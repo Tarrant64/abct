@@ -1,0 +1,1992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ABCT - Manage Assets</title>
+    <link rel="stylesheet" href="/static/css/styles.css?v=20">
+    <style>
+        /* Wallet Manager Styles */
+        .wallet-manager {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .nav-link {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 14px;
+            padding: 6px 12px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover {
+            background: rgba(102, 126, 234, 0.2);
+        }
+
+        .wallet-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .wallet-header h1 {
+            margin: 0;
+            color: #e0e0e0;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #2a2a3e;
+            color: #e0e0e0;
+            border: 1px solid #3a3a4e;
+        }
+
+        .btn-secondary:hover {
+            background: #3a3a4e;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        /* Chain Tabs */
+        .chain-tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            background: #1a1a2e;
+            padding: 10px;
+            border-radius: 12px;
+        }
+
+        .chain-tab {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            background: transparent;
+            color: #888;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .chain-tab:hover {
+            background: #2a2a3e;
+            color: #e0e0e0;
+        }
+
+        .chain-tab.active {
+            background: #2a2a3e;
+            color: #e0e0e0;
+        }
+
+        .chain-tab .count {
+            background: #3a3a4e;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+        }
+
+        .chain-tab.active .count {
+            background: #667eea;
+        }
+
+        /* Chain colors */
+        .chain-tab[data-chain="cardano"].active { border-bottom: 3px solid #0033AD; }
+        .chain-tab[data-chain="bitcoin"].active { border-bottom: 3px solid #F7931A; }
+        .chain-tab[data-chain="ethereum"].active { border-bottom: 3px solid #627EEA; }
+        .chain-tab[data-chain="solana"].active { border-bottom: 3px solid #14F195; }
+        .chain-tab[data-chain="polygon"].active { border-bottom: 3px solid #8247E5; }
+        .chain-tab[data-chain="base"].active { border-bottom: 3px solid #0052FF; }
+
+        /* Wallet List */
+        .wallet-list {
+            background: #1a1a2e;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .wallet-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            border-bottom: 1px solid #2a2a3e;
+            transition: background 0.2s;
+        }
+
+        .wallet-item:hover {
+            background: #22223a;
+        }
+
+        .wallet-item:last-child {
+            border-bottom: none;
+        }
+
+        .wallet-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .wallet-address {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 14px;
+            color: #e0e0e0;
+            word-break: break-all;
+        }
+
+        .wallet-label {
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        .wallet-balance {
+            text-align: right;
+            margin-right: 20px;
+        }
+
+        .wallet-balance .amount {
+            font-size: 14px;
+            color: #e0e0e0;
+        }
+
+        .wallet-balance .unit {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .wallet-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* Stake Key Groups */
+        .stake-group {
+            border-bottom: 1px solid #2a2a3e;
+        }
+
+        .stake-group:last-child {
+            border-bottom: none;
+        }
+
+        .stake-group-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            cursor: pointer;
+            transition: background 0.2s;
+            background: linear-gradient(135deg, rgba(0, 51, 173, 0.1) 0%, rgba(0, 51, 173, 0.05) 100%);
+        }
+
+        .stake-group-header:hover {
+            background: linear-gradient(135deg, rgba(0, 51, 173, 0.15) 0%, rgba(0, 51, 173, 0.08) 100%);
+        }
+
+        .stake-group.expanded .stake-group-header {
+            border-bottom: 1px solid #3a3a4e;
+        }
+
+        .stake-group-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+        }
+
+        .expand-icon {
+            color: #667eea;
+            font-size: 10px;
+            width: 16px;
+            transition: transform 0.2s;
+        }
+
+        .stake-group.expanded .expand-icon {
+            transform: rotate(90deg);
+        }
+
+        .stake-key-display {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+            color: #888;
+        }
+
+        .group-label {
+            color: #e0e0e0;
+            font-size: 13px;
+        }
+
+        .stake-group-summary {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            font-size: 13px;
+        }
+
+        .stake-group-summary .wallet-count {
+            color: #667eea;
+            font-weight: 500;
+        }
+
+        .stake-group-summary .total-balance {
+            color: #4ade80;
+            font-weight: 500;
+        }
+
+        .stake-group-summary .asset-count {
+            color: #888;
+        }
+
+        .stake-group-wallets {
+            background: rgba(0, 0, 0, 0.2);
+            border-left: 3px solid #0033ad;
+            margin-left: 20px;
+        }
+
+        .wallet-item.grouped {
+            padding-left: 30px;
+            background: transparent;
+        }
+
+        .wallet-item.grouped:hover {
+            background: rgba(0, 51, 173, 0.1);
+        }
+
+        .wallet-label .token-count {
+            background: rgba(102, 126, 234, 0.2);
+            color: #667eea;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            margin-left: 8px;
+        }
+
+        .wallet-label .label-text {
+            color: #aaa;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #888;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 10px;
+            color: #e0e0e0;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: #1a1a2e;
+            border-radius: 16px;
+            padding: 30px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal h2 {
+            margin: 0 0 20px 0;
+            color: #e0e0e0;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #e0e0e0;
+            font-size: 14px;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #3a3a4e;
+            border-radius: 8px;
+            background: #2a2a3e;
+            color: #e0e0e0;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group textarea {
+            min-height: 150px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+        }
+
+        .form-group .hint {
+            font-size: 12px;
+            color: #888;
+            margin-top: 6px;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 30px;
+        }
+
+        /* Import Preview */
+        .import-preview {
+            margin-top: 20px;
+            padding: 15px;
+            background: #2a2a3e;
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .import-preview h4 {
+            margin: 0 0 10px 0;
+            color: #e0e0e0;
+            font-size: 14px;
+        }
+
+        .import-item {
+            display: flex;
+            gap: 10px;
+            padding: 5px 0;
+            font-size: 12px;
+            border-bottom: 1px solid #3a3a4e;
+        }
+
+        .import-item:last-child {
+            border-bottom: none;
+        }
+
+        .import-item .chain {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        .import-item .chain.cardano { background: rgba(0, 51, 173, 0.3); color: #4d7fff; }
+        .import-item .chain.bitcoin { background: rgba(247, 147, 26, 0.3); color: #F7931A; }
+        .import-item .chain.ethereum { background: rgba(98, 126, 234, 0.3); color: #627EEA; }
+        .import-item .chain.solana { background: rgba(20, 241, 149, 0.3); color: #14F195; }
+        .import-item .chain.polygon { background: rgba(130, 71, 229, 0.3); color: #8247E5; }
+        .import-item .chain.base { background: rgba(0, 82, 255, 0.3); color: #0052FF; }
+
+        .import-item .address {
+            font-family: monospace;
+            color: #e0e0e0;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Status messages */
+        .status-message {
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .status-message.success {
+            display: block;
+            background: rgba(40, 167, 69, 0.2);
+            border: 1px solid #28a745;
+            color: #28a745;
+        }
+
+        .status-message.error {
+            display: block;
+            background: rgba(220, 53, 69, 0.2);
+            border: 1px solid #dc3545;
+            color: #dc3545;
+        }
+
+        /* Loading spinner */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #3a3a4e;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Back link */
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #888;
+            text-decoration: none;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .back-link:hover {
+            color: #e0e0e0;
+        }
+
+        /* Asset Type Tabs */
+        .asset-type-tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 20px;
+            background: #1a1a2e;
+            padding: 4px;
+            border-radius: 12px;
+            width: fit-content;
+        }
+
+        .asset-tab {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            background: transparent;
+            color: #888;
+            transition: all 0.2s;
+        }
+
+        .asset-tab:hover {
+            color: #e0e0e0;
+        }
+
+        .asset-tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        /* Token List */
+        .token-list {
+            background: #1a1a2e;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .token-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            border-bottom: 1px solid #2a2a3e;
+            transition: background 0.2s;
+        }
+
+        .token-item:hover {
+            background: #22223a;
+        }
+
+        .token-item:last-child {
+            border-bottom: none;
+        }
+
+        .token-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .token-name {
+            font-size: 14px;
+            color: #e0e0e0;
+            font-weight: 500;
+        }
+
+        .token-details {
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .token-details .chain {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        .token-details .chain.cardano { background: rgba(0, 51, 173, 0.3); color: #4d7fff; }
+        .token-details .chain.ethereum { background: rgba(98, 126, 234, 0.3); color: #627EEA; }
+        .token-details .chain.bitcoin { background: rgba(247, 147, 26, 0.3); color: #F7931A; }
+        .token-details .chain.solana { background: rgba(20, 241, 149, 0.3); color: #14F195; }
+
+        .token-quantity {
+            text-align: right;
+            margin-right: 20px;
+        }
+
+        .token-quantity .amount {
+            font-size: 14px;
+            color: #e0e0e0;
+        }
+
+        .token-quantity .value {
+            font-size: 12px;
+            color: #4ade80;
+        }
+
+        .token-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .wallet-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+
+            .wallet-balance {
+                text-align: left;
+                margin-right: 0;
+            }
+
+            .wallet-actions {
+                width: 100%;
+                justify-content: flex-end;
+            }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js">
+        // XSS Protection - Safe HTML rendering
+        function setSafeHTML(element, html) {
+            if (!element) return;
+            if (typeof DOMPurify !== 'undefined') {
+                setSafeHTML(element, DOMPurify.sanitize(html);
+            } else {
+                console.warn('DOMPurify not loaded, falling back to textContent');
+                element.textContent = html;
+            }
+        }
+</script>
+</head>
+<body>
+    <div class="wallet-manager">
+        <div class="nav-links">
+            <a href="/" class="back-link">← Back to Dashboard</a>
+            <a href="/apis.html" class="nav-link">Manage APIs</a>
+        </div>
+
+        <div class="wallet-header">
+            <h1>Manage Assets</h1>
+            <div class="header-actions" id="walletHeaderActions">
+                <button class="btn btn-secondary" onclick="openImportModal()">
+                    Import from File
+                </button>
+                <button class="btn btn-secondary" onclick="exportWallets()">
+                    Export to File
+                </button>
+                <button class="btn btn-primary" onclick="openAddModal()">
+                    + Add Wallet
+                </button>
+            </div>
+            <div class="header-actions" id="tokenHeaderActions" style="display: none;">
+                <button class="btn btn-primary" onclick="openAddTokenModal()">
+                    + Add Token
+                </button>
+            </div>
+        </div>
+
+        <!-- Asset Type Tabs -->
+        <div class="asset-type-tabs">
+            <button class="asset-tab active" data-type="wallets" onclick="switchAssetTab('wallets')">
+                Wallets
+            </button>
+            <button class="asset-tab" data-type="tokens" onclick="switchAssetTab('tokens')">
+                Manual Tokens
+            </button>
+        </div>
+
+        <div id="statusMessage" class="status-message"></div>
+
+        <!-- Wallets Section -->
+        <div id="walletsSection">
+            <div class="chain-tabs">
+            <button class="chain-tab active" data-chain="all" onclick="filterByChain('all')">
+                All <span class="count" id="count-all">0</span>
+            </button>
+            <button class="chain-tab" data-chain="cardano" onclick="filterByChain('cardano')">
+                Cardano <span class="count" id="count-cardano">0</span>
+            </button>
+            <button class="chain-tab" data-chain="bitcoin" onclick="filterByChain('bitcoin')">
+                Bitcoin <span class="count" id="count-bitcoin">0</span>
+            </button>
+            <button class="chain-tab" data-chain="ethereum" onclick="filterByChain('ethereum')">
+                Ethereum <span class="count" id="count-ethereum">0</span>
+            </button>
+            <button class="chain-tab" data-chain="solana" onclick="filterByChain('solana')">
+                Solana <span class="count" id="count-solana">0</span>
+            </button>
+            <button class="chain-tab" data-chain="polygon" onclick="filterByChain('polygon')">
+                Polygon <span class="count" id="count-polygon">0</span>
+            </button>
+            <button class="chain-tab" data-chain="base" onclick="filterByChain('base')">
+                Base <span class="count" id="count-base">0</span>
+            </button>
+        </div>
+
+            <div class="wallet-list" id="walletList">
+                <div class="empty-state">
+                    <div class="loading"></div>
+                    <p>Loading wallets...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Manual Tokens Section -->
+        <div id="tokensSection" style="display: none;">
+            <div class="token-list" id="tokenList">
+                <div class="empty-state">
+                    <h3>No manual tokens</h3>
+                    <p>Add tokens manually to track holdings not in your wallets.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Wallet Modal -->
+    <div class="modal-overlay" id="addModal">
+        <div class="modal">
+            <h2>Add Wallet</h2>
+            <form onsubmit="addWallet(event)">
+                <div class="form-group">
+                    <label for="walletChain">Blockchain</label>
+                    <select id="walletChain" required>
+                        <option value="">Select blockchain...</option>
+                        <option value="cardano">Cardano</option>
+                        <option value="bitcoin">Bitcoin</option>
+                        <option value="ethereum">Ethereum</option>
+                        <option value="solana">Solana</option>
+                        <option value="polygon">Polygon</option>
+                        <option value="base">Base</option>
+                    </select>
+                </div>
+                <div class="form-group" id="cardanoDiscoveryOption" style="display: none;">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                        <input type="checkbox" id="enableDiscovery" checked>
+                        <span>Discover all wallets under stake key</span>
+                    </label>
+                    <div class="hint" style="margin-top: 5px;">
+                        When enabled, finds all payment addresses sharing the same stake key and lets you add them together.
+                    </div>
+                </div>
+                <div class="form-group" id="bitcoinXpubOption" style="display: none;">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                        <input type="checkbox" id="enableXpub" onchange="toggleXpubMode()">
+                        <span>Enter xpub (HD wallet extended public key)</span>
+                    </label>
+                    <div class="hint" style="margin-top: 5px;">
+                        Discover all addresses from an xpub/ypub/zpub. Automatically finds addresses with balance.
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="walletAddress" id="addressLabel">Wallet Address</label>
+                    <input type="text" id="walletAddress" placeholder="Enter wallet address" required>
+                    <div class="hint" id="addressHint">
+                        Examples:<br>
+                        Cardano: addr1q..., stake1u...<br>
+                        Bitcoin: bc1..., 1..., 3..., xpub..., ypub..., zpub...<br>
+                        Ethereum/Polygon/Base: 0x...<br>
+                        Solana: Base58 address
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="walletLabel">Label (optional)</label>
+                    <input type="text" id="walletLabel" placeholder="e.g., Main Wallet, Cold Storage">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeAddModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Wallet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Import Modal -->
+    <div class="modal-overlay" id="importModal">
+        <div class="modal">
+            <h2>Import Wallets</h2>
+            <div class="form-group">
+                <label for="importText">Paste wallet addresses</label>
+                <textarea id="importText" placeholder="Enter one wallet per line in format:
+chain:address
+
+Examples:
+cardano:addr1q8nl...
+bitcoin:bc1qxy...
+ethereum:0x123...
+solana:ABC123...
+polygon:0x456...
+base:0x789..." oninput="previewImport()"></textarea>
+                <div class="hint">
+                    Format: <code>chain:address</code> (one per line)<br>
+                    Supported chains: cardano, bitcoin, ethereum, solana, polygon, base
+                </div>
+            </div>
+
+            <div class="import-preview" id="importPreview" style="display: none;">
+                <h4>Preview (<span id="importCount">0</span> wallets)</h4>
+                <div id="importPreviewList"></div>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeImportModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="importWallets()" id="importBtn" disabled>
+                    Import Wallets
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Label Modal -->
+    <div class="modal-overlay" id="editModal">
+        <div class="modal">
+            <h2>Edit Wallet Label</h2>
+            <form onsubmit="saveLabel(event)">
+                <input type="hidden" id="editWalletId">
+                <div class="form-group">
+                    <label>Address</label>
+                    <input type="text" id="editWalletAddress" readonly style="background: #1a1a2e;">
+                </div>
+                <div class="form-group">
+                    <label for="editWalletLabel">Label</label>
+                    <input type="text" id="editWalletLabel" placeholder="Enter a label for this wallet">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Cardano Discovery Modal -->
+    <div class="modal-overlay" id="discoverModal">
+        <div class="modal" style="max-width: 700px;">
+            <h2>Discovered Cardano Wallets</h2>
+            <div id="discoverInfo" class="form-group">
+                <p style="color: #888; margin-bottom: 15px;">
+                    <span id="discoverStakeKey" style="font-family: monospace; font-size: 12px;"></span>
+                </p>
+                <div style="display: flex; gap: 20px; margin-bottom: 15px;">
+                    <div><strong id="discoverTotal">0</strong> total addresses</div>
+                    <div><strong id="discoverWithUtxos">0</strong> with UTXOs</div>
+                    <div><strong id="discoverNew">0</strong> new (not tracked)</div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                    <input type="checkbox" id="selectAllDiscover" onchange="toggleSelectAllDiscover()" checked>
+                    <span>Select all new addresses with UTXOs</span>
+                </label>
+            </div>
+
+            <div id="discoverList" style="max-height: 300px; overflow-y: auto; background: #2a2a3e; border-radius: 8px; padding: 10px;">
+                <!-- Addresses will be populated here -->
+            </div>
+
+            <div class="form-group" style="margin-top: 15px;">
+                <label for="discoverLabel">Label for new wallets (optional)</label>
+                <input type="text" id="discoverLabel" placeholder="e.g., Main Stake Key">
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeDiscoverModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="addDiscoveredWallets()" id="addDiscoveredBtn">
+                    Add Selected Wallets
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .discover-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            border-bottom: 1px solid #3a3a4e;
+        }
+        .discover-item:last-child {
+            border-bottom: none;
+        }
+        .discover-item.tracked {
+            opacity: 0.5;
+        }
+        .discover-item .address {
+            flex: 1;
+            font-family: monospace;
+            font-size: 12px;
+            color: #e0e0e0;
+        }
+        .discover-item .balance {
+            font-size: 12px;
+            color: #888;
+            min-width: 100px;
+            text-align: right;
+        }
+        .discover-item .balance.has-utxos {
+            color: #4ade80;
+        }
+        .discover-item .status {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            min-width: 70px;
+            text-align: center;
+        }
+        .discover-item .status.tracked {
+            background: rgba(102, 126, 234, 0.2);
+            color: #667eea;
+        }
+        .discover-item .status.new {
+            background: rgba(74, 222, 128, 0.2);
+            color: #4ade80;
+        }
+        .discover-item .chain-type {
+            font-size: 11px;
+            color: #888;
+            min-width: 60px;
+            text-align: center;
+        }
+    </style>
+
+    <!-- Bitcoin xpub Discovery Modal -->
+    <div class="modal-overlay" id="xpubModal">
+        <div class="modal" style="max-width: 750px;">
+            <h2>Discovered Bitcoin Addresses</h2>
+            <div class="form-group">
+                <p style="color: #888; margin-bottom: 15px;">
+                    HD Wallet Type: <strong id="xpubType" style="color: #f7931a;"></strong>
+                </p>
+                <div style="display: flex; gap: 20px; margin-bottom: 15px;">
+                    <div><strong id="xpubTotal">0</strong> addresses found</div>
+                    <div><strong id="xpubBalance">0</strong> BTC total</div>
+                    <div><strong id="xpubNew">0</strong> new (not tracked)</div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                    <input type="checkbox" id="selectAllXpub" onchange="toggleSelectAllXpub()" checked>
+                    <span>Select all new addresses</span>
+                </label>
+            </div>
+
+            <div id="xpubList" style="max-height: 300px; overflow-y: auto; background: #2a2a3e; border-radius: 8px; padding: 10px;">
+                <!-- Addresses will be populated here -->
+            </div>
+
+            <div class="form-group" style="margin-top: 15px;">
+                <label for="xpubLabel">Label for new wallets (optional)</label>
+                <input type="text" id="xpubLabel" placeholder="e.g., Hardware Wallet">
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeXpubModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="addSelectedXpubAddresses()">
+                    Add Selected Wallets
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Token Modal -->
+    <div class="modal-overlay" id="addTokenModal">
+        <div class="modal">
+            <h2>Add Manual Token</h2>
+            <p style="color: #888; margin-bottom: 20px;">
+                Track tokens that are not in your connected wallets (e.g., tokens held elsewhere, or custom tracking).
+            </p>
+            <form onsubmit="addManualToken(event)">
+                <div class="form-group">
+                    <label for="tokenChain">Blockchain</label>
+                    <select id="tokenChain" required>
+                        <option value="">Select blockchain...</option>
+                        <option value="cardano">Cardano</option>
+                        <option value="ethereum">Ethereum</option>
+                        <option value="bitcoin">Bitcoin</option>
+                        <option value="solana">Solana</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="tokenIdentifier">Token Ticker or Policy ID / Contract</label>
+                    <input type="text" id="tokenIdentifier" placeholder="e.g., INDY or policy ID" required>
+                    <div class="hint">
+                        Enter a ticker symbol (e.g., INDY, SNEK) or the full policy ID / contract address
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="tokenAmount">Quantity</label>
+                    <input type="text" id="tokenAmount" placeholder="e.g., 1000" required>
+                </div>
+                <div class="form-group">
+                    <label for="tokenLabel">Label (optional)</label>
+                    <input type="text" id="tokenLabel" placeholder="e.g., Cold Storage INDY">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeAddTokenModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Token</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Token Modal -->
+    <div class="modal-overlay" id="editTokenModal">
+        <div class="modal">
+            <h2>Edit Token</h2>
+            <form onsubmit="saveTokenEdit(event)">
+                <input type="hidden" id="editTokenId">
+                <div class="form-group">
+                    <label>Token</label>
+                    <input type="text" id="editTokenName" readonly style="background: #1a1a2e;">
+                </div>
+                <div class="form-group">
+                    <label for="editTokenAmount">Quantity</label>
+                    <input type="text" id="editTokenAmount" required>
+                </div>
+                <div class="form-group">
+                    <label for="editTokenLabel">Label</label>
+                    <input type="text" id="editTokenLabel" placeholder="Enter a label">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeEditTokenModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Toggle select all for xpub addresses
+        function toggleSelectAllXpub() {
+            const checked = document.getElementById('selectAllXpub').checked;
+            document.querySelectorAll('#xpubList input[type="checkbox"]:not(:disabled)').forEach(cb => {
+                cb.checked = checked;
+            });
+        }
+    </script>
+
+    <script>
+        let wallets = [];
+        let currentFilter = 'all';
+
+        // Load wallets on page load
+        document.addEventListener('DOMContentLoaded', loadWallets);
+
+        async function loadWallets() {
+            try {
+                const response = await fetch('/wallets');
+                const data = await response.json();
+                wallets = data.wallets || [];
+                updateCounts();
+                renderWallets();
+            } catch (error) {
+                console.error('Error loading wallets:', error);
+                showStatus('Failed to load wallets', 'error');
+            }
+        }
+
+        function updateCounts() {
+            const counts = { all: wallets.length };
+            ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base'].forEach(chain => {
+                counts[chain] = wallets.filter(w => w.blockchain === chain).length;
+            });
+
+            Object.entries(counts).forEach(([chain, count]) => {
+                const el = document.getElementById(`count-${chain}`);
+                if (el) el.textContent = count;
+            });
+        }
+
+        function filterByChain(chain) {
+            currentFilter = chain;
+
+            // Update tab states
+            document.querySelectorAll('.chain-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.chain === chain);
+            });
+
+            renderWallets();
+        }
+
+        function renderWallets() {
+            const container = document.getElementById('walletList');
+            const filtered = currentFilter === 'all'
+                ? wallets
+                : wallets.filter(w => w.blockchain === currentFilter);
+
+            if (filtered.length === 0) {
+                setSafeHTML(container, `
+                    <div class="empty-state">
+                        <h3>No wallets found</h3>
+                        <p>${currentFilter === 'all' ? 'Add your first wallet to get started' : `No ${currentFilter} wallets yet`}</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Separate Cardano wallets (to group by stake key) from others
+            const cardanoWallets = filtered.filter(w => w.blockchain === 'cardano');
+            const otherWallets = filtered.filter(w => w.blockchain !== 'cardano');
+
+            // Group Cardano wallets by stake key
+            const stakeGroups = {};
+            const enterpriseWallets = []; // Wallets without stake keys
+
+            cardanoWallets.forEach(wallet => {
+                if (wallet.stake_key) {
+                    if (!stakeGroups[wallet.stake_key]) {
+                        stakeGroups[wallet.stake_key] = [];
+                    }
+                    stakeGroups[wallet.stake_key].push(wallet);
+                } else {
+                    enterpriseWallets.push(wallet);
+                }
+            });
+
+            let html = '';
+
+            // Render Cardano stake key groups
+            Object.entries(stakeGroups).forEach(([stakeKey, groupWallets]) => {
+                const totalAda = groupWallets.reduce((sum, w) => sum + (parseFloat(w.balance) || 0), 0);
+                const totalAssets = groupWallets.reduce((sum, w) => sum + (w.native_assets_count || 0), 0);
+                const groupLabel = groupWallets[0].label || '';
+
+                html += `
+                    <div class="stake-group" data-stake-key="${stakeKey}">
+                        <div class="stake-group-header" onclick="toggleStakeGroup('${stakeKey}')">
+                            <div class="stake-group-info">
+                                <span class="expand-icon">▶</span>
+                                <span class="chain cardano">cardano</span>
+                                <span class="stake-key-display">${stakeKey.slice(0, 15)}...${stakeKey.slice(-8)}</span>
+                                ${groupLabel ? `<span class="group-label">${groupLabel}</span>` : ''}
+                            </div>
+                            <div class="stake-group-summary">
+                                <span class="wallet-count">${groupWallets.length} wallet${groupWallets.length !== 1 ? 's' : ''}</span>
+                                <span class="total-balance">${totalAda.toFixed(2)} ADA</span>
+                                <span class="asset-count">${totalAssets} token${totalAssets !== 1 ? 's' : ''}</span>
+                            </div>
+                        </div>
+                        <div class="stake-group-wallets" style="display: none;">
+                            ${groupWallets.map(wallet => renderWalletItem(wallet, true)).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+
+            // Render enterprise Cardano wallets (no stake key)
+            enterpriseWallets.forEach(wallet => {
+                html += renderWalletItem(wallet, false);
+            });
+
+            // Render other chain wallets
+            otherWallets.forEach(wallet => {
+                html += renderWalletItem(wallet, false);
+            });
+
+            setSafeHTML(container, html;
+        }
+
+        function renderWalletItem(wallet, isGrouped = false) {
+            return `
+                <div class="wallet-item ${isGrouped ? 'grouped' : ''}" data-chain="${wallet.blockchain}">
+                    <div class="wallet-info">
+                        <div class="wallet-address">${wallet.address.slice(0, 20)}...${wallet.address.slice(-12)}</div>
+                        <div class="wallet-label">
+                            ${!isGrouped ? `<span class="chain ${wallet.blockchain}">${wallet.blockchain}</span>` : ''}
+                            ${wallet.label ? `<span class="label-text">${wallet.label}</span>` : ''}
+                            ${wallet.native_assets_count ? `<span class="token-count">${wallet.native_assets_count} tokens</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="wallet-balance">
+                        <div class="amount">${formatBalance(wallet.balance, wallet.balance_unit)}</div>
+                        <div class="unit">${getUnitDisplay(wallet.balance_unit)}</div>
+                    </div>
+                    <div class="wallet-actions">
+                        <button class="btn btn-secondary btn-small" onclick="openEditModal(${wallet.id}, '${wallet.address}', '${wallet.label || ''}')">
+                            Edit
+                        </button>
+                        <button class="btn btn-danger btn-small" onclick="deleteWallet('${wallet.blockchain}:${wallet.address}')">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function toggleStakeGroup(stakeKey) {
+            const group = document.querySelector(`.stake-group[data-stake-key="${stakeKey}"]`);
+            if (!group) return;
+
+            const walletsDiv = group.querySelector('.stake-group-wallets');
+            const icon = group.querySelector('.expand-icon');
+
+            if (walletsDiv.style.display === 'none') {
+                walletsDiv.style.display = 'block';
+                icon.textContent = '▼';
+                group.classList.add('expanded');
+            } else {
+                walletsDiv.style.display = 'none';
+                icon.textContent = '▶';
+                group.classList.remove('expanded');
+            }
+        }
+
+        function formatBalance(balance, unit) {
+            const num = parseFloat(balance) || 0;
+            if (unit === 'SAT') {
+                return (num / 100000000).toFixed(8);
+            }
+            return num.toFixed(6);
+        }
+
+        function getUnitDisplay(unit) {
+            const units = {
+                'ADA': 'ADA',
+                'SAT': 'BTC',
+                'ETH': 'ETH',
+                'ETH_BASE': 'ETH',
+                'SOL': 'SOL',
+                'MATIC': 'POL'
+            };
+            return units[unit] || unit;
+        }
+
+        // Add Wallet Modal
+        function openAddModal() {
+            document.getElementById('addModal').classList.add('active');
+            document.getElementById('walletAddress').value = '';
+            document.getElementById('walletLabel').value = '';
+            document.getElementById('walletChain').value = '';
+            document.getElementById('cardanoDiscoveryOption').style.display = 'none';
+            document.getElementById('bitcoinXpubOption').style.display = 'none';
+            document.getElementById('enableXpub').checked = false;
+            resetXpubMode();
+        }
+
+        function closeAddModal() {
+            document.getElementById('addModal').classList.remove('active');
+        }
+
+        // Show/hide chain-specific options based on selection
+        document.getElementById('walletChain').addEventListener('change', function() {
+            const discoveryOption = document.getElementById('cardanoDiscoveryOption');
+            const xpubOption = document.getElementById('bitcoinXpubOption');
+
+            discoveryOption.style.display = this.value === 'cardano' ? 'block' : 'none';
+            xpubOption.style.display = this.value === 'bitcoin' ? 'block' : 'none';
+
+            // Reset xpub mode when switching chains
+            if (this.value !== 'bitcoin') {
+                document.getElementById('enableXpub').checked = false;
+                resetXpubMode();
+            }
+        });
+
+        // Toggle xpub mode for Bitcoin
+        function toggleXpubMode() {
+            const isXpub = document.getElementById('enableXpub').checked;
+            const addressLabel = document.getElementById('addressLabel');
+            const addressInput = document.getElementById('walletAddress');
+            const addressHint = document.getElementById('addressHint');
+
+            if (isXpub) {
+                addressLabel.textContent = 'Extended Public Key';
+                addressInput.placeholder = 'Enter xpub, ypub, or zpub...';
+                setSafeHTML(addressHint, `
+                    <strong>HD Wallet Discovery:</strong><br>
+                    xpub: Legacy addresses (1...)<br>
+                    ypub: Nested SegWit addresses (3...)<br>
+                    zpub: Native SegWit addresses (bc1...)<br>
+                    <em>All addresses with balance will be discovered automatically.</em>
+                `;
+            } else {
+                resetXpubMode();
+            }
+        }
+
+        function resetXpubMode() {
+            document.getElementById('addressLabel').textContent = 'Wallet Address';
+            document.getElementById('walletAddress').placeholder = 'Enter wallet address';
+            setSafeHTML(document.getElementById('addressHint'), `
+                Examples:<br>
+                Cardano: addr1q..., stake1u...<br>
+                Bitcoin: bc1..., 1..., 3..., xpub..., ypub..., zpub...<br>
+                Ethereum/Polygon/Base: 0x...<br>
+                Solana: Base58 address
+            `;
+        }
+
+        let discoveredAddresses = [];
+
+        async function addWallet(event) {
+            event.preventDefault();
+
+            const chain = document.getElementById('walletChain').value;
+            const address = document.getElementById('walletAddress').value.trim();
+            const label = document.getElementById('walletLabel').value.trim();
+            const enableDiscovery = document.getElementById('enableDiscovery').checked;
+            const enableXpub = document.getElementById('enableXpub').checked;
+
+            // For Cardano with discovery enabled, find related wallets
+            if (chain === 'cardano' && enableDiscovery && (address.startsWith('addr1') || address.startsWith('stake1'))) {
+                closeAddModal();
+                await discoverCardanoWallets(address, label);
+                return;
+            }
+
+            // For Bitcoin xpub, discover addresses
+            if (chain === 'bitcoin' && (enableXpub || isXpubAddress(address))) {
+                closeAddModal();
+                await discoverBitcoinXpub(address, label);
+                return;
+            }
+
+            // For other chains, add directly
+            try {
+                const response = await fetch('/wallets', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        address: `${chain}:${address}`,
+                        label: label || null
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to add wallet');
+                }
+
+                closeAddModal();
+                showStatus('Wallet added successfully', 'success');
+                await loadWallets();
+            } catch (error) {
+                showStatus(error.message, 'error');
+            }
+        }
+
+        // Check if address is an xpub
+        function isXpubAddress(addr) {
+            return addr && (addr.startsWith('xpub') || addr.startsWith('ypub') || addr.startsWith('zpub'));
+        }
+
+        // Store discovered xpub addresses
+        let discoveredXpubAddresses = [];
+
+        // Discover Bitcoin addresses from xpub
+        async function discoverBitcoinXpub(xpub, label) {
+            showStatus('Discovering Bitcoin addresses from xpub...', 'success');
+
+            try {
+                const response = await fetch('/wallets/xpub/discover', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ xpub, gap_limit: 20 })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'xpub discovery failed');
+                }
+
+                const data = await response.json();
+                discoveredXpubAddresses = data.addresses || [];
+
+                if (discoveredXpubAddresses.length === 0) {
+                    showStatus('No addresses with balance found for this xpub', 'error');
+                    return;
+                }
+
+                // Show xpub discovery modal
+                document.getElementById('xpubType').textContent = data.address_type || data.xpub_type;
+                document.getElementById('xpubTotal').textContent = data.total_addresses;
+                document.getElementById('xpubBalance').textContent = data.total_balance_btc;
+                document.getElementById('xpubNew').textContent = data.new_addresses_count;
+                document.getElementById('xpubLabel').value = label || `xpub (${xpub.slice(0, 8)}...)`;
+
+                // Render address list
+                const listEl = document.getElementById('xpubList');
+                setSafeHTML(listEl, discoveredXpubAddresses.map((addr, idx) => `
+                    <div class="discover-item ${addr.already_tracked ? 'tracked' : ''}">
+                        <input type="checkbox"
+                               id="xpub-${idx}"
+                               ${addr.already_tracked ? 'disabled' : 'checked'}
+                               data-address="${addr.address}">
+                        <div class="address">${addr.address.slice(0, 15)}...${addr.address.slice(-8)}</div>
+                        <div class="balance">${addr.balance_btc.toFixed(8)} BTC</div>
+                        <div class="chain-type">${addr.chain === 'receive' ? 'Receive' : 'Change'}</div>
+                        <div class="status ${addr.already_tracked ? 'tracked' : 'new'}">
+                            ${addr.already_tracked ? 'Tracked' : 'New'}
+                        </div>
+                    </div>
+                `).join('');
+
+                document.getElementById('xpubModal').classList.add('active');
+
+            } catch (error) {
+                showStatus(error.message, 'error');
+            }
+        }
+
+        function closeXpubModal() {
+            document.getElementById('xpubModal').classList.remove('active');
+        }
+
+        async function addSelectedXpubAddresses() {
+            const label = document.getElementById('xpubLabel').value.trim();
+            const checkboxes = document.querySelectorAll('#xpubList input[type="checkbox"]:checked:not(:disabled)');
+            const selectedAddresses = Array.from(checkboxes).map(cb => cb.dataset.address);
+
+            if (selectedAddresses.length === 0) {
+                showStatus('No addresses selected', 'error');
+                return;
+            }
+
+            closeXpubModal();
+            showStatus(`Adding ${selectedAddresses.length} Bitcoin addresses...`, 'success');
+
+            try {
+                const response = await fetch('/wallets/xpub/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        addresses: selectedAddresses,
+                        label: label || null
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to add addresses');
+                }
+
+                const result = await response.json();
+                showStatus(result.message, 'success');
+                await loadWallets();
+
+            } catch (error) {
+                showStatus(error.message, 'error');
+            }
+        }
+
+        async function discoverCardanoWallets(address, label) {
+            showStatus('Discovering related wallets...', 'success');
+
+            try {
+                const response = await fetch('/wallets/discover', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ address })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Discovery failed');
+                }
+
+                const data = await response.json();
+                discoveredAddresses = data.addresses || [];
+
+                // If only one address and it's already tracked, just show message
+                if (discoveredAddresses.length === 0) {
+                    showStatus('No addresses found for this stake key', 'error');
+                    return;
+                }
+
+                if (discoveredAddresses.length === 1 && discoveredAddresses[0].already_tracked) {
+                    showStatus('This wallet is already tracked', 'error');
+                    return;
+                }
+
+                // Show discovery modal
+                document.getElementById('discoverStakeKey').textContent =
+                    data.stake_address ? `Stake Key: ${data.stake_address}` : 'Enterprise address (no stake key)';
+                document.getElementById('discoverTotal').textContent = data.total_addresses;
+                document.getElementById('discoverWithUtxos').textContent = data.total_with_utxos;
+                document.getElementById('discoverNew').textContent = data.new_addresses_count;
+                document.getElementById('discoverLabel').value = label || '';
+
+                // Render address list
+                const listEl = document.getElementById('discoverList');
+                setSafeHTML(listEl, discoveredAddresses.map((addr, idx) => `
+                    <div class="discover-item ${addr.already_tracked ? 'tracked' : ''}">
+                        <input type="checkbox"
+                               id="discover-${idx}"
+                               ${addr.already_tracked ? 'disabled' : (addr.has_utxos ? 'checked' : '')}
+                               data-address="${addr.address}">
+                        <div class="address">${addr.address_short}</div>
+                        <div class="balance ${addr.has_utxos ? 'has-utxos' : ''}">${addr.balance_ada.toFixed(2)} ADA</div>
+                        <div class="status ${addr.already_tracked ? 'tracked' : 'new'}">
+                            ${addr.already_tracked ? 'Tracked' : 'New'}
+                        </div>
+                    </div>
+                `).join('');
+
+                document.getElementById('discoverModal').classList.add('active');
+
+            } catch (error) {
+                showStatus(error.message, 'error');
+            }
+        }
+
+        function closeDiscoverModal() {
+            document.getElementById('discoverModal').classList.remove('active');
+            discoveredAddresses = [];
+        }
+
+        function toggleSelectAllDiscover() {
+            const selectAll = document.getElementById('selectAllDiscover').checked;
+            discoveredAddresses.forEach((addr, idx) => {
+                const checkbox = document.getElementById(`discover-${idx}`);
+                if (checkbox && !checkbox.disabled) {
+                    checkbox.checked = selectAll && addr.has_utxos;
+                }
+            });
+        }
+
+        async function addDiscoveredWallets() {
+            const label = document.getElementById('discoverLabel').value.trim();
+            const selectedAddresses = [];
+
+            discoveredAddresses.forEach((addr, idx) => {
+                const checkbox = document.getElementById(`discover-${idx}`);
+                if (checkbox && checkbox.checked && !addr.already_tracked) {
+                    selectedAddresses.push(addr.address);
+                }
+            });
+
+            if (selectedAddresses.length === 0) {
+                showStatus('No wallets selected', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('addDiscoveredBtn');
+            btn.disabled = true;
+            btn.textContent = 'Adding...';
+
+            try {
+                const response = await fetch('/wallets/add-multiple', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        addresses: selectedAddresses,
+                        label: label || null
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to add wallets');
+                }
+
+                const result = await response.json();
+                closeDiscoverModal();
+                showStatus(result.message, 'success');
+                await loadWallets();
+
+            } catch (error) {
+                showStatus(error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Add Selected Wallets';
+            }
+        }
+
+        // Edit Modal
+        function openEditModal(id, address, label) {
+            document.getElementById('editModal').classList.add('active');
+            document.getElementById('editWalletId').value = id;
+            document.getElementById('editWalletAddress').value = address;
+            document.getElementById('editWalletLabel').value = label;
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').classList.remove('active');
+        }
+
+        async function saveLabel(event) {
+            event.preventDefault();
+
+            const id = document.getElementById('editWalletId').value;
+            const label = document.getElementById('editWalletLabel').value.trim();
+
+            try {
+                const response = await fetch(`/wallets/${id}/label`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ label: label || null })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to update label');
+                }
+
+                closeEditModal();
+                showStatus('Label updated', 'success');
+                await loadWallets();
+            } catch (error) {
+                showStatus(error.message, 'error');
+            }
+        }
+
+        // Delete Wallet
+        async function deleteWallet(address) {
+            if (!confirm(`Delete wallet ${address}?`)) return;
+
+            try {
+                const response = await fetch(`/wallets/${encodeURIComponent(address)}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to delete wallet');
+                }
+
+                showStatus('Wallet deleted', 'success');
+                await loadWallets();
+            } catch (error) {
+                showStatus(error.message, 'error');
+            }
+        }
+
+        // Import Modal
+        function openImportModal() {
+            document.getElementById('importModal').classList.add('active');
+            document.getElementById('importText').value = '';
+            document.getElementById('importPreview').style.display = 'none';
+            document.getElementById('importBtn').disabled = true;
+        }
+
+        function closeImportModal() {
+            document.getElementById('importModal').classList.remove('active');
+        }
+
+        function previewImport() {
+            const text = document.getElementById('importText').value;
+            const lines = text.split('\n').filter(line => line.trim() && !line.trim().startsWith('#'));
+
+            const validWallets = [];
+            const validChains = ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base'];
+
+            lines.forEach(line => {
+                const trimmed = line.trim();
+                const colonIndex = trimmed.indexOf(':');
+                if (colonIndex > 0) {
+                    const chain = trimmed.substring(0, colonIndex).toLowerCase();
+                    const address = trimmed.substring(colonIndex + 1);
+                    if (validChains.includes(chain) && address.length > 10) {
+                        validWallets.push({ chain, address });
+                    }
+                }
+            });
+
+            const previewEl = document.getElementById('importPreview');
+            const listEl = document.getElementById('importPreviewList');
+            const countEl = document.getElementById('importCount');
+            const importBtn = document.getElementById('importBtn');
+
+            if (validWallets.length > 0) {
+                previewEl.style.display = 'block';
+                countEl.textContent = validWallets.length;
+                setSafeHTML(listEl, validWallets.slice(0, 10).map(w => `
+                    <div class="import-item">
+                        <span class="chain ${w.chain}">${w.chain}</span>
+                        <span class="address">${w.address}</span>
+                    </div>
+                `).join('') + (validWallets.length > 10 ? `<div class="import-item">... and ${validWallets.length - 10} more</div>` : '');
+                importBtn.disabled = false;
+            } else {
+                previewEl.style.display = 'none';
+                importBtn.disabled = true;
+            }
+        }
+
+        async function importWallets() {
+            const importBtn = document.getElementById('importBtn');
+            importBtn.disabled = true;
+            importBtn.textContent = 'Importing...';
+
+            try {
+                const text = document.getElementById('importText').value;
+                const lines = text.split('\n').filter(line => line.trim() && !line.trim().startsWith('#'));
+
+                const validChains = ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base'];
+                let added = 0;
+                let failed = 0;
+                let lastError = '';
+
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    const colonIndex = trimmed.indexOf(':');
+                    if (colonIndex > 0) {
+                        const chain = trimmed.substring(0, colonIndex).toLowerCase();
+                        const address = trimmed.substring(colonIndex + 1);
+                        if (validChains.includes(chain) && address.length > 10) {
+                            try {
+                                const response = await fetch('/wallets', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ address: `${chain}:${address}` })
+                                });
+                                if (response.ok) {
+                                    added++;
+                                } else {
+                                    failed++;
+                                    try {
+                                        const errData = await response.json();
+                                        lastError = errData.detail || response.statusText;
+                                    } catch {
+                                        lastError = response.statusText;
+                                    }
+                                    console.error(`Failed to import ${chain}:${address.substring(0,20)}...: ${lastError}`);
+                                }
+                            } catch (err) {
+                                failed++;
+                                lastError = err.message;
+                                console.error(`Error importing wallet: ${err.message}`);
+                            }
+                        }
+                    }
+                }
+
+                closeImportModal();
+                let msg = `Imported ${added} wallets`;
+                if (failed > 0) {
+                    msg += `, ${failed} failed`;
+                    if (lastError) msg += ` (${lastError})`;
+                }
+                showStatus(msg, added > 0 ? 'success' : 'error');
+                await loadWallets();
+            } catch (err) {
+                console.error('Import error:', err);
+                closeImportModal();
+                showStatus(`Import error: ${err.message}`, 'error');
+            } finally {
+                importBtn.disabled = false;
+                importBtn.textContent = 'Import Wallets';
+            }
+        }
+
+        // Export Wallets
+        function exportWallets() {
+            const content = wallets.map(w => `${w.blockchain}:${w.address}`).join('\n');
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'wallets.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+            showStatus('Wallets exported', 'success');
+        }
+
+        // ==========================================
+        // Asset Tab Switching
+        // ==========================================
+        let currentAssetTab = 'wallets';
+        let manualTokens = [];
+
+        function switchAssetTab(tab) {
+            currentAssetTab = tab;
+
+            // Update tab states
+            document.querySelectorAll('.asset-tab').forEach(t => {
+                t.classList.toggle('active', t.dataset.type === tab);
+            });
+
+            // Show/hide sections
+            document.getElementById('walletsSection').style.display = tab === 'wallets' ? 'block' : 'none';
+            document.getElementById('tokensSection').style.display = tab === 'tokens' ? 'block' : 'none';
+
+            // Show/hide header actions
+            document.getElementById('walletHeaderActions').style.display = tab === 'wallets' ? 'flex' : 'none';
+            document.getElementById('tokenHeaderActions').style.display = tab === 'tokens' ? 'flex' : 'none';
+
+            // Load tokens if switching to tokens tab
+            if (tab === 'tokens') {
+                loadManualTokens();
+            }
+        }
+
+        // ==========================================
+        // Manual Tokens Management
+        // ==========================================
+        async function loadManualTokens() {
+            try {
+                const response = await fetch('/portfolio/custom-tokens');
+                const data = await response.json();
+                manualTokens = data.tokens || [];
+                renderTokens();
+            } catch (error) {
+                console.error('Error loading tokens:', error);
+                showStatus('Failed to load tokens', 'error');
+            }
+        }
+
+        function renderTokens() {
+            const container = document.getElementById('tokenList');
+
+            if (manualTokens.length === 0) {
+                setSafeHTML(container, `
+                    <div class="empty-state">
+                        <h3>No manual tokens</h3>
+                        <p>Add tokens manually to track holdings not in your wallets.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            setSafeHTML(container, manualTokens.map(token => `
+                <div class="token-item">
+                    <div class="token-info">
+                        <div class="token-name">${token.ticker || token.name || 'Unknown Token'}</div>
+                        <div class="token-details">
+                            <span class="chain ${token.chain || 'cardano'}">${token.chain || 'cardano'}</span>
+                            ${token.label ? `<span class="label">${token.label}</span>` : ''}
+                            ${token.policy_id ? `<span class="policy-id">${token.policy_id.slice(0, 12)}...</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="token-quantity">
+                        <div class="amount">${formatTokenQuantity(token.quantity)}</div>
+                        ${token.value_usd ? `<div class="value">$${token.value_usd.toFixed(2)}</div>` : ''}
+                    </div>
+                    <div class="token-actions">
+                        <button class="btn btn-secondary btn-small" onclick="openEditTokenModal(${token.id}, '${token.ticker || token.name}', '${token.quantity}', '${token.label || ''}')">
+                            Edit
+                        </button>
+                        <button class="btn btn-danger btn-small" onclick="deleteToken(${token.id})">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function formatTokenQuantity(qty) {
+            const num = parseFloat(qty);
+            if (num >= 1000000) {
+                return (num / 1000000).toFixed(2) + 'M';
+            } else if (num >= 1000) {
+                return (num / 1000).toFixed(2) + 'K';
+            }
+            return num.toLocaleString(undefined, { maximumFractionDigits: 6 });
+        }
+
+        // Add Token Modal
+        function openAddTokenModal() {
+            document.getElementById('addTokenModal').classList.add('active');
+            document.getElementById('tokenChain').value = '';
+            document.getElementById('tokenIdentifier').value = '';
+            document.getElementById('tokenAmount').value = '';
+            document.getElementById('tokenLabel').value = '';
+        }
+
+        function closeAddTokenModal() {
+            document.getElementById('addTokenModal').classList.remove('active');
+        }
+
+        async function addManualToken(event) {
+            event.preventDefault();
+
+            const chain = document.getElementById('tokenChain').value;
+            const identifier = document.getElementById('tokenIdentifier').value.trim();
+            const quantity = document.getElementById('tokenAmount').value.trim();
+            const label = document.getElementById('tokenLabel').value.trim();
+
+            try {
+                const response = await fetch('/portfolio/custom-tokens', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chain: chain,
+                        ticker_or_policy: identifier,
+                        quantity: quantity,
+                        label: label || null
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to add token');
+                }
+
+                closeAddTokenModal();
+                showStatus('Token added successfully', 'success');
+                await loadManualTokens();
+            } catch (error) {
+                showStatus(error.message, 'error');
+            }
+        }
+
+        // Edit Token Modal
+        function openEditTokenModal(id, name, quantity, label) {
+            document.getElementById('editTokenModal').classList.add('active');
+            document.getElementById('editTokenId').value = id;
+            document.getElementById('editTokenName').value = name;
+            document.getElementById('editTokenAmount').value = quantity;
+            document.getElementById('editTokenLabel').value = label;
+        }
+
+        function closeEditTokenModal() {
+            document.getElementById('editTokenModal').classList.remove('active');
+        }
+
+        async function saveTokenEdit(event) {
+            event.preventDefault();
+
+            const id = document.getElementById('editTokenId').value;
+            const quantity = document.getElementById('editTokenAmount').value.trim();
+            const label = document.getElementById('editTokenLabel').value.trim();
+
+            try {
+                const response = await fetch(`/portfolio/custom-tokens/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        quantity: quantity,
+                        label: label || null
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to update token');
+                }
+
+                closeEditTokenModal();
+                showStatus('Token updated', 'success');
+                await loadManualTokens();
+            } catch (error) {
+                showStatus(error.message, 'error');
+            }
+        }
+
+        async function deleteToken(id) {
+            if (!confirm('Delete this token?')) return;
+
+            try {
+                const response = await fetch(`/portfolio/custom-tokens/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to delete token');
+                }
+
+                showStatus('Token deleted', 'success');
+                await loadManualTokens();
+            } catch (error) {
+                showStatus(error.message, 'error');
+            }
+        }
+
+        // Status Messages
+        function showStatus(message, type) {
+            const el = document.getElementById('statusMessage');
+            el.textContent = message;
+            el.className = `status-message ${type}`;
+            setTimeout(() => {
+                el.className = 'status-message';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

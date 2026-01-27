@@ -1,0 +1,445 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2867
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww21820\viewh14700\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 meta:\
+  repo: "Tarrant64/abct"\
+  scope:\
+    - web app security review (pages + APIs + microservice)\
+    - include: OWASP Top 10, NIST, ISO 27034, CWE, CIS Controls 1-6, CERT Secure Coding\
+    - exclude: infra/nginx deep hardening (separate review later)\
+\
+repo_surface_map:\
+  backend_entry:\
+    file: "backend/main.py"\
+    notes:\
+      - "Multiple routers included (wallets/portfolio/defi/prices/exchanges/nfts/custom_tokens/settings/security) with no visible global auth gate" # :contentReference[oaicite:6]\{index=6\}\
+      - "UI pages served via FileResponse: /, /wallets.html, /apis.html, /services.html, /security.html, /nft-wall.html" # :contentReference[oaicite:7]\{index=7\}\
+  high_risk_router:\
+    file: "backend/routers/security.py"\
+    notes:\
+      - "Endpoints include SSL mode update and certificate upload" # :contentReference[oaicite:8]\{index=8\}\
+      - "Uploads private key material to disk, chmod 600, then moves into place" # :contentReference[oaicite:9]\{index=9\}\
+  microservice:\
+    file: "docker/nft-price-service/app/main.py"\
+    notes:\
+      - "CORS allow_origins=['*'] and allow_credentials=True" # :contentReference[oaicite:10]\{index=10\}\
+      - "Binds 0.0.0.0:8080" # :contentReference[oaicite:11]\{index=11\}\
+  frontend_xss_sinks:\
+    file: "frontend/js/app.js"\
+    notes:\
+      - "Uses innerHTML with formatted values from API responses" # :contentReference[oaicite:12]\{index=12\}\
+\
+checks:\
+\
+  # ---------------------------------------------------------------------------\
+  # OWASP A01 Broken Access Control\
+  # ---------------------------------------------------------------------------\
+  - id: "ABCT-OWASP-A01-001"\
+    title: "Enforce authentication/authorization for all state-changing endpoints"\
+    category: "OWASP A01: Broken Access Control"\
+    why: "Routers are included without a visible global auth gate; security endpoints include certificate upload and SSL mode changes."\
+    repo_evidence:\
+      - "backend/main.py includes security router" # :contentReference[oaicite:13]\{index=13\}\
+      - "security router exposes /security/settings and /security/certificate/upload" # :contentReference[oaicite:14]\{index=14\}\
+    how_to_check:\
+      - "Enumerate all POST/PUT/PATCH/DELETE routes in backend/routers/*."\
+      - "Verify each requires (a) auth OR (b) explicit localhost-only enforcement OR (c) both."\
+    pass_criteria:\
+      - "All state-changing endpoints require auth or explicit local-only guard; /security/* must be protected."\
+    mappings:\
+      nist:\
+        - "NIST 800-53: AC-3, AC-6"\
+        - "NIST SSDF (800-218): PW.4, RV.1"\
+      iso_27034:\
+        - "Application security requirements & controls defined and enforced at runtime"\
+      cwe:\
+        - "CWE-306 (Missing Authentication)"\
+        - "CWE-285 (Improper Authorization)"\
+      cis_1_6:\
+        - "CIS 5 (Account Management)"\
+        - "CIS 6 (Access Control Management)"\
+      cert:\
+        - "CERT: Authenticate users, authorize actions; least privilege"\
+\
+  - id: "ABCT-OWASP-A01-002"\
+    title: "Protect certificate/key management endpoints with strongest controls"\
+    category: "OWASP A01: Broken Access Control"\
+    why: "Private key upload exists and is high impact."\
+    repo_evidence:\
+      - "Certificate upload endpoint writes uploaded cert/key and chmod 600" # :contentReference[oaicite:15]\{index=15\}\
+    how_to_check:\
+      - "Confirm /security/certificate/upload, /security/certificate/generate, /security/settings, /security/certificate DELETE cannot be called by unauthenticated remote users."\
+      - "Confirm request size limits and throttling exist (see A05-002)."\
+    pass_criteria:\
+      - "Endpoints are localhost-only AND authenticated (recommended), or otherwise strongly protected."\
+    mappings:\
+      nist: ["AC-3", "SC-12", "SC-13"]\
+      iso_27034: ["Protection of sensitive assets in application components"]\
+      cwe: ["CWE-306", "CWE-269 (Improper Privilege Management)"]\
+      cis_1_6: ["CIS 6"]\
+      cert: ["CERT: handle sensitive data with strict access control"]\
+\
+  # ---------------------------------------------------------------------------\
+  # OWASP A03 Injection (incl. XSS)\
+  # ---------------------------------------------------------------------------\
+  - id: "ABCT-OWASP-A03-001"\
+    title: "Eliminate DOM XSS sinks (innerHTML) for any API-derived values"\
+    category: "OWASP A03: Injection"\
+    why: "frontend uses innerHTML assignments which become XSS sinks if any value becomes attacker-controlled."\
+    repo_evidence:\
+      - "innerHTML used in frontend/js/app.js to render values" # :contentReference[oaicite:16]\{index=16\}\
+    how_to_check:\
+      - "Search for: innerHTML=, insertAdjacentHTML, document.write in frontend/**/*.js and frontend/**/*.html."\
+      - "For each sink, trace data origin: API responses, URL params, localStorage, DOM."\
+      - "Require textContent or DOM node creation for all untrusted strings."\
+    pass_criteria:\
+      - "No untrusted string flows into innerHTML; sanitized allowlist sanitizer used if HTML rendering is unavoidable."\
+    mappings:\
+      nist: ["SI-10 (Information Input Validation)"]\
+      iso_27034: ["Output encoding & input validation as app security controls"]\
+      cwe: ["CWE-79 (XSS)", "CWE-116 (Improper Encoding or Escaping)"]\
+      cis_1_6: ["CIS 4 (Secure Configuration)"]\
+      cert: ["CERT: Output Encoding, Validate Input, Avoid dangerous HTML APIs"]\
+\
+  - id: "ABCT-OWASP-A03-002"\
+    title: "Validate and sanitize any HTML generated server-side (microservice status page)"\
+    category: "OWASP A03: Injection"\
+    why: "Microservice builds HTML with f-strings and returns it; any future untrusted interpolation could become XSS."\
+    repo_evidence:\
+      - "HTML response built as f-string in nft-price-service" # :contentReference[oaicite:17]\{index=17\}\
+    how_to_check:\
+      - "Identify all HTMLResponse / template strings in backend and microservices."\
+      - "Confirm interpolated values are strictly typed (numbers/dates) or escaped."\
+    pass_criteria:\
+      - "No unescaped untrusted strings interpolated into HTML."\
+    mappings:\
+      nist: ["SI-10"]\
+      iso_27034: ["Secure output handling control"]\
+      cwe: ["CWE-79", "CWE-116"]\
+      cis_1_6: ["CIS 4"]\
+      cert: ["CERT: Encode output, avoid mixed data/markup"]\
+\
+  # ---------------------------------------------------------------------------\
+  # OWASP A05 Security Misconfiguration\
+  # ---------------------------------------------------------------------------\
+  - id: "ABCT-OWASP-A05-001"\
+    title: "Fix CORS: remove wildcard origins and disallow credentials unless required"\
+    category: "OWASP A05: Security Misconfiguration"\
+    why: "Microservice sets allow_origins=['*'] and allow_credentials=True."\
+    repo_evidence:\
+      - "CORS middleware configured with wildcard + credentials" # :contentReference[oaicite:18]\{index=18\}\
+    how_to_check:\
+      - "Confirm intended callers (same-origin ABCT UI vs remote)."\
+      - "If same-origin: remove CORS middleware entirely or explicitly set allowed origins to localhost/ABCT host."\
+      - "Set allow_credentials=false unless a real need exists."\
+    pass_criteria:\
+      - "No wildcard origin; credentials disabled unless explicitly required and safe."\
+    mappings:\
+      nist: ["SC-7 (Boundary Protection)", "SC-8 (Transmission Confidentiality)"]\
+      iso_27034: ["Secure configuration of application interfaces"]\
+      cwe: ["CWE-942 (Permissive Cross-domain Policy)"]\
+      cis_1_6: ["CIS 4"]\
+      cert: ["CERT: secure defaults; least privilege for cross-origin access"]\
+\
+  - id: "ABCT-OWASP-A05-002"\
+    title: "Enforce request size limits and upload constraints for certificate upload"\
+    category: "OWASP A05: Security Misconfiguration"\
+    why: "Upload endpoints accept files; without size limits you risk DoS and disk abuse."\
+    repo_evidence:\
+      - "UploadFile used for cert and key; files written to disk" # :contentReference[oaicite:19]\{index=19\}\
+    how_to_check:\
+      - "Confirm max body size at ASGI/server and app layer (e.g., middleware, reverse proxy)."\
+      - "Reject oversized uploads early; restrict accepted content types/extensions; validate PEM structure before storing."\
+    pass_criteria:\
+      - "Defined maximum request size; upload endpoints reject oversized content and invalid file types."\
+    mappings:\
+      nist: ["SC-5 (DoS Protection)", "SI-10"]\
+      iso_27034: ["Controls for secure input handling and resource management"]\
+      cwe: ["CWE-400 (Uncontrolled Resource Consumption)"]\
+      cis_1_6: ["CIS 4"]\
+      cert: ["CERT: limit resource usage; validate inputs before use"]\
+\
+  - id: "ABCT-OWASP-A05-003"\
+    title: "Bind to localhost by default; block remote access unless explicitly secured"\
+    category: "OWASP A05: Security Misconfiguration"\
+    why: "Microservice binds 0.0.0.0; backend docs show production host 0.0.0.0 option."\
+    repo_evidence:\
+      - "Microservice uvicorn run uses host=0.0.0.0" # :contentReference[oaicite:20]\{index=20\}\
+      - "Backend docs show production uvicorn host 0.0.0.0" # :contentReference[oaicite:21]\{index=21\}\
+    how_to_check:\
+      - "Confirm default runtime binds only to 127.0.0.1 (backend does for dev) and microservice is not exposed unintentionally."\
+      - "If exposed on LAN, require TLS + auth + firewall rules."\
+    pass_criteria:\
+      - "Default is localhost-only; remote exposure requires explicit secure configuration."\
+    mappings:\
+      nist: ["SC-7", "AC-17"]\
+      iso_27034: ["Secure deployment configuration control"]\
+      cwe: ["CWE-200 (Info Exposure)"]\
+      cis_1_6: ["CIS 1 (Inventory & Control of Enterprise Assets)", "CIS 4"]\
+      cert: ["CERT: secure defaults; minimize attack surface"]\
+\
+  # ---------------------------------------------------------------------------\
+  # OWASP A07 Identification & Authentication Failures\
+  # ---------------------------------------------------------------------------\
+  - id: "ABCT-OWASP-A07-001"\
+    title: "If authentication is added, ensure strong session/token handling"\
+    category: "OWASP A07: Identification & Authentication Failures"\
+    why: "Once auth exists, common failures are weak secrets, improper session storage, missing expiry."\
+    how_to_check:\
+      - "Verify: password hashing (if passwords), session cookie flags (Secure/HttpOnly/SameSite), token expiry, rotation, logout invalidation."\
+      - "Verify no auth tokens stored in localStorage unless strictly necessary and threat-modeled."\
+    pass_criteria:\
+      - "Auth uses strong, standard mechanisms; session protection enabled; token lifetime and rotation defined."\
+    mappings:\
+      nist: ["IA-2", "IA-5", "AC-12"]\
+      iso_27034: ["Authentication control design and verification"]\
+      cwe: ["CWE-287 (Improper Authentication)", "CWE-613 (Insufficient Session Expiration)"]\
+      cis_1_6: ["CIS 5", "CIS 6"]\
+      cert: ["CERT: proper authentication, session management"]\
+\
+  # ---------------------------------------------------------------------------\
+  # OWASP A08 Software & Data Integrity Failures\
+  # ---------------------------------------------------------------------------\
+  - id: "ABCT-OWASP-A08-001"\
+    title: "Protect integrity of locally stored secrets and settings (SQLite + env)"\
+    category: "OWASP A08: Software & Data Integrity Failures"\
+    why: "API keys and security settings are stored and can override env; ensure integrity controls and permissions."\
+    repo_evidence:\
+      - "API keys stored in SQLite and override env (changelog)" # :contentReference[oaicite:22]\{index=22\}\
+      - "Security settings stored for SSL config (changelog)" # :contentReference[oaicite:23]\{index=23\}\
+    how_to_check:\
+      - "Confirm file permissions for data directory, DB files, cert/key files."\
+      - "Confirm no unsafe exposure endpoints return secret values (only configured/missing status is OK)."\
+      - "Confirm inputs saved into DB are validated and not logged."\
+    pass_criteria:\
+      - "Secrets are never returned via API; files use restrictive permissions; integrity assumptions are documented."\
+    mappings:\
+      nist: ["SC-28 (Protection of Information at Rest)", "AU-9"]\
+      iso_27034: ["Protection of application data and keys"]\
+      cwe: ["CWE-522 (Insufficiently Protected Credentials)", "CWE-312 (Cleartext Storage)"]\
+      cis_1_6: ["CIS 3 (Data Protection)", "CIS 4"]\
+      cert: ["CERT: protect sensitive info at rest; minimize exposure"]\
+\
+  # ---------------------------------------------------------------------------\
+  # OWASP A09 Security Logging & Monitoring Failures\
+  # ---------------------------------------------------------------------------\
+  - id: "ABCT-OWASP-A09-001"\
+    title: "Log security-relevant events without leaking secrets"\
+    category: "OWASP A09: Security Logging & Monitoring Failures"\
+    why: "Certificate changes, SSL mode changes, API key changes, and auth failures need audit logs."\
+    repo_evidence:\
+      - "Security endpoints exist for mode changes and cert upload" # :contentReference[oaicite:24]\{index=24\}\
+    how_to_check:\
+      - "Ensure logs record: who/what initiated change, timestamp, endpoint, success/failure."\
+      - "Verify logs never include key material, cert private key contents, or API key values."\
+    pass_criteria:\
+      - "Audit trail exists for security actions; secrets are redacted."\
+    mappings:\
+      nist: ["AU-2", "AU-6", "SI-4"]\
+      iso_27034: ["Security event logging as an application control"]\
+      cwe: ["CWE-532 (Information Exposure Through Log Files)"]\
+      cis_1_6: ["CIS 4"]\
+      cert: ["CERT: log securely; do not log secrets"]\
+\
+  # ---------------------------------------------------------------------------\
+  # ISO 27034 (Application Security) - process/control checks (tailored)\
+  # ---------------------------------------------------------------------------\
+  - id: "ABCT-ISO27034-001"\
+    title: "Define and maintain an Application Security Control (ASC) set for ABCT"\
+    category: "ISO/IEC 27034: Application Security Controls"\
+    why: "ISO 27034 expects an explicit set of app security controls and verification."\
+    how_to_check:\
+      - "Create/verify a short ASC document (or SECURITY.md) listing: auth model, local-only model, TLS model, secret handling, logging, input validation, XSS approach."\
+      - "Ensure each control is mapped to code locations and has a verification method."\
+    pass_criteria:\
+      - "ASC exists; controls are testable and linked to implementation points."\
+    mappings:\
+      nist: ["SSDF: PO.1, PO.3, RV.1"]\
+      cwe: ["N/A (process control)"]\
+      cis_1_6: ["CIS 2 (Software Inventory)"]\
+      cert: ["Secure coding standard referenced and enforced"]\
+\
+  - id: "ABCT-ISO27034-002"\
+    title: "Application security verification: repeatable checks in CI"\
+    category: "ISO/IEC 27034: Verification"\
+    why: "Controls must be verifiable; automate scanning."\
+    how_to_check:\
+      - "Add CI steps: gitleaks, dependency audit, basic SAST for Python/JS, and a route auth check (see A01)."\
+    pass_criteria:\
+      - "CI fails on secrets, known-vuln deps, and missing protection on critical routes."\
+    mappings:\
+      nist: ["SSDF: PW.8, RV.1, RV.2"]\
+      cis_1_6: ["CIS 2", "CIS 4"]\
+      cert: ["Automate enforcement of secure coding rules"]\
+\
+  # ---------------------------------------------------------------------------\
+  # CIS Controls 1\'966 (tailored to ABCT web app)\
+  # ---------------------------------------------------------------------------\
+  - id: "ABCT-CIS-001"\
+    title: "CIS 1: Inventory exposed network services (backend + microservice) and ensure intentional exposure only"\
+    category: "CIS 1: Inventory and Control of Enterprise Assets"\
+    repo_evidence:\
+      - "Microservice binds 0.0.0.0:8080" # :contentReference[oaicite:25]\{index=25\}\
+    how_to_check:\
+      - "List all listeners/ports in docker-compose, uvicorn configs, scripts."\
+      - "Confirm each service is bound to localhost unless explicitly needed."\
+    pass_criteria:\
+      - "No unintended remote listeners; exposure documented."\
+    mappings:\
+      owasp: ["A05", "A01"]\
+      nist: ["SC-7"]\
+      cwe: ["CWE-200"]\
+      cert: ["Reduce attack surface"]\
+\
+  - id: "ABCT-CIS-002"\
+    title: "CIS 2: Inventory third-party libraries; verify update and vuln policy"\
+    category: "CIS 2: Inventory and Control of Software Assets"\
+    how_to_check:\
+      - "Enumerate Python dependencies (requirements/pyproject) and JS deps (if any)."\
+      - "Run vulnerability scan; verify pinned versions and update cadence."\
+    pass_criteria:\
+      - "Known critical/high vulns addressed or risk-accepted; versions pinned."\
+    mappings:\
+      owasp: ["A06 (Vulnerable and Outdated Components)"]\
+      nist: ["SSDF: PW.4, RV.2"]\
+      cwe: ["CWE-1104 (Use of Unmaintained Third Party Components)"]\
+      cert: ["Keep dependencies updated"]\
+\
+  - id: "ABCT-CIS-003"\
+    title: "CIS 3: Data protection for API keys, wallet identifiers, and portfolio data"\
+    category: "CIS 3: Data Protection"\
+    how_to_check:\
+      - "Ensure API keys are never returned from endpoints; only configured/missing flags."\
+      - "Ensure DB and cert/key files are permission-restricted; consider encryption at rest if threat model requires."\
+    pass_criteria:\
+      - "Sensitive data is minimized, protected at rest, and never exposed via API/logs."\
+    mappings:\
+      owasp: ["A02 (Cryptographic Failures)", "A09"]\
+      nist: ["SC-28", "AU-9"]\
+      cwe: ["CWE-522", "CWE-532"]\
+      cert: ["Protect sensitive information"]\
+\
+  - id: "ABCT-CIS-004"\
+    title: "CIS 4: Secure configuration baselines for FastAPI + CORS + TLS"\
+    category: "CIS 4: Secure Configuration of Enterprise Assets and Software"\
+    repo_evidence:\
+      - "CORS wildcard + credentials in microservice" # :contentReference[oaicite:26]\{index=26\}\
+    how_to_check:\
+      - "Set secure defaults: localhost bind, strict CORS, TLS required for remote."\
+    pass_criteria:\
+      - "Secure defaults enforced; insecure modes require explicit opt-in."\
+    mappings:\
+      owasp: ["A05"]\
+      nist: ["CM-2", "SC-7"]\
+      cwe: ["CWE-942"]\
+      cert: ["Secure defaults"]\
+\
+  - id: "ABCT-CIS-005"\
+    title: "CIS 5/6: Account and access control management for administrative functions"\
+    category: "CIS 5 & CIS 6"\
+    repo_evidence:\
+      - "Security router provides admin-like operations (SSL mode + cert upload)" # :contentReference[oaicite:27]\{index=27\}\
+    how_to_check:\
+      - "Define roles: admin vs read-only."\
+      - "Ensure only admin can call /security/* and settings endpoints."\
+    pass_criteria:\
+      - "Roles and permissions enforced consistently across routers."\
+    mappings:\
+      owasp: ["A01", "A07"]\
+      nist: ["AC-3", "AC-6", "IA-2"]\
+      cwe: ["CWE-285", "CWE-306"]\
+      cert: ["Least privilege; authorization checks"]\
+\
+  # ---------------------------------------------------------------------------\
+  # CERT Secure Coding (web-relevant, tailored)\
+  # ---------------------------------------------------------------------------\
+  - id: "ABCT-CERT-001"\
+    title: "Validate all external inputs at trust boundaries (API params, JSON bodies, files)"\
+    category: "CERT Secure Coding"\
+    repo_evidence:\
+      - "Microservice exposes POST/DELETE endpoints for collections" # :contentReference[oaicite:28]\{index=28\}\
+      - "Security upload endpoints accept files" # :contentReference[oaicite:29]\{index=29\}\
+    how_to_check:\
+      - "For each endpoint: validate types, ranges, and formats; reject unexpected fields."\
+      - "Ensure file uploads validate before persistence."\
+    pass_criteria:\
+      - "All endpoints enforce strict validation; failures produce safe errors."\
+    mappings:\
+      owasp: ["A03"]\
+      nist: ["SI-10"]\
+      cwe: ["CWE-20 (Improper Input Validation)"]\
+\
+  - id: "ABCT-CERT-002"\
+    title: "Do not expose sensitive data in errors or logs"\
+    category: "CERT Secure Coding"\
+    how_to_check:\
+      - "Scan logs/error handlers for printing request bodies, headers, env vars, DB rows containing secrets."\
+      - "Verify exception messages returned to clients don\'92t include file paths/secrets."\
+    pass_criteria:\
+      - "Errors are user-safe; logs are redacted."\
+    mappings:\
+      owasp: ["A09", "A05"]\
+      nist: ["AU-9", "SI-11"]\
+      cwe: ["CWE-209 (Information Exposure Through an Error Message)", "CWE-532"]\
+\
+  # ---------------------------------------------------------------------------\
+  # CWE-focused \'93hotspot\'94 checks (agent should explicitly test)\
+  # ---------------------------------------------------------------------------\
+  - id: "ABCT-CWE-306-001"\
+    title: "Confirm no unauthenticated remote caller can trigger state changes"\
+    category: "CWE Hotspot"\
+    repo_evidence:\
+      - "Routers included without visible auth guard" # :contentReference[oaicite:30]\{index=30\}\
+    how_to_check:\
+      - "Run app bound to LAN (test) and attempt POST/PUT/DELETE calls without auth."\
+    pass_criteria:\
+      - "All such calls are rejected or unreachable remotely."\
+    mappings:\
+      owasp: ["A01"]\
+      nist: ["AC-3"]\
+      cwe: ["CWE-306", "CWE-285"]\
+\
+  - id: "ABCT-CWE-79-001"\
+    title: "Confirm XSS is not possible via UI rendering of API responses"\
+    category: "CWE Hotspot"\
+    repo_evidence:\
+      - "innerHTML sinks exist" # :contentReference[oaicite:31]\{index=31\}\
+    how_to_check:\
+      - "Fuzz API responses (test env) by injecting HTML/JS payloads into any string fields and see if they execute in browser."\
+    pass_criteria:\
+      - "Payload is rendered as text; no script execution."\
+    mappings:\
+      owasp: ["A03"]\
+      nist: ["SI-10"]\
+      cwe: ["CWE-79", "CWE-116"]\
+\
+framework_index:\
+  OWASP:\
+    A01: ["ABCT-OWASP-A01-001", "ABCT-OWASP-A01-002", "ABCT-CWE-306-001"]\
+    A03: ["ABCT-OWASP-A03-001", "ABCT-OWASP-A03-002", "ABCT-CERT-001", "ABCT-CWE-79-001"]\
+    A05: ["ABCT-OWASP-A05-001", "ABCT-OWASP-A05-002", "ABCT-OWASP-A05-003", "ABCT-CIS-004"]\
+    A07: ["ABCT-OWASP-A07-001", "ABCT-CIS-005"]\
+    A08: ["ABCT-OWASP-A08-001"]\
+    A09: ["ABCT-OWASP-A09-001", "ABCT-CERT-002"]\
+  NIST:\
+    SSDF_800_218: ["ABCT-ISO27034-002", "ABCT-OWASP-A01-001", "ABCT-CIS-002"]\
+    SP_800_53_AC: ["ABCT-OWASP-A01-001", "ABCT-OWASP-A01-002", "ABCT-CIS-005"]\
+    SP_800_53_SI: ["ABCT-OWASP-A03-001", "ABCT-CERT-001", "ABCT-CWE-79-001"]\
+    SP_800_53_SC: ["ABCT-OWASP-A05-001", "ABCT-OWASP-A05-003", "ABCT-OWASP-A08-001"]\
+    SP_800_53_AU: ["ABCT-OWASP-A09-001", "ABCT-CERT-002"]\
+  ISO_27034:\
+    Controls: ["ABCT-ISO27034-001", "ABCT-ISO27034-002", "ABCT-OWASP-A01-001", "ABCT-OWASP-A03-001", "ABCT-OWASP-A08-001"]\
+  CIS_Controls_1_to_6:\
+    CIS_1: ["ABCT-CIS-001"]\
+    CIS_2: ["ABCT-CIS-002"]\
+    CIS_3: ["ABCT-CIS-003"]\
+    CIS_4: ["ABCT-CIS-004", "ABCT-OWASP-A05-001", "ABCT-OWASP-A05-003"]\
+    CIS_5: ["ABCT-CIS-005"]\
+    CIS_6: ["ABCT-CIS-005", "ABCT-OWASP-A01-001"]\
+  CERT:\
+    Secure_Coding: ["ABCT-CERT-001", "ABCT-CERT-002", "ABCT-OWASP-A03-001", "ABCT-OWASP-A09-001"]\
+}

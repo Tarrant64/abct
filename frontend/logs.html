@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ABCT - System Logs</title>
+    <link rel="stylesheet" href="/static/css/styles.css?v=20">
+    <style>
+        .logs-page {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .page-header h1 {
+            margin: 0;
+            color: #e0e0e0;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 12px;
+        }
+
+        /* Controls Bar */
+        .controls-bar {
+            background: linear-gradient(135deg, #1a1a2e 0%, #2a2a3e 100%);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            border: 1px solid #2a2a4e;
+        }
+
+        .controls-row {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .control-group label {
+            color: #888;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+
+        .control-group select,
+        .control-group input {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            color: #e0e0e0;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        .control-group select:focus,
+        .control-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        /* Stats Bar */
+        .stats-bar {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #1a1a2e 0%, #2a2a3e 100%);
+            padding: 15px 20px;
+            border-radius: 8px;
+            border: 1px solid #2a2a4e;
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .stat-label {
+            color: #888;
+            font-size: 12px;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 600;
+            color: #e0e0e0;
+        }
+
+        .stat-value.error { color: #ef4444; }
+        .stat-value.warning { color: #f59e0b; }
+        .stat-value.info { color: #3b82f6; }
+        .stat-value.debug { color: #6b7280; }
+
+        /* Log Container */
+        .log-container {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            height: 600px;
+            overflow-y: auto;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            padding: 15px;
+        }
+
+        .log-container.auto-scroll {
+            scroll-behavior: smooth;
+        }
+
+        /* Log Entry */
+        .log-entry {
+            padding: 10px;
+            margin-bottom: 8px;
+            border-left: 3px solid #30363d;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 4px;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .log-entry.ERROR {
+            border-left-color: #ef4444;
+            background: rgba(239, 68, 68, 0.05);
+        }
+
+        .log-entry.WARNING {
+            border-left-color: #f59e0b;
+            background: rgba(245, 158, 11, 0.05);
+        }
+
+        .log-entry.INFO {
+            border-left-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.05);
+        }
+
+        .log-entry.DEBUG {
+            border-left-color: #6b7280;
+            background: rgba(107, 114, 128, 0.05);
+        }
+
+        .log-header {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .log-timestamp {
+            color: #6b7280;
+        }
+
+        .log-level {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .log-level.ERROR {
+            background: #ef4444;
+            color: white;
+        }
+
+        .log-level.WARNING {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .log-level.INFO {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .log-level.DEBUG {
+            background: #6b7280;
+            color: white;
+        }
+
+        .log-source {
+            color: #8b949e;
+            font-weight: 500;
+        }
+
+        .log-message {
+            color: #e0e0e0;
+            margin: 5px 0;
+            word-wrap: break-word;
+        }
+
+        .log-traceback {
+            color: #ff6b6b;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 8px;
+            font-size: 12px;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+
+        /* Connection Status */
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: #1a1a2e;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+
+        .connection-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #6b7280;
+        }
+
+        .connection-indicator.connected {
+            background: #10b981;
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .connection-indicator.disconnected {
+            background: #ef4444;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6b7280;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        /* Toggle Switches */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #30363d;
+            transition: .3s;
+            border-radius: 24px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        .toggle-switch input:checked + .toggle-slider {
+            background-color: #667eea;
+        }
+
+        .toggle-switch input:checked + .toggle-slider:before {
+            transform: translateX(20px);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .controls-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .control-group {
+                width: 100%;
+            }
+
+            .log-container {
+                height: 400px;
+            }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js">
+        // XSS Protection - Safe HTML rendering
+        function setSafeHTML(element, html) {
+            if (!element) return;
+            if (typeof DOMPurify !== 'undefined') {
+                setSafeHTML(element, DOMPurify.sanitize(html);
+            } else {
+                console.warn('DOMPurify not loaded, falling back to textContent');
+                element.textContent = html;
+            }
+        }
+</script>
+</head>
+<body>
+    <div class="logs-page">
+        <div class="page-header">
+            <h1>System Logs</h1>
+            <div class="nav-links">
+                <a href="/services.html" class="btn btn-secondary">Service Health</a>
+                <a href="/" class="btn btn-secondary">Back to Dashboard</a>
+            </div>
+        </div>
+
+        <!-- Stats Bar -->
+        <div class="stats-bar" id="statsBar">
+            <div class="stat-card">
+                <div class="stat-label">Total Logs</div>
+                <div class="stat-value" id="totalLogs">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Errors</div>
+                <div class="stat-value error" id="errorCount">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Warnings</div>
+                <div class="stat-value warning" id="warningCount">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Active Streams</div>
+                <div class="stat-value info" id="activeStreams">-</div>
+            </div>
+        </div>
+
+        <!-- Controls Bar -->
+        <div class="controls-bar">
+            <div class="controls-row">
+                <div class="control-group">
+                    <label>Level Filter</label>
+                    <select id="levelFilter">
+                        <option value="">All Levels</option>
+                        <option value="ERROR">Errors</option>
+                        <option value="WARNING">Warnings</option>
+                        <option value="INFO">Info</option>
+                        <option value="DEBUG">Debug</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label>Source Filter</label>
+                    <input type="text" id="sourceFilter" placeholder="e.g., wallets, nft">
+                </div>
+
+                <div class="control-group">
+                    <label>Auto-Scroll</label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="autoScroll" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="control-group">
+                    <label>Live Stream</label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="liveStream" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="control-group">
+                    <label>&nbsp;</label>
+                    <button class="btn btn-secondary" onclick="clearLogs()">Clear Logs</button>
+                </div>
+
+                <div class="control-group">
+                    <label>&nbsp;</label>
+                    <div class="connection-status">
+                        <span class="connection-indicator" id="connectionIndicator"></span>
+                        <span id="connectionText">Connecting...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Log Container -->
+        <div class="log-container auto-scroll" id="logContainer">
+            <div class="empty-state">
+                <div class="empty-state-icon">📋</div>
+                <div>Waiting for logs...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let eventSource = null;
+        let autoScroll = true;
+        let liveStream = true;
+        let logBuffer = [];
+        let levelFilter = '';
+        let sourceFilter = '';
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStats();
+            loadRecentLogs();
+            setupEventListeners();
+            startLiveStream();
+
+            // Refresh stats every 10 seconds
+            setInterval(loadStats, 10000);
+        });
+
+        function setupEventListeners() {
+            document.getElementById('levelFilter').addEventListener('change', (e) => {
+                levelFilter = e.target.value;
+                filterLogs();
+            });
+
+            document.getElementById('sourceFilter').addEventListener('input', (e) => {
+                sourceFilter = e.target.value.toLowerCase();
+                filterLogs();
+            });
+
+            document.getElementById('autoScroll').addEventListener('change', (e) => {
+                autoScroll = e.target.checked;
+                if (autoScroll) {
+                    scrollToBottom();
+                }
+            });
+
+            document.getElementById('liveStream').addEventListener('change', (e) => {
+                liveStream = e.target.checked;
+                if (liveStream) {
+                    startLiveStream();
+                } else {
+                    stopLiveStream();
+                }
+            });
+        }
+
+        async function loadStats() {
+            try {
+                const response = await fetch('/logs/stats');
+                const data = await response.json();
+
+                if (data.stats) {
+                    const buffer = data.stats.buffer || {};
+                    const db = data.stats.database || {};
+
+                    document.getElementById('totalLogs').textContent = buffer.total || 0;
+                    document.getElementById('errorCount').textContent = (buffer.by_level?.ERROR || 0);
+                    document.getElementById('warningCount').textContent = (buffer.by_level?.WARNING || 0);
+                    document.getElementById('activeStreams').textContent = data.stats.subscribers || 0;
+                }
+            } catch (error) {
+                console.error('Failed to load stats:', error);
+            }
+        }
+
+        async function loadRecentLogs() {
+            try {
+                const response = await fetch('/logs/recent?limit=100');
+                const data = await response.json();
+
+                logBuffer = data.logs || [];
+                renderLogs();
+            } catch (error) {
+                console.error('Failed to load recent logs:', error);
+            }
+        }
+
+        function startLiveStream() {
+            if (eventSource) return;
+
+            eventSource = new EventSource('/logs/stream');
+
+            eventSource.onopen = () => {
+                updateConnectionStatus(true);
+            };
+
+            eventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+
+                    if (data.event === 'connected' || data.event === 'ping') {
+                        return;
+                    }
+
+                    // Add to buffer
+                    logBuffer.unshift(data);
+
+                    // Keep buffer size reasonable
+                    if (logBuffer.length > 500) {
+                        logBuffer = logBuffer.slice(0, 500);
+                    }
+
+                    renderLogs();
+                    loadStats(); // Update stats
+                } catch (error) {
+                    console.error('Failed to parse log event:', error);
+                }
+            };
+
+            eventSource.onerror = () => {
+                updateConnectionStatus(false);
+                stopLiveStream();
+
+                // Reconnect after 5 seconds
+                setTimeout(() => {
+                    if (liveStream) {
+                        startLiveStream();
+                    }
+                }, 5000);
+            };
+        }
+
+        function stopLiveStream() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+                updateConnectionStatus(false);
+            }
+        }
+
+        function updateConnectionStatus(connected) {
+            const indicator = document.getElementById('connectionIndicator');
+            const text = document.getElementById('connectionText');
+
+            if (connected) {
+                indicator.classList.add('connected');
+                indicator.classList.remove('disconnected');
+                text.textContent = 'Live';
+            } else {
+                indicator.classList.remove('connected');
+                indicator.classList.add('disconnected');
+                text.textContent = 'Disconnected';
+            }
+        }
+
+        function filterLogs() {
+            renderLogs();
+        }
+
+        function renderLogs() {
+            const container = document.getElementById('logContainer');
+
+            // Filter logs
+            let filtered = logBuffer;
+
+            if (levelFilter) {
+                filtered = filtered.filter(log => log.level === levelFilter);
+            }
+
+            if (sourceFilter) {
+                filtered = filtered.filter(log =>
+                    log.source.toLowerCase().includes(sourceFilter)
+                );
+            }
+
+            if (filtered.length === 0) {
+                setSafeHTML(container, `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📋</div>
+                        <div>No logs match the current filters</div>
+                    </div>
+                `;
+                return;
+            }
+
+            // Render logs
+            setSafeHTML(container, filtered.map(log => {
+                const timestamp = new Date(log.timestamp).toLocaleString();
+                const traceback = log.traceback ? `
+                    <div class="log-traceback">${escapeHtml(log.traceback)}</div>
+                ` : '';
+
+                return `
+                    <div class="log-entry ${log.level}">
+                        <div class="log-header">
+                            <span class="log-timestamp">${timestamp}</span>
+                            <span class="log-level ${log.level}">${log.level}</span>
+                            <span class="log-source">[${escapeHtml(log.source)}]</span>
+                        </div>
+                        <div class="log-message">${escapeHtml(log.message)}</div>
+                        ${traceback}
+                    </div>
+                `;
+            }).join('');
+
+            if (autoScroll) {
+                scrollToBottom();
+            }
+        }
+
+        function scrollToBottom() {
+            const container = document.getElementById('logContainer');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        async function clearLogs() {
+            if (!confirm('Are you sure you want to clear all logs? This action cannot be undone.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/logs', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ confirm: true })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to clear logs');
+                }
+
+                logBuffer = [];
+                renderLogs();
+                loadStats();
+
+                alert('Logs cleared successfully');
+            } catch (error) {
+                console.error('Failed to clear logs:', error);
+                alert('Failed to clear logs: ' + error.message);
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            stopLiveStream();
+        });
+    </script>
+</body>
+</html>

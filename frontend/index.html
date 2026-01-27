@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A Better Crypto Tracker</title>
+    <link rel="stylesheet" href="/static/css/styles.css?v=21">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+    <!-- DOMPurify for XSS protection -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>A Better Crypto Tracker</h1>
+            <div class="header-actions">
+                <button id="privacyBtn" class="btn btn-privacy" onclick="togglePrivacyMode()" title="Toggle privacy mode">
+                    Privacy Mode
+                </button>
+                <button id="sectionsToggleBtn" class="btn btn-sections" onclick="toggleAllSections()" title="Expand/Collapse all sections">
+                    Expand All
+                </button>
+                <div class="theme-selector">
+                    <select id="themeSelect" onchange="changeTheme(this.value)" title="Select theme">
+                        <option value="default">Default</option>
+                        <option value="cypherpunk1">Cypherpunk 1</option>
+                        <option value="green-terminal">Green Terminal</option>
+                        <option value="ocean-depths">Ocean Depths</option>
+                        <option value="sunset-horizon">Sunset Horizon</option>
+                    </select>
+                </div>
+                <button id="refreshBtn" class="btn btn-primary">Refresh Balances</button>
+                <div class="waffle-menu-container">
+                    <button class="waffle-menu-btn" onclick="toggleWaffleMenu()" title="Menu">
+                        <span class="waffle-icon">
+                            <span></span><span></span><span></span>
+                            <span></span><span></span><span></span>
+                            <span></span><span></span><span></span>
+                        </span>
+                    </button>
+                    <div class="waffle-menu-dropdown" id="waffleMenu">
+                        <a href="/wallets.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128176;</span>
+                            <span class="waffle-item-label">Manage Assets</span>
+                        </a>
+                        <a href="/apis.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128273;</span>
+                            <span class="waffle-item-label">APIs</span>
+                        </a>
+                        <a href="/services.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#9881;</span>
+                            <span class="waffle-item-label">Services</span>
+                        </a>
+                        <a href="/security.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128274;</span>
+                            <span class="waffle-item-label">Security</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <!-- Status Bar -->
+            <div id="statusBar" class="status-bar hidden">
+                <span id="statusMessage"></span>
+            </div>
+
+            <!-- Startup Status Indicator -->
+            <div id="startupIndicator" class="startup-indicator" style="display: none;">
+                <span class="spinner-small"></span>
+                <span id="startupMessage">Loading NFT prices...</span>
+            </div>
+
+            <!-- Portfolio Summary -->
+            <section class="summary-section">
+                <div class="section-header-inline summary-header">
+                    <h2>Portfolio Summary</h2>
+                    <div class="display-toggle display-toggle-compact">
+                        <button id="displayToggle" class="toggle-btn toggle-btn-compact" onclick="toggleDisplayMode()">
+                            <span class="toggle-option active" data-mode="crypto">Crypto</span>
+                            <span class="toggle-option" data-mode="usd">USD</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="total-portfolio-card">
+                    <div class="total-header">
+                        <div class="total-label">Total Portfolio Value</div>
+                        <button id="globalRefreshBtn" class="btn btn-refresh-small" onclick="globalRefreshAll()" title="Refresh all data">
+                            <span class="refresh-icon">↻</span>
+                        </button>
+                    </div>
+                    <div class="total-value" id="totalPortfolioValue">$0.00</div>
+                    <div class="last-updated" id="lastUpdated" style="font-size: 0.75rem; color: #888; text-align: center; margin-top: 5px;"></div>
+                    <div class="total-breakdown" id="totalBreakdown">
+                        <span class="breakdown-item">Wallets: $0.00</span>
+                        <span class="breakdown-item">Exchanges: $0.00</span>
+                        <span class="breakdown-item">Staking: $0.00</span>
+                    </div>
+                </div>
+                <div class="summary-cards">
+                    <div class="summary-card cardano">
+                        <div class="card-header">
+                            <span class="blockchain-icon">₳</span>
+                            <span>Cardano</span>
+                            <div class="price-info">
+                                <span class="token-price" id="adaPrice">$0.00</span>
+                                <span class="price-change" id="adaChange">0.0%</span>
+                                <span class="market-cap" id="adaMcap"></span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="balance" id="adaBalance">0.000000 ADA</div>
+                            <div class="balance-secondary" id="adaBalanceUsd">($0.00)</div>
+                            <div class="details">
+                                <span id="cardanoWallets">0 wallets</span>
+                                <span id="cardanoAssets">0 native assets</span>
+                                <span id="cardanoNfts">0 NFTs</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="summary-card bitcoin">
+                        <div class="card-header">
+                            <span class="blockchain-icon">₿</span>
+                            <span>Bitcoin</span>
+                            <div class="price-info">
+                                <span class="token-price" id="btcPrice">$0.00</span>
+                                <span class="price-change" id="btcChange">0.0%</span>
+                                <span class="market-cap" id="btcMcap"></span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="balance" id="btcBalance">0.00000000 BTC</div>
+                            <div class="balance-secondary" id="btcBalanceUsd">($0.00)</div>
+                            <div class="details">
+                                <span id="bitcoinWallets">0 wallets</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="summary-card ethereum">
+                        <div class="card-header">
+                            <span class="blockchain-icon">Ξ</span>
+                            <span>Ethereum</span>
+                            <div class="price-info">
+                                <span class="token-price" id="ethPrice">$0.00</span>
+                                <span class="price-change" id="ethChange">0.0%</span>
+                                <span class="market-cap" id="ethMcap"></span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="balance" id="ethBalance">0.00000000 ETH</div>
+                            <div class="balance-secondary" id="ethBalanceUsd">($0.00)</div>
+                            <div class="details">
+                                <span id="ethereumWallets">0 wallets</span>
+                                <span id="ethereumTokens">0 tokens</span>
+                                <span id="ethereumNfts">0 NFTs</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="summary-card solana">
+                        <div class="card-header">
+                            <span class="blockchain-icon">◎</span>
+                            <span>Solana</span>
+                            <div class="price-info">
+                                <span class="token-price" id="solPrice">$0.00</span>
+                                <span class="price-change" id="solChange">0.0%</span>
+                                <span class="market-cap" id="solMcap"></span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="balance" id="solBalance">0.000000000 SOL</div>
+                            <div class="balance-secondary" id="solBalanceUsd">($0.00)</div>
+                            <div class="details">
+                                <span id="solanaWallets">0 wallets</span>
+                                <span id="solanaTokens">0 tokens</span>
+                                <span id="solanaNfts">0 NFTs</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="summary-card polygon">
+                        <div class="card-header">
+                            <span class="blockchain-icon">⬡</span>
+                            <span>Polygon</span>
+                            <div class="price-info">
+                                <span class="token-price" id="maticPrice">$0.00</span>
+                                <span class="price-change" id="maticChange">0.0%</span>
+                                <span class="market-cap" id="maticMcap"></span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="balance" id="maticBalance">0.000000 POL</div>
+                            <div class="balance-secondary" id="maticBalanceUsd">($0.00)</div>
+                            <div class="details">
+                                <span id="polygonWallets">0 wallets</span>
+                                <span id="polygonTokens">0 tokens</span>
+                                <span id="polygonNfts">0 NFTs</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="summary-card base">
+                        <div class="card-header">
+                            <span class="blockchain-icon">Ⓑ</span>
+                            <span>Base</span>
+                            <div class="price-info">
+                                <span class="token-price" id="baseEthPrice">$0.00</span>
+                                <span class="price-change" id="baseEthChange">0.0%</span>
+                                <span class="market-cap" id="baseEthMcap"></span>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="balance" id="baseEthBalance">0.00000000 ETH</div>
+                            <div class="balance-secondary" id="baseEthBalanceUsd">($0.00)</div>
+                            <div class="details">
+                                <span id="baseWallets">0 wallets</span>
+                                <span id="baseTokens">0 tokens</span>
+                                <span id="baseNfts">0 NFTs</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Portfolio Value History Chart -->
+            <section class="history-section">
+                <div class="section-header-inline">
+                    <h2>Portfolio Value History</h2>
+                    <div class="history-range-selector">
+                        <button class="range-btn active" data-range="7d">7 Days</button>
+                        <button class="range-btn" data-range="4w">4 Weeks</button>
+                        <button class="range-btn" data-range="3m">3 Months</button>
+                    </div>
+                </div>
+                <div class="history-chart-container">
+                    <canvas id="portfolioHistoryChart"></canvas>
+                    <div class="chart-empty-state" id="chartEmptyState">
+                        <p>No historical data yet.</p>
+                        <p class="chart-empty-hint">Portfolio snapshots are captured daily at 12:00 PM CT.</p>
+                    </div>
+                </div>
+                <div class="chart-category-toggles">
+                    <span class="toggle-label">Include:</span>
+                    <label class="category-toggle">
+                        <input type="checkbox" id="chartWallets" checked onchange="updateChartCategories()">
+                        <span class="category-name">Wallets</span>
+                    </label>
+                    <label class="category-toggle">
+                        <input type="checkbox" id="chartExchanges" checked onchange="updateChartCategories()">
+                        <span class="category-name">Exchanges</span>
+                    </label>
+                    <label class="category-toggle">
+                        <input type="checkbox" id="chartStaking" checked onchange="updateChartCategories()">
+                        <span class="category-name">Staking</span>
+                    </label>
+                    <label class="category-toggle">
+                        <input type="checkbox" id="chartDefi" checked onchange="updateChartCategories()">
+                        <span class="category-name">DeFi</span>
+                    </label>
+                    <label class="category-toggle">
+                        <input type="checkbox" id="chartNfts" checked onchange="updateChartCategories()">
+                        <span class="category-name">NFTs</span>
+                    </label>
+                    <label class="category-toggle">
+                        <input type="checkbox" id="chartTrackedTokens" checked onchange="updateChartCategories()">
+                        <span class="category-name">Native Tokens</span>
+                    </label>
+                </div>
+                <div class="history-info">
+                    <span id="historyLastUpdate">Last snapshot: --</span>
+                </div>
+            </section>
+
+            <!-- Wallets List -->
+            <section class="wallets-section collapsible-section collapsed">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h2>Self-Custody Wallets</h2>
+                    <div class="section-summary" id="walletsSummary">
+                        <span class="chain-count cardano">0 Cardano</span>
+                        <span class="chain-count bitcoin">0 Bitcoin</span>
+                        <span class="chain-count ethereum">0 Ethereum</span>
+                        <span class="chain-count solana">0 Solana</span>
+                        <span class="chain-count polygon">0 Polygon</span>
+                        <span class="chain-count base">0 Base</span>
+                    </div>
+                    <button class="section-refresh-btn" onclick="event.stopPropagation(); refreshWallets();" title="Refresh wallets">⟳</button>
+                    <span class="collapse-icon">▼</span>
+                </div>
+                <div id="walletsList" class="wallets-list section-content">
+                    <p class="empty-state">No wallets found. Click "Manage Wallets" to add your wallet addresses.</p>
+                </div>
+            </section>
+
+            <!-- Exchange Wallets -->
+            <section class="exchanges-section collapsible-section collapsed">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h2>Exchange Wallets</h2>
+                    <div class="section-summary" id="exchangesSummary">
+                        <span class="exchange-status">Loading...</span>
+                    </div>
+                    <button class="section-refresh-btn" onclick="event.stopPropagation(); refreshExchanges();" title="Refresh exchanges">⟳</button>
+                    <span class="collapse-icon">▼</span>
+                </div>
+                <div id="exchangesList" class="exchanges-list section-content">
+                    <p class="empty-state">Loading exchange data...</p>
+                </div>
+            </section>
+
+            <!-- DeFi & Governance (consolidated section) -->
+            <section class="defi-governance-section collapsible-section collapsed">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h2>DeFi & Governance</h2>
+                    <div class="section-summary" id="defiGovernanceSummary">
+                        <span class="defi-gov-status">Loading...</span>
+                    </div>
+                    <button class="section-refresh-btn" onclick="event.stopPropagation(); refreshDefiGovernance();" title="Refresh DeFi & Governance">⟳</button>
+                    <span class="collapse-icon">▼</span>
+                </div>
+                <div class="defi-governance-content section-content" id="defiGovernanceContent">
+                    <p class="empty-state">Loading DeFi & Governance data...</p>
+                </div>
+            </section>
+
+            <!-- NFTs -->
+            <section class="nfts-section collapsible-section collapsed">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h2>NFTs</h2>
+                    <div class="section-summary" id="nftsSummary">
+                        <span class="nft-count">0 NFTs</span>
+                        <span class="nft-value">$0.00</span>
+                    </div>
+                    <button class="section-refresh-btn" onclick="event.stopPropagation(); refreshNFTs();" title="Refresh NFTs">⟳</button>
+                    <span class="collapse-icon">▼</span>
+                </div>
+                <div class="nfts-content section-content">
+                    <div class="nft-controls">
+                        <div class="nft-chain-tabs">
+                            <button class="chain-tab active" data-chain="cardano" onclick="switchNFTChain('cardano')">
+                                <span class="chain-name">Cardano</span>
+                                <span class="chain-stats" id="cardanoNftStats">0 · $0</span>
+                            </button>
+                            <button class="chain-tab" data-chain="ethereum" onclick="switchNFTChain('ethereum')">
+                                <span class="chain-name">Ethereum</span>
+                                <span class="chain-stats" id="ethereumNftStats">0 · $0</span>
+                            </button>
+                            <button class="chain-tab" data-chain="solana" onclick="switchNFTChain('solana')">
+                                <span class="chain-name">Solana</span>
+                                <span class="chain-stats" id="solanaNftStats">0 · $0</span>
+                            </button>
+                            <button class="chain-tab" data-chain="polygon" onclick="switchNFTChain('polygon')">
+                                <span class="chain-name">Polygon</span>
+                                <span class="chain-stats" id="polygonNftStats">0 · $0</span>
+                            </button>
+                            <button class="chain-tab" data-chain="base" onclick="switchNFTChain('base')">
+                                <span class="chain-name">Base</span>
+                                <span class="chain-stats" id="baseNftStats">0 · $0</span>
+                            </button>
+                        </div>
+                        <div class="nft-actions">
+                            <label class="image-cache-toggle" title="Cache NFT images locally for faster loading">
+                                <input type="checkbox" id="imageCacheToggle" onchange="toggleImageCache(this.checked)">
+                                <span class="toggle-slider"></span>
+                                <span class="toggle-text">Cache Images</span>
+                            </label>
+                            <a href="/nft-wall.html" class="btn btn-nft-wall" title="View NFT image gallery">
+                                NFT Wall
+                            </a>
+                            <button class="btn btn-sync-prices" onclick="syncNFTPrices()" title="Sync Cardano floor prices from external service">
+                                Sync Prices
+                            </button>
+                        </div>
+                    </div>
+                    <div id="nftsList" class="nfts-list">
+                        <p class="empty-state">Loading NFTs...</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Native Assets (Cardano) - Consolidated with toggles -->
+            <section class="native-tokens-section collapsible-section collapsed">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h2>Native Assets</h2>
+                    <div class="section-summary" id="nativeTokensSummary">
+                        <span class="token-count">0 tokens</span>
+                        <span class="tracked-value">Tracked: $0.00</span>
+                    </div>
+                    <button class="section-refresh-btn" onclick="event.stopPropagation(); loadNativeAssets();" title="Refresh assets">⟳</button>
+                    <span class="collapse-icon">▼</span>
+                </div>
+                <div class="native-tokens-content section-content">
+                    <div class="native-tokens-list" id="nativeTokensList">
+                        <p class="loading-state">Loading tokens...</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Custom Tokens (Manually Added) -->
+            <section class="custom-tokens-section collapsible-section collapsed">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h2>Custom Tokens</h2>
+                    <div class="section-summary" id="customTokensSummary">
+                        <span>0 tokens</span>
+                    </div>
+                    <button class="section-refresh-btn" onclick="event.stopPropagation(); loadCustomTokens();" title="Refresh custom tokens">⟳</button>
+                    <span class="collapse-icon">▼</span>
+                </div>
+                <div id="customTokensList" class="custom-tokens-list section-content">
+                    <p class="empty-state">No custom tokens added. Use "Add Token" below to track tokens manually.</p>
+                </div>
+            </section>
+
+            <!-- Token Policy ID Modal -->
+            <div id="tokenPolicyModal" class="modal hidden">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>Manual Token Tracking</h3>
+                        <button class="modal-close" onclick="closeTokenModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="modal-notice">Only <strong>Cardano</strong>, <strong>Ethereum</strong>, <strong>Bitcoin</strong>, and <strong>Solana</strong> chains are supported for manual token tracking.</p>
+                        <div class="form-group">
+                            <label for="modalChainSelect">Select Chain:</label>
+                            <select id="modalChainSelect">
+                                <option value="cardano">Cardano</option>
+                                <option value="ethereum">Ethereum</option>
+                                <option value="bitcoin">Bitcoin</option>
+                                <option value="solana">Solana</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="modalPolicyId">Policy ID / Contract Address:</label>
+                            <input type="text" id="modalPolicyId" placeholder="Enter policy ID (Cardano) or contract address">
+                        </div>
+                        <div class="form-group">
+                            <label for="modalQuantity">Quantity:</label>
+                            <input type="text" id="modalQuantity" placeholder="Enter quantity">
+                        </div>
+                        <div class="form-group">
+                            <label for="modalLabel">Label (optional):</label>
+                            <input type="text" id="modalLabel" placeholder="e.g., My INDY Holdings">
+                        </div>
+                        <div id="tokenLookupResult" class="token-lookup-result hidden"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" onclick="closeTokenModal()">Cancel</button>
+                        <button class="btn btn-primary" onclick="submitManualToken()">Add Token</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>ABCT - Personal Crypto Portfolio Tracker | Phase 1 | <span id="appVersion" style="opacity: 0.6;">v1769476120</span></p>
+        </footer>
+    </div>
+
+    <script src="/static/js/app.js?v=26"></script>
+</body>
+</html>
