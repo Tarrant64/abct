@@ -227,6 +227,67 @@ async def init_db():
             VALUES (1, 'http')
         """)
 
+        # NFT Scheduler state table - tracks scheduler status (single row)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS nft_scheduler_state (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                enabled INTEGER DEFAULT 0,
+                started_at TIMESTAMP,
+                last_update TIMESTAMP,
+                total_updates INTEGER DEFAULT 0,
+                successful_updates INTEGER DEFAULT 0,
+                failed_updates INTEGER DEFAULT 0,
+                last_error TEXT,
+                rate_limited_until TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # Insert default row if not exists
+        await db.execute("""
+            INSERT OR IGNORE INTO nft_scheduler_state (id, enabled)
+            VALUES (1, 0)
+        """)
+
+        # NFT Scheduler collections - tracks which NFT collections to monitor
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS nft_scheduler_collections (
+                policy_id TEXT PRIMARY KEY,
+                collection_name TEXT,
+                priority INTEGER DEFAULT 0,
+                last_updated TIMESTAMP,
+                update_count INTEGER DEFAULT 0,
+                last_floor_price REAL,
+                supply INTEGER,
+                holders INTEGER,
+                listings INTEGER,
+                volume_24h REAL,
+                volume_7d REAL,
+                volume_30d REAL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_nft_scheduler_collections_priority
+            ON nft_scheduler_collections(priority DESC, last_updated ASC)
+        """)
+
+        # NFT Scheduler API calls - tracks API usage for rate limiting
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS nft_scheduler_api_calls (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                endpoint TEXT NOT NULL,
+                policy_id TEXT,
+                status_code INTEGER,
+                called_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_nft_scheduler_api_calls_date
+            ON nft_scheduler_api_calls(called_at)
+        """)
+
         await db.commit()
 
 async def get_db():

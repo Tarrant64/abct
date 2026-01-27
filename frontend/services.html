@@ -257,6 +257,78 @@
             margin-top: 5px;
         }
 
+        /* NFT Scheduler Styles */
+        .category-controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .scheduler-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            padding: 20px;
+            background: rgba(0,0,0,0.2);
+        }
+
+        .scheduler-stat {
+            text-align: center;
+        }
+
+        .scheduler-stat .label {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 5px;
+        }
+
+        .scheduler-stat .value {
+            font-size: 20px;
+            font-weight: 600;
+            color: #10b981;
+        }
+
+        .scheduler-stat .value.warning {
+            color: #f59e0b;
+        }
+
+        .scheduler-stat .value.disabled {
+            color: #6b7280;
+        }
+
+        .scheduler-progress {
+            padding: 15px 20px;
+            background: rgba(0,0,0,0.2);
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #10b981, #3b82f6);
+            transition: width 0.3s ease;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 13px;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             .page-header {
@@ -267,6 +339,14 @@
             .nav-links {
                 width: 100%;
                 justify-content: flex-start;
+            }
+
+            .scheduler-stats {
+                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            }
+
+            .category-controls {
+                width: 100%;
             }
         }
     </style>
@@ -421,6 +501,30 @@
                 <!-- Populated by JavaScript -->
             </div>
         </div>
+
+        <!-- NFT Background Scheduler Section -->
+        <div class="service-category">
+            <div class="category-header">
+                <div class="category-info">
+                    <div class="category-icon scheduler">⏰</div>
+                    <div>
+                        <div class="category-title">NFT Background Scheduler</div>
+                        <div class="category-desc">Automatic NFT floor price updates (spreads 95 calls across 24 hours)</div>
+                    </div>
+                </div>
+                <div class="category-controls">
+                    <button class="btn btn-sm btn-primary" id="schedulerToggle" onclick="toggleScheduler()">
+                        <span id="schedulerToggleText">Enable</span>
+                    </button>
+                    <button class="btn btn-sm" id="schedulerTrigger" onclick="triggerScheduler()" style="display:none;">
+                        Trigger Now
+                    </button>
+                </div>
+            </div>
+            <div id="schedulerStatus">
+                <!-- Populated by JavaScript -->
+            </div>
+        </div>
     </div>
 
     <script>
@@ -440,6 +544,9 @@
                 updateStartupStatus(startup);
                 updateApiStatus(apiStatus);
                 updateOverview(startup, apiStatus);
+
+                // Load NFT scheduler status
+                await loadSchedulerStatus();
 
                 document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
             } catch (error) {
@@ -578,6 +685,144 @@
             } else {
                 tasksEl.textContent = 'Pending';
                 tasksEl.className = 'value';
+            }
+        }
+
+        // NFT Scheduler Functions
+        async function loadSchedulerStatus() {
+            try {
+                const res = await fetch('/api/nft-scheduler/status');
+                const status = await res.json();
+                displaySchedulerStatus(status);
+            } catch (error) {
+                console.error('[Scheduler] Error loading status:', error);
+            }
+        }
+
+        function displaySchedulerStatus(status) {
+            const container = document.getElementById('schedulerStatus');
+            const toggleBtn = document.getElementById('schedulerToggle');
+            const toggleText = document.getElementById('schedulerToggleText');
+            const triggerBtn = document.getElementById('schedulerTrigger');
+
+            if (!container) return;
+
+            // Update toggle button
+            if (status.enabled) {
+                toggleText.textContent = 'Disable';
+                toggleBtn.classList.remove('btn-primary');
+                toggleBtn.classList.add('btn-danger');
+                triggerBtn.style.display = 'inline-block';
+            } else {
+                toggleText.textContent = 'Enable';
+                toggleBtn.classList.remove('btn-danger');
+                toggleBtn.classList.add('btn-primary');
+                triggerBtn.style.display = 'none';
+            }
+
+            // Calculate progress percentage
+            const progress = status.collections_total > 0
+                ? Math.round((status.collections_updated_24h / status.collections_total) * 100)
+                : 0;
+
+            // Format next run time
+            let nextRun = 'Not scheduled';
+            if (status.next_run && status.enabled) {
+                try {
+                    const nextDate = new Date(status.next_run);
+                    nextRun = nextDate.toLocaleTimeString();
+                } catch (e) {
+                    nextRun = 'Scheduled';
+                }
+            }
+
+            // Build status HTML
+            const statusClass = status.enabled ? 'healthy' : 'disabled';
+            const progressClass = (status.collections_updated_24h < status.collections_total && status.collections_total > 0) ? 'warning' : 'healthy';
+            const callsClass = status.api_calls_remaining < 10 ? 'warning' : 'healthy';
+
+            const html = `
+                <div class="scheduler-stats">
+                    <div class="scheduler-stat">
+                        <div class="label">Status</div>
+                        <div class="value ${statusClass}">
+                            ${status.enabled ? 'Running' : 'Disabled'}
+                        </div>
+                    </div>
+                    <div class="scheduler-stat">
+                        <div class="label">Next Update</div>
+                        <div class="value">${nextRun}</div>
+                    </div>
+                    <div class="scheduler-stat">
+                        <div class="label">Collections</div>
+                        <div class="value">${status.collections_total}</div>
+                    </div>
+                    <div class="scheduler-stat">
+                        <div class="label">Updated (24h)</div>
+                        <div class="value ${progressClass}">
+                            ${status.collections_updated_24h}
+                        </div>
+                    </div>
+                    <div class="scheduler-stat">
+                        <div class="label">API Calls Today</div>
+                        <div class="value">${status.api_calls_today} / ${status.api_calls_limit}</div>
+                    </div>
+                    <div class="scheduler-stat">
+                        <div class="label">Remaining</div>
+                        <div class="value ${callsClass}">
+                            ${status.api_calls_remaining}
+                        </div>
+                    </div>
+                </div>
+                <div class="scheduler-progress">
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; color: #888; margin-bottom: 4px;">
+                        <span>24-Hour Progress (${status.collections_stale} stale, ${status.collections_updated_24h} fresh)</span>
+                        <span>${progress}%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${progress}%"></div>
+                    </div>
+                    ${!status.taptools_configured ? '<div style="margin-top:10px; color:#f59e0b; font-size:12px;">⚠️ TapTools API key not configured</div>' : ''}
+                </div>
+            `;
+
+            setSafeHTML(container, html);
+        }
+
+        async function toggleScheduler() {
+            try {
+                const statusRes = await fetch('/api/nft-scheduler/status');
+                const status = await statusRes.json();
+
+                const endpoint = status.enabled ? 'disable' : 'enable';
+                const res = await fetch(`/api/nft-scheduler/${endpoint}`, { method: 'POST' });
+
+                if (res.ok) {
+                    // Reload status immediately
+                    await loadSchedulerStatus();
+                } else {
+                    alert('Failed to toggle scheduler');
+                }
+            } catch (error) {
+                console.error('[Scheduler] Toggle error:', error);
+                alert('Error toggling scheduler');
+            }
+        }
+
+        async function triggerScheduler() {
+            try {
+                const res = await fetch('/api/nft-scheduler/trigger', { method: 'POST' });
+                const result = await res.json();
+
+                if (res.ok) {
+                    alert(`Update triggered! Calls remaining: ${result.calls_remaining}`);
+                    setTimeout(loadSchedulerStatus, 2000); // Refresh after 2 seconds
+                } else {
+                    alert(result.detail || 'Failed to trigger update');
+                }
+            } catch (error) {
+                console.error('[Scheduler] Trigger error:', error);
+                alert('Error triggering update');
             }
         }
 

@@ -10,3 +10,4 @@ cryptography==42.0.0
 python-multipart==0.0.6
 bip_utils==2.9.3
 slowapi==0.1.9
+apscheduler==3.10.4
