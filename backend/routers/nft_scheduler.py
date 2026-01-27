@@ -13,7 +13,7 @@ from services.nft_scheduler import nft_scheduler
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/nft-scheduler", tags=["NFT Scheduler"])
+router = APIRouter(prefix="/nft-scheduler", tags=["NFT Scheduler"])
 
 
 class RegisterCollectionRequest(BaseModel):
