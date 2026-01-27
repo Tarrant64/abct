@@ -44,13 +44,14 @@ import os
 # Add backend directory to Python path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from config import PROJECT_ROOT, DATA_DIR, CERTS_DIR, DEFAULT_CERT_PATH, DEFAULT_KEY_PATH
+from config import PROJECT_ROOT, DATA_DIR, CERTS_DIR, DEFAULT_CERT_PATH, DEFAULT_KEY_PATH, NFT_SCHEDULER_ENABLED
 from database import init_db
 from nft_image_database import init_nft_image_db
-from routers import wallets, portfolio, defi, prices, exchanges, nfts, custom_tokens, settings, security, logs
+from routers import wallets, portfolio, defi, prices, exchanges, nfts, custom_tokens, settings, security, logs, nft_scheduler as nft_scheduler_router
 
 from middleware import RequestSizeLimitMiddleware, RATE_LIMITING_AVAILABLE
 from services.logging_service import get_logging_service
+from services.nft_scheduler import nft_scheduler
 
 # Configure logging
 logging.basicConfig(
@@ -65,6 +66,7 @@ startup_status = {
     "nft_image_db": "pending",
     "snapshot_check": "pending",
     "nft_prices": "pending",
+    "nft_scheduler": "pending",
     "ready": False
 }
 
@@ -146,7 +148,31 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(create_snapshot_background())
     asyncio.create_task(collect_nft_prices_background())
 
+    # Initialize and optionally start NFT background scheduler
+    startup_status["nft_scheduler"] = "initializing"
+    try:
+        logger.info("Initializing NFT background scheduler...")
+        await nft_scheduler.initialize()
+
+        if NFT_SCHEDULER_ENABLED or nft_scheduler.enabled:
+            logger.info("NFT scheduler is enabled, starting...")
+            await nft_scheduler.start()
+            startup_status["nft_scheduler"] = "running"
+            await log_service.info("main", "NFT background scheduler started")
+        else:
+            startup_status["nft_scheduler"] = "disabled"
+            logger.info("NFT scheduler disabled (set NFT_SCHEDULER_ENABLED=true to enable)")
+
+    except Exception as e:
+        startup_status["nft_scheduler"] = "error"
+        logger.warning(f"Could not initialize NFT scheduler: {e}")
+        await log_service.warning("main", f"NFT scheduler initialization failed: {e}")
+
     yield
+
+    # Shutdown: Stop NFT scheduler
+    logger.info("Shutting down NFT scheduler...")
+    await nft_scheduler.stop()
 
 app = FastAPI(
     title="ABCT - Crypto Portfolio Tracker",
@@ -244,6 +270,7 @@ app.include_router(custom_tokens.router)
 app.include_router(settings.router)
 app.include_router(security.router)
 app.include_router(logs.router)
+app.include_router(nft_scheduler_router.router)
 
 # Mount static files (frontend)
 frontend_path = PROJECT_ROOT / "frontend"

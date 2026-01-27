@@ -7,6 +7,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.9.0] - 2026-01-26
+
+### Added - NFT Background Scheduler (Major Feature)
+- **Integrated NFT Scheduler**: Consolidated standalone `nft-price-service` into main application
+  - Single container deployment (eliminates need for separate NFT service container)
+  - Optional background service controlled via environment variable or UI
+  - Continuous NFT floor price collection spread across 24 hours
+  - Respects TapTools API rate limits (95 calls/day with safety buffer)
+
+- **Progress Tracking & State Persistence**:
+  - All scheduler state saved to database for graceful restarts
+  - Picks up exactly where it left off after server restart
+  - Tracks last update time per collection
+  - Logs API calls for daily rate limit tracking
+  - Collections marked as "stale" after 1 hour without update
+
+- **Priority System**:
+  - Collections assigned priority levels (0-10)
+  - Higher priority collections updated first
+  - User-owned NFTs can be marked high priority
+  - Oldest stale collections updated before fresh ones
+
+- **Smart Scheduling**:
+  - Runs every 15 minutes by default (configurable)
+  - Updates 1 collection per cycle by default (96/day max)
+  - Automatic rate limit management with daily reset
+  - Sets `rate_limited_until` when limit reached
+
+- **New API Endpoints** (`/api/nft-scheduler/*`):
+  - `GET /status` - Detailed scheduler status and statistics
+  - `POST /enable` - Enable and start the scheduler
+  - `POST /disable` - Disable and stop the scheduler
+  - `POST /trigger` - Manually trigger an update cycle
+  - `POST /register` - Register a collection for tracking
+  - `POST /register-batch` - Bulk register multiple collections
+  - `GET /collections` - List all tracked collections
+
+- **Web UI Integration** (`services.html`):
+  - NFT Background Scheduler section with real-time status
+  - Enable/Disable toggle button
+  - Manual "Trigger Now" button (when enabled)
+  - Live statistics: status, next run time, collections count
+  - API call tracking: today's usage, remaining calls, daily limit
+  - 24-hour progress bar showing update completion
+  - Auto-refreshes every 3 seconds with page status
+
+- **Database Tables** (3 new tables):
+  - `nft_scheduler_state` - Scheduler status and statistics (single row)
+  - `nft_scheduler_collections` - Collections being monitored with priority
+  - `nft_scheduler_api_calls` - API call log for rate limit tracking
+
+- **Configuration Variables**:
+  - `NFT_SCHEDULER_ENABLED` - Enable/disable scheduler (default: false)
+  - `NFT_UPDATE_INTERVAL_MINUTES` - Update frequency (default: 15)
+  - `NFT_CALLS_PER_UPDATE` - Collections per cycle (default: 1)
+  - `NFT_MAX_DAILY_CALLS` - Daily limit with safety buffer (default: 95)
+
+### Changed
+- **Deployment Architecture**: Single container now handles both main app and NFT scheduler
+  - Simplified from 2-container to 1-container deployment
+  - No more port conflicts (was ports 8000 + 8080, now just 8000)
+  - Unified configuration and logging
+  - Shared database and caching layer
+  - Same security middleware applies to scheduler
+
+### Dependencies
+- **Added**: `apscheduler==3.10.4` - Background job scheduling
+
+### Deprecated
+- **Standalone nft-price-service**: The separate NFT price microservice is now deprecated
+  - Integrated scheduler provides same functionality in main container
+  - Migration guide provided in `NFT_SCHEDULER_INTEGRATION_COMPLETE.md`
+  - Standalone service will be removed in v1.0.0
+  - Existing users can continue using it or migrate to integrated scheduler
+
+### Documentation
+- Added comprehensive integration guide: `NFT_SCHEDULER_INTEGRATION_COMPLETE.md`
+- Updated `.env.example` with scheduler configuration variables
+- Updated architecture diagram to v0.9.0 (reflects single-container design)
+
+---
+
 ## [0.8.5] - 2026-01-26
 
 ### Added

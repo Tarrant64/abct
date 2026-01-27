@@ -98,3 +98,9 @@ IPFS_GATEWAYS = [
     "https://cloudflare-ipfs.com/ipfs/",
     "https://gateway.pinata.cloud/ipfs/",
 ]
+
+# NFT Background Scheduler Configuration
+NFT_SCHEDULER_ENABLED = os.getenv("NFT_SCHEDULER_ENABLED", "false").lower() == "true"
+NFT_UPDATE_INTERVAL_MINUTES = int(os.getenv("NFT_UPDATE_INTERVAL_MINUTES", "15"))
+NFT_CALLS_PER_UPDATE = int(os.getenv("NFT_CALLS_PER_UPDATE", "1"))
+NFT_MAX_DAILY_CALLS = int(os.getenv("NFT_MAX_DAILY_CALLS", "95"))  # Leave buffer under 100
