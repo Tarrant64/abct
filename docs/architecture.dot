@@ -1,0 +1,331 @@
+digraph ABCT_Architecture {
+    // Graph settings
+    rankdir=TB;
+    splines=polyline;
+    nodesep=0.8;
+    ranksep=1.0;
+    fontname="Helvetica";
+    fontsize=12;
+    bgcolor="white";
+
+    // Node defaults
+    node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=11];
+    edge [fontname="Helvetica", fontsize=9];
+
+    // Title
+    labelloc="t";
+    label="ABCT Architecture - A Better Crypto Tracker\nVersion 0.8.5";
+    fontsize=16;
+
+    // ========== SUBGRAPHS ==========
+
+    // User Layer
+    subgraph cluster_user {
+        label="User Interface";
+        style="rounded,filled";
+        fillcolor="#E3F2FD";
+        color="#1976D2";
+
+        browser [label="Web Browser\n(localhost:8000)", fillcolor="#BBDEFB", color="#1976D2"];
+    }
+
+    // Docker Container
+    subgraph cluster_docker {
+        label="Docker Container: abct-dashboard";
+        style="rounded,filled";
+        fillcolor="#F3E5F5";
+        color="#7B1FA2";
+
+        // Frontend
+        subgraph cluster_frontend {
+            label="Frontend (Static Files)";
+            style="rounded,filled";
+            fillcolor="#E1BEE7";
+            color="#7B1FA2";
+
+            html [label="index.html\nDashboard UI", fillcolor="#CE93D8"];
+            wallets_html [label="wallets.html\nWallet Manager", fillcolor="#CE93D8"];
+            apis_html [label="apis.html\nAPI Manager", fillcolor="#CE93D8"];
+            security_html [label="security.html\nSecurity Settings", fillcolor="#CE93D8"];
+            services_html [label="services.html\nHealth Status", fillcolor="#CE93D8"];
+            logs_html [label="logs.html\nSystem Logs", fillcolor="#CE93D8"];
+            nftwall_html [label="nft-wall.html\nNFT Gallery", fillcolor="#CE93D8"];
+            css [label="styles.css\nStyling", fillcolor="#CE93D8"];
+            js [label="app.js\nClient Logic", fillcolor="#CE93D8"];
+        }
+
+        // Backend
+        subgraph cluster_backend {
+            label="Backend (FastAPI + Uvicorn)";
+            style="rounded,filled";
+            fillcolor="#E8F5E9";
+            color="#388E3C";
+
+            main [label="main.py\nApplication Entry", fillcolor="#A5D6A7", color="#388E3C"];
+            db [label="database.py\nSQLite Layer", fillcolor="#A5D6A7", color="#388E3C"];
+            nft_image_db [label="nft_image_database.py\nImage Cache DB", fillcolor="#A5D6A7", color="#388E3C"];
+            config [label="config.py\nConfiguration", fillcolor="#A5D6A7", color="#388E3C"];
+
+            // Middleware
+            subgraph cluster_middleware {
+                label="Security Middleware";
+                style="rounded,filled";
+                fillcolor="#FFCDD2";
+                color="#C62828";
+
+                m_size [label="size_limit.py\nRequest Size (10MB)", fillcolor="#EF9A9A"];
+                m_rate [label="rate_limit.py\nRate Limiting (slowapi)", fillcolor="#EF9A9A"];
+                m_auth [label="auth.py\nHTTP Basic Auth", fillcolor="#EF9A9A"];
+                m_localhost [label="localhost.py\nLocalhost Only", fillcolor="#EF9A9A"];
+            }
+
+            // Routers
+            subgraph cluster_routers {
+                label="API Routers";
+                style="rounded,filled";
+                fillcolor="#C8E6C9";
+                color="#388E3C";
+
+                r_wallets [label="/wallets\nWallet CRUD", fillcolor="#81C784"];
+                r_portfolio [label="/portfolio\nSummary & History", fillcolor="#81C784"];
+                r_prices [label="/prices\nCrypto Prices", fillcolor="#81C784"];
+                r_nfts [label="/nfts\nNFT Collections", fillcolor="#81C784"];
+                r_defi [label="/defi\nDeFi Positions", fillcolor="#81C784"];
+                r_exchanges [label="/exchanges\nExchange Sync", fillcolor="#81C784"];
+                r_tokens [label="/custom-tokens\nToken Tracking", fillcolor="#81C784"];
+                r_settings [label="/settings\nAPI Key Management", fillcolor="#81C784"];
+                r_security [label="/security\nSSL/Certificate Mgmt", fillcolor="#81C784"];
+                r_logs [label="/logs\nSystem Logging", fillcolor="#81C784"];
+            }
+
+            // Services
+            subgraph cluster_services {
+                label="Services Layer";
+                style="rounded,filled";
+                fillcolor="#FFF3E0";
+                color="#E65100";
+
+                // Blockchain Services
+                subgraph cluster_blockchain_svc {
+                    label="Blockchain Services";
+                    style="rounded,filled";
+                    fillcolor="#FFE0B2";
+                    color="#E65100";
+
+                    s_cardano [label="cardano.py\nCardano Chain", fillcolor="#FFCC80"];
+                    s_bitcoin [label="bitcoin.py\nBitcoin Chain", fillcolor="#FFCC80"];
+                    s_ethereum [label="ethereum.py\nEthereum Chain", fillcolor="#FFCC80"];
+                    s_polygon [label="polygon.py\nPolygon Chain", fillcolor="#FFCC80"];
+                    s_base [label="base.py\nBase Chain", fillcolor="#FFCC80"];
+                    s_solana [label="solana.py\nSolana Chain", fillcolor="#FFCC80"];
+                }
+
+                // NFT Services
+                subgraph cluster_nft_svc {
+                    label="NFT Services";
+                    style="rounded,filled";
+                    fillcolor="#FFECB3";
+                    color="#FF8F00";
+
+                    s_nft [label="nft.py\nCardano NFTs", fillcolor="#FFE082"];
+                    s_eth_nft [label="ethereum_nft.py\nEthereum NFTs", fillcolor="#FFE082"];
+                    s_sol_nft [label="solana_nft.py\nSolana NFTs", fillcolor="#FFE082"];
+                    s_nft_image [label="nft_image_service.py\nImage Caching", fillcolor="#FFE082"];
+                }
+
+                // Security & Support Services
+                subgraph cluster_support_svc {
+                    label="Support Services";
+                    style="rounded,filled";
+                    fillcolor="#E0F7FA";
+                    color="#00838F";
+
+                    s_pricing [label="pricing.py\nPrice Aggregation", fillcolor="#80DEEA"];
+                    s_defi [label="defi.py\nDeFi Protocols", fillcolor="#80DEEA"];
+                    s_coinbase [label="coinbase.py\nExchange API", fillcolor="#80DEEA"];
+                    s_snapshot [label="snapshot.py\nPortfolio Snapshots", fillcolor="#80DEEA"];
+                    s_etherscan [label="etherscan.py\nTransaction History", fillcolor="#80DEEA"];
+                    s_taptools [label="taptools.py\nToken Data", fillcolor="#80DEEA"];
+                    s_ssl [label="ssl_service.py\nCertificate Mgmt", fillcolor="#80DEEA"];
+                    s_logging [label="logging_service.py\nCentralized Logs", fillcolor="#80DEEA"];
+                }
+            }
+        }
+
+        // Data Storage
+        subgraph cluster_data {
+            label="Data Storage";
+            style="rounded,filled";
+            fillcolor="#FFEBEE";
+            color="#C62828";
+
+            sqlite [label="portfolio.db\nMain Database\n(wallets, balances,\nAPI keys, cache,\nsecurity settings,\nsystem logs)", shape=cylinder, fillcolor="#EF9A9A", color="#C62828"];
+            nft_db [label="nft_images.db\nNFT Image Cache\n(thumbnails, metadata)", shape=cylinder, fillcolor="#EF9A9A", color="#C62828"];
+            certs [label="data/certs/\nSSL Certificates\n(server.crt, server.key)", shape=folder, fillcolor="#EF9A9A", color="#C62828"];
+        }
+    }
+
+    // External APIs
+    subgraph cluster_external {
+        label="External APIs";
+        style="rounded,filled";
+        fillcolor="#FFF8E1";
+        color="#F57F17";
+
+        // Cardano APIs
+        subgraph cluster_cardano_api {
+            label="Cardano";
+            style="rounded,filled";
+            fillcolor="#FFECB3";
+            color="#FF8F00";
+
+            api_blockfrost [label="Blockfrost\nBlockchain Data", fillcolor="#FFE082"];
+            api_cexplorer [label="CExplorer\nStaking Data", fillcolor="#FFE082"];
+            api_taptools [label="TapTools\nNFT Prices", fillcolor="#FFE082"];
+            api_koios [label="Koios\nFallback API", fillcolor="#FFE082"];
+        }
+
+        // EVM APIs
+        subgraph cluster_evm_api {
+            label="EVM Chains";
+            style="rounded,filled";
+            fillcolor="#E8EAF6";
+            color="#3F51B5";
+
+            api_alchemy [label="Alchemy\nETH/Polygon/Base", fillcolor="#C5CAE9"];
+            api_etherscan [label="Etherscan\nTransaction History", fillcolor="#C5CAE9"];
+            api_beaconchain [label="Beaconchain\nETH Staking Data", fillcolor="#C5CAE9"];
+        }
+
+        // Other Blockchain APIs
+        subgraph cluster_other_api {
+            label="Other Blockchains";
+            style="rounded,filled";
+            fillcolor="#E0F2F1";
+            color="#00796B";
+
+            api_blockstream [label="Blockstream\nBitcoin Data", fillcolor="#B2DFDB"];
+            api_helius [label="Helius\nSolana Data", fillcolor="#B2DFDB"];
+        }
+
+        // Pricing APIs
+        subgraph cluster_pricing_api {
+            label="Pricing (Fallback Chain)";
+            style="rounded,filled";
+            fillcolor="#FCE4EC";
+            color="#C2185B";
+
+            api_coingecko [label="1. CoinGecko\nPrimary", fillcolor="#F8BBD9"];
+            api_coinbase_price [label="2. Coinbase\nFallback (Free)", fillcolor="#F8BBD9"];
+        }
+
+        // Exchange APIs
+        subgraph cluster_exchange_api {
+            label="Exchanges";
+            style="rounded,filled";
+            fillcolor="#E8F5E9";
+            color="#2E7D32";
+
+            api_coinbase [label="Coinbase CDP\nPortfolio Sync", fillcolor="#C8E6C9"];
+        }
+    }
+
+    // Security & Monitoring
+    subgraph cluster_security {
+        label="Security & Monitoring";
+        style="rounded,filled";
+        fillcolor="#ECEFF1";
+        color="#455A64";
+
+        sec_audit [label="security_audit.py\nAutomated Audit", fillcolor="#CFD8DC"];
+        sec_agent [label="security_agent.py\nPre-push Hook", fillcolor="#CFD8DC"];
+        git_hook [label=".git/hooks/pre-push\nGit Integration", fillcolor="#CFD8DC"];
+    }
+
+    // ========== CONNECTIONS ==========
+
+    // User to Frontend
+    browser -> html [label="HTTP/HTTPS GET /"];
+
+    // Frontend to Backend
+    js -> main [label="REST API\nJSON"];
+
+    // Main through Middleware
+    main -> m_size [style=dashed, label="request"];
+    main -> m_rate [style=dashed, label="request"];
+    m_size -> m_rate [style=dashed];
+
+    // Main to Components
+    main -> config [style=dashed];
+    main -> db [style=dashed];
+    main -> nft_image_db [style=dashed];
+
+    // Main to Routers
+    main -> r_wallets [style=dashed, color="#388E3C"];
+    main -> r_portfolio [style=dashed, color="#388E3C"];
+    main -> r_prices [style=dashed, color="#388E3C"];
+    main -> r_nfts [style=dashed, color="#388E3C"];
+    main -> r_defi [style=dashed, color="#388E3C"];
+    main -> r_exchanges [style=dashed, color="#388E3C"];
+    main -> r_tokens [style=dashed, color="#388E3C"];
+    main -> r_settings [style=dashed, color="#388E3C"];
+    main -> r_security [style=dashed, color="#388E3C"];
+    main -> r_logs [style=dashed, color="#388E3C"];
+
+    // Routers to Services
+    r_wallets -> s_cardano;
+    r_wallets -> s_bitcoin;
+    r_wallets -> s_ethereum;
+    r_wallets -> s_polygon;
+    r_wallets -> s_base;
+    r_wallets -> s_solana;
+
+    r_nfts -> s_nft;
+    r_nfts -> s_eth_nft;
+    r_nfts -> s_sol_nft;
+    r_nfts -> s_nft_image;
+
+    r_portfolio -> s_snapshot;
+    r_prices -> s_pricing;
+    r_defi -> s_defi;
+    r_exchanges -> s_coinbase;
+    r_security -> s_ssl;
+    r_logs -> s_logging;
+
+    // Services to Database
+    db -> sqlite [dir=both];
+    s_nft_image -> nft_db [dir=both, label="images"];
+    r_settings -> db [label="API keys"];
+    r_security -> db [label="SSL config"];
+    s_logging -> db [label="log entries"];
+    s_ssl -> certs [label="cert files"];
+
+    // Services to External APIs
+    s_cardano -> api_blockfrost [label="HTTPS", color="#FF8F00"];
+    s_cardano -> api_cexplorer [label="HTTPS", color="#FF8F00"];
+    s_nft -> api_taptools [label="HTTPS", color="#FF8F00"];
+    s_nft -> api_koios [label="HTTPS (fallback)", color="#FF8F00"];
+    s_taptools -> api_taptools [label="HTTPS", color="#FF8F00"];
+
+    s_ethereum -> api_alchemy [label="HTTPS", color="#3F51B5"];
+    s_polygon -> api_alchemy [label="HTTPS", color="#3F51B5"];
+    s_base -> api_alchemy [label="HTTPS", color="#3F51B5"];
+    s_eth_nft -> api_alchemy [label="HTTPS", color="#3F51B5"];
+    s_etherscan -> api_etherscan [label="HTTPS", color="#3F51B5"];
+
+    s_bitcoin -> api_blockstream [label="HTTPS", color="#00796B"];
+    s_solana -> api_helius [label="HTTPS", color="#00796B"];
+    s_sol_nft -> api_helius [label="HTTPS", color="#00796B"];
+
+    // Pricing service connections (fallback chain)
+    s_pricing -> api_coingecko [label="1st", color="#C2185B"];
+    s_pricing -> api_coinbase_price [label="2nd", color="#C2185B"];
+
+    // Exchange connections
+    s_coinbase -> api_coinbase [label="HTTPS", color="#2E7D32"];
+
+    // Security monitoring
+    sec_agent -> sec_audit [label="runs"];
+    git_hook -> sec_agent [label="triggers"];
+    sec_audit -> main [label="scans", style=dotted, color="#C62828"];
+}
