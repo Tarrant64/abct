@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ABCT - Backup & Restore</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20">
+    <style>
+        /* Backup Manager Styles */
+        .backup-manager {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .backup-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .backup-header h1 {
+            margin: 0;
+            color: #e0e0e0;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #2a2a3e;
+            color: #e0e0e0;
+            border: 1px solid #3a3a4e;
+        }
+
+        .btn-secondary:hover {
+            background: #3a3a4e;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #0ea472;
+        }
+
+        .btn-warning {
+            background: #f59e0b;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* Alert Banners */
+        .alert {
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .alert-warning {
+            background: rgba(245, 158, 11, 0.15);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            color: #fbbf24;
+        }
+
+        .alert-danger {
+            background: rgba(220, 53, 69, 0.15);
+            border: 1px solid rgba(220, 53, 69, 0.3);
+            color: #f87171;
+        }
+
+        .alert-info {
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            color: #60a5fa;
+        }
+
+        .alert-success {
+            background: rgba(16, 185, 129, 0.15);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #34d399;
+        }
+
+        .alert-icon {
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .alert-content {
+            flex: 1;
+        }
+
+        .alert-content h4 {
+            margin: 0 0 5px 0;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .alert-content p {
+            margin: 0;
+            font-size: 13px;
+            opacity: 0.9;
+        }
+
+        .alert-content ul {
+            margin: 8px 0 0 0;
+            padding-left: 20px;
+        }
+
+        .alert-content li {
+            font-size: 13px;
+            margin: 4px 0;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Section Cards */
+        .section-card {
+            background: linear-gradient(135deg, #1a1a2e 0%, #2a2a3e 100%);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #3a3a4e;
+        }
+
+        .section-header h2 {
+            margin: 0;
+            color: #e0e0e0;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-icon {
+            font-size: 24px;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-item {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .stat-label {
+            color: #888;
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            color: #e0e0e0;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .stat-value.sensitive {
+            color: #f59e0b;
+        }
+
+        /* Options Grid */
+        .options-grid {
+            display: grid;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .option-item {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 15px;
+            border-radius: 8px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .option-checkbox {
+            margin-top: 2px;
+        }
+
+        .option-content {
+            flex: 1;
+        }
+
+        .option-label {
+            color: #e0e0e0;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .option-badge {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            background: rgba(220, 53, 69, 0.2);
+            color: #f87171;
+        }
+
+        .option-description {
+            color: #888;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        /* File Upload Area */
+        .upload-area {
+            border: 2px dashed #3a3a4e;
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 20px;
+            background: rgba(255, 255, 255, 0.02);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .upload-area:hover {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.05);
+        }
+
+        .upload-area.drag-over {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+
+        .upload-text {
+            color: #e0e0e0;
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+
+        .upload-hint {
+            color: #888;
+            font-size: 13px;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        /* Preview Panel */
+        .preview-panel {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .preview-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .preview-header h3 {
+            margin: 0;
+            color: #e0e0e0;
+            font-size: 16px;
+        }
+
+        .preview-grid {
+            display: grid;
+            gap: 10px;
+        }
+
+        .preview-item {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 12px 15px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .preview-item-label {
+            color: #888;
+            font-size: 13px;
+        }
+
+        .preview-item-value {
+            color: #e0e0e0;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .table-preview {
+            background: rgba(255, 255, 255, 0.02);
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+
+        .table-preview-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .table-name {
+            color: #e0e0e0;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .table-count {
+            color: #667eea;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .table-description {
+            color: #888;
+            font-size: 12px;
+        }
+
+        /* Action Buttons Container */
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+        }
+
+        /* Loading Spinner */
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Mode Selection */
+        .mode-selection {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .mode-option {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .mode-option:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .mode-option.selected {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .mode-option input[type="radio"] {
+            margin-right: 8px;
+        }
+
+        .mode-label {
+            color: #e0e0e0;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .mode-description {
+            color: #888;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="backup-manager">
+        <div class="backup-header">
+            <h1>Backup & Restore</h1>
+            <div class="header-actions">
+                <a href="/" class="btn btn-secondary">
+                    <span>←</span>
+                    <span>Back to Dashboard</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Info Alert -->
+        <div class="alert alert-info">
+            <div class="alert-icon">ℹ️</div>
+            <div class="alert-content">
+                <h4>About Backups</h4>
+                <p>Export your ABCT configuration to a JSON file that can be imported later. This includes wallets, API keys, custom tokens, and settings. You can use this to migrate to a new installation or recover from data loss.</p>
+            </div>
+        </div>
+
+        <!-- Export Section -->
+        <div class="section-card">
+            <div class="section-header">
+                <h2>
+                    <span class="section-icon">📦</span>
+                    Export Configuration
+                </h2>
+            </div>
+
+            <!-- Current Data Stats -->
+            <div id="backupInfo" class="stats-grid">
+                <!-- Populated by JavaScript -->
+            </div>
+
+            <!-- Export Options -->
+            <div class="options-grid">
+                <div class="option-item">
+                    <input type="checkbox" id="includeApiKeys" class="option-checkbox" checked>
+                    <div class="option-content">
+                        <label for="includeApiKeys" class="option-label">
+                            Include API Keys
+                            <span class="option-badge">SENSITIVE</span>
+                        </label>
+                        <p class="option-description">
+                            Include your API keys in the backup. These keys grant access to external services. Store backup files securely if enabled.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="option-item">
+                    <input type="checkbox" id="includeSecuritySettings" class="option-checkbox">
+                    <div class="option-content">
+                        <label for="includeSecuritySettings" class="option-label">
+                            Include Security Settings
+                            <span class="option-badge">SENSITIVE</span>
+                        </label>
+                        <p class="option-description">
+                            Include SSL/HTTPS configuration (certificate paths only, not actual certificate files). Generally not recommended unless migrating servers.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="option-item">
+                    <input type="checkbox" id="includeCustomTokens" class="option-checkbox" checked>
+                    <div class="option-content">
+                        <label for="includeCustomTokens" class="option-label">
+                            Include Custom Tokens
+                        </label>
+                        <p class="option-description">
+                            Include manually added custom tokens and their quantities.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="option-item">
+                    <input type="checkbox" id="includeNftCollections" class="option-checkbox" checked>
+                    <div class="option-content">
+                        <label for="includeNftCollections" class="option-label">
+                            Include NFT Collections
+                        </label>
+                        <p class="option-description">
+                            Include NFT collections being tracked by the background scheduler.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Warning Alert (shown when sensitive data included) -->
+            <div id="exportWarning" class="alert alert-warning hidden">
+                <div class="alert-icon">⚠️</div>
+                <div class="alert-content">
+                    <h4>Security Warning</h4>
+                    <p>Your backup will contain sensitive information. Please:</p>
+                    <ul>
+                        <li>Store the backup file in a secure location</li>
+                        <li>Never share the backup file publicly</li>
+                        <li>Consider encrypting the file if storing online</li>
+                        <li>Delete old backups when no longer needed</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="action-buttons">
+                <button id="exportBtn" class="btn btn-primary" onclick="exportBackup()">
+                    <span>📥</span>
+                    <span>Download Backup</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Import Section -->
+        <div class="section-card">
+            <div class="section-header">
+                <h2>
+                    <span class="section-icon">📤</span>
+                    Import Configuration
+                </h2>
+            </div>
+
+            <!-- Warning Alert -->
+            <div class="alert alert-danger">
+                <div class="alert-icon">⚠️</div>
+                <div class="alert-content">
+                    <h4>Important: Read Before Importing</h4>
+                    <p>Importing will modify your ABCT configuration. Always preview before importing. In "replace" mode, ALL existing data will be deleted first.</p>
+                </div>
+            </div>
+
+            <!-- File Upload Area -->
+            <div id="uploadArea" class="upload-area" onclick="document.getElementById('fileInput').click()">
+                <div class="upload-icon">📄</div>
+                <div class="upload-text">Click to select backup file or drag and drop</div>
+                <div class="upload-hint">Accepts .json files from ABCT export</div>
+            </div>
+            <input type="file" id="fileInput" accept=".json" onchange="handleFileSelect(event)">
+
+            <!-- Preview Panel (hidden initially) -->
+            <div id="previewPanel" class="hidden">
+                <div class="preview-panel">
+                    <div class="preview-header">
+                        <h3>Backup Preview</h3>
+                        <button class="btn btn-secondary btn-small" onclick="clearImport()">Clear</button>
+                    </div>
+
+                    <!-- Backup Info -->
+                    <div id="previewInfo" class="preview-grid">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Import Mode Selection -->
+                <h3 style="color: #e0e0e0; margin-bottom: 15px;">Import Mode</h3>
+                <div class="mode-selection">
+                    <label class="mode-option selected">
+                        <input type="radio" name="importMode" value="merge" checked>
+                        <div class="mode-label">
+                            🔄 Merge
+                        </div>
+                        <div class="mode-description">
+                            Keep existing data and add/update from backup. Conflicts resolved by updating existing records. Safest option.
+                        </div>
+                    </label>
+
+                    <label class="mode-option">
+                        <input type="radio" name="importMode" value="replace">
+                        <div class="mode-label">
+                            🔥 Replace
+                            <span class="option-badge">DESTRUCTIVE</span>
+                        </div>
+                        <div class="mode-description">
+                            Delete ALL existing data first, then import backup. Use when restoring to a fresh installation. Cannot be undone!
+                        </div>
+                    </label>
+                </div>
+
+                <!-- Import Options -->
+                <div class="options-grid">
+                    <div class="option-item">
+                        <input type="checkbox" id="skipApiKeys" class="option-checkbox">
+                        <div class="option-content">
+                            <label for="skipApiKeys" class="option-label">
+                                Skip API Keys
+                            </label>
+                            <p class="option-description">
+                                Don't import API keys from backup. Use if you want to keep your current API keys or add them manually.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="option-item">
+                        <input type="checkbox" id="skipSecuritySettings" class="option-checkbox" checked>
+                        <div class="option-content">
+                            <label for="skipSecuritySettings" class="option-label">
+                                Skip Security Settings (Recommended)
+                            </label>
+                            <p class="option-description">
+                                Don't import SSL/HTTPS settings. Recommended unless migrating to a new server with same certificate setup.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Validation Results -->
+                <div id="validationResults" class="hidden">
+                    <!-- Populated by JavaScript -->
+                </div>
+
+                <div class="action-buttons">
+                    <button id="previewBtn" class="btn btn-secondary" onclick="previewImport()">
+                        <span>👁️</span>
+                        <span>Preview Import</span>
+                    </button>
+                    <button id="importBtn" class="btn btn-warning" onclick="performImport()" disabled>
+                        <span>📤</span>
+                        <span>Import Configuration</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Messages -->
+        <div id="statusMessages">
+            <!-- Dynamic status messages appear here -->
+        </div>
+    </div>
+
+    <script>
+        let backupFileData = null;
+        let previewData = null;
+
+        // Load backup info on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            loadBackupInfo();
+            setupDragAndDrop();
+            setupModeSelection();
+            updateExportWarning();
+
+            // Listen to checkbox changes for warning
+            document.querySelectorAll('.option-checkbox').forEach(cb => {
+                if (cb.id === 'includeApiKeys' || cb.id === 'includeSecuritySettings') {
+                    cb.addEventListener('change', updateExportWarning);
+                }
+            });
+        });
+
+        function updateExportWarning() {
+            const includeApiKeys = document.getElementById('includeApiKeys').checked;
+            const includeSecuritySettings = document.getElementById('includeSecuritySettings').checked;
+            const warning = document.getElementById('exportWarning');
+
+            if (includeApiKeys || includeSecuritySettings) {
+                warning.classList.remove('hidden');
+            } else {
+                warning.classList.add('hidden');
+            }
+        }
+
+        async function loadBackupInfo() {
+            try {
+                const response = await fetch('/backup/info');
+                const data = await response.json();
+
+                const container = document.getElementById('backupInfo');
+                container.innerHTML = '';
+
+                // Create stats for each table with data
+                Object.entries(data.tables).forEach(([tableName, info]) => {
+                    if (info.has_data) {
+                        const statDiv = document.createElement('div');
+                        statDiv.className = 'stat-item';
+                        statDiv.innerHTML = `
+                            <div class="stat-label">${info.description}</div>
+                            <div class="stat-value ${info.sensitive ? 'sensitive' : ''}">
+                                ${info.record_count} record${info.record_count !== 1 ? 's' : ''}
+                                ${info.sensitive ? '<span style="font-size: 12px; margin-left: 5px;">🔒</span>' : ''}
+                            </div>
+                        `;
+                        container.appendChild(statDiv);
+                    }
+                });
+
+                if (container.children.length === 0) {
+                    container.innerHTML = '<div class="stat-item"><div class="stat-label">No data to backup yet</div></div>';
+                }
+
+            } catch (error) {
+                console.error('Failed to load backup info:', error);
+                showStatus('error', 'Failed to load backup information');
+            }
+        }
+
+        async function exportBackup() {
+            const btn = document.getElementById('exportBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> <span>Exporting...</span>';
+
+            try {
+                const options = {
+                    include_api_keys: document.getElementById('includeApiKeys').checked,
+                    include_security_settings: document.getElementById('includeSecuritySettings').checked,
+                    include_custom_tokens: document.getElementById('includeCustomTokens').checked,
+                    include_nft_collections: document.getElementById('includeNftCollections').checked
+                };
+
+                const response = await fetch('/backup/export', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(options)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Export failed: ${response.statusText}`);
+                }
+
+                // Download the file
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+
+                // Get filename from response header or use default
+                const contentDisposition = response.headers.get('content-disposition');
+                const filenameMatch = contentDisposition && contentDisposition.match(/filename="?(.+)"?/);
+                a.download = filenameMatch ? filenameMatch[1] : `abct-backup-${new Date().toISOString().split('T')[0]}.json`;
+
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                showStatus('success', 'Backup exported successfully! File downloaded.');
+
+            } catch (error) {
+                console.error('Export failed:', error);
+                showStatus('error', `Export failed: ${error.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>📥</span> <span>Download Backup</span>';
+            }
+        }
+
+        function setupDragAndDrop() {
+            const uploadArea = document.getElementById('uploadArea');
+
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('drag-over');
+            });
+
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('drag-over');
+            });
+
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('drag-over');
+
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleFile(files[0]);
+                }
+            });
+        }
+
+        function setupModeSelection() {
+            document.querySelectorAll('.mode-option').forEach(option => {
+                option.addEventListener('click', function() {
+                    document.querySelectorAll('.mode-option').forEach(o => o.classList.remove('selected'));
+                    this.classList.add('selected');
+                    this.querySelector('input[type="radio"]').checked = true;
+                });
+            });
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        }
+
+        async function handleFile(file) {
+            if (!file.name.endsWith('.json')) {
+                showStatus('error', 'Please select a valid JSON backup file');
+                return;
+            }
+
+            try {
+                const text = await file.text();
+                backupFileData = text;
+
+                // Show preview panel
+                document.getElementById('previewPanel').classList.remove('hidden');
+                document.getElementById('uploadArea').style.display = 'none';
+
+                // Update upload area text
+                const uploadArea = document.getElementById('uploadArea');
+                uploadArea.innerHTML = `
+                    <div class="upload-icon">✅</div>
+                    <div class="upload-text">${file.name}</div>
+                    <div class="upload-hint">File loaded successfully</div>
+                `;
+
+                showStatus('success', 'File loaded successfully. Click "Preview Import" to validate.');
+
+                // Enable preview button
+                document.getElementById('previewBtn').disabled = false;
+                document.getElementById('importBtn').disabled = true;
+
+            } catch (error) {
+                console.error('Failed to read file:', error);
+                showStatus('error', `Failed to read file: ${error.message}`);
+            }
+        }
+
+        function clearImport() {
+            backupFileData = null;
+            previewData = null;
+            document.getElementById('previewPanel').classList.add('hidden');
+            document.getElementById('uploadArea').style.display = 'block';
+            document.getElementById('fileInput').value = '';
+            document.getElementById('validationResults').innerHTML = '';
+            document.getElementById('validationResults').classList.add('hidden');
+
+            // Reset upload area
+            const uploadArea = document.getElementById('uploadArea');
+            uploadArea.innerHTML = `
+                <div class="upload-icon">📄</div>
+                <div class="upload-text">Click to select backup file or drag and drop</div>
+                <div class="upload-hint">Accepts .json files from ABCT export</div>
+            `;
+        }
+
+        async function previewImport() {
+            if (!backupFileData) {
+                showStatus('error', 'Please select a backup file first');
+                return;
+            }
+
+            const btn = document.getElementById('previewBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> <span>Validating...</span>';
+
+            try {
+                const options = {
+                    mode: document.querySelector('input[name="importMode"]:checked').value,
+                    skip_api_keys: document.getElementById('skipApiKeys').checked,
+                    skip_security_settings: document.getElementById('skipSecuritySettings').checked,
+                    backup_data: backupFileData
+                };
+
+                const response = await fetch('/backup/preview', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(options)
+                });
+
+                previewData = await response.json();
+
+                // Display validation results
+                displayPreviewResults(previewData);
+
+                // Enable import button if valid
+                if (previewData.valid && previewData.compatible) {
+                    document.getElementById('importBtn').disabled = false;
+                    showStatus('success', 'Backup validated successfully. You can now import.');
+                } else {
+                    document.getElementById('importBtn').disabled = true;
+                    showStatus('error', 'Backup validation failed. Please check the errors.');
+                }
+
+            } catch (error) {
+                console.error('Preview failed:', error);
+                showStatus('error', `Preview failed: ${error.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>👁️</span> <span>Preview Import</span>';
+            }
+        }
+
+        function displayPreviewResults(data) {
+            const resultsDiv = document.getElementById('validationResults');
+            resultsDiv.innerHTML = '';
+            resultsDiv.classList.remove('hidden');
+
+            // Errors
+            if (data.errors && data.errors.length > 0) {
+                const errorAlert = document.createElement('div');
+                errorAlert.className = 'alert alert-danger';
+                errorAlert.innerHTML = `
+                    <div class="alert-icon">❌</div>
+                    <div class="alert-content">
+                        <h4>Validation Errors</h4>
+                        <ul>
+                            ${data.errors.map(err => `<li>${err}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+                resultsDiv.appendChild(errorAlert);
+            }
+
+            // Warnings
+            if (data.warnings && data.warnings.length > 0) {
+                const warningAlert = document.createElement('div');
+                warningAlert.className = 'alert alert-warning';
+                warningAlert.innerHTML = `
+                    <div class="alert-icon">⚠️</div>
+                    <div class="alert-content">
+                        <h4>Important Warnings</h4>
+                        <ul>
+                            ${data.warnings.map(warn => `<li>${warn}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+                resultsDiv.appendChild(warningAlert);
+            }
+
+            // Summary
+            if (data.summary) {
+                const summaryDiv = document.createElement('div');
+                summaryDiv.className = 'preview-panel';
+
+                let summaryHTML = '<h3 style="margin-top: 0; color: #e0e0e0;">Import Summary</h3>';
+
+                // Backup info
+                if (data.summary.backup_info) {
+                    const info = data.summary.backup_info;
+                    summaryHTML += `
+                        <div class="preview-grid" style="margin-bottom: 20px;">
+                            <div class="preview-item">
+                                <span class="preview-item-label">Backup Version</span>
+                                <span class="preview-item-value">${info.abct_version}</span>
+                            </div>
+                            <div class="preview-item">
+                                <span class="preview-item-label">Export Date</span>
+                                <span class="preview-item-value">${new Date(info.export_date).toLocaleString()}</span>
+                            </div>
+                            <div class="preview-item">
+                                <span class="preview-item-label">Backup Age</span>
+                                <span class="preview-item-value">${info.age_days} day${info.age_days !== 1 ? 's' : ''}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // Tables to import
+                if (data.summary.tables) {
+                    summaryHTML += '<h4 style="color: #e0e0e0; margin-bottom: 10px;">Data to Import</h4>';
+                    Object.entries(data.summary.tables).forEach(([tableName, tableInfo]) => {
+                        const actionColor = tableInfo.action === 'skip' ? '#888' : '#667eea';
+                        const actionText = tableInfo.action === 'skip' ? 'SKIP' : tableInfo.action.toUpperCase();
+
+                        summaryHTML += `
+                            <div class="table-preview">
+                                <div class="table-preview-header">
+                                    <span class="table-name">
+                                        ${tableName}
+                                        ${tableInfo.sensitive ? ' 🔒' : ''}
+                                    </span>
+                                    <span class="table-count" style="color: ${actionColor}">
+                                        ${tableInfo.count} records - ${actionText}
+                                    </span>
+                                </div>
+                                <div class="table-description">
+                                    ${tableInfo.description || tableInfo.reason || ''}
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+
+                summaryDiv.innerHTML = summaryHTML;
+                resultsDiv.appendChild(summaryDiv);
+            }
+        }
+
+        async function performImport() {
+            if (!backupFileData || !previewData || !previewData.valid) {
+                showStatus('error', 'Please preview the backup first');
+                return;
+            }
+
+            const mode = document.querySelector('input[name="importMode"]:checked').value;
+
+            // Extra confirmation for replace mode
+            if (mode === 'replace') {
+                if (!confirm('⚠️ REPLACE MODE will DELETE ALL existing data first!\n\nThis action CANNOT be undone.\n\nAre you absolutely sure you want to continue?')) {
+                    return;
+                }
+            } else {
+                if (!confirm('Are you sure you want to import this backup?\n\nExisting data will be updated/merged.')) {
+                    return;
+                }
+            }
+
+            const btn = document.getElementById('importBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> <span>Importing...</span>';
+
+            try {
+                const options = {
+                    mode: mode,
+                    skip_api_keys: document.getElementById('skipApiKeys').checked,
+                    skip_security_settings: document.getElementById('skipSecuritySettings').checked,
+                    backup_data: backupFileData
+                };
+
+                const response = await fetch('/backup/import', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(options)
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.detail || 'Import failed');
+                }
+
+                // Display success with details
+                let successMessage = `Import completed successfully in ${mode} mode!\n\n`;
+                if (result.tables_processed) {
+                    Object.entries(result.tables_processed).forEach(([table, info]) => {
+                        if (info.status === 'success') {
+                            successMessage += `${table}: ${info.imported} imported`;
+                            if (info.skipped > 0) {
+                                successMessage += `, ${info.skipped} skipped`;
+                            }
+                            successMessage += '\n';
+                        }
+                    });
+                }
+
+                alert(successMessage);
+                showStatus('success', 'Import completed successfully!');
+
+                // Clear and refresh
+                clearImport();
+                loadBackupInfo();
+
+            } catch (error) {
+                console.error('Import failed:', error);
+                showStatus('error', `Import failed: ${error.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>📤</span> <span>Import Configuration</span>';
+            }
+        }
+
+        function showStatus(type, message) {
+            const container = document.getElementById('statusMessages');
+            const alertDiv = document.createElement('div');
+
+            const alertClass = type === 'error' ? 'alert-danger' : type === 'success' ? 'alert-success' : 'alert-info';
+            const icon = type === 'error' ? '❌' : type === 'success' ? '✅' : 'ℹ️';
+
+            alertDiv.className = `alert ${alertClass}`;
+            alertDiv.innerHTML = `
+                <div class="alert-icon">${icon}</div>
+                <div class="alert-content">
+                    <p>${message}</p>
+                </div>
+            `;
+
+            container.appendChild(alertDiv);
+
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 5000);
+        }
+    </script>
+
+    <div class="footer">
+        ABCT v0.9.0 - Backup & Restore
+    </div>
+</body>
+</html>
