@@ -1,0 +1,8 @@
+# Environment files with secrets
+.env
+
+# Data directory
+data/
+
+# Docker build artifacts
+.docker/

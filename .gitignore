@@ -1,0 +1,147 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+venv/
+ENV/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+data/*.db
+data/*.sqlite
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# API Keys and Secrets
+**/api_key.json
+**/cdp_api_key.json
+**/*_api_key.json
+config/api_keys.json
+secrets/
+
+# Cache
+.cache/
+*.cache
+.pytest_cache/
+__pycache__/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*.xss-backup
+temp/
+tmp/
+
+# Security audit reports (contain vulnerability details)
+sec/last_audit.json
+sec/audit_report*.json
+*.audit.json
+
+# NFT images cache
+data/nft_images/
+data/cache/
+
+# SSL certificates (never commit private keys!)
+*.key
+*.pem
+*.crt
+*.csr
+data/certs/
+certs/
+
+# Wallet data (privacy!)
+data/wallets.txt
+
+# Node modules (if any frontend tooling)
+node_modules/
+package-lock.json
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# Documentation build artifacts
+docs/_build/
+site/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Distribution / packaging
+*.whl
+*.tar.gz
+*.zip
+
+# Unit test / coverage
+.tox/
+.nox/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# profiling data
+*.prof
+
+# Claude project files (local only)
+.claude/
+
+# Backup directories
+backups/
+backup/
+*.backup/

@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ABCT - Service Health</title>
+    <link rel="stylesheet" href="/static/css/styles.css?v=20">
+    <style>
+        .services-page {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .page-header h1 {
+            margin: 0;
+            color: #e0e0e0;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 12px;
+        }
+
+        /* Status Overview */
+        .status-overview {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .status-card {
+            background: linear-gradient(135deg, #1a1a2e 0%, #2a2a3e 100%);
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid #2a2a4e;
+        }
+
+        .status-card .icon {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .status-card .label {
+            color: #888;
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+
+        .status-card .value {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .status-card .value.healthy {
+            color: #10b981;
+        }
+
+        .status-card .value.loading {
+            color: #f59e0b;
+        }
+
+        .status-card .value.error {
+            color: #ef4444;
+        }
+
+        /* Service Categories */
+        .service-category {
+            background: #1a1a2e;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .category-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, transparent 100%);
+            border-bottom: 1px solid #2a2a3e;
+        }
+
+        .category-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .category-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .category-icon.backend {
+            background: rgba(102, 126, 234, 0.2);
+            color: #667eea;
+        }
+
+        .category-icon.apis {
+            background: rgba(245, 158, 11, 0.2);
+            color: #f59e0b;
+        }
+
+        .category-icon.databases {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+
+        .category-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #e0e0e0;
+        }
+
+        .category-desc {
+            font-size: 13px;
+            color: #888;
+        }
+
+        /* Service Items */
+        .service-list {
+            padding: 0;
+        }
+
+        .service-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid #2a2a3e;
+        }
+
+        .service-item:last-child {
+            border-bottom: none;
+        }
+
+        .service-info {
+            flex: 1;
+        }
+
+        .service-name {
+            color: #e0e0e0;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .service-description {
+            color: #888;
+            font-size: 13px;
+        }
+
+        .service-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .status-indicator.healthy {
+            background: #10b981;
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+        }
+
+        .status-indicator.loading {
+            background: #f59e0b;
+            box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+            animation: loadingPulse 1s ease-in-out infinite;
+        }
+
+        .status-indicator.error {
+            background: #ef4444;
+            box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+        }
+
+        .status-indicator.pending {
+            background: #6b7280;
+        }
+
+        .status-indicator.missing {
+            background: #6b7280;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        @keyframes loadingPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+        }
+
+        .status-text {
+            font-size: 12px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .status-text.healthy { color: #10b981; }
+        .status-text.loading { color: #f59e0b; }
+        .status-text.error { color: #ef4444; }
+        .status-text.pending { color: #6b7280; }
+        .status-text.missing { color: #6b7280; }
+        .status-text.configured { color: #10b981; }
+
+        /* Auto-refresh indicator */
+        .refresh-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #888;
+            font-size: 13px;
+        }
+
+        .refresh-info .spinner-small {
+            width: 14px;
+            height: 14px;
+            border: 2px solid #3a3a4e;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Last Updated */
+        .last-updated {
+            color: #888;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .page-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .nav-links {
+                width: 100%;
+                justify-content: flex-start;
+            }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js">
+        // XSS Protection - Safe HTML rendering
+        function setSafeHTML(element, html) {
+            if (!element) return;
+            if (typeof DOMPurify !== 'undefined') {
+                setSafeHTML(element, DOMPurify.sanitize(html);
+            } else {
+                console.warn('DOMPurify not loaded, falling back to textContent');
+                element.textContent = html;
+            }
+        }
+</script>
+</head>
+<body>
+    <div class="services-page">
+        <div class="page-header">
+            <div>
+                <h1>Service Health</h1>
+                <p class="last-updated">Last updated: <span id="lastUpdate">-</span></p>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="btn btn-secondary">Back to Dashboard</a>
+                <a href="/apis.html" class="btn btn-secondary">Manage APIs</a>
+                <a href="/logs.html" class="btn btn-primary">View Logs</a>
+            </div>
+        </div>
+
+        <!-- Status Overview -->
+        <div class="status-overview">
+            <div class="status-card">
+                <div class="icon">⚡</div>
+                <div class="label">Server</div>
+                <div class="value" id="serverStatus">-</div>
+            </div>
+            <div class="status-card">
+                <div class="icon">🗄️</div>
+                <div class="label">Databases</div>
+                <div class="value" id="dbStatus">-</div>
+            </div>
+            <div class="status-card">
+                <div class="icon">🔌</div>
+                <div class="label">APIs Configured</div>
+                <div class="value" id="apisConfigured">-</div>
+            </div>
+            <div class="status-card">
+                <div class="icon">🔄</div>
+                <div class="label">Background Tasks</div>
+                <div class="value" id="tasksStatus">-</div>
+            </div>
+        </div>
+
+        <!-- Backend Services -->
+        <div class="service-category">
+            <div class="category-header">
+                <div class="category-info">
+                    <div class="category-icon backend">⚙️</div>
+                    <div>
+                        <div class="category-title">Backend Services</div>
+                        <div class="category-desc">Core application components</div>
+                    </div>
+                </div>
+                <div class="refresh-info">
+                    <span class="spinner-small"></span>
+                    <span>Auto-refreshing</span>
+                </div>
+            </div>
+            <div class="service-list">
+                <div class="service-item">
+                    <div class="service-info">
+                        <div class="service-name">FastAPI Server</div>
+                        <div class="service-description">Main application server</div>
+                    </div>
+                    <div class="service-status">
+                        <span class="status-indicator" id="serverIndicator"></span>
+                        <span class="status-text" id="serverStatusText">-</span>
+                    </div>
+                </div>
+                <div class="service-item">
+                    <div class="service-info">
+                        <div class="service-name">Main Database</div>
+                        <div class="service-description">SQLite database for wallets and portfolio</div>
+                    </div>
+                    <div class="service-status">
+                        <span class="status-indicator" id="dbIndicator"></span>
+                        <span class="status-text" id="dbStatusText">-</span>
+                    </div>
+                </div>
+                <div class="service-item">
+                    <div class="service-info">
+                        <div class="service-name">NFT Image Cache</div>
+                        <div class="service-description">Image caching database for NFTs</div>
+                    </div>
+                    <div class="service-status">
+                        <span class="status-indicator" id="nftDbIndicator"></span>
+                        <span class="status-text" id="nftDbStatusText">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Background Tasks -->
+        <div class="service-category">
+            <div class="category-header">
+                <div class="category-info">
+                    <div class="category-icon databases">🔄</div>
+                    <div>
+                        <div class="category-title">Background Tasks</div>
+                        <div class="category-desc">Automated data collection and processing</div>
+                    </div>
+                </div>
+            </div>
+            <div class="service-list">
+                <div class="service-item">
+                    <div class="service-info">
+                        <div class="service-name">Portfolio Snapshot</div>
+                        <div class="service-description">Daily portfolio value snapshots</div>
+                    </div>
+                    <div class="service-status">
+                        <span class="status-indicator" id="snapshotIndicator"></span>
+                        <span class="status-text" id="snapshotStatusText">-</span>
+                    </div>
+                </div>
+                <div class="service-item">
+                    <div class="service-info">
+                        <div class="service-name">NFT Floor Prices</div>
+                        <div class="service-description">Collection floor price updates</div>
+                    </div>
+                    <div class="service-status">
+                        <span class="status-indicator" id="nftPricesIndicator"></span>
+                        <span class="status-text" id="nftPricesStatusText">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- External APIs -->
+        <div class="service-category">
+            <div class="category-header">
+                <div class="category-info">
+                    <div class="category-icon apis">🔌</div>
+                    <div>
+                        <div class="category-title">External APIs</div>
+                        <div class="category-desc">Third-party service integrations</div>
+                    </div>
+                </div>
+            </div>
+            <div class="service-list" id="apisList">
+                <!-- Populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let refreshInterval;
+
+        async function loadStatus() {
+            try {
+                // Fetch startup status and API status in parallel
+                const [startupRes, apiRes] = await Promise.all([
+                    fetch('/api/startup-status'),
+                    fetch('/api/status')
+                ]);
+
+                const startup = await startupRes.json();
+                const apiStatus = await apiRes.json();
+
+                updateStartupStatus(startup);
+                updateApiStatus(apiStatus);
+                updateOverview(startup, apiStatus);
+
+                document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+            } catch (error) {
+                console.error('Error loading status:', error);
+                document.getElementById('serverStatus').textContent = 'Offline';
+                document.getElementById('serverStatus').className = 'value error';
+            }
+        }
+
+        function updateStartupStatus(status) {
+            // Database
+            updateIndicator('db', status.database);
+
+            // NFT Image DB
+            updateIndicator('nftDb', status.nft_image_db);
+
+            // Snapshot
+            updateIndicator('snapshot', status.snapshot_check);
+
+            // NFT Prices
+            updateIndicator('nftPrices', status.nft_prices);
+        }
+
+        function updateIndicator(prefix, status) {
+            const indicator = document.getElementById(`${prefix}Indicator`);
+            const text = document.getElementById(`${prefix}StatusText`);
+
+            if (!indicator || !text) return;
+
+            // Reset classes
+            indicator.className = 'status-indicator';
+            text.className = 'status-text';
+
+            switch(status) {
+                case 'ready':
+                    indicator.classList.add('healthy');
+                    text.classList.add('healthy');
+                    text.textContent = 'Ready';
+                    break;
+                case 'loading':
+                    indicator.classList.add('loading');
+                    text.classList.add('loading');
+                    text.textContent = 'Loading';
+                    break;
+                case 'error':
+                    indicator.classList.add('error');
+                    text.classList.add('error');
+                    text.textContent = 'Error';
+                    break;
+                default:
+                    indicator.classList.add('pending');
+                    text.classList.add('pending');
+                    text.textContent = 'Pending';
+            }
+        }
+
+        function updateApiStatus(status) {
+            // Server status
+            const serverIndicator = document.getElementById('serverIndicator');
+            const serverText = document.getElementById('serverStatusText');
+            serverIndicator.className = 'status-indicator healthy';
+            serverText.className = 'status-text healthy';
+            serverText.textContent = 'Running';
+
+            // APIs list
+            const apisList = document.getElementById('apisList');
+            setSafeHTML(apisList, '';
+
+            const apiNames = {
+                blockfrost: { name: 'Blockfrost', desc: 'Cardano blockchain API' },
+                cexplorer: { name: 'CExplorer', desc: 'Cardano explorer API' },
+                blockstream: { name: 'Blockstream', desc: 'Bitcoin blockchain API' },
+                coinbase: { name: 'Coinbase', desc: 'Exchange integration' },
+                alchemy: { name: 'Alchemy', desc: 'Ethereum/Polygon/Base NFT API' },
+                helius: { name: 'Helius', desc: 'Solana blockchain API' }
+            };
+
+            Object.entries(status.apis).forEach(([key, value]) => {
+                const api = apiNames[key] || { name: key, desc: 'External API' };
+                const statusClass = value === 'configured' ? 'healthy' :
+                                   value === 'available' ? 'healthy' : 'missing';
+                const statusText = value === 'configured' ? 'Configured' :
+                                  value === 'available' ? 'Available' : 'Not Configured';
+
+                apisList.innerHTML += ` /* TODO: Review for XSS */
+                    <div class="service-item">
+                        <div class="service-info">
+                            <div class="service-name">${api.name}</div>
+                            <div class="service-description">${api.desc}</div>
+                        </div>
+                        <div class="service-status">
+                            <span class="status-indicator ${statusClass}"></span>
+                            <span class="status-text ${statusClass}">${statusText}</span>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function updateOverview(startup, apiStatus) {
+            // Server status
+            const serverEl = document.getElementById('serverStatus');
+            serverEl.textContent = 'Online';
+            serverEl.className = 'value healthy';
+
+            // Database status
+            const dbEl = document.getElementById('dbStatus');
+            if (startup.database === 'ready' && startup.nft_image_db === 'ready') {
+                dbEl.textContent = 'Healthy';
+                dbEl.className = 'value healthy';
+            } else if (startup.database === 'loading' || startup.nft_image_db === 'loading') {
+                dbEl.textContent = 'Initializing';
+                dbEl.className = 'value loading';
+            } else {
+                dbEl.textContent = 'Error';
+                dbEl.className = 'value error';
+            }
+
+            // APIs configured count
+            const apisEl = document.getElementById('apisConfigured');
+            const configured = Object.values(apiStatus.apis).filter(v => v === 'configured' || v === 'available').length;
+            const total = Object.keys(apiStatus.apis).length;
+            apisEl.textContent = `${configured}/${total}`;
+            apisEl.className = configured === total ? 'value healthy' : 'value';
+
+            // Background tasks status
+            const tasksEl = document.getElementById('tasksStatus');
+            if (startup.ready) {
+                tasksEl.textContent = 'Complete';
+                tasksEl.className = 'value healthy';
+            } else if (startup.nft_prices === 'loading' || startup.snapshot_check === 'loading') {
+                tasksEl.textContent = 'Running';
+                tasksEl.className = 'value loading';
+            } else {
+                tasksEl.textContent = 'Pending';
+                tasksEl.className = 'value';
+            }
+        }
+
+        // Initial load
+        loadStatus();
+
+        // Refresh every 3 seconds
+        refreshInterval = setInterval(loadStatus, 3000);
+
+        // Cleanup on page leave
+        window.addEventListener('beforeunload', () => {
+            clearInterval(refreshInterval);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ABCT - Security Settings</title>
+    <link rel="stylesheet" href="/static/css/styles.css?v=20">
+    <style>
+        /* Security Settings Styles */
+        .security-manager {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .security-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .security-header h1 {
+            margin: 0;
+            color: #e0e0e0;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #2a2a3e;
+            color: #e0e0e0;
+            border: 1px solid #3a3a4e;
+        }
+
+        .btn-secondary:hover {
+            background: #3a3a4e;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* Restart Banner */
+        .restart-banner {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(245, 158, 11, 0.1) 100%);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .restart-banner.hidden {
+            display: none;
+        }
+
+        .restart-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .restart-icon {
+            font-size: 24px;
+        }
+
+        .restart-text h3 {
+            margin: 0 0 5px 0;
+            color: #f59e0b;
+            font-size: 16px;
+        }
+
+        .restart-text p {
+            margin: 0;
+            color: #888;
+            font-size: 13px;
+        }
+
+        /* Status Card */
+        .status-card {
+            background: linear-gradient(135deg, #1a1a2e 0%, #2a2a3e 100%);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+        }
+
+        .status-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .status-header h2 {
+            margin: 0;
+            color: #e0e0e0;
+            font-size: 18px;
+        }
+
+        .status-badge {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-badge.http {
+            background: rgba(107, 114, 128, 0.2);
+            color: #9ca3af;
+        }
+
+        .status-badge.https {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .status-item {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .status-item .label {
+            color: #888;
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+
+        .status-item .value {
+            color: #e0e0e0;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .status-item .value.success {
+            color: #10b981;
+        }
+
+        .status-item .value.warning {
+            color: #f59e0b;
+        }
+
+        /* Mode Selector */
+        .mode-section {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+        }
+
+        .mode-section h2 {
+            margin: 0 0 20px 0;
+            color: #e0e0e0;
+            font-size: 18px;
+        }
+
+        .mode-options {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .mode-option {
+            display: flex;
+            align-items: flex-start;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .mode-option:hover {
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .mode-option.selected {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .mode-option input[type="radio"] {
+            margin-right: 15px;
+            margin-top: 3px;
+            accent-color: #667eea;
+        }
+
+        .mode-content {
+            flex: 1;
+        }
+
+        .mode-title {
+            color: #e0e0e0;
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .mode-description {
+            color: #888;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .mode-badge {
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .mode-badge.default {
+            background: rgba(107, 114, 128, 0.2);
+            color: #9ca3af;
+        }
+
+        .mode-badge.recommended {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+
+        /* Certificate Section */
+        .cert-section {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+        }
+
+        .cert-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .cert-header h2 {
+            margin: 0;
+            color: #e0e0e0;
+            font-size: 18px;
+        }
+
+        .cert-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .cert-info {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .cert-info.no-cert {
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .cert-info.no-cert p {
+            color: #888;
+            margin: 0 0 15px 0;
+        }
+
+        .cert-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .cert-detail {
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 6px;
+        }
+
+        .cert-detail .label {
+            color: #888;
+            font-size: 11px;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }
+
+        .cert-detail .value {
+            color: #e0e0e0;
+            font-size: 13px;
+            word-break: break-all;
+        }
+
+        /* Upload Form */
+        .upload-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #2a2a3e;
+        }
+
+        .upload-section h3 {
+            color: #e0e0e0;
+            font-size: 15px;
+            margin: 0 0 15px 0;
+        }
+
+        .upload-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .file-input-wrapper {
+            display: flex;
+            gap: 15px;
+        }
+
+        .file-input-group {
+            flex: 1;
+        }
+
+        .file-input-group label {
+            display: block;
+            color: #888;
+            font-size: 12px;
+            margin-bottom: 8px;
+        }
+
+        .file-input-group input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            background: #2a2a3e;
+            border: 1px solid #3a3a4e;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 13px;
+        }
+
+        .file-input-group input[type="file"]::file-selector-button {
+            background: #3a3a4e;
+            border: none;
+            padding: 8px 12px;
+            margin-right: 10px;
+            border-radius: 4px;
+            color: #e0e0e0;
+            cursor: pointer;
+        }
+
+        /* Browser Warning Guide */
+        .warning-guide {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 25px;
+        }
+
+        .warning-guide h3 {
+            color: #3b82f6;
+            font-size: 14px;
+            margin: 0 0 15px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .warning-guide ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .warning-guide li {
+            color: #888;
+            font-size: 13px;
+            margin-bottom: 8px;
+            line-height: 1.5;
+        }
+
+        .warning-guide li strong {
+            color: #e0e0e0;
+        }
+
+        /* Status Message */
+        .status-message {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 8px;
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+
+        .status-message.success {
+            background: #10b981;
+            color: white;
+        }
+
+        .status-message.error {
+            background: #ef4444;
+            color: white;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .file-input-wrapper {
+                flex-direction: column;
+            }
+
+            .restart-banner {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js">
+        // XSS Protection - Safe HTML rendering
+        function setSafeHTML(element, html) {
+            if (!element) return;
+            if (typeof DOMPurify !== 'undefined') {
+                setSafeHTML(element, DOMPurify.sanitize(html);
+            } else {
+                console.warn('DOMPurify not loaded, falling back to textContent');
+                element.textContent = html;
+            }
+        }
+</script>
+</head>
+<body>
+    <div class="security-manager">
+        <div class="security-header">
+            <h1>Security Settings</h1>
+            <div class="header-actions">
+                <a href="/" class="btn btn-secondary">Back to Dashboard</a>
+                <a href="/apis.html" class="btn btn-secondary">Manage APIs</a>
+            </div>
+        </div>
+
+        <!-- Restart Required Banner -->
+        <div id="restartBanner" class="restart-banner hidden">
+            <div class="restart-info">
+                <span class="restart-icon">!</span>
+                <div class="restart-text">
+                    <h3>Restart Required</h3>
+                    <p id="restartMessage">SSL mode changes require a server restart to take effect.</p>
+                </div>
+            </div>
+            <div class="restart-actions">
+                <span class="btn btn-secondary btn-small" style="cursor: default;">Restart server with: <code>./stop.sh && ./run.sh</code></span>
+            </div>
+        </div>
+
+        <!-- Current Status -->
+        <div class="status-card">
+            <div class="status-header">
+                <h2>Current Status</h2>
+                <span id="statusBadge" class="status-badge http">HTTP</span>
+            </div>
+            <div class="status-grid">
+                <div class="status-item">
+                    <div class="label">Server URL</div>
+                    <div class="value" id="serverUrl">http://127.0.0.1:8000</div>
+                </div>
+                <div class="status-item">
+                    <div class="label">SSL Mode</div>
+                    <div class="value" id="sslMode">HTTP (No Encryption)</div>
+                </div>
+                <div class="status-item">
+                    <div class="label">Certificate Status</div>
+                    <div class="value" id="certStatus">No certificate</div>
+                </div>
+                <div class="status-item">
+                    <div class="label">Certificate Expires</div>
+                    <div class="value" id="certExpires">N/A</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SSL Mode Selector -->
+        <div class="mode-section">
+            <h2>SSL Mode</h2>
+            <div class="mode-options">
+                <label class="mode-option" data-mode="http">
+                    <input type="radio" name="sslMode" value="http" checked>
+                    <div class="mode-content">
+                        <div class="mode-title">
+                            HTTP (No Encryption)
+                            <span class="mode-badge default">Default</span>
+                        </div>
+                        <div class="mode-description">
+                            Standard HTTP connection. Best for local-only development where security isn't a concern.
+                            No browser warnings, simplest setup.
+                        </div>
+                    </div>
+                </label>
+
+                <label class="mode-option" data-mode="https-self-signed">
+                    <input type="radio" name="sslMode" value="https-self-signed">
+                    <div class="mode-content">
+                        <div class="mode-title">
+                            HTTPS (Self-Signed Certificate)
+                            <span class="mode-badge recommended">Recommended for Dev</span>
+                        </div>
+                        <div class="mode-description">
+                            Encrypted HTTPS connection using an auto-generated self-signed certificate.
+                            Browsers will show a warning (this is normal for local development).
+                        </div>
+                    </div>
+                </label>
+
+                <label class="mode-option" data-mode="https-custom">
+                    <input type="radio" name="sslMode" value="https-custom">
+                    <div class="mode-content">
+                        <div class="mode-title">
+                            HTTPS (Custom Certificate)
+                        </div>
+                        <div class="mode-description">
+                            Use your own SSL certificate (e.g., from Let's Encrypt or a trusted CA).
+                            No browser warnings if properly configured.
+                        </div>
+                    </div>
+                </label>
+            </div>
+        </div>
+
+        <!-- Certificate Management -->
+        <div class="cert-section">
+            <div class="cert-header">
+                <h2>Certificate Management</h2>
+                <div class="cert-actions">
+                    <button class="btn btn-primary btn-small" onclick="generateCertificate()">
+                        Generate Self-Signed
+                    </button>
+                    <button class="btn btn-danger btn-small" id="deleteCertBtn" onclick="deleteCertificate()" style="display: none;">
+                        Delete Certificate
+                    </button>
+                </div>
+            </div>
+
+            <div id="certInfo" class="cert-info no-cert">
+                <p>No certificate configured.</p>
+                <p>Generate a self-signed certificate or upload your own to enable HTTPS.</p>
+            </div>
+
+            <!-- Upload Section -->
+            <div class="upload-section">
+                <h3>Upload Custom Certificate</h3>
+                <form class="upload-form" id="uploadForm" onsubmit="uploadCertificate(event)">
+                    <div class="file-input-wrapper">
+                        <div class="file-input-group">
+                            <label for="certFile">Certificate File (.crt, .pem)</label>
+                            <input type="file" id="certFile" accept=".crt,.pem,.cer" required>
+                        </div>
+                        <div class="file-input-group">
+                            <label for="keyFile">Private Key File (.key, .pem)</label>
+                            <input type="file" id="keyFile" accept=".key,.pem" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-success">Upload Certificate</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Browser Warning Guide -->
+        <div class="warning-guide">
+            <h3>Browser Warning Guide for Self-Signed Certificates</h3>
+            <ul>
+                <li><strong>Chrome:</strong> Click "Advanced" then "Proceed to localhost (unsafe)"</li>
+                <li><strong>Firefox:</strong> Click "Advanced..." then "Accept the Risk and Continue"</li>
+                <li><strong>Safari:</strong> Click "Show Details" then "visit this website"</li>
+                <li><strong>Edge:</strong> Click "Advanced" then "Continue to localhost (unsafe)"</li>
+            </ul>
+            <p style="color: #888; font-size: 12px; margin-top: 10px;">
+                These warnings are expected for self-signed certificates and don't indicate a security problem for local development.
+            </p>
+        </div>
+    </div>
+
+    <div id="statusMessage" class="status-message" style="display: none;"></div>
+
+    <script>
+        let currentSettings = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSettings();
+
+            // Add click handlers for mode options
+            document.querySelectorAll('.mode-option').forEach(option => {
+                option.addEventListener('click', () => {
+                    const radio = option.querySelector('input[type="radio"]');
+                    radio.checked = true;
+                    updateModeSelection();
+                    saveMode(radio.value);
+                });
+            });
+        });
+
+        async function loadSettings() {
+            try {
+                const response = await fetch('/security/settings');
+                currentSettings = await response.json();
+                renderSettings(currentSettings);
+            } catch (error) {
+                console.error('Error loading settings:', error);
+                showStatus('Failed to load security settings', 'error');
+            }
+        }
+
+        function renderSettings(settings) {
+            // Update status badge
+            const badge = document.getElementById('statusBadge');
+            const isHttps = settings.running_mode !== 'http';
+            badge.textContent = isHttps ? 'HTTPS' : 'HTTP';
+            badge.className = `status-badge ${isHttps ? 'https' : 'http'}`;
+
+            // Update status grid
+            const protocol = isHttps ? 'https' : 'http';
+            document.getElementById('serverUrl').textContent = `${protocol}://127.0.0.1:8000`;
+
+            const modeLabels = {
+                'http': 'HTTP (No Encryption)',
+                'https-self-signed': 'HTTPS (Self-Signed)',
+                'https-custom': 'HTTPS (Custom Certificate)'
+            };
+            document.getElementById('sslMode').textContent = modeLabels[settings.ssl_mode] || settings.ssl_mode;
+
+            // Update certificate status
+            if (settings.certificate && !settings.certificate.error) {
+                document.getElementById('certStatus').textContent = settings.certificate.is_valid ? 'Valid' : 'Invalid';
+                document.getElementById('certStatus').className = `value ${settings.certificate.is_valid ? 'success' : 'warning'}`;
+
+                if (settings.certificate.expires_at) {
+                    const expires = new Date(settings.certificate.expires_at);
+                    const daysRemaining = settings.certificate.days_remaining;
+                    document.getElementById('certExpires').textContent = `${expires.toLocaleDateString()} (${daysRemaining} days)`;
+                    document.getElementById('certExpires').className = `value ${daysRemaining > 30 ? '' : 'warning'}`;
+                }
+
+                renderCertificateInfo(settings.certificate, settings.cert_type);
+                document.getElementById('deleteCertBtn').style.display = 'inline-flex';
+            } else {
+                document.getElementById('certStatus').textContent = 'No certificate';
+                document.getElementById('certStatus').className = 'value';
+                document.getElementById('certExpires').textContent = 'N/A';
+                document.getElementById('deleteCertBtn').style.display = 'none';
+
+                setSafeHTML(document.getElementById('certInfo'), `
+                    <p>No certificate configured.</p>
+                    <p>Generate a self-signed certificate or upload your own to enable HTTPS.</p>
+                `;
+                document.getElementById('certInfo').className = 'cert-info no-cert';
+            }
+
+            // Update mode selector
+            const radio = document.querySelector(`input[name="sslMode"][value="${settings.ssl_mode}"]`);
+            if (radio) {
+                radio.checked = true;
+                updateModeSelection();
+            }
+
+            // Show restart banner if needed
+            const banner = document.getElementById('restartBanner');
+            if (settings.restart_required) {
+                banner.classList.remove('hidden');
+                document.getElementById('restartMessage').textContent =
+                    `Mode will change from "${settings.running_mode}" to "${settings.pending_mode}" after restart.`;
+            } else {
+                banner.classList.add('hidden');
+            }
+        }
+
+        function renderCertificateInfo(cert, certType) {
+            const certInfo = document.getElementById('certInfo');
+            certInfo.className = 'cert-info';
+
+            const subject = cert.subject || {};
+            const issuer = cert.issuer || {};
+
+            setSafeHTML(certInfo, `
+                <div class="cert-details">
+                    <div class="cert-detail">
+                        <div class="label">Type</div>
+                        <div class="value">${certType === 'self-signed' ? 'Self-Signed' : 'Custom'}</div>
+                    </div>
+                    <div class="cert-detail">
+                        <div class="label">Common Name</div>
+                        <div class="value">${subject.commonName || 'N/A'}</div>
+                    </div>
+                    <div class="cert-detail">
+                        <div class="label">Organization</div>
+                        <div class="value">${subject.organizationName || 'N/A'}</div>
+                    </div>
+                    <div class="cert-detail">
+                        <div class="label">Valid From</div>
+                        <div class="value">${cert.not_valid_before ? new Date(cert.not_valid_before).toLocaleDateString() : 'N/A'}</div>
+                    </div>
+                    <div class="cert-detail">
+                        <div class="label">Valid Until</div>
+                        <div class="value">${cert.not_valid_after ? new Date(cert.not_valid_after).toLocaleDateString() : 'N/A'}</div>
+                    </div>
+                    <div class="cert-detail">
+                        <div class="label">Days Remaining</div>
+                        <div class="value ${cert.days_remaining > 30 ? '' : 'warning'}">${cert.days_remaining} days</div>
+                    </div>
+                    <div class="cert-detail">
+                        <div class="label">Self-Signed</div>
+                        <div class="value">${cert.is_self_signed ? 'Yes' : 'No'}</div>
+                    </div>
+                    <div class="cert-detail">
+                        <div class="label">Subject Alternative Names</div>
+                        <div class="value">${cert.san ? cert.san.join(', ') : 'None'}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function updateModeSelection() {
+            document.querySelectorAll('.mode-option').forEach(option => {
+                const radio = option.querySelector('input[type="radio"]');
+                option.classList.toggle('selected', radio.checked);
+            });
+        }
+
+        async function saveMode(mode) {
+            try {
+                const response = await fetch('/security/settings', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ssl_mode: mode })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.detail || 'Failed to update SSL mode');
+                }
+
+                if (result.restart_required) {
+                    showStatus('Mode will change after restart', 'success');
+                } else {
+                    showStatus(result.message, 'success');
+                }
+
+                await loadSettings();
+            } catch (error) {
+                showStatus(error.message, 'error');
+                await loadSettings(); // Reload to reset UI
+            }
+        }
+
+        async function generateCertificate() {
+            try {
+                showStatus('Generating certificate...', 'success');
+
+                const response = await fetch('/security/certificate/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ hostname: 'localhost', valid_days: 365 })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.detail || 'Failed to generate certificate');
+                }
+
+                showStatus('Certificate generated successfully', 'success');
+                await loadSettings();
+            } catch (error) {
+                showStatus(error.message, 'error');
+            }
+        }
+
+        async function uploadCertificate(event) {
+            event.preventDefault();
+
+            const certFile = document.getElementById('certFile').files[0];
+            const keyFile = document.getElementById('keyFile').files[0];
+
+            if (!certFile || !keyFile) {
+                showStatus('Please select both certificate and key files', 'error');
+                return;
+            }
+
+            try {
+                const formData = new FormData();
+                formData.append('cert_file', certFile);
+                formData.append('key_file', keyFile);
+
+                showStatus('Uploading certificate...', 'success');
+
+                const response = await fetch('/security/certificate/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.detail || 'Failed to upload certificate');
+                }
+
+                showStatus('Certificate uploaded successfully', 'success');
+                document.getElementById('uploadForm').reset();
+                await loadSettings();
+            } catch (error) {
+                showStatus(error.message, 'error');
+            }
+        }
+
+        async function deleteCertificate() {
+            if (!confirm('Are you sure you want to delete the certificate? This will reset SSL mode to HTTP.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/security/certificate', {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.detail || 'Failed to delete certificate');
+                }
+
+                showStatus('Certificate deleted', 'success');
+                await loadSettings();
+            } catch (error) {
+                showStatus(error.message, 'error');
+            }
+        }
+
+        function showStatus(message, type) {
+            const el = document.getElementById('statusMessage');
+            el.textContent = message;
+            el.className = `status-message ${type}`;
+            el.style.display = 'block';
+
+            setTimeout(() => {
+                el.style.display = 'none';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

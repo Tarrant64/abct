@@ -1,0 +1,10 @@
+# Optional security dependencies for ABCT
+# Install with: pip install -r requirements-security.txt
+
+# Rate limiting (HIGH-002, HIGH-004)
+# Provides per-IP rate limiting with in-memory or Redis storage
+slowapi>=0.1.9
+
+# Future enhancements
+# redis>=4.5.0  # For Redis-based rate limiting (more robust than in-memory)
+# python-multipart>=0.0.6  # For file upload handling (likely already installed)

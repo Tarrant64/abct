@@ -1,0 +1,106 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>abct-dashboard</Name>
+  <Repository>abct-dashboard:latest</Repository>
+  <Registry/>
+  <Branch>
+    <Tag>latest</Tag>
+    <TagDescription>Latest build</TagDescription>
+  </Branch>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Support/>
+  <Project/>
+  <Overview>
+    ABCT (A Better Crypto Tracker) - Portfolio Dashboard
+
+    A comprehensive crypto portfolio tracker supporting Cardano, Bitcoin, and Ethereum.
+    Features include DeFi tracking, NFT floor prices, staking rewards, and more.
+
+    Designed for use with the ABCT mobile app or any web browser.
+  </Overview>
+  <Category>Crypto: Tools:</Category>
+  <WebUI>http://[IP]:[PORT:8080]/</WebUI>
+  <TemplateURL/>
+  <Icon>https://raw.githubusercontent.com/your-username/abct/main/icon.png</Icon>
+  <ExtraParams>--restart unless-stopped</ExtraParams>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+
+  <!-- Port Mapping -->
+  <Config
+    Name="Web UI Port"
+    Target="80"
+    Default="8080"
+    Mode="tcp"
+    Description="Port for the web dashboard. Access at http://[IP]:8080"
+    Type="Port"
+    Display="always"
+    Required="true"
+    Mask="false">8080</Config>
+
+  <!-- Data Storage -->
+  <Config
+    Name="Data Directory"
+    Target="/app/data"
+    Default="/mnt/user/appdata/abct-dashboard"
+    Mode="rw"
+    Description="Persistent storage for SQLite database with portfolio data"
+    Type="Path"
+    Display="always"
+    Required="true"
+    Mask="false">/mnt/user/appdata/abct-dashboard</Config>
+
+  <!-- Required Environment Variables -->
+  <Config
+    Name="Blockfrost API Key"
+    Target="BLOCKFROST_API_KEY"
+    Default=""
+    Mode=""
+    Description="Blockfrost API key for Cardano blockchain access (required). Get one at https://blockfrost.io"
+    Type="Variable"
+    Display="always"
+    Required="true"
+    Mask="true"/>
+
+  <Config
+    Name="TapTools API Key"
+    Target="TAPTOOLS_API_KEY"
+    Default=""
+    Mode=""
+    Description="TapTools API key for NFT and token data. Get one at https://taptools.io"
+    Type="Variable"
+    Display="always"
+    Required="false"
+    Mask="true"/>
+
+  <!-- Optional Environment Variables -->
+  <Config
+    Name="CoinGecko API Key"
+    Target="COINGECKO_API_KEY"
+    Default=""
+    Mode=""
+    Description="CoinGecko API key for better rate limits (optional, uses free tier if not set)"
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="true"/>
+
+  <Config
+    Name="NFT Price Service URL"
+    Target="NFT_PRICE_SERVICE_URL"
+    Default=""
+    Mode=""
+    Description="URL of external NFT price service (optional). Example: http://192.168.1.100:8080"
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false"/>
+
+</Container>
