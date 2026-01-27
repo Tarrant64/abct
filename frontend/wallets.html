@@ -647,7 +647,7 @@
         function setSafeHTML(element, html) {
             if (!element) return;
             if (typeof DOMPurify !== 'undefined') {
-                setSafeHTML(element, DOMPurify.sanitize(html);
+                element.innerHTML = DOMPurify.sanitize(html);
             } else {
                 console.warn('DOMPurify not loaded, falling back to textContent');
                 element.textContent = html;
@@ -1119,7 +1119,8 @@ base:0x789..." oninput="previewImport()"></textarea>
                         <h3>No wallets found</h3>
                         <p>${currentFilter === 'all' ? 'Add your first wallet to get started' : `No ${currentFilter} wallets yet`}</p>
                     </div>
-                `;
+                `);
+
                 return;
             }
 
@@ -1182,7 +1183,7 @@ base:0x789..." oninput="previewImport()"></textarea>
                 html += renderWalletItem(wallet, false);
             });
 
-            setSafeHTML(container, html;
+            setSafeHTML(container, html);
         }
 
         function renderWalletItem(wallet, isGrouped = false) {
@@ -1297,7 +1298,8 @@ base:0x789..." oninput="previewImport()"></textarea>
                     ypub: Nested SegWit addresses (3...)<br>
                     zpub: Native SegWit addresses (bc1...)<br>
                     <em>All addresses with balance will be discovered automatically.</em>
-                `;
+                `);
+
             } else {
                 resetXpubMode();
             }
@@ -1312,7 +1314,8 @@ base:0x789..." oninput="previewImport()"></textarea>
                 Bitcoin: bc1..., 1..., 3..., xpub..., ypub..., zpub...<br>
                 Ethereum/Polygon/Base: 0x...<br>
                 Solana: Base58 address
-            `;
+            `);
+
         }
 
         let discoveredAddresses = [];
@@ -1831,7 +1834,8 @@ base:0x789..." oninput="previewImport()"></textarea>
                         <h3>No manual tokens</h3>
                         <p>Add tokens manually to track holdings not in your wallets.</p>
                     </div>
-                `;
+                `);
+
                 return;
             }
 

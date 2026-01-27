@@ -320,7 +320,7 @@
         function setSafeHTML(element, html) {
             if (!element) return;
             if (typeof DOMPurify !== 'undefined') {
-                setSafeHTML(element, DOMPurify.sanitize(html);
+                element.innerHTML = DOMPurify.sanitize(html);
             } else {
                 console.warn('DOMPurify not loaded, falling back to textContent');
                 element.textContent = html;
@@ -469,7 +469,8 @@
                         <h3>Error Loading NFTs</h3>
                         <p>${error.message}</p>
                     </div>
-                `;
+                `);
+
             }
         }
 
@@ -487,7 +488,8 @@
                         <h3>No Cached Images</h3>
                         <p>Click "Cache Images" to download NFT images for display.</p>
                     </div>
-                `;
+                `);
+
                 return;
             }
 

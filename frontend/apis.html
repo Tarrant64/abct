@@ -735,7 +735,7 @@
         function setSafeHTML(element, html) {
             if (!element) return;
             if (typeof DOMPurify !== 'undefined') {
-                setSafeHTML(element, DOMPurify.sanitize(html);
+                element.innerHTML = DOMPurify.sanitize(html);
             } else {
                 console.warn('DOMPurify not loaded, falling back to textContent');
                 element.textContent = html;
@@ -1019,7 +1019,8 @@
             } catch (error) {
                 console.error('Error loading utilization:', error);
                 setSafeHTML(document.getElementById('utilizationGrid'),
-                    '<div style="padding: 20px; text-align: center; color: #888;">Failed to load utilization data</div>';
+                    '<div style="padding: 20px; text-align: center; color: #888;">Failed to load utilization data</div>');
+
             }
         }
 
@@ -1037,7 +1038,7 @@
             const relevantApis = data.utilization.filter(api => api.configured || api.call_count > 0);
 
             if (relevantApis.length === 0) {
-                setSafeHTML(grid, '<div style="padding: 20px; text-align: center; color: #888;">No configured APIs to track. Add API keys below to see utilization.</div>';
+                setSafeHTML(grid, '<div style="padding: 20px; text-align: center; color: #888;">No configured APIs to track. Add API keys below to see utilization.</div>');
                 return;
             }
 
@@ -1045,7 +1046,8 @@
         }
 
         function renderUtilizationCard(api) {
-            const hasLimit = api.utilization_pct !== null && api.requests_limit !== null;
+            const hasLimit = api.utilization_pct !== null && api.requests_limit !== null);
+
             const utilizationClass = !hasLimit ? 'unknown' :
                                     api.utilization_pct < 50 ? 'low' :
                                     api.utilization_pct < 80 ? 'medium' : 'high';
