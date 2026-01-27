@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.4] - 2026-01-26
+
+### Added
+- **Favicon Support**: Added application favicon and touch icons
+  - Created favicon.ico from abct-logo.png
+  - Added apple-touch-icon.png for iOS devices
+  - Linked favicon on all 7 HTML pages
+  - Eliminates 404 errors for favicon requests
+
+### Fixed
+- **wallets.html Syntax Error**: Fixed missing closing parenthesis in setSafeHTML call (line 1699)
+  - Wallet management page now loads correctly
+  - Displays all wallet data without errors
+- **logs.html Syntax Error**: Fixed missing closing parenthesis in setSafeHTML call (line 629)
+  - Logs page now renders log entries correctly
+- **services.html Status Loading**: Fixed undeclared htmlContent variable
+  - Added variable declaration before forEach loop
+  - Added setSafeHTML call to render API status
+  - Services page now displays all API statuses correctly
+  - No more "Error loading status" console errors
+
+### Changed
+- **Semantic Versioning**: Implemented v0.8.4 (BUILD timestamp) format
+  - Syncs with CHANGELOG version numbers
+  - Build timestamps for development iteration tracking
+
+### Infrastructure
+- **Chrome DevTools MCP Integration**: Enabled automated browser testing
+  - Direct console error detection
+  - Real-time debugging capabilities
+  - Network request monitoring
+  - Automated testing workflow
+
+---
+
 ## [0.8.3] - 2026-01-26
 
 ### Fixed

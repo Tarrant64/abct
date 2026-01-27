@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ABCT - Service Health</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
     <link rel="stylesheet" href="/static/css/styles.css?v=20">
     <style>
         .services-page {
@@ -515,6 +517,7 @@
                 helius: { name: 'Helius', desc: 'Solana blockchain API' }
             };
 
+            let htmlContent = '';
             Object.entries(status.apis).forEach(([key, value]) => {
                 const api = apiNames[key] || { name: key, desc: 'External API' };
                 const statusClass = value === 'configured' ? 'healthy' :
@@ -522,7 +525,7 @@
                 const statusText = value === 'configured' ? 'Configured' :
                                   value === 'available' ? 'Available' : 'Not Configured';
 
-                htmlContent += ` /* TODO: Review for XSS */
+                htmlContent += `
                     <div class="service-item">
                         <div class="service-info">
                             <div class="service-name">${api.name}</div>
@@ -535,6 +538,7 @@
                     </div>
                 `;
             });
+            setSafeHTML(apisList, htmlContent);
         }
 
         function updateOverview(startup, apiStatus) {
@@ -590,7 +594,7 @@
     </script>
 
     <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
-        <p>ABCT - Services | <span style="opacity: 0.6;">v0.8.3 (BUILD 1769482955)</span></p>
+        <p>ABCT - Services | <span style="opacity: 0.6;">v0.8.4 (BUILD 1769486084)</span></p>
     </footer>
 </body>
 </html>
