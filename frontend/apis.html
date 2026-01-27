@@ -1042,11 +1042,11 @@
                 return;
             }
 
-            setSafeHTML(grid, relevantApis.map(api => renderUtilizationCard(api)).join('');
+            setSafeHTML(grid, relevantApis.map(api => renderUtilizationCard(api)).join(''));
         }
 
         function renderUtilizationCard(api) {
-            const hasLimit = api.utilization_pct !== null && api.requests_limit !== null);
+            const hasLimit = api.utilization_pct !== null && api.requests_limit !== null;
 
             const utilizationClass = !hasLimit ? 'unknown' :
                                     api.utilization_pct < 50 ? 'low' :
@@ -1167,7 +1167,7 @@
     </script>
 
     <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
-        <p>ABCT - API Configuration | <span style="opacity: 0.6;">v1769480609</span></p>
+        <p>ABCT - API Configuration | <span style="opacity: 0.6;">v0.8.3 (BUILD 1769481896)</span></p>
     </footer>
 </body>
 </html>
