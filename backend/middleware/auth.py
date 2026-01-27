@@ -22,8 +22,8 @@ from fastapi import HTTPException, Depends
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from typing import Optional
 
-# Initialize HTTP Basic Auth
-security = HTTPBasic()
+# Initialize HTTP Basic Auth (auto_error=False allows optional auth)
+security = HTTPBasic(auto_error=False)
 
 
 def get_admin_credentials() -> tuple[Optional[str], Optional[str]]:
@@ -66,7 +66,7 @@ def constant_time_compare(a: str, b: str) -> bool:
     return hmac.compare_digest(a.encode('utf-8'), b.encode('utf-8'))
 
 
-async def verify_admin(credentials: HTTPBasicCredentials = Depends(security)) -> str:
+async def verify_admin(credentials: Optional[HTTPBasicCredentials] = Depends(security)) -> str:
     """
     Verify HTTP Basic Auth credentials for admin access.
 
@@ -76,7 +76,7 @@ async def verify_admin(credentials: HTTPBasicCredentials = Depends(security)) ->
             ...
 
     Args:
-        credentials: HTTP Basic Auth credentials from the request
+        credentials: HTTP Basic Auth credentials from the request (optional if auth disabled)
 
     Returns:
         Username if authentication succeeds
@@ -88,6 +88,14 @@ async def verify_admin(credentials: HTTPBasicCredentials = Depends(security)) ->
     # Check if auth is disabled (for local development)
     if not is_auth_required():
         return "localhost"
+
+    # If auth is required but no credentials provided, return 401
+    if credentials is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Basic"},
+        )
 
     # Get configured credentials
     admin_user, admin_password = get_admin_credentials()
