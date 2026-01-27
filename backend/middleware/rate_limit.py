@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 # Uses client IP address as the key for rate limiting
 limiter = Limiter(
     key_func=get_remote_address,
-    default_limits=["1000/day", "100/hour"],  # Global default limits
+    default_limits=["10000/day", "2000/hour"],  # Global default limits (generous for localhost)
     storage_uri="memory://",  # In-memory storage (use Redis in production)
     headers_enabled=True,  # Add rate limit info to response headers
 )
