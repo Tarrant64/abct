@@ -7,6 +7,95 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.10.0] - 2026-01-26
+
+### Added - Backup & Restore Feature (Major Feature)
+- **Comprehensive Backup System**: Export and import all ABCT configurations
+  - Export all user configurations to a single JSON file
+  - Includes: wallets, API keys, security settings, custom tokens, NFT collections
+  - Excludes: pricing data, portfolio snapshots (regenerable time-series data)
+  - Encrypted backup file format with version tracking
+  - Filename format: `abct-backup-YYYY-MM-DD-HHMMSS.json`
+
+- **Export Options**:
+  - Selectively include/exclude sensitive data (API keys, security settings)
+  - Include/exclude custom tokens and NFT collection tracking
+  - Security warnings displayed when sensitive data is included
+  - One-click download of backup file
+  - Real-time statistics showing what data will be backed up
+
+- **Import with Validation**:
+  - Comprehensive backup file validation before import
+  - Version compatibility checking
+  - Two import modes:
+    - **Merge Mode**: Keep existing data and add/update from backup (safe)
+    - **Replace Mode**: Delete all existing data first, then import (destructive)
+  - Preview functionality (dry-run) shows exactly what will be imported
+  - Skip options for API keys and security settings
+  - Detailed warnings about data that will be overwritten
+
+- **New API Endpoints** (`/api/backup/*`):
+  - `POST /export` - Generate and download backup file
+  - `POST /preview` - Preview import (validate and show summary)
+  - `POST /import` - Import configuration from backup file
+  - `GET /info` - Get backup statistics and current data status
+
+- **Web UI** (`backup.html`):
+  - Clean, modern interface with export and import sections
+  - Real-time data statistics showing records per table
+  - Drag-and-drop file upload for backup files
+  - Checkbox options for export (include API keys, security, tokens, NFTs)
+  - Radio button selection for import mode (merge vs replace)
+  - Color-coded alerts for warnings and errors
+  - Preview panel showing backup contents before import
+  - Sensitive data clearly marked with lock icons
+  - Progress indicators and status messages
+
+- **Security Features**:
+  - Prominent warnings when API keys are included in backups
+  - Recommendations to store backups securely
+  - Option to exclude API keys from export (add manually after import)
+  - Security settings excluded by default on import
+  - Clear indication of sensitive vs non-sensitive data
+  - Admin authentication required for all backup operations
+
+- **Data Coverage**:
+  - **Included Tables**:
+    - `wallets` - All wallet addresses and labels
+    - `api_settings` - API keys and configuration
+    - `security_settings` - SSL/HTTPS configuration
+    - `custom_tokens` - Manually added custom tokens
+    - `token_metadata` - Token metadata and tracking settings
+    - `nft_scheduler_collections` - NFT collections being tracked
+    - `api_rate_limits` - Custom API rate limits
+  - **Excluded Tables** (regenerable):
+    - `portfolio_snapshots` - Historical portfolio data
+    - `nft_floor_prices` - NFT price history
+    - `cache` - Temporary cached data
+    - `balances`, `native_assets` - Refreshed from blockchain
+    - `api_usage` - Usage logs
+    - `nft_scheduler_state` - Runtime state
+    - `nft_scheduler_api_calls` - API call logs
+
+- **Use Cases**:
+  - Migrate ABCT to a new server or computer
+  - Recover from data loss or corruption
+  - Test configuration changes safely (backup first)
+  - Share wallet configuration across multiple ABCT instances
+  - Regular backups as part of data protection strategy
+  - Clone configuration for multiple users (without sharing API keys)
+
+### Navigation
+- Added "Backup & Restore" to waffle menu in dashboard (📦 icon)
+
+### Documentation
+- Added comprehensive inline help text and tooltips
+- Clear warnings about sensitive data handling
+- Mode selection with detailed descriptions
+- Security best practices displayed in UI
+
+---
+
 ## [0.9.0] - 2026-01-26
 
 ### Added - NFT Background Scheduler (Major Feature)
