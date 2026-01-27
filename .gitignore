@@ -50,12 +50,22 @@ data/*.sqlite
 .env.*.local
 *.env
 
-# API Keys and Secrets
+# API Keys and Secrets - CRITICAL
 **/api_key.json
 **/cdp_api_key.json
 **/*_api_key.json
 config/api_keys.json
 secrets/
+apikeys.rtf
+apikeys.txt
+**/apikeys.*
+api_keys.*
+*.apikey
+credentials.*
+
+# Process files
+*.pid
+data/*.pid
 
 # Cache
 .cache/
@@ -67,6 +77,8 @@ __pycache__/
 *.tmp
 *.temp
 *.bak
+*.bak2
+*.bak3
 *.backup
 *.xss-backup
 temp/
@@ -91,6 +103,7 @@ certs/
 
 # Wallet data (privacy!)
 data/wallets.txt
+data/wallets.json
 
 # Node modules (if any frontend tooling)
 node_modules/
@@ -145,3 +158,6 @@ dmypy.json
 backups/
 backup/
 *.backup/
+
+# Sync reports (local development artifacts)
+SYNC_REPORT*.txt
