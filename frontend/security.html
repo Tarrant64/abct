@@ -477,7 +477,7 @@
         function setSafeHTML(element, html) {
             if (!element) return;
             if (typeof DOMPurify !== 'undefined') {
-                setSafeHTML(element, DOMPurify.sanitize(html);
+                element.innerHTML = DOMPurify.sanitize(html);
             } else {
                 console.warn('DOMPurify not loaded, falling back to textContent');
                 element.textContent = html;
@@ -706,7 +706,8 @@
                 setSafeHTML(document.getElementById('certInfo'), `
                     <p>No certificate configured.</p>
                     <p>Generate a self-signed certificate or upload your own to enable HTTPS.</p>
-                `;
+                `);
+
                 document.getElementById('certInfo').className = 'cert-info no-cert';
             }
 
@@ -770,7 +771,8 @@
                         <div class="value">${cert.san ? cert.san.join(', ') : 'None'}</div>
                     </div>
                 </div>
-            `;
+            `);
+
         }
 
         function updateModeSelection() {

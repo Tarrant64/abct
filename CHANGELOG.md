@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.3] - 2026-01-26
+
+### Fixed
+- **HTML Inline JavaScript Syntax Errors**: Fixed setSafeHTML() calls across all submenu pages
+  - Fixed recursive setSafeHTML call in function definitions (6 files)
+  - Fixed missing closing parentheses in 15+ setSafeHTML calls
+  - Affected pages: wallets.html, apis.html, services.html, logs.html, security.html, nft-wall.html
+  - Resolved "Uncaught SyntaxError: missing ) after argument list" errors
+  - All page functionality now operational
+
+---
+
 ## [0.8.2] - 2026-01-26
 
 ### Added
