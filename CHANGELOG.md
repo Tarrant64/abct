@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.5] - 2026-01-26
+
+### Added
+- **Rate Limiting**: Fully activated rate limiting middleware
+  - Installed slowapi==0.1.9 library
+  - Rate limiting now active with in-memory storage
+  - Global limits: 1000/day, 100/hour per IP
+  - Specific limits for sensitive endpoints:
+    - Certificate uploads: 5/hour
+    - Certificate generation: 10/hour
+    - Settings updates: 20/hour
+    - Wallet operations: 100/hour
+  - Rate limit headers enabled in responses
+
+### Verified
+- **Pre-Push Security Hook**: Confirmed security hook is installed and active
+  - Runs automated security audit before git push
+  - Blocks push on CRITICAL/HIGH issues
+  - Warns on MEDIUM/LOW issues
+  - Located at `.git/hooks/pre-push`
+
+### Infrastructure
+- **Security Middleware Stack**: Complete security layer operational
+  - Request size limiting: 10MB default, 5MB for uploads
+  - Rate limiting: Per-IP with configurable limits
+  - Ready for authentication layer (v0.9.0)
+
+---
+
 ## [0.8.4] - 2026-01-26
 
 ### Added
