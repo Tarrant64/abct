@@ -161,3 +161,4 @@ backup/
 
 # Sync reports (local development artifacts)
 SYNC_REPORT*.txt
+SECURITY_INCIDENT*.md
