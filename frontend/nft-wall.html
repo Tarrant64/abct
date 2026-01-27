@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NFT Wall - ABCT</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <style>
+        /* NFT Wall Specific Styles */
+        .wall-container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .wall-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .wall-header h1 {
+            margin: 0;
+            font-size: 1.8rem;
+            color: var(--text-primary);
+        }
+
+        .wall-header .back-link {
+            color: var(--accent-color);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .wall-header .back-link:hover {
+            text-decoration: underline;
+        }
+
+        .wall-stats {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .wall-stat {
+            background: var(--bg-secondary);
+            padding: 15px 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .wall-stat .value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--accent-color);
+        }
+
+        .wall-stat .label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 5px;
+        }
+
+        .chain-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .chain-tab {
+            padding: 10px 20px;
+            background: var(--bg-secondary);
+            border: none;
+            border-radius: 8px;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .chain-tab:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .chain-tab.active {
+            background: var(--accent-color);
+            color: #000;
+        }
+
+        .chain-tab .count {
+            background: rgba(0,0,0,0.2);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.8rem;
+        }
+
+        .chain-tab.active .count {
+            background: rgba(0,0,0,0.3);
+        }
+
+        .nft-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .nft-card {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            overflow: hidden;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            cursor: pointer;
+        }
+
+        .nft-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .nft-card .image-container {
+            width: 100%;
+            aspect-ratio: 1;
+            background: var(--bg-tertiary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .nft-card .image-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .nft-card .image-container .loading {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .nft-card .nft-info {
+            padding: 12px;
+        }
+
+        .nft-card .nft-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 4px;
+        }
+
+        .nft-card .nft-collection {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 8px;
+        }
+
+        .nft-card .nft-price {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nft-card .nft-price .native {
+            font-size: 0.85rem;
+            color: var(--text-primary);
+        }
+
+        .nft-card .nft-price .usd {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .nft-card .chain-badge {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .nft-card .chain-badge.cardano { background: #0033AD; color: white; }
+        .nft-card .chain-badge.ethereum { background: #627EEA; color: white; }
+        .nft-card .chain-badge.solana { background: #14F195; color: black; }
+        .nft-card .chain-badge.polygon { background: #8247E5; color: white; }
+        .nft-card .chain-badge.base { background: #0052FF; color: white; }
+
+        .nft-card .image-container {
+            position: relative;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state h3 {
+            margin-bottom: 10px;
+            color: var(--text-primary);
+        }
+
+        .cache-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .cache-btn {
+            padding: 10px 20px;
+            background: var(--accent-color);
+            border: none;
+            border-radius: 8px;
+            color: #000;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: opacity 0.2s;
+        }
+
+        .cache-btn:hover {
+            opacity: 0.9;
+        }
+
+        .cache-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .cache-progress {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        /* Modal for full-size image */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.9);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            max-width: 90vw;
+            max-height: 90vh;
+            position: relative;
+        }
+
+        .modal-content img {
+            max-width: 100%;
+            max-height: 80vh;
+            border-radius: 8px;
+        }
+
+        .modal-info {
+            background: var(--bg-secondary);
+            padding: 15px;
+            border-radius: 0 0 8px 8px;
+            margin-top: -8px;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: -40px;
+            right: 0;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 2rem;
+            cursor: pointer;
+        }
+
+        @media (max-width: 768px) {
+            .nft-grid {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+                gap: 12px;
+            }
+
+            .wall-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .chain-tabs {
+                overflow-x: auto;
+                flex-wrap: nowrap;
+                padding-bottom: 10px;
+            }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js">
+        // XSS Protection - Safe HTML rendering
+        function setSafeHTML(element, html) {
+            if (!element) return;
+            if (typeof DOMPurify !== 'undefined') {
+                setSafeHTML(element, DOMPurify.sanitize(html);
+            } else {
+                console.warn('DOMPurify not loaded, falling back to textContent');
+                element.textContent = html;
+            }
+        }
+</script>
+</head>
+<body>
+    <div class="wall-container">
+        <div class="wall-header">
+            <div>
+                <a href="/" class="back-link">&larr; Back to Dashboard</a>
+                <h1>NFT Wall</h1>
+            </div>
+            <div class="cache-controls">
+                <span class="cache-progress" id="cacheProgress"></span>
+                <button class="cache-btn" id="cacheBtn" onclick="cacheImages()">Cache Images</button>
+            </div>
+        </div>
+
+        <div class="wall-stats" id="wallStats">
+            <div class="wall-stat">
+                <div class="value" id="totalNfts">-</div>
+                <div class="label">Total NFTs</div>
+            </div>
+            <div class="wall-stat">
+                <div class="value" id="cachedNfts">-</div>
+                <div class="label">Cached Images</div>
+            </div>
+            <div class="wall-stat">
+                <div class="value" id="cachePercent">-</div>
+                <div class="label">Cache Coverage</div>
+            </div>
+            <div class="wall-stat">
+                <div class="value" id="totalValue">-</div>
+                <div class="label">Total Value</div>
+            </div>
+        </div>
+
+        <div class="chain-tabs" id="chainTabs">
+            <button class="chain-tab active" data-chain="all" onclick="switchChain('all')">
+                All Chains <span class="count" id="countAll">0</span>
+            </button>
+            <button class="chain-tab" data-chain="cardano" onclick="switchChain('cardano')">
+                Cardano <span class="count" id="countCardano">0</span>
+            </button>
+            <button class="chain-tab" data-chain="ethereum" onclick="switchChain('ethereum')">
+                Ethereum <span class="count" id="countEthereum">0</span>
+            </button>
+            <button class="chain-tab" data-chain="solana" onclick="switchChain('solana')">
+                Solana <span class="count" id="countSolana">0</span>
+            </button>
+            <button class="chain-tab" data-chain="polygon" onclick="switchChain('polygon')">
+                Polygon <span class="count" id="countPolygon">0</span>
+            </button>
+            <button class="chain-tab" data-chain="base" onclick="switchChain('base')">
+                Base <span class="count" id="countBase">0</span>
+            </button>
+        </div>
+
+        <div class="nft-grid" id="nftGrid">
+            <div class="empty-state">
+                <h3>Loading NFTs...</h3>
+                <p>Fetching your cached NFT images</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for full-size image -->
+    <div class="modal-overlay" id="imageModal" onclick="closeModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+            <img id="modalImage" src="" alt="NFT">
+            <div class="modal-info">
+                <div class="nft-name" id="modalName"></div>
+                <div class="nft-collection" id="modalCollection"></div>
+                <div class="nft-price" id="modalPrice"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '';
+        let allNfts = [];
+        let currentChain = 'all';
+
+        // Format USD value
+        function formatUSD(value) {
+            if (value === null || value === undefined) return '-';
+            return '$' + value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        // Load wall status
+        async function loadWallStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/nfts/wall/status`);
+                const data = await response.json();
+
+                document.getElementById('totalNfts').textContent = data.total_with_images || 0;
+                document.getElementById('cachedNfts').textContent = data.total_cached || 0;
+                document.getElementById('cachePercent').textContent = (data.cache_percentage || 0) + '%';
+
+                // Update chain counts in status
+                const byChain = data.by_chain || {};
+                for (const [chain, info] of Object.entries(byChain)) {
+                    const el = document.getElementById(`count${chain.charAt(0).toUpperCase() + chain.slice(1)}`);
+                    if (el && info.cached !== undefined) {
+                        el.textContent = info.cached;
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading wall status:', error);
+            }
+        }
+
+        // Load NFTs with images
+        async function loadNfts() {
+            try {
+                const url = currentChain === 'all'
+                    ? `${API_BASE}/nfts/wall/nfts`
+                    : `${API_BASE}/nfts/wall/nfts?blockchain=${currentChain}`;
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                allNfts = data.nfts || [];
+
+                // Update counts
+                document.getElementById('countAll').textContent = data.total_count || 0;
+
+                const byChain = data.by_chain || {};
+                for (const [chain, count] of Object.entries(byChain)) {
+                    const el = document.getElementById(`count${chain.charAt(0).toUpperCase() + chain.slice(1)}`);
+                    if (el) el.textContent = count;
+                }
+
+                // Calculate total value
+                const totalValue = allNfts.reduce((sum, nft) => sum + (nft.floor_price_usd || 0), 0);
+                document.getElementById('totalValue').textContent = formatUSD(totalValue);
+
+                renderNfts();
+            } catch (error) {
+                console.error('Error loading NFTs:', error);
+                setSafeHTML(document.getElementById('nftGrid'), `
+                    <div class="empty-state">
+                        <h3>Error Loading NFTs</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Render NFT grid
+        function renderNfts() {
+            const grid = document.getElementById('nftGrid');
+
+            const nftsToShow = currentChain === 'all'
+                ? allNfts
+                : allNfts.filter(n => n.blockchain === currentChain);
+
+            if (nftsToShow.length === 0) {
+                setSafeHTML(grid, `
+                    <div class="empty-state">
+                        <h3>No Cached Images</h3>
+                        <p>Click "Cache Images" to download NFT images for display.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            setSafeHTML(grid, nftsToShow.map(nft => `
+                <div class="nft-card" onclick="openModal('${nft.asset_id}', '${nft.blockchain}')">
+                    <div class="image-container">
+                        <span class="chain-badge ${nft.blockchain}">${nft.blockchain}</span>
+                        <img src="${nft.thumbnail_url}"
+                             alt="${nft.name}"
+                             loading="lazy"
+                             onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23333%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2250%22 text-anchor=%22middle%22 fill=%22%23666%22 font-size=%2212%22>No Image</text></svg>'">
+                    </div>
+                    <div class="nft-info">
+                        <div class="nft-name">${escapeHtml(nft.name)}</div>
+                        <div class="nft-collection">${escapeHtml(nft.collection)}</div>
+                        <div class="nft-price">
+                            <span class="native">${nft.floor_price ? nft.floor_price.toFixed(2) + ' ' + nft.native_symbol : '-'}</span>
+                            <span class="usd">${formatUSD(nft.floor_price_usd)}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Escape HTML to prevent XSS
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;')
+                      .replace(/</g, '&lt;')
+                      .replace(/>/g, '&gt;')
+                      .replace(/"/g, '&quot;');
+        }
+
+        // Switch chain tab
+        function switchChain(chain) {
+            currentChain = chain;
+
+            // Update tab active state
+            document.querySelectorAll('.chain-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.chain === chain);
+            });
+
+            // If switching to a specific chain, reload data for that chain only
+            if (chain !== 'all') {
+                loadNfts();
+            } else {
+                renderNfts();
+            }
+        }
+
+        // Cache images
+        async function cacheImages() {
+            const btn = document.getElementById('cacheBtn');
+            const progress = document.getElementById('cacheProgress');
+
+            btn.disabled = true;
+            btn.textContent = 'Caching...';
+            progress.textContent = 'Starting...';
+
+            try {
+                const chain = currentChain === 'all' ? null : currentChain;
+                const url = chain
+                    ? `${API_BASE}/nfts/wall/cache-all?blockchain=${chain}&limit=50`
+                    : `${API_BASE}/nfts/wall/cache-all?limit=50`;
+
+                const response = await fetch(url, { method: 'POST' });
+                const data = await response.json();
+
+                progress.textContent = `Cached: ${data.total_cached}, Failed: ${data.total_failed}`;
+
+                // Reload data
+                await loadWallStatus();
+                await loadNfts();
+
+            } catch (error) {
+                progress.textContent = 'Error: ' + error.message;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Cache Images';
+            }
+        }
+
+        // Open modal with full-size image
+        function openModal(assetId, blockchain) {
+            const nft = allNfts.find(n => n.asset_id === assetId && n.blockchain === blockchain);
+            if (!nft) return;
+
+            document.getElementById('modalImage').src = nft.image_url;
+            document.getElementById('modalName').textContent = nft.name;
+            document.getElementById('modalCollection').textContent = nft.collection;
+            document.getElementById('modalPrice').textContent = nft.floor_price
+                ? `${nft.floor_price.toFixed(2)} ${nft.native_symbol} (${formatUSD(nft.floor_price_usd)})`
+                : 'No price data';
+
+            document.getElementById('imageModal').classList.add('active');
+        }
+
+        // Close modal
+        function closeModal(event) {
+            if (event && event.target !== document.getElementById('imageModal')) return;
+            document.getElementById('imageModal').classList.remove('active');
+        }
+
+        // Keyboard support for modal
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadWallStatus();
+            loadNfts();
+        });
+    </script>
+</body>
+</html>

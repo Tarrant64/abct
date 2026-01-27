@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  abct-dashboard:
+    build:
+      context: ..
+      dockerfile: abct-docker/Dockerfile
+    container_name: abct-dashboard
+    restart: unless-stopped
+    ports:
+      - "${ABCT_PORT:-8080}:80"
+    volumes:
+      # Persist SQLite database
+      - abct-data:/app/data
+    environment:
+      # Required API keys
+      - BLOCKFROST_API_KEY=${BLOCKFROST_API_KEY:-}
+      - TAPTOOLS_API_KEY=${TAPTOOLS_API_KEY:-}
+
+      # Optional API keys
+      - COINGECKO_API_KEY=${COINGECKO_API_KEY:-}
+
+      # Optional: External NFT price service
+      - NFT_PRICE_SERVICE_URL=${NFT_PRICE_SERVICE_URL:-}
+
+      # Database path (inside container)
+      - DATABASE_PATH=/app/data/portfolio.db
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  abct-data:
+    driver: local

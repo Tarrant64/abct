@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  nft-price-service:
+    build: .
+    container_name: nft-floor-prices
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      # Persist SQLite database
+      - nft-data:/app/data
+    environment:
+      # Required: Your TapTools API key
+      - TAPTOOLS_API_KEY=${TAPTOOLS_API_KEY:-}
+
+      # Update interval in minutes (default: 15 = 4 updates/hour = 96/day)
+      - UPDATE_INTERVAL_MINUTES=${UPDATE_INTERVAL_MINUTES:-15}
+
+      # API calls per update cycle (default: 1, conservative)
+      - CALLS_PER_UPDATE=${CALLS_PER_UPDATE:-1}
+
+      # Database path (inside container)
+      - DATABASE_PATH=/app/data/nft_prices.db
+
+      # Security: CORS and Network Binding
+      # Allowed origins for CORS (comma-separated, no wildcards in production)
+      - NFT_SERVICE_ALLOWED_ORIGINS=${NFT_SERVICE_ALLOWED_ORIGINS:-http://localhost:8000,http://127.0.0.1:8000}
+      # Service host binding (use 127.0.0.1 for localhost-only, 0.0.0.0 for network exposure)
+      - NFT_SERVICE_HOST=${NFT_SERVICE_HOST:-0.0.0.0}
+      # Service port
+      - NFT_SERVICE_PORT=${NFT_SERVICE_PORT:-8080}
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  nft-data:
+    driver: local

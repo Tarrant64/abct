@@ -1,0 +1,94 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>nft-floor-prices</Name>
+  <Repository>ghcr.io/your-username/nft-floor-prices:latest</Repository>
+  <Registry>https://ghcr.io</Registry>
+  <Branch>
+    <Tag>latest</Tag>
+    <TagDescription>Latest stable release</TagDescription>
+  </Branch>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/your-username/nft-floor-prices</Support>
+  <Project>https://github.com/your-username/nft-floor-prices</Project>
+  <Overview>
+    Cardano NFT Floor Price Service - A standalone microservice that continuously collects Cardano NFT floor prices from TapTools API and serves them via REST API.
+
+    Designed to run 24/7 to work around TapTools rate limits (100 calls/day). Spreads API calls over 24 hours and stores prices in SQLite for instant retrieval.
+
+    Use with ABCT (A Better Crypto Tracker) or any application needing Cardano NFT floor prices.
+  </Overview>
+  <Category>Crypto: Tools:</Category>
+  <WebUI>http://[IP]:[PORT:8080]/status</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/your-username/nft-floor-prices/main/unraid/nft-floor-prices.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/your-username/nft-floor-prices/main/unraid/icon.png</Icon>
+  <ExtraParams>--restart unless-stopped</ExtraParams>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText>Support Development</DonateText>
+  <DonateLink/>
+  <Requires/>
+
+  <!-- Port Mapping -->
+  <Config
+    Name="Web UI Port"
+    Target="8080"
+    Default="8080"
+    Mode="tcp"
+    Description="Port for the REST API. Access status at http://[IP]:8080/status"
+    Type="Port"
+    Display="always"
+    Required="true"
+    Mask="false">8080</Config>
+
+  <!-- Data Storage -->
+  <Config
+    Name="Data Directory"
+    Target="/app/data"
+    Default="/mnt/user/appdata/nft-floor-prices"
+    Mode="rw"
+    Description="Persistent storage for SQLite database with floor prices and history"
+    Type="Path"
+    Display="always"
+    Required="true"
+    Mask="false">/mnt/user/appdata/nft-floor-prices</Config>
+
+  <!-- Required Environment Variables -->
+  <Config
+    Name="TapTools API Key"
+    Target="TAPTOOLS_API_KEY"
+    Default=""
+    Mode=""
+    Description="Your TapTools API key (required). Get one at https://taptools.io"
+    Type="Variable"
+    Display="always"
+    Required="true"
+    Mask="true"/>
+
+  <!-- Optional Environment Variables -->
+  <Config
+    Name="Update Interval (minutes)"
+    Target="UPDATE_INTERVAL_MINUTES"
+    Default="15"
+    Mode=""
+    Description="Minutes between price update cycles. Default 15 = 4 updates/hour = 96 API calls/day (under 100 limit)"
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false">15</Config>
+
+  <Config
+    Name="API Calls Per Update"
+    Target="CALLS_PER_UPDATE"
+    Default="1"
+    Mode=""
+    Description="Number of collection price fetches per update cycle. Keep at 1 to stay under rate limits."
+    Type="Variable"
+    Display="advanced"
+    Required="false"
+    Mask="false">1</Config>
+
+</Container>

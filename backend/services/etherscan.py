@@ -1,0 +1,325 @@
+"""
+Etherscan Service - Fetches blockchain data using Etherscan API.
+
+The Etherscan API format is used by multiple block explorers:
+- Etherscan (Ethereum mainnet)
+- Basescan (Base)
+- Polygonscan (Polygon)
+
+Provides:
+- Transaction history
+- Token transfers
+- Contract verification status
+- Gas prices
+
+Uses persistent database caching to reduce API calls.
+"""
+
+import httpx
+import logging
+from typing import Dict, List, Optional
+from datetime import datetime, timedelta
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config import ETHERSCAN_API_KEY, ETHERSCAN_BASE_URL, BASESCAN_BASE_URL, POLYGONSCAN_BASE_URL
+from database import get_cache, set_cache
+
+logger = logging.getLogger(__name__)
+
+# Cache settings
+ETHERSCAN_CACHE_TTL = 300  # 5 minutes for transaction data
+
+
+class EtherscanService:
+    """Service for fetching EVM blockchain data from Etherscan-compatible APIs."""
+
+    # Chain configurations
+    CHAINS = {
+        'ethereum': {
+            'base_url': ETHERSCAN_BASE_URL,
+            'chain_id': 1,
+            'native_symbol': 'ETH',
+            'explorer_name': 'Etherscan'
+        },
+        'base': {
+            'base_url': BASESCAN_BASE_URL,
+            'chain_id': 8453,
+            'native_symbol': 'ETH',
+            'explorer_name': 'Basescan'
+        },
+        'polygon': {
+            'base_url': POLYGONSCAN_BASE_URL,
+            'chain_id': 137,
+            'native_symbol': 'MATIC',
+            'explorer_name': 'Polygonscan'
+        }
+    }
+
+    def __init__(self):
+        self.api_key = ETHERSCAN_API_KEY
+        self._cache: Dict[str, dict] = {}
+        self._cache_ttl = timedelta(minutes=5)
+
+    def is_configured(self) -> bool:
+        """Check if the API key is configured."""
+        return bool(self.api_key)
+
+    def _get_chain_config(self, chain: str) -> Optional[dict]:
+        """Get configuration for a specific chain."""
+        return self.CHAINS.get(chain.lower())
+
+    async def _make_request(self, chain: str, params: dict) -> Optional[dict]:
+        """
+        Make a request to the Etherscan-compatible API.
+
+        Args:
+            chain: Chain name ('ethereum', 'base', 'polygon')
+            params: API parameters
+
+        Returns:
+            API response data or None if error
+        """
+        if not self.is_configured():
+            logger.warning("Etherscan API key not configured")
+            return None
+
+        chain_config = self._get_chain_config(chain)
+        if not chain_config:
+            logger.error(f"Unknown chain: {chain}")
+            return None
+
+        # Add API key to params
+        params['apikey'] = self.api_key
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(
+                    chain_config['base_url'],
+                    params=params
+                )
+
+                if response.status_code != 200:
+                    logger.error(f"{chain_config['explorer_name']} API error: {response.status_code}")
+                    return None
+
+                data = response.json()
+
+                if data.get('status') == '0':
+                    message = data.get('message', 'Unknown error')
+                    result = data.get('result', '')
+                    # "No transactions found" is not an error
+                    if 'No transactions found' in str(result):
+                        return {'result': []}
+                    logger.warning(f"{chain_config['explorer_name']} API: {message} - {result}")
+                    return None
+
+                return data
+
+        except Exception as e:
+            logger.error(f"Error making {chain_config['explorer_name']} request: {e}")
+            return None
+
+    async def get_eth_balance(self, chain: str, address: str) -> Optional[float]:
+        """
+        Get native token balance for an address.
+
+        Args:
+            chain: Chain name
+            address: Wallet address
+
+        Returns:
+            Balance in native token (ETH/MATIC), or None if error
+        """
+        params = {
+            'module': 'account',
+            'action': 'balance',
+            'address': address,
+            'tag': 'latest'
+        }
+
+        data = await self._make_request(chain, params)
+        if not data:
+            return None
+
+        try:
+            balance_wei = int(data.get('result', '0'))
+            return balance_wei / 10**18
+        except (ValueError, TypeError):
+            return None
+
+    async def get_transactions(self, chain: str, address: str, limit: int = 50) -> List[dict]:
+        """
+        Get transaction history for an address.
+
+        Args:
+            chain: Chain name
+            address: Wallet address
+            limit: Maximum number of transactions
+
+        Returns:
+            List of transactions
+        """
+        params = {
+            'module': 'account',
+            'action': 'txlist',
+            'address': address,
+            'startblock': 0,
+            'endblock': 99999999,
+            'page': 1,
+            'offset': limit,
+            'sort': 'desc'
+        }
+
+        data = await self._make_request(chain, params)
+        if not data:
+            return []
+
+        transactions = data.get('result', [])
+        if not isinstance(transactions, list):
+            return []
+
+        return [self._parse_transaction(tx, chain) for tx in transactions]
+
+    def _parse_transaction(self, tx: dict, chain: str) -> dict:
+        """Parse a transaction into a standard format."""
+        chain_config = self._get_chain_config(chain)
+        native_symbol = chain_config['native_symbol'] if chain_config else 'ETH'
+
+        value_wei = int(tx.get('value', '0'))
+        value = value_wei / 10**18
+
+        return {
+            'hash': tx.get('hash', ''),
+            'from': tx.get('from', ''),
+            'to': tx.get('to', ''),
+            'value': value,
+            'value_formatted': f"{value:.6f} {native_symbol}",
+            'gas_used': int(tx.get('gasUsed', '0')),
+            'gas_price': int(tx.get('gasPrice', '0')),
+            'timestamp': int(tx.get('timeStamp', '0')),
+            'block_number': int(tx.get('blockNumber', '0')),
+            'is_error': tx.get('isError', '0') == '1',
+            'chain': chain
+        }
+
+    async def get_token_transfers(self, chain: str, address: str, limit: int = 50) -> List[dict]:
+        """
+        Get ERC-20 token transfer history for an address.
+
+        Args:
+            chain: Chain name
+            address: Wallet address
+            limit: Maximum number of transfers
+
+        Returns:
+            List of token transfers
+        """
+        params = {
+            'module': 'account',
+            'action': 'tokentx',
+            'address': address,
+            'startblock': 0,
+            'endblock': 99999999,
+            'page': 1,
+            'offset': limit,
+            'sort': 'desc'
+        }
+
+        data = await self._make_request(chain, params)
+        if not data:
+            return []
+
+        transfers = data.get('result', [])
+        if not isinstance(transfers, list):
+            return []
+
+        return [self._parse_token_transfer(tx, chain) for tx in transfers]
+
+    def _parse_token_transfer(self, tx: dict, chain: str) -> dict:
+        """Parse a token transfer into a standard format."""
+        decimals = int(tx.get('tokenDecimal', '18'))
+        value_raw = int(tx.get('value', '0'))
+        value = value_raw / (10 ** decimals)
+
+        return {
+            'hash': tx.get('hash', ''),
+            'from': tx.get('from', ''),
+            'to': tx.get('to', ''),
+            'token_name': tx.get('tokenName', 'Unknown'),
+            'token_symbol': tx.get('tokenSymbol', '???'),
+            'token_address': tx.get('contractAddress', ''),
+            'value': value,
+            'value_formatted': f"{value:.6f} {tx.get('tokenSymbol', '???')}",
+            'decimals': decimals,
+            'timestamp': int(tx.get('timeStamp', '0')),
+            'block_number': int(tx.get('blockNumber', '0')),
+            'chain': chain
+        }
+
+    async def get_gas_price(self, chain: str = 'ethereum') -> Optional[dict]:
+        """
+        Get current gas prices.
+
+        Args:
+            chain: Chain name (default: ethereum)
+
+        Returns:
+            Dictionary with gas prices in Gwei
+        """
+        params = {
+            'module': 'gastracker',
+            'action': 'gasoracle'
+        }
+
+        data = await self._make_request(chain, params)
+        if not data:
+            return None
+
+        result = data.get('result', {})
+        if not isinstance(result, dict):
+            return None
+
+        return {
+            'safe_gas_price': float(result.get('SafeGasPrice', 0)),
+            'propose_gas_price': float(result.get('ProposeGasPrice', 0)),
+            'fast_gas_price': float(result.get('FastGasPrice', 0)),
+            'last_block': int(result.get('LastBlock', 0)),
+            'chain': chain
+        }
+
+    async def get_contract_abi(self, chain: str, contract_address: str) -> Optional[str]:
+        """
+        Get the ABI for a verified contract.
+
+        Args:
+            chain: Chain name
+            contract_address: Contract address
+
+        Returns:
+            ABI string or None if not verified
+        """
+        params = {
+            'module': 'contract',
+            'action': 'getabi',
+            'address': contract_address
+        }
+
+        data = await self._make_request(chain, params)
+        if not data:
+            return None
+
+        return data.get('result')
+
+    def get_status(self) -> dict:
+        """Get service status."""
+        return {
+            'configured': self.is_configured(),
+            'supported_chains': list(self.CHAINS.keys()),
+            'api_key_set': bool(self.api_key)
+        }
+
+
+# Singleton instance
+etherscan_service = EtherscanService()

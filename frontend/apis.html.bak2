@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ABCT - Manage APIs</title>
+    <link rel="stylesheet" href="/static/css/styles.css?v=20">
+    <style>
+        /* API Manager Styles */
+        .api-manager {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .api-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .api-header h1 {
+            margin: 0;
+            color: #e0e0e0;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #2a2a3e;
+            color: #e0e0e0;
+            border: 1px solid #3a3a4e;
+        }
+
+        .btn-secondary:hover {
+            background: #3a3a4e;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        /* Stats Banner */
+        .stats-banner {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #1a1a2e 0%, #2a2a3e 100%);
+            padding: 20px 30px;
+            border-radius: 12px;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .stat-card .label {
+            color: #888;
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .value {
+            color: #e0e0e0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .stat-card .value.success {
+            color: #10b981;
+        }
+
+        /* Category Sections */
+        .api-category {
+            background: #1a1a2e;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .category-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, transparent 100%);
+            border-bottom: 1px solid #2a2a3e;
+        }
+
+        .category-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .category-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .category-icon.cardano {
+            background: rgba(0, 51, 173, 0.2);
+            color: #0033ad;
+        }
+
+        .category-icon.evm {
+            background: rgba(98, 126, 234, 0.2);
+            color: #627eea;
+        }
+
+        .category-icon.solana {
+            background: rgba(20, 241, 149, 0.2);
+            color: #14F195;
+        }
+
+        .category-icon.pricing {
+            background: rgba(245, 158, 11, 0.2);
+            color: #f59e0b;
+        }
+
+        .category-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #e0e0e0;
+        }
+
+        .category-desc {
+            font-size: 13px;
+            color: #888;
+        }
+
+        .category-count {
+            background: #2a2a3e;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: #888;
+        }
+
+        /* API Items */
+        .api-list {
+            padding: 0;
+        }
+
+        .api-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            border-bottom: 1px solid #2a2a3e;
+            transition: background 0.2s;
+        }
+
+        .api-item:last-child {
+            border-bottom: none;
+        }
+
+        .api-item:hover {
+            background: rgba(102, 126, 234, 0.05);
+        }
+
+        .api-info {
+            flex: 1;
+        }
+
+        .api-name {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 5px;
+        }
+
+        .api-name h4 {
+            margin: 0;
+            color: #e0e0e0;
+            font-size: 15px;
+        }
+
+        .api-badge {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .api-badge.required {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .api-badge.optional {
+            background: rgba(59, 130, 246, 0.2);
+            color: #3b82f6;
+        }
+
+        .api-description {
+            color: #888;
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+
+        .api-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .status-dot.configured {
+            background: #10b981;
+        }
+
+        .status-dot.not-configured {
+            background: #6b7280;
+        }
+
+        .api-source {
+            color: #6b7280;
+            font-size: 11px;
+        }
+
+        .api-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .api-key-input {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .api-key-input input {
+            width: 250px;
+            padding: 8px 12px;
+            border: 1px solid #3a3a4e;
+            border-radius: 6px;
+            background: #2a2a3e;
+            color: #e0e0e0;
+            font-size: 13px;
+            font-family: monospace;
+        }
+
+        .api-key-input input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .api-key-input input::placeholder {
+            color: #6b7280;
+        }
+
+        /* Toggle Switch */
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 48px;
+            height: 26px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #3a3a4e;
+            transition: 0.3s;
+            border-radius: 26px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .toggle-slider {
+            background-color: #10b981;
+        }
+
+        input:checked + .toggle-slider:before {
+            transform: translateX(22px);
+        }
+
+        /* Docs Link */
+        .docs-link {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 12px;
+        }
+
+        .docs-link:hover {
+            text-decoration: underline;
+        }
+
+        /* Status Message */
+        .status-message {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 8px;
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+
+        .status-message.success {
+            background: #10b981;
+            color: white;
+        }
+
+        .status-message.error {
+            background: #ef4444;
+            color: white;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .api-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+
+            .api-actions {
+                width: 100%;
+                flex-wrap: wrap;
+            }
+
+            .api-key-input input {
+                width: 100%;
+            }
+        }
+
+        /* API Utilization Tracker Styles */
+        .utilization-section {
+            background: #1a1a2e;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            overflow: hidden;
+        }
+
+        .utilization-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, transparent 100%);
+            border-bottom: 1px solid #2a2a3e;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .utilization-header:hover {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, transparent 100%);
+        }
+
+        .utilization-title {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .utilization-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            font-size: 18px;
+        }
+
+        .utilization-title h2 {
+            margin: 0;
+            font-size: 18px;
+            color: #e0e0e0;
+        }
+
+        .utilization-title p {
+            margin: 4px 0 0 0;
+            font-size: 13px;
+            color: #888;
+        }
+
+        .utilization-toggle {
+            color: #888;
+            font-size: 20px;
+            transition: transform 0.3s;
+        }
+
+        .utilization-toggle.expanded {
+            transform: rotate(180deg);
+        }
+
+        .utilization-content {
+            padding: 20px;
+            display: none;
+        }
+
+        .utilization-content.expanded {
+            display: block;
+        }
+
+        .utilization-summary {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .summary-item {
+            background: #2a2a3e;
+            padding: 12px 20px;
+            border-radius: 8px;
+            text-align: center;
+            min-width: 120px;
+        }
+
+        .summary-item .value {
+            font-size: 24px;
+            font-weight: 600;
+            color: #e0e0e0;
+        }
+
+        .summary-item .value.warning {
+            color: #f59e0b;
+        }
+
+        .summary-item .label {
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        .utilization-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+        }
+
+        .utilization-card {
+            background: #2a2a3e;
+            border-radius: 10px;
+            padding: 16px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .utilization-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .utilization-card.not-configured {
+            opacity: 0.6;
+        }
+
+        .utilization-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .utilization-card-name {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .utilization-card-name h4 {
+            margin: 0;
+            font-size: 14px;
+            color: #e0e0e0;
+        }
+
+        .utilization-card-badge {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 9px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .utilization-card-badge.free {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }
+
+        .utilization-card-badge.paid {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        .utilization-pct {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .utilization-pct.low {
+            color: #10b981;
+        }
+
+        .utilization-pct.medium {
+            color: #f59e0b;
+        }
+
+        .utilization-pct.high {
+            color: #ef4444;
+        }
+
+        .utilization-pct.unknown {
+            color: #6b7280;
+        }
+
+        .utilization-bar-container {
+            height: 8px;
+            background: #1a1a2e;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .utilization-bar {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.5s ease-out;
+        }
+
+        .utilization-bar.low {
+            background: linear-gradient(90deg, #10b981, #34d399);
+        }
+
+        .utilization-bar.medium {
+            background: linear-gradient(90deg, #f59e0b, #fbbf24);
+        }
+
+        .utilization-bar.high {
+            background: linear-gradient(90deg, #ef4444, #f87171);
+        }
+
+        .utilization-bar.unknown {
+            background: linear-gradient(90deg, #6b7280, #9ca3af);
+        }
+
+        .utilization-details {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #888;
+        }
+
+        .utilization-usage {
+            font-family: monospace;
+        }
+
+        .utilization-reset {
+            color: #667eea;
+        }
+
+        .utilization-card-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 10px;
+            gap: 8px;
+        }
+
+        .btn-icon {
+            background: transparent;
+            border: 1px solid #3a3a4e;
+            color: #888;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.2s;
+        }
+
+        .btn-icon:hover {
+            background: #3a3a4e;
+            color: #e0e0e0;
+        }
+
+        /* Limit Edit Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            display: none;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 24px;
+            width: 400px;
+            max-width: 90%;
+        }
+
+        .modal h3 {
+            margin: 0 0 20px 0;
+            color: #e0e0e0;
+        }
+
+        .modal-input-group {
+            margin-bottom: 16px;
+        }
+
+        .modal-input-group label {
+            display: block;
+            color: #888;
+            font-size: 13px;
+            margin-bottom: 6px;
+        }
+
+        .modal-input-group input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #3a3a4e;
+            border-radius: 6px;
+            background: #2a2a3e;
+            color: #e0e0e0;
+            font-size: 14px;
+        }
+
+        .modal-input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js">
+        // XSS Protection - Safe HTML rendering
+        function setSafeHTML(element, html) {
+            if (!element) return;
+            if (typeof DOMPurify !== 'undefined') {
+                setSafeHTML(element, DOMPurify.sanitize(html);
+            } else {
+                console.warn('DOMPurify not loaded, falling back to textContent');
+                element.textContent = html;
+            }
+        }
+</script>
+</head>
+<body>
+    <div class="api-manager">
+        <div class="api-header">
+            <h1>Manage APIs</h1>
+            <div class="header-actions">
+                <a href="/" class="btn btn-secondary">Back to Dashboard</a>
+                <a href="/static/wallets.html" class="btn btn-secondary">Manage Wallets</a>
+            </div>
+        </div>
+
+        <div class="stats-banner">
+            <div class="stat-card">
+                <div class="label">Total APIs</div>
+                <div class="value" id="totalApis">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Configured</div>
+                <div class="value success" id="configuredApis">-</div>
+            </div>
+        </div>
+
+        <!-- API Utilization Tracker -->
+        <div class="utilization-section" id="utilizationSection">
+            <div class="utilization-header" onclick="toggleUtilization()">
+                <div class="utilization-title">
+                    <div class="utilization-icon">%</div>
+                    <div>
+                        <h2>API Utilization</h2>
+                        <p>Track your API rate limit usage across all configured APIs</p>
+                    </div>
+                </div>
+                <span class="utilization-toggle" id="utilizationToggle">&#9660;</span>
+            </div>
+            <div class="utilization-content" id="utilizationContent">
+                <div class="utilization-summary" id="utilizationSummary">
+                    <div class="summary-item">
+                        <div class="value" id="totalCallsToday">-</div>
+                        <div class="label">Calls Today</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="value warning" id="highUtilizationCount">-</div>
+                        <div class="label">High Usage APIs</div>
+                    </div>
+                </div>
+                <div class="utilization-grid" id="utilizationGrid">
+                    <div style="padding: 20px; text-align: center; color: #888;">Loading utilization data...</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="apiCategories">
+            <div class="api-category">
+                <div class="category-header">
+                    <div class="category-info">
+                        <div class="category-icon">...</div>
+                        <div>
+                            <div class="category-title">Loading APIs...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="statusMessage" class="status-message" style="display: none;"></div>
+
+    <!-- Rate Limit Edit Modal -->
+    <div class="modal-overlay" id="limitModal">
+        <div class="modal">
+            <h3>Edit Rate Limit</h3>
+            <p id="limitModalApiName" style="color: #888; margin-bottom: 16px;"></p>
+            <div class="modal-input-group">
+                <label for="limitInput">Daily Request Limit</label>
+                <input type="number" id="limitInput" min="1" placeholder="Enter limit...">
+            </div>
+            <p style="font-size: 12px; color: #888; margin-bottom: 16px;">
+                Default limit: <span id="defaultLimitDisplay">-</span> requests/day
+            </p>
+            <div class="modal-actions">
+                <button class="btn btn-secondary btn-small" onclick="closeLimitModal()">Cancel</button>
+                <button class="btn btn-secondary btn-small" onclick="resetToDefault()">Reset to Default</button>
+                <button class="btn btn-primary btn-small" onclick="saveLimitChange()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let apiData = null;
+        let utilizationData = null;
+        let currentEditApiId = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadApis();
+            loadUtilization();
+        });
+
+        async function loadApis() {
+            try {
+                const response = await fetch('/settings/apis');
+                apiData = await response.json();
+                renderApis(apiData);
+            } catch (error) {
+                console.error('Error loading APIs:', error);
+                showStatus('Failed to load APIs', 'error');
+            }
+        }
+
+        function renderApis(data) {
+            document.getElementById('totalApis').textContent = data.total_apis;
+            document.getElementById('configuredApis').textContent = data.configured_count;
+
+            const container = document.getElementById('apiCategories');
+            setSafeHTML(container, '');
+
+            const categoryOrder = ['cardano', 'evm', 'solana', 'pricing'];
+            let htmlContent = '';
+
+            categoryOrder.forEach(catId => {
+                const category = data.categories[catId];
+                if (!category) return;
+
+                const configuredCount = category.apis.filter(a => a.configured).length;
+
+                htmlContent += `
+                    <div class="api-category">
+                        <div class="category-header">
+                            <div class="category-info">
+                                <div class="category-icon ${catId}">${category.icon}</div>
+                                <div>
+                                    <div class="category-title">${category.name}</div>
+                                    <div class="category-desc">${category.description}</div>
+                                </div>
+                            </div>
+                            <div class="category-count">${configuredCount}/${category.apis.length} configured</div>
+                        </div>
+                        <div class="api-list">
+                            ${category.apis.map(api => renderApiItem(api)).join('')}
+                        </div>
+                    </div>
+                `;
+                        setSafeHTML(container, htmlContent);
+            });
+        }
+
+        function renderApiItem(api) {
+            const statusClass = api.configured ? 'configured' : 'not-configured';
+            const statusText = api.configured ? 'Configured' : 'Not configured';
+            const sourceText = api.source ? `(${api.source})` : '';
+
+            return `
+                <div class="api-item" data-api-id="${api.id}">
+                    <div class="api-info">
+                        <div class="api-name">
+                            <h4>${api.name}</h4>
+                            <span class="api-badge ${api.required ? 'required' : 'optional'}">
+                                ${api.required ? 'Required' : 'Optional'}
+                            </span>
+                        </div>
+                        <div class="api-description">${api.description}</div>
+                        <div class="api-status">
+                            <span class="status-dot ${statusClass}"></span>
+                            <span>${statusText}</span>
+                            <span class="api-source">${sourceText}</span>
+                            <a href="${api.docs_url}" target="_blank" class="docs-link">Get API Key</a>
+                        </div>
+                    </div>
+                    <div class="api-actions">
+                        ${api.configured ? `
+                            <div class="toggle-container">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" ${api.enabled ? 'checked' : ''}
+                                           onchange="toggleApi('${api.id}', this.checked)">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span style="color: #888; font-size: 12px;">${api.enabled ? 'Enabled' : 'Disabled'}</span>
+                            </div>
+                            <button class="btn btn-danger btn-small" onclick="disableApi('${api.id}')">
+                                Remove Key
+                            </button>
+                        ` : `
+                            <div class="api-key-input">
+                                <input type="password"
+                                       id="key-${api.id}"
+                                       placeholder="Enter API key..."
+                                       onkeypress="if(event.key==='Enter') saveApiKey('${api.id}')">
+                                <button class="btn btn-success btn-small" onclick="saveApiKey('${api.id}')">
+                                    Save
+                                </button>
+                            </div>
+                        `}
+                    </div>
+                </div>
+            `;
+        }
+
+        async function saveApiKey(apiId) {
+            const input = document.getElementById(`key-${apiId}`);
+            const apiKey = input.value.trim();
+
+            if (!apiKey) {
+                showStatus('Please enter an API key', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/settings/apis/${apiId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ api_key: apiKey })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to save API key');
+                }
+
+                showStatus('API key saved successfully', 'success');
+                await loadApis();
+            } catch (error) {
+                showStatus(error.message, 'error');
+            }
+        }
+
+        async function disableApi(apiId) {
+            if (!confirm('Are you sure you want to remove this API key? You will need to re-enter it to use this API again.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/settings/apis/${apiId}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to disable API');
+                }
+
+                showStatus('API disabled and key removed', 'success');
+                await loadApis();
+            } catch (error) {
+                showStatus(error.message, 'error');
+            }
+        }
+
+        async function toggleApi(apiId, enabled) {
+            // If disabling, just call disable
+            if (!enabled) {
+                // Get the API item to re-render if toggle changed
+                await loadApis();
+                return;
+            }
+            // If enabling but already has key, nothing needed (toggle is visual)
+        }
+
+        function showStatus(message, type) {
+            const el = document.getElementById('statusMessage');
+            el.textContent = message;
+            el.className = `status-message ${type}`;
+            el.style.display = 'block';
+
+            setTimeout(() => {
+                el.style.display = 'none';
+            }, 3000);
+        }
+
+        // ========== Utilization Functions ==========
+
+        async function loadUtilization() {
+            try {
+                const response = await fetch('/settings/api-utilization');
+                utilizationData = await response.json();
+                renderUtilization(utilizationData);
+            } catch (error) {
+                console.error('Error loading utilization:', error);
+                document.getElementById('utilizationGrid').innerHTML =
+                    '<div style="padding: 20px; text-align: center; color: #888;">Failed to load utilization data</div>';
+            }
+        }
+
+        function renderUtilization(data) {
+            // Update summary
+            document.getElementById('totalCallsToday').textContent =
+                data.summary.total_calls_today.toLocaleString();
+            document.getElementById('highUtilizationCount').textContent =
+                data.summary.high_utilization_count;
+
+            // Render utilization cards
+            const grid = document.getElementById('utilizationGrid');
+
+            // Filter to only show configured APIs, plus any with usage
+            const relevantApis = data.utilization.filter(api => api.configured || api.call_count > 0);
+
+            if (relevantApis.length === 0) {
+                setSafeHTML(grid, '<div style="padding: 20px; text-align: center; color: #888;">No configured APIs to track. Add API keys below to see utilization.</div>';
+                return;
+            }
+
+            setSafeHTML(grid, relevantApis.map(api => renderUtilizationCard(api)).join('');
+        }
+
+        function renderUtilizationCard(api) {
+            const hasLimit = api.utilization_pct !== null && api.requests_limit !== null;
+            const utilizationClass = !hasLimit ? 'unknown' :
+                                    api.utilization_pct < 50 ? 'low' :
+                                    api.utilization_pct < 80 ? 'medium' : 'high';
+            const configuredClass = api.configured ? '' : 'not-configured';
+
+            const pctDisplay = hasLimit ? `${api.utilization_pct}%` : 'N/A';
+            const barWidth = hasLimit ? api.utilization_pct : 0;
+            const usageDisplay = hasLimit
+                ? `${api.call_count.toLocaleString()} / ${api.requests_limit.toLocaleString()}`
+                : `${api.call_count.toLocaleString()} calls (limit N/A)`;
+
+            return `
+                <div class="utilization-card ${configuredClass}">
+                    <div class="utilization-card-header">
+                        <div class="utilization-card-name">
+                            <h4>${api.name}</h4>
+                            <span class="utilization-card-badge ${api.pricing}">${api.pricing}</span>
+                        </div>
+                        <span class="utilization-pct ${utilizationClass}">${pctDisplay}</span>
+                    </div>
+                    <div class="utilization-bar-container">
+                        <div class="utilization-bar ${utilizationClass}" style="width: ${barWidth}%"></div>
+                    </div>
+                    <div class="utilization-details">
+                        <span class="utilization-usage">${usageDisplay}</span>
+                        <span class="utilization-reset">Resets in ${api.reset_in}</span>
+                    </div>
+                    <div class="utilization-card-actions">
+                        <button class="btn-icon" onclick="openLimitModal('${api.api_id}')" title="Set custom rate limit">
+                            ${hasLimit ? 'Edit' : 'Set'} Limit
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function toggleUtilization() {
+            const content = document.getElementById('utilizationContent');
+            const toggle = document.getElementById('utilizationToggle');
+
+            content.classList.toggle('expanded');
+            toggle.classList.toggle('expanded');
+        }
+
+        function openLimitModal(apiId) {
+            currentEditApiId = apiId;
+            const api = utilizationData.utilization.find(a => a.api_id === apiId);
+            if (!api) return;
+
+            document.getElementById('limitModalApiName').textContent = api.name;
+            const hasLimit = api.requests_limit !== null;
+            document.getElementById('limitInput').value = hasLimit ? api.requests_limit : '';
+            document.getElementById('limitInput').placeholder = hasLimit ? '' : 'Enter daily limit';
+            document.getElementById('defaultLimitDisplay').textContent = hasLimit ? api.requests_limit.toLocaleString() : 'N/A';
+            document.getElementById('limitModal').classList.add('active');
+        }
+
+        function closeLimitModal() {
+            document.getElementById('limitModal').classList.remove('active');
+            currentEditApiId = null;
+        }
+
+        async function saveLimitChange() {
+            if (!currentEditApiId) return;
+
+            const limitInput = document.getElementById('limitInput');
+            const newLimit = parseInt(limitInput.value);
+
+            if (isNaN(newLimit) || newLimit <= 0) {
+                showStatus('Please enter a valid positive number', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/settings/api-utilization/${currentEditApiId}/limit`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requests_limit: newLimit })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to update rate limit');
+                }
+
+                showStatus('Rate limit updated successfully', 'success');
+                closeLimitModal();
+                await loadUtilization();
+            } catch (error) {
+                showStatus(error.message, 'error');
+            }
+        }
+
+        async function resetToDefault() {
+            if (!currentEditApiId) return;
+
+            try {
+                const response = await fetch(`/settings/api-utilization/${currentEditApiId}/limit`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to reset rate limit');
+                }
+
+                showStatus('Rate limit reset to default', 'success');
+                closeLimitModal();
+                await loadUtilization();
+            } catch (error) {
+                showStatus(error.message, 'error');
+            }
+        }
+
+        // Auto-refresh utilization every 60 seconds
+        setInterval(loadUtilization, 60000);
+    </script>
+</body>
+</html>

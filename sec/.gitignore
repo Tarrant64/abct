@@ -1,0 +1,7 @@
+# Security audit reports (contain vulnerability details - never commit)
+last_audit.json
+audit_report*.json
+*.audit.json
+
+# Backup files
+*.backup.*
