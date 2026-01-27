@@ -1156,7 +1156,7 @@ base:0x789..." oninput="previewImport()"></textarea>
 
                 html += `
                     <div class="stake-group" data-stake-key="${stakeKey}">
-                        <div class="stake-group-header" onclick="toggleStakeGroup('${stakeKey}')">
+                        <div class="stake-group-header">
                             <div class="stake-group-info">
                                 <span class="expand-icon">▶</span>
                                 <span class="chain cardano">cardano</span>
@@ -1187,6 +1187,16 @@ base:0x789..." oninput="previewImport()"></textarea>
             });
 
             setSafeHTML(container, html);
+
+            // Attach click handlers to stake group headers (after DOM is updated)
+            document.querySelectorAll('.stake-group-header').forEach(header => {
+                header.style.cursor = 'pointer';
+                header.addEventListener('click', function() {
+                    const group = this.closest('.stake-group');
+                    const stakeKey = group.dataset.stakeKey;
+                    toggleStakeGroup(stakeKey);
+                });
+            });
         }
 
         function renderWalletItem(wallet, isGrouped = false) {
