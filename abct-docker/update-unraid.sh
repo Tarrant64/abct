@@ -95,8 +95,8 @@ echo ""
 echo -e "${YELLOW}[2/4] Connecting to Unraid and rebuilding...${NC}"
 echo ""
 
-# Capture SSH output to extract version later
-ssh_output=$(ssh "${SSH_USER}@${UNRAID_HOST}" bash -s "$CONTAINER_NAME" "$REMOTE_PATH" "$DATA_DIR" "$PORT" 2>&1 << 'ENDSSH'
+# Run commands on Unraid (output streams in real-time)
+ssh "${SSH_USER}@${UNRAID_HOST}" bash -s "$CONTAINER_NAME" "$REMOTE_PATH" "$DATA_DIR" "$PORT" << 'ENDSSH'
     CONTAINER_NAME="$1"
     REMOTE_PATH="$2"
     DATA_DIR="$3"
@@ -219,24 +219,16 @@ EOF
         echo "  ⚠ Service may still be starting. Check: docker logs $CONTAINER_NAME"
     fi
 
-    # Extract version information from deployed container
-    echo ""
-    echo "  Extracting version information..."
-    VERSION_INFO=$(docker exec "$CONTAINER_NAME" grep -o 'v[0-9.]*\s*(BUILD\s*[0-9]*)' /app/frontend/index.html 2>/dev/null | head -1 || echo "")
-
-    # Return version for display
-    echo "DEPLOYED_VERSION=$VERSION_INFO"
 ENDSSH
-)
-
-# Display SSH output
-echo "$ssh_output"
-
-# Capture the version from SSH output
-DEPLOYED_VERSION=$(echo "$ssh_output" | grep "DEPLOYED_VERSION=" | cut -d'=' -f2-)
 
 # Get result (check if SSH command succeeded)
 SSH_EXIT_CODE=$?
+
+# Extract version information from deployed container (separate quick SSH call)
+echo ""
+echo -e "${YELLOW}Extracting version information...${NC}"
+DEPLOYED_VERSION=$(ssh "${SSH_USER}@${UNRAID_HOST}" "docker exec $CONTAINER_NAME grep -o 'v[0-9.]*\s*(BUILD\s*[0-9]*)' /app/frontend/index.html 2>/dev/null | head -1" || echo "")
+
 if [ $SSH_EXIT_CODE -eq 0 ]; then
     echo ""
     echo -e "${GREEN}========================================"
