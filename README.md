@@ -393,5 +393,5 @@ Built with amazing open-source tools:
 
 ---
 
-**Current Version:** v0.10.0 (BUILD 1769498491)
+**Current Version:** v0.10.0 (BUILD 1769574035)
 **Last Updated:** January 2026
