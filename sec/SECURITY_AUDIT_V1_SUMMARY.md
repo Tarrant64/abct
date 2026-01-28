@@ -320,7 +320,7 @@ ABCT_ADMIN_PASSWORD=your_secure_password
 - **Status**: Plan exists, not implemented
 - **Timeline**: v0.9.0 or later
 - **Priority**: Medium (required for remote access)
-- **Plan**: `/Users/chriscata/.claude/plans/purrfect-imagining-sedgewick.md`
+- **Plan**: `/path/to/abct
 
 ---
 

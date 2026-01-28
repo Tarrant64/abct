@@ -88,7 +88,7 @@ cd abct
 ./abct-docker/update-unraid.sh <unraid-ip> <port>
 
 # Example:
-./abct-docker/update-unraid.sh YOUR_SERVER_IP 8081
+./abct-docker/update-unraid.sh 192.168.x.x 8081
 ```
 
 ### Local Development
