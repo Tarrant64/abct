@@ -154,10 +154,12 @@ dmypy.json
 # Claude project files (local only)
 .claude/
 
-# Backup directories
+# Backup directories and files
 backups/
 backup/
 *.backup/
+*abct-backup*.json
+test-abct-backup*.json
 
 # Sync reports (local development artifacts)
 SYNC_REPORT*.txt

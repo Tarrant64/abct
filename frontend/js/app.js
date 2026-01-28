@@ -485,6 +485,10 @@ document.addEventListener('click', function(event) {
 
 // Show status message
 function showStatus(message, isError = false) {
+    if (!statusMessage || !statusBar) {
+        console.log(`Status: ${message}${isError ? ' (error)' : ''}`);
+        return;
+    }
     statusMessage.textContent = message;
     statusBar.classList.remove('hidden', 'error');
     if (isError) {
@@ -3029,7 +3033,9 @@ async function deleteWallet(address) {
 }
 
 // Event Listeners
-refreshBtn.addEventListener('click', refreshBalances);
+if (refreshBtn) {
+    refreshBtn.addEventListener('click', refreshBalances);
+}
 if (addWalletForm) {
     addWalletForm.addEventListener('submit', addWallet);
 }
