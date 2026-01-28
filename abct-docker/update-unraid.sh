@@ -75,19 +75,12 @@ echo ""
 # ===========================================
 # This allows all SSH/rsync operations to reuse a single connection
 # Reduces password prompts from 3 to 1
+# The first SSH/rsync command will prompt for password and create the master connection
+# All subsequent commands will reuse it automatically
 SSH_CONTROL_PATH="/tmp/ssh-abct-update-%r@%h:%p"
 SSH_OPTS="-o ControlMaster=auto -o ControlPath=$SSH_CONTROL_PATH -o ControlPersist=60"
 
-# Establish master connection (this is where password is entered)
-echo -e "${YELLOW}Establishing SSH connection to $UNRAID_HOST...${NC}"
-ssh $SSH_OPTS -N -f "${SSH_USER}@${UNRAID_HOST}" 2>/dev/null || {
-    # If background connection fails, try establishing it with a simple command
-    ssh $SSH_OPTS "${SSH_USER}@${UNRAID_HOST}" "true" || {
-        echo -e "${RED}Failed to establish SSH connection${NC}"
-        exit 1
-    }
-}
-echo -e "${GREEN}  ✓ Connected (will reuse for all operations)${NC}"
+echo -e "${YELLOW}Note: You'll be prompted for password once. Subsequent operations will reuse the connection.${NC}"
 echo ""
 
 # ===========================================
@@ -269,12 +262,8 @@ if [ $SSH_EXIT_CODE -eq 0 ]; then
 else
     echo ""
     echo -e "${RED}Update failed. Check the output above for errors.${NC}"
-    # Clean up SSH master connection
-    ssh -O exit $SSH_OPTS "${SSH_USER}@${UNRAID_HOST}" 2>/dev/null || true
     exit 1
 fi
 
-# Clean up SSH master connection
-echo -e "${YELLOW}Closing SSH connection...${NC}"
-ssh -O exit $SSH_OPTS "${SSH_USER}@${UNRAID_HOST}" 2>/dev/null || true
-echo -e "${GREEN}  ✓ Disconnected${NC}"
+# Clean up SSH master connection if it exists
+ssh -O exit -o ControlPath="$SSH_CONTROL_PATH" "${SSH_USER}@${UNRAID_HOST}" 2>/dev/null || true
