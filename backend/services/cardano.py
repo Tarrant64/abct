@@ -3,9 +3,14 @@ from typing import Optional, List
 import logging
 
 import sys
+import os
 sys.path.insert(0, str(__file__).rsplit('/', 2)[0])
 from config import BLOCKFROST_API_KEY, BLOCKFROST_BASE_URL, CEXPLORER_API_KEY, CEXPLORER_BASE_URL
 from database import get_token_metadata, save_token_metadata
+
+# Import API tracker
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'middleware'))
+from api_tracker import get_blockfrost_client, get_cexplorer_client
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +42,7 @@ class CardanoService:
     async def _get_address_blockfrost(self, address: str) -> Optional[dict]:
         """Fetch address data from Blockfrost API."""
         try:
-            async with httpx.AsyncClient() as client:
+            async with get_blockfrost_client(headers=self.blockfrost_headers, timeout=30.0) as client:
                 # Get address info
                 response = await client.get(
                     f"{BLOCKFROST_BASE_URL}/addresses/{address}",
