@@ -702,12 +702,12 @@ For issues with rollback procedures:
 #### 1. Modified Files
 
 **NFT Service:**
-- `/Users/chriscata/Documents/Claude-Projects/ABCT/nft-price-service/app/main.py`
-- `/Users/chriscata/Documents/Claude-Projects/ABCT/nft-price-service/docker-compose.yml`
-- `/Users/chriscata/Documents/Claude-Projects/ABCT/Deployment/docker/nft-price-service/docker-compose.yml`
+- `/path/to/abct
+- `/path/to/abct
+- `/path/to/abct
 
 **Main Deployment:**
-- `/Users/chriscata/Documents/Claude-Projects/ABCT/Deployment/docker-compose.yml`
+- `/path/to/abct
 
 ### Code Changes
 
@@ -995,12 +995,12 @@ Edit `/Deployment/docker-compose.yml`:
 **Step 4: Restart Services**
 
 ```bash
-cd /Users/chriscata/Documents/Claude-Projects/ABCT/Deployment
+cd /path/to/abct
 docker-compose down
 docker-compose up -d
 
 # Or for standalone:
-cd /Users/chriscata/Documents/Claude-Projects/ABCT/nft-price-service
+cd /path/to/abct
 python app/main.py
 ```
 
@@ -1046,7 +1046,7 @@ curl http://localhost:8080/health
 
 ### Backend Verification
 
-**Backend binding checked:** `/Users/chriscata/Documents/Claude-Projects/ABCT/backend/main.py`
+**Backend binding checked:** `/path/to/abct
 
 **Result:** Already secure
 ```python
@@ -1317,16 +1317,16 @@ X-RateLimit-Reset: 1643395200
 
 ```bash
 # 1. Remove middleware files
-rm /Users/chriscata/Documents/Claude-Projects/ABCT/backend/middleware/size_limit.py
-rm /Users/chriscata/Documents/Claude-Projects/ABCT/backend/middleware/rate_limit.py
+rm /path/to/abct
+rm /path/to/abct
 
 # 2. Remove validation models (optional)
-rm /Users/chriscata/Documents/Claude-Projects/ABCT/backend/routers/validation_models.py
+rm /path/to/abct
 
 # 3. Restore security.py from backup
-if [ -f /Users/chriscata/Documents/Claude-Projects/ABCT/backend/routers/security.py.backup ]; then
-    cp /Users/chriscata/Documents/Claude-Projects/ABCT/backend/routers/security.py.backup \
-       /Users/chriscata/Documents/Claude-Projects/ABCT/backend/routers/security.py
+if [ -f /path/to/abct ]; then
+    cp /path/to/abct \
+       /path/to/abct
 fi
 
 # 4. Edit main.py to remove middleware
@@ -1336,7 +1336,7 @@ fi
 #   - Rate limiting configuration block (lines with limiter, RateLimitMiddleware)
 
 # 5. Restart application
-cd /Users/chriscata/Documents/Claude-Projects/ABCT/backend
+cd /path/to/abct
 python main.py
 ```
 
@@ -1391,7 +1391,7 @@ cp /backend/routers/security.py.backup /backend/routers/security.py
 
 ```bash
 # 1. Verify application starts
-python /Users/chriscata/Documents/Claude-Projects/ABCT/backend/main.py
+python /path/to/abct
 
 # 2. Check startup logs
 # Should NOT see:
@@ -1715,7 +1715,7 @@ Added before `</head>` tag in all HTML files.
 **Rollback:**
 ```bash
 # Remove DOMPurify script tag from all HTML files
-for file in /Users/chriscata/Documents/Claude-Projects/ABCT/frontend/*.html; do
+for file in /path/to/abct do
     sed -i.bak '/dompurify/d' "$file"
 done
 ```
@@ -1766,8 +1766,8 @@ Similar functions added to inline scripts in other HTML files.
 **Rollback:**
 ```bash
 # Restore original app.js from backup
-cp /Users/chriscata/Documents/Claude-Projects/ABCT/frontend/js/app.js.xss-backup \
-   /Users/chriscata/Documents/Claude-Projects/ABCT/frontend/js/app.js
+cp /path/to/abct \
+   /path/to/abct
 ```
 
 #### 3. Replaced innerHTML with setSafeHTML
@@ -1869,14 +1869,14 @@ setSafeHTML(container, htmlContent);
 
 ```bash
 # Restore app.js
-cp /Users/chriscata/Documents/Claude-Projects/ABCT/frontend/js/app.js.xss-backup \
-   /Users/chriscata/Documents/Claude-Projects/ABCT/frontend/js/app.js
+cp /path/to/abct \
+   /path/to/abct
 
 # Restore HTML files
 for file in apis logs nft-wall security services wallets; do
-    if [ -f "/Users/chriscata/Documents/Claude-Projects/ABCT/frontend/${file}.html.xss-backup" ]; then
-        cp "/Users/chriscata/Documents/Claude-Projects/ABCT/frontend/${file}.html.xss-backup" \
-           "/Users/chriscata/Documents/Claude-Projects/ABCT/frontend/${file}.html"
+    if [ -f "/path/to/abct ]; then
+        cp "/path/to/abct \
+           "/path/to/abct
     fi
 done
 
@@ -1889,7 +1889,7 @@ echo "Instruct users to hard refresh browser (Ctrl+Shift+R or Cmd+Shift+R)"
 **Step 1: Remove DOMPurify script tag from all HTML files**
 
 ```bash
-cd /Users/chriscata/Documents/Claude-Projects/ABCT/frontend
+cd /path/to/abct
 
 # Remove DOMPurify script from all HTML files
 for file in *.html; do
@@ -1908,7 +1908,7 @@ Edit `/frontend/js/app.js`:
 
 ```bash
 # Automated replacement (use with caution)
-cd /Users/chriscata/Documents/Claude-Projects/ABCT/frontend/js
+cd /path/to/abct
 sed -i.rollback2 's/setSafeHTML(\([^,]*\),/\1.innerHTML =/g' app.js
 ```
 
@@ -1917,7 +1917,7 @@ sed -i.rollback2 's/setSafeHTML(\([^,]*\),/\1.innerHTML =/g' app.js
 For each HTML file with setSafeHTML calls, edit manually or use sed:
 
 ```bash
-for file in /Users/chriscata/Documents/Claude-Projects/ABCT/frontend/*.html; do
+for file in /path/to/abct do
     sed -i.rollback3 's/setSafeHTML(\([^,]*\),/\1.innerHTML =/g' "$file"
 done
 ```
@@ -2105,11 +2105,11 @@ frontend/wallets.html.xss-backup
 
 ```bash
 # 1. Copy fixed files to deployment directory
-cp -r /Users/chriscata/Documents/Claude-Projects/ABCT/frontend/* \
-      /Users/chriscata/Documents/Claude-Projects/ABCT/Deployment/frontend/
+cp -r /path/to/abct \
+      /path/to/abct
 
 # 2. Restart frontend service
-cd /Users/chriscata/Documents/Claude-Projects/ABCT/Deployment
+cd /path/to/abct
 docker-compose restart frontend
 
 # 3. Verify DOMPurify loads

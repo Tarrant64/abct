@@ -61,7 +61,7 @@ await log_service.debug("source", "message")
 # Before: "Error with API key: bf123abc456def"
 # After:  "Error with API key: ***REDACTED***"
 
-# Before: "Failed at /Users/chris/ABCT/backend/services/nft.py"
+# Before: "Failed at /path/to/abct
 # After:  "Failed at .../backend/services/nft.py"
 
 # Before: "Wallet addr1qxy123...full_address"
@@ -165,11 +165,11 @@ async def generic_exception_handler(request, exc):
 **Before** (INSECURE):
 ```json
 {
-    "detail": "FileNotFoundError: /Users/chris/ABCT/backend/data/wallets.txt not found",
+    "detail": "FileNotFoundError: /path/to/abct not found",
     "traceback": [
-        "File \"/Users/chris/ABCT/backend/routers/wallets.py\", line 45, in list_wallets",
-        "  with open('/Users/chris/ABCT/backend/data/wallets.txt') as f:",
-        "FileNotFoundError: [Errno 2] No such file or directory: '/Users/chris/ABCT/backend/data/wallets.txt'"
+        "File \"/path/to/abct line 45, in list_wallets",
+        "  with open('/path/to/abct as f:",
+        "FileNotFoundError: [Errno 2] No such file or directory: '/path/to/abct
     ]
 }
 ```
@@ -193,7 +193,7 @@ async def generic_exception_handler(request, exc):
     "traceback": "File \".../backend/routers/wallets.py\", line 45...",
     "method": "GET",
     "path": "/wallets",
-    "client": "192.168.1.100"
+    "client": "192.168.x.x"
 }
 ```
 

@@ -12,7 +12,7 @@ The ABCT Security Audit System has been successfully deployed across all project
 ## Deployment Locations
 
 ### ✅ Main ABCT Directory
-**Path**: `/Users/chriscata/Documents/Claude-Projects/ABCT/sec/`
+**Path**: `/path/to/abct
 
 **Files Deployed**:
 - `security_audit.py` (21,789 bytes) - Core audit engine
@@ -26,7 +26,7 @@ The ABCT Security Audit System has been successfully deployed across all project
 **Status**: ✅ All scripts executable, ready for use
 
 ### ✅ Deployment Directory
-**Path**: `/Users/chriscata/Documents/Claude-Projects/ABCT/Deployment/sec/`
+**Path**: `/path/to/abct
 
 **Status**: ✅ Identical copy of all security audit files
 **Synchronized**: YES (100% match with main directory)
@@ -105,7 +105,7 @@ Total: 213 findings
 
 1. **Navigate to project root**:
    ```bash
-   cd /Users/chriscata/Documents/Claude-Projects/ABCT
+   cd /path/to/abct
    ```
 
 2. **Run installer**:
@@ -122,7 +122,7 @@ Total: 213 findings
 
 1. **Navigate to Deployment directory**:
    ```bash
-   cd /Users/chriscata/Documents/Claude-Projects/ABCT/Deployment
+   cd /path/to/abct
    ```
 
 2. **Run installer**:
@@ -136,7 +136,7 @@ The security audit system is included in the Docker image. To use:
 
 1. **Rebuild Docker image**:
    ```bash
-   cd /Users/chriscata/Documents/Claude-Projects/ABCT
+   cd /path/to/abct
    docker build -t abct:latest -f abct-docker/Dockerfile .
    ```
 

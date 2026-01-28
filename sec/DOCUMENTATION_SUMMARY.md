@@ -15,7 +15,7 @@ This document provides a comprehensive summary of all security hardening documen
 ## Documentation Files Created
 
 ### 1. ROLLBACK.md
-**Location:** `/Users/chriscata/Documents/Claude-Projects/ABCT/sec/ROLLBACK.md`
+**Location:** `/path/to/abct
 
 **Purpose:** Complete rollback procedures for reverting from v0.8.0 to v0.7.0
 
@@ -43,7 +43,7 @@ This document provides a comprehensive summary of all security hardening documen
 ---
 
 ### 2. SECURITY.md
-**Location:** `/Users/chriscata/Documents/Claude-Projects/ABCT/SECURITY.md`
+**Location:** `/path/to/abct
 
 **Purpose:** Complete security policy, best practices, and operational security guide
 
@@ -73,7 +73,7 @@ This document provides a comprehensive summary of all security hardening documen
 ---
 
 ### 3. MIGRATION_v0.8.md
-**Location:** `/Users/chriscata/Documents/Claude-Projects/ABCT/docs/MIGRATION_v0.8.md`
+**Location:** `/path/to/abct
 
 **Purpose:** Step-by-step guide for upgrading from v0.7.0 to v0.8.0
 
@@ -101,7 +101,7 @@ This document provides a comprehensive summary of all security hardening documen
 ---
 
 ### 4. CHANGELOG.md (Updated)
-**Location:** `/Users/chriscata/Documents/Claude-Projects/ABCT/Deployment/CHANGELOG.md`
+**Location:** `/path/to/abct
 
 **Purpose:** Version history with detailed change log
 
@@ -125,8 +125,8 @@ This document provides a comprehensive summary of all security hardening documen
 
 ### 5. .env.example (Updated)
 **Locations:**
-- `/Users/chriscata/Documents/Claude-Projects/ABCT/.env.example`
-- `/Users/chriscata/Documents/Claude-Projects/ABCT/Deployment/.env.example`
+- `/path/to/abct
+- `/path/to/abct
 
 **New Variables Added:**
 ```bash
@@ -157,7 +157,7 @@ LOG_LEVEL=INFO
 ---
 
 ### 6. docker-compose.yml (Updated)
-**Location:** `/Users/chriscata/Documents/Claude-Projects/ABCT/Deployment/docker-compose.yml`
+**Location:** `/path/to/abct
 
 **Changes:**
 - Added security environment variables
@@ -178,7 +178,7 @@ LOG_LEVEL=INFO
 ---
 
 ### 7. README.md (Updated)
-**Location:** `/Users/chriscata/Documents/Claude-Projects/ABCT/README.md`
+**Location:** `/path/to/abct
 
 **Changes:**
 - Added version badge (0.8.0)

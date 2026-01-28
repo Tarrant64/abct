@@ -36,7 +36,7 @@ This comprehensive security audit of the ABCT (A Better Crypto Tracker) applicat
 **Status:** FAIL
 
 **Evidence:**
-- No global authentication middleware in `/Users/chriscata/Documents/Claude-Projects/ABCT/backend/main.py`
+- No global authentication middleware in `/path/to/abct
 - 40+ state-changing endpoints discovered with no auth requirements:
   - `POST /security/certificate/upload` - Uploads SSL certificates (lines 166-245 in security.py)
   - `POST /security/certificate/generate` - Generates certificates (lines 122-164)
@@ -161,7 +161,7 @@ This comprehensive security audit of the ABCT (A Better Crypto Tracker) applicat
 
 **Evidence:**
 ```python
-# /Users/chriscata/Documents/Claude-Projects/ABCT/nft-price-service/app/main.py:339-345
+# /path/to/abct
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],           # ← WILDCARD
@@ -310,7 +310,7 @@ raise HTTPException(status_code=500, detail=f"Failed to upload certificate: {str
 **Status:** FAIL
 
 **Evidence:**
-85+ innerHTML assignments in `/Users/chriscata/Documents/Claude-Projects/ABCT/frontend/js/app.js` with API data:
+85+ innerHTML assignments in `/path/to/abct with API data:
 
 ```javascript
 // Line 217 - Market cap from API

@@ -457,7 +457,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - **PII Cleanup**: Removed personal identifiable information from repository
   - Replaced real wallet addresses in README examples with fake placeholders
-  - Removed default Unraid IP (192.168.1.100) from all scripts
+  - Removed default Unraid IP (192.168.x.x) from all scripts
   - Changed sync scripts to use localhost defaults instead of private IPs
   - Sanitized cdp_api_key.json.template (removed PEM markers)
 
