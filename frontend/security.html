@@ -490,12 +490,72 @@
 </head>
 <body>
     <div class="security-manager">
-        <div class="security-header">
-            <h1>Security Settings</h1>
+        <header>
+            <h1><a href="/" style="color: inherit; text-decoration: none;">A Better Crypto Tracker</a></h1>
             <div class="header-actions">
-                <a href="/" class="btn btn-secondary">Back to Dashboard</a>
-                <a href="/apis.html" class="btn btn-secondary">Manage APIs</a>
+                <button id="privacyBtn" class="btn btn-privacy" onclick="togglePrivacyMode()" title="Toggle privacy mode">
+                    Privacy Mode
+                </button>
+                <button id="sectionsToggleBtn" class="btn btn-sections" onclick="toggleAllSections()" title="Expand/Collapse all sections">
+                    Expand All
+                </button>
+                <div class="theme-selector">
+                    <select id="themeSelect" onchange="changeTheme(this.value)" title="Select theme">
+                        <option value="default">Default</option>
+                        <option value="cypherpunk1">Cypherpunk 1</option>
+                        <option value="green-terminal">Green Terminal</option>
+                        <option value="ocean-depths">Ocean Depths</option>
+                        <option value="sunset-horizon">Sunset Horizon</option>
+                    </select>
+                </div>
+                <div class="waffle-menu-container">
+                    <button class="waffle-menu-btn" onclick="toggleWaffleMenu()" title="Menu">
+                        <span class="waffle-icon">
+                            <span></span><span></span><span></span>
+                            <span></span><span></span><span></span>
+                            <span></span><span></span><span></span>
+                        </span>
+                    </button>
+                    <div class="waffle-menu-dropdown" id="waffleMenu">
+                        <a href="/" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128200;</span>
+                            <span class="waffle-item-label">Dashboard</span>
+                        </a>
+                        <a href="/wallets.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128176;</span>
+                            <span class="waffle-item-label">Manage Assets</span>
+                        </a>
+                        <a href="/apis.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128273;</span>
+                            <span class="waffle-item-label">APIs</span>
+                        </a>
+                        <a href="/services.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#9881;</span>
+                            <span class="waffle-item-label">Services</span>
+                        </a>
+                        <a href="/security.html" class="waffle-menu-item active">
+                            <span class="waffle-item-icon">&#128274;</span>
+                            <span class="waffle-item-label">Security</span>
+                        </a>
+                        <a href="/backup.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128230;</span>
+                            <span class="waffle-item-label">Backup & Restore</span>
+                        </a>
+                        <a href="/nft-wall.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128444;</span>
+                            <span class="waffle-item-label">NFT Wall</span>
+                        </a>
+                        <a href="/logs.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128221;</span>
+                            <span class="waffle-item-label">System Logs</span>
+                        </a>
+                    </div>
+                </div>
             </div>
+        </header>
+
+        <div class="security-header">
+            <h2>Security Settings</h2>
         </div>
 
         <!-- Restart Required Banner -->
@@ -905,7 +965,13 @@
                 el.style.display = 'none';
             }, 3000);
         }
+
+        // Initialize privacy mode and theme on page load
+        initializePrivacyMode();
+        loadSavedTheme();
     </script>
+
+    <script src="/static/js/app.js"></script>
 
     <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
         <p>ABCT - Security Settings | <span style="opacity: 0.6;">v0.10.0 (BUILD 1769498491)</span></p>
