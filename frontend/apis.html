@@ -1326,15 +1326,24 @@
         setInterval(loadUtilization, 60000);
 
         // Waffle menu toggle
-        // Initialize privacy mode and theme on page load
-        initializePrivacyMode();
-        loadSavedTheme();
     </script>
 
     <script src="/static/js/app.js"></script>
 
+    <script>
+        // Initialize privacy mode and theme on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof initializePrivacyMode === 'function') {
+                initializePrivacyMode();
+            }
+            if (typeof loadSavedTheme === 'function') {
+                loadSavedTheme();
+            }
+        });
+    </script>
+
     <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
-        <p>ABCT - API Configuration | <span style="opacity: 0.6;">v0.10.0 (BUILD 1769574035)</span></p>
+        <p>ABCT - API Configuration | <span style="opacity: 0.6;">v0.10.0 (BUILD 1769590093)</span></p>
     </footer>
 </body>
 </html>
