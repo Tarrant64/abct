@@ -184,7 +184,43 @@ EOF
     echo ""
     echo "[3/4] Building Docker image..."
     cd "$REMOTE_PATH"
-    docker build -t "$CONTAINER_NAME:latest" -f abct-docker/Dockerfile .
+
+    # Build with progress tracking (shows: [████████░░] 88% Step [15/17] - FROM docker.io/...)
+    echo ""
+    (docker build --progress=plain -t "$CONTAINER_NAME:latest" -f abct-docker/Dockerfile . 2>&1; echo "BUILD_EXIT:$?" >&2) | {
+        while IFS= read -r line; do
+            # Extract step numbers (e.g., "#1 [1/17]" or "#22 [17/17]")
+            if echo "$line" | grep -qE "^#[0-9]+ \[[0-9]+/[0-9]+\]"; then
+                # Extract current/total steps
+                STEP_INFO=$(echo "$line" | grep -oE "\[[0-9]+/[0-9]+\]" | head -1)
+                CURRENT=$(echo "$STEP_INFO" | sed 's/\[//;s/\/.*//')
+                TOTAL=$(echo "$STEP_INFO" | sed 's/.*\///;s/\]//')
+
+                # Calculate percentage
+                PERCENT=$((CURRENT * 100 / TOTAL))
+
+                # Create progress bar (20 characters wide)
+                FILLED=$((PERCENT / 5))
+                EMPTY=$((20 - FILLED))
+                BAR=$(printf '%*s' "$FILLED" | tr ' ' '█')$(printf '%*s' "$EMPTY" | tr ' ' '░')
+
+                # Extract step description (everything after the step number) - truncate to 50 chars
+                DESC=$(echo "$line" | sed 's/^#[0-9]* \[[0-9]*\/[0-9]*\] //' | cut -c1-50)
+
+                # Print progress on one line (overwrite previous)
+                printf "\r  \033[K[%s] %3d%%  Step %s - %s" "$BAR" "$PERCENT" "$STEP_INFO" "$DESC"
+            fi
+        done
+        echo ""
+    }
+
+    # Check if build succeeded
+    if [ $? -ne 0 ]; then
+        echo ""
+        echo "  ✗ Build failed!"
+        exit 1
+    fi
+
     echo ""
     echo "  ✓ Image built"
 
