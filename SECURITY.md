@@ -324,7 +324,7 @@ Restrict access to trusted networks:
 **UFW (Ubuntu/Debian):**
 ```bash
 # Allow only from home network
-sudo ufw allow from 192.168.1.0/24 to any port 8000
+sudo ufw allow from 192.168.x.x/24 to any port 8000
 
 # Allow only from VPN
 sudo ufw allow from 10.8.0.0/24 to any port 8000
@@ -335,7 +335,7 @@ sudo ufw enable
 
 **firewalld (RHEL/CentOS):**
 ```bash
-firewall-cmd --permanent --zone=home --add-source=192.168.1.0/24
+firewall-cmd --permanent --zone=home --add-source=192.168.x.x/24
 firewall-cmd --permanent --zone=home --add-port=8000/tcp
 firewall-cmd --reload
 ```
@@ -343,7 +343,7 @@ firewall-cmd --reload
 **iptables:**
 ```bash
 # Allow from local network only
-iptables -A INPUT -p tcp --dport 8000 -s 192.168.1.0/24 -j ACCEPT
+iptables -A INPUT -p tcp --dport 8000 -s 192.168.x.x/24 -j ACCEPT
 iptables -A INPUT -p tcp --dport 8000 -j DROP
 ```
 
@@ -609,7 +609,7 @@ ABCT_ADMIN_USER=admin
 ABCT_ADMIN_PASSWORD=strong_password
 
 # Bind to internal IP
-BIND_HOST=192.168.1.100
+BIND_HOST=192.168.x.x
 
 # Run with restrictions
 ./run.sh --cert certs/server.crt --key certs/server.key
@@ -755,7 +755,7 @@ logging.basicConfig(
 ```
 2026-01-26 10:15:23 | INFO | CERT_UPLOAD | user=admin | cert_type=custom | path=/app/certs/custom.crt
 2026-01-26 10:16:45 | INFO | SSL_MODE_CHANGE | user=admin | old_mode=http | new_mode=https-custom
-2026-01-26 10:20:10 | WARN | AUTH_FAILURE | user=unknown | ip=192.168.1.50 | endpoint=/security/settings
+2026-01-26 10:20:10 | WARN | AUTH_FAILURE | user=unknown | ip=192.168.x.x | endpoint=/security/settings
 ```
 
 ### Log Retention

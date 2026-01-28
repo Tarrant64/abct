@@ -88,7 +88,7 @@ This guide helps you upgrade from ABCT v0.7.0 to v0.8.0, which introduces compre
    - New dependencies: `cryptography` (auto-installed)
 
 4. **Review Security Audit**
-   Read `/Users/chriscata/Documents/Claude-Projects/ABCT/sec/security_audit_report.md` to understand changes.
+   Read `/path/to/abct to understand changes.
 
 ### Compatibility Check
 
@@ -755,7 +755,7 @@ curl http://127.0.0.1:8000/health
 
 ### Complete Rollback Guide
 
-See `/Users/chriscata/Documents/Claude-Projects/ABCT/sec/ROLLBACK.md` for detailed instructions.
+See `/path/to/abct for detailed instructions.
 
 ---
 
