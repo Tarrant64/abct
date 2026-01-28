@@ -143,6 +143,10 @@ ssh $SSH_OPTS "${SSH_USER}@${UNRAID_HOST}" bash -s "$CONTAINER_NAME" "$REMOTE_PA
         # Optional services
         NFT_SERVICE_URL=$(docker exec "$CONTAINER_NAME" printenv NFT_PRICE_SERVICE_URL 2>/dev/null || echo "")
         NFT_IMAGE_CACHE=$(docker exec "$CONTAINER_NAME" printenv NFT_IMAGE_CACHE_ENABLED 2>/dev/null || echo "false")
+        # Authentication settings
+        REQUIRE_AUTH=$(docker exec "$CONTAINER_NAME" printenv ABCT_REQUIRE_AUTH 2>/dev/null || echo "false")
+        ADMIN_USER=$(docker exec "$CONTAINER_NAME" printenv ABCT_ADMIN_USER 2>/dev/null || echo "")
+        ADMIN_PASSWORD=$(docker exec "$CONTAINER_NAME" printenv ABCT_ADMIN_PASSWORD 2>/dev/null || echo "")
 
         # Save to config file for future rebuilds
         mkdir -p "$DATA_DIR"
@@ -164,6 +168,10 @@ CMC_API_KEY=$CMC_KEY
 # Optional services
 NFT_PRICE_SERVICE_URL=$NFT_SERVICE_URL
 NFT_IMAGE_CACHE_ENABLED=$NFT_IMAGE_CACHE
+# Authentication
+ABCT_REQUIRE_AUTH=$REQUIRE_AUTH
+ABCT_ADMIN_USER=$ADMIN_USER
+ABCT_ADMIN_PASSWORD=$ADMIN_PASSWORD
 EOF
         chmod 600 "$CONFIG_FILE"
         echo "  ✓ API keys saved to $CONFIG_FILE"
@@ -185,7 +193,7 @@ EOF
     echo "[3/4] Building Docker image..."
     cd "$REMOTE_PATH"
 
-    # Build with progress tracking (shows: [████████░░] 88% Step [15/17] - FROM docker.io/...)
+    # Build with progress tracking (shows: [################----] 88% Step [15/17] - FROM docker.io/...)
     echo ""
     (docker build --progress=plain -t "$CONTAINER_NAME:latest" -f abct-docker/Dockerfile . 2>&1; echo "BUILD_EXIT:$?" >&2) | {
         while IFS= read -r line; do
@@ -202,7 +210,7 @@ EOF
                 # Create progress bar (20 characters wide)
                 FILLED=$((PERCENT / 5))
                 EMPTY=$((20 - FILLED))
-                BAR=$(printf '%*s' "$FILLED" | tr ' ' '█')$(printf '%*s' "$EMPTY" | tr ' ' '░')
+                BAR=$(printf '%*s' "$FILLED" | tr ' ' '#')$(printf '%*s' "$EMPTY" | tr ' ' '-')
 
                 # Extract step description (everything after the step number) - truncate to 50 chars
                 DESC=$(echo "$line" | sed 's/^#[0-9]* \[[0-9]*\/[0-9]*\] //' | cut -c1-50)
@@ -258,6 +266,9 @@ EOF
         -e "CMC_API_KEY=${CMC_API_KEY:-}" \
         -e "NFT_PRICE_SERVICE_URL=${NFT_PRICE_SERVICE_URL:-}" \
         -e "NFT_IMAGE_CACHE_ENABLED=${NFT_IMAGE_CACHE_ENABLED:-false}" \
+        -e "ABCT_REQUIRE_AUTH=${ABCT_REQUIRE_AUTH:-false}" \
+        -e "ABCT_ADMIN_USER=${ABCT_ADMIN_USER:-}" \
+        -e "ABCT_ADMIN_PASSWORD=${ABCT_ADMIN_PASSWORD:-}" \
         --label "net.unraid.docker.webui=http://[IP]:${PORT}/" \
         --label "net.unraid.docker.icon=https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/crypto.png" \
         "$CONTAINER_NAME:latest"
