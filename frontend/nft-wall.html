@@ -251,6 +251,53 @@
             color: var(--text-secondary);
         }
 
+        .privacy-btn {
+            padding: 10px 20px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color, #444);
+            border-radius: 8px;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .privacy-btn:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .privacy-btn.active {
+            background: var(--accent-color);
+            color: #000;
+        }
+
+        #privacyIcon {
+            font-size: 1.1rem;
+        }
+
+        /* Privacy Mode - Blur NFT sensitive data */
+        body.privacy-mode .nft-image {
+            filter: blur(10px);
+            user-select: none;
+        }
+
+        body.privacy-mode .nft-price,
+        body.privacy-mode .nft-value,
+        body.privacy-mode .nft-name,
+        body.privacy-mode .nft-collection,
+        body.privacy-mode .wall-stat .value,
+        body.privacy-mode .chain-tab .count {
+            filter: blur(8px);
+            user-select: none;
+        }
+
+        body.privacy-mode .modal-overlay {
+            filter: blur(15px);
+        }
+
         /* Modal for full-size image */
         .modal-overlay {
             display: none;
@@ -339,6 +386,10 @@
                 <h1>NFT Wall</h1>
             </div>
             <div class="cache-controls">
+                <button id="privacyToggle" class="privacy-btn" onclick="togglePrivacyMode()" title="Toggle privacy mode">
+                    <span id="privacyIcon">👁️</span>
+                    <span id="privacyText">Privacy</span>
+                </button>
                 <span class="cache-progress" id="cacheProgress"></span>
                 <button class="cache-btn" id="cacheBtn" onclick="cacheImages()">Cache Images</button>
             </div>
@@ -500,7 +551,7 @@
                 <div class="nft-card" onclick="openModal('${nft.asset_id}', '${nft.blockchain}')">
                     <div class="image-container">
                         <span class="chain-badge ${nft.blockchain}">${nft.blockchain}</span>
-                        <img src="${nft.thumbnail_url}"
+                        <img class="nft-image" src="${nft.thumbnail_url}"
                              alt="${nft.name}"
                              loading="lazy"
                              onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23333%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2250%22 text-anchor=%22middle%22 fill=%22%23666%22 font-size=%2212%22>No Image</text></svg>'">
@@ -509,8 +560,8 @@
                         <div class="nft-name">${escapeHtml(nft.name)}</div>
                         <div class="nft-collection">${escapeHtml(nft.collection)}</div>
                         <div class="nft-price">
-                            <span class="native">${nft.floor_price ? nft.floor_price.toFixed(2) + ' ' + nft.native_symbol : '-'}</span>
-                            <span class="usd">${formatUSD(nft.floor_price_usd)}</span>
+                            <span class="native nft-value">${nft.floor_price ? nft.floor_price.toFixed(2) + ' ' + nft.native_symbol : '-'}</span>
+                            <span class="usd nft-value">${formatUSD(nft.floor_price_usd)}</span>
                         </div>
                     </div>
                 </div>
@@ -601,8 +652,51 @@
             if (e.key === 'Escape') closeModal();
         });
 
+        // Privacy Mode Functions
+        function initializePrivacyMode() {
+            const privacyEnabled = localStorage.getItem('privacyMode') === 'true';
+            applyPrivacyMode(privacyEnabled);
+        }
+
+        function togglePrivacyMode() {
+            const body = document.body;
+            const btn = document.getElementById('privacyToggle');
+            const icon = document.getElementById('privacyIcon');
+
+            const isEnabled = body.classList.toggle('privacy-mode');
+            btn.classList.toggle('active', isEnabled);
+            icon.textContent = isEnabled ? '🙈' : '👁️';
+
+            // Save to localStorage
+            localStorage.setItem('privacyMode', isEnabled);
+        }
+
+        function applyPrivacyMode(enabled) {
+            const body = document.body;
+            const btn = document.getElementById('privacyToggle');
+            const icon = document.getElementById('privacyIcon');
+
+            if (enabled) {
+                body.classList.add('privacy-mode');
+                btn.classList.add('active');
+                icon.textContent = '🙈';
+            } else {
+                body.classList.remove('privacy-mode');
+                btn.classList.remove('active');
+                icon.textContent = '👁️';
+            }
+        }
+
+        // Listen for storage events to sync privacy mode across tabs
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'privacyMode') {
+                applyPrivacyMode(e.newValue === 'true');
+            }
+        });
+
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
+            initializePrivacyMode();
             loadWallStatus();
             loadNfts();
         });

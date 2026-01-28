@@ -15,25 +15,133 @@
             padding: 20px;
         }
 
-        .nav-links {
+        /* Page Navigation Header */
+        .page-nav-header {
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            gap: 20px;
             margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
         }
 
-        .nav-link {
-            color: #667eea;
+        .nav-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .back-link {
+            color: #888;
             text-decoration: none;
             font-size: 14px;
-            padding: 6px 12px;
+            transition: color 0.2s;
+        }
+
+        .back-link:hover {
+            color: #e0e0e0;
+        }
+
+        /* Waffle Menu Styles */
+        .waffle-menu-container {
+            position: relative;
+        }
+
+        .waffle-menu-btn {
+            width: 40px;
+            height: 40px;
             background: rgba(102, 126, 234, 0.1);
-            border-radius: 6px;
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             transition: all 0.2s;
         }
 
-        .nav-link:hover {
+        .waffle-menu-btn:hover {
             background: rgba(102, 126, 234, 0.2);
+            border-color: rgba(102, 126, 234, 0.5);
+        }
+
+        .waffle-icon {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 3px;
+            width: 18px;
+            height: 18px;
+        }
+
+        .waffle-icon span {
+            width: 4px;
+            height: 4px;
+            background: #667eea;
+            border-radius: 1px;
+        }
+
+        .waffle-menu-dropdown {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            background: #1a1a2e;
+            border: 1px solid #3a3a4e;
+            border-radius: 12px;
+            min-width: 220px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: all 0.3s ease;
+            z-index: 1000;
+            overflow: hidden;
+        }
+
+        .waffle-menu-dropdown.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .waffle-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            color: #e0e0e0;
+            text-decoration: none;
+            transition: all 0.2s;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .waffle-menu-item:last-child {
+            border-bottom: none;
+        }
+
+        .waffle-menu-item:hover {
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .waffle-menu-item.active {
+            background: rgba(102, 126, 234, 0.15);
+            border-left: 3px solid #667eea;
+        }
+
+        .waffle-item-icon {
+            font-size: 18px;
+            width: 24px;
+            text-align: center;
+        }
+
+        .waffle-item-label {
+            font-size: 14px;
+            font-weight: 500;
         }
 
         .wallet-header {
@@ -660,9 +768,55 @@
 </head>
 <body>
     <div class="wallet-manager">
-        <div class="nav-links">
-            <a href="/" class="back-link">← Back to Dashboard</a>
-            <a href="/apis.html" class="nav-link">Manage APIs</a>
+        <div class="page-nav-header">
+            <div class="nav-left">
+                <a href="/" class="back-link">← Back to Dashboard</a>
+            </div>
+            <div class="nav-right">
+                <div class="waffle-menu-container">
+                    <button class="waffle-menu-btn" onclick="toggleWaffleMenu()" title="Menu">
+                        <span class="waffle-icon">
+                            <span></span><span></span><span></span>
+                            <span></span><span></span><span></span>
+                            <span></span><span></span><span></span>
+                        </span>
+                    </button>
+                    <div class="waffle-menu-dropdown" id="waffleMenu">
+                        <a href="/" class="waffle-menu-item active">
+                            <span class="waffle-item-icon">&#128200;</span>
+                            <span class="waffle-item-label">Dashboard</span>
+                        </a>
+                        <a href="/wallets.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128176;</span>
+                            <span class="waffle-item-label">Manage Assets</span>
+                        </a>
+                        <a href="/apis.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128273;</span>
+                            <span class="waffle-item-label">APIs</span>
+                        </a>
+                        <a href="/services.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#9881;</span>
+                            <span class="waffle-item-label">Services</span>
+                        </a>
+                        <a href="/security.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128274;</span>
+                            <span class="waffle-item-label">Security</span>
+                        </a>
+                        <a href="/backup.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128230;</span>
+                            <span class="waffle-item-label">Backup & Restore</span>
+                        </a>
+                        <a href="/nft-wall.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128444;</span>
+                            <span class="waffle-item-label">NFT Wall</span>
+                        </a>
+                        <a href="/logs.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128221;</span>
+                            <span class="waffle-item-label">System Logs</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="wallet-header">
@@ -2004,6 +2158,22 @@ base:0x789..." oninput="previewImport()"></textarea>
                 el.className = 'status-message';
             }, 5000);
         }
+
+        // Waffle menu toggle
+        function toggleWaffleMenu() {
+            const menu = document.getElementById('waffleMenu');
+            menu.classList.toggle('show');
+        }
+
+        // Close waffle menu when clicking outside
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('waffleMenu');
+            const btn = document.querySelector('.waffle-menu-btn');
+
+            if (menu && !menu.contains(event.target) && !btn.contains(event.target)) {
+                menu.classList.remove('show');
+            }
+        });
     </script>
 
     <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
