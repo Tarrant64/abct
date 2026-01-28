@@ -39,6 +39,8 @@ A self-hosted cryptocurrency portfolio tracker that aggregates data from multipl
 
 ## 🚀 Quick Start
 
+ABCT works on any Docker-capable system including Linux servers, NAS devices (TrueNAS, Synology, Unraid), and desktop environments.
+
 ### Option 1: Docker Deployment (Recommended)
 
 ```bash
@@ -46,14 +48,20 @@ A self-hosted cryptocurrency portfolio tracker that aggregates data from multipl
 git clone https://github.com/Tarrant64/abct.git
 cd abct
 
-# Deploy to Unraid/Docker server
-./abct-docker/update-unraid.sh <unraid-ip> <port>
+# Create environment file
+cp .env.example .env
+nano .env  # Add your API keys
 
-# Example:
-./abct-docker/update-unraid.sh 192.168.x.x 8081
+# Build and run with Docker Compose
+cd abct-docker
+docker-compose up -d
 
-# Access at http://<your-ip>:<port>
+# Access at http://localhost:8080
 ```
+
+**For detailed platform-specific instructions** (TrueNAS, Synology, Portainer, etc.), see [Docker Deployment Guide](docs/DOCKER_DEPLOYMENT.md).
+
+> **Note for Unraid users:** A convenience deployment script is available at `abct-docker/update-unraid.sh` for automated deployment and updates on Unraid servers.
 
 ### Option 2: Local Development
 
@@ -320,6 +328,7 @@ See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
 ## 📖 Documentation
 
+- **[Docker Deployment Guide](docs/DOCKER_DEPLOYMENT.md)** - Complete multi-platform Docker setup
 - **[Quick Start Guide](docs/)** - Get up and running
 - **[Architecture](docs/ARCHITECTURE.md)** - System design overview
 - **[Backup & Restore Guide](docs/BACKUP_RESTORE_GUIDE.md)** - Configuration management

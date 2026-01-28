@@ -1308,6 +1308,21 @@ body.privacy-mode .history-info {
     filter: blur(10px);
 }
 
+/* Privacy mode for NFT section */
+body.privacy-mode .nft-collection-header .collection-value,
+body.privacy-mode .nft-item .nft-price,
+body.privacy-mode .nfts-section .section-summary .nft-value,
+body.privacy-mode .nfts-section .section-summary .nft-count,
+body.privacy-mode .chain-tab .chain-stats {
+    filter: blur(10px);
+    user-select: none;
+}
+
+body.privacy-mode .nft-collection-header .collection-name .blur-value {
+    filter: blur(10px);
+    user-select: none;
+}
+
 /* Total Portfolio Card */
 .total-portfolio-card {
     background: linear-gradient(135deg, #1e3a5f 0%, #0f3460 50%, #1a1a2e 100%);
