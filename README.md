@@ -2,44 +2,82 @@
 
 A self-hosted cryptocurrency portfolio tracker that aggregates data from multiple blockchains, exchanges, and DeFi protocols.
 
-![Version](https://img.shields.io/badge/version-0.8.0-blue.svg)
+![Version](https://img.shields.io/badge/version-0.10.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.109-teal.svg)
 ![Security](https://img.shields.io/badge/security-hardened-green.svg)
+![Docker](https://img.shields.io/badge/docker-ready-blue.svg)
 
-## Features
+## ✨ Features
 
-- **Multi-Blockchain Support**: Track wallets on Cardano, Bitcoin, and Ethereum
+### Portfolio Tracking
+- **Multi-Blockchain Support**: Track wallets on Cardano, Bitcoin, Ethereum, Solana, Polygon, and Base
 - **Exchange Integration**: Connect to Coinbase for centralized holdings
 - **DeFi Monitoring**: View Cardano staking positions with APY and rewards
 - **NFT Collection**: Browse your NFTs with floor price valuations
-- **Portfolio History**: Interactive charts showing value over time
+- **Portfolio History**: Interactive charts showing value over time (7d, 4w, 3m)
 - **Privacy Mode**: Hide sensitive financial data with one click
-- **Self-Hosted**: Your data stays on your machine
 
-## Quick Start
+### New in v0.10.0 🎉
+- **🔄 Backup & Restore**: Export/import your entire configuration with one click
+  - Migrate to new servers easily
+  - Disaster recovery ready
+  - Selective data export (choose what to include)
+  - Preview before import
+- **⏰ NFT Background Scheduler**: Automatic 24/7 NFT floor price updates
+  - Smart rate limiting (95 calls/day)
+  - State persistence (resumes after restart)
+  - Priority queue system
+  - Integrated into main app (no separate container needed!)
+
+### Infrastructure
+- **Self-Hosted**: Your data stays on your machine
+- **Docker Ready**: Single container deployment
+- **Optional HTTPS**: SSL/TLS encryption support
+- **Secure Logging**: Audit trails with sensitive data redaction
+
+## 🚀 Quick Start
+
+### Option 1: Docker Deployment (Recommended)
 
 ```bash
 # Clone the repository
-git clone <repo-url> ABCT
-cd ABCT
+git clone https://github.com/Tarrant64/abct.git
+cd abct
 
-# Run the setup script
-cd Deployment
-chmod +x setup.sh
-./setup.sh
+# Deploy to Unraid/Docker server
+./abct-docker/update-unraid.sh <unraid-ip> <port>
 
-# Configure your API keys
-cd ..
+# Example:
+./abct-docker/update-unraid.sh 192.168.1.100 8081
+
+# Access at http://<your-ip>:<port>
+```
+
+### Option 2: Local Development
+
+```bash
+# Clone the repository
+git clone https://github.com/Tarrant64/abct.git
+cd abct
+
+# Copy and configure environment
+cp .env.example .env
 nano .env  # Add your Blockfrost API key at minimum
 
-# Start the server
+# Run the application
 ./run.sh
 
 # Open in browser
 open http://127.0.0.1:8000
 ```
+
+The `run.sh` script will:
+- Create a Python virtual environment
+- Install dependencies
+- Start the FastAPI backend
+- Display the server URL
 
 ## Screenshots
 
@@ -67,49 +105,72 @@ The dashboard provides a comprehensive view of your crypto portfolio:
 | Coinbase | Optional | Exchange integration | [portal.cdp.coinbase.com](https://portal.cdp.coinbase.com) |
 | Etherscan | Optional | Ethereum support | [etherscan.io](https://etherscan.io/apis) |
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 ABCT/
-├── backend/                 # Python FastAPI backend
-│   ├── main.py             # Application entry point
-│   ├── config.py           # Configuration management
-│   ├── database.py         # SQLite database layer
-│   ├── routers/            # API endpoint handlers
-│   │   ├── wallets.py      # Wallet CRUD operations
-│   │   ├── portfolio.py    # Portfolio summary & history
-│   │   ├── prices.py       # Cryptocurrency prices
-│   │   ├── defi.py         # Staking positions
-│   │   ├── exchanges.py    # Exchange balances
-│   │   └── nfts.py         # NFT collection
-│   ├── services/           # Business logic layer
-│   │   ├── cardano.py      # Cardano blockchain service
-│   │   ├── bitcoin.py      # Bitcoin blockchain service
-│   │   ├── ethereum.py     # Ethereum blockchain service
-│   │   ├── pricing.py      # Price aggregation
-│   │   ├── defi.py         # DeFi/staking service
-│   │   ├── coinbase.py     # Coinbase exchange service
-│   │   ├── nft.py          # NFT service
-│   │   └── snapshot.py     # Portfolio snapshot service
-│   └── utils/              # Utility functions
-├── frontend/               # HTML/CSS/JS frontend
-│   ├── index.html          # Main dashboard
-│   ├── css/styles.css      # Styling
-│   └── js/app.js           # Client-side logic
-├── data/                   # SQLite database (auto-created)
-├── docs/                   # Documentation
-│   ├── ARCHITECTURE.md     # System architecture diagram
-│   └── ABCT_Technical_Documentation.docx
-├── Deployment/             # Deployment scripts
-│   ├── setup.sh           # Initial setup script
-│   └── README.md          # Deployment guide
-├── .env                    # API keys (you create this)
-├── requirements.txt        # Python dependencies
-├── run.sh                  # Start server
-└── stop.sh                 # Stop server
+├── backend/                    # Python FastAPI backend
+│   ├── main.py                # Application entry point
+│   ├── config.py              # Configuration management
+│   ├── database.py            # SQLite database layer
+│   ├── routers/               # API endpoint handlers
+│   │   ├── wallets.py         # Wallet CRUD operations
+│   │   ├── portfolio.py       # Portfolio summary & history
+│   │   ├── prices.py          # Cryptocurrency prices
+│   │   ├── defi.py            # Staking positions
+│   │   ├── exchanges.py       # Exchange balances
+│   │   ├── nfts.py            # NFT collection
+│   │   ├── nft_scheduler.py   # NFT scheduler API (v0.9.0+)
+│   │   ├── backup.py          # Backup & restore API (v0.10.0+)
+│   │   ├── security.py        # Security settings
+│   │   └── settings.py        # Application settings
+│   ├── services/              # Business logic layer
+│   │   ├── cardano.py         # Cardano blockchain service
+│   │   ├── bitcoin.py         # Bitcoin blockchain service
+│   │   ├── ethereum.py        # Ethereum/EVM blockchain service
+│   │   ├── pricing.py         # Price aggregation
+│   │   ├── defi.py            # DeFi/staking service
+│   │   ├── coinbase.py        # Coinbase exchange service
+│   │   ├── nft.py             # NFT service
+│   │   ├── nft_scheduler.py   # NFT background scheduler (v0.9.0+)
+│   │   └── snapshot.py        # Portfolio snapshot service
+│   ├── middleware/            # Security middleware
+│   │   ├── auth.py            # Authentication
+│   │   └── rate_limit.py      # Rate limiting
+│   └── utils/                 # Utility functions
+├── frontend/                  # HTML/CSS/JS frontend
+│   ├── index.html             # Main dashboard
+│   ├── wallets.html           # Wallet manager
+│   ├── services.html          # Services monitor (NFT scheduler)
+│   ├── backup.html            # Backup & restore (v0.10.0+)
+│   ├── apis.html              # API key manager
+│   ├── security.html          # Security settings
+│   ├── nft-wall.html          # NFT gallery
+│   ├── logs.html              # System logs
+│   ├── css/styles.css         # Styling
+│   └── js/app.js              # Client-side logic
+├── abct-docker/               # Docker deployment
+│   ├── Dockerfile             # Container definition
+│   ├── nginx.conf             # Reverse proxy config
+│   ├── supervisord.conf       # Process manager
+│   └── update-unraid.sh       # Deployment script
+├── data/                      # SQLite databases (auto-created)
+│   ├── portfolio.db           # Main database
+│   └── nft_images.db          # NFT image cache
+├── docs/                      # Documentation
+│   ├── ARCHITECTURE.md        # System architecture
+│   ├── BACKUP_RESTORE_GUIDE.md # Backup documentation
+│   └── ...
+├── .env                       # API keys (you create this)
+├── .env.example               # Example configuration
+├── requirements.txt           # Python dependencies
+├── run.sh                     # Start server (local)
+├── stop.sh                    # Stop server (local)
+├── CHANGELOG.md               # Version history
+└── README.md                  # This file
 ```
 
-## API Endpoints
+## 📡 API Endpoints
 
 ### Wallets
 - `GET /wallets` - List all tracked wallets
@@ -137,20 +198,63 @@ ABCT/
 - `GET /nfts/prices/status` - Price collection status
 - `POST /nfts/prices/collect` - Trigger price collection
 
-## Configuration
+### NFT Background Scheduler (v0.9.0+)
+- `GET /nft-scheduler/status` - Get scheduler status and statistics
+- `POST /nft-scheduler/enable` - Enable background updates
+- `POST /nft-scheduler/disable` - Disable background updates
+- `POST /nft-scheduler/trigger` - Manually trigger update cycle
+- `GET /nft-scheduler/collections` - List tracked NFT collections
+
+### Backup & Restore (v0.10.0+)
+- `GET /backup/info` - Get backup information and statistics
+- `POST /backup/export` - Export configuration to JSON
+- `POST /backup/preview` - Preview backup file (dry-run)
+- `POST /backup/import` - Import configuration from backup
+
+## ⚙️ Configuration
 
 ### Environment Variables (.env)
 
 ```bash
-# Required
-BLOCKFROST_API_KEY=your_key_here
+# ============================================
+# REQUIRED: Cardano Blockchain API
+# ============================================
+BLOCKFROST_API_KEY=mainnetXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-# Recommended
-CEXPLORER_API_KEY=your_key_here
+# ============================================
+# RECOMMENDED: Enhanced Features
+# ============================================
+CEXPLORER_API_KEY=your_key_here      # Staking positions and rewards
+TAPTOOLS_API_KEY=your_key_here       # NFT floor prices
 
-# Optional
-TAPTOOLS_API_KEY=your_key_here
-ETHERSCAN_API_KEY=your_key_here
+# ============================================
+# OPTIONAL: Additional Blockchains
+# ============================================
+ETHERSCAN_API_KEY=your_key_here      # Ethereum support
+ALCHEMY_API_KEY=your_key_here        # Ethereum/Polygon/Base NFTs
+HELIUS_API_KEY=your_key_here         # Solana support
+
+# ============================================
+# NFT Background Scheduler (v0.9.0+)
+# ============================================
+NFT_SCHEDULER_ENABLED=false           # Enable automatic NFT price updates
+NFT_UPDATE_INTERVAL_MINUTES=15        # Update every 15 minutes (default)
+NFT_CALLS_PER_UPDATE=1                # Collections per cycle
+NFT_MAX_DAILY_CALLS=95                # Daily API call limit
+
+# ============================================
+# Authentication (v0.10.0+)
+# ============================================
+ABCT_REQUIRE_AUTH=false               # Set to false for localhost-only
+# ABCT_ADMIN_USER=admin               # Required if auth enabled
+# ABCT_ADMIN_PASSWORD=secure_password # Required if auth enabled
+
+# ============================================
+# HTTPS/SSL (Optional)
+# ============================================
+# ABCT_SSL_MODE=http                  # Options: http | https-self-signed | https-custom
+# ABCT_SSL_CERT=/path/to/cert.pem
+# ABCT_SSL_KEY=/path/to/key.pem
 ```
 
 ### Coinbase Integration
@@ -178,20 +282,51 @@ uvicorn main:app --reload
 pytest
 ```
 
-## Security
+## 🔒 Security
 
-- **Local Only**: Server binds to 127.0.0.1 by default
-- **Read-Only Access**: Cannot move funds, only view balances
-- **No Telemetry**: No data sent to external analytics
-- **Local Database**: All data stored in local SQLite file
-- **HTTPS Support**: Optional SSL/TLS encryption (v0.8.0+)
-- **Centralized Logging**: Secure audit trails with sensitive data redaction
-- **Input Validation**: Protection against malformed inputs
+- **Local Only**: Server binds to 127.0.0.1 by default (localhost-only)
+- **Read-Only Access**: Cannot move funds, only view balances and data
+- **No Telemetry**: No data sent to external analytics or tracking
+- **Local Database**: All data stored in local SQLite files
+- **Optional Authentication**: HTTP Basic Auth for network-exposed deployments (v0.10.0+)
+- **HTTPS Support**: SSL/TLS encryption with self-signed or custom certificates (v0.8.0+)
+- **Secure Logging**: Audit trails with sensitive data redaction
+- **Input Validation**: Protection against malformed inputs and XSS
+- **Rate Limiting**: API endpoint protection against abuse
 - **CORS Hardening**: Restricted cross-origin access
+- **DOMPurify**: Client-side XSS protection on all HTML rendering
+
+**Note:** This application is designed for **self-hosted, localhost-only** use. The optional authentication feature allows running without credentials on trusted local installations, or with Basic Auth if you expose it on your network.
 
 For detailed security information, see [SECURITY.md](SECURITY.md)
 
-## Troubleshooting
+## 📦 What's New
+
+### v0.10.0 - Backup & Restore Release (January 2026)
+- **Complete Backup System**: Export/import all your configuration data
+- **Migration Ready**: Easily move to new servers
+- **Selective Export**: Choose what data to include
+- **Import Modes**: Merge (safe) or Replace (full restore)
+- **Security Warnings**: Alerts for sensitive data in backups
+
+### v0.9.0 - NFT Scheduler Integration (January 2026)
+- **Single Container**: NFT price service integrated into main app
+- **Background Updates**: Automatic 24/7 NFT floor price collection
+- **Smart Rate Limiting**: Respects TapTools 95 calls/day limit
+- **State Persistence**: Resumes exactly where it left off after restart
+- **UI Controls**: Enable/disable from Services page
+
+See [CHANGELOG.md](CHANGELOG.md) for complete version history.
+
+## 📖 Documentation
+
+- **[Quick Start Guide](docs/)** - Get up and running
+- **[Architecture](docs/ARCHITECTURE.md)** - System design overview
+- **[Backup & Restore Guide](docs/BACKUP_RESTORE_GUIDE.md)** - Configuration management
+- **[Security Guide](SECURITY.md)** - Security best practices
+- **[API Documentation](#-api-endpoints)** - Complete endpoint reference
+
+## 🔧 Troubleshooting
 
 ### Server won't start
 ```bash
@@ -217,13 +352,37 @@ rm data/portfolio.db
 ./run.sh  # Fresh database created
 ```
 
-## License
+## 📄 License
 
-MIT License - see LICENSE file for details.
+MIT License - see [LICENSE](LICENSE) file for details.
 
-## Acknowledgments
+## 🙏 Acknowledgments
 
-- [FastAPI](https://fastapi.tiangolo.com/) - Modern Python web framework
-- [Chart.js](https://www.chartjs.org/) - JavaScript charting library
-- [Blockfrost](https://blockfrost.io/) - Cardano API
-- [CoinGecko](https://www.coingecko.com/) - Cryptocurrency prices
+Built with amazing open-source tools:
+
+- **Backend**
+  - [FastAPI](https://fastapi.tiangolo.com/) - Modern Python web framework
+  - [APScheduler](https://apscheduler.readthedocs.io/) - Background task scheduling
+  - [SQLite](https://www.sqlite.org/) - Embedded database
+
+- **Frontend**
+  - [Chart.js](https://www.chartjs.org/) - Interactive charting library
+  - [DOMPurify](https://github.com/cure53/DOMPurify) - XSS sanitization
+
+- **APIs & Services**
+  - [Blockfrost](https://blockfrost.io/) - Cardano blockchain data
+  - [TapTools](https://www.taptools.io/) - Cardano NFT floor prices
+  - [CoinGecko](https://www.coingecko.com/) - Cryptocurrency price aggregation
+  - [Coinbase](https://www.coinbase.com/) - Exchange integration
+
+## 🔗 Links
+
+- **Repository**: https://github.com/Tarrant64/abct
+- **Releases**: https://github.com/Tarrant64/abct/releases
+- **Issues**: https://github.com/Tarrant64/abct/issues
+- **Latest Release**: [v0.10.0 - Backup & Restore](https://github.com/Tarrant64/abct/releases/tag/v0.10.0)
+
+---
+
+**Current Version:** v0.10.0 (BUILD 1769498491)
+**Last Updated:** January 2026
