@@ -437,13 +437,36 @@ function collapseAllSections() {
     if (btn) btn.textContent = 'Expand All';
 }
 
+// Initialize privacy mode from localStorage
+function initializePrivacyMode() {
+    const privacyEnabled = localStorage.getItem('privacyMode') === 'true';
+    if (privacyEnabled) {
+        document.body.classList.add('privacy-mode');
+        const btn = document.getElementById('privacyBtn');
+        if (btn) btn.classList.add('active');
+    }
+}
+
 // Toggle privacy mode
 function togglePrivacyMode() {
     const body = document.body;
     const btn = document.getElementById('privacyBtn');
-    body.classList.toggle('privacy-mode');
+    const isEnabled = body.classList.toggle('privacy-mode');
     btn.classList.toggle('active');
+
+    // Save to localStorage
+    localStorage.setItem('privacyMode', isEnabled);
 }
+
+// Listen for storage events to sync privacy mode across tabs
+window.addEventListener('storage', (e) => {
+    if (e.key === 'privacyMode') {
+        const privacyEnabled = e.newValue === 'true';
+        document.body.classList.toggle('privacy-mode', privacyEnabled);
+        const btn = document.getElementById('privacyBtn');
+        if (btn) btn.classList.toggle('active', privacyEnabled);
+    }
+});
 
 // Toggle waffle menu
 function toggleWaffleMenu() {
@@ -4978,6 +5001,9 @@ async function monitorStartupStatus() {
 document.addEventListener('DOMContentLoaded', async () => {
     // Load saved theme preference
     loadSavedTheme();
+
+    // Initialize privacy mode from localStorage
+    initializePrivacyMode();
 
     // Start monitoring startup status (non-blocking)
     monitorStartupStatus();
