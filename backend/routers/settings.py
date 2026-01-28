@@ -33,8 +33,8 @@ API_REGISTRY = {
         "docs_url": "https://blockfrost.io/",
         "env_var": "BLOCKFROST_API_KEY",
         "pricing": "free",
-        "pricing_note": "Free tier: 50,000 requests/day",
-        "default_limit": 50000,
+        "pricing_note": "Free tier: 10 requests/sec, burst of 500 requests (no documented daily limit)",
+        "default_limit": None,  # Rate limit is per-second, not daily
         "default_period": 86400,
         "period_label": "day"
     },
@@ -87,8 +87,8 @@ API_REGISTRY = {
         "docs_url": "https://www.alchemy.com/",
         "env_var": "ALCHEMY_API_KEY",
         "pricing": "free",
-        "pricing_note": "Free tier: 300M compute units/mo (units vary per call)",
-        "default_limit": None,  # Compute units vary per call type
+        "pricing_note": "Free tier: 30M compute units/mo (~1.8M simple requests)",
+        "default_limit": 60000,  # ~30M CU / 30 days = 1M CU/day = ~60k simple requests/day (conservative)
         "default_period": 86400,
         "period_label": "day"
     },
@@ -100,8 +100,8 @@ API_REGISTRY = {
         "docs_url": "https://etherscan.io/apis",
         "env_var": "ETHERSCAN_API_KEY",
         "pricing": "free",
-        "pricing_note": "Free tier: 5 calls/sec rate limit",
-        "default_limit": None,  # Rate limit per second, not daily quota
+        "pricing_note": "Free tier: 3 calls/sec OR 100,000 calls/day",
+        "default_limit": 100000,  # 100k calls per day
         "default_period": 86400,
         "period_label": "day"
     },
@@ -128,8 +128,8 @@ API_REGISTRY = {
         "docs_url": "https://helius.xyz/",
         "env_var": "HELIUS_API_KEY",
         "pricing": "free",
-        "pricing_note": "Free tier: 500,000 credits/mo (credits vary per call)",
-        "default_limit": None,  # Credits vary per call type
+        "pricing_note": "Free tier: 1M credits/mo, 10 RPS rate limit",
+        "default_limit": 33333,  # ~1M credits / 30 days = 33k credits/day
         "default_period": 86400,
         "period_label": "day"
     },
@@ -142,9 +142,9 @@ API_REGISTRY = {
         "required": False,
         "docs_url": "https://www.coingecko.com/en/api",
         "pricing": "free",
-        "pricing_note": "Free: 10-30 calls/min rate limit",
+        "pricing_note": "Demo API (free): 30 calls/min, 10,000 calls/month",
         "env_var": "COINGECKO_API_KEY",
-        "default_limit": None,  # Rate limit per minute, not daily quota
+        "default_limit": 333,  # 10k/month ≈ 333/day
         "default_period": 86400,
         "period_label": "day"
     },
