@@ -71,12 +71,34 @@ fi
 echo ""
 
 # ===========================================
+# SSH Connection Multiplexing Setup
+# ===========================================
+# This allows all SSH/rsync operations to reuse a single connection
+# Reduces password prompts from 3 to 1
+SSH_CONTROL_PATH="/tmp/ssh-abct-update-%r@%h:%p"
+SSH_OPTS="-o ControlMaster=auto -o ControlPath=$SSH_CONTROL_PATH -o ControlPersist=60"
+
+# Establish master connection (this is where password is entered)
+echo -e "${YELLOW}Establishing SSH connection to $UNRAID_HOST...${NC}"
+ssh $SSH_OPTS -N -f "${SSH_USER}@${UNRAID_HOST}" 2>/dev/null || {
+    # If background connection fails, try establishing it with a simple command
+    ssh $SSH_OPTS "${SSH_USER}@${UNRAID_HOST}" "true" || {
+        echo -e "${RED}Failed to establish SSH connection${NC}"
+        exit 1
+    }
+}
+echo -e "${GREEN}  ✓ Connected (will reuse for all operations)${NC}"
+echo ""
+
+# ===========================================
 # STEP 1: Sync files to Unraid
 # ===========================================
 echo -e "${YELLOW}[1/4] Syncing files to Unraid...${NC}"
 
 # Use rsync for efficient sync (only changed files)
+# Reuses the SSH master connection (no password prompt)
 rsync -avz --progress \
+    -e "ssh $SSH_OPTS" \
     --exclude '.git' \
     --exclude 'venv' \
     --exclude '__pycache__' \
@@ -96,7 +118,8 @@ echo -e "${YELLOW}[2/4] Connecting to Unraid and rebuilding...${NC}"
 echo ""
 
 # Run commands on Unraid (output streams in real-time)
-ssh "${SSH_USER}@${UNRAID_HOST}" bash -s "$CONTAINER_NAME" "$REMOTE_PATH" "$DATA_DIR" "$PORT" << 'ENDSSH'
+# Reuses the SSH master connection (no password prompt)
+ssh $SSH_OPTS "${SSH_USER}@${UNRAID_HOST}" bash -s "$CONTAINER_NAME" "$REMOTE_PATH" "$DATA_DIR" "$PORT" << 'ENDSSH'
     CONTAINER_NAME="$1"
     REMOTE_PATH="$2"
     DATA_DIR="$3"
@@ -225,9 +248,10 @@ ENDSSH
 SSH_EXIT_CODE=$?
 
 # Extract version information from deployed container (separate quick SSH call)
+# Reuses the SSH master connection (no password prompt)
 echo ""
 echo -e "${YELLOW}Extracting version information...${NC}"
-DEPLOYED_VERSION=$(ssh "${SSH_USER}@${UNRAID_HOST}" "docker exec $CONTAINER_NAME grep -o 'v[0-9.]*\s*(BUILD\s*[0-9]*)' /app/frontend/index.html 2>/dev/null | head -1" || echo "")
+DEPLOYED_VERSION=$(ssh $SSH_OPTS "${SSH_USER}@${UNRAID_HOST}" "docker exec $CONTAINER_NAME grep -o 'v[0-9.]*\s*(BUILD\s*[0-9]*)' /app/frontend/index.html 2>/dev/null | head -1" || echo "")
 
 if [ $SSH_EXIT_CODE -eq 0 ]; then
     echo ""
@@ -245,5 +269,12 @@ if [ $SSH_EXIT_CODE -eq 0 ]; then
 else
     echo ""
     echo -e "${RED}Update failed. Check the output above for errors.${NC}"
+    # Clean up SSH master connection
+    ssh -O exit $SSH_OPTS "${SSH_USER}@${UNRAID_HOST}" 2>/dev/null || true
     exit 1
 fi
+
+# Clean up SSH master connection
+echo -e "${YELLOW}Closing SSH connection...${NC}"
+ssh -O exit $SSH_OPTS "${SSH_USER}@${UNRAID_HOST}" 2>/dev/null || true
+echo -e "${GREEN}  ✓ Disconnected${NC}"
