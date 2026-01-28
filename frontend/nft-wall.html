@@ -380,16 +380,75 @@
 </head>
 <body>
     <div class="wall-container">
+        <header>
+            <h1><a href="/" style="color: inherit; text-decoration: none;">A Better Crypto Tracker</a></h1>
+            <div class="header-actions">
+                <button id="privacyBtn" class="btn btn-privacy" onclick="togglePrivacyMode()" title="Toggle privacy mode">
+                    Privacy Mode
+                </button>
+                <button id="sectionsToggleBtn" class="btn btn-sections" onclick="toggleAllSections()" title="Expand/Collapse all sections">
+                    Expand All
+                </button>
+                <div class="theme-selector">
+                    <select id="themeSelect" onchange="changeTheme(this.value)" title="Select theme">
+                        <option value="default">Default</option>
+                        <option value="cypherpunk1">Cypherpunk 1</option>
+                        <option value="green-terminal">Green Terminal</option>
+                        <option value="ocean-depths">Ocean Depths</option>
+                        <option value="sunset-horizon">Sunset Horizon</option>
+                    </select>
+                </div>
+                <div class="waffle-menu-container">
+                    <button class="waffle-menu-btn" onclick="toggleWaffleMenu()" title="Menu">
+                        <span class="waffle-icon">
+                            <span></span><span></span><span></span>
+                            <span></span><span></span><span></span>
+                            <span></span><span></span><span></span>
+                        </span>
+                    </button>
+                    <div class="waffle-menu-dropdown" id="waffleMenu">
+                        <a href="/" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128200;</span>
+                            <span class="waffle-item-label">Dashboard</span>
+                        </a>
+                        <a href="/wallets.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128176;</span>
+                            <span class="waffle-item-label">Manage Assets</span>
+                        </a>
+                        <a href="/apis.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128273;</span>
+                            <span class="waffle-item-label">APIs</span>
+                        </a>
+                        <a href="/services.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#9881;</span>
+                            <span class="waffle-item-label">Services</span>
+                        </a>
+                        <a href="/security.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128274;</span>
+                            <span class="waffle-item-label">Security</span>
+                        </a>
+                        <a href="/backup.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128230;</span>
+                            <span class="waffle-item-label">Backup & Restore</span>
+                        </a>
+                        <a href="/nft-wall.html" class="waffle-menu-item active">
+                            <span class="waffle-item-icon">&#128444;</span>
+                            <span class="waffle-item-label">NFT Wall</span>
+                        </a>
+                        <a href="/logs.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128221;</span>
+                            <span class="waffle-item-label">System Logs</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </header>
+
         <div class="wall-header">
             <div>
-                <a href="/" class="back-link">&larr; Back to Dashboard</a>
-                <h1>NFT Wall</h1>
+                <h2>NFT Wall</h2>
             </div>
             <div class="cache-controls">
-                <button id="privacyToggle" class="privacy-btn" onclick="togglePrivacyMode()" title="Toggle privacy mode">
-                    <span id="privacyIcon">👁️</span>
-                    <span id="privacyText">Privacy</span>
-                </button>
                 <span class="cache-progress" id="cacheProgress"></span>
                 <button class="cache-btn" id="cacheBtn" onclick="cacheImages()">Cache Images</button>
             </div>
@@ -653,54 +712,16 @@
         });
 
         // Privacy Mode Functions
-        function initializePrivacyMode() {
-            const privacyEnabled = localStorage.getItem('privacyMode') === 'true';
-            applyPrivacyMode(privacyEnabled);
-        }
-
-        function togglePrivacyMode() {
-            const body = document.body;
-            const btn = document.getElementById('privacyToggle');
-            const icon = document.getElementById('privacyIcon');
-
-            const isEnabled = body.classList.toggle('privacy-mode');
-            btn.classList.toggle('active', isEnabled);
-            icon.textContent = isEnabled ? '🙈' : '👁️';
-
-            // Save to localStorage
-            localStorage.setItem('privacyMode', isEnabled);
-        }
-
-        function applyPrivacyMode(enabled) {
-            const body = document.body;
-            const btn = document.getElementById('privacyToggle');
-            const icon = document.getElementById('privacyIcon');
-
-            if (enabled) {
-                body.classList.add('privacy-mode');
-                btn.classList.add('active');
-                icon.textContent = '🙈';
-            } else {
-                body.classList.remove('privacy-mode');
-                btn.classList.remove('active');
-                icon.textContent = '👁️';
-            }
-        }
-
-        // Listen for storage events to sync privacy mode across tabs
-        window.addEventListener('storage', (e) => {
-            if (e.key === 'privacyMode') {
-                applyPrivacyMode(e.newValue === 'true');
-            }
-        });
-
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             initializePrivacyMode();
+            loadSavedTheme();
             loadWallStatus();
             loadNfts();
         });
     </script>
+
+    <script src="/static/js/app.js"></script>
 
     <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
         <p>ABCT - NFT Gallery | <span style="opacity: 0.6;">v0.10.0 (BUILD 1769498491)</span></p>

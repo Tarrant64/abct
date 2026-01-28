@@ -366,56 +366,74 @@
 </head>
 <body>
     <div class="services-page">
-        <div class="page-header">
-            <div>
-                <h1>Service Health</h1>
-                <p class="last-updated">Last updated: <span id="lastUpdate">-</span></p>
-            </div>
-            <div class="nav-links">
-                <a href="/" class="btn btn-secondary">Back to Dashboard</a>
-                <div class="waffle-menu-container" style="position: relative;">
-                    <button class="waffle-menu-btn" onclick="toggleWaffleMenu()" title="Menu" style="width: 40px; height: 40px; background: rgba(102, 126, 234, 0.1); border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
-                        <span class="waffle-icon" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; width: 18px; height: 18px;">
-                            <span style="width: 4px; height: 4px; background: #667eea; border-radius: 1px;"></span><span style="width: 4px; height: 4px; background: #667eea; border-radius: 1px;"></span><span style="width: 4px; height: 4px; background: #667eea; border-radius: 1px;"></span>
-                            <span style="width: 4px; height: 4px; background: #667eea; border-radius: 1px;"></span><span style="width: 4px; height: 4px; background: #667eea; border-radius: 1px;"></span><span style="width: 4px; height: 4px; background: #667eea; border-radius: 1px;"></span>
-                            <span style="width: 4px; height: 4px; background: #667eea; border-radius: 1px;"></span><span style="width: 4px; height: 4px; background: #667eea; border-radius: 1px;"></span><span style="width: 4px; height: 4px; background: #667eea; border-radius: 1px;"></span>
+        <header>
+            <h1><a href="/" style="color: inherit; text-decoration: none;">A Better Crypto Tracker</a></h1>
+            <div class="header-actions">
+                <button id="privacyBtn" class="btn btn-privacy" onclick="togglePrivacyMode()" title="Toggle privacy mode">
+                    Privacy Mode
+                </button>
+                <button id="sectionsToggleBtn" class="btn btn-sections" onclick="toggleAllSections()" title="Expand/Collapse all sections">
+                    Expand All
+                </button>
+                <div class="theme-selector">
+                    <select id="themeSelect" onchange="changeTheme(this.value)" title="Select theme">
+                        <option value="default">Default</option>
+                        <option value="cypherpunk1">Cypherpunk 1</option>
+                        <option value="green-terminal">Green Terminal</option>
+                        <option value="ocean-depths">Ocean Depths</option>
+                        <option value="sunset-horizon">Sunset Horizon</option>
+                    </select>
+                </div>
+                <div class="waffle-menu-container">
+                    <button class="waffle-menu-btn" onclick="toggleWaffleMenu()" title="Menu">
+                        <span class="waffle-icon">
+                            <span></span><span></span><span></span>
+                            <span></span><span></span><span></span>
+                            <span></span><span></span><span></span>
                         </span>
                     </button>
-                    <div class="waffle-menu-dropdown" id="waffleMenu" style="position: absolute; top: calc(100% + 8px); right: 0; background: #1a1a2e; border: 1px solid #3a3a4e; border-radius: 12px; min-width: 220px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); opacity: 0; visibility: hidden; transform: translateY(-10px); transition: all 0.3s ease; z-index: 1000; overflow: hidden;">
-                        <a href="/" class="waffle-menu-item" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: #e0e0e0; text-decoration: none; border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
-                            <span class="waffle-item-icon" style="font-size: 18px; width: 24px; text-align: center;">&#128200;</span>
-                            <span class="waffle-item-label" style="font-size: 14px; font-weight: 500;">Dashboard</span>
+                    <div class="waffle-menu-dropdown" id="waffleMenu">
+                        <a href="/" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128200;</span>
+                            <span class="waffle-item-label">Dashboard</span>
                         </a>
-                        <a href="/wallets.html" class="waffle-menu-item" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: #e0e0e0; text-decoration: none; border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
-                            <span class="waffle-item-icon" style="font-size: 18px; width: 24px; text-align: center;">&#128176;</span>
-                            <span class="waffle-item-label" style="font-size: 14px; font-weight: 500;">Manage Assets</span>
+                        <a href="/wallets.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128176;</span>
+                            <span class="waffle-item-label">Manage Assets</span>
                         </a>
-                        <a href="/apis.html" class="waffle-menu-item" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: #e0e0e0; text-decoration: none; border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
-                            <span class="waffle-item-icon" style="font-size: 18px; width: 24px; text-align: center;">&#128273;</span>
-                            <span class="waffle-item-label" style="font-size: 14px; font-weight: 500;">APIs</span>
+                        <a href="/apis.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128273;</span>
+                            <span class="waffle-item-label">APIs</span>
                         </a>
-                        <a href="/services.html" class="waffle-menu-item active" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: #e0e0e0; text-decoration: none; border-bottom: 1px solid rgba(255, 255, 255, 0.05); background: rgba(102, 126, 234, 0.15); border-left: 3px solid #667eea;">
-                            <span class="waffle-item-icon" style="font-size: 18px; width: 24px; text-align: center;">&#9881;</span>
-                            <span class="waffle-item-label" style="font-size: 14px; font-weight: 500;">Services</span>
+                        <a href="/services.html" class="waffle-menu-item active">
+                            <span class="waffle-item-icon">&#9881;</span>
+                            <span class="waffle-item-label">Services</span>
                         </a>
-                        <a href="/security.html" class="waffle-menu-item" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: #e0e0e0; text-decoration: none; border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
-                            <span class="waffle-item-icon" style="font-size: 18px; width: 24px; text-align: center;">&#128274;</span>
-                            <span class="waffle-item-label" style="font-size: 14px; font-weight: 500;">Security</span>
+                        <a href="/security.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128274;</span>
+                            <span class="waffle-item-label">Security</span>
                         </a>
-                        <a href="/backup.html" class="waffle-menu-item" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: #e0e0e0; text-decoration: none; border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
-                            <span class="waffle-item-icon" style="font-size: 18px; width: 24px; text-align: center;">&#128230;</span>
-                            <span class="waffle-item-label" style="font-size: 14px; font-weight: 500;">Backup & Restore</span>
+                        <a href="/backup.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128230;</span>
+                            <span class="waffle-item-label">Backup & Restore</span>
                         </a>
-                        <a href="/nft-wall.html" class="waffle-menu-item" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: #e0e0e0; text-decoration: none; border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
-                            <span class="waffle-item-icon" style="font-size: 18px; width: 24px; text-align: center;">&#128444;</span>
-                            <span class="waffle-item-label" style="font-size: 14px; font-weight: 500;">NFT Wall</span>
+                        <a href="/nft-wall.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128444;</span>
+                            <span class="waffle-item-label">NFT Wall</span>
                         </a>
-                        <a href="/logs.html" class="waffle-menu-item" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: #e0e0e0; text-decoration: none;">
-                            <span class="waffle-item-icon" style="font-size: 18px; width: 24px; text-align: center;">&#128221;</span>
-                            <span class="waffle-item-label" style="font-size: 14px; font-weight: 500;">System Logs</span>
+                        <a href="/logs.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128221;</span>
+                            <span class="waffle-item-label">System Logs</span>
                         </a>
                     </div>
                 </div>
+            </div>
+        </header>
+
+        <div class="page-header">
+            <div>
+                <h2>Service Health</h2>
+                <p class="last-updated">Last updated: <span id="lastUpdate">-</span></p>
             </div>
         </div>
 
@@ -878,46 +896,12 @@
             clearInterval(refreshInterval);
         });
 
-        // Waffle menu toggle
-        function toggleWaffleMenu() {
-            const menu = document.getElementById('waffleMenu');
-            if (menu.style.opacity === '1') {
-                menu.style.opacity = '0';
-                menu.style.visibility = 'hidden';
-                menu.style.transform = 'translateY(-10px)';
-            } else {
-                menu.style.opacity = '1';
-                menu.style.visibility = 'visible';
-                menu.style.transform = 'translateY(0)';
-            }
-        }
-
-        // Close waffle menu when clicking outside
-        document.addEventListener('click', function(event) {
-            const menu = document.getElementById('waffleMenu');
-            const btn = document.querySelector('.waffle-menu-btn');
-
-            if (menu && !menu.contains(event.target) && !btn.contains(event.target)) {
-                menu.style.opacity = '0';
-                menu.style.visibility = 'hidden';
-                menu.style.transform = 'translateY(-10px)';
-            }
-        });
-
-        // Add hover effect for menu items
-        document.querySelectorAll('.waffle-menu-item').forEach(item => {
-            item.addEventListener('mouseenter', function() {
-                if (!this.classList.contains('active')) {
-                    this.style.background = 'rgba(102, 126, 234, 0.1)';
-                }
-            });
-            item.addEventListener('mouseleave', function() {
-                if (!this.classList.contains('active')) {
-                    this.style.background = '';
-                }
-            });
-        });
+        // Initialize privacy mode and theme on page load
+        initializePrivacyMode();
+        loadSavedTheme();
     </script>
+
+    <script src="/static/js/app.js"></script>
 
     <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
         <p>ABCT - Services | <span style="opacity: 0.6;">v0.10.0 (BUILD 1769498491)</span></p>

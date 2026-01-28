@@ -4768,3 +4768,154 @@ footer {
         width: 100%;
     }
 }
+
+/* ============================================================================
+   GLOBAL PRIVACY MODE - Blur Sensitive Data Across All Pages
+   ============================================================================ */
+
+/* Wallet Addresses - All Blockchains */
+body.privacy-mode .wallet-address,
+body.privacy-mode .wallet-label,
+body.privacy-mode .wallet-item .wallet-info h3,
+body.privacy-mode .stake-address {
+    filter: blur(8px);
+    user-select: none;
+}
+
+/* Balances and Values - All Pages */
+body.privacy-mode .wallet-balance,
+body.privacy-mode .total-value,
+body.privacy-mode .total-portfolio-card .total-value,
+body.privacy-mode .total-portfolio-card .total-breakdown,
+body.privacy-mode .summary-card .value,
+body.privacy-mode .chain-balance,
+body.privacy-mode .stake-value,
+body.privacy-mode .rewards-value,
+body.privacy-mode .exchange-balance,
+body.privacy-mode .nft-value,
+body.privacy-mode .collection-value,
+body.privacy-mode .floor-price,
+body.privacy-mode .asset-amount,
+body.privacy-mode .usd-value {
+    filter: blur(10px);
+    user-select: none;
+}
+
+/* API Keys and Secrets - APIs Page */
+body.privacy-mode .api-key-value,
+body.privacy-mode .api-key-display,
+body.privacy-mode .api-secret,
+body.privacy-mode .api-token,
+body.privacy-mode input[type="text"],
+body.privacy-mode input[type="password"],
+body.privacy-mode textarea {
+    filter: blur(12px);
+    user-select: none;
+}
+
+/* NFT Wall Specific */
+body.privacy-mode .nft-image,
+body.privacy-mode .nft-card img {
+    filter: blur(15px);
+    user-select: none;
+}
+
+body.privacy-mode .nft-name,
+body.privacy-mode .nft-collection,
+body.privacy-mode .nft-price,
+body.privacy-mode .wall-stat .value {
+    filter: blur(8px);
+    user-select: none;
+}
+
+/* Staking Positions */
+body.privacy-mode .stake-pool,
+body.privacy-mode .pool-name,
+body.privacy-mode .pool-ticker,
+body.privacy-mode .apy-value,
+body.privacy-mode .delegated-amount {
+    filter: blur(8px);
+    user-select: none;
+}
+
+/* Exchange Balances */
+body.privacy-mode .exchange-account,
+body.privacy-mode .account-balance,
+body.privacy-mode .asset-list {
+    filter: blur(10px);
+    user-select: none;
+}
+
+/* Logs Page - Sensitive Content */
+body.privacy-mode .log-message,
+body.privacy-mode .log-traceback,
+body.privacy-mode .log-extra {
+    filter: blur(6px);
+    user-select: none;
+}
+
+/* Backup Page - Configuration Data */
+body.privacy-mode .backup-preview,
+body.privacy-mode .backup-data,
+body.privacy-mode .config-value {
+    filter: blur(10px);
+    user-select: none;
+}
+
+/* Security Page - Settings Values */
+body.privacy-mode .setting-value,
+body.privacy-mode .security-config {
+    filter: blur(8px);
+    user-select: none;
+}
+
+/* Charts and Graphs */
+body.privacy-mode .chart-container,
+body.privacy-mode canvas {
+    filter: blur(20px);
+    user-select: none;
+}
+
+/* Statistics and Metrics */
+body.privacy-mode .stat-value,
+body.privacy-mode .metric-value,
+body.privacy-mode .count-value,
+body.privacy-mode .percentage-value {
+    filter: blur(8px);
+    user-select: none;
+}
+
+/* Table Data */
+body.privacy-mode table td,
+body.privacy-mode table th {
+    filter: blur(8px);
+    user-select: none;
+}
+
+/* Table Headers - Keep visible for structure */
+body.privacy-mode table thead th {
+    filter: none;
+    user-select: auto;
+}
+
+/* Form Labels - Keep visible */
+body.privacy-mode label,
+body.privacy-mode .form-label,
+body.privacy-mode .field-label {
+    filter: none !important;
+    user-select: auto !important;
+}
+
+/* Buttons and Navigation - Keep visible */
+body.privacy-mode button,
+body.privacy-mode .btn,
+body.privacy-mode nav,
+body.privacy-mode .menu,
+body.privacy-mode .waffle-menu-item,
+body.privacy-mode h1,
+body.privacy-mode h2,
+body.privacy-mode h3,
+body.privacy-mode .section-title {
+    filter: none !important;
+    user-select: auto !important;
+}

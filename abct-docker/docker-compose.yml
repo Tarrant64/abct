@@ -26,6 +26,11 @@ services:
       # Database path (inside container)
       - DATABASE_PATH=/app/data/portfolio.db
 
+      # Authentication (optional - set to false for local Docker)
+      - ABCT_REQUIRE_AUTH=${ABCT_REQUIRE_AUTH:-false}
+      - ABCT_ADMIN_USER=${ABCT_ADMIN_USER:-}
+      - ABCT_ADMIN_PASSWORD=${ABCT_ADMIN_PASSWORD:-}
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 30s
