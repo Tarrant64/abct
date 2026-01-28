@@ -17,6 +17,10 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import TAPTOOLS_API_KEY, TAPTOOLS_BASE_URL
 
+# Import API tracker
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'middleware'))
+from api_tracker import get_taptools_client
+
 logger = logging.getLogger(__name__)
 
 
@@ -66,11 +70,10 @@ class TapToolsWalletService:
                 return cached['data']
 
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with get_taptools_client(headers=self.headers, timeout=30) as client:
                 response = await client.get(
                     f"{self.api_base}/wallet/portfolio/positions",
-                    params={"address": address},
-                    headers=self.headers
+                    params={"address": address}
                 )
 
                 if response.status_code == 200:
