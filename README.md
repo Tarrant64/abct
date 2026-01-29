@@ -9,6 +9,35 @@ A self-hosted cryptocurrency portfolio tracker that aggregates data from multipl
 ![Security](https://img.shields.io/badge/security-hardened-green.svg)
 ![Docker](https://img.shields.io/badge/docker-ready-blue.svg)
 
+## ⚠️ Important: Intended Use
+
+**ABCT is designed for personal, self-hosted use on trusted local networks.**
+
+This is a hobby project for tracking your personal cryptocurrency portfolio. It is:
+
+- ✅ **Perfect for:** Home networks, personal NAS devices, local development
+- ✅ **Designed for:** Single-user or family use on trusted networks
+- ❌ **NOT designed for:** Public internet hosting or multi-tenant use
+- ❌ **NOT recommended:** Exposing directly to the internet without VPN
+
+### Security Considerations
+
+- Default configuration assumes localhost/trusted network access
+- Authentication is optional (can be disabled for local use)
+- No built-in HTTPS/SSL (can be added via reverse proxy if needed)
+- API keys stored in environment variables
+- Read-only access to blockchain data (cannot move funds)
+
+### Remote Access
+
+If you need to access ABCT remotely:
+- ✅ Use a VPN (Tailscale, WireGuard, etc.)
+- ✅ Use a reverse proxy with authentication (nginx + Basic Auth)
+- ✅ Use SSH tunnel
+- ❌ Don't expose port directly to internet
+
+For more details, see [SECURITY.md](SECURITY.md)
+
 ## ✨ Features
 
 ### Portfolio Tracking
@@ -41,6 +70,8 @@ A self-hosted cryptocurrency portfolio tracker that aggregates data from multipl
 
 ABCT works on any Docker-capable system including Linux servers, NAS devices (TrueNAS, Synology, Unraid), and desktop environments.
 
+> **Note:** ABCT is designed for local network use. See [security considerations](#️-important-intended-use) above before exposing to external networks.
+
 ### Option 1: Docker Deployment (Recommended)
 
 ```bash
@@ -60,6 +91,8 @@ docker-compose up -d
 ```
 
 **For detailed platform-specific instructions** (TrueNAS, Synology, Portainer, etc.), see [Docker Deployment Guide](docs/DOCKER_DEPLOYMENT.md).
+
+> **Security Note:** The default Docker configuration binds to all network interfaces. For added security on trusted networks, consider restricting port binding to localhost only (`127.0.0.1:8080:80`) or implementing authentication and HTTPS. See [SECURITY.md](SECURITY.md) for guidance.
 
 > **Note for Unraid users:** A convenience deployment script is available at `abct-docker/update-unraid.sh` for automated deployment and updates on Unraid servers.
 
