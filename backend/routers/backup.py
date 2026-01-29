@@ -489,3 +489,140 @@ async def get_backup_info():
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get backup info: {str(e)}")
+
+
+@router.get("/export-env", dependencies=[Depends(verify_admin)])
+async def export_env_file():
+    """
+    Export .env file contents for backup.
+
+    SECURITY WARNING: This contains ALL API keys in plain text!
+    - Only download this on trusted devices
+    - Never share this file
+    - Store securely (encrypted storage recommended)
+    - Delete from downloads folder after importing to new server
+
+    Returns a text file with .env contents.
+    """
+    try:
+        # Find .env file (in project root, parent of backend directory)
+        env_path = Path(__file__).parent.parent.parent / ".env"
+
+        if not env_path.exists():
+            raise HTTPException(
+                status_code=404,
+                detail=".env file not found. API keys may be set via environment variables instead."
+            )
+
+        # Read .env file
+        with open(env_path, 'r') as f:
+            env_content = f.read()
+
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+        filename = f"abct-env-{timestamp}.txt"
+
+        # Add warning header to the file
+        warning_header = f"""# ============================================================
+# ABCT API Keys - HIGHLY SENSITIVE
+# ============================================================
+#
+# ⚠️  WARNING: This file contains ALL your API keys in plain text!
+#
+# Security Guidelines:
+# - NEVER commit this file to version control
+# - NEVER share this file with anyone
+# - Store in encrypted storage or password manager
+# - Delete from downloads folder after use
+# - Use secure transfer methods only (SSH, encrypted USB)
+#
+# Exported: {datetime.now().isoformat()}
+# Source: {env_path}
+#
+# ============================================================
+
+{env_content}
+"""
+
+        return Response(
+            content=warning_header,
+            media_type="text/plain",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}",
+                "X-Content-Type-Options": "nosniff"
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to export .env file: {str(e)}")
+
+
+@router.post("/import-env", dependencies=[Depends(verify_admin)])
+async def import_env_file(env_content: str):
+    """
+    Import .env file contents (preview only - doesn't write to disk).
+
+    For security, this endpoint only validates and previews the .env content.
+    To actually use these keys, you must:
+    1. Manually copy the .env file to the server
+    2. Restart the application to load new environment variables
+
+    Returns: Preview of what would be imported and instructions.
+    """
+    try:
+        # Parse .env content
+        lines = env_content.strip().split('\n')
+        api_keys = {}
+
+        for line in lines:
+            line = line.strip()
+            # Skip comments and empty lines
+            if not line or line.startswith('#'):
+                continue
+
+            # Parse KEY=VALUE
+            if '=' in line:
+                key, value = line.split('=', 1)
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+
+                # Only track API key variables
+                if 'API_KEY' in key or 'COINBASE' in key or 'NFT' in key or 'ABCT' in key:
+                    # Mask the value for preview
+                    if value:
+                        masked_value = value[:8] + '...' + value[-4:] if len(value) > 12 else '***'
+                        api_keys[key] = {
+                            'has_value': bool(value),
+                            'preview': masked_value,
+                            'length': len(value)
+                        }
+                    else:
+                        api_keys[key] = {
+                            'has_value': False,
+                            'preview': '(empty)',
+                            'length': 0
+                        }
+
+        return {
+            "valid": True,
+            "api_keys_found": len(api_keys),
+            "preview": api_keys,
+            "instructions": [
+                "This is a preview only - keys are NOT imported yet.",
+                "To use these API keys:",
+                "1. Save the .env file to your server (project root directory)",
+                "2. For Docker: Pass keys as environment variables when starting container",
+                "3. For local: Restart the backend server to load new .env file",
+                "4. Verify keys are loaded: Check /settings/api-status endpoint"
+            ],
+            "warnings": [
+                "Never store .env files in version control",
+                "Delete the .env backup file after importing",
+                "API keys in environment variables override .env file"
+            ]
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to parse .env content: {str(e)}")

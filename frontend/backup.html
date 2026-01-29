@@ -630,6 +630,69 @@
             </div>
         </div>
 
+        <!-- API Keys (.env) Backup Section -->
+        <div class="section-card">
+            <div class="section-header">
+                <h2>
+                    <span class="section-icon">🔑</span>
+                    API Keys Backup (.env File)
+                </h2>
+            </div>
+
+            <div class="alert alert-danger">
+                <div class="alert-icon">🔥</div>
+                <div class="alert-content">
+                    <h4>EXTREME CAUTION: API Keys Export</h4>
+                    <p><strong>This exports ALL your API keys in plain text!</strong></p>
+                    <ul>
+                        <li><strong>Never</strong> commit this file to Git or version control</li>
+                        <li><strong>Never</strong> share this file with anyone</li>
+                        <li><strong>Never</strong> store in cloud storage (Dropbox, Google Drive, etc.)</li>
+                        <li><strong>Only</strong> download on trusted devices</li>
+                        <li><strong>Delete</strong> from downloads folder immediately after use</li>
+                        <li><strong>Store</strong> in encrypted password manager or secure vault</li>
+                    </ul>
+                    <p>Use this ONLY for migrating to a new server. For regular backups, keep API keys in your password manager instead.</p>
+                </div>
+            </div>
+
+            <div class="info-box" style="background: rgba(100, 100, 255, 0.1); border-left: 4px solid #6666ff; margin-bottom: 20px;">
+                <h4 style="color: #8888ff; margin-bottom: 10px;">ℹ️ What's Included</h4>
+                <p style="margin-bottom: 10px;">This export includes all API keys from your .env file:</p>
+                <ul style="margin-left: 20px; color: #b0b0b0;">
+                    <li>Blockfrost API Key (Cardano)</li>
+                    <li>TapTools API Key (Cardano NFTs)</li>
+                    <li>CExplorer API Key (Cardano Staking)</li>
+                    <li>Etherscan API Key (Ethereum)</li>
+                    <li>Alchemy API Key (Multi-chain)</li>
+                    <li>Helius API Key (Solana)</li>
+                    <li>CoinGecko API Key (Pricing)</li>
+                    <li>CoinMarketCap API Key (Pricing)</li>
+                    <li>All other environment variables</li>
+                </ul>
+            </div>
+
+            <div class="info-box" style="background: rgba(255, 165, 0, 0.1); border-left: 4px solid #ffa500; margin-bottom: 20px;">
+                <h4 style="color: #ffaa44; margin-bottom: 10px;">📋 How to Use</h4>
+                <ol style="margin-left: 20px; color: #b0b0b0;">
+                    <li>Click "Export API Keys" below</li>
+                    <li>Save the file to a secure location (password manager recommended)</li>
+                    <li>On your new server, create <code>.env</code> file in project root</li>
+                    <li>Copy the contents from the backup file</li>
+                    <li>For Docker: Set environment variables in docker-compose or run command</li>
+                    <li>Restart ABCT to load the new API keys</li>
+                    <li><strong>DELETE the backup file immediately</strong></li>
+                </ol>
+            </div>
+
+            <div class="action-buttons">
+                <button id="exportEnvBtn" class="btn btn-danger" onclick="exportEnvFile()">
+                    <span>🔑</span>
+                    <span>Export API Keys (.env)</span>
+                </button>
+            </div>
+        </div>
+
         <!-- Import Section -->
         <div class="section-card">
             <div class="section-header">
@@ -864,6 +927,78 @@
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<span>📥</span> <span>Download Backup</span>';
+            }
+        }
+
+        async function exportEnvFile() {
+            // Double confirmation because this is extremely sensitive
+            const confirmed = confirm(
+                '⚠️ SECURITY WARNING ⚠️\n\n' +
+                'This will export ALL your API keys in PLAIN TEXT.\n\n' +
+                'Are you absolutely sure you want to proceed?\n\n' +
+                '• Only use this for server migration\n' +
+                '• Never share this file\n' +
+                '• Delete immediately after use\n' +
+                '• Store in encrypted password manager'
+            );
+
+            if (!confirmed) {
+                return;
+            }
+
+            const btn = document.getElementById('exportEnvBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> <span>Exporting...</span>';
+
+            try {
+                const response = await fetch('/backup/export-env', {
+                    method: 'GET'
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Export failed');
+                }
+
+                // Get the blob and create download
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+
+                // Extract filename from Content-Disposition header
+                const disposition = response.headers.get('Content-Disposition');
+                const filename = disposition
+                    ? disposition.split('filename=')[1].replace(/"/g, '')
+                    : 'abct-env-backup.txt';
+
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                showStatus('success', `API keys exported! REMEMBER TO DELETE THE FILE AFTER USE!`);
+
+                // Show another warning after download
+                setTimeout(() => {
+                    alert(
+                        '🔥 IMPORTANT REMINDER 🔥\n\n' +
+                        'Your API keys file has been downloaded.\n\n' +
+                        'IMMEDIATELY:\n' +
+                        '1. Move it to a password manager or encrypted vault\n' +
+                        '2. DELETE the original from your downloads folder\n' +
+                        '3. Never email or upload it anywhere\n\n' +
+                        'This file contains EXTREMELY sensitive data!'
+                    );
+                }, 1000);
+
+            } catch (error) {
+                console.error('Env export failed:', error);
+                showStatus('error', `Failed to export API keys: ${error.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>🔑</span> <span>Export API Keys (.env)</span>';
             }
         }
 
@@ -1212,7 +1347,7 @@
     <script src="/static/js/app.js"></script>
 
     <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
-        <p>ABCT - Backup & Restore | <span style="opacity: 0.6;">v0.10.0 (BUILD 1769590093)</span></p>
+        <p>ABCT - Backup & Restore | <span style="opacity: 0.6;">v0.10.0 (BUILD 1769648168)</span></p>
     </footer>
 </body>
 </html>
