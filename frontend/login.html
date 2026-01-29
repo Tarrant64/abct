@@ -316,6 +316,11 @@
                     localStorage.setItem('abct_token', data.token);
                     localStorage.setItem('abct_username', username);
 
+                    // Check if password change is required
+                    if (data.should_change_password) {
+                        localStorage.setItem('abct_prompt_password_change', 'true');
+                    }
+
                     // Redirect to dashboard
                     window.location.href = '/';
                 } else {

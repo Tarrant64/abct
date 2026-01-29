@@ -109,8 +109,8 @@ function getCurrentUsername() {
 }
 
 /**
- * Add logout button to navigation
- * Call this after page loads to add logout button to existing nav
+ * Add admin dropdown menu to navigation
+ * Call this after page loads to add admin dropdown to existing nav
  */
 function addLogoutButton() {
     const username = getCurrentUsername();
@@ -120,23 +120,126 @@ function addLogoutButton() {
     const headerActions = document.querySelector('.header-actions');
     if (!headerActions) return;
 
-    // Check if logout button already exists
-    if (document.getElementById('logoutBtn')) return;
+    // Check if admin menu already exists
+    if (document.getElementById('adminMenu')) return;
 
-    // Create logout button
+    // Create admin dropdown container
+    const adminContainer = document.createElement('div');
+    adminContainer.className = 'admin-menu-container';
+    adminContainer.style.cssText = 'position: relative; display: inline-block;';
+
+    // Create admin button
+    const adminBtn = document.createElement('button');
+    adminBtn.id = 'adminMenuBtn';
+    adminBtn.className = 'btn btn-secondary';
+    adminBtn.textContent = `${username} ▼`;
+    adminBtn.title = 'Admin menu';
+    adminBtn.onclick = (e) => {
+        e.stopPropagation();
+        toggleAdminMenu();
+    };
+
+    // Create dropdown menu
+    const dropdown = document.createElement('div');
+    dropdown.id = 'adminMenu';
+    dropdown.className = 'admin-dropdown';
+    dropdown.style.cssText = `
+        display: none;
+        position: absolute;
+        right: 0;
+        top: 100%;
+        margin-top: 5px;
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        min-width: 180px;
+        z-index: 1000;
+    `;
+
+    // Change Password option
+    const changePasswordBtn = document.createElement('button');
+    changePasswordBtn.className = 'admin-menu-item';
+    changePasswordBtn.textContent = 'Change Password';
+    changePasswordBtn.style.cssText = `
+        width: 100%;
+        padding: 10px 16px;
+        text-align: left;
+        background: none;
+        border: none;
+        color: var(--text-primary);
+        cursor: pointer;
+        font-size: 14px;
+        transition: background 0.2s;
+    `;
+    changePasswordBtn.onmouseover = () => changePasswordBtn.style.background = 'rgba(255,255,255,0.05)';
+    changePasswordBtn.onmouseout = () => changePasswordBtn.style.background = 'none';
+    changePasswordBtn.onclick = () => {
+        toggleAdminMenu();
+        showChangePasswordModal();
+    };
+
+    // Logout option
     const logoutBtn = document.createElement('button');
-    logoutBtn.id = 'logoutBtn';
-    logoutBtn.className = 'btn btn-secondary';
-    logoutBtn.textContent = `Logout (${username})`;
-    logoutBtn.title = 'Logout from ABCT';
-    logoutBtn.onclick = logout;
+    logoutBtn.className = 'admin-menu-item';
+    logoutBtn.textContent = 'Logout';
+    logoutBtn.style.cssText = `
+        width: 100%;
+        padding: 10px 16px;
+        text-align: left;
+        background: none;
+        border: none;
+        color: var(--text-primary);
+        cursor: pointer;
+        font-size: 14px;
+        border-top: 1px solid var(--border-color);
+        transition: background 0.2s;
+    `;
+    logoutBtn.onmouseover = () => logoutBtn.style.background = 'rgba(255,255,255,0.05)';
+    logoutBtn.onmouseout = () => logoutBtn.style.background = 'none';
+    logoutBtn.onclick = () => {
+        toggleAdminMenu();
+        logout();
+    };
+
+    dropdown.appendChild(changePasswordBtn);
+    dropdown.appendChild(logoutBtn);
+    adminContainer.appendChild(adminBtn);
+    adminContainer.appendChild(dropdown);
 
     // Add to header (before waffle menu)
     const waffleContainer = headerActions.querySelector('.waffle-menu-container');
     if (waffleContainer) {
-        headerActions.insertBefore(logoutBtn, waffleContainer);
+        headerActions.insertBefore(adminContainer, waffleContainer);
     } else {
-        headerActions.appendChild(logoutBtn);
+        headerActions.appendChild(adminContainer);
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!adminContainer.contains(e.target)) {
+            closeAdminMenu();
+        }
+    });
+}
+
+/**
+ * Toggle admin dropdown menu
+ */
+function toggleAdminMenu() {
+    const menu = document.getElementById('adminMenu');
+    if (menu) {
+        menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+    }
+}
+
+/**
+ * Close admin dropdown menu
+ */
+function closeAdminMenu() {
+    const menu = document.getElementById('adminMenu');
+    if (menu) {
+        menu.style.display = 'none';
     }
 }
 
@@ -168,8 +271,19 @@ async function initAuth() {
     const isAuthenticated = await checkAuth();
 
     if (isAuthenticated) {
-        // Add logout button to navigation
+        // Add admin dropdown to navigation
         addLogoutButton();
+
+        // Check if we should prompt for password change
+        if (localStorage.getItem('abct_prompt_password_change') === 'true') {
+            // Remove the flag
+            localStorage.removeItem('abct_prompt_password_change');
+
+            // Show password change modal after a short delay
+            setTimeout(() => {
+                showChangePasswordModal();
+            }, 500);
+        }
     }
 
     return isAuthenticated;
@@ -182,9 +296,181 @@ if (document.readyState === 'loading') {
     initAuth();
 }
 
+/**
+ * Show change password modal
+ */
+function showChangePasswordModal() {
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('changePasswordModal');
+    if (!modal) {
+        modal = createChangePasswordModal();
+        document.body.appendChild(modal);
+    }
+
+    // Clear form
+    document.getElementById('currentPassword').value = '';
+    document.getElementById('newPassword').value = '';
+    document.getElementById('confirmPassword').value = '';
+    document.getElementById('passwordError').style.display = 'none';
+
+    // Show modal
+    modal.style.display = 'flex';
+}
+
+/**
+ * Close change password modal
+ */
+function closeChangePasswordModal() {
+    const modal = document.getElementById('changePasswordModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+/**
+ * Create change password modal
+ */
+function createChangePasswordModal() {
+    const modal = document.createElement('div');
+    modal.id = 'changePasswordModal';
+    modal.style.cssText = `
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.7);
+        z-index: 10000;
+        align-items: center;
+        justify-content: center;
+    `;
+
+    const modalContent = document.createElement('div');
+    modalContent.style.cssText = `
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 30px;
+        max-width: 450px;
+        width: 90%;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    `;
+
+    modalContent.innerHTML = `
+        <h2 style="margin: 0 0 10px 0; color: var(--text-primary);">Change Password</h2>
+        <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 20px;">
+            Please change your password from the default for security.
+        </p>
+
+        <div id="passwordError" style="display: none; background: rgba(255,107,107,0.1); border: 1px solid var(--accent-error); border-radius: 6px; padding: 12px; margin-bottom: 15px; color: var(--accent-error); font-size: 14px;"></div>
+
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; color: var(--text-primary); font-size: 14px; margin-bottom: 5px;">Current Password</label>
+            <input type="password" id="currentPassword" style="width: 100%; padding: 10px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 14px;">
+        </div>
+
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; color: var(--text-primary); font-size: 14px; margin-bottom: 5px;">New Password (min 8 characters)</label>
+            <input type="password" id="newPassword" style="width: 100%; padding: 10px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 14px;">
+        </div>
+
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; color: var(--text-primary); font-size: 14px; margin-bottom: 5px;">Confirm New Password</label>
+            <input type="password" id="confirmPassword" style="width: 100%; padding: 10px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 14px;">
+        </div>
+
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button onclick="window.closeChangePasswordModal()" style="padding: 10px 20px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); cursor: pointer; font-size: 14px;">Cancel</button>
+            <button onclick="window.submitPasswordChange()" style="padding: 10px 20px; background: var(--accent-success); border: none; border-radius: 6px; color: white; cursor: pointer; font-size: 14px; font-weight: 600;">Change Password</button>
+        </div>
+    `;
+
+    modal.appendChild(modalContent);
+
+    // Close on background click
+    modal.onclick = (e) => {
+        if (e.target === modal) {
+            closeChangePasswordModal();
+        }
+    };
+
+    return modal;
+}
+
+/**
+ * Submit password change
+ */
+async function submitPasswordChange() {
+    const currentPassword = document.getElementById('currentPassword').value;
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    const errorDiv = document.getElementById('passwordError');
+
+    // Validation
+    if (!currentPassword || !newPassword || !confirmPassword) {
+        errorDiv.textContent = 'All fields are required';
+        errorDiv.style.display = 'block';
+        return;
+    }
+
+    if (newPassword.length < 8) {
+        errorDiv.textContent = 'New password must be at least 8 characters';
+        errorDiv.style.display = 'block';
+        return;
+    }
+
+    if (newPassword !== confirmPassword) {
+        errorDiv.textContent = 'New passwords do not match';
+        errorDiv.style.display = 'block';
+        return;
+    }
+
+    if (newPassword === currentPassword) {
+        errorDiv.textContent = 'New password must be different from current password';
+        errorDiv.style.display = 'block';
+        return;
+    }
+
+    try {
+        const token = localStorage.getItem('abct_token');
+        const response = await fetch('/auth/change-password', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                current_password: currentPassword,
+                new_password: newPassword
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            errorDiv.textContent = data.detail || 'Password change failed';
+            errorDiv.style.display = 'block';
+            return;
+        }
+
+        // Success
+        alert('Password changed successfully! You can now use your new password to login.');
+        closeChangePasswordModal();
+
+    } catch (error) {
+        console.error('Password change error:', error);
+        errorDiv.textContent = 'Connection error. Please try again.';
+        errorDiv.style.display = 'block';
+    }
+}
+
 // Export functions for use in other scripts
 window.checkAuth = checkAuth;
 window.logout = logout;
 window.getCurrentUsername = getCurrentUsername;
 window.addLogoutButton = addLogoutButton;
 window.initAuth = initAuth;
+window.showChangePasswordModal = showChangePasswordModal;
+window.closeChangePasswordModal = closeChangePasswordModal;
+window.submitPasswordChange = submitPasswordChange;

@@ -50,6 +50,13 @@ class LoginResponse(BaseModel):
     success: bool
     token: Optional[str] = None
     message: Optional[str] = None
+    should_change_password: bool = False
+
+
+class ChangePasswordRequest(BaseModel):
+    """Change password request model"""
+    current_password: str
+    new_password: str
 
 
 class TokenVerifyResponse(BaseModel):
@@ -70,11 +77,21 @@ async def init_auth_tables():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
+                password_changed BOOLEAN DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
         await db.commit()
+
+        # Add password_changed column if it doesn't exist (migration)
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN password_changed BOOLEAN DEFAULT 0")
+            await db.commit()
+            logger.info("Added password_changed column to users table")
+        except Exception:
+            # Column already exists
+            pass
 
         # Check if admin user exists
         async with db.execute("SELECT COUNT(*) FROM users WHERE username = 'admin'") as cursor:
@@ -183,6 +200,17 @@ async def login(request: LoginRequest):
             message="Invalid username or password"
         )
 
+    # Check if user should change password
+    should_change_password = False
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        async with db.execute(
+            "SELECT password_changed FROM users WHERE username = ?",
+            (request.username,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            if row and not row[0]:  # password_changed is False/0
+                should_change_password = True
+
     # Create session token
     token = create_session_token()
     expires = datetime.utcnow() + timedelta(minutes=SESSION_TIMEOUT_MINUTES)
@@ -196,7 +224,8 @@ async def login(request: LoginRequest):
     return LoginResponse(
         success=True,
         token=token,
-        message="Login successful"
+        message="Login successful",
+        should_change_password=should_change_password
     )
 
 
@@ -251,6 +280,57 @@ async def logout(token: Optional[str] = None):
         del active_sessions[token]
 
     return {"success": True, "message": "Logged out successfully"}
+
+
+@router.post("/change-password")
+async def change_password(
+    request: ChangePasswordRequest,
+    authorization: Optional[str] = Header(None)
+):
+    """
+    Change password endpoint - allows authenticated users to change their password.
+
+    Args:
+        request: Current password and new password
+        authorization: Bearer token from Authorization header
+
+    Returns:
+        Success message
+    """
+    # Verify user is authenticated
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    token = authorization[7:]
+    session_data = active_sessions.get(token)
+
+    if not session_data:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+    username = session_data['username']
+
+    # Verify current password
+    if not await verify_password(username, request.current_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    # Validate new password
+    if len(request.new_password) < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
+
+    if request.new_password == request.current_password:
+        raise HTTPException(status_code=400, detail="New password must be different from current password")
+
+    # Update password
+    password_hash = bcrypt.hashpw(request.new_password.encode('utf-8'), bcrypt.gensalt())
+
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute(
+            "UPDATE users SET password_hash = ?, password_changed = 1, updated_at = ? WHERE username = ?",
+            (password_hash.decode('utf-8'), datetime.utcnow(), username)
+        )
+        await db.commit()
+
+    return {"success": True, "message": "Password changed successfully"}
 
 
 @router.get("/status")
