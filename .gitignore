@@ -93,6 +93,9 @@ sec/audit_report*.json
 data/nft_images/
 data/cache/
 
+# Demo NFT images (generated, not committed)
+frontend/demo-nfts/
+
 # SSL certificates (never commit private keys!)
 *.key
 *.pem
