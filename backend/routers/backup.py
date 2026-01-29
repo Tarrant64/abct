@@ -22,7 +22,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database import get_db
-from middleware.auth import verify_admin
+from routers.auth import verify_session
 
 router = APIRouter(prefix="/backup", tags=["backup"])
 
@@ -92,7 +92,7 @@ class PreviewResponse(BaseModel):
     compatible: bool = True
 
 
-@router.post("/export", dependencies=[Depends(verify_admin)])
+@router.post("/export", dependencies=[Depends(verify_session)])
 async def export_backup(options: BackupOptions):
     """
     Export all user configurations to a JSON backup file.
@@ -176,7 +176,7 @@ async def export_backup(options: BackupOptions):
         raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
 
 
-@router.post("/preview", dependencies=[Depends(verify_admin)])
+@router.post("/preview", dependencies=[Depends(verify_session)])
 async def preview_import(options: ImportOptions) -> PreviewResponse:
     """
     Preview what will be imported from a backup file (dry-run).
@@ -316,7 +316,7 @@ async def preview_import(options: ImportOptions) -> PreviewResponse:
         )
 
 
-@router.post("/import", dependencies=[Depends(verify_admin)])
+@router.post("/import", dependencies=[Depends(verify_session)])
 async def import_backup(options: ImportOptions):
     """
     Import configurations from a backup file.
@@ -491,7 +491,7 @@ async def get_backup_info():
         raise HTTPException(status_code=500, detail=f"Failed to get backup info: {str(e)}")
 
 
-@router.get("/export-env", dependencies=[Depends(verify_admin)])
+@router.get("/export-env", dependencies=[Depends(verify_session)])
 async def export_env_file():
     """
     Export .env file contents for backup.
@@ -559,7 +559,7 @@ async def export_env_file():
         raise HTTPException(status_code=500, detail=f"Failed to export .env file: {str(e)}")
 
 
-@router.post("/import-env", dependencies=[Depends(verify_admin)])
+@router.post("/import-env", dependencies=[Depends(verify_session)])
 async def import_env_file(env_content: str):
     """
     Import .env file contents (preview only - doesn't write to disk).
