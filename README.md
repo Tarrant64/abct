@@ -73,9 +73,9 @@ ABCT includes a login page to protect your portfolio data. Use these credentials
 - **Username**: `admin`
 - **Password**: `satoshi`
 
-**⚠️ IMPORTANT**: Change the default password after first login! See [Password Reset Guide](PASSWORD_RESET_GUIDE.md) for instructions.
+**⚠️ IMPORTANT**: Change the default password after first login! See [Password Reset Guide](docs/guides/PASSWORD_RESET_GUIDE.md) for instructions.
 
-**Forgot your password?** See [PASSWORD_RESET_GUIDE.md](PASSWORD_RESET_GUIDE.md) for reset instructions.
+**Forgot your password?** See [Password Reset Guide](docs/guides/PASSWORD_RESET_GUIDE.md) for reset instructions.
 
 ## 🚀 Quick Start
 
@@ -459,7 +459,7 @@ Built with amazing open-source tools and data from leading blockchain API provid
 ### Privacy & Blockchain Innovation
 - [Midnight Network](https://midnight.network/) - Privacy-focused Cardano partner chain (NIGHT token support)
 
-For detailed API information including rate limits and pricing, see [API_PROVIDERS.md](API_PROVIDERS.md).
+For detailed API information including rate limits and pricing, see [API Providers Guide](docs/API_PROVIDERS.md).
 
 ## 🔗 Links
 
