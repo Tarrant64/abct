@@ -60,6 +60,9 @@ class TokenVerifyResponse(BaseModel):
 
 async def init_auth_tables():
     """Initialize authentication tables in database"""
+    import logging
+    logger = logging.getLogger(__name__)
+
     async with aiosqlite.connect(DATABASE_PATH) as db:
         # Users table
         await db.execute("""
@@ -71,14 +74,18 @@ async def init_auth_tables():
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        await db.commit()
 
         # Check if admin user exists
         async with db.execute("SELECT COUNT(*) FROM users WHERE username = 'admin'") as cursor:
             count = await cursor.fetchone()
 
+        logger.info(f"Admin user check: {count[0]} users found with username 'admin'")
+
         if count[0] == 0:
             # Create default admin user
             default_password = os.getenv("ABCT_ADMIN_PASSWORD", "satoshi")
+            logger.info(f"Creating default admin user with password from env (using default: {'satoshi'})")
             password_hash = bcrypt.hashpw(default_password.encode('utf-8'), bcrypt.gensalt())
 
             await db.execute(
@@ -86,6 +93,9 @@ async def init_auth_tables():
                 ("admin", password_hash.decode('utf-8'))
             )
             await db.commit()
+            logger.info("Default admin user created successfully")
+        else:
+            logger.info("Admin user already exists, skipping creation")
 
 
 async def verify_password(username: str, password: str) -> bool:
@@ -253,10 +263,21 @@ async def auth_status():
     """
     clean_expired_sessions()
 
+    # Check if admin user exists in database
+    user_count = 0
+    try:
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            async with db.execute("SELECT COUNT(*) FROM users") as cursor:
+                row = await cursor.fetchone()
+                user_count = row[0] if row else 0
+    except Exception as e:
+        user_count = f"Error: {e}"
+
     return {
         "enabled": True,
         "active_sessions": len(active_sessions),
         "session_timeout_minutes": SESSION_TIMEOUT_MINUTES,
+        "users_in_database": user_count,
         "default_credentials": {
             "username": "admin",
             "password": "satoshi (change on first login)"
