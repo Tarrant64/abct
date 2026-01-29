@@ -2885,6 +2885,12 @@ async function refreshBalances() {
 async function addWallet(event) {
     event.preventDefault();
 
+    // Check if demo mode
+    if (window.isDemoMode && window.isDemoMode()) {
+        window.showDemoModeAlert();
+        return;
+    }
+
     const address = document.getElementById('walletAddress').value.trim();
     const label = document.getElementById('walletLabel').value.trim();
 
@@ -2987,6 +2993,12 @@ async function editWalletLabel(address, button) {
 
 // Delete wallet
 async function deleteWallet(address) {
+    // Check if demo mode
+    if (window.isDemoMode && window.isDemoMode()) {
+        window.showDemoModeAlert();
+        return;
+    }
+
     // Confirm deletion
     const shortAddress = address.length > 20 ? address.slice(0, 10) + '...' + address.slice(-10) : address;
     if (!confirm(`Are you sure you want to delete this wallet?\n\n${shortAddress}\n\nThis will remove it from tracking and from wallets.txt.`)) {
@@ -3641,6 +3653,12 @@ function getNftImageUrl(nft, chain) {
 
 // Sync Cardano NFT floor prices from the external Cardano NFT Price Service
 async function syncNFTPrices() {
+    // Check if demo mode
+    if (window.isDemoMode && window.isDemoMode()) {
+        window.showDemoModeAlert();
+        return;
+    }
+
     const btn = document.querySelector('.btn-sync-prices');
     if (btn) {
         btn.disabled = true;
@@ -4650,6 +4668,12 @@ function closeTokenModal() {
 
 // Submit manual token from modal
 async function submitManualToken() {
+    // Check if demo mode
+    if (window.isDemoMode && window.isDemoMode()) {
+        window.showDemoModeAlert();
+        return;
+    }
+
     const chain = document.getElementById('modalChainSelect').value;
     const policyId = document.getElementById('modalPolicyId').value.trim();
     const quantity = document.getElementById('modalQuantity').value.trim();
@@ -4926,6 +4950,12 @@ async function toggleCustomTokenTracking(tokenId, include, tokenValue) {
 
 // Delete a custom token
 async function deleteCustomToken(tokenId) {
+    // Check if demo mode
+    if (window.isDemoMode && window.isDemoMode()) {
+        window.showDemoModeAlert();
+        return;
+    }
+
     if (!confirm('Are you sure you want to remove this token?')) {
         return;
     }

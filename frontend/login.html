@@ -14,7 +14,7 @@
             align-items: center;
             justify-content: center;
             min-height: 100vh;
-            background: var(--bg-primary);
+            background: #000000;
             padding: 20px;
         }
 
@@ -31,6 +31,14 @@
         .login-header {
             text-align: center;
             margin-bottom: 30px;
+        }
+
+        .login-header img {
+            max-width: 280px;
+            width: 100%;
+            height: auto;
+            margin: 0 auto;
+            display: block;
         }
 
         .login-header h1 {
@@ -188,8 +196,7 @@
     <div class="login-container">
         <div class="login-card">
             <div class="login-header">
-                <h1>ABCT Login</h1>
-                <p>A Better Crypto Tracker</p>
+                <img src="/abct-logo2.png" alt="ABCT - A Better Crypto Tracker">
             </div>
 
             <div id="errorMessage" class="error-message"></div>
@@ -235,6 +242,16 @@
                 <p style="margin-top: 12px; font-size: 11px;">
                     Change password after first login
                 </p>
+                <div style="margin-top: 20px; padding: 12px; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px;">
+                    <p style="margin: 0; color: #f59e0b; font-size: 13px;">
+                        <span style="font-size: 16px;">🎭</span> <strong>Try Demo Mode:</strong><br>
+                        Username: <code style="background: rgba(245, 158, 11, 0.2); color: #f59e0b;">demo</code><br>
+                        Password: <code style="background: rgba(245, 158, 11, 0.2); color: #f59e0b;">demo</code>
+                    </p>
+                    <p style="margin: 8px 0 0 0; font-size: 11px; color: #d97706;">
+                        View simulated portfolio data
+                    </p>
+                </div>
             </div>
         </div>
 
@@ -316,6 +333,13 @@
                     localStorage.setItem('abct_token', data.token);
                     localStorage.setItem('abct_username', username);
 
+                    // Check if this is demo account
+                    if (username.toLowerCase() === 'demo') {
+                        localStorage.setItem('is_demo', 'true');
+                    } else {
+                        localStorage.removeItem('is_demo');
+                    }
+
                     // Check if password change is required
                     if (data.should_change_password) {
                         localStorage.setItem('abct_prompt_password_change', 'true');
@@ -338,8 +362,13 @@
         });
 
         // Auto-fill default credentials on Ctrl+D (for development)
+        // Auto-fill demo credentials on Ctrl+Shift+D
         document.addEventListener('keydown', (e) => {
-            if (e.ctrlKey && e.key === 'd') {
+            if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+                e.preventDefault();
+                document.getElementById('username').value = 'demo';
+                document.getElementById('password').value = 'demo';
+            } else if (e.ctrlKey && e.key === 'd') {
                 e.preventDefault();
                 document.getElementById('username').value = 'admin';
                 document.getElementById('password').value = 'satoshi';
@@ -350,6 +379,7 @@
         if (window.location.search.includes('logout=1')) {
             localStorage.removeItem('abct_token');
             localStorage.removeItem('abct_username');
+            localStorage.removeItem('is_demo');
         }
     </script>
 </body>
