@@ -371,22 +371,51 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
-Built with amazing open-source tools:
+Built with amazing open-source tools and data from leading blockchain API providers:
 
-- **Backend**
-  - [FastAPI](https://fastapi.tiangolo.com/) - Modern Python web framework
-  - [APScheduler](https://apscheduler.readthedocs.io/) - Background task scheduling
-  - [SQLite](https://www.sqlite.org/) - Embedded database
+### Backend Framework
+- [FastAPI](https://fastapi.tiangolo.com/) - Modern Python web framework
+- [APScheduler](https://apscheduler.readthedocs.io/) - Background task scheduling
+- [SQLite](https://www.sqlite.org/) - Embedded database
+- [HTTPX](https://www.python-httpx.org/) - Async HTTP client
 
-- **Frontend**
-  - [Chart.js](https://www.chartjs.org/) - Interactive charting library
-  - [DOMPurify](https://github.com/cure53/DOMPurify) - XSS sanitization
+### Frontend Libraries
+- [Chart.js](https://www.chartjs.org/) - Interactive charting
+- [DOMPurify](https://github.com/cure53/DOMPurify) - XSS sanitization
 
-- **APIs & Services**
-  - [Blockfrost](https://blockfrost.io/) - Cardano blockchain data
-  - [TapTools](https://www.taptools.io/) - Cardano NFT floor prices
-  - [CoinGecko](https://www.coingecko.com/) - Cryptocurrency price aggregation
-  - [Coinbase](https://www.coinbase.com/) - Exchange integration
+### Blockchain Data Providers
+
+#### Cardano Network
+- [Blockfrost](https://blockfrost.io/) - Primary Cardano blockchain API (addresses, transactions, assets, staking)
+- [TapTools](https://www.taptools.io/) - Cardano NFT floor price data and token analytics
+- [CExplorer](https://cexplorer.io/) - Cardano staking positions and DeFi data
+- [Koios](https://koios.rest/) - Free Cardano API (metadata fallback)
+
+#### Ethereum & EVM Chains
+- [Alchemy](https://www.alchemy.com/) - Multi-chain infrastructure (Ethereum, Polygon, Base, Optimism)
+- [Etherscan](https://etherscan.io/) - Ethereum blockchain explorer API
+- [Basescan](https://basescan.org/) - Base blockchain explorer API
+- [Polygonscan](https://polygonscan.com/) - Polygon blockchain explorer API
+
+#### Solana Network
+- [Helius](https://www.helius.dev/) - Solana blockchain API and RPC
+
+#### Bitcoin Network
+- [Blockstream](https://blockstream.info/) - Bitcoin blockchain data (free, no API key required)
+
+#### Pricing & Market Data
+- [CoinGecko](https://www.coingecko.com/) - Cryptocurrency price aggregation and market data
+- [CoinMarketCap](https://coinmarketcap.com/) - Alternative cryptocurrency price data
+- [Coinbase](https://www.coinbase.com/) - Spot price data (public API)
+- [DefiLlama](https://defillama.com/) - Universal price fallback for all chains
+
+#### Exchange Integration
+- [Coinbase CDP](https://www.coinbase.com/cloud) - Exchange API for portfolio balances
+
+### Privacy & Blockchain Innovation
+- [Midnight Network](https://midnight.network/) - Privacy-focused Cardano partner chain (NIGHT token support)
+
+For detailed API information including rate limits and pricing, see [API_PROVIDERS.md](API_PROVIDERS.md).
 
 ## 🔗 Links
 
@@ -397,5 +426,5 @@ Built with amazing open-source tools:
 
 ---
 
-**Current Version:** v0.10.0 (BUILD 1769575984)
+**Current Version:** v0.10.0 (BUILD 1769645761)
 **Last Updated:** January 2026
