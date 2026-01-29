@@ -6,7 +6,7 @@
     <title>ABCT Login</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1769649627">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1769653325">
     <style>
         /* Login-specific styles */
         .login-container {
@@ -237,11 +237,16 @@
                 </p>
             </div>
         </div>
+
+        <!-- Version footer (bottom right) -->
+        <div style="position: fixed; bottom: 10px; right: 10px; color: var(--text-secondary); font-size: 11px; opacity: 0.6;">
+            Build <span id="versionNumber"></span>
+        </div>
     </div>
 
     <script>
         // Build version
-        const BUILD_VERSION = 'v1769649627';
+        const BUILD_VERSION = 'v1769653325';
 
         // Theme handling
         function initTheme() {
@@ -251,6 +256,11 @@
 
         // Initialize theme on page load
         initTheme();
+
+        // Display build version
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('versionNumber').textContent = BUILD_VERSION;
+        });
 
         // Show error message
         function showError(message) {

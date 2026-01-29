@@ -4,7 +4,7 @@
  * Provides client-side authentication checking for protected pages.
  * Verifies session tokens and redirects to login if unauthorized.
  *
- * Build: v1769649627
+ * Build: v1769653325
  */
 
 // Authentication state
