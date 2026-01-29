@@ -97,6 +97,10 @@ The dashboard provides a comprehensive view of your crypto portfolio:
 - **Exchange Holdings**: See balances from connected exchanges
 - **NFT Gallery**: Browse collections with floor price estimates
 
+<img width="2440" height="1612" alt="image" src="https://github.com/user-attachments/assets/36b98266-97c3-404c-9b0d-6e2d925ae5df" />
+<img width="2996" height="1650" alt="image" src="https://github.com/user-attachments/assets/073a6537-e012-469c-b163-91090ec375c2" />
+
+
 ## Requirements
 
 - Python 3.9 or higher
