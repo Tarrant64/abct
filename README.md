@@ -66,6 +66,17 @@ For more details, see [SECURITY.md](SECURITY.md)
 - **Optional HTTPS**: SSL/TLS encryption support
 - **Secure Logging**: Audit trails with sensitive data redaction
 
+## 🔐 Default Login Credentials
+
+ABCT includes a login page to protect your portfolio data. Use these credentials on first access:
+
+- **Username**: `admin`
+- **Password**: `satoshi`
+
+**⚠️ IMPORTANT**: Change the default password after first login! See [Password Reset Guide](PASSWORD_RESET_GUIDE.md) for instructions.
+
+**Forgot your password?** See [PASSWORD_RESET_GUIDE.md](PASSWORD_RESET_GUIDE.md) for reset instructions.
+
 ## 🚀 Quick Start
 
 ABCT works on any Docker-capable system including Linux servers, NAS devices (TrueNAS, Synology, Unraid), and desktop environments.
