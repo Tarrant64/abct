@@ -18,8 +18,11 @@ from services.solana import solana_service
 from services.polygon import polygon_service
 from services.base import base_service
 from services.logging_service import get_logging_service
+from services.demo_wallet_service import demo_wallet_service
 from utils.address import parse_wallets_file, detect_blockchain, is_bitcoin_xpub, get_xpub_type
 from config import WALLETS_FILE, DATA_DIR
+from middleware.demo_mode import is_demo_user
+from auth_utils import verify_session
 
 
 def append_to_wallets_file(address: str, label: Optional[str] = None) -> bool:
@@ -90,9 +93,18 @@ class WalletResponse(BaseModel):
     native_assets: Optional[list] = None
 
 @router.get("")
-async def list_wallets():
+async def list_wallets(username: str = Depends(verify_session)):
     """List all tracked wallets with their current balances and stake keys."""
     log_service = get_logging_service()
+
+    # Check if demo user - return fake data
+    if await is_demo_user(username):
+        demo_wallets = await demo_wallet_service.get_all_wallets()
+        return {
+            "wallets": demo_wallets,
+            "total": len(demo_wallets),
+            "demo_mode": True
+        }
 
     try:
         wallets = await get_all_wallets()

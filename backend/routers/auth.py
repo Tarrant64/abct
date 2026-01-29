@@ -78,6 +78,7 @@ async def init_auth_tables():
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 password_changed BOOLEAN DEFAULT 0,
+                is_demo BOOLEAN DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -89,6 +90,15 @@ async def init_auth_tables():
             await db.execute("ALTER TABLE users ADD COLUMN password_changed BOOLEAN DEFAULT 0")
             await db.commit()
             logger.info("Added password_changed column to users table")
+        except Exception:
+            # Column already exists
+            pass
+
+        # Add is_demo column if it doesn't exist (migration)
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN is_demo BOOLEAN DEFAULT 0")
+            await db.commit()
+            logger.info("Added is_demo column to users table")
         except Exception:
             # Column already exists
             pass
@@ -106,13 +116,38 @@ async def init_auth_tables():
             password_hash = bcrypt.hashpw(default_password.encode('utf-8'), bcrypt.gensalt())
 
             await db.execute(
-                "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-                ("admin", password_hash.decode('utf-8'))
+                "INSERT INTO users (username, password_hash, is_demo) VALUES (?, ?, ?)",
+                ("admin", password_hash.decode('utf-8'), 0)
             )
             await db.commit()
             logger.info("Default admin user created successfully")
         else:
             logger.info("Admin user already exists, skipping creation")
+
+        # Check if demo user exists
+        async with db.execute("SELECT COUNT(*) FROM users WHERE username = 'demo'") as cursor:
+            count = await cursor.fetchone()
+
+        logger.info(f"Demo user check: {count[0]} users found with username 'demo'")
+
+        if count[0] == 0:
+            # Create demo user (username: demo, password: demo)
+            logger.info("Creating demo user account")
+            password_hash = bcrypt.hashpw("demo".encode('utf-8'), bcrypt.gensalt())
+
+            await db.execute(
+                "INSERT INTO users (username, password_hash, password_changed, is_demo) VALUES (?, ?, ?, ?)",
+                ("demo", password_hash.decode('utf-8'), 1, 1)  # password_changed=1, is_demo=1
+            )
+            await db.commit()
+            logger.info("Demo user created successfully (username: demo, password: demo)")
+        else:
+            # Ensure existing demo user has is_demo flag set
+            await db.execute(
+                "UPDATE users SET is_demo = 1 WHERE username = 'demo'",
+            )
+            await db.commit()
+            logger.info("Demo user already exists, ensured is_demo flag is set")
 
 
 async def verify_password(username: str, password: str) -> bool:
@@ -200,16 +235,20 @@ async def login(request: LoginRequest):
             message="Invalid username or password"
         )
 
-    # Check if user should change password
+    # Check if user should change password and if demo user
     should_change_password = False
+    is_demo = False
     async with aiosqlite.connect(DATABASE_PATH) as db:
         async with db.execute(
-            "SELECT password_changed FROM users WHERE username = ?",
+            "SELECT password_changed, is_demo FROM users WHERE username = ?",
             (request.username,)
         ) as cursor:
             row = await cursor.fetchone()
-            if row and not row[0]:  # password_changed is False/0
-                should_change_password = True
+            if row:
+                if not row[0]:  # password_changed is False/0
+                    should_change_password = True
+                if row[1]:  # is_demo is True/1
+                    is_demo = True
 
     # Create session token
     token = create_session_token()
@@ -218,7 +257,8 @@ async def login(request: LoginRequest):
     active_sessions[token] = {
         'username': request.username,
         'expires': expires,
-        'created_at': datetime.utcnow()
+        'created_at': datetime.utcnow(),
+        'is_demo': is_demo
     }
 
     return LoginResponse(
@@ -361,7 +401,48 @@ async def auth_status():
         "default_credentials": {
             "username": "admin",
             "password": "satoshi (change on first login)"
+        },
+        "demo_account": {
+            "username": "demo",
+            "password": "demo",
+            "description": "Demo account with fake data (no real API calls)"
         }
+    }
+
+
+@router.get("/demo-status")
+async def get_demo_status(authorization: Optional[str] = Header(None)):
+    """
+    Get demo mode status for current user.
+
+    Args:
+        authorization: Authorization header value (Bearer token)
+
+    Returns:
+        Demo mode status
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        return {
+            "authenticated": False,
+            "is_demo": False
+        }
+
+    token = authorization[7:]
+    session_data = active_sessions.get(token)
+
+    if not session_data:
+        return {
+            "authenticated": False,
+            "is_demo": False
+        }
+
+    is_demo = session_data.get('is_demo', False)
+
+    return {
+        "authenticated": True,
+        "username": session_data['username'],
+        "is_demo": is_demo,
+        "message": "Demo mode active - all data is fake" if is_demo else "Normal mode - using real data"
     }
 
 

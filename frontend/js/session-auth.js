@@ -44,6 +44,7 @@ async function checkAuth() {
             // Token is invalid or expired
             localStorage.removeItem('abct_token');
             localStorage.removeItem('abct_username');
+            localStorage.removeItem('is_demo');
             redirectToLogin();
             return false;
         }
@@ -94,6 +95,7 @@ async function logout() {
     // Clear local storage
     localStorage.removeItem('abct_token');
     localStorage.removeItem('abct_username');
+    localStorage.removeItem('is_demo');
 
     // Redirect to login
     window.location.href = '/login.html?logout=1';
@@ -106,6 +108,15 @@ async function logout() {
  */
 function getCurrentUsername() {
     return localStorage.getItem('abct_username');
+}
+
+/**
+ * Check if current user is demo account
+ *
+ * @returns {boolean} True if demo mode, false otherwise
+ */
+function isDemoMode() {
+    return localStorage.getItem('is_demo') === 'true';
 }
 
 /**
@@ -157,7 +168,7 @@ function addLogoutButton() {
         z-index: 1000;
     `;
 
-    // Change Password option
+    // Change Password option (hide for demo mode)
     const changePasswordBtn = document.createElement('button');
     changePasswordBtn.className = 'admin-menu-item';
     changePasswordBtn.textContent = 'Change Password';
@@ -176,6 +187,10 @@ function addLogoutButton() {
     changePasswordBtn.onmouseout = () => changePasswordBtn.style.background = 'none';
     changePasswordBtn.onclick = () => {
         toggleAdminMenu();
+        if (isDemoMode()) {
+            alert('Cannot change password in demo mode');
+            return;
+        }
         showChangePasswordModal();
     };
 
@@ -202,7 +217,10 @@ function addLogoutButton() {
         logout();
     };
 
-    dropdown.appendChild(changePasswordBtn);
+    // Only add change password button if not in demo mode
+    if (!isDemoMode()) {
+        dropdown.appendChild(changePasswordBtn);
+    }
     dropdown.appendChild(logoutBtn);
     adminContainer.appendChild(adminBtn);
     adminContainer.appendChild(dropdown);
@@ -274,8 +292,14 @@ async function initAuth() {
         // Add admin dropdown to navigation
         addLogoutButton();
 
-        // Check if we should prompt for password change
-        if (localStorage.getItem('abct_prompt_password_change') === 'true') {
+        // Add demo mode banner if in demo mode
+        if (isDemoMode()) {
+            addDemoBanner();
+            applyDemoRestrictions();
+        }
+
+        // Check if we should prompt for password change (skip for demo)
+        if (!isDemoMode() && localStorage.getItem('abct_prompt_password_change') === 'true') {
             // Remove the flag
             localStorage.removeItem('abct_prompt_password_change');
 
@@ -465,12 +489,221 @@ async function submitPasswordChange() {
     }
 }
 
+/**
+ * Add demo mode banner to page
+ */
+function addDemoBanner() {
+    // Check if banner already exists
+    if (document.getElementById('demoBanner')) return;
+
+    const banner = document.createElement('div');
+    banner.id = 'demoBanner';
+    banner.style.cssText = `
+        position: sticky;
+        top: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        color: #000;
+        padding: 12px 20px;
+        text-align: center;
+        font-weight: 600;
+        font-size: 14px;
+        z-index: 9999;
+        box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+        border-bottom: 2px solid #b45309;
+    `;
+    banner.innerHTML = `
+        <span style="font-size: 18px; margin-right: 8px;">🎭</span>
+        DEMO MODE - All data is simulated for demonstration purposes
+        <span style="font-size: 18px; margin-left: 8px;">🎭</span>
+    `;
+
+    // Insert at the very top of the body
+    document.body.insertBefore(banner, document.body.firstChild);
+}
+
+/**
+ * Apply demo mode restrictions to the page
+ */
+function applyDemoRestrictions() {
+    // Wait for DOM to be ready
+    setTimeout(() => {
+        // Disable all "Add" and modification buttons
+        const buttons = document.querySelectorAll('button, a, input[type="submit"]');
+        buttons.forEach(btn => {
+            const text = btn.textContent.toLowerCase();
+            const id = btn.id ? btn.id.toLowerCase() : '';
+            const classList = btn.className ? btn.className.toLowerCase() : '';
+
+            // Check if this is a button that should be disabled in demo mode
+            const shouldDisable =
+                text.includes('add wallet') || text.includes('add exchange') ||
+                text.includes('add token') || text.includes('add api') ||
+                text.includes('create backup') || text.includes('restore') ||
+                text.includes('import') || text.includes('export backup') ||
+                text.includes('save') && (classList.includes('btn') || btn.type === 'submit') ||
+                text.includes('delete') || text.includes('remove') ||
+                text.includes('update') && (classList.includes('btn') || btn.type === 'submit') ||
+                id.includes('addwallet') || id.includes('addexchange') ||
+                id.includes('saveapi') || id.includes('deleteapi') ||
+                classList.includes('btn-add') || classList.includes('btn-save') ||
+                classList.includes('btn-delete');
+
+            if (shouldDisable) {
+                btn.disabled = true;
+                btn.style.opacity = '0.5';
+                btn.style.cursor = 'not-allowed';
+                btn.title = 'Disabled in demo mode - This is simulated data';
+
+                // Add click handler to show message
+                const handleClick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    showDemoModeAlert();
+                    return false;
+                };
+
+                // Remove existing listeners and add new one
+                btn.onclick = handleClick;
+                btn.addEventListener('click', handleClick, true);
+            }
+        });
+
+        // Make form inputs readonly in certain contexts (but not search/filter)
+        const inputs = document.querySelectorAll('input[type="text"], input[type="password"], textarea, input[type="number"]');
+        inputs.forEach(input => {
+            const placeholder = input.placeholder ? input.placeholder.toLowerCase() : '';
+            const id = input.id ? input.id.toLowerCase() : '';
+
+            // Don't disable search/filter inputs
+            if (placeholder.includes('search') || placeholder.includes('filter') ||
+                id.includes('search') || id.includes('filter')) {
+                return;
+            }
+
+            // Make inputs in forms readonly (for editing)
+            const parentForm = input.closest('form');
+            const parentModal = input.closest('.modal');
+
+            if (parentForm || parentModal) {
+                input.readOnly = true;
+                input.style.opacity = '0.7';
+                input.style.cursor = 'not-allowed';
+                input.title = 'Read-only in demo mode';
+
+                // Add click handler
+                input.addEventListener('click', (e) => {
+                    showDemoModeAlert();
+                });
+            }
+        });
+
+        // Add demo tooltips to data displays
+        const dataElements = document.querySelectorAll('.balance, .wallet-card, .exchange-card, .summary-card');
+        dataElements.forEach(elem => {
+            if (!elem.title || elem.title === '') {
+                elem.title = 'This is simulated data for demonstration purposes';
+            }
+        });
+
+        // Check if we're on backup page and add specific notice
+        if (window.location.pathname.includes('backup.html')) {
+            addBackupDemoNotice();
+        }
+
+        // Check if we're on security page
+        if (window.location.pathname.includes('security.html')) {
+            addSecurityDemoNotice();
+        }
+    }, 500);
+}
+
+/**
+ * Show demo mode alert
+ */
+function showDemoModeAlert() {
+    alert('This feature is disabled in demo mode.\n\nAll data shown is simulated for demonstration purposes.');
+}
+
+/**
+ * Add demo notice to backup page
+ */
+function addBackupDemoNotice() {
+    const backupManager = document.querySelector('.backup-manager');
+    if (!backupManager || document.getElementById('demoBackupNotice')) return;
+
+    const notice = document.createElement('div');
+    notice.id = 'demoBackupNotice';
+    notice.style.cssText = `
+        background: rgba(245, 158, 11, 0.15);
+        border: 2px solid #f59e0b;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 25px;
+        color: #f59e0b;
+    `;
+    notice.innerHTML = `
+        <h3 style="margin: 0 0 10px 0; font-size: 16px;">
+            <span style="font-size: 20px;">🎭</span> Demo Mode - Backup Disabled
+        </h3>
+        <p style="margin: 0; font-size: 14px; color: #888;">
+            Backup and restore features are disabled in demo mode.
+            This account uses simulated data for demonstration purposes.
+        </p>
+    `;
+
+    // Insert after header
+    const header = backupManager.querySelector('.backup-header');
+    if (header) {
+        header.parentNode.insertBefore(notice, header.nextSibling);
+    }
+}
+
+/**
+ * Add demo notice to security page
+ */
+function addSecurityDemoNotice() {
+    const securityManager = document.querySelector('.security-manager');
+    if (!securityManager || document.getElementById('demoSecurityNotice')) return;
+
+    const notice = document.createElement('div');
+    notice.id = 'demoSecurityNotice';
+    notice.style.cssText = `
+        background: rgba(245, 158, 11, 0.15);
+        border: 2px solid #f59e0b;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 25px;
+        color: #f59e0b;
+    `;
+    notice.innerHTML = `
+        <h3 style="margin: 0 0 10px 0; font-size: 16px;">
+            <span style="font-size: 20px;">🎭</span> Demo Mode - Settings Read-Only
+        </h3>
+        <p style="margin: 0; font-size: 14px; color: #888;">
+            Security settings cannot be modified in demo mode.
+            This account uses default demonstration settings.
+        </p>
+    `;
+
+    // Insert after header
+    const header = securityManager.querySelector('.security-header');
+    if (header) {
+        header.parentNode.insertBefore(notice, header.nextSibling);
+    }
+}
+
 // Export functions for use in other scripts
 window.checkAuth = checkAuth;
 window.logout = logout;
 window.getCurrentUsername = getCurrentUsername;
+window.isDemoMode = isDemoMode;
 window.addLogoutButton = addLogoutButton;
 window.initAuth = initAuth;
 window.showChangePasswordModal = showChangePasswordModal;
 window.closeChangePasswordModal = closeChangePasswordModal;
 window.submitPasswordChange = submitPasswordChange;
+window.addDemoBanner = addDemoBanner;
+window.applyDemoRestrictions = applyDemoRestrictions;
+window.showDemoModeAlert = showDemoModeAlert;

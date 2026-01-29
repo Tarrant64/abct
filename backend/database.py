@@ -2,21 +2,181 @@ import aiosqlite
 from datetime import datetime, timedelta
 from pathlib import Path
 from config import DATABASE_PATH
+from typing import Optional
+
+# ============================================================================
+# MULTI-USER CONTEXT
+# ============================================================================
+
+# Global context for current user (set by auth middleware)
+_current_user_id: Optional[int] = None
+
+
+def set_current_user_id(user_id: Optional[int]):
+    """Set the current user ID from auth context."""
+    global _current_user_id
+    _current_user_id = user_id
+
+
+def get_current_user_id() -> Optional[int]:
+    """Get the current user ID from context.
+
+    Returns:
+        User ID if authenticated, None otherwise
+    """
+    return _current_user_id
+
+
+async def get_user_id_by_username(username: str) -> Optional[int]:
+    """Get user ID by username.
+
+    Args:
+        username: Username to look up
+
+    Returns:
+        User ID if found, None otherwise
+    """
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute(
+            "SELECT id FROM users WHERE username = ?",
+            (username,)
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+
+async def _check_column_exists(db, table_name: str, column_name: str) -> bool:
+    """Check if a column exists in a table."""
+    cursor = await db.execute(f"PRAGMA table_info({table_name})")
+    columns = await cursor.fetchall()
+    return any(col[1] == column_name for col in columns)
+
+
+async def _migrate_add_user_id_columns(db):
+    """Migration: Add user_id columns to existing tables without it.
+
+    This function handles migrating from single-user to multi-user architecture.
+    It adds user_id columns to tables that need them and assigns existing records
+    to the admin user.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    # Tables that need user_id column
+    tables_needing_user_id = [
+        'wallets',
+        'portfolio_snapshots',
+        'custom_tokens',
+        'api_settings',
+        'security_settings',
+    ]
+
+    # Get or create admin user
+    cursor = await db.execute("SELECT id FROM users WHERE username = 'admin'")
+    admin = await cursor.fetchone()
+
+    if not admin:
+        # Create admin user if it doesn't exist
+        import bcrypt
+        import os
+        default_password = os.getenv("ABCT_ADMIN_PASSWORD", "satoshi")
+        password_hash = bcrypt.hashpw(default_password.encode('utf-8'), bcrypt.gensalt())
+
+        cursor = await db.execute(
+            "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+            ("admin", password_hash.decode('utf-8'))
+        )
+        await db.commit()
+        admin_id = cursor.lastrowid
+        logger.info(f"Created admin user during migration (ID: {admin_id})")
+    else:
+        admin_id = admin[0]
+
+    # Process each table
+    for table_name in tables_needing_user_id:
+        try:
+            # Check if table exists
+            cursor = await db.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                (table_name,)
+            )
+            if not await cursor.fetchone():
+                continue  # Table doesn't exist yet
+
+            # Check if user_id column exists
+            if await _check_column_exists(db, table_name, 'user_id'):
+                continue  # Already has user_id
+
+            # Add user_id column
+            logger.info(f"Adding user_id column to {table_name}")
+            await db.execute(f"""
+                ALTER TABLE {table_name}
+                ADD COLUMN user_id INTEGER REFERENCES users(id)
+            """)
+
+            # Update existing records to admin user
+            await db.execute(f"""
+                UPDATE {table_name}
+                SET user_id = ?
+                WHERE user_id IS NULL
+            """, (admin_id,))
+
+            # Create index
+            await db.execute(f"""
+                CREATE INDEX IF NOT EXISTS idx_{table_name}_user_id
+                ON {table_name}(user_id)
+            """)
+
+            await db.commit()
+            logger.info(f"Successfully migrated {table_name}")
+
+        except Exception as e:
+            logger.warning(f"Migration warning for {table_name}: {e}")
+            # Continue with other tables
+
 
 async def init_db():
     """Initialize the SQLite database with required tables."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
-        # Wallets table - address + blockchain is unique (same address can exist on multiple chains)
+        # Users table (created by auth system, but ensure it exists)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                password_changed BOOLEAN DEFAULT 0,
+                is_demo BOOLEAN DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Migration: Add is_demo column if it doesn't exist
+        try:
+            await db.execute("ALTER TABLE users ADD COLUMN is_demo BOOLEAN DEFAULT 0")
+            await db.commit()
+        except Exception:
+            # Column already exists
+            pass
+
+        # Wallets table - address + blockchain + user is unique
         await db.execute("""
             CREATE TABLE IF NOT EXISTS wallets (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id),
                 address TEXT NOT NULL,
                 blockchain TEXT NOT NULL,
                 label TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(address, blockchain)
+                UNIQUE(user_id, address, blockchain)
             )
+        """)
+
+        # Create index on user_id for wallets
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_wallets_user_id
+            ON wallets(user_id)
         """)
 
         # Balances table (native currency)
@@ -55,11 +215,12 @@ async def init_db():
             )
         """)
 
-        # Portfolio snapshots table for historical tracking
+        # Portfolio snapshots table for historical tracking (per user)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS portfolio_snapshots (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                snapshot_date DATE NOT NULL UNIQUE,
+                user_id INTEGER REFERENCES users(id),
+                snapshot_date DATE NOT NULL,
                 snapshot_time TIMESTAMP NOT NULL,
                 total_value_usd REAL NOT NULL,
                 ada_amount REAL DEFAULT 0,
@@ -72,8 +233,15 @@ async def init_db():
                 defi_value_usd REAL DEFAULT 0,
                 exchange_value_usd REAL DEFAULT 0,
                 nft_value_usd REAL DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, snapshot_date)
             )
+        """)
+
+        # Create index on user_id for portfolio_snapshots
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_portfolio_snapshots_user_id
+            ON portfolio_snapshots(user_id)
         """)
 
         # NFT collection floor prices - stores historical floor price data
@@ -104,10 +272,11 @@ async def init_db():
             ON nft_floor_prices(fetched_at)
         """)
 
-        # Custom tokens table for manual token tracking
+        # Custom tokens table for manual token tracking (per user)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS custom_tokens (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id),
                 policy_id TEXT NOT NULL,
                 asset_name TEXT,
                 ticker TEXT,
@@ -121,8 +290,13 @@ async def init_db():
                 include_in_total INTEGER DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(policy_id, asset_name)
+                UNIQUE(user_id, policy_id, asset_name)
             )
+        """)
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_custom_tokens_user_id
+            ON custom_tokens(user_id)
         """)
 
         await db.execute("""
@@ -168,14 +342,23 @@ async def init_db():
         except:
             pass  # Column already exists
 
-        # API settings table - stores enabled APIs and their keys
+        # API settings table - stores enabled APIs and their keys (per user)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS api_settings (
-                api_name TEXT PRIMARY KEY,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id),
+                api_name TEXT NOT NULL,
                 api_key TEXT,
                 enabled INTEGER DEFAULT 0,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, api_name)
             )
+        """)
+
+        # Create index on user_id for api_settings
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_api_settings_user_id
+            ON api_settings(user_id)
         """)
 
         # API usage tracking table - stores API call counts per period
@@ -207,10 +390,11 @@ async def init_db():
             )
         """)
 
-        # Security settings table for SSL/HTTPS configuration
+        # Security settings table for SSL/HTTPS configuration (per user)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS security_settings (
-                id INTEGER PRIMARY KEY CHECK (id = 1),
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER UNIQUE REFERENCES users(id),
                 ssl_mode TEXT DEFAULT 'http',
                 cert_path TEXT,
                 key_path TEXT,
@@ -221,10 +405,11 @@ async def init_db():
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        # Insert default row if not exists
+
+        # Create index on user_id for security_settings
         await db.execute("""
-            INSERT OR IGNORE INTO security_settings (id, ssl_mode)
-            VALUES (1, 'http')
+            CREATE INDEX IF NOT EXISTS idx_security_settings_user_id
+            ON security_settings(user_id)
         """)
 
         # NFT Scheduler state table - tracks scheduler status (single row)
@@ -290,20 +475,33 @@ async def init_db():
 
         await db.commit()
 
+        # ===== MIGRATION: Add user_id columns to existing tables =====
+        await _migrate_add_user_id_columns(db)
+
 async def get_db():
     """Get database connection."""
     db = await aiosqlite.connect(DATABASE_PATH)
     db.row_factory = aiosqlite.Row
     return db
 
-async def save_wallet(address: str, blockchain: str, label: str = None):
-    """Save or update a wallet in the database."""
+async def save_wallet(address: str, blockchain: str, label: str = None, user_id: int = None):
+    """Save or update a wallet in the database.
+
+    Args:
+        address: Wallet address
+        blockchain: Blockchain name (cardano, bitcoin, ethereum, etc.)
+        label: Optional label for the wallet
+        user_id: User ID (defaults to current user from context)
+    """
+    if user_id is None:
+        user_id = get_current_user_id()
+
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
-        # Check if wallet already exists
+        # Check if wallet already exists for this user
         cursor = await db.execute(
-            "SELECT id, label FROM wallets WHERE address = ? AND blockchain = ?",
-            (address, blockchain)
+            "SELECT id, label FROM wallets WHERE user_id = ? AND address = ? AND blockchain = ?",
+            (user_id, address, blockchain)
         )
         existing = await cursor.fetchone()
 
@@ -317,34 +515,72 @@ async def save_wallet(address: str, blockchain: str, label: str = None):
         else:
             # Insert new wallet
             await db.execute(
-                "INSERT INTO wallets (address, blockchain, label, updated_at) VALUES (?, ?, ?, ?)",
-                (address, blockchain, label, datetime.now())
+                "INSERT INTO wallets (user_id, address, blockchain, label, updated_at) VALUES (?, ?, ?, ?, ?)",
+                (user_id, address, blockchain, label, datetime.now())
             )
         await db.commit()
 
-async def get_all_wallets():
-    """Get all wallets from the database."""
+async def get_all_wallets(user_id: int = None):
+    """Get all wallets for a user.
+
+    Args:
+        user_id: User ID (defaults to current user from context)
+
+    Returns:
+        List of wallet records
+    """
+    if user_id is None:
+        user_id = get_current_user_id()
+
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute("SELECT * FROM wallets ORDER BY blockchain, id")
+        if user_id is not None:
+            cursor = await db.execute(
+                "SELECT * FROM wallets WHERE user_id = ? ORDER BY blockchain, id",
+                (user_id,)
+            )
+        else:
+            # Fallback for backward compatibility during migration
+            cursor = await db.execute("SELECT * FROM wallets ORDER BY blockchain, id")
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
-async def get_wallet_by_address(address: str, blockchain: str = None):
-    """Get a wallet by its address (and optionally blockchain).
+async def get_wallet_by_address(address: str, blockchain: str = None, user_id: int = None):
+    """Get a wallet by its address for a specific user.
 
-    If blockchain is provided, returns the specific wallet for that chain.
-    If not, returns the first matching wallet (for backwards compatibility).
+    Args:
+        address: Wallet address
+        blockchain: Optional blockchain filter
+        user_id: User ID (defaults to current user from context)
+
+    Returns:
+        Wallet record or None
     """
+    if user_id is None:
+        user_id = get_current_user_id()
+
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
-        if blockchain:
-            cursor = await db.execute(
-                "SELECT * FROM wallets WHERE address = ? AND blockchain = ?",
-                (address, blockchain)
-            )
+        if user_id is not None:
+            if blockchain:
+                cursor = await db.execute(
+                    "SELECT * FROM wallets WHERE user_id = ? AND address = ? AND blockchain = ?",
+                    (user_id, address, blockchain)
+                )
+            else:
+                cursor = await db.execute(
+                    "SELECT * FROM wallets WHERE user_id = ? AND address = ?",
+                    (user_id, address)
+                )
         else:
-            cursor = await db.execute("SELECT * FROM wallets WHERE address = ?", (address,))
+            # Fallback for backward compatibility during migration
+            if blockchain:
+                cursor = await db.execute(
+                    "SELECT * FROM wallets WHERE address = ? AND blockchain = ?",
+                    (address, blockchain)
+                )
+            else:
+                cursor = await db.execute("SELECT * FROM wallets WHERE address = ?", (address,))
         row = await cursor.fetchone()
         return dict(row) if row else None
 
@@ -512,18 +748,26 @@ async def get_cache_status():
 
 
 # Portfolio snapshot functions
-async def save_portfolio_snapshot(snapshot_data: dict):
-    """Save a daily portfolio snapshot. Uses INSERT OR REPLACE for idempotency."""
+async def save_portfolio_snapshot(snapshot_data: dict, user_id: int = None):
+    """Save a daily portfolio snapshot for a user.
+
+    Args:
+        snapshot_data: Snapshot data dictionary
+        user_id: User ID (defaults to current user from context)
+    """
+    if user_id is None:
+        user_id = get_current_user_id()
+
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute("""
             INSERT INTO portfolio_snapshots (
-                snapshot_date, snapshot_time, total_value_usd,
+                user_id, snapshot_date, snapshot_time, total_value_usd,
                 ada_amount, ada_price, btc_amount, btc_price, eth_amount, eth_price,
                 sol_amount, sol_price,
                 staking_value_usd, defi_value_usd, exchange_value_usd, nft_value_usd,
                 tracked_tokens_value_usd
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(snapshot_date) DO UPDATE SET
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, snapshot_date) DO UPDATE SET
                 snapshot_time = excluded.snapshot_time,
                 total_value_usd = excluded.total_value_usd,
                 ada_amount = excluded.ada_amount,
@@ -540,6 +784,7 @@ async def save_portfolio_snapshot(snapshot_data: dict):
                 nft_value_usd = excluded.nft_value_usd,
                 tracked_tokens_value_usd = excluded.tracked_tokens_value_usd
         """, (
+            user_id,
             snapshot_data['snapshot_date'],
             snapshot_data['snapshot_time'],
             snapshot_data['total_value_usd'],
@@ -560,20 +805,44 @@ async def save_portfolio_snapshot(snapshot_data: dict):
         await db.commit()
 
 
-async def get_portfolio_history(days: int = 7) -> list:
-    """Get portfolio snapshots for the specified number of days."""
+async def get_portfolio_history(days: int = 7, user_id: int = None) -> list:
+    """Get portfolio snapshots for a user.
+
+    Args:
+        days: Number of days of history to retrieve
+        user_id: User ID (defaults to current user from context)
+
+    Returns:
+        List of snapshot records
+    """
+    if user_id is None:
+        user_id = get_current_user_id()
+
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute("""
-            SELECT snapshot_date, total_value_usd, snapshot_time,
-                   ada_amount, ada_price, btc_amount, btc_price, eth_amount, eth_price,
-                   sol_amount, sol_price,
-                   staking_value_usd, defi_value_usd, exchange_value_usd, nft_value_usd,
-                   COALESCE(tracked_tokens_value_usd, 0) as tracked_tokens_value_usd
-            FROM portfolio_snapshots
-            WHERE snapshot_date >= date('now', ?)
-            ORDER BY snapshot_date ASC
-        """, (f'-{days} days',))
+        if user_id is not None:
+            cursor = await db.execute("""
+                SELECT snapshot_date, total_value_usd, snapshot_time,
+                       ada_amount, ada_price, btc_amount, btc_price, eth_amount, eth_price,
+                       sol_amount, sol_price,
+                       staking_value_usd, defi_value_usd, exchange_value_usd, nft_value_usd,
+                       COALESCE(tracked_tokens_value_usd, 0) as tracked_tokens_value_usd
+                FROM portfolio_snapshots
+                WHERE user_id = ? AND snapshot_date >= date('now', ?)
+                ORDER BY snapshot_date ASC
+            """, (user_id, f'-{days} days'))
+        else:
+            # Fallback for backward compatibility
+            cursor = await db.execute("""
+                SELECT snapshot_date, total_value_usd, snapshot_time,
+                       ada_amount, ada_price, btc_amount, btc_price, eth_amount, eth_price,
+                       sol_amount, sol_price,
+                       staking_value_usd, defi_value_usd, exchange_value_usd, nft_value_usd,
+                       COALESCE(tracked_tokens_value_usd, 0) as tracked_tokens_value_usd
+                FROM portfolio_snapshots
+                WHERE snapshot_date >= date('now', ?)
+                ORDER BY snapshot_date ASC
+            """, (f'-{days} days',))
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
@@ -777,15 +1046,26 @@ async def get_nft_price_stats() -> dict:
 
 
 # Custom token functions
-async def add_custom_token(token_data: dict) -> int:
-    """Add a custom token for manual tracking."""
+async def add_custom_token(token_data: dict, user_id: int = None) -> int:
+    """Add a custom token for a user.
+
+    Args:
+        token_data: Token data dictionary
+        user_id: User ID (defaults to current user from context)
+
+    Returns:
+        Token ID
+    """
+    if user_id is None:
+        user_id = get_current_user_id()
+
     async with aiosqlite.connect(DATABASE_PATH) as db:
         cursor = await db.execute("""
             INSERT INTO custom_tokens (
-                policy_id, asset_name, ticker, blockchain, quantity,
+                user_id, policy_id, asset_name, ticker, blockchain, quantity,
                 decimals, label, token_name, price_usd, last_price_update
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(policy_id, asset_name) DO UPDATE SET
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, policy_id, asset_name) DO UPDATE SET
                 quantity = excluded.quantity,
                 label = COALESCE(excluded.label, custom_tokens.label),
                 token_name = COALESCE(excluded.token_name, custom_tokens.token_name),
@@ -793,6 +1073,7 @@ async def add_custom_token(token_data: dict) -> int:
                 last_price_update = COALESCE(excluded.last_price_update, custom_tokens.last_price_update),
                 updated_at = CURRENT_TIMESTAMP
         """, (
+            user_id,
             token_data['policy_id'],
             token_data.get('asset_name', ''),
             token_data.get('ticker'),
@@ -808,38 +1089,93 @@ async def add_custom_token(token_data: dict) -> int:
         return cursor.lastrowid
 
 
-async def get_all_custom_tokens() -> list:
-    """Get all custom tokens."""
+async def get_all_custom_tokens(user_id: int = None) -> list:
+    """Get all custom tokens for a user.
+
+    Args:
+        user_id: User ID (defaults to current user from context)
+
+    Returns:
+        List of custom token records
+    """
+    if user_id is None:
+        user_id = get_current_user_id()
+
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute("""
-            SELECT * FROM custom_tokens
-            ORDER BY blockchain, token_name, ticker
-        """)
+        if user_id is not None:
+            cursor = await db.execute("""
+                SELECT * FROM custom_tokens
+                WHERE user_id = ?
+                ORDER BY blockchain, token_name, ticker
+            """, (user_id,))
+        else:
+            # Fallback for backward compatibility
+            cursor = await db.execute("""
+                SELECT * FROM custom_tokens
+                ORDER BY blockchain, token_name, ticker
+            """)
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
 
-async def get_custom_token_by_id(token_id: int) -> dict:
-    """Get a custom token by ID."""
+async def get_custom_token_by_id(token_id: int, user_id: int = None) -> dict:
+    """Get a custom token by ID for a user.
+
+    Args:
+        token_id: Token ID
+        user_id: User ID (defaults to current user from context)
+
+    Returns:
+        Token record or None
+    """
+    if user_id is None:
+        user_id = get_current_user_id()
+
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            "SELECT * FROM custom_tokens WHERE id = ?",
-            (token_id,)
-        )
+        if user_id is not None:
+            cursor = await db.execute(
+                "SELECT * FROM custom_tokens WHERE id = ? AND user_id = ?",
+                (token_id, user_id)
+            )
+        else:
+            # Fallback for backward compatibility
+            cursor = await db.execute(
+                "SELECT * FROM custom_tokens WHERE id = ?",
+                (token_id,)
+            )
         row = await cursor.fetchone()
         return dict(row) if row else None
 
 
-async def get_custom_token_by_policy(policy_id: str, asset_name: str = '') -> dict:
-    """Get a custom token by policy ID and asset name."""
+async def get_custom_token_by_policy(policy_id: str, asset_name: str = '', user_id: int = None) -> dict:
+    """Get a custom token by policy ID and asset name for a user.
+
+    Args:
+        policy_id: Token policy ID
+        asset_name: Token asset name
+        user_id: User ID (defaults to current user from context)
+
+    Returns:
+        Token record or None
+    """
+    if user_id is None:
+        user_id = get_current_user_id()
+
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            "SELECT * FROM custom_tokens WHERE policy_id = ? AND asset_name = ?",
-            (policy_id, asset_name)
-        )
+        if user_id is not None:
+            cursor = await db.execute(
+                "SELECT * FROM custom_tokens WHERE user_id = ? AND policy_id = ? AND asset_name = ?",
+                (user_id, policy_id, asset_name)
+            )
+        else:
+            # Fallback for backward compatibility
+            cursor = await db.execute(
+                "SELECT * FROM custom_tokens WHERE policy_id = ? AND asset_name = ?",
+                (policy_id, asset_name)
+            )
         row = await cursor.fetchone()
         return dict(row) if row else None
 
@@ -990,58 +1326,119 @@ async def update_native_asset_decimals(asset_id: str, decimals: int):
 
 # ============ API Settings Functions ============
 
-async def get_api_setting(api_name: str) -> dict:
-    """Get API setting by name."""
+async def get_api_setting(api_name: str, user_id: int = None) -> dict:
+    """Get API setting by name for a user.
+
+    Args:
+        api_name: API name
+        user_id: User ID (defaults to current user from context)
+
+    Returns:
+        API setting record or None
+    """
+    if user_id is None:
+        user_id = get_current_user_id()
+
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            "SELECT * FROM api_settings WHERE api_name = ?",
-            (api_name,)
-        )
+        if user_id is not None:
+            cursor = await db.execute(
+                "SELECT * FROM api_settings WHERE user_id = ? AND api_name = ?",
+                (user_id, api_name)
+            )
+        else:
+            # Fallback for backward compatibility
+            cursor = await db.execute(
+                "SELECT * FROM api_settings WHERE api_name = ?",
+                (api_name,)
+            )
         row = await cursor.fetchone()
         return dict(row) if row else None
 
 
-async def get_all_api_settings() -> list:
-    """Get all API settings."""
+async def get_all_api_settings(user_id: int = None) -> list:
+    """Get all API settings for a user.
+
+    Args:
+        user_id: User ID (defaults to current user from context)
+
+    Returns:
+        List of API setting records
+    """
+    if user_id is None:
+        user_id = get_current_user_id()
+
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute("SELECT * FROM api_settings")
+        if user_id is not None:
+            cursor = await db.execute(
+                "SELECT * FROM api_settings WHERE user_id = ?",
+                (user_id,)
+            )
+        else:
+            # Fallback for backward compatibility
+            cursor = await db.execute("SELECT * FROM api_settings")
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
 
-async def save_api_setting(api_name: str, api_key: str, enabled: bool = True):
-    """Save or update an API setting."""
+async def save_api_setting(api_name: str, api_key: str, enabled: bool = True, user_id: int = None):
+    """Save or update an API setting for a user.
+
+    Args:
+        api_name: API name
+        api_key: API key
+        enabled: Whether the API is enabled
+        user_id: User ID (defaults to current user from context)
+    """
+    if user_id is None:
+        user_id = get_current_user_id()
+
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute("""
-            INSERT INTO api_settings (api_name, api_key, enabled, updated_at)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(api_name) DO UPDATE SET
+            INSERT INTO api_settings (user_id, api_name, api_key, enabled, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, api_name) DO UPDATE SET
                 api_key = excluded.api_key,
                 enabled = excluded.enabled,
                 updated_at = excluded.updated_at
-        """, (api_name, api_key, 1 if enabled else 0, datetime.now()))
+        """, (user_id, api_name, api_key, 1 if enabled else 0, datetime.now()))
         await db.commit()
 
 
-async def delete_api_setting(api_name: str):
-    """Disable an API and clear its key."""
+async def delete_api_setting(api_name: str, user_id: int = None):
+    """Disable an API and clear its key for a user.
+
+    Args:
+        api_name: API name
+        user_id: User ID (defaults to current user from context)
+    """
+    if user_id is None:
+        user_id = get_current_user_id()
+
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute("""
-            INSERT INTO api_settings (api_name, api_key, enabled, updated_at)
-            VALUES (?, NULL, 0, ?)
-            ON CONFLICT(api_name) DO UPDATE SET
+            INSERT INTO api_settings (user_id, api_name, api_key, enabled, updated_at)
+            VALUES (?, ?, NULL, 0, ?)
+            ON CONFLICT(user_id, api_name) DO UPDATE SET
                 api_key = NULL,
                 enabled = 0,
                 updated_at = excluded.updated_at
-        """, (api_name, datetime.now()))
+        """, (user_id, api_name, datetime.now()))
         await db.commit()
 
 
-async def get_api_key(api_name: str) -> str:
-    """Get API key if enabled, otherwise return empty string."""
-    setting = await get_api_setting(api_name)
+async def get_api_key(api_name: str, user_id: int = None) -> str:
+    """Get API key if enabled for a user.
+
+    Args:
+        api_name: API name
+        user_id: User ID (defaults to current user from context)
+
+    Returns:
+        API key or empty string
+    """
+    setting = await get_api_setting(api_name, user_id)
     if setting and setting.get('enabled') and setting.get('api_key'):
         return setting['api_key']
     return ""
@@ -1049,19 +1446,36 @@ async def get_api_key(api_name: str) -> str:
 
 # ============ Security Settings Functions ============
 
-async def get_security_settings() -> dict:
-    """Get current security settings."""
+async def get_security_settings(user_id: int = None) -> dict:
+    """Get security settings for a user.
+
+    Args:
+        user_id: User ID (defaults to current user from context)
+
+    Returns:
+        Security settings record
+    """
+    if user_id is None:
+        user_id = get_current_user_id()
+
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            "SELECT * FROM security_settings WHERE id = 1"
-        )
+        if user_id is not None:
+            cursor = await db.execute(
+                "SELECT * FROM security_settings WHERE user_id = ?",
+                (user_id,)
+            )
+        else:
+            # Fallback for backward compatibility - get first record
+            cursor = await db.execute(
+                "SELECT * FROM security_settings LIMIT 1"
+            )
         row = await cursor.fetchone()
         if row:
             return dict(row)
         # Return defaults if no row exists
         return {
-            'id': 1,
+            'user_id': user_id,
             'ssl_mode': 'http',
             'cert_path': None,
             'key_path': None,
@@ -1078,14 +1492,27 @@ async def save_security_settings(
     cert_path: str = None,
     key_path: str = None,
     cert_type: str = None,
-    cert_expires_at: str = None
+    cert_expires_at: str = None,
+    user_id: int = None
 ):
-    """Save security settings."""
+    """Save security settings for a user.
+
+    Args:
+        ssl_mode: SSL mode (http, https_self_signed, https_letsencrypt)
+        cert_path: Path to certificate file
+        key_path: Path to key file
+        cert_type: Certificate type
+        cert_expires_at: Certificate expiration timestamp
+        user_id: User ID (defaults to current user from context)
+    """
+    if user_id is None:
+        user_id = get_current_user_id()
+
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute("""
-            INSERT INTO security_settings (id, ssl_mode, cert_path, key_path, cert_type, cert_expires_at, updated_at)
-            VALUES (1, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
+            INSERT INTO security_settings (user_id, ssl_mode, cert_path, key_path, cert_type, cert_expires_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
                 ssl_mode = excluded.ssl_mode,
                 cert_path = excluded.cert_path,
                 key_path = excluded.key_path,
@@ -1094,29 +1521,44 @@ async def save_security_settings(
                 pending_mode = NULL,
                 restart_required = 0,
                 updated_at = excluded.updated_at
-        """, (ssl_mode, cert_path, key_path, cert_type, cert_expires_at, datetime.now()))
+        """, (user_id, ssl_mode, cert_path, key_path, cert_type, cert_expires_at, datetime.now()))
         await db.commit()
 
 
-async def set_pending_mode(pending_mode: str):
-    """Set pending mode change (requires restart to take effect)."""
+async def set_pending_mode(pending_mode: str, user_id: int = None):
+    """Set pending mode change for a user (requires restart to take effect).
+
+    Args:
+        pending_mode: Pending SSL mode
+        user_id: User ID (defaults to current user from context)
+    """
+    if user_id is None:
+        user_id = get_current_user_id()
+
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute("""
             UPDATE security_settings
             SET pending_mode = ?, restart_required = 1, updated_at = ?
-            WHERE id = 1
-        """, (pending_mode, datetime.now()))
+            WHERE user_id = ?
+        """, (pending_mode, datetime.now(), user_id))
         await db.commit()
 
 
-async def clear_pending_mode():
-    """Clear pending mode after restart."""
+async def clear_pending_mode(user_id: int = None):
+    """Clear pending mode after restart for a user.
+
+    Args:
+        user_id: User ID (defaults to current user from context)
+    """
+    if user_id is None:
+        user_id = get_current_user_id()
+
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute("""
             UPDATE security_settings
             SET pending_mode = NULL, restart_required = 0, updated_at = ?
-            WHERE id = 1
-        """, (datetime.now(),))
+            WHERE user_id = ?
+        """, (datetime.now(), user_id))
         await db.commit()
 
 
