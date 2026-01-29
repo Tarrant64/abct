@@ -264,16 +264,5 @@ async def auth_status():
     }
 
 
-# Initialize auth tables on import
-import asyncio
-try:
-    loop = asyncio.get_event_loop()
-    if loop.is_running():
-        # If event loop is already running, schedule the init
-        asyncio.create_task(init_auth_tables())
-    else:
-        # If no event loop, run it synchronously
-        loop.run_until_complete(init_auth_tables())
-except RuntimeError:
-    # No event loop, will be initialized on first request
-    pass
+# Note: Auth tables are initialized via startup event in main.py
+# Do not initialize here during import to avoid asyncio issues
