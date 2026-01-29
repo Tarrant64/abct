@@ -84,7 +84,7 @@ EXPOSE 80 443
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost/api/health || exit 1
+    CMD curl -f http://localhost/health || exit 1
 
 # Run supervisor (manages nginx + uvicorn)
 CMD ["/app/entrypoint.sh"]
