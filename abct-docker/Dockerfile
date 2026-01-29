@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg-dev \
     zlib1g-dev \
     libpng-dev \
+    libffi-dev \
     gcc \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
