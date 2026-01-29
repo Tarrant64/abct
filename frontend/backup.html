@@ -893,11 +893,17 @@
                     include_nft_collections: document.getElementById('includeNftCollections').checked
                 };
 
+                const token = localStorage.getItem('abct_token');
+                const headers = {
+                    'Content-Type': 'application/json',
+                };
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                }
+
                 const response = await fetch('/backup/export', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: headers,
                     body: JSON.stringify(options)
                 });
 
@@ -1126,11 +1132,17 @@
                     backup_data: backupFileData
                 };
 
+                const token = localStorage.getItem('abct_token');
+                const headers = {
+                    'Content-Type': 'application/json',
+                };
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                }
+
                 const response = await fetch('/backup/preview', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: headers,
                     body: JSON.stringify(options)
                 });
 
@@ -1289,11 +1301,17 @@
                     backup_data: backupFileData
                 };
 
+                const token = localStorage.getItem('abct_token');
+                const headers = {
+                    'Content-Type': 'application/json',
+                };
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                }
+
                 const response = await fetch('/backup/import', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: headers,
                     body: JSON.stringify(options)
                 });
 
