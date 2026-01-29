@@ -15,6 +15,7 @@ Build: v1769649627
 """
 
 import os
+import sys
 import secrets
 import bcrypt
 from datetime import datetime, timedelta
@@ -24,11 +25,18 @@ from pydantic import BaseModel
 import aiosqlite
 from config import DATABASE_PATH
 
+# Initialize auth_utils with session store
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import auth_utils
+
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
 # In-memory session store (in production, use Redis or database)
 active_sessions = {}
 SESSION_TIMEOUT_MINUTES = 480  # 8 hours
+
+# Initialize auth_utils with session store reference
+auth_utils.init_session_store(active_sessions)
 
 
 class LoginRequest(BaseModel):
@@ -180,56 +188,6 @@ async def login(request: LoginRequest):
         token=token,
         message="Login successful"
     )
-
-
-async def verify_session(authorization: Optional[str] = Header(None)) -> str:
-    """
-    Dependency to verify session token for protected endpoints.
-
-    Use with Depends() to protect endpoints:
-        @router.get("/endpoint", dependencies=[Depends(verify_session)])
-        async def protected_endpoint():
-            ...
-
-    Args:
-        authorization: Authorization header value (Bearer token)
-
-    Returns:
-        Username of authenticated user
-
-    Raises:
-        HTTPException: 401 if token is missing or invalid
-    """
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=401,
-            detail="Not authenticated. Please login.",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
-
-    token = authorization[7:]  # Remove "Bearer " prefix
-
-    # Clean expired sessions
-    clean_expired_sessions()
-
-    # Check if token exists and is valid
-    session_data = active_sessions.get(token)
-    if not session_data:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or expired session. Please login again.",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
-
-    if session_data['expires'] < datetime.utcnow():
-        del active_sessions[token]
-        raise HTTPException(
-            status_code=401,
-            detail="Session expired. Please login again.",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
-
-    return session_data['username']
 
 
 @router.get("/verify", response_model=TokenVerifyResponse)
