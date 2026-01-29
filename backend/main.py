@@ -87,6 +87,17 @@ async def lifespan(app: FastAPI):
     logger.info("Database initialized")
     await log_service.info("main", "Main database initialized")
 
+    # Initialize authentication tables
+    logger.info("Initializing authentication system...")
+    try:
+        from routers.auth import init_auth_tables
+        await init_auth_tables()
+        logger.info("Authentication system initialized")
+        await log_service.info("main", "Authentication system initialized")
+    except Exception as e:
+        logger.warning(f"Could not initialize auth tables: {e}")
+        await log_service.warning("main", f"Auth initialization failed: {e}")
+
     # Initialize NFT image cache database (separate from main DB)
     logger.info("Initializing NFT image cache database...")
     await init_nft_image_db()
