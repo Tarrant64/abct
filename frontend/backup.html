@@ -962,8 +962,16 @@
                 });
 
                 if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.detail || 'Export failed');
+                    let errorMsg = `Export failed (${response.status})`;
+                    try {
+                        const error = await response.json();
+                        errorMsg = error.detail || errorMsg;
+                    } catch (e) {
+                        // Response wasn't JSON
+                        const text = await response.text();
+                        if (text) errorMsg = text;
+                    }
+                    throw new Error(errorMsg);
                 }
 
                 // Get the blob and create download

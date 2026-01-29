@@ -22,7 +22,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database import get_db
-from routers.auth import verify_session
+from auth_utils import verify_session
 
 router = APIRouter(prefix="/backup", tags=["backup"])
 
