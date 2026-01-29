@@ -161,6 +161,33 @@ backup/
 *abct-backup*.json
 test-abct-backup*.json
 
+# Development documentation (keep local only)
+docs/development/
+*_SUMMARY.md
+*_REPORT*.md
+SESSION_*.md
+IMPLEMENTATION_*.md
+INTEGRATION_*.md
+*_INTEGRATION_*.md
+TODO.md
+STATUS.md
+PROJECT_PLAN.md
+FIXES_*.md
+*_FIX_REPORT.md
+*_INVESTIGATION_*.md
+RELEASE_NOTES_*.md
+GITHUB_RELEASE_*.md
+*_FEATURE_COMPLETE.md
+POST_DEPLOYMENT*.md
+
 # Sync reports (local development artifacts)
 SYNC_REPORT*.txt
 SECURITY_INCIDENT*.md
+
+# Test files in root
+test_*.py
+test-*.json
+
+# API keys and credentials files
+apikeys.rtf
+cdp_api_key.json
