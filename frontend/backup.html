@@ -953,8 +953,12 @@
             btn.innerHTML = '<span class="spinner"></span> <span>Exporting...</span>';
 
             try {
+                const token = localStorage.getItem('abct_token');
                 const response = await fetch('/backup/export-env', {
-                    method: 'GET'
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
                 });
 
                 if (!response.ok) {
