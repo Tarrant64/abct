@@ -1602,17 +1602,28 @@ base:0x789..." oninput="previewImport()"></textarea>
             const enableDiscovery = document.getElementById('enableDiscovery').checked;
             const enableXpub = document.getElementById('enableXpub').checked;
 
+            // Close the add modal first
+            closeAddModal();
+
             // For Cardano with discovery enabled, find related wallets
             if (chain === 'cardano' && enableDiscovery && (address.startsWith('addr1') || address.startsWith('stake1'))) {
-                closeAddModal();
-                await discoverCardanoWallets(address, label);
+                try {
+                    await discoverCardanoWallets(address, label);
+                } catch (error) {
+                    showStatus(error.message || 'Discovery failed', 'error');
+                    await loadWallets(); // Still reload in case some wallets were added
+                }
                 return;
             }
 
             // For Bitcoin xpub, discover addresses
             if (chain === 'bitcoin' && (enableXpub || isXpubAddress(address))) {
-                closeAddModal();
-                await discoverBitcoinXpub(address, label);
+                try {
+                    await discoverBitcoinXpub(address, label);
+                } catch (error) {
+                    showStatus(error.message || 'xpub discovery failed', 'error');
+                    await loadWallets(); // Still reload in case some wallets were added
+                }
                 return;
             }
 
@@ -1632,7 +1643,6 @@ base:0x789..." oninput="previewImport()"></textarea>
                     throw new Error(error.detail || 'Failed to add wallet');
                 }
 
-                closeAddModal();
                 showStatus('Wallet added successfully', 'success');
                 await loadWallets();
             } catch (error) {
@@ -1762,14 +1772,25 @@ base:0x789..." oninput="previewImport()"></textarea>
                 const data = await response.json();
                 discoveredAddresses = data.addresses || [];
 
-                // If only one address and it's already tracked, just show message
+                // If no addresses found
                 if (discoveredAddresses.length === 0) {
                     showStatus('No addresses found for this stake key', 'error');
+                    await loadWallets(); // Reload anyway
                     return;
                 }
 
+                // If only one address and it's already tracked, just reload
                 if (discoveredAddresses.length === 1 && discoveredAddresses[0].already_tracked) {
                     showStatus('This wallet is already tracked', 'error');
+                    await loadWallets();
+                    return;
+                }
+
+                // Check if all addresses are already tracked
+                const newAddresses = discoveredAddresses.filter(a => !a.already_tracked);
+                if (newAddresses.length === 0) {
+                    showStatus('All discovered wallets are already tracked', 'error');
+                    await loadWallets();
                     return;
                 }
 
@@ -1797,10 +1818,16 @@ base:0x789..." oninput="previewImport()"></textarea>
                     </div>
                 `).join(''));
 
-                document.getElementById('discoverModal').classList.add('active');
+                // Make sure modal is visible
+                const modal = document.getElementById('discoverModal');
+                modal.classList.add('active');
+                modal.style.display = 'flex'; // Force display
 
             } catch (error) {
-                showStatus(error.message, 'error');
+                console.error('Discovery error:', error);
+                showStatus(error.message || 'Discovery failed', 'error');
+                await loadWallets(); // Reload anyway in case some wallets were added
+                throw error; // Re-throw so parent knows it failed
             }
         }
 
@@ -1856,8 +1883,16 @@ base:0x789..." oninput="previewImport()"></textarea>
 
                 const result = await response.json();
                 closeDiscoverModal();
-                showStatus(result.message, 'success');
+                showStatus(result.message + ' - Loading balances...', 'success');
+
+                // Reload wallets to show the new ones
                 await loadWallets();
+
+                // Give a moment for balances to load, then reload again
+                setTimeout(async () => {
+                    await loadWallets();
+                    showStatus('Wallets added successfully', 'success');
+                }, 2000);
 
             } catch (error) {
                 showStatus(error.message, 'error');
