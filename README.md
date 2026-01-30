@@ -140,6 +140,9 @@ The dashboard provides a comprehensive view of your crypto portfolio:
 - **Staking Positions**: View delegated ADA, earned rewards, and pool APY
 - **Exchange Holdings**: See balances from connected exchanges
 - **NFT Gallery**: Browse collections with floor price estimates
+- 
+<img width="1231" height="699" alt="Screenshot 2026-01-29 at 9 11 28 PM" src="https://github.com/user-attachments/assets/b0ff3d54-48fa-47dd-af6b-b73033e5d60a" />
+<img width="1206" height="762" alt="Screenshot 2026-01-29 at 9 12 54 PM" src="https://github.com/user-attachments/assets/93011fcd-56a9-421f-ad15-34bc14cc3814" />
 <img width="2996" height="1650" alt="image" src="https://github.com/user-attachments/assets/073a6537-e012-469c-b163-91090ec375c2" />
 
 
