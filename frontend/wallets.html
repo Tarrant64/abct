@@ -1400,13 +1400,15 @@ base:0x789..." oninput="previewImport()"></textarea>
         }
 
         function toggleStakeGroup(stakeKey) {
-            const group = document.querySelector(`.stake-group[data-stake-key="${stakeKey}"]`);
+            // Use CSS.escape() to properly escape the stake key for CSS selectors
+            const escapedStakeKey = CSS.escape(stakeKey);
+            const group = document.querySelector(`.stake-group[data-stake-key="${escapedStakeKey}"]`);
             if (!group) return;
 
             const walletsDiv = group.querySelector('.stake-group-wallets');
             const icon = group.querySelector('.expand-icon');
 
-            if (walletsDiv.style.display === 'none') {
+            if (walletsDiv.style.display === 'none' || walletsDiv.style.display === '') {
                 walletsDiv.style.display = 'block';
                 icon.textContent = '▼';
                 group.classList.add('expanded');
