@@ -425,10 +425,52 @@
             border-radius: 10px;
             font-size: 11px;
             margin-left: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .wallet-label .token-count:hover {
+            background: rgba(102, 126, 234, 0.3);
         }
 
         .wallet-label .label-text {
             color: #aaa;
+        }
+
+        /* Wallet Assets Expansion */
+        .wallet-assets-container {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-left: 3px solid #667eea;
+            border-radius: 4px;
+        }
+
+        .wallet-assets-container.expanded {
+            display: block;
+        }
+
+        .wallet-asset-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .wallet-asset-item:last-child {
+            border-bottom: none;
+        }
+
+        .wallet-asset-name {
+            font-size: 13px;
+            color: #e0e0e0;
+            font-weight: 500;
+        }
+
+        .wallet-asset-quantity {
+            font-size: 13px;
+            color: #888;
         }
 
         .empty-state {
@@ -1363,14 +1405,20 @@ base:0x789..." oninput="previewImport()"></textarea>
         }
 
         function renderWalletItem(wallet, isGrouped = false) {
+            const walletContainerId = `wallet-${wallet.id}`;
+            const hasAssets = wallet.native_assets_count && wallet.native_assets_count > 0;
+
             return `
-                <div class="wallet-item ${isGrouped ? 'grouped' : ''}" data-chain="${wallet.blockchain}">
-                    <div class="wallet-info">
+                <div class="wallet-item ${isGrouped ? 'grouped' : ''}" data-chain="${wallet.blockchain}" id="${walletContainerId}">
+                    <div class="wallet-info" style="flex: 1; min-width: 0;">
                         <div class="wallet-address">${wallet.address.slice(0, 20)}...${wallet.address.slice(-12)}</div>
                         <div class="wallet-label">
                             ${!isGrouped ? `<span class="chain ${wallet.blockchain}">${wallet.blockchain}</span>` : ''}
                             ${wallet.label ? `<span class="label-text">${wallet.label}</span>` : ''}
-                            ${wallet.native_assets_count ? `<span class="token-count">${wallet.native_assets_count} tokens</span>` : ''}
+                            ${hasAssets ? `<span class="token-count" onclick="toggleWalletAssets(${wallet.id}, event)">${wallet.native_assets_count} token${wallet.native_assets_count !== 1 ? 's' : ''} ▼</span>` : ''}
+                        </div>
+                        <div class="wallet-assets-container" id="assets-${wallet.id}">
+                            <div class="loading" style="text-align: center; padding: 10px;">Loading assets...</div>
                         </div>
                     </div>
                     <div class="wallet-balance">
@@ -1387,6 +1435,48 @@ base:0x789..." oninput="previewImport()"></textarea>
                     </div>
                 </div>
             `;
+        }
+
+        async function toggleWalletAssets(walletId, event) {
+            event.stopPropagation();  // Prevent other click handlers from firing
+
+            const container = document.getElementById(`assets-${walletId}`);
+            if (!container) return;
+
+            // Toggle visibility
+            if (container.classList.contains('expanded')) {
+                container.classList.remove('expanded');
+                return;
+            }
+
+            // Show container
+            container.classList.add('expanded');
+
+            // Check if assets are already loaded
+            if (container.dataset.loaded === 'true') return;
+
+            // Fetch assets
+            try {
+                const response = await authFetch(`/wallets/id/${walletId}/assets`);
+                const data = await response.json();
+                const assets = data.assets || [];
+
+                if (assets.length === 0) {
+                    container.innerHTML = '<div style="text-align: center; padding: 10px; color: #888;">No native assets</div>';
+                } else {
+                    container.innerHTML = assets.map(asset => `
+                        <div class="wallet-asset-item">
+                            <div class="wallet-asset-name">${asset.asset_name || 'Unknown'}</div>
+                            <div class="wallet-asset-quantity">${formatTokenQuantity(asset.quantity)}</div>
+                        </div>
+                    `).join('');
+                }
+
+                container.dataset.loaded = 'true';
+            } catch (error) {
+                console.error('Error loading wallet assets:', error);
+                container.innerHTML = '<div style="text-align: center; padding: 10px; color: #dc3545;">Failed to load assets</div>';
+            }
         }
 
         function toggleStakeGroup(stakeKey) {
