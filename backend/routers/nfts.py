@@ -1385,19 +1385,37 @@ async def get_nfts_with_images(user_id: int = Depends(verify_session), blockchai
         # Return demo NFTs for wall display
         demo_nfts = await demo_nft_service.get_all_nfts(force_refresh=False)
 
-        # Format for wall display
+        # Map collections to blockchains for variety
+        collection_chain_map = {
+            'Clay Nation': ('cardano', 'ADA', 0.33),
+            'Ape Society': ('ethereum', 'ETH', 2700),
+            'Bored Ape Yacht Club': ('ethereum', 'ETH', 2700),
+            'Solana Monkey Business': ('solana', 'SOL', 115)
+        }
+
+        # Format for wall display with mixed blockchains
         formatted_nfts = []
         for nft in demo_nfts:
+            collection = nft['collection_name']
+            blockchain, symbol, price_conversion = collection_chain_map.get(collection, ('cardano', 'ADA', 0.33))
+
+            # Convert ADA price to native currency
+            floor_price = nft['price_ada']
+            if blockchain == 'ethereum':
+                floor_price = floor_price * 0.33 / 2700  # Convert ADA to ETH
+            elif blockchain == 'solana':
+                floor_price = floor_price * 0.33 / 115   # Convert ADA to SOL
+
             formatted_nfts.append({
                 'asset_id': nft['asset_id'],
-                'blockchain': 'cardano',  # Demo NFTs shown as Cardano
+                'blockchain': blockchain,
                 'name': nft['asset_name'],
-                'collection': nft['collection_name'],
+                'collection': collection,
                 'image_url': nft['image'],  # SVG path
                 'thumbnail_url': nft['image'],  # Same for demo
-                'floor_price': nft['price_ada'],
-                'floor_price_usd': nft.get('price_usd', nft['price_ada'] * 1.05),
-                'native_symbol': 'ADA',
+                'floor_price': floor_price,
+                'floor_price_usd': nft['price_ada'] * 0.33,  # Keep USD consistent
+                'native_symbol': symbol,
                 'image_info': {
                     'format': 'svg',
                     'width': 400,
@@ -1406,9 +1424,10 @@ async def get_nfts_with_images(user_id: int = Depends(verify_session), blockchai
             })
 
         # Group by chain for summary (simple counts like normal mode)
-        by_chain = {
-            'cardano': len(formatted_nfts)
-        }
+        by_chain = {}
+        for nft in formatted_nfts:
+            chain = nft['blockchain']
+            by_chain[chain] = by_chain.get(chain, 0) + 1
 
         prices = {
             'ada': 0.33,
