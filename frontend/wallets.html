@@ -1249,7 +1249,7 @@ base:0x789..." oninput="previewImport()"></textarea>
 
         async function loadWallets() {
             try {
-                const response = await fetch('/wallets');
+                const response = await authFetch('/wallets');
                 const data = await response.json();
                 wallets = data.wallets || [];
                 updateCounts();
@@ -1533,7 +1533,7 @@ base:0x789..." oninput="previewImport()"></textarea>
 
             // For other chains, add directly
             try {
-                const response = await fetch('/wallets', {
+                const response = await authFetch('/wallets', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1568,7 +1568,7 @@ base:0x789..." oninput="previewImport()"></textarea>
             showStatus('Discovering Bitcoin addresses from xpub...', 'success');
 
             try {
-                const response = await fetch('/wallets/xpub/discover', {
+                const response = await authFetch('/wallets/xpub/discover', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ xpub, gap_limit: 20 })
@@ -1636,7 +1636,7 @@ base:0x789..." oninput="previewImport()"></textarea>
             showStatus(`Adding ${selectedAddresses.length} Bitcoin addresses...`, 'success');
 
             try {
-                const response = await fetch('/wallets/xpub/add', {
+                const response = await authFetch('/wallets/xpub/add', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1663,7 +1663,7 @@ base:0x789..." oninput="previewImport()"></textarea>
             showStatus('Discovering related wallets...', 'success');
 
             try {
-                const response = await fetch('/wallets/discover', {
+                const response = await authFetch('/wallets/discover', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ address })
@@ -1755,7 +1755,7 @@ base:0x789..." oninput="previewImport()"></textarea>
             btn.textContent = 'Adding...';
 
             try {
-                const response = await fetch('/wallets/add-multiple', {
+                const response = await authFetch('/wallets/add-multiple', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -1801,7 +1801,7 @@ base:0x789..." oninput="previewImport()"></textarea>
             const label = document.getElementById('editWalletLabel').value.trim();
 
             try {
-                const response = await fetch(`/wallets/${id}/label`, {
+                const response = await authFetch(`/wallets/${id}/label`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ label: label || null })
@@ -1824,7 +1824,7 @@ base:0x789..." oninput="previewImport()"></textarea>
             if (!confirm(`Delete wallet ${address}?`)) return;
 
             try {
-                const response = await fetch(`/wallets/${encodeURIComponent(address)}`, {
+                const response = await authFetch(`/wallets/${encodeURIComponent(address)}`, {
                     method: 'DELETE'
                 });
 
@@ -1913,7 +1913,7 @@ base:0x789..." oninput="previewImport()"></textarea>
                         const address = trimmed.substring(colonIndex + 1);
                         if (validChains.includes(chain) && address.length > 10) {
                             try {
-                                const response = await fetch('/wallets', {
+                                const response = await authFetch('/wallets', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ address: `${chain}:${address}` })
@@ -2003,7 +2003,7 @@ base:0x789..." oninput="previewImport()"></textarea>
         // ==========================================
         async function loadManualTokens() {
             try {
-                const response = await fetch('/portfolio/custom-tokens');
+                const response = await authFetch('/portfolio/custom-tokens');
                 const data = await response.json();
                 manualTokens = data.tokens || [];
                 renderTokens();
@@ -2085,7 +2085,7 @@ base:0x789..." oninput="previewImport()"></textarea>
             const label = document.getElementById('tokenLabel').value.trim();
 
             try {
-                const response = await fetch('/portfolio/custom-tokens', {
+                const response = await authFetch('/portfolio/custom-tokens', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -2130,7 +2130,7 @@ base:0x789..." oninput="previewImport()"></textarea>
             const label = document.getElementById('editTokenLabel').value.trim();
 
             try {
-                const response = await fetch(`/portfolio/custom-tokens/${id}`, {
+                const response = await authFetch(`/portfolio/custom-tokens/${id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -2155,7 +2155,7 @@ base:0x789..." oninput="previewImport()"></textarea>
             if (!confirm('Delete this token?')) return;
 
             try {
-                const response = await fetch(`/portfolio/custom-tokens/${id}`, {
+                const response = await authFetch(`/portfolio/custom-tokens/${id}`, {
                     method: 'DELETE'
                 });
 
