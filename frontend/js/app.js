@@ -5106,3 +5106,156 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Load NFTs for the default chain (Cardano)
     loadNFTs();
 });
+
+// ===========================
+// Asset Breakdown Modal
+// ===========================
+let assetBreakdownChart = null;
+
+async function openAssetBreakdown(blockchain) {
+    try {
+        document.getElementById('assetBreakdownModal').classList.remove('hidden');
+        document.getElementById('breakdownChainName').textContent =
+            `${blockchain.charAt(0).toUpperCase() + blockchain.slice(1)} Asset Breakdown`;
+
+        const response = await authFetch(`${API_BASE}/portfolio/assets/${blockchain}`);
+        const data = await response.json();
+
+        document.getElementById('breakdownTotalValue').textContent = formatUSD(data.total_value_usd);
+        document.getElementById('breakdownAssetCount').textContent =
+            1 + data.tokens.length + (data.nfts.count > 0 ? 1 : 0);
+
+        const labels = [];
+        const values = [];
+        const colors = [];
+        const legendItems = [];
+
+        // Add native coin
+        if (data.native_coin.value_usd > 0) {
+            labels.push(data.native_coin.symbol);
+            values.push(data.native_coin.value_usd);
+            colors.push(getBlockchainColor(blockchain));
+            legendItems.push({
+                color: getBlockchainColor(blockchain),
+                symbol: data.native_coin.symbol,
+                name: 'Native Coin',
+                value_usd: data.native_coin.value_usd,
+                percentage: data.native_coin.percentage
+            });
+        }
+
+        // Add tokens
+        data.tokens.forEach((token, idx) => {
+            if (token.value_usd > 0) {
+                labels.push(token.symbol);
+                values.push(token.value_usd);
+                colors.push(generateColorForToken(idx));
+                legendItems.push({
+                    color: generateColorForToken(idx),
+                    symbol: token.symbol,
+                    name: token.name,
+                    value_usd: token.value_usd,
+                    percentage: token.percentage
+                });
+            }
+        });
+
+        // Add NFTs
+        if (data.nfts.count > 0 && data.nfts.value_usd > 0) {
+            labels.push('NFTs');
+            values.push(data.nfts.value_usd);
+            colors.push('#9B59B6');
+            legendItems.push({
+                color: '#9B59B6',
+                symbol: 'NFTs',
+                name: `${data.nfts.count} NFTs`,
+                value_usd: data.nfts.value_usd,
+                percentage: data.nfts.percentage
+            });
+        }
+
+        renderAssetBreakdownChart(labels, values, colors);
+        renderBreakdownLegend(legendItems);
+
+    } catch (error) {
+        console.error('Error loading asset breakdown:', error);
+        closeAssetBreakdownModal();
+        alert('Failed to load asset breakdown.');
+    }
+}
+
+function renderAssetBreakdownChart(labels, values, colors) {
+    const ctx = document.getElementById('assetBreakdownChart').getContext('2d');
+    if (assetBreakdownChart) assetBreakdownChart.destroy();
+
+    assetBreakdownChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: values,
+                backgroundColor: colors,
+                borderWidth: 2,
+                borderColor: getComputedStyle(document.body).getPropertyValue('--bg-primary')
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((context.parsed / total) * 100).toFixed(1);
+                            return `${context.label}: ${formatUSD(context.parsed)} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderBreakdownLegend(items) {
+    const legendDiv = document.getElementById('breakdownLegend');
+    legendDiv.innerHTML = items.map(item => `
+        <div class="legend-item">
+            <div class="legend-label">
+                <div class="legend-color" style="background-color: ${item.color};"></div>
+                <span class="legend-symbol">${item.symbol}</span>
+                <span class="legend-name">${item.name}</span>
+            </div>
+            <div class="legend-value">
+                <div>${formatUSD(item.value_usd)}</div>
+                <div class="legend-percentage">${item.percentage.toFixed(1)}%</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function getBlockchainColor(blockchain) {
+    const colors = {
+        'cardano': '#0033AD', 'bitcoin': '#F7931A', 'ethereum': '#627EEA',
+        'solana': '#14F195', 'polygon': '#8247E5', 'base': '#0052FF'
+    };
+    return colors[blockchain] || '#888888';
+}
+
+function generateColorForToken(index) {
+    const palette = [
+        '#3498DB', '#E74C3C', '#2ECC71', '#F39C12', '#9B59B6', '#1ABC9C',
+        '#E67E22', '#95A5A6', '#34495E', '#16A085', '#27AE60', '#2980B9',
+        '#8E44AD', '#F1C40F', '#E84393', '#00B894'
+    ];
+    return palette[index % palette.length];
+}
+
+function closeAssetBreakdownModal() {
+    document.getElementById('assetBreakdownModal').classList.add('hidden');
+    if (assetBreakdownChart) {
+        assetBreakdownChart.destroy();
+        assetBreakdownChart = null;
+    }
+}

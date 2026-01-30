@@ -360,6 +360,88 @@ async def get_all_native_assets(user_id: int = Depends(verify_session), refresh:
     return result
 
 
+@router.get("/assets/{blockchain}")
+async def get_blockchain_asset_breakdown(
+    blockchain: str,
+    user_id: int = Depends(verify_session)
+):
+    """
+    Get asset breakdown for a specific blockchain for doughnut chart visualization.
+
+    Returns native coin, tokens, and NFTs with USD values and percentages.
+    """
+    from fastapi import HTTPException
+
+    # Validate blockchain parameter
+    valid_chains = ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base']
+    if blockchain not in valid_chains:
+        raise HTTPException(status_code=400, detail=f"Invalid blockchain: {blockchain}")
+
+    # Get portfolio summary for native coin balance
+    summary = await get_portfolio_summary(user_id=user_id)
+    chain_data = summary.get(blockchain, {})
+
+    # Get all assets filtered by blockchain
+    assets_data = await get_all_native_assets(user_id=user_id)
+    chain_assets = [a for a in assets_data['assets'] if a.get('blockchain') == blockchain]
+
+    # Calculate native coin value
+    native_symbols = {
+        'cardano': 'ADA', 'bitcoin': 'BTC', 'ethereum': 'ETH',
+        'solana': 'SOL', 'polygon': 'POL', 'base': 'ETH'
+    }
+    native_keys = {
+        'cardano': 'total_ada', 'bitcoin': 'total_btc', 'ethereum': 'total_eth',
+        'solana': 'total_sol', 'polygon': 'total_matic', 'base': 'total_eth'
+    }
+
+    native_symbol = native_symbols[blockchain]
+    native_qty = chain_data.get(native_keys[blockchain], 0)
+    native_price = await pricing_service.get_price(native_symbol)
+    native_value = native_qty * (native_price or 0)
+
+    # Get NFT value for this chain (placeholder for now)
+    # TODO: Query NFT service for actual values
+    nft_value = 0
+    nft_count = 0
+
+    # Calculate total value
+    tokens_value = sum(a.get('value_usd', 0) for a in chain_assets if a.get('value_usd'))
+    total_value = native_value + tokens_value + nft_value
+
+    # Calculate percentages
+    native_pct = (native_value / total_value * 100) if total_value > 0 else 0
+    nft_pct = (nft_value / total_value * 100) if total_value > 0 else 0
+
+    # Build response
+    return {
+        'blockchain': blockchain,
+        'total_value_usd': total_value,
+        'native_coin': {
+            'symbol': native_symbol,
+            'quantity': native_qty,
+            'value_usd': native_value,
+            'percentage': native_pct
+        },
+        'tokens': [
+            {
+                'symbol': a.get('ticker') or a.get('asset_name', '')[:10],
+                'name': a.get('asset_name', 'Unknown'),
+                'quantity': a.get('total_quantity', 0),
+                'value_usd': a.get('value_usd', 0),
+                'percentage': (a.get('value_usd', 0) / total_value * 100) if total_value > 0 else 0
+            }
+            for a in sorted(chain_assets, key=lambda x: x.get('value_usd', 0) or 0, reverse=True)
+            if a.get('value_usd') and a.get('value_usd') > 0
+        ],
+        'nfts': {
+            'count': nft_count,
+            'value_usd': nft_value,
+            'percentage': nft_pct
+        }
+    }
+
+
 async def _enrich_cached_assets_with_prices(cached_data: dict) -> dict:
     """
     Take cached asset data and recalculate USD values with current prices.
