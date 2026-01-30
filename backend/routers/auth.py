@@ -28,15 +28,12 @@ from config import DATABASE_PATH
 # Initialize auth_utils with session store
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import auth_utils
+from database import create_session, get_session, delete_session, cleanup_expired_sessions
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
-# In-memory session store (in production, use Redis or database)
-active_sessions = {}
+# Session timeout in minutes
 SESSION_TIMEOUT_MINUTES = 480  # 8 hours
-
-# Initialize auth_utils with session store reference
-auth_utils.init_session_store(active_sessions)
 
 
 class LoginRequest(BaseModel):
@@ -84,6 +81,21 @@ async def init_auth_tables():
             )
         """)
         await db.commit()
+
+        # Sessions table (database-backed sessions for multi-process safety)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS sessions (
+                token TEXT PRIMARY KEY,
+                username TEXT NOT NULL,
+                user_id INTEGER NOT NULL,
+                is_demo BOOLEAN DEFAULT 0,
+                expires_at TIMESTAMP NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+        await db.commit()
+        logger.info("Sessions table initialized")
 
         # Add password_changed column if it doesn't exist (migration)
         try:
@@ -203,17 +215,6 @@ def create_session_token() -> str:
     return secrets.token_urlsafe(32)
 
 
-def clean_expired_sessions():
-    """Remove expired sessions from memory"""
-    now = datetime.utcnow()
-    expired_tokens = [
-        token for token, data in active_sessions.items()
-        if data['expires'] < now
-    ]
-    for token in expired_tokens:
-        del active_sessions[token]
-
-
 @router.post("/login", response_model=LoginResponse)
 async def login(request: LoginRequest):
     """
@@ -225,8 +226,8 @@ async def login(request: LoginRequest):
     Returns:
         LoginResponse with success status and session token
     """
-    # Clean expired sessions
-    clean_expired_sessions()
+    # Clean expired sessions from database
+    await cleanup_expired_sessions()
 
     # Verify credentials
     if not await verify_password(request.username, request.password):
@@ -235,37 +236,29 @@ async def login(request: LoginRequest):
             message="Invalid username or password"
         )
 
-    # Check if user should change password and if demo user
-    should_change_password = False
+    # Get user details including ID and is_demo
     is_demo = False
+    user_id = None
     async with aiosqlite.connect(DATABASE_PATH) as db:
         async with db.execute(
-            "SELECT password_changed, is_demo FROM users WHERE username = ?",
+            "SELECT id, is_demo FROM users WHERE username = ?",
             (request.username,)
         ) as cursor:
             row = await cursor.fetchone()
             if row:
-                if not row[0]:  # password_changed is False/0
-                    should_change_password = True
+                user_id = row[0]
                 if row[1]:  # is_demo is True/1
                     is_demo = True
 
-    # Create session token
+    # Create session token and store in database
     token = create_session_token()
-    expires = datetime.utcnow() + timedelta(minutes=SESSION_TIMEOUT_MINUTES)
-
-    active_sessions[token] = {
-        'username': request.username,
-        'expires': expires,
-        'created_at': datetime.utcnow(),
-        'is_demo': is_demo
-    }
+    await create_session(token, request.username, user_id, is_demo, SESSION_TIMEOUT_MINUTES)
 
     return LoginResponse(
         success=True,
         token=token,
         message="Login successful",
-        should_change_password=should_change_password
+        should_change_password=False  # Never prompt for password change
     )
 
 
@@ -287,16 +280,18 @@ async def verify_token(token: Optional[str] = None):
     if token.startswith("Bearer "):
         token = token[7:]
 
-    # Clean expired sessions
-    clean_expired_sessions()
+    # Clean expired sessions from database
+    await cleanup_expired_sessions()
 
-    # Check if token exists and is valid
-    session_data = active_sessions.get(token)
+    # Check if token exists and is valid in database
+    session_data = await get_session(token)
     if not session_data:
         return TokenVerifyResponse(valid=False)
 
-    if session_data['expires'] < datetime.utcnow():
-        del active_sessions[token]
+    # Check if session is expired
+    expires_at = datetime.fromisoformat(session_data['expires_at'])
+    if expires_at < datetime.utcnow():
+        await delete_session(token)
         return TokenVerifyResponse(valid=False)
 
     return TokenVerifyResponse(
@@ -316,8 +311,8 @@ async def logout(token: Optional[str] = None):
     Returns:
         Success message
     """
-    if token and token in active_sessions:
-        del active_sessions[token]
+    if token:
+        await delete_session(token)
 
     return {"success": True, "message": "Logged out successfully"}
 
@@ -342,7 +337,7 @@ async def change_password(
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     token = authorization[7:]
-    session_data = active_sessions.get(token)
+    session_data = await get_session(token)
 
     if not session_data:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
@@ -381,21 +376,28 @@ async def auth_status():
     Returns:
         Status information about auth system
     """
-    clean_expired_sessions()
+    await cleanup_expired_sessions()
 
-    # Check if admin user exists in database
+    # Check user count and active sessions in database
     user_count = 0
+    session_count = 0
     try:
         async with aiosqlite.connect(DATABASE_PATH) as db:
+            # Count users
             async with db.execute("SELECT COUNT(*) FROM users") as cursor:
                 row = await cursor.fetchone()
                 user_count = row[0] if row else 0
+
+            # Count active sessions
+            async with db.execute("SELECT COUNT(*) FROM sessions") as cursor:
+                row = await cursor.fetchone()
+                session_count = row[0] if row else 0
     except Exception as e:
         user_count = f"Error: {e}"
 
     return {
         "enabled": True,
-        "active_sessions": len(active_sessions),
+        "active_sessions": session_count,
         "session_timeout_minutes": SESSION_TIMEOUT_MINUTES,
         "users_in_database": user_count,
         "default_credentials": {
@@ -428,7 +430,7 @@ async def get_demo_status(authorization: Optional[str] = Header(None)):
         }
 
     token = authorization[7:]
-    session_data = active_sessions.get(token)
+    session_data = await get_session(token)
 
     if not session_data:
         return {

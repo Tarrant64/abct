@@ -45,6 +45,24 @@ async def get_user_id_by_username(username: str) -> Optional[int]:
         return row[0] if row else None
 
 
+async def get_username_by_user_id(user_id: int) -> Optional[str]:
+    """Get username by user ID.
+
+    Args:
+        user_id: User ID to look up
+
+    Returns:
+        Username if found, None otherwise
+    """
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute(
+            "SELECT username FROM users WHERE id = ?",
+            (user_id,)
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+
 async def _check_column_exists(db, table_name: str, column_name: str) -> bool:
     """Check if a column exists in a table."""
     cursor = await db.execute(f"PRAGMA table_info({table_name})")
@@ -184,10 +202,13 @@ async def init_db():
             CREATE TABLE IF NOT EXISTS balances (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 wallet_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
                 amount TEXT NOT NULL,
                 unit TEXT NOT NULL,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (wallet_id) REFERENCES wallets(id)
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                FOREIGN KEY (wallet_id) REFERENCES wallets(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
         """)
 
@@ -196,24 +217,42 @@ async def init_db():
             CREATE TABLE IF NOT EXISTS native_assets (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 wallet_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
                 asset_id TEXT NOT NULL,
                 policy_id TEXT,
                 asset_name TEXT,
                 quantity TEXT NOT NULL,
                 decimals INTEGER DEFAULT 0,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (wallet_id) REFERENCES wallets(id)
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                FOREIGN KEY (wallet_id) REFERENCES wallets(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
         """)
 
-        # Cache table for API responses
+        # Cache table for API responses (user-specific)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS cache (
-                key TEXT PRIMARY KEY,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                key TEXT NOT NULL,
                 value TEXT NOT NULL,
-                expires_at TIMESTAMP NOT NULL
+                expires_at TIMESTAMP NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                UNIQUE(user_id, key),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
         """)
+
+        # Create indexes for multi-user performance
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_balances_user_id ON balances(user_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_balances_wallet_id ON balances(wallet_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_native_assets_user_id ON native_assets(user_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_native_assets_wallet_id ON native_assets(wallet_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_native_assets_policy_id ON native_assets(policy_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_cache_user_key ON cache(user_id, key)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_cache_expires ON cache(expires_at)")
 
         # Portfolio snapshots table for historical tracking (per user)
         await db.execute("""
@@ -342,23 +381,15 @@ async def init_db():
         except:
             pass  # Column already exists
 
-        # API settings table - stores enabled APIs and their keys (per user)
+        # API settings table - stores enabled APIs and their keys (system-wide)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS api_settings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER REFERENCES users(id),
-                api_name TEXT NOT NULL,
+                api_name TEXT PRIMARY KEY,
                 api_key TEXT,
                 enabled INTEGER DEFAULT 0,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(user_id, api_name)
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
             )
-        """)
-
-        # Create index on user_id for api_settings
-        await db.execute("""
-            CREATE INDEX IF NOT EXISTS idx_api_settings_user_id
-            ON api_settings(user_id)
         """)
 
         # API usage tracking table - stores API call counts per period
@@ -390,11 +421,10 @@ async def init_db():
             )
         """)
 
-        # Security settings table for SSL/HTTPS configuration (per user)
+        # Security settings table for SSL/HTTPS configuration (system-wide)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS security_settings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER UNIQUE REFERENCES users(id),
+                id INTEGER PRIMARY KEY CHECK (id = 1),
                 ssl_mode TEXT DEFAULT 'http',
                 cert_path TEXT,
                 key_path TEXT,
@@ -402,14 +432,9 @@ async def init_db():
                 cert_expires_at TIMESTAMP,
                 pending_mode TEXT,
                 restart_required INTEGER DEFAULT 0,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
             )
-        """)
-
-        # Create index on user_id for security_settings
-        await db.execute("""
-            CREATE INDEX IF NOT EXISTS idx_security_settings_user_id
-            ON security_settings(user_id)
         """)
 
         # NFT Scheduler state table - tracks scheduler status (single row)
@@ -686,14 +711,25 @@ async def delete_wallet(wallet_id: int):
 
 
 # Cache functions
-async def get_cache(key: str):
-    """Get a value from the cache if not expired."""
+async def get_cache(key: str, user_id: Optional[int] = None):
+    """Get a value from the cache if not expired.
+
+    Args:
+        key: Cache key
+        user_id: User ID for user-specific cache, None for system-wide cache
+    """
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            "SELECT value, expires_at FROM cache WHERE key = ?",
-            (key,)
-        )
+        if user_id is not None:
+            cursor = await db.execute(
+                "SELECT value, expires_at FROM cache WHERE user_id = ? AND key = ?",
+                (user_id, key)
+            )
+        else:
+            cursor = await db.execute(
+                "SELECT value, expires_at FROM cache WHERE user_id IS NULL AND key = ?",
+                (key,)
+            )
         row = await cursor.fetchone()
         if row:
             expires_at = datetime.fromisoformat(row['expires_at'])
@@ -703,27 +739,47 @@ async def get_cache(key: str):
         return None
 
 
-async def set_cache(key: str, value, ttl_seconds: int = 300):
-    """Set a value in the cache with TTL."""
+async def set_cache(key: str, value, ttl_seconds: int = 300, user_id: Optional[int] = None):
+    """Set a value in the cache with TTL.
+
+    Args:
+        key: Cache key
+        value: Value to cache (will be JSON serialized)
+        ttl_seconds: Time to live in seconds
+        user_id: User ID for user-specific cache, None for system-wide cache
+    """
     import json
     expires_at = datetime.now() + timedelta(seconds=ttl_seconds)
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute("""
-            INSERT INTO cache (key, value, expires_at)
-            VALUES (?, ?, ?)
-            ON CONFLICT(key) DO UPDATE SET
+            INSERT INTO cache (user_id, key, value, expires_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id, key) DO UPDATE SET
                 value = excluded.value,
                 expires_at = excluded.expires_at
-        """, (key, json.dumps(value), expires_at.isoformat()))
+        """, (user_id, key, json.dumps(value), expires_at.isoformat()))
         await db.commit()
 
 
-async def clear_cache(key_pattern: str = None):
-    """Clear cache entries. If pattern provided, only clear matching keys."""
+async def clear_cache(key_pattern: str = None, user_id: Optional[int] = None):
+    """Clear cache entries. If pattern provided, only clear matching keys.
+
+    Args:
+        key_pattern: Optional pattern to match keys (uses LIKE)
+        user_id: User ID to clear cache for, None clears system-wide cache, omit to clear all
+    """
     async with aiosqlite.connect(DATABASE_PATH) as db:
-        if key_pattern:
+        if user_id is not None:
+            # Clear user-specific cache
+            if key_pattern:
+                await db.execute("DELETE FROM cache WHERE user_id = ? AND key LIKE ?", (user_id, f"%{key_pattern}%"))
+            else:
+                await db.execute("DELETE FROM cache WHERE user_id = ?", (user_id,))
+        elif key_pattern:
+            # Clear all caches matching pattern
             await db.execute("DELETE FROM cache WHERE key LIKE ?", (f"%{key_pattern}%",))
         else:
+            # Clear all caches
             await db.execute("DELETE FROM cache")
         await db.commit()
 
@@ -847,22 +903,34 @@ async def get_portfolio_history(days: int = 7, user_id: int = None) -> list:
         return [dict(row) for row in rows]
 
 
-async def get_latest_snapshot_date() -> str:
+async def get_latest_snapshot_date(user_id: int = None) -> str:
     """Get the date of the most recent snapshot."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
-        cursor = await db.execute(
-            "SELECT snapshot_date FROM portfolio_snapshots ORDER BY snapshot_date DESC LIMIT 1"
-        )
+        if user_id is not None:
+            cursor = await db.execute(
+                "SELECT snapshot_date FROM portfolio_snapshots WHERE user_id = ? ORDER BY snapshot_date DESC LIMIT 1",
+                (user_id,)
+            )
+        else:
+            cursor = await db.execute(
+                "SELECT snapshot_date FROM portfolio_snapshots ORDER BY snapshot_date DESC LIMIT 1"
+            )
         row = await cursor.fetchone()
         return row[0] if row else None
 
 
-async def get_latest_snapshot_time() -> str:
+async def get_latest_snapshot_time(user_id: int = None) -> str:
     """Get the timestamp of the most recent snapshot."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
-        cursor = await db.execute(
-            "SELECT snapshot_time FROM portfolio_snapshots ORDER BY snapshot_date DESC LIMIT 1"
-        )
+        if user_id is not None:
+            cursor = await db.execute(
+                "SELECT snapshot_time FROM portfolio_snapshots WHERE user_id = ? ORDER BY snapshot_date DESC LIMIT 1",
+                (user_id,)
+            )
+        else:
+            cursor = await db.execute(
+                "SELECT snapshot_time FROM portfolio_snapshots ORDER BY snapshot_date DESC LIMIT 1"
+            )
         row = await cursor.fetchone()
         return row[0] if row else None
 
@@ -1694,4 +1762,67 @@ async def cleanup_old_api_usage(days_to_keep: int = 30):
             "DELETE FROM api_usage WHERE period_end < ?",
             (cutoff,)
         )
+        await db.commit()
+
+
+# ============================================================================
+# SESSION MANAGEMENT (Database-backed sessions for multi-process safety)
+# ============================================================================
+
+async def create_session(token: str, username: str, user_id: int, is_demo: bool, expires_minutes: int = 480):
+    """
+    Create a new session in the database.
+
+    Args:
+        token: Session token
+        username: Username
+        user_id: User ID
+        is_demo: Whether this is a demo account
+        expires_minutes: Session expiration time in minutes
+    """
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        expires = datetime.utcnow() + timedelta(minutes=expires_minutes)
+        await db.execute(
+            """INSERT OR REPLACE INTO sessions
+               (token, username, user_id, is_demo, expires_at, created_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (token, username, user_id, is_demo, expires.isoformat(), datetime.utcnow().isoformat())
+        )
+        await db.commit()
+
+
+async def get_session(token: str) -> Optional[dict]:
+    """
+    Get session data from database.
+
+    Args:
+        token: Session token
+
+    Returns:
+        Session dict with username, user_id, is_demo, expires_at or None if not found
+    """
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM sessions WHERE token = ?",
+            (token,)
+        )
+        row = await cursor.fetchone()
+        if not row:
+            return None
+        return dict(row)
+
+
+async def delete_session(token: str):
+    """Delete a session from the database."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("DELETE FROM sessions WHERE token = ?", (token,))
+        await db.commit()
+
+
+async def cleanup_expired_sessions():
+    """Remove expired sessions from the database."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        now = datetime.utcnow().isoformat()
+        await db.execute("DELETE FROM sessions WHERE expires_at < ?", (now,))
         await db.commit()

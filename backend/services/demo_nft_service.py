@@ -18,64 +18,145 @@ class DemoNFTService:
 
     def __init__(self):
         """Initialize demo NFT service with fake collections."""
-        # Demo NFT collections
+        # Demo NFT collections - USING ACTUAL ANIME IMAGES
         self.collections = [
             {
                 "policy_id": "demo_policy_001",
-                "collection_name": "Demo Apes",
-                "floor_price_ada": 125.50,
-                "floor_price_usd": 125.50 * 1.05,
-                "volume_24h": 15000,
-                "volume_7d": 85000,
-                "listings": 45,
-                "supply": 10000,
-                "holders": 3542,
-                "verified": True,
-                "owned_count": 3
-            },
-            {
-                "policy_id": "demo_policy_002",
-                "collection_name": "Cardano Planets",
-                "floor_price_ada": 85.00,
-                "floor_price_usd": 85.00 * 1.05,
-                "volume_24h": 8500,
-                "volume_7d": 52000,
-                "listings": 32,
-                "supply": 5000,
-                "holders": 2150,
-                "verified": True,
-                "owned_count": 2
-            },
-            {
-                "policy_id": "demo_policy_003",
                 "collection_name": "Clay Nation",
-                "floor_price_ada": 250.00,
-                "floor_price_usd": 250.00 * 1.05,
+                "floor_price_ada": 1100.00,
+                "floor_price_usd": 1100.00 * 1.05,
                 "volume_24h": 25000,
                 "volume_7d": 145000,
                 "listings": 28,
                 "supply": 10000,
                 "holders": 4250,
                 "verified": True,
-                "owned_count": 1
+                "owned_count": 15  # 15 clay nation images
+            },
+            {
+                "policy_id": "demo_policy_002",
+                "collection_name": "Ape Society",
+                "floor_price_ada": 1850.00,
+                "floor_price_usd": 1850.00 * 1.05,
+                "volume_24h": 18500,
+                "volume_7d": 95000,
+                "listings": 35,
+                "supply": 7000,
+                "holders": 3150,
+                "verified": True,
+                "owned_count": 8  # 8 ape society images
+            },
+            {
+                "policy_id": "demo_policy_003",
+                "collection_name": "Bored Ape Yacht Club",
+                "floor_price_ada": 3800.00,
+                "floor_price_usd": 3800.00 * 1.05,
+                "volume_24h": 85000,
+                "volume_7d": 425000,
+                "listings": 12,
+                "supply": 10000,
+                "holders": 6420,
+                "verified": True,
+                "owned_count": 12  # 12 BAYC images
             },
             {
                 "policy_id": "demo_policy_004",
-                "collection_name": "Demo Dinos",
-                "floor_price_ada": 42.50,
-                "floor_price_usd": 42.50 * 1.05,
-                "volume_24h": 3200,
-                "volume_7d": 18500,
-                "listings": 65,
-                "supply": 8888,
+                "collection_name": "Solana Monkey Business",
+                "floor_price_ada": 1200.00,
+                "floor_price_usd": 1200.00 * 1.05,
+                "volume_24h": 15000,
+                "volume_7d": 78000,
+                "listings": 45,
+                "supply": 5000,
                 "holders": 2890,
-                "verified": False,
-                "owned_count": 4
+                "verified": True,
+                "owned_count": 20  # 20 SMB images
             }
         ]
 
-        # Demo individual NFTs
-        self.nfts = [
+        # Demo individual NFTs - USING ACTUAL ANIME IMAGES
+        self.nfts = []
+
+        # Clay Nation (15 images) - Floor price: 1100 ADA
+        for i in range(1, 16):
+            self.nfts.append({
+                "asset_id": f"clay_nation_{i:04d}",
+                "policy_id": "demo_policy_001",
+                "asset_name": f"Clay Nation #{i:04d}",
+                "collection_name": "Clay Nation",
+                "image": f"/static/demo-nfts/clay-nation-{i}.svg",
+                "rarity_rank": i * 50 + random.randint(1, 49),
+                "rarity_score": 90 - (i * 3) + random.uniform(-5, 5),
+                "price_ada": 1100.00,
+                "last_sale_ada": 1100.00 * random.uniform(0.9, 1.1),
+                "attributes": [
+                    {"trait_type": "Background", "value": ["Sky", "Ocean", "Sunset", "Night", "Dawn"][i % 5]},
+                    {"trait_type": "Body", "value": ["Blue Clay", "Red Clay", "Green Clay", "Purple Clay"][i % 4]},
+                    {"trait_type": "Face", "value": ["Happy", "Surprised", "Cool", "Smiling"][i % 4]}
+                ]
+            })
+
+        # Ape Society (8 images) - Floor price: 1850 ADA
+        for i in range(1, 9):
+            self.nfts.append({
+                "asset_id": f"ape_society_{i:04d}",
+                "policy_id": "demo_policy_002",
+                "asset_name": f"Ape Society #{1000 + i}",
+                "collection_name": "Ape Society",
+                "image": f"/static/demo-nfts/ape-society-{i}.svg",
+                "rarity_rank": i * 75 + random.randint(1, 74),
+                "rarity_score": 85 - (i * 4) + random.uniform(-5, 5),
+                "price_ada": 1850.00,
+                "last_sale_ada": 1850.00 * random.uniform(0.85, 1.15),
+                "attributes": [
+                    {"trait_type": "Background", "value": ["Purple", "Blue", "Green", "Orange"][i % 4]},
+                    {"trait_type": "Fur", "value": ["Golden", "Brown", "White", "Black"][i % 4]},
+                    {"trait_type": "Eyes", "value": ["Laser", "3D", "Regular", "Closed"][i % 4]}
+                ]
+            })
+
+        # BAYC (12 images) - Floor price: 3800 ADA
+        for i in range(1, 13):
+            self.nfts.append({
+                "asset_id": f"bayc_{i:04d}",
+                "policy_id": "demo_policy_003",
+                "asset_name": f"Bored Ape #{2000 + i}",
+                "collection_name": "Bored Ape Yacht Club",
+                "image": f"/static/demo-nfts/bayc-{i}.svg",
+                "rarity_rank": i * 60 + random.randint(1, 59),
+                "rarity_score": 95 - (i * 2.5) + random.uniform(-3, 3),
+                "price_ada": 3800.00,
+                "last_sale_ada": 3800.00 * random.uniform(0.9, 1.1),
+                "attributes": [
+                    {"trait_type": "Background", "value": ["Gray", "Blue", "Yellow", "Aquamarine"][i % 4]},
+                    {"trait_type": "Fur", "value": ["Brown", "Golden Brown", "Black", "Cream"][i % 4]},
+                    {"trait_type": "Eyes", "value": ["Bored", "Angry", "Sad", "Happy"][i % 4]},
+                    {"trait_type": "Mouth", "value": ["Bored", "Grin", "Smile", "Phoneme"][i % 4]}
+                ]
+            })
+
+        # Solana Monkey Business (20 images) - Floor price: 1200 ADA
+        for i in range(1, 21):
+            self.nfts.append({
+                "asset_id": f"smb_{i:04d}",
+                "policy_id": "demo_policy_004",
+                "asset_name": f"SMB #{3000 + i}",
+                "collection_name": "Solana Monkey Business",
+                "image": f"/static/demo-nfts/smb-{i}.svg",
+                "rarity_rank": i * 40 + random.randint(1, 39),
+                "rarity_score": 80 - (i * 2) + random.uniform(-4, 4),
+                "price_ada": 1200.00,
+                "last_sale_ada": 1200.00 * random.uniform(0.85, 1.15),
+                "attributes": [
+                    {"trait_type": "Type", "value": ["Gen1", "Gen2", "Gen3"][i % 3]},
+                    {"trait_type": "Background", "value": ["Blue", "Red", "Green", "Yellow", "Purple"][i % 5]},
+                    {"trait_type": "Hat", "value": ["None", "Cap", "Beanie", "Crown"][i % 4]},
+                    {"trait_type": "Eyes", "value": ["Normal", "Laser", "Closed", "3D"][i % 4]}
+                ]
+            })
+
+        # Old placeholder NFTs (keeping for backwards compatibility but not used)
+        self._old_nfts = [
             {
                 "asset_id": "demo_asset_001",
                 "policy_id": "demo_policy_001",

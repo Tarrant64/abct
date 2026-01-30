@@ -325,14 +325,14 @@ class SnapshotService:
         else:
             logger.info("Portfolio snapshot is up to date (less than 4 hours old)")
 
-    async def get_history(self, days: int = 7) -> list:
+    async def get_history(self, days: int = 7, user_id: int = None) -> list:
         """
         Get portfolio value history for charting.
 
         Includes current portfolio value as "today" if no snapshot exists
         or if today's snapshot has $0 value.
         """
-        snapshots = await get_portfolio_history(days)
+        snapshots = await get_portfolio_history(days, user_id=user_id)
 
         # Convert snapshots to history format
         history = [

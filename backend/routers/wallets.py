@@ -93,21 +93,12 @@ class WalletResponse(BaseModel):
     native_assets: Optional[list] = None
 
 @router.get("")
-async def list_wallets(username: str = Depends(verify_session)):
+async def list_wallets(user_id: int = Depends(verify_session)):
     """List all tracked wallets with their current balances and stake keys."""
     log_service = get_logging_service()
 
-    # Check if demo user - return fake data
-    if await is_demo_user(username):
-        demo_wallets = await demo_wallet_service.get_all_wallets()
-        return {
-            "wallets": demo_wallets,
-            "total": len(demo_wallets),
-            "demo_mode": True
-        }
-
     try:
-        wallets = await get_all_wallets()
+        wallets = await get_all_wallets(user_id=user_id)
     except Exception as e:
         await log_service.error("wallets", "Failed to retrieve wallets from database", exc_info=e)
         raise HTTPException(status_code=500, detail="Failed to retrieve wallets")
@@ -143,7 +134,7 @@ async def list_wallets(username: str = Depends(verify_session)):
     return {"wallets": result, "total": len(result)}
 
 @router.get("/{address}")
-async def get_wallet(address: str):
+async def get_wallet(address: str, user_id: int = Depends(verify_session)):
     """Get details for a specific wallet."""
     wallet = await get_wallet_by_address(address)
     if not wallet:
@@ -160,7 +151,7 @@ async def get_wallet(address: str):
     }
 
 @router.post("/sync")
-async def sync_wallets_from_file():
+async def sync_wallets_from_file(user_id: int = Depends(verify_session)):
     """
     Sync wallets from the wallets.txt file.
     Stake addresses (stake1...) are automatically expanded to their associated payment addresses.
@@ -197,7 +188,7 @@ async def sync_wallets_from_file():
             synced += 1
 
     # Now refresh all wallet balances in parallel (with concurrency limit)
-    all_wallets = await get_all_wallets()
+    all_wallets = await get_all_wallets(user_id=user_id)
 
     # Use semaphore to limit concurrent API calls (prevents rate limiting)
     semaphore = asyncio.Semaphore(5)  # Max 5 concurrent refreshes
@@ -223,9 +214,9 @@ async def sync_wallets_from_file():
     }
 
 @router.post("/refresh")
-async def refresh_all_balances():
+async def refresh_all_balances(user_id: int = Depends(verify_session)):
     """Refresh balances for all tracked wallets in parallel."""
-    wallets = await get_all_wallets()
+    wallets = await get_all_wallets(user_id=user_id)
 
     if not wallets:
         return {"message": "No wallets to refresh", "refreshed": 0}
@@ -245,11 +236,11 @@ async def refresh_all_balances():
     # Invalidate and repopulate portfolio cache with fresh data
     if success_count > 0:
         from database import clear_cache
-        await clear_cache("portfolio_summary")
+        await clear_cache("portfolio_summary", user_id=user_id)
         # Trigger cache repopulation by calling portfolio summary
         try:
             from routers.portfolio import get_portfolio_summary
-            await get_portfolio_summary(refresh=True)
+            await get_portfolio_summary(user_id=user_id, refresh=True)
         except Exception as e:
             import logging
             logging.warning(f"Could not repopulate portfolio cache: {e}")
@@ -261,7 +252,7 @@ async def refresh_all_balances():
     }
 
 @router.post("/{address}/refresh")
-async def refresh_wallet_balance(address: str):
+async def refresh_wallet_balance(address: str, user_id: int = Depends(verify_session)):
     """Refresh balance for a specific wallet."""
     wallet = await get_wallet_by_address(address)
     if not wallet:
@@ -453,7 +444,7 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
 
 
 @router.post("/discover")
-async def discover_related_wallets(data: dict):
+async def discover_related_wallets(data: dict, user_id: int = Depends(verify_session)):
     """
     Discover all Cardano wallets related to a given address or stake key.
 
@@ -553,7 +544,7 @@ async def discover_related_wallets(data: dict):
 
 
 @router.post("/add-multiple")
-async def add_multiple_wallets(data: dict):
+async def add_multiple_wallets(data: dict, user_id: int = Depends(verify_session)):
     """
     Add multiple Cardano wallets at once.
     Used after discover to add selected addresses.
@@ -598,7 +589,7 @@ async def add_multiple_wallets(data: dict):
 
 
 @router.post("/xpub/discover")
-async def discover_xpub_addresses(data: dict):
+async def discover_xpub_addresses(data: dict, user_id: int = Depends(verify_session)):
     """
     Discover all used addresses from a Bitcoin extended public key (xpub/ypub/zpub).
 
@@ -651,7 +642,7 @@ async def discover_xpub_addresses(data: dict):
 
 
 @router.post("/xpub/add")
-async def add_xpub_addresses(data: dict):
+async def add_xpub_addresses(data: dict, user_id: int = Depends(verify_session)):
     """
     Add discovered Bitcoin addresses from an xpub.
 
@@ -731,7 +722,7 @@ async def add_xpub_addresses(data: dict):
 
 
 @router.get("/xpub/status")
-async def xpub_status():
+async def xpub_status(user_id: int = Depends(verify_session)):
     """Check if xpub support is available."""
     return {
         'available': bitcoin_service.xpub_available(),
@@ -740,7 +731,7 @@ async def xpub_status():
 
 
 @router.post("")
-async def add_wallet(wallet: WalletCreate):
+async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session)):
     """
     Add a new wallet to track.
     Stake addresses (stake1...) are automatically expanded to their associated payment addresses.
@@ -889,7 +880,7 @@ async def add_wallet(wallet: WalletCreate):
 
 
 @router.patch("/{address}")
-async def update_wallet(address: str, update: WalletUpdate):
+async def update_wallet(address: str, update: WalletUpdate, user_id: int = Depends(verify_session)):
     """Update wallet label."""
     from database import update_wallet_label
 
@@ -943,7 +934,7 @@ def remove_from_wallets_file(address: str) -> bool:
 
 
 @router.delete("/{address:path}")
-async def delete_wallet(address: str):
+async def delete_wallet(address: str, user_id: int = Depends(verify_session)):
     """Delete a wallet and all its associated data, including from wallets.txt."""
     from database import delete_wallet as db_delete_wallet
 
@@ -980,7 +971,7 @@ async def delete_wallet(address: str):
 
 
 @router.put("/{wallet_id}/label")
-async def update_wallet_label(wallet_id: int, data: dict):
+async def update_wallet_label(wallet_id: int, data: dict, user_id: int = Depends(verify_session)):
     """Update the label for a wallet."""
     import aiosqlite
     from database import DATABASE_PATH
@@ -998,7 +989,7 @@ async def update_wallet_label(wallet_id: int, data: dict):
 
 
 @router.get("/stake/{stake_address}")
-async def get_stake_address_info(stake_address: str):
+async def get_stake_address_info(stake_address: str, user_id: int = Depends(verify_session)):
     """
     Get comprehensive information for a Cardano stake address.
     Returns account info, all associated payment addresses, and aggregated totals.
@@ -1021,7 +1012,7 @@ async def get_stake_address_info(stake_address: str):
 
 
 @router.get("/{address}/governance")
-async def get_wallet_governance(address: str):
+async def get_wallet_governance(address: str, user_id: int = Depends(verify_session)):
     """
     Get governance and staking info for a Cardano wallet.
     Includes staking pool, DRep delegation, and pending rewards.
@@ -1044,26 +1035,26 @@ async def get_wallet_governance(address: str):
 
 
 @router.get("/ethereum/status")
-async def get_ethereum_api_status():
+async def get_ethereum_api_status(user_id: int = Depends(verify_session)):
     """Get Ethereum API (beaconcha.in) status and rate limit info."""
     return ethereum_service.get_rate_limit_status()
 
 
 @router.post("/ethereum/clear-cache")
-async def clear_ethereum_cache():
+async def clear_ethereum_cache(user_id: int = Depends(verify_session)):
     """Clear Ethereum balance cache to force fresh fetches."""
     ethereum_service.clear_cache()
     return {"message": "Ethereum cache cleared"}
 
 
 @router.get("/solana/status")
-async def get_solana_api_status():
+async def get_solana_api_status(user_id: int = Depends(verify_session)):
     """Get Solana API (Helius) status and cache info."""
     return solana_service.get_rate_limit_status()
 
 
 @router.post("/solana/clear-cache")
-async def clear_solana_cache():
+async def clear_solana_cache(user_id: int = Depends(verify_session)):
     """Clear Solana balance cache to force fresh fetches."""
     solana_service.clear_cache()
     return {"message": "Solana cache cleared"}

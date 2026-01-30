@@ -201,7 +201,7 @@ NFT_COLLECTIONS = [
 
 
 async def create_demo_user():
-    """Create the demo user in the database."""
+    """Create the demo user in the database. Returns the user ID."""
     print(f"\n{'='*60}")
     print("Creating Demo User Account")
     print(f"{'='*60}")
@@ -218,8 +218,12 @@ async def create_demo_user():
         existing = await cursor.fetchone()
 
         if existing:
-            print(f"⚠️  Demo user '{DEMO_USERNAME}' already exists (ID: {existing[0]})")
-            print("   Deleting existing demo user and recreating...")
+            demo_user_id = existing[0]
+            print(f"⚠️  Demo user '{DEMO_USERNAME}' already exists (ID: {demo_user_id})")
+            print("   Deleting existing demo data and recreating...")
+            # Delete existing demo wallets and snapshots
+            await db.execute("DELETE FROM wallets WHERE user_id = ?", (demo_user_id,))
+            await db.execute("DELETE FROM portfolio_snapshots WHERE user_id = ?", (demo_user_id,))
             await db.execute("DELETE FROM users WHERE username = ?", (DEMO_USERNAME,))
             await db.commit()
 
@@ -231,22 +235,25 @@ async def create_demo_user():
             pass  # Column already exists
 
         # Create demo user
-        await db.execute(
+        cursor = await db.execute(
             """INSERT INTO users (username, password_hash, password_changed, is_demo)
                VALUES (?, ?, 1, 1)""",
             (DEMO_USERNAME, password_hash.decode('utf-8'))
         )
+        demo_user_id = cursor.lastrowid
         await db.commit()
 
-        print(f"✓ Demo user created successfully")
+        print(f"✓ Demo user created successfully (ID: {demo_user_id})")
         print(f"  Username: {DEMO_USERNAME}")
         print(f"  Password: {DEMO_PASSWORD}")
         print(f"  Password Changed: Yes (no prompt on login)")
         print(f"  Demo Flag: Yes")
 
+        return demo_user_id
 
-async def create_demo_wallets():
-    """Create demo wallets with balances and native assets."""
+
+async def create_demo_wallets(user_id):
+    """Create demo wallets with balances and native assets for the specified user."""
     print(f"\n{'='*60}")
     print("Creating Demo Wallets")
     print(f"{'='*60}")
@@ -261,10 +268,10 @@ async def create_demo_wallets():
             native_balance = wallet_data["native_balance"]
             native_assets = wallet_data.get("native_assets", [])
 
-            # Check if wallet exists
+            # Check if wallet exists for this user
             cursor = await db.execute(
-                "SELECT id FROM wallets WHERE address = ? AND blockchain = ?",
-                (address, blockchain)
+                "SELECT id FROM wallets WHERE address = ? AND blockchain = ? AND user_id = ?",
+                (address, blockchain, user_id)
             )
             existing = await cursor.fetchone()
 
@@ -276,10 +283,10 @@ async def create_demo_wallets():
                     (label, datetime.now(), wallet_id)
                 )
             else:
-                # Insert new wallet
+                # Insert new wallet WITH user_id
                 cursor = await db.execute(
-                    "INSERT INTO wallets (address, blockchain, label, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-                    (address, blockchain, label, datetime.now(), datetime.now())
+                    "INSERT INTO wallets (user_id, address, blockchain, label, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+                    (user_id, address, blockchain, label, datetime.now(), datetime.now())
                 )
                 wallet_id = cursor.lastrowid
 
@@ -339,8 +346,8 @@ async def create_demo_wallets():
     return total_value_usd
 
 
-async def create_demo_nfts():
-    """Create demo NFT collections with floor prices."""
+async def create_demo_nfts(user_id):
+    """Create demo NFT collections with floor prices for the specified user."""
     print(f"\n{'='*60}")
     print("Creating Demo NFT Collections")
     print(f"{'='*60}")
@@ -348,14 +355,15 @@ async def create_demo_nfts():
     total_nft_value_usd = 0
 
     async with aiosqlite.connect(DATABASE_PATH) as db:
-        # Get a Cardano wallet for NFT ownership
+        # Get a Cardano wallet for NFT ownership (from demo user's wallets only)
         cursor = await db.execute(
-            "SELECT id FROM wallets WHERE blockchain = 'cardano' LIMIT 1"
+            "SELECT id FROM wallets WHERE blockchain = 'cardano' AND user_id = ? LIMIT 1",
+            (user_id,)
         )
         cardano_wallet = await cursor.fetchone()
 
         if not cardano_wallet:
-            print("⚠️  No Cardano wallet found, skipping NFT creation")
+            print(f"⚠️  No Cardano wallet found for user {user_id}, skipping NFT creation")
             return 0
 
         wallet_id = cardano_wallet[0]
@@ -400,8 +408,8 @@ async def create_demo_nfts():
     return total_nft_value_usd
 
 
-async def create_historical_data(wallet_value: float, nft_value: float):
-    """Generate 90 days of historical portfolio snapshots."""
+async def create_historical_data(user_id, wallet_value: float, nft_value: float):
+    """Generate 90 days of historical portfolio snapshots for the specified user."""
     print(f"\n{'='*60}")
     print("Generating Historical Portfolio Data (90 days)")
     print(f"{'='*60}")
@@ -420,8 +428,8 @@ async def create_historical_data(wallet_value: float, nft_value: float):
     print(f"Growth: ${final_total - initial_total:,.2f} ({((final_total/initial_total - 1) * 100):.1f}%)")
 
     async with aiosqlite.connect(DATABASE_PATH) as db:
-        # Clear existing snapshots
-        await db.execute("DELETE FROM portfolio_snapshots")
+        # Clear existing snapshots for THIS user only
+        await db.execute("DELETE FROM portfolio_snapshots WHERE user_id = ?", (user_id,))
 
         # Generate 90 days of data
         for days_ago in range(90, -1, -1):
@@ -454,14 +462,14 @@ async def create_historical_data(wallet_value: float, nft_value: float):
             exchange_value = exchange_base * (1 + random.uniform(-0.04, 0.04))
             nft_value_day = nft_value * (1 + random.uniform(-0.03, 0.03))
 
-            # Insert snapshot
+            # Insert snapshot with user_id
             await db.execute(
                 """INSERT INTO portfolio_snapshots
-                   (snapshot_date, snapshot_time, total_value_usd,
+                   (user_id, snapshot_date, snapshot_time, total_value_usd,
                     ada_amount, ada_price, btc_amount, btc_price, eth_amount, eth_price, sol_amount, sol_price,
                     staking_value_usd, defi_value_usd, exchange_value_usd, nft_value_usd)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (snapshot_date, snapshot_time.isoformat(), total_value,
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (user_id, snapshot_date, snapshot_time.isoformat(), total_value,
                  ada_amount, CRYPTO_PRICES["ADA"],
                  btc_amount, CRYPTO_PRICES["BTC"],
                  eth_amount, CRYPTO_PRICES["ETH"],
@@ -491,17 +499,17 @@ async def main():
     print(f"\n📁 Database: {DATABASE_PATH}")
 
     try:
-        # Create demo user
-        await create_demo_user()
+        # Create demo user and get the user ID
+        demo_user_id = await create_demo_user()
 
-        # Create demo wallets
-        wallet_value = await create_demo_wallets()
+        # Create demo wallets for this user
+        wallet_value = await create_demo_wallets(demo_user_id)
 
-        # Create demo NFTs
-        nft_value = await create_demo_nfts()
+        # Create demo NFTs for this user
+        nft_value = await create_demo_nfts(demo_user_id)
 
-        # Create historical data
-        await create_historical_data(wallet_value, nft_value)
+        # Create historical data for this user
+        await create_historical_data(demo_user_id, wallet_value, nft_value)
 
         # Summary
         print(f"\n{'='*60}")
