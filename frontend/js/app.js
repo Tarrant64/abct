@@ -873,7 +873,7 @@ function renderWalletsGrouped(cardanoStakeGroups, bitcoinWallets, ethereumWallet
         // Render as collapsible group (always, even for single wallet)
         html += `
             <div class="wallet-group cardano ${walletCount === 1 ? 'single-wallet' : ''}" data-stake="${group.stake_address || 'none'}">
-                <div class="wallet-group-header" onclick="toggleWalletGroup(this)">
+                <div class="wallet-group-header">
                     <div class="group-info">
                         <span class="group-label">Stake Key: ${group.stake_address_short || 'No Stake Key'}</span>
                         <span class="group-wallet-count">${walletCount} address${walletCount !== 1 ? 'es' : ''}</span>
@@ -927,10 +927,42 @@ function renderWalletsGrouped(cardanoStakeGroups, bitcoinWallets, ethereumWallet
         html += renderSingleWallet(wallet, 'base', false);
     }
 
-    setSafeHTML(walletsList, html);
+    // Use innerHTML directly for internally generated HTML (not user input)
+    walletsList.innerHTML = html;
+
+    // Attach event listeners after DOM update (DOMPurify was stripping onclick handlers)
+    attachDashboardWalletEventListeners();
 
     // Load governance info at the stake key level
     loadStakeKeyGovernanceInfo(cardanoStakeGroups);
+}
+
+// Attach event listeners for dashboard wallet buttons
+function attachDashboardWalletEventListeners() {
+    // Wallet group toggle listeners
+    document.querySelectorAll('.wallet-group-header').forEach(header => {
+        header.addEventListener('click', function() {
+            toggleWalletGroup(this);
+        });
+    });
+
+    // Edit label button listeners
+    document.querySelectorAll('.edit-label-btn').forEach(btn => {
+        btn.addEventListener('click', function(event) {
+            event.stopPropagation();
+            const address = this.closest('[data-address]').dataset.address;
+            editWalletLabel(address, this);
+        });
+    });
+
+    // Delete wallet button listeners
+    document.querySelectorAll('.delete-wallet-btn').forEach(btn => {
+        btn.addEventListener('click', function(event) {
+            event.stopPropagation();
+            const address = this.closest('[data-address]').dataset.address;
+            deleteWallet(address);
+        });
+    });
 }
 
 // Render a single wallet item
@@ -1053,13 +1085,13 @@ function renderSingleWallet(wallet, blockchain, isGrouped) {
             <div class="wallet-info">
                 <div class="wallet-label-container">
                     <span class="wallet-label">${wallet.label || blockchain.charAt(0).toUpperCase() + blockchain.slice(1) + ' Wallet'}</span>
-                    <button class="edit-label-btn" onclick="editWalletLabel('${wallet.address}', this)" title="Edit wallet name">
+                    <button class="edit-label-btn" title="Edit wallet name">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                         </svg>
                     </button>
-                    <button class="delete-wallet-btn" onclick="deleteWallet('${wallet.address}')" title="Delete wallet">
+                    <button class="delete-wallet-btn" title="Delete wallet">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M3 6h18"></path>
                             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
