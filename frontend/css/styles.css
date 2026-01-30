@@ -1815,6 +1815,7 @@ body.usd-primary .card-body .details {
     border-radius: 8px;
     padding: 16px 20px;
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
 }
@@ -1975,6 +1976,56 @@ body.usd-primary .card-body .details {
     padding: 4px 8px;
     width: 200px;
     outline: none;
+}
+
+/* Dashboard wallet assets expansion */
+.assets-toggle {
+    cursor: pointer;
+    user-select: none;
+    transition: opacity 0.2s ease;
+}
+
+.assets-toggle:hover {
+    opacity: 0.8;
+}
+
+.wallet-assets-list {
+    width: 100%;
+    padding: 12px;
+    background-color: var(--bg-secondary);
+    border-radius: 6px;
+    margin-top: 8px;
+}
+
+.assets-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px;
+}
+
+.asset-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background-color: var(--bg-card);
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+
+.asset-name {
+    color: var(--text-primary);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.asset-quantity {
+    color: var(--text-secondary);
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    margin-left: 8px;
+    flex-shrink: 0;
 }
 
 .wallet-item .wallet-balance {

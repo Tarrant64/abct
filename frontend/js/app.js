@@ -963,6 +963,61 @@ function attachDashboardWalletEventListeners() {
             deleteWallet(address);
         });
     });
+
+    // Assets toggle listeners (expand to show individual assets)
+    document.querySelectorAll('.assets-toggle').forEach(toggle => {
+        toggle.addEventListener('click', async function(event) {
+            event.stopPropagation();
+            const walletId = this.dataset.walletId;
+            await toggleDashboardWalletAssets(walletId);
+        });
+    });
+}
+
+// Toggle wallet assets display on dashboard
+async function toggleDashboardWalletAssets(walletId) {
+    const container = document.getElementById(`assets-${walletId}`);
+    if (!container) return;
+
+    // Toggle visibility
+    if (container.style.display === 'block') {
+        container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'block';
+
+    // Check if already loaded
+    if (container.dataset.loaded === 'true') return;
+
+    // Fetch assets
+    try {
+        const response = await authFetch(`${API_BASE}/wallets/id/${walletId}/assets`);
+        const data = await response.json();
+        const assets = data.assets || [];
+
+        if (assets.length === 0) {
+            container.innerHTML = '<div style="text-align: center; padding: 10px; color: #888;">No assets found</div>';
+        } else {
+            let html = '<div class="assets-grid">';
+            assets.forEach(asset => {
+                const quantity = formatTokenQuantity(asset.quantity);
+                html += `
+                    <div class="asset-item">
+                        <div class="asset-name">${asset.asset_name || 'Unknown'}</div>
+                        <div class="asset-quantity">${quantity}</div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        container.dataset.loaded = 'true';
+    } catch (error) {
+        console.error('Error loading wallet assets:', error);
+        container.innerHTML = '<div style="text-align: center; padding: 10px; color: #dc3545;">Failed to load assets</div>';
+    }
 }
 
 // Render a single wallet item
@@ -1080,8 +1135,11 @@ function renderSingleWallet(wallet, blockchain, isGrouped) {
     // No governance section for individual wallets - it's at stake key level now
     const groupedClass = isGrouped ? 'grouped-wallet' : '';
 
+    const walletId = wallet.id || wallet.wallet_id;
+    const hasAssets = wallet.native_assets_count > 0 || wallet.token_count > 0;
+
     return `
-        <div class="wallet-item ${blockchain} ${groupedClass}" data-address="${wallet.address}">
+        <div class="wallet-item ${blockchain} ${groupedClass}" data-address="${wallet.address}" data-wallet-id="${walletId}">
             <div class="wallet-info">
                 <div class="wallet-label-container">
                     <span class="wallet-label">${wallet.label || blockchain.charAt(0).toUpperCase() + blockchain.slice(1) + ' Wallet'}</span>
@@ -1105,8 +1163,9 @@ function renderSingleWallet(wallet, blockchain, isGrouped) {
             <div class="wallet-balance">
                 <div class="amount">${formatCryptoBlur(balance, unit)}</div>
                 <div class="amount-usd">${formatUSDBlur(usdValue)}</div>
-                ${assetsInfo ? `<div class="assets">${assetsInfo}</div>` : ''}
+                ${assetsInfo && hasAssets ? `<div class="assets assets-toggle" data-wallet-id="${walletId}">${assetsInfo} ▼</div>` : (assetsInfo ? `<div class="assets">${assetsInfo}</div>` : '')}
             </div>
+            ${hasAssets ? `<div class="wallet-assets-list" id="assets-${walletId}" style="display: none;"><div class="loading">Loading assets...</div></div>` : ''}
         </div>
     `;
 }
