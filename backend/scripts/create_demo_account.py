@@ -49,16 +49,72 @@ DEMO_WALLETS = [
             {
                 "asset_id": "d5e6bf0500378d4f0da4e8dde6becec7621cd8cbf5cbb9b87013d4cc4d494e",
                 "policy_id": "d5e6bf0500378d4f0da4e8dde6becec7621cd8cbf5cbb9b87013d4cc",
-                "asset_name": "4d494e",
+                "asset_name": "4d494e",  # MIN (Minswap)
                 "quantity": "100000",
                 "decimals": 6
             },
             {
                 "asset_id": "25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935574d54",
                 "policy_id": "25c5de5f5b286073c593edfd77b48abc7a48e5a4f3d4cd9d428ff935",
-                "asset_name": "574d54",
+                "asset_name": "574d54",  # WMT (World Mobile Token)
                 "quantity": "5000",
                 "decimals": 6
+            },
+            {
+                "asset_id": "f43a62fdc3965df486de8a0d32fe800963589c41b38946602a0dc53541474f",
+                "policy_id": "f43a62fdc3965df486de8a0d32fe800963589c41b38946602a0dc535",
+                "asset_name": "41474f",  # AGIX (SingularityNET)
+                "quantity": "50000",
+                "decimals": 8
+            },
+            {
+                "asset_id": "8db269c3ec630e06ae29f74bc39edd1f87c819f1056206e879a1cd61446f67",
+                "policy_id": "8db269c3ec630e06ae29f74bc39edd1f87c819f1056206e879a1cd61",
+                "asset_name": "446f67",  # SNEK
+                "quantity": "2500000",
+                "decimals": 0
+            },
+            {
+                "asset_id": "29d222ce763455e3d7a09a665ce554f00ac89d2e99a1a83d267170c6494e4459",
+                "policy_id": "29d222ce763455e3d7a09a665ce554f00ac89d2e99a1a83d267170c6",
+                "asset_name": "494e4459",  # INDY (Indigo)
+                "quantity": "7500",
+                "decimals": 6
+            },
+            {
+                "asset_id": "0e14267a8020229adc0184dd25fa3174c3f7d6caadcb4425c70e7c04534e454b",
+                "policy_id": "0e14267a8020229adc0184dd25fa3174c3f7d6caadcb4425c70e7c04",
+                "asset_name": "534e454b",  # Another SNEK variant
+                "quantity": "150000",
+                "decimals": 0
+            },
+            {
+                "asset_id": "682fe60c9918842b3323c43b5144bc3d52a23bd2fb81345560d73f634e4d4c4b",
+                "policy_id": "682fe60c9918842b3323c43b5144bc3d52a23bd2fb81345560d73f63",
+                "asset_name": "4e4d4c4b",  # NMKR (Newm)
+                "quantity": "25000",
+                "decimals": 6
+            },
+            {
+                "asset_id": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147",
+                "policy_id": "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114",
+                "asset_name": "494147",  # IAG (Iagon)
+                "quantity": "80000",
+                "decimals": 6
+            },
+            {
+                "asset_id": "c6e65ba7878b2f8ea0ad39287d3e2fd256dc5c4160fc19bdf4c4d87e7447454e53",
+                "policy_id": "c6e65ba7878b2f8ea0ad39287d3e2fd256dc5c4160fc19bdf4c4d87e",
+                "asset_name": "7447454e53",  # GENS (Genzee)
+                "quantity": "120000",
+                "decimals": 0
+            },
+            {
+                "asset_id": "804f5544c1962a40546827cab750a88404dc7108c0f588b72964754f434f5049",
+                "policy_id": "804f5544c1962a40546827cab750a88404dc7108c0f588b72964754f",
+                "asset_name": "434f5049",  # COPI (Cornucopias)
+                "quantity": "35000",
+                "decimals": 0
             }
         ]
     },
@@ -103,16 +159,72 @@ DEMO_WALLETS = [
             {
                 "asset_id": "0xdac17f958d2ee523a2206206994597c13d831ec7",
                 "policy_id": "0xdac17f958d2ee523a2206206994597c13d831ec7",
-                "asset_name": "USDT",
+                "asset_name": "USDT",  # Tether
                 "quantity": "10000",
                 "decimals": 6
             },
             {
                 "asset_id": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
                 "policy_id": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
-                "asset_name": "USDC",
+                "asset_name": "USDC",  # USD Coin
                 "quantity": "5000",
                 "decimals": 6
+            },
+            {
+                "asset_id": "0x514910771af9ca656af840dff83e8264ecf986ca",
+                "policy_id": "0x514910771af9ca656af840dff83e8264ecf986ca",
+                "asset_name": "LINK",  # Chainlink
+                "quantity": "250",
+                "decimals": 18
+            },
+            {
+                "asset_id": "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984",
+                "policy_id": "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984",
+                "asset_name": "UNI",  # Uniswap
+                "quantity": "500",
+                "decimals": 18
+            },
+            {
+                "asset_id": "0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9",
+                "policy_id": "0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9",
+                "asset_name": "AAVE",  # Aave
+                "quantity": "75",
+                "decimals": 18
+            },
+            {
+                "asset_id": "0x6b175474e89094c44da98b954eedeac495271d0f",
+                "policy_id": "0x6b175474e89094c44da98b954eedeac495271d0f",
+                "asset_name": "DAI",  # Dai Stablecoin
+                "quantity": "8000",
+                "decimals": 18
+            },
+            {
+                "asset_id": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+                "policy_id": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+                "asset_name": "WBTC",  # Wrapped Bitcoin
+                "quantity": "0.5",
+                "decimals": 8
+            },
+            {
+                "asset_id": "0x95ad61b0a150d79219dcf64e1e6cc01f0b64c4ce",
+                "policy_id": "0x95ad61b0a150d79219dcf64e1e6cc01f0b64c4ce",
+                "asset_name": "SHIB",  # Shiba Inu
+                "quantity": "50000000",
+                "decimals": 18
+            },
+            {
+                "asset_id": "0xc00e94cb662c3520282e6f5717214004a7f26888",
+                "policy_id": "0xc00e94cb662c3520282e6f5717214004a7f26888",
+                "asset_name": "COMP",  # Compound
+                "quantity": "30",
+                "decimals": 18
+            },
+            {
+                "asset_id": "0x0d8775f648430679a709e98d2b0cb6250d2887ef",
+                "policy_id": "0x0d8775f648430679a709e98d2b0cb6250d2887ef",
+                "asset_name": "BAT",  # Basic Attention Token
+                "quantity": "15000",
+                "decimals": 18
             }
         ]
     },
@@ -134,9 +246,72 @@ DEMO_WALLETS = [
             {
                 "asset_id": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
                 "policy_id": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-                "asset_name": "USDC",
+                "asset_name": "USDC",  # USD Coin
                 "quantity": "3000",
                 "decimals": 6
+            },
+            {
+                "asset_id": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+                "policy_id": "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+                "asset_name": "RAY",  # Raydium
+                "quantity": "1200",
+                "decimals": 6
+            },
+            {
+                "asset_id": "SRMuApVNdxXokk5GT7XD5cUUgXMBCoAz2LHeuAoKWRt",
+                "policy_id": "SRMuApVNdxXokk5GT7XD5cUUgXMBCoAz2LHeuAoKWRt",
+                "asset_name": "SRM",  # Serum
+                "quantity": "800",
+                "decimals": 6
+            },
+            {
+                "asset_id": "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE",
+                "policy_id": "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE",
+                "asset_name": "ORCA",  # Orca
+                "quantity": "2500",
+                "decimals": 6
+            },
+            {
+                "asset_id": "MNGOqteD6L8KxfxaWNJ3r5fkPYuD1kXUhqFVEKB5dVa",
+                "policy_id": "MNGOqteD6L8KxfxaWNJ3r5fkPYuD1kXUhqFVEKB5dVa",
+                "asset_name": "MNGO",  # Mango Markets
+                "quantity": "15000",
+                "decimals": 6
+            },
+            {
+                "asset_id": "StepAscQoEioFxxWGnh2sLBDFp9d8rvKz2Yp39iDpyT",
+                "policy_id": "StepAscQoEioFxxWGnh2sLBDFp9d8rvKz2Yp39iDpyT",
+                "asset_name": "STEP",  # Step Finance
+                "quantity": "5000",
+                "decimals": 9
+            },
+            {
+                "asset_id": "7dHbWXmci3dT8UFYWYZweBLXgycu7Y3iL6trKn1Y7ARj",
+                "policy_id": "7dHbWXmci3dT8UFYWYZweBLXgycu7Y3iL6trKn1Y7ARj",
+                "asset_name": "stSOL",  # Lido Staked SOL
+                "quantity": "350",
+                "decimals": 9
+            },
+            {
+                "asset_id": "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So",
+                "policy_id": "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So",
+                "asset_name": "mSOL",  # Marinade Staked SOL
+                "quantity": "280",
+                "decimals": 9
+            },
+            {
+                "asset_id": "SLNDpmoWTVADgEdndyvWzroNL7zSi1dF9PC3xHGtPwp",
+                "policy_id": "SLNDpmoWTVADgEdndyvWzroNL7zSi1dF9PC3xHGtPwp",
+                "asset_name": "SLND",  # Solend
+                "quantity": "3500",
+                "decimals": 6
+            },
+            {
+                "asset_id": "Jito4APyf642JPZPx3hGc6WWJ8zPKtRbRs4P815Awbb",
+                "policy_id": "Jito4APyf642JPZPx3hGc6WWJ8zPKtRbRs4P815Awbb",
+                "asset_name": "JTO",  # Jito
+                "quantity": "600",
+                "decimals": 9
             }
         ]
     },
