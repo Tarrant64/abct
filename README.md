@@ -38,6 +38,10 @@ If you need to access ABCT remotely:
 
 For more details, see [SECURITY.md](SECURITY.md)
 
+## 🏗️ Architecture
+
+For a detailed overview of the system architecture, authentication flow, and database structure, see [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ## ✨ Features
 
 ### Portfolio Tracking
