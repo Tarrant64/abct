@@ -596,22 +596,31 @@ async function loadPortfolioSummary() {
         const baseEthUsd = (data.base?.total_eth || 0) * (prices.ETH || 0);
 
         // Update Cardano summary
-        setSafeHTML(adaBalance, formatCryptoBlur(data.cardano.total_ada, 'ADA', 6));
+        if (adaBalance) {
+            setSafeHTML(adaBalance, formatCryptoBlur(data.cardano.total_ada, 'ADA', 6));
+        }
         const adaBalanceUsd = document.getElementById('adaBalanceUsd');
         if (adaBalanceUsd) {
             setSafeHTML(adaBalanceUsd, formatUSDBlur(adaUsd));
         }
-        cardanoWallets.textContent = `${data.cardano.wallet_count} wallet${data.cardano.wallet_count !== 1 ? 's' : ''}`;
-        cardanoAssets.textContent = `${data.cardano.native_assets_count} native asset${data.cardano.native_assets_count !== 1 ? 's' : ''}`;
+        if (cardanoWallets) {
+            cardanoWallets.textContent = `${data.cardano.wallet_count} wallet${data.cardano.wallet_count !== 1 ? 's' : ''}`;
+        }
+        if (cardanoAssets) {
+            cardanoAssets.textContent = `${data.cardano.native_assets_count} native asset${data.cardano.native_assets_count !== 1 ? 's' : ''}`;
+        }
 
         // Update Bitcoin summary
-        setSafeHTML(btcBalance, formatCryptoBlur(data.bitcoin.total_btc.toFixed(8), 'BTC', 8));
+        if (btcBalance) {
+            setSafeHTML(btcBalance, formatCryptoBlur(data.bitcoin.total_btc.toFixed(8), 'BTC', 8));
+        }
         const btcBalanceUsd = document.getElementById('btcBalanceUsd');
         if (btcBalanceUsd) {
             setSafeHTML(btcBalanceUsd, formatUSDBlur(btcUsd));
         }
-        bitcoinWallets.textContent = `${data.bitcoin.wallet_count} wallet${data.bitcoin.wallet_count !== 1 ? 's' : ''}`;
-
+        if (bitcoinWallets) {
+            bitcoinWallets.textContent = `${data.bitcoin.wallet_count} wallet${data.bitcoin.wallet_count !== 1 ? 's' : ''}`;
+        }
         // Update Ethereum summary
         if (ethBalance) {
             setSafeHTML(ethBalance, formatCryptoBlur((data.ethereum?.total_eth || 0).toFixed(8), 'ETH', 8));

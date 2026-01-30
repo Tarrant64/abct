@@ -182,15 +182,15 @@ async def sync_wallets_from_file(user_id: int = Depends(verify_session)):
 
             if payment_addresses:
                 for pay_addr in payment_addresses:
-                    await save_wallet(pay_addr, 'cardano', f"From stake: {address[:20]}...")
+                    await save_wallet(pay_addr, 'cardano', f"From stake: {address[:20]}...", user_id)
                     synced += 1
                     expanded_from_stake += 1
             else:
                 # Save the stake address itself if no payment addresses found
-                await save_wallet(address, wallet['blockchain'])
+                await save_wallet(address, wallet['blockchain'], None, user_id)
                 synced += 1
         else:
-            await save_wallet(address, wallet['blockchain'])
+            await save_wallet(address, wallet['blockchain'], None, user_id)
             synced += 1
 
     # Now refresh all wallet balances in parallel (with concurrency limit)
@@ -572,7 +572,7 @@ async def add_multiple_wallets(data: dict, user_id: int = Depends(verify_session
             continue
 
         try:
-            await save_wallet(addr, 'cardano', label)
+            await save_wallet(addr, 'cardano', label, user_id)
             append_to_wallets_file(f"cardano:{addr}", label)
             added += 1
 
@@ -703,7 +703,7 @@ async def add_xpub_addresses(data: dict, user_id: int = Depends(verify_session))
         try:
             # Create label with xpub reference
             label = f"{label_prefix} ({xpub_short})"
-            await save_wallet(address, 'bitcoin', label)
+            await save_wallet(address, 'bitcoin', label, user_id)
             append_to_wallets_file(f"bitcoin:{address}", label)
             added += 1
 
@@ -778,7 +778,7 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
             added_count = 0
             for pay_addr in payment_addresses:
                 label = wallet.label or f"From stake: {address[:20]}..."
-                await save_wallet(pay_addr, 'cardano', label)
+                await save_wallet(pay_addr, 'cardano', label, user_id)
                 # Append each payment address to wallets.txt
                 append_to_wallets_file(pay_addr, label)
                 saved = await get_wallet_by_address(pay_addr)
@@ -835,7 +835,7 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
                     continue
 
                 label = wallet.label or f"xpub ({xpub_short})"
-                await save_wallet(addr, 'bitcoin', label)
+                await save_wallet(addr, 'bitcoin', label, user_id)
                 append_to_wallets_file(f"bitcoin:{addr}", label)
 
                 saved = await get_wallet_by_address(addr, 'bitcoin')
@@ -857,7 +857,7 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
             }
 
         # Regular address handling
-        await save_wallet(address, blockchain, wallet.label)
+        await save_wallet(address, blockchain, wallet.label, user_id)
 
         # Append to wallets.txt
         file_saved = append_to_wallets_file(address, wallet.label)
