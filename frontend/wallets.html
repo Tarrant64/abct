@@ -1461,9 +1461,11 @@ base:0x789..." oninput="previewImport()"></textarea>
                 html += renderWalletItem(wallet, false);
             });
 
-            setSafeHTML(container, html);
+            // Use innerHTML directly for internally generated HTML (not user input)
+            // DOMPurify was stripping data attributes needed for event listeners
+            container.innerHTML = html;
 
-            // Attach event listeners after DOM is updated (DOMPurify strips onclick)
+            // Attach event listeners after DOM is updated
             attachWalletEventListeners();
         }
 
@@ -2391,7 +2393,7 @@ base:0x789..." oninput="previewImport()"></textarea>
     </script>
 
     <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
-        <p>ABCT - Wallet Management | <span style="opacity: 0.6;">v0.12.0 (BUILD 1769804954)</span></p>
+        <p>ABCT - Wallet Management | <span style="opacity: 0.6;">v0.12.0 (BUILD 1769809798)</span></p>
     </footer>
 </body>
 </html>
