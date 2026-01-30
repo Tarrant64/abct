@@ -194,3 +194,6 @@ test-*.json
 # API keys and credentials files
 apikeys.rtf
 cdp_api_key.json
+
+# Legacy/Archive
+archive/
