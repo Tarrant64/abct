@@ -241,7 +241,7 @@ class SolanaNFTService:
             "royalty_percent": royalty_percent * 100 if royalty_percent < 1 else royalty_percent
         }
 
-    async def get_all_solana_nfts(self, force_refresh: bool = False) -> List[dict]:
+    async def get_all_solana_nfts(self, user_id: int = None, force_refresh: bool = False) -> List[dict]:
         """
         Fetch all NFTs for all Solana wallets.
         Uses persistent database cache that survives server restarts.
@@ -273,7 +273,7 @@ class SolanaNFTService:
             return []
 
         # Get all Solana wallets
-        wallets = await get_all_wallets()
+        wallets = await get_all_wallets(user_id=user_id)
         sol_wallets = [w for w in wallets if w['blockchain'] == 'solana']
 
         if not sol_wallets:
@@ -342,14 +342,14 @@ class SolanaNFTService:
         except Exception as e:
             logger.error(f"Error saving Solana NFT cache to database: {e}")
 
-    async def get_nft_summary(self) -> dict:
+    async def get_nft_summary(self, user_id: int = None) -> dict:
         """
         Get a summary of all Solana NFTs grouped by collection.
 
         Returns:
             Dictionary with collection summaries and totals
         """
-        all_nfts = await self.get_all_solana_nfts()
+        all_nfts = await self.get_all_solana_nfts(user_id=user_id)
 
         # Group by collection
         collections = {}

@@ -18,6 +18,7 @@ from database import (
 )
 from services.pricing import pricing_service
 from middleware.auth import verify_admin
+from auth_utils import verify_session
 
 router = APIRouter(prefix="/custom-tokens", tags=["custom-tokens"])
 
@@ -41,12 +42,12 @@ class TokenUpdateRequest(BaseModel):
 
 
 @router.get("")
-async def list_custom_tokens():
+async def list_custom_tokens(user_id: int = Depends(verify_session)):
     """
     Get all custom tokens being tracked.
     Returns tokens with current price data if available.
     """
-    tokens = await get_all_custom_tokens()
+    tokens = await get_all_custom_tokens(user_id=user_id)
 
     # Get current prices
     all_prices = await pricing_service.get_all_tracked_prices()
@@ -87,13 +88,12 @@ async def list_custom_tokens():
     }
 
 
-@router.post("", dependencies=[Depends(verify_admin)])
-async def add_token(request: TokenAddRequest):
+@router.post("")
+async def add_token(user_id: int = Depends(verify_session), request: TokenAddRequest = None):
     """
     Add a new custom token for manual tracking.
 
     Validates the blockchain and attempts to look up token info.
-    Requires admin authentication.
     """
     # Validate blockchain
     if request.blockchain not in ['cardano', 'ethereum', 'bitcoin']:
@@ -119,7 +119,8 @@ async def add_token(request: TokenAddRequest):
     # Check if token already exists
     existing = await get_custom_token_by_policy(
         request.policy_id,
-        request.asset_name or ''
+        request.asset_name or '',
+        user_id=user_id
     )
     if existing:
         raise HTTPException(
@@ -145,7 +146,7 @@ async def add_token(request: TokenAddRequest):
         'price_usd': token_info.get('price_usd') if token_info else None
     }
 
-    token_id = await add_custom_token(token_data)
+    token_id = await add_custom_token(token_data, user_id=user_id)
 
     return {
         'message': 'Token added successfully',
@@ -156,6 +157,7 @@ async def add_token(request: TokenAddRequest):
 
 @router.get("/lookup")
 async def lookup_token(
+    user_id: int = Depends(verify_session),
     policy_id: str = Query(..., description="Policy ID or contract address"),
     asset_name: str = Query("", description="Asset name (hex) for Cardano tokens"),
     blockchain: str = Query("cardano", description="Blockchain: cardano, ethereum, bitcoin")
@@ -237,9 +239,9 @@ async def lookup_cardano_token(policy_id: str, asset_name: str = "") -> dict:
 
 
 @router.get("/{token_id}")
-async def get_token(token_id: int):
+async def get_token(token_id: int, user_id: int = Depends(verify_session)):
     """Get a specific custom token by ID."""
-    token = await get_custom_token_by_id(token_id)
+    token = await get_custom_token_by_id(token_id, user_id=user_id)
     if not token:
         raise HTTPException(status_code=404, detail="Token not found")
 
@@ -258,10 +260,10 @@ async def get_token(token_id: int):
     return token
 
 
-@router.put("/{token_id}", dependencies=[Depends(verify_admin)])
-async def update_token(token_id: int, request: TokenUpdateRequest):
-    """Update a custom token's quantity or label. Requires admin authentication."""
-    token = await get_custom_token_by_id(token_id)
+@router.put("/{token_id}")
+async def update_token(token_id: int, user_id: int = Depends(verify_session), request: TokenUpdateRequest = None):
+    """Update a custom token's quantity or label."""
+    token = await get_custom_token_by_id(token_id, user_id=user_id)
     if not token:
         raise HTTPException(status_code=404, detail="Token not found")
 
@@ -274,19 +276,19 @@ async def update_token(token_id: int, request: TokenUpdateRequest):
         updates['ticker'] = request.ticker
 
     if updates:
-        await update_custom_token(token_id, updates)
+        await update_custom_token(token_id, updates, user_id=user_id)
 
     return {'message': 'Token updated successfully'}
 
 
-@router.delete("/{token_id}", dependencies=[Depends(verify_admin)])
-async def remove_token(token_id: int):
-    """Remove a custom token from tracking. Requires admin authentication."""
-    token = await get_custom_token_by_id(token_id)
+@router.delete("/{token_id}")
+async def remove_token(token_id: int, user_id: int = Depends(verify_session)):
+    """Remove a custom token from tracking."""
+    token = await get_custom_token_by_id(token_id, user_id=user_id)
     if not token:
         raise HTTPException(status_code=404, detail="Token not found")
 
-    await delete_custom_token(token_id)
+    await delete_custom_token(token_id, user_id=user_id)
 
     return {'message': 'Token removed successfully'}
 
@@ -296,14 +298,14 @@ class TokenToggleRequest(BaseModel):
     include_in_total: bool
 
 
-@router.post("/{token_id}/toggle", dependencies=[Depends(verify_admin)])
-async def toggle_token_inclusion(token_id: int, request: TokenToggleRequest):
-    """Toggle whether a custom token is included in the portfolio total. Requires admin authentication."""
-    token = await get_custom_token_by_id(token_id)
+@router.post("/{token_id}/toggle")
+async def toggle_token_inclusion(token_id: int, user_id: int = Depends(verify_session), request: TokenToggleRequest = None):
+    """Toggle whether a custom token is included in the portfolio total."""
+    token = await get_custom_token_by_id(token_id, user_id=user_id)
     if not token:
         raise HTTPException(status_code=404, detail="Token not found")
 
-    await update_custom_token(token_id, {'include_in_total': 1 if request.include_in_total else 0})
+    await update_custom_token(token_id, {'include_in_total': 1 if request.include_in_total else 0}, user_id=user_id)
 
     return {
         'message': 'Token inclusion updated',

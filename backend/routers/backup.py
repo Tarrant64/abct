@@ -316,8 +316,8 @@ async def preview_import(options: ImportOptions) -> PreviewResponse:
         )
 
 
-@router.post("/import", dependencies=[Depends(verify_session)])
-async def import_backup(options: ImportOptions):
+@router.post("/import")
+async def import_backup(options: ImportOptions, user_id: int = Depends(verify_session)):
     """
     Import configurations from a backup file.
 
@@ -397,6 +397,13 @@ async def import_backup(options: ImportOptions):
                             id_index = columns.index("id")
                             columns.pop(id_index)
                             values.pop(id_index)
+
+                        # Override user_id for user-specific tables
+                        # This ensures imported data belongs to the current user
+                        user_tables = ["wallets", "custom_tokens", "portfolio_history", "portfolio_snapshots"]
+                        if table_name in user_tables and "user_id" in columns:
+                            user_id_index = columns.index("user_id")
+                            values[user_id_index] = user_id
 
                         # Build INSERT OR REPLACE query for merge mode
                         placeholders = ",".join(["?" for _ in values])

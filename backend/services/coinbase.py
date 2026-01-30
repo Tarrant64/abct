@@ -142,7 +142,7 @@ class CoinbaseService:
 
         return accounts
 
-    async def get_portfolio_balances(self) -> Dict:
+    async def get_portfolio_balances(self, user_id: int = None) -> Dict:
         """
         Get portfolio balances from Coinbase.
         Includes both available and held balances (funds in open orders).

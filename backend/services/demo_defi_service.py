@@ -18,17 +18,17 @@ class DemoDeFiService:
 
     def __init__(self):
         """Initialize demo DeFi service with fake positions."""
-        # Demo staking positions
+        # Demo staking positions - ANIME THEMED
         self.staking_positions = [
             {
                 "protocol": "Cardano Staking",
                 "pool_name": "DEMO POOL",
                 "pool_ticker": "DEMO",
-                "staked_amount": "35000",
-                "staked_amount_usd": 35000 * 1.05,  # $1.05 ADA
-                "rewards_earned": "450.25",
-                "rewards_earned_usd": 450.25 * 1.05,
-                "apy": 4.5,
+                "staked_amount": "100000",
+                "staked_amount_usd": 100000 * 1.05,  # $105,000 (ADA at $1.05)
+                "rewards_earned": "1250.50",
+                "rewards_earned_usd": 1250.50 * 1.05,
+                "apy": 4.2,
                 "status": "active",
                 "stake_address": "stake1u9demo_stake_address_example_1234567890",
                 "epochs_staked": 45,
@@ -37,73 +37,79 @@ class DemoDeFiService:
             {
                 "protocol": "Ethereum Staking",
                 "validator": "Demo Validator",
-                "staked_amount": "32",
-                "staked_amount_usd": 32 * 3500,  # $3500 ETH
-                "rewards_earned": "0.85",
-                "rewards_earned_usd": 0.85 * 3500,
+                "staked_amount": "12",
+                "staked_amount_usd": 12 * 3000,  # $36,000 (ETH at $3000)
+                "rewards_earned": "0.42",
+                "rewards_earned_usd": 0.42 * 3000,
                 "apy": 3.8,
                 "status": "active",
                 "validator_index": "123456"
-            }
-        ]
-
-        # Demo lending positions
-        self.lending_positions = [
-            {
-                "protocol": "Indigo",
-                "position_type": "collateral",
-                "asset": "ADA",
-                "amount": "25000",
-                "amount_usd": 25000 * 1.05,
-                "collateral_ratio": 275,
-                "liquidation_price": 0.65,
-                "health_factor": 2.75,
-                "debt_asset": "iUSD",
-                "debt_amount": "9500",
-                "debt_amount_usd": 9500,
-                "apy": 0,
-                "stability_fee": 2.5
             },
             {
-                "protocol": "Liqwid",
+                "protocol": "Solana Staking",
+                "validator": "Anime Validator",
+                "staked_amount": "300",
+                "staked_amount_usd": 300 * 140,  # $42,000 (SOL at $140)
+                "rewards_earned": "15.75",
+                "rewards_earned_usd": 15.75 * 140,
+                "apy": 7.1,
+                "status": "active",
+                "validator_address": "SoL1anaDemo1Validator123456789ABC"
+            }
+        ]
+
+        # Demo lending positions - ANIME THEMED
+        self.lending_positions = [
+            {
+                "protocol": "Kawaii Lending",
                 "position_type": "supply",
                 "asset": "ADA",
-                "amount": "10000",
-                "amount_usd": 10000 * 1.05,
-                "apy": 3.2,
-                "rewards_earned": "85.50",
-                "rewards_earned_usd": 85.50 * 1.05
+                "amount": "33333",
+                "amount_usd": 33333 * 1.05,  # $35,000
+                "apy": 5.5,
+                "rewards_earned": "425.50",
+                "rewards_earned_usd": 425.50 * 1.05
             }
         ]
 
-        # Demo liquidity positions
+        # Demo liquidity positions - ANIME THEMED
         self.liquidity_positions = [
             {
-                "protocol": "Minswap",
-                "pool": "ADA/MIN",
-                "position_value_usd": 5250.75,
+                "protocol": "Senpai Swap",
+                "pool": "ADA/ANIME",
+                "position_value_usd": 45000.00,
                 "token_a": "ADA",
-                "token_a_amount": "2500",
-                "token_b": "MIN",
-                "token_b_amount": "58350",
-                "share_of_pool": 0.025,
-                "apy": 12.5,
-                "fees_earned_24h": 2.50,
-                "fees_earned_total": 125.75,
-                "impermanent_loss": -2.3
+                "token_a_amount": "21429",
+                "token_b": "ANIME",
+                "token_b_amount": "500000",
+                "share_of_pool": 0.085,
+                "apy": 18.5,
+                "fees_earned_24h": 12.50,
+                "fees_earned_total": 1250.75,
+                "impermanent_loss": -1.2
             }
         ]
 
-        # Demo yield farming positions
+        # Demo yield farming positions - ANIME THEMED
         self.farming_positions = [
             {
-                "protocol": "SundaeSwap",
-                "farm": "ADA/SUNDAE LP Staking",
-                "staked_amount_usd": 3200.50,
-                "rewards_token": "SUNDAE",
-                "rewards_earned": "850",
-                "rewards_earned_usd": 850 * 0.012,
-                "apy": 15.8,
+                "protocol": "Otaku Vault",
+                "farm": "Anime Yield Farm",
+                "staked_amount_usd": 40000.00,
+                "rewards_token": "OTAKU",
+                "rewards_earned": "2500",
+                "rewards_earned_usd": 2500 * 0.025,
+                "apy": 22.5,
+                "status": "active"
+            },
+            {
+                "protocol": "Manga Money Market",
+                "farm": "Staking Rewards",
+                "staked_amount_usd": 30000.00,
+                "rewards_token": "MANGA",
+                "rewards_earned": "1800",
+                "rewards_earned_usd": 1800 * 0.032,
+                "apy": 16.8,
                 "status": "active"
             }
         ]
@@ -244,6 +250,10 @@ class DemoDeFiService:
                 len(self.liquidity_positions) +
                 len(self.farming_positions)
             ),
+            "staking_positions": await self.get_all_staking_positions(),
+            "lending_positions": await self.get_all_lending_positions(),
+            "liquidity_positions": await self.get_all_liquidity_positions(),
+            "farming_positions": await self.get_all_farming_positions(),
             "updated_at": datetime.now().isoformat()
         }
 

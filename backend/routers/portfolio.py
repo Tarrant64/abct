@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
 from pydantic import BaseModel
 import sys
 import os
@@ -15,6 +15,7 @@ from services.snapshot import snapshot_service
 from services.pricing import pricing_service
 from services.defi import DEFI_PROTOCOLS
 from services.taptools import taptools_wallet_service
+from auth_utils import verify_session
 
 
 class TokenTrackRequest(BaseModel):
@@ -31,18 +32,18 @@ PORTFOLIO_CACHE_TTL = 604800  # 7 days
 STAKE_CACHE_TTL = 3600  # 1 hour for stake address lookups
 
 @router.get("/summary")
-async def get_portfolio_summary(refresh: bool = Query(False, description="Force refresh cache")):
+async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh: bool = Query(False, description="Force refresh cache")):
     """Get a summary of the entire portfolio grouped by blockchain."""
-    cache_key = "portfolio_summary"
+    cache_key = f"portfolio_summary_{user_id}"
 
     # Check cache first (unless refresh requested)
     if not refresh:
-        cached = await get_cache(cache_key)
+        cached = await get_cache(cache_key, user_id=user_id)
         if cached:
             cached['from_cache'] = True
             return cached
 
-    wallets = await get_all_wallets()
+    wallets = await get_all_wallets(user_id=user_id)
 
     summary = {
         'cardano': {
@@ -190,7 +191,7 @@ async def get_portfolio_summary(refresh: bool = Query(False, description="Force 
     from datetime import datetime
     summary['from_cache'] = False
     summary['last_updated'] = datetime.now().isoformat()
-    await set_cache(cache_key, summary, PORTFOLIO_CACHE_TTL)
+    await set_cache(cache_key, summary, PORTFOLIO_CACHE_TTL, user_id=user_id)
 
     return summary
 
@@ -198,22 +199,22 @@ async def get_portfolio_summary(refresh: bool = Query(False, description="Force 
 NATIVE_ASSETS_CACHE_TTL = 604800
 
 @router.get("/assets")
-async def get_all_native_assets(refresh: bool = Query(False, description="Force refresh cache")):
+async def get_all_native_assets(user_id: int = Depends(verify_session), refresh: bool = Query(False, description="Force refresh cache")):
     """
     Get all native assets across all wallets with prices.
     Returns aggregated quantities, proper decimal conversion, and USD values.
     Uses caching for faster loads - pass refresh=true to force update.
     """
-    cache_key = "native_assets_all"
+    cache_key = f"native_assets_all"
 
     # Check cache first (unless refresh requested)
     if not refresh:
-        cached = await get_cache(cache_key)
+        cached = await get_cache(cache_key, user_id=user_id)
         if cached:
             # Still need to recalculate prices since they change frequently
             return await _enrich_cached_assets_with_prices(cached)
 
-    wallets = await get_all_wallets()
+    wallets = await get_all_wallets(user_id=user_id)
 
     all_assets = []
     for wallet in wallets:
@@ -354,7 +355,7 @@ async def get_all_native_assets(refresh: bool = Query(False, description="Force 
         'assets': list(asset_totals.values()),
         'total_unique_assets': len(asset_totals)
     }
-    await set_cache(cache_key, cache_data, NATIVE_ASSETS_CACHE_TTL)
+    await set_cache(cache_key, cache_data, NATIVE_ASSETS_CACHE_TTL, user_id=user_id)
 
     return result
 
@@ -421,6 +422,7 @@ async def _enrich_cached_assets_with_prices(cached_data: dict) -> dict:
 
 @router.get("/history")
 async def get_portfolio_history(
+    user_id: int = Depends(verify_session),
     range: str = Query("7d", description="Time range: 7d (7 days), 4w (4 weeks), 3m (3 months)")
 ):
     """
@@ -432,8 +434,8 @@ async def get_portfolio_history(
     days_map = {"7d": 7, "4w": 28, "3m": 90}
     days = days_map.get(range, 7)
 
-    history = await snapshot_service.get_history(days)
-    latest = await get_latest_snapshot_date()
+    history = await snapshot_service.get_history(days, user_id=user_id)
+    latest = await get_latest_snapshot_date(user_id=user_id)
 
     return {
         "range": range,
@@ -445,18 +447,18 @@ async def get_portfolio_history(
 
 
 @router.post("/snapshot")
-async def create_portfolio_snapshot(force: bool = Query(False, description="Force create even if exists")):
+async def create_portfolio_snapshot(user_id: int = Depends(verify_session), force: bool = Query(False, description="Force create even if exists")):
     """
     Manually create a portfolio snapshot.
 
     Useful for testing or creating snapshots outside the normal schedule.
     """
-    result = await snapshot_service.create_snapshot(force=force)
+    result = await snapshot_service.create_snapshot(user_id=user_id, force=force)
     return result
 
 
 @router.post("/history/generate")
-async def generate_historical_data(days: int = Query(30, description="Number of days of history to generate")):
+async def generate_historical_data(user_id: int = Depends(verify_session), days: int = Query(30, description="Number of days of history to generate")):
     """
     Generate historical portfolio data for the past N days.
 
@@ -466,24 +468,24 @@ async def generate_historical_data(days: int = Query(30, description="Number of 
     Note: This assumes holdings have been constant. For accurate historical
     balances, transaction history reconstruction would be needed.
     """
-    result = await snapshot_service.generate_historical_data(days=days)
+    result = await snapshot_service.generate_historical_data(user_id=user_id, days=days)
     return result
 
 
 @router.post("/history/backfill")
-async def backfill_historical_components():
+async def backfill_historical_components(user_id: int = Depends(verify_session)):
     """
     Backfill historical snapshots with current staking/defi/exchange/NFT values.
 
     Updates existing snapshots to include non-wallet components, making the
     chart more accurate. Assumes these component values have been relatively stable.
     """
-    result = await snapshot_service.backfill_component_values()
+    result = await snapshot_service.backfill_component_values(user_id=user_id)
     return result
 
 
 @router.post("/tokens/track")
-async def track_token(request: TokenTrackRequest):
+async def track_token(user_id: int = Depends(verify_session), request: TokenTrackRequest = None):
     """
     Toggle tracking for a native token.
 
@@ -491,7 +493,7 @@ async def track_token(request: TokenTrackRequest):
     and pricing will be fetched for it.
     """
     # Save tracking preference
-    await toggle_token_tracking(request.asset_id, request.track)
+    await toggle_token_tracking(request.asset_id, request.track, user_id=user_id)
 
     # If enabling tracking and ticker/decimals provided, save metadata
     if request.track and (request.ticker or request.decimals is not None):
@@ -512,9 +514,9 @@ async def track_token(request: TokenTrackRequest):
 
 
 @router.get("/tokens/tracked")
-async def get_tracked_token_list():
+async def get_tracked_token_list(user_id: int = Depends(verify_session)):
     """Get all tokens that are being tracked for pricing."""
-    tracked = await get_tracked_tokens()
+    tracked = await get_tracked_tokens(user_id=user_id)
     return {
         'tokens': tracked,
         'count': len(tracked)
@@ -522,17 +524,17 @@ async def get_tracked_token_list():
 
 
 @router.post("/tokens/decimals")
-async def update_token_decimals(asset_id: str = Query(...), decimals: int = Query(...)):
+async def update_token_decimals(user_id: int = Depends(verify_session), asset_id: str = Query(...), decimals: int = Query(...)):
     """
     Update decimals for a specific token.
 
     This updates both the metadata cache and all native_assets records.
     """
     # Update metadata
-    await save_token_metadata({'asset_id': asset_id, 'decimals': decimals})
+    await save_token_metadata({'asset_id': asset_id, 'decimals': decimals}, user_id=user_id)
 
     # Update native_assets table
-    await update_native_asset_decimals(asset_id, decimals)
+    await update_native_asset_decimals(asset_id, decimals, user_id=user_id)
 
     return {
         'success': True,
@@ -542,7 +544,7 @@ async def update_token_decimals(asset_id: str = Query(...), decimals: int = Quer
 
 
 @router.get("/verify/{address}")
-async def verify_wallet_balance(address: str):
+async def verify_wallet_balance(address: str, user_id: int = Depends(verify_session)):
     """
     Verify wallet balance against TapTools data.
 
@@ -591,7 +593,7 @@ async def verify_wallet_balance(address: str):
 
 
 @router.get("/stake/discover/{address}")
-async def discover_stake_addresses(address: str):
+async def discover_stake_addresses(address: str, user_id: int = Depends(verify_session)):
     """
     Discover all addresses under the stake key for a given address.
 
@@ -670,7 +672,7 @@ async def discover_stake_addresses(address: str):
 
 
 @router.post("/stake/sync")
-async def sync_stake_addresses(address: str, label_prefix: str = "Discovered"):
+async def sync_stake_addresses(address: str, label_prefix: str = "Discovered", user_id: int = Depends(verify_session)):
     """
     Add all missing addresses from a stake key to tracking.
 
@@ -715,7 +717,7 @@ async def sync_stake_addresses(address: str, label_prefix: str = "Discovered"):
 
 
 @router.get("/defi/analysis/{address}")
-async def analyze_defi_locked_ada(address: str):
+async def analyze_defi_locked_ada(address: str, user_id: int = Depends(verify_session)):
     """
     Deep analysis of DeFi-locked ADA for a given address.
 
@@ -808,14 +810,14 @@ async def analyze_defi_locked_ada(address: str):
 
 
 @router.get("/taptools/summary")
-async def get_taptools_summary():
+async def get_taptools_summary(user_id: int = Depends(verify_session)):
     """
     Get TapTools portfolio summary for all Cardano wallets.
 
     Groups wallets by stake key and shows aggregate local vs TapTools balances.
     TapTools returns stake key totals, so we aggregate our local balances similarly.
     """
-    wallets = await get_all_wallets()
+    wallets = await get_all_wallets(user_id=user_id)
     cardano_wallets = [w for w in wallets if w['blockchain'] == 'cardano']
 
     if not taptools_wallet_service.is_configured():
