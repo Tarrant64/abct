@@ -1833,12 +1833,89 @@ body.usd-primary .card-body .details {
 
 .wallet-item .wallet-label {
     font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.wallet-label .label-text {
+    color: var(--text-primary);
+}
+
+.wallet-label .token-count {
+    background-color: var(--accent-color);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
+
+.wallet-label .token-count:hover {
+    opacity: 0.8;
 }
 
 .wallet-label-container {
     display: flex;
     align-items: center;
     gap: 8px;
+}
+
+/* Wallet Actions Buttons */
+.wallet-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.wallet-actions .btn {
+    white-space: nowrap;
+}
+
+/* Wallet Assets Container */
+.wallet-assets-container {
+    display: none;
+    margin-top: 12px;
+    padding: 12px;
+    background-color: var(--bg-secondary);
+    border-radius: 6px;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+
+.wallet-assets-container.expanded {
+    display: block;
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.wallet-asset-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px;
+    margin-bottom: 4px;
+    background-color: var(--bg-card);
+    border-radius: 4px;
+}
+
+.wallet-asset-item:last-child {
+    margin-bottom: 0;
+}
+
+.wallet-asset-name {
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.wallet-asset-quantity {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
 }
 
 .edit-label-btn {
