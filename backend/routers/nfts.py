@@ -1405,12 +1405,9 @@ async def get_nfts_with_images(user_id: int = Depends(verify_session), blockchai
                 }
             })
 
-        # Group by chain for summary
+        # Group by chain for summary (simple counts like normal mode)
         by_chain = {
-            'cardano': {
-                'count': len(formatted_nfts),
-                'total_value_usd': sum(n['floor_price_usd'] for n in formatted_nfts)
-            }
+            'cardano': len(formatted_nfts)
         }
 
         prices = {
