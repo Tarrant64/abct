@@ -1376,7 +1376,7 @@ base:0x789..." oninput="previewImport()"></textarea>
 
                 html += `
                     <div class="stake-group" data-stake-key="${stakeKey}">
-                        <div class="stake-group-header" onclick="toggleStakeGroup('${stakeKey.replace(/'/g, "\\'")}')">
+                        <div class="stake-group-header">
                             <div class="stake-group-info">
                                 <span class="expand-icon">▶</span>
                                 <span class="chain cardano">cardano</span>
@@ -1407,6 +1407,9 @@ base:0x789..." oninput="previewImport()"></textarea>
             });
 
             setSafeHTML(container, html);
+
+            // Attach event listeners after DOM is updated (DOMPurify strips onclick)
+            attachWalletEventListeners();
         }
 
         function renderWalletItem(wallet, isGrouped = false) {
@@ -1414,13 +1417,13 @@ base:0x789..." oninput="previewImport()"></textarea>
             const hasAssets = wallet.native_assets_count && wallet.native_assets_count > 0;
 
             return `
-                <div class="wallet-item ${isGrouped ? 'grouped' : ''}" data-chain="${wallet.blockchain}" id="${walletContainerId}">
+                <div class="wallet-item ${isGrouped ? 'grouped' : ''}" data-chain="${wallet.blockchain}" data-wallet-id="${wallet.id}" data-wallet-address="${wallet.address}" data-wallet-label="${wallet.label || ''}" id="${walletContainerId}">
                     <div class="wallet-info" style="flex: 1; min-width: 0;">
                         <div class="wallet-address">${wallet.address.slice(0, 20)}...${wallet.address.slice(-12)}</div>
                         <div class="wallet-label">
                             ${!isGrouped ? `<span class="chain ${wallet.blockchain}">${wallet.blockchain}</span>` : ''}
                             ${wallet.label ? `<span class="label-text">${wallet.label}</span>` : ''}
-                            ${hasAssets ? `<span class="token-count" onclick="toggleWalletAssets(${wallet.id}, event)">${wallet.native_assets_count} token${wallet.native_assets_count !== 1 ? 's' : ''} ▼</span>` : ''}
+                            ${hasAssets ? `<span class="token-count" data-wallet-id="${wallet.id}">${wallet.native_assets_count} token${wallet.native_assets_count !== 1 ? 's' : ''} ▼</span>` : ''}
                         </div>
                         <div class="wallet-assets-container" id="assets-${wallet.id}">
                             <div class="loading" style="text-align: center; padding: 10px;">Loading assets...</div>
@@ -1431,15 +1434,55 @@ base:0x789..." oninput="previewImport()"></textarea>
                         <div class="unit">${getUnitDisplay(wallet.balance_unit)}</div>
                     </div>
                     <div class="wallet-actions">
-                        <button class="btn btn-secondary btn-small" onclick="openEditModal(${wallet.id}, '${wallet.address}', '${wallet.label || ''}')">
+                        <button class="btn btn-secondary btn-small wallet-edit-btn" data-wallet-id="${wallet.id}" data-wallet-address="${wallet.address}" data-wallet-label="${wallet.label || ''}">
                             Edit
                         </button>
-                        <button class="btn btn-danger btn-small" onclick="deleteWallet('${wallet.blockchain}:${wallet.address}')">
+                        <button class="btn btn-danger btn-small wallet-delete-btn" data-wallet-key="${wallet.blockchain}:${wallet.address}">
                             Delete
                         </button>
                     </div>
                 </div>
             `;
+        }
+
+        function attachWalletEventListeners() {
+            // Stake group toggle listeners
+            document.querySelectorAll('.stake-group-header').forEach(header => {
+                header.addEventListener('click', function() {
+                    const stakeGroup = this.closest('.stake-group');
+                    const stakeKey = stakeGroup.dataset.stakeKey;
+                    toggleStakeGroup(stakeKey);
+                });
+            });
+
+            // Token count badge listeners
+            document.querySelectorAll('.token-count').forEach(badge => {
+                badge.addEventListener('click', function(event) {
+                    event.stopPropagation();
+                    const walletId = parseInt(this.dataset.walletId);
+                    toggleWalletAssets(walletId, event);
+                });
+            });
+
+            // Edit button listeners
+            document.querySelectorAll('.wallet-edit-btn').forEach(btn => {
+                btn.addEventListener('click', function(event) {
+                    event.stopPropagation();
+                    const id = parseInt(this.dataset.walletId);
+                    const address = this.dataset.walletAddress;
+                    const label = this.dataset.walletLabel;
+                    openEditModal(id, address, label);
+                });
+            });
+
+            // Delete button listeners
+            document.querySelectorAll('.wallet-delete-btn').forEach(btn => {
+                btn.addEventListener('click', function(event) {
+                    event.stopPropagation();
+                    const walletKey = this.dataset.walletKey;
+                    deleteWallet(walletKey);
+                });
+            });
         }
 
         async function toggleWalletAssets(walletId, event) {
@@ -2333,7 +2376,7 @@ base:0x789..." oninput="previewImport()"></textarea>
     </script>
 
     <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
-        <p>ABCT - Wallet Management | <span style="opacity: 0.6;">v0.12.0 (BUILD 1769801052)</span></p>
+        <p>ABCT - Wallet Management | <span style="opacity: 0.6;">v0.12.0 (BUILD 1769804539)</span></p>
     </footer>
 </body>
 </html>
