@@ -1725,6 +1725,91 @@ body.usd-primary .card-body .details {
     gap: 12px;
 }
 
+/* Stake Group Styles */
+.stake-group {
+    background-color: var(--bg-card);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.stake-group-header {
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.stake-group-header:hover {
+    background-color: var(--bg-secondary);
+}
+
+.stake-group-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.expand-icon {
+    font-size: 0.85rem;
+    transition: transform 0.2s ease;
+    display: inline-block;
+    width: 16px;
+}
+
+.stake-group.expanded .expand-icon {
+    transform: rotate(90deg);
+}
+
+.stake-key-display {
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.group-label {
+    padding: 4px 8px;
+    background-color: var(--accent-color);
+    color: white;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.stake-group-summary {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.wallet-count,
+.total-balance,
+.asset-count {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.total-balance {
+    font-weight: 600;
+    color: var(--accent-color);
+}
+
+.stake-group-wallets {
+    border-top: 1px solid var(--bg-secondary);
+    padding: 8px;
+    background-color: var(--bg-primary);
+}
+
+.stake-group-wallets .wallet-item {
+    margin-bottom: 8px;
+}
+
+.stake-group-wallets .wallet-item:last-child {
+    margin-bottom: 0;
+}
+
 .wallet-item {
     background-color: var(--bg-card);
     border-radius: 8px;
