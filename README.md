@@ -2,7 +2,7 @@
 
 A self-hosted cryptocurrency portfolio tracker that aggregates data from multiple blockchains, exchanges, and DeFi protocols.
 
-![Version](https://img.shields.io/badge/version-0.10.0-blue.svg)
+![Version](https://img.shields.io/badge/version-0.12.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.109-teal.svg)
@@ -48,17 +48,35 @@ For more details, see [SECURITY.md](SECURITY.md)
 - **Portfolio History**: Interactive charts showing value over time (7d, 4w, 3m)
 - **Privacy Mode**: Hide sensitive financial data with one click
 
-### New in v0.10.0 🎉
-- **🔄 Backup & Restore**: Export/import your entire configuration with one click
-  - Migrate to new servers easily
-  - Disaster recovery ready
-  - Selective data export (choose what to include)
-  - Preview before import
+### New in v0.12.0 🎉
+- **👥 Multi-User Support**: Full multi-user architecture with user isolation
+  - Separate portfolios for different users
+  - Session-based authentication with secure tokens
+  - Per-user wallet, NFT, and DeFi data isolation
+  - Password change functionality built-in
+- **🎨 Demo Mode**: Try ABCT without connecting wallets
+  - Pre-loaded with realistic demo data
+  - 55 anime-themed NFT placeholders across 4 collections
+  - Demo DeFi positions and exchange balances
+  - Multi-chain NFT wall (Cardano, Ethereum, Solana)
+  - Login with username: `demo` / password: `demo`
+- **🖼️ Multi-Chain NFT Wall**: Enhanced NFT visualization
+  - Support for Cardano, Ethereum, Solana NFTs
+  - Filter by blockchain with live chain tabs
+  - Colorful SVG placeholders for demo mode
+  - Privacy mode to blur sensitive data
+- **🐛 Bug Fixes**:
+  - Fixed Cardano stake key collapse/expand functionality
+  - Fixed demo NFT wall authentication
+  - Improved multi-user database schema
+  - Enhanced session token handling
+
+### Previous Releases
+#### v0.10.0
+- **🔄 Backup & Restore**: Export/import your entire configuration
 - **⏰ NFT Background Scheduler**: Automatic 24/7 NFT floor price updates
   - Smart rate limiting (95 calls/day)
-  - State persistence (resumes after restart)
-  - Priority queue system
-  - Integrated into main app (no separate container needed!)
+  - State persistence and priority queue
 
 ### Infrastructure
 - **Self-Hosted**: Your data stays on your machine
@@ -70,10 +88,18 @@ For more details, see [SECURITY.md](SECURITY.md)
 
 ABCT includes a login page to protect your portfolio data. Use these credentials on first access:
 
-- **Username**: `admin`
-- **Password**: `satoshi`
+- **Admin Account**:
+  - Username: `admin`
+  - Password: `satoshi`
+  - Full access to add wallets and configure settings
 
-**⚠️ IMPORTANT**: Change the default password after first login! See [Password Reset Guide](docs/guides/PASSWORD_RESET_GUIDE.md) for instructions.
+- **Demo Account** (New in v0.12.0):
+  - Username: `demo`
+  - Password: `demo`
+  - Pre-loaded with sample data, NFTs, and DeFi positions
+  - Try ABCT without connecting your wallets!
+
+**⚠️ IMPORTANT**: Change the default admin password after first login! See [Password Reset Guide](docs/guides/PASSWORD_RESET_GUIDE.md) for instructions.
 
 **Forgot your password?** See [Password Reset Guide](docs/guides/PASSWORD_RESET_GUIDE.md) for reset instructions.
 
@@ -186,10 +212,14 @@ ABCT/
 │   │   ├── defi.py            # DeFi/staking service
 │   │   ├── coinbase.py        # Coinbase exchange service
 │   │   ├── nft.py             # NFT service
-│   │   ├── nft_scheduler.py   # NFT background scheduler (v0.9.0+)
-│   │   └── snapshot.py        # Portfolio snapshot service
+│   │   ├── nft_scheduler.py   # NFT background scheduler
+│   │   ├── snapshot.py        # Portfolio snapshot service
+│   │   ├── demo_nft_service.py      # Demo NFTs (v0.12.0+)
+│   │   ├── demo_defi_service.py     # Demo DeFi data (v0.12.0+)
+│   │   └── demo_exchange_service.py # Demo exchange data (v0.12.0+)
 │   ├── middleware/            # Security middleware
-│   │   ├── auth.py            # Authentication
+│   │   ├── auth.py            # Session-based authentication
+│   │   ├── demo_mode.py       # Demo mode detection (v0.12.0+)
 │   │   └── rate_limit.py      # Rate limiting
 │   └── utils/                 # Utility functions
 ├── frontend/                  # HTML/CSS/JS frontend
@@ -197,10 +227,12 @@ ABCT/
 │   ├── wallets.html           # Wallet manager
 │   ├── services.html          # Services monitor (NFT scheduler)
 │   ├── backup.html            # Backup & restore (v0.10.0+)
+│   ├── login.html             # Login page (v0.12.0+)
 │   ├── apis.html              # API key manager
 │   ├── security.html          # Security settings
 │   ├── nft-wall.html          # NFT gallery
 │   ├── logs.html              # System logs
+│   ├── static/demo-nfts/      # Demo NFT images (v0.12.0+)
 │   ├── css/styles.css         # Styling
 │   └── js/app.js              # Client-side logic
 ├── abct-docker/               # Docker deployment
