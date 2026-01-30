@@ -249,8 +249,11 @@
         }
 
         .cache-progress {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
+            font-size: 0.95rem;
+            color: var(--text-primary);
+            margin-top: 10px;
+            font-weight: 500;
+            min-height: 24px;
         }
 
         .privacy-btn {
@@ -547,6 +550,15 @@
                         el.textContent = info.cached;
                     }
                 }
+
+                // Auto-cache if no images are cached yet
+                const totalCached = data.total_cached || 0;
+                const totalWithImages = data.total_with_images || 0;
+                if (totalCached === 0 && totalWithImages > 0) {
+                    console.log('No cached images found, starting automatic caching...');
+                    document.getElementById('cacheProgress').textContent = 'Starting automatic image caching...';
+                    setTimeout(() => cacheImages(true), 1000); // Auto-cache after 1 second
+                }
             } catch (error) {
                 console.error('Error loading wall status:', error);
             }
@@ -554,6 +566,15 @@
 
         // Load NFTs with images
         async function loadNfts() {
+            const grid = document.getElementById('nftGrid');
+            setSafeHTML(grid, `
+                <div class="empty-state">
+                    <h3>Loading NFTs...</h3>
+                    <p>Please wait while we load your NFT collection from the backend.</p>
+                    <div style="margin-top: 20px; font-size: 2rem;">⏳</div>
+                </div>
+            `);
+
             try {
                 const url = currentChain === 'all'
                     ? `${API_BASE}/nfts/wall/nfts`
@@ -657,13 +678,18 @@
         }
 
         // Cache images
-        async function cacheImages() {
+        async function cacheImages(auto = false) {
             const btn = document.getElementById('cacheBtn');
             const progress = document.getElementById('cacheProgress');
 
             btn.disabled = true;
             btn.textContent = 'Caching...';
-            progress.textContent = 'Starting...';
+
+            if (auto) {
+                progress.textContent = 'Automatically caching NFT images in background... (This may take a minute)';
+            } else {
+                progress.textContent = 'Starting image cache... Please wait, do not refresh the page.';
+            }
 
             try {
                 const chain = currentChain === 'all' ? null : currentChain;
@@ -674,17 +700,26 @@
                 const response = await authFetch(url, { method: 'POST' });
                 const data = await response.json();
 
-                progress.textContent = `Cached: ${data.total_cached}, Failed: ${data.total_failed}`;
+                progress.textContent = `✓ Caching complete! Cached: ${data.total_cached} images | Failed: ${data.total_failed}`;
+                progress.style.color = 'var(--accent-color)';
+                progress.style.fontWeight = 'bold';
 
                 // Reload data
                 await loadWallStatus();
                 await loadNfts();
 
             } catch (error) {
-                progress.textContent = 'Error: ' + error.message;
+                progress.textContent = '✗ Error caching images: ' + error.message;
+                progress.style.color = '#dc3545';
             } finally {
                 btn.disabled = false;
-                btn.textContent = 'Cache Images';
+                btn.textContent = 'Cache More Images';
+
+                // Reset progress style after 5 seconds
+                setTimeout(() => {
+                    progress.style.color = '';
+                    progress.style.fontWeight = '';
+                }, 5000);
             }
         }
 
@@ -725,7 +760,7 @@
     </script>
 
     <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
-        <p>ABCT - NFT Gallery | <span style="opacity: 0.6;">v0.12.0 (BUILD 1769804539)</span></p>
+        <p>ABCT - NFT Gallery | <span style="opacity: 0.6;">v0.12.0 (BUILD 1769804626)</span></p>
     </footer>
 </body>
 </html>
