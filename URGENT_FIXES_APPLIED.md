@@ -37,6 +37,19 @@
 
 ---
 
+### ✅ 4. Native Assets Not Loading (401 Unauthorized)
+**Error**: `Failed to load resource: 401 (Unauthorized)` on `/portfolio/assets`
+
+**Problem**: The `loadNativeAssets()` function was using plain `fetch()` instead of `authFetch()`, so the session token wasn't being sent with the request.
+
+**Fixed**: Changed `fetch(url)` to `authFetch(url)` at line 1203 in frontend/js/app.js.
+
+**Commit**: 5c553ac
+
+**Impact**: Native tokens now load correctly after adding wallets.
+
+---
+
 ## 🔧 How to Fix Your Docker Container
 
 ### Quick Fix (Recommended)
@@ -84,6 +97,7 @@ cd /Users/chriscata/Documents/Claude-Projects/ABCT
 ### Test Checklist
 - [ ] Wallets page loads without errors
 - [ ] Can add new wallet (should work now!)
+- [ ] Native assets load without 401 errors (check console)
 - [ ] Portfolio summary displays correctly
 - [ ] Stake key groups expand/collapse
 - [ ] Token badges show assets
@@ -101,6 +115,7 @@ cd /Users/chriscata/Documents/Claude-Projects/ABCT
 6. **d81efd5** - fix: Rename renderWallets to renderWalletsList
 7. **b306362** - fix: Add user_id to all save_wallet calls and null checks
 8. **73aed07** - feat: Add database migration script for Docker
+9. **5c553ac** - fix: Use authFetch in loadNativeAssets to include session token
 
 **All pushed to GitHub**: ✅
 
