@@ -340,7 +340,7 @@
             justify-content: space-between;
             align-items: center;
             padding: 15px 20px;
-            cursor: pointer;
+            cursor: pointer !important;
             transition: background 0.2s;
             background: linear-gradient(135deg, rgba(0, 51, 173, 0.1) 0%, rgba(0, 51, 173, 0.05) 100%);
         }
@@ -1329,7 +1329,7 @@ base:0x789..." oninput="previewImport()"></textarea>
 
                 html += `
                     <div class="stake-group" data-stake-key="${stakeKey}">
-                        <div class="stake-group-header">
+                        <div class="stake-group-header" onclick="toggleStakeGroup('${stakeKey.replace(/'/g, "\\'")}')">
                             <div class="stake-group-info">
                                 <span class="expand-icon">▶</span>
                                 <span class="chain cardano">cardano</span>
@@ -1360,16 +1360,6 @@ base:0x789..." oninput="previewImport()"></textarea>
             });
 
             setSafeHTML(container, html);
-
-            // Attach click handlers to stake group headers (after DOM is updated)
-            document.querySelectorAll('.stake-group-header').forEach(header => {
-                header.style.cursor = 'pointer';
-                header.addEventListener('click', function() {
-                    const group = this.closest('.stake-group');
-                    const stakeKey = group.dataset.stakeKey;
-                    toggleStakeGroup(stakeKey);
-                });
-            });
         }
 
         function renderWalletItem(wallet, isGrouped = false) {
