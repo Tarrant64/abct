@@ -391,14 +391,25 @@ For detailed security information, see [SECURITY.md](SECURITY.md)
 
 ## 📦 What's New
 
-### v0.10.0 - Backup & Restore Release (January 2026)
+### v0.12.0 - Multi-User & Enhanced Visualization (January 2026)
+- **Multi-User Support**: Complete database restructure with user accounts and sessions
+- **Demo Mode**: Full-featured demo account with $1M portfolio and 30 diverse tokens
+- **Asset Breakdown Charts**: Interactive doughnut charts showing blockchain asset distribution
+- **Expandable Wallet Assets**: Native assets visible directly under each wallet
+- **Enhanced NFT Wall**: Multi-chain NFT display with anime-themed demo images
+- **Password Management**: Change password functionality with admin dropdown
+- **Improved UX**: Clickable stake key groups and token count badges
+
+### Previous Releases
+
+#### v0.10.0 - Backup & Restore Release (January 2026)
 - **Complete Backup System**: Export/import all your configuration data
 - **Migration Ready**: Easily move to new servers
 - **Selective Export**: Choose what data to include
 - **Import Modes**: Merge (safe) or Replace (full restore)
 - **Security Warnings**: Alerts for sensitive data in backups
 
-### v0.9.0 - NFT Scheduler Integration (January 2026)
+#### v0.9.0 - NFT Scheduler Integration (January 2026)
 - **Single Container**: NFT price service integrated into main app
 - **Background Updates**: Automatic 24/7 NFT floor price collection
 - **Smart Rate Limiting**: Respects TapTools 95 calls/day limit
@@ -499,9 +510,9 @@ For detailed API information including rate limits and pricing, see [API Provide
 - **Repository**: https://github.com/Tarrant64/abct
 - **Releases**: https://github.com/Tarrant64/abct/releases
 - **Issues**: https://github.com/Tarrant64/abct/issues
-- **Latest Release**: [v0.10.0 - Backup & Restore](https://github.com/Tarrant64/abct/releases/tag/v0.10.0)
+- **Latest Release**: [v0.12.0 - Multi-User & Enhanced Visualization](https://github.com/Tarrant64/abct/releases/tag/v0.12.0)
 
 ---
 
-**Current Version:** v0.10.0 (BUILD 1769648168)
+**Current Version:** v0.12.0 (BUILD 1769740718)
 **Last Updated:** January 2026

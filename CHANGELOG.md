@@ -7,6 +7,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.12.0] - 2026-01-29
+
+### Added - Multi-User Support & Enhanced Portfolio Visualization
+
+#### 🔐 Multi-User Architecture
+- **Complete Multi-User Database Migration**: Restructured database to support multiple user accounts
+  - Added `users` table with username/password authentication
+  - Added `sessions` table for session-based authentication
+  - All tables now include `user_id` foreign keys for data isolation
+  - User-scoped data access across wallets, portfolios, API keys, and settings
+  - Migration scripts to upgrade from single-user to multi-user schema
+
+#### 🎭 Demo Mode
+- **Demo Account System**: Full-featured demo account for testing without real data
+  - Username: `demo` / Password: `demo`
+  - Pre-populated with ~$1M portfolio across 6 blockchains
+  - 11 demo wallets with diverse token holdings (30 different tokens)
+  - 55 NFTs across 4 collections with anime-themed placeholders
+  - 90 days of historical portfolio data with realistic growth trends
+  - Anime-themed NFT wall with demo images
+  - Automatic API mocking for demo users (no real API calls)
+  - Dedicated demo services for exchanges, DeFi, and staking
+
+#### 📊 Portfolio Visualization Enhancements
+- **Blockchain Asset Breakdown**: Interactive drill-down on portfolio cards
+  - Click 📊 icon on any blockchain card to view detailed asset breakdown
+  - Beautiful doughnut charts showing asset distribution
+  - Color-coded segments for native coin, tokens, and NFTs
+  - Hover tooltips with USD values and percentages
+  - Scrollable legend with full asset details
+  - Works for Cardano, Bitcoin, Ethereum, Solana, Polygon, and Base
+
+- **Expandable Wallet Assets**: Native assets visible directly under wallets
+  - Click token count badge on any wallet to expand/collapse asset list
+  - Shows asset name and quantity inline
+  - Works within stake key groups
+  - On-demand loading for better performance
+  - Eliminates need for separate tokens tab
+
+#### 🎨 NFT Wall Improvements
+- **Multi-Chain NFT Display**: Enhanced NFT wall with blockchain distribution
+  - NFTs distributed across Cardano, Ethereum, and Solana
+  - Blockchain indicator badges on each NFT card
+  - Colored borders matching blockchain theme
+  - Demo mode shows anime-themed placeholder images
+  - Privacy mode blur support
+
+#### 🔑 Authentication & Security
+- **Session-Based Authentication**: Secure login system
+  - Session tokens with expiration
+  - Password hashing with bcrypt
+  - Middleware for route protection
+  - Auto-redirect to login for unauthenticated users
+  - Demo user flag for special handling
+
+- **Password Management**:
+  - Password change functionality
+  - Admin dropdown menu in header
+  - Password validation and confirmation
+  - Secure password updates
+
+#### 💾 Demo Account Token Diversity
+- **Cardano Tokens** (10): MIN, WMT, AGIX, SNEK, INDY, NMKR, IAG, GENS, COPI
+- **Ethereum Tokens** (10): USDT, USDC, LINK, UNI, AAVE, DAI, WBTC, SHIB, COMP, BAT
+- **Solana Tokens** (10): USDC, RAY, SRM, ORCA, MNGO, STEP, stSOL, mSOL, SLND, JTO
+
+### Fixed
+- **Wallets Page Authentication**: Fixed perpetual "Loading wallets..." spinner
+  - Replaced all `fetch()` calls with `authFetch()` for proper session authentication
+  - Fixed add wallet, import, export, and token management functionality
+
+- **Stake Key Expansion**: Fixed collapse/expand functionality for Cardano stake key groups
+  - Changed from addEventListener to inline onclick handlers
+  - Properly handles sanitized HTML content
+
+- **Asset Quantity Parsing**: Fixed decimal token quantities (e.g., WBTC with 0.5)
+  - Changed from `int()` to `float()` conversion
+  - Resolves "Failed to load asset breakdown" error
+
+- **Demo Account Creation**: Fixed database constraints for multi-user schema
+  - Added `user_id` to balances and native_assets INSERT statements
+  - Properly creates demo user with all data isolation
+
+### Changed
+- **Version Management**: Implemented semantic versioning (v0.12.0)
+- **Footer**: Updated all page footers to show version v0.12.0
+- **README**: Updated to reflect multi-user and demo mode features
+
+### Developer Notes
+- See `backend/MULTIUSER_DEVELOPER_GUIDE.md` for migration details
+- See `backend/DEMO_MODE_GUIDE.md` for demo mode implementation
+- See `backend/scripts/create_demo_account.py` for demo data structure
+
+---
+
 ## [0.10.0] - 2026-01-26
 
 ### Added - Backup & Restore Feature (Major Feature)
