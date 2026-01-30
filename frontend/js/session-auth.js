@@ -298,16 +298,7 @@ async function initAuth() {
             applyDemoRestrictions();
         }
 
-        // Check if we should prompt for password change (skip for demo)
-        if (!isDemoMode() && localStorage.getItem('abct_prompt_password_change') === 'true') {
-            // Remove the flag
-            localStorage.removeItem('abct_prompt_password_change');
-
-            // Show password change modal after a short delay
-            setTimeout(() => {
-                showChangePasswordModal();
-            }, 500);
-        }
+        // Password change prompts removed - users can change password via admin menu
     }
 
     return isAuthenticated;

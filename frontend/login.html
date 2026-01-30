@@ -14,18 +14,18 @@
             align-items: center;
             justify-content: center;
             min-height: 100vh;
-            background: #000000;
+            background: #1a1a1a;
             padding: 20px;
         }
 
         .login-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
+            background: #000000;
+            border: 1px solid #333;
             border-radius: 12px;
             padding: 40px;
             max-width: 420px;
             width: 100%;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
         }
 
         .login-header {
@@ -42,13 +42,13 @@
         }
 
         .login-header h1 {
-            color: var(--text-primary);
+            color: #ffffff;
             font-size: 28px;
             margin-bottom: 10px;
         }
 
         .login-header p {
-            color: var(--text-secondary);
+            color: #cccccc;
             font-size: 14px;
         }
 
@@ -65,50 +65,55 @@
         }
 
         .form-group label {
-            color: var(--text-primary);
+            color: #ffffff;
             font-size: 14px;
             font-weight: 500;
         }
 
         .form-group input {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
+            background: #000000;
+            border: 2px solid #ffffff;
             border-radius: 6px;
-            color: var(--text-primary);
+            color: #ffffff;
             font-size: 15px;
             padding: 12px 16px;
-            transition: border-color 0.2s;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
         }
 
         .form-group input:focus {
             outline: none;
-            border-color: var(--accent-success);
+            border-color: #ffffff;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.6), 0 0 30px rgba(255, 255, 255, 0.4);
         }
 
         .form-group input::placeholder {
-            color: var(--text-secondary);
-            opacity: 0.6;
+            color: #888888;
+            opacity: 0.8;
         }
 
         .login-btn {
-            background: var(--accent-success);
-            color: white;
+            background: #f59e0b;
+            color: #000000;
             border: none;
             border-radius: 6px;
             padding: 14px 24px;
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: opacity 0.2s, transform 0.1s;
+            transition: all 0.3s ease;
             margin-top: 10px;
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
         }
 
         .login-btn:hover {
-            opacity: 0.9;
+            background: #d97706;
+            box-shadow: 0 6px 16px rgba(245, 158, 11, 0.6);
+            transform: translateY(-2px);
         }
 
         .login-btn:active {
-            transform: scale(0.98);
+            transform: translateY(0);
         }
 
         .login-btn:disabled {
@@ -117,10 +122,10 @@
         }
 
         .error-message {
-            background: rgba(255, 107, 107, 0.1);
-            border: 1px solid var(--accent-error);
+            background: rgba(255, 107, 107, 0.2);
+            border: 1px solid #ff6b6b;
             border-radius: 6px;
-            color: var(--accent-error);
+            color: #ff6b6b;
             padding: 12px 16px;
             font-size: 14px;
             text-align: center;
@@ -147,27 +152,28 @@
             text-align: center;
             margin-top: 30px;
             padding-top: 20px;
-            border-top: 1px solid var(--border-color);
+            border-top: 1px solid #333;
         }
 
         .login-footer p {
-            color: var(--text-secondary);
+            color: #cccccc;
             font-size: 13px;
             line-height: 1.6;
         }
 
         .login-footer code {
-            background: var(--bg-secondary);
+            background: #222222;
             padding: 2px 6px;
             border-radius: 3px;
             font-family: 'Courier New', monospace;
             font-size: 12px;
+            color: #ffffff;
         }
 
         /* Loading spinner */
         .spinner {
-            border: 3px solid var(--border-color);
-            border-top: 3px solid var(--accent-success);
+            border: 3px solid #333;
+            border-top: 3px solid #000000;
             border-radius: 50%;
             width: 20px;
             height: 20px;
@@ -196,7 +202,7 @@
     <div class="login-container">
         <div class="login-card">
             <div class="login-header">
-                <img src="/abct-logo2.png" alt="ABCT - A Better Crypto Tracker">
+                <img src="/static/abct-logo2.png" alt="ABCT - A Better Crypto Tracker">
             </div>
 
             <div id="errorMessage" class="error-message"></div>
@@ -240,7 +246,7 @@
                     Password: <code>satoshi</code>
                 </p>
                 <p style="margin-top: 12px; font-size: 11px;">
-                    Change password after first login
+                    For security, use a strong password
                 </p>
                 <div style="margin-top: 20px; padding: 12px; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px;">
                     <p style="margin: 0; color: #f59e0b; font-size: 13px;">
@@ -263,7 +269,7 @@
 
     <script>
         // Build version
-        const BUILD_VERSION = 'v1769653325';
+        const BUILD_VERSION = 'v0.11.0 (BUILD 1769689111)';
 
         // Theme handling
         function initTheme() {
@@ -338,11 +344,6 @@
                         localStorage.setItem('is_demo', 'true');
                     } else {
                         localStorage.removeItem('is_demo');
-                    }
-
-                    // Check if password change is required
-                    if (data.should_change_password) {
-                        localStorage.setItem('abct_prompt_password_change', 'true');
                     }
 
                     // Redirect to dashboard

@@ -140,7 +140,7 @@ class EthereumNFTService:
             'token_type': contract.get('tokenType', 'ERC721')
         }
 
-    async def get_all_ethereum_nfts(self, force_refresh: bool = False) -> List[dict]:
+    async def get_all_ethereum_nfts(self, user_id: int = None, force_refresh: bool = False) -> List[dict]:
         """
         Fetch all NFTs for all Ethereum wallets.
         Uses persistent database cache that survives server restarts.
@@ -172,7 +172,7 @@ class EthereumNFTService:
             return []
 
         # Get all Ethereum wallets
-        wallets = await get_all_wallets()
+        wallets = await get_all_wallets(user_id=user_id)
         eth_wallets = [w for w in wallets if w['blockchain'] == 'ethereum']
 
         if not eth_wallets:
@@ -236,14 +236,14 @@ class EthereumNFTService:
         except Exception as e:
             logger.error(f"Error saving Ethereum NFT cache to database: {e}")
 
-    async def get_nft_summary(self) -> dict:
+    async def get_nft_summary(self, user_id: int = None) -> dict:
         """
         Get a summary of all Ethereum NFTs grouped by collection.
 
         Returns:
             Dictionary with collection summaries and totals
         """
-        all_nfts = await self.get_all_ethereum_nfts()
+        all_nfts = await self.get_all_ethereum_nfts(user_id=user_id)
 
         # Group by collection
         collections = {}

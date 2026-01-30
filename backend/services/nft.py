@@ -193,39 +193,24 @@ class NFTService:
             logger.debug(f"Error fetching image for {asset_id[:20]}...: {e}")
             return None
 
-    async def get_all_nfts(self, force_refresh: bool = False) -> List[dict]:
+    async def get_all_nfts(self, user_id: int = None, force_refresh: bool = False) -> List[dict]:
         """
         Get all NFTs across all Cardano wallets.
         Returns enriched NFT data with collection info and prices.
         Uses persistent database cache that survives server restarts.
         """
-        # Try to load from persistent database cache first
-        if not force_refresh and not self._db_cache_loaded:
-            cached_data = await get_cache(NFT_CACHE_KEY)
+        # Try to load from persistent database cache first (user-specific)
+        if not force_refresh and user_id is not None:
+            cached_data = await get_cache(NFT_CACHE_KEY, user_id=user_id)
             if cached_data:
-                logger.info(f"Loaded {len(cached_data.get('nfts', []))} NFTs from persistent cache")
-                self.nft_cache = {nft['asset_id']: nft for nft in cached_data.get('nfts', [])}
-                self.collection_cache = cached_data.get('collections', {})
-                self.last_full_refresh = datetime.fromisoformat(cached_data['last_refresh']) if cached_data.get('last_refresh') else None
-                self._db_cache_loaded = True
-
-                # Load floor prices from DB and merge into collection cache
-                await self.load_floor_prices_from_db()
-
-                # Update NFTs with fresh collection data (especially floor prices)
-                self._update_nft_collection_data()
-
-                return list(self.nft_cache.values())
-            self._db_cache_loaded = True
-
-        # Check in-memory cache
-        if not force_refresh and self._is_cache_valid():
-            return list(self.nft_cache.values())
+                logger.info(f"Loaded {len(cached_data.get('nfts', []))} NFTs from user {user_id} cache")
+                # Return cached data directly without modifying instance variables
+                return cached_data.get('nfts', [])
 
         # Always load floor prices from database first to reduce API calls
         await self.load_floor_prices_from_db()
 
-        wallets = await get_all_wallets()
+        wallets = await get_all_wallets(user_id=user_id)
         cardano_wallets = [w for w in wallets if w['blockchain'] == 'cardano']
 
         all_nfts = []
@@ -256,43 +241,72 @@ class NFTService:
                 all_nfts.append(nft_data)
 
         # Enrich NFTs with collection data (batch by policy_id)
-        # Only fetch data for collections not already in cache from database
+        # Build temporary collection cache for this user's NFTs
+        temp_collection_cache = {}
         policy_ids = list(set(nft['policy_id'] for nft in all_nfts))
-        uncached_policy_ids = [pid for pid in policy_ids if pid not in self.collection_cache]
-        if uncached_policy_ids:
-            logger.info(f"Fetching collection data for {len(uncached_policy_ids)} uncached collections (of {len(policy_ids)} total)")
-            await self._fetch_collection_data(uncached_policy_ids)
-        else:
-            logger.info(f"All {len(policy_ids)} collections already cached")
+        if policy_ids:
+            logger.info(f"Fetching collection data for {len(policy_ids)} collections")
+            # Load from DB first
+            for pid in policy_ids:
+                floor_price_data = await self._get_floor_price_from_db(pid)
+                if floor_price_data:
+                    temp_collection_cache[pid] = floor_price_data
 
-        # Enrich each NFT
+            # Fetch any missing from API
+            uncached_policy_ids = [pid for pid in policy_ids if pid not in temp_collection_cache]
+            if uncached_policy_ids:
+                await self._fetch_collection_data(uncached_policy_ids)
+                # Copy to temp cache
+                for pid in uncached_policy_ids:
+                    if pid in self.collection_cache:
+                        temp_collection_cache[pid] = self.collection_cache[pid]
+
+        # Enrich each NFT with collection data
         enriched_nfts = []
         for nft in all_nfts:
-            enriched = await self._enrich_nft(nft)
-            enriched_nfts.append(enriched)
-            self.nft_cache[nft['asset_id']] = enriched
+            # Add collection data to NFT
+            policy_id = nft['policy_id']
+            collection = temp_collection_cache.get(policy_id, {})
+            nft['collection'] = {
+                'found': collection.get('found', False),
+                'name': collection.get('name', ''),
+                'verified': collection.get('verified', False),
+                'floor_price_ada': collection.get('floor_price_ada'),
+            }
 
-        self.last_full_refresh = datetime.now()
+            # Calculate price
+            if nft.get('listing_price_ada'):
+                nft['price_ada'] = nft['listing_price_ada']
+                nft['price_source'] = 'listing'
+            elif collection.get('floor_price_ada'):
+                nft['price_ada'] = collection['floor_price_ada']
+                nft['price_source'] = 'floor'
+            else:
+                nft['price_ada'] = None
+                nft['price_source'] = None
 
-        # Save to persistent database cache
-        await self._save_to_db_cache()
+            enriched_nfts.append(nft)
+
+        # Save to persistent database cache (user-specific)
+        if user_id is not None:
+            await self._save_to_db_cache(enriched_nfts, temp_collection_cache, user_id)
 
         return enriched_nfts
 
-    async def _save_to_db_cache(self) -> None:
-        """Save NFT data to persistent database cache."""
+    async def _save_to_db_cache(self, nfts: List[dict], collections: dict, user_id: int) -> None:
+        """Save NFT data to persistent database cache (user-specific)."""
         try:
             # Prepare data for caching (convert datetime objects)
             cache_data = {
-                'nfts': list(self.nft_cache.values()),
+                'nfts': nfts,
                 'collections': {
                     pid: {k: v.isoformat() if isinstance(v, datetime) else v for k, v in col.items()}
-                    for pid, col in self.collection_cache.items()
+                    for pid, col in collections.items()
                 },
-                'last_refresh': self.last_full_refresh.isoformat() if self.last_full_refresh else None
+                'last_refresh': datetime.now().isoformat()
             }
-            await set_cache(NFT_CACHE_KEY, cache_data, NFT_CACHE_TTL)
-            logger.info(f"Saved {len(self.nft_cache)} NFTs to persistent cache")
+            await set_cache(NFT_CACHE_KEY, cache_data, NFT_CACHE_TTL, user_id=user_id)
+            logger.info(f"Saved {len(nfts)} NFTs to user {user_id} cache")
         except Exception as e:
             logger.error(f"Error saving NFT cache to database: {e}")
 
@@ -593,9 +607,9 @@ class NFTService:
         all_nfts = await self.get_all_nfts()
         return [nft for nft in all_nfts if nft['policy_id'] == policy_id]
 
-    async def get_nft_summary(self) -> dict:
+    async def get_nft_summary(self, user_id: int = None) -> dict:
         """Get a summary of all NFTs."""
-        all_nfts = await self.get_all_nfts()
+        all_nfts = await self.get_all_nfts(user_id=user_id)
 
         # Group by collection
         collections = {}

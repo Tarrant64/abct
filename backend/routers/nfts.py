@@ -18,8 +18,11 @@ from services.polygon import polygon_service
 from services.base import base_service
 from services.pricing import pricing_service
 from services.nft_price_client import nft_price_client
-from database import get_all_wallets
+from services.demo_nft_service import demo_nft_service
+from database import get_all_wallets, get_username_by_user_id
 from middleware.auth import verify_admin
+from middleware.demo_mode import is_demo_user
+from auth_utils import verify_session
 
 router = APIRouter(prefix="/nfts", tags=["nfts"])
 
@@ -28,13 +31,34 @@ MIN_USD_VALUE = 1.00
 
 
 @router.get("")
-async def get_all_nfts(force_refresh: bool = False):
+async def get_all_nfts(user_id: int = Depends(verify_session), force_refresh: bool = False):
     """
     Get all NFTs across all Cardano wallets.
     Returns NFTs with collection data and values.
     Only includes NFTs with value >= $1.00 if they have a price.
     """
-    all_nfts = await nft_service.get_all_nfts(force_refresh=force_refresh)
+    # Check if demo user
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        # Return demo NFTs with anime images
+        all_nfts = await demo_nft_service.get_all_nfts(force_refresh=force_refresh)
+
+        # Calculate totals
+        total_value_usd = sum(nft.get('price_usd', 0) for nft in all_nfts)
+
+        return {
+            'nfts': all_nfts,
+            'total_count': len(all_nfts),
+            'valued_count': len(all_nfts),
+            'total_value_usd': total_value_usd,
+            'ada_price': 1.05,
+            'min_value_filter': MIN_USD_VALUE,
+            'last_updated': all_nfts[0]['updated_at'] if all_nfts else None,
+            'demo_mode': True
+        }
+
+    # Normal mode - real NFT service
+    all_nfts = await nft_service.get_all_nfts(user_id=user_id, force_refresh=force_refresh)
 
     # Get ADA price for USD conversion
     ada_price = await pricing_service.get_price('ADA')
@@ -74,11 +98,20 @@ async def get_all_nfts(force_refresh: bool = False):
 
 
 @router.get("/summary")
-async def get_nft_summary():
+async def get_nft_summary(user_id: int = Depends(verify_session)):
     """
     Get a summary of all NFTs grouped by collection.
     """
-    summary = await nft_service.get_nft_summary()
+    # Check if demo user
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        # Return demo NFT summary
+        summary = await demo_nft_service.get_nft_summary()
+        summary['demo_mode'] = True
+        return summary
+
+    # Normal mode - real NFT service
+    summary = await nft_service.get_nft_summary(user_id=user_id)
 
     # Get ADA price for USD conversion
     ada_price = await pricing_service.get_price('ADA')
@@ -100,9 +133,9 @@ async def get_nft_summary():
 
 
 @router.get("/collection/{policy_id}")
-async def get_collection_nfts(policy_id: str):
+async def get_collection_nfts(policy_id: str, user_id: int = Depends(verify_session)):
     """Get all NFTs for a specific collection."""
-    nfts = await nft_service.get_nfts_by_collection(policy_id)
+    nfts = await nft_service.get_nfts_by_collection(policy_id, user_id=user_id)
 
     if not nfts:
         raise HTTPException(status_code=404, detail="No NFTs found for this collection")
@@ -125,9 +158,9 @@ async def get_collection_nfts(policy_id: str):
 
 
 @router.get("/asset/{asset_id}")
-async def get_nft_details(asset_id: str):
+async def get_nft_details(asset_id: str, user_id: int = Depends(verify_session)):
     """Get details for a specific NFT."""
-    nft = await nft_service.get_nft_by_asset_id(asset_id)
+    nft = await nft_service.get_nft_by_asset_id(asset_id, user_id=user_id)
 
     if not nft:
         raise HTTPException(status_code=404, detail="NFT not found")
@@ -141,11 +174,11 @@ async def get_nft_details(asset_id: str):
     return nft
 
 
-@router.post("/refresh", dependencies=[Depends(verify_admin)])
-async def refresh_nfts():
-    """Force refresh all NFT data. Requires admin authentication."""
+@router.post("/refresh")
+async def refresh_nfts(user_id: int = Depends(verify_session)):
+    """Force refresh all NFT data."""
     nft_service.clear_cache()
-    all_nfts = await nft_service.get_all_nfts(force_refresh=True)
+    all_nfts = await nft_service.get_all_nfts(user_id=user_id, force_refresh=True)
 
     return {
         'message': f'Refreshed {len(all_nfts)} NFTs',
@@ -195,7 +228,7 @@ async def collect_floor_prices(
 # ============================================================================
 
 @router.get("/ethereum")
-async def get_ethereum_nfts(force_refresh: bool = False):
+async def get_ethereum_nfts(user_id: int = Depends(verify_session), force_refresh: bool = False):
     """
     Get all NFTs across all Ethereum wallets.
     Returns NFTs with collection data, floor prices, and values.
@@ -209,7 +242,7 @@ async def get_ethereum_nfts(force_refresh: bool = False):
             'total_value_usd': 0
         }
 
-    all_nfts = await ethereum_nft_service.get_all_ethereum_nfts(force_refresh=force_refresh)
+    all_nfts = await ethereum_nft_service.get_all_ethereum_nfts(user_id=user_id, force_refresh=force_refresh)
 
     # Get ETH price for USD conversion
     eth_price = await pricing_service.get_price('ETH')
@@ -239,7 +272,7 @@ async def get_ethereum_nfts(force_refresh: bool = False):
 
 
 @router.get("/ethereum/summary")
-async def get_ethereum_nft_summary():
+async def get_ethereum_nft_summary(user_id: int = Depends(verify_session)):
     """
     Get a summary of all Ethereum NFTs grouped by collection.
     """
@@ -249,7 +282,7 @@ async def get_ethereum_nft_summary():
             'message': 'Alchemy API key not configured'
         }
 
-    summary = await ethereum_nft_service.get_nft_summary()
+    summary = await ethereum_nft_service.get_nft_summary(user_id=user_id)
 
     # Get ETH price for USD conversion
     eth_price = await pricing_service.get_price('ETH')
@@ -272,7 +305,7 @@ async def get_ethereum_nft_summary():
 
 
 @router.post("/ethereum/refresh")
-async def refresh_ethereum_nfts():
+async def refresh_ethereum_nfts(user_id: int = Depends(verify_session)):
     """Force refresh all Ethereum NFT data."""
     if not ethereum_nft_service.is_configured():
         return {
@@ -281,7 +314,7 @@ async def refresh_ethereum_nfts():
         }
 
     ethereum_nft_service.clear_cache()
-    all_nfts = await ethereum_nft_service.get_all_ethereum_nfts(force_refresh=True)
+    all_nfts = await ethereum_nft_service.get_all_ethereum_nfts(user_id=user_id, force_refresh=True)
 
     return {
         'message': f'Refreshed {len(all_nfts)} Ethereum NFTs',
@@ -300,7 +333,7 @@ async def get_ethereum_nft_status():
 # ============================================================================
 
 @router.get("/solana")
-async def get_solana_nfts(force_refresh: bool = False):
+async def get_solana_nfts(user_id: int = Depends(verify_session), force_refresh: bool = False):
     """
     Get all NFTs across all Solana wallets.
     Returns NFTs including Helium hotspots, compressed NFTs, and standard Solana NFTs.
@@ -314,7 +347,7 @@ async def get_solana_nfts(force_refresh: bool = False):
             'total_value_usd': 0
         }
 
-    all_nfts = await solana_nft_service.get_all_solana_nfts(force_refresh=force_refresh)
+    all_nfts = await solana_nft_service.get_all_solana_nfts(user_id=user_id, force_refresh=force_refresh)
 
     # Get SOL price for USD conversion
     sol_price = await pricing_service.get_price('SOL')
@@ -344,7 +377,7 @@ async def get_solana_nfts(force_refresh: bool = False):
 
 
 @router.get("/solana/summary")
-async def get_solana_nft_summary():
+async def get_solana_nft_summary(user_id: int = Depends(verify_session)):
     """
     Get a summary of all Solana NFTs grouped by collection.
     """
@@ -354,7 +387,7 @@ async def get_solana_nft_summary():
             'message': 'Helius API key not configured'
         }
 
-    summary = await solana_nft_service.get_nft_summary()
+    summary = await solana_nft_service.get_nft_summary(user_id=user_id)
 
     # Get SOL price for USD conversion
     sol_price = await pricing_service.get_price('SOL')
@@ -377,7 +410,7 @@ async def get_solana_nft_summary():
 
 
 @router.post("/solana/refresh")
-async def refresh_solana_nfts():
+async def refresh_solana_nfts(user_id: int = Depends(verify_session)):
     """Force refresh all Solana NFT data."""
     if not solana_nft_service.is_configured():
         return {
@@ -386,7 +419,7 @@ async def refresh_solana_nfts():
         }
 
     solana_nft_service.clear_cache()
-    all_nfts = await solana_nft_service.get_all_solana_nfts(force_refresh=True)
+    all_nfts = await solana_nft_service.get_all_solana_nfts(user_id=user_id, force_refresh=True)
 
     return {
         'message': f'Refreshed {len(all_nfts)} Solana NFTs',
@@ -405,7 +438,7 @@ async def get_solana_nft_status():
 # ============================================================================
 
 @router.get("/polygon")
-async def get_polygon_nfts(force_refresh: bool = False):
+async def get_polygon_nfts(user_id: int = Depends(verify_session), force_refresh: bool = False):
     """
     Get all NFTs across all Polygon wallets.
     Returns NFTs with collection data, floor prices, and values.
@@ -420,7 +453,7 @@ async def get_polygon_nfts(force_refresh: bool = False):
         }
 
     # Get all Polygon wallets
-    wallets = await get_all_wallets()
+    wallets = await get_all_wallets(user_id=user_id)
     polygon_wallets = [w for w in wallets if w['blockchain'] == 'polygon']
 
     if not polygon_wallets:
@@ -462,7 +495,7 @@ async def get_polygon_nfts(force_refresh: bool = False):
 
 
 @router.get("/polygon/summary")
-async def get_polygon_nft_summary():
+async def get_polygon_nft_summary(user_id: int = Depends(verify_session)):
     """
     Get a summary of all Polygon NFTs grouped by collection.
     """
@@ -473,7 +506,7 @@ async def get_polygon_nft_summary():
         }
 
     # Get all Polygon wallets
-    wallets = await get_all_wallets()
+    wallets = await get_all_wallets(user_id=user_id)
     polygon_wallets = [w for w in wallets if w['blockchain'] == 'polygon']
 
     summary = await polygon_service.get_nft_summary(polygon_wallets)
@@ -499,7 +532,7 @@ async def get_polygon_nft_summary():
 
 
 @router.post("/polygon/refresh")
-async def refresh_polygon_nfts():
+async def refresh_polygon_nfts(user_id: int = Depends(verify_session)):
     """Force refresh all Polygon NFT data."""
     if not polygon_service.is_configured():
         return {
@@ -508,7 +541,7 @@ async def refresh_polygon_nfts():
         }
 
     # Get all Polygon wallets
-    wallets = await get_all_wallets()
+    wallets = await get_all_wallets(user_id=user_id)
     polygon_wallets = [w for w in wallets if w['blockchain'] == 'polygon']
 
     polygon_service.clear_cache()
@@ -531,7 +564,7 @@ async def get_polygon_nft_status():
 # ============================================================================
 
 @router.get("/base")
-async def get_base_nfts(force_refresh: bool = False):
+async def get_base_nfts(user_id: int = Depends(verify_session), force_refresh: bool = False):
     """
     Get all NFTs from Base wallets.
     """
@@ -545,7 +578,7 @@ async def get_base_nfts(force_refresh: bool = False):
         }
 
     # Get Base wallets
-    wallets = await get_all_wallets()
+    wallets = await get_all_wallets(user_id=user_id)
     base_wallets = [w for w in wallets if w['blockchain'] == 'base']
 
     if not base_wallets:
@@ -580,7 +613,7 @@ async def get_base_nfts(force_refresh: bool = False):
 
 
 @router.get("/base/summary")
-async def get_base_nft_summary():
+async def get_base_nft_summary(user_id: int = Depends(verify_session)):
     """Get Base NFT summary grouped by collection."""
     if not base_service.is_configured():
         return {
@@ -588,7 +621,7 @@ async def get_base_nft_summary():
             'message': 'Alchemy API key not configured'
         }
 
-    wallets = await get_all_wallets()
+    wallets = await get_all_wallets(user_id=user_id)
     base_wallets = [w for w in wallets if w['blockchain'] == 'base']
 
     summary = await base_service.get_nft_summary(base_wallets)
@@ -609,12 +642,12 @@ async def get_base_nft_summary():
 
 
 @router.post("/base/refresh")
-async def refresh_base_nfts():
+async def refresh_base_nfts(user_id: int = Depends(verify_session)):
     """Force refresh Base NFTs from API."""
     if not base_service.is_configured():
         return {'success': False, 'message': 'Alchemy API key not configured'}
 
-    wallets = await get_all_wallets()
+    wallets = await get_all_wallets(user_id=user_id)
     base_wallets = [w for w in wallets if w['blockchain'] == 'base']
 
     base_service.clear_cache()
@@ -638,7 +671,7 @@ async def get_base_nft_status():
 # ============================================================================
 
 @router.get("/all/summary")
-async def get_all_chains_nft_summary():
+async def get_all_chains_nft_summary(user_id: int = Depends(verify_session)):
     """
     Get a combined summary of NFTs across all chains (Cardano + Ethereum + Solana + Polygon + Base).
     Returns totals and per-chain breakdown.
@@ -658,7 +691,7 @@ async def get_all_chains_nft_summary():
         'configured': True
     }
     try:
-        cardano_summary = await nft_service.get_nft_summary()
+        cardano_summary = await nft_service.get_nft_summary(user_id=user_id)
         cardano_data['total_count'] = cardano_summary.get('total_nfts', 0)
         cardano_data['total_value_usd'] = cardano_summary.get('total_value_ada', 0) * ada_price
     except Exception as e:
@@ -673,7 +706,7 @@ async def get_all_chains_nft_summary():
     }
     if ethereum_data['configured']:
         try:
-            eth_summary = await ethereum_nft_service.get_nft_summary()
+            eth_summary = await ethereum_nft_service.get_nft_summary(user_id=user_id)
             ethereum_data['total_count'] = eth_summary.get('total_nfts', 0)
             ethereum_data['total_value_usd'] = eth_summary.get('total_value_eth', 0) * eth_price
         except Exception as e:
@@ -688,7 +721,7 @@ async def get_all_chains_nft_summary():
     }
     if solana_data['configured']:
         try:
-            sol_summary = await solana_nft_service.get_nft_summary()
+            sol_summary = await solana_nft_service.get_nft_summary(user_id=user_id)
             solana_data['total_count'] = sol_summary.get('total_nfts', 0)
             solana_data['total_value_usd'] = sol_summary.get('total_value_sol', 0) * sol_price
         except Exception as e:
@@ -703,7 +736,7 @@ async def get_all_chains_nft_summary():
     }
     if polygon_data['configured']:
         try:
-            wallets = await get_all_wallets()
+            wallets = await get_all_wallets(user_id=user_id)
             polygon_wallets = [w for w in wallets if w['blockchain'] == 'polygon']
             polygon_summary = await polygon_service.get_nft_summary(polygon_wallets)
             polygon_data['total_count'] = polygon_summary.get('total_nfts', 0)
@@ -720,7 +753,7 @@ async def get_all_chains_nft_summary():
     }
     if base_data['configured']:
         try:
-            wallets = await get_all_wallets()
+            wallets = await get_all_wallets(user_id=user_id)
             base_wallets = [w for w in wallets if w['blockchain'] == 'base']
             base_summary = await base_service.get_nft_summary(base_wallets)
             base_data['total_count'] = base_summary.get('total_nfts', 0)
@@ -764,7 +797,7 @@ async def get_all_chains_nft_summary():
 
 
 @router.post("/prices/sync")
-async def sync_prices_from_service():
+async def sync_prices_from_service(user_id: int = Depends(verify_session)):
     """
     Sync Cardano NFT floor prices from the external Cardano NFT Price Service.
     Updates local price cache with data from the dedicated price service.
@@ -784,7 +817,7 @@ async def sync_prices_from_service():
         }
 
     # Get all unique policy IDs from our NFTs
-    all_nfts = await nft_service.get_all_nfts(force_refresh=False)
+    all_nfts = await nft_service.get_all_nfts(user_id=user_id, force_refresh=False)
     policy_ids = list(set(nft.get('policy_id') for nft in all_nfts if nft.get('policy_id')))
 
     if not policy_ids:
@@ -1105,7 +1138,7 @@ def _get_nft_image_url(nft: dict) -> Optional[str]:
 
 
 @router.get("/wall/status")
-async def get_nft_wall_status():
+async def get_nft_wall_status(user_id: int = Depends(verify_session)):
     """
     Get NFT wall status showing total NFTs vs cached images per chain.
     Useful for tracking image collection progress.
@@ -1119,7 +1152,7 @@ async def get_nft_wall_status():
 
     # Cardano
     try:
-        cardano_nfts = await nft_service.get_all_nfts(force_refresh=False)
+        cardano_nfts = await nft_service.get_all_nfts(user_id=user_id, force_refresh=False)
         chain_totals['cardano'] = {
             'total_nfts': len(cardano_nfts),
             'with_images': sum(1 for n in cardano_nfts if _get_nft_image_url(n)),
@@ -1133,7 +1166,7 @@ async def get_nft_wall_status():
     # Ethereum
     if ethereum_nft_service.is_configured():
         try:
-            eth_nfts = await ethereum_nft_service.get_all_ethereum_nfts(force_refresh=False)
+            eth_nfts = await ethereum_nft_service.get_all_ethereum_nfts(user_id=user_id, force_refresh=False)
             chain_totals['ethereum'] = {
                 'total_nfts': len(eth_nfts),
                 'with_images': sum(1 for n in eth_nfts if _get_nft_image_url(n)),
@@ -1149,7 +1182,7 @@ async def get_nft_wall_status():
     # Solana
     if solana_nft_service.is_configured():
         try:
-            sol_nfts = await solana_nft_service.get_all_solana_nfts(force_refresh=False)
+            sol_nfts = await solana_nft_service.get_all_solana_nfts(user_id=user_id, force_refresh=False)
             chain_totals['solana'] = {
                 'total_nfts': len(sol_nfts),
                 'with_images': sum(1 for n in sol_nfts if _get_nft_image_url(n)),
@@ -1165,7 +1198,7 @@ async def get_nft_wall_status():
     # Polygon
     if polygon_service.is_configured():
         try:
-            wallets = await get_all_wallets()
+            wallets = await get_all_wallets(user_id=user_id)
             polygon_wallets = [w for w in wallets if w['blockchain'] == 'polygon']
             poly_nfts = await polygon_service.get_all_polygon_nfts(polygon_wallets, force_refresh=False)
             chain_totals['polygon'] = {
@@ -1183,7 +1216,7 @@ async def get_nft_wall_status():
     # Base
     if base_service.is_configured():
         try:
-            wallets = await get_all_wallets()
+            wallets = await get_all_wallets(user_id=user_id)
             base_wallets = [w for w in wallets if w['blockchain'] == 'base']
             base_nfts = await base_service.get_all_base_nfts(base_wallets, force_refresh=False)
             chain_totals['base'] = {
@@ -1216,6 +1249,7 @@ async def get_nft_wall_status():
 
 @router.post("/wall/cache-all")
 async def cache_all_nft_images(
+    user_id: int = Depends(verify_session),
     blockchain: Optional[str] = None,
     max_concurrent: int = 3,
     limit: int = 100
@@ -1243,7 +1277,7 @@ async def cache_all_nft_images(
 
         try:
             if chain == 'cardano':
-                nfts = await nft_service.get_all_nfts(force_refresh=False)
+                nfts = await nft_service.get_all_nfts(user_id=user_id, force_refresh=False)
 
                 # For Cardano, we need to fetch image URLs from Blockfrost metadata
                 # Only fetch for NFTs that don't already have image URLs
@@ -1269,7 +1303,7 @@ async def cache_all_nft_images(
                         })
 
             elif chain == 'ethereum' and ethereum_nft_service.is_configured():
-                nfts = await ethereum_nft_service.get_all_ethereum_nfts(force_refresh=False)
+                nfts = await ethereum_nft_service.get_all_ethereum_nfts(user_id=user_id, force_refresh=False)
                 for nft in nfts:
                     if _get_nft_image_url(nft):
                         nfts_to_cache.append({
@@ -1278,7 +1312,7 @@ async def cache_all_nft_images(
                         })
 
             elif chain == 'solana' and solana_nft_service.is_configured():
-                nfts = await solana_nft_service.get_all_solana_nfts(force_refresh=False)
+                nfts = await solana_nft_service.get_all_solana_nfts(user_id=user_id, force_refresh=False)
                 for nft in nfts:
                     if _get_nft_image_url(nft):
                         nfts_to_cache.append({
@@ -1287,7 +1321,7 @@ async def cache_all_nft_images(
                         })
 
             elif chain == 'polygon' and polygon_service.is_configured():
-                wallets = await get_all_wallets()
+                wallets = await get_all_wallets(user_id=user_id)
                 polygon_wallets = [w for w in wallets if w['blockchain'] == 'polygon']
                 nfts = await polygon_service.get_all_polygon_nfts(polygon_wallets, force_refresh=False)
                 for nft in nfts:
@@ -1298,7 +1332,7 @@ async def cache_all_nft_images(
                         })
 
             elif chain == 'base' and base_service.is_configured():
-                wallets = await get_all_wallets()
+                wallets = await get_all_wallets(user_id=user_id)
                 base_wallets = [w for w in wallets if w['blockchain'] == 'base']
                 nfts = await base_service.get_all_base_nfts(base_wallets, force_refresh=False)
                 for nft in nfts:
@@ -1337,7 +1371,7 @@ async def cache_all_nft_images(
 
 
 @router.get("/wall/nfts")
-async def get_nfts_with_images(blockchain: Optional[str] = None):
+async def get_nfts_with_images(user_id: int = Depends(verify_session), blockchain: Optional[str] = None):
     """
     Get all NFTs that have cached images for the NFT Wall display.
     Only returns NFTs from the dashboard (non-spam) that have successfully cached images.
@@ -1345,6 +1379,56 @@ async def get_nfts_with_images(blockchain: Optional[str] = None):
     Args:
         blockchain: Optional chain filter. If not provided, returns all chains.
     """
+    # Check if demo user
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        # Return demo NFTs for wall display
+        demo_nfts = await demo_nft_service.get_all_nfts(force_refresh=False)
+
+        # Format for wall display
+        formatted_nfts = []
+        for nft in demo_nfts:
+            formatted_nfts.append({
+                'asset_id': nft['asset_id'],
+                'blockchain': 'cardano',  # Demo NFTs shown as Cardano
+                'name': nft['asset_name'],
+                'collection': nft['collection_name'],
+                'image_url': nft['image'],  # SVG path
+                'thumbnail_url': nft['image'],  # Same for demo
+                'floor_price': nft['price_ada'],
+                'floor_price_usd': nft.get('price_usd', nft['price_ada'] * 1.05),
+                'native_symbol': 'ADA',
+                'image_info': {
+                    'format': 'svg',
+                    'width': 400,
+                    'height': 400
+                }
+            })
+
+        # Group by chain for summary
+        by_chain = {
+            'cardano': {
+                'count': len(formatted_nfts),
+                'total_value_usd': sum(n['floor_price_usd'] for n in formatted_nfts)
+            }
+        }
+
+        prices = {
+            'ada': 0.33,
+            'eth': 2700,
+            'sol': 115,
+            'matic': 0.11
+        }
+
+        return {
+            'nfts': formatted_nfts,
+            'total_count': len(formatted_nfts),
+            'by_chain': by_chain,
+            'prices': prices,
+            'demo_mode': True
+        }
+
+    # Normal mode for real users
     from nft_image_database import get_nft_image_db
 
     all_nfts = []
@@ -1382,7 +1466,7 @@ async def get_nfts_with_images(blockchain: Optional[str] = None):
             chain_nfts = []
 
             if chain == 'cardano':
-                nfts = await nft_service.get_all_nfts(force_refresh=False)
+                nfts = await nft_service.get_all_nfts(user_id=user_id, force_refresh=False)
                 for nft in nfts:
                     asset_id = nft.get('unit') or nft.get('asset_id')
                     key = f"cardano:{asset_id}"
@@ -1401,7 +1485,7 @@ async def get_nfts_with_images(blockchain: Optional[str] = None):
                         })
 
             elif chain == 'ethereum' and ethereum_nft_service.is_configured():
-                nfts = await ethereum_nft_service.get_all_ethereum_nfts(force_refresh=False)
+                nfts = await ethereum_nft_service.get_all_ethereum_nfts(user_id=user_id, force_refresh=False)
                 for nft in nfts:
                     asset_id = f"{nft.get('contract_address')}_{nft.get('token_id')}"
                     key = f"ethereum:{asset_id}"
@@ -1421,7 +1505,7 @@ async def get_nfts_with_images(blockchain: Optional[str] = None):
                         })
 
             elif chain == 'solana' and solana_nft_service.is_configured():
-                nfts = await solana_nft_service.get_all_solana_nfts(force_refresh=False)
+                nfts = await solana_nft_service.get_all_solana_nfts(user_id=user_id, force_refresh=False)
                 for nft in nfts:
                     asset_id = nft.get('mint') or nft.get('asset_id')
                     key = f"solana:{asset_id}"
@@ -1441,7 +1525,7 @@ async def get_nfts_with_images(blockchain: Optional[str] = None):
                         })
 
             elif chain == 'polygon' and polygon_service.is_configured():
-                wallets = await get_all_wallets()
+                wallets = await get_all_wallets(user_id=user_id)
                 polygon_wallets = [w for w in wallets if w['blockchain'] == 'polygon']
                 nfts = await polygon_service.get_all_polygon_nfts(polygon_wallets, force_refresh=False)
                 for nft in nfts:
@@ -1463,7 +1547,7 @@ async def get_nfts_with_images(blockchain: Optional[str] = None):
                         })
 
             elif chain == 'base' and base_service.is_configured():
-                wallets = await get_all_wallets()
+                wallets = await get_all_wallets(user_id=user_id)
                 base_wallets = [w for w in wallets if w['blockchain'] == 'base']
                 nfts = await base_service.get_all_base_nfts(base_wallets, force_refresh=False)
                 for nft in nfts:

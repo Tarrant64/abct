@@ -4,13 +4,16 @@ DeFi Tracking API Endpoints
 Provides endpoints for analyzing Cardano DeFi positions.
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.defi import defi_service
-from database import get_all_wallets, get_cache, set_cache
+from services.demo_defi_service import demo_defi_service
+from database import get_all_wallets, get_cache, set_cache, get_username_by_user_id
+from middleware.demo_mode import is_demo_user
+from auth_utils import verify_session
 
 router = APIRouter(prefix="/defi", tags=["defi"])
 
@@ -20,7 +23,7 @@ DEFI_SUMMARY_CACHE_TTL = 86400 * 30  # 30 days - essentially persistent until ma
 
 
 @router.get("/protocols")
-async def list_supported_protocols():
+async def list_supported_protocols(user_id: int = Depends(verify_session)):
     """List all supported DeFi protocols."""
     protocols = defi_service.get_supported_protocols()
     return {
@@ -30,7 +33,7 @@ async def list_supported_protocols():
 
 
 @router.get("/protocol/{protocol_name}")
-async def get_protocol_info(protocol_name: str):
+async def get_protocol_info(protocol_name: str, user_id: int = Depends(verify_session)):
     """Get information about a specific DeFi protocol."""
     info = await defi_service.get_protocol_info(protocol_name)
     if not info['tokens']:
@@ -39,7 +42,7 @@ async def get_protocol_info(protocol_name: str):
 
 
 @router.get("/wallet/{address}")
-async def analyze_wallet_defi(address: str):
+async def analyze_wallet_defi(address: str, user_id: int = Depends(verify_session)):
     """
     Analyze DeFi positions for a specific wallet address.
 
@@ -57,7 +60,7 @@ async def analyze_wallet_defi(address: str):
 
 
 @router.get("/staking/{address}")
-async def get_staking_positions(address: str, refresh: bool = False):
+async def get_staking_positions(address: str, refresh: bool = False, user_id: int = Depends(verify_session)):
     """
     Get staked positions for a wallet across supported DeFi protocols.
 
@@ -84,7 +87,7 @@ async def get_staking_positions(address: str, refresh: bool = False):
 
 
 @router.get("/staking/indigo/{address}")
-async def get_indigo_staking(address: str):
+async def get_indigo_staking(address: str, user_id: int = Depends(verify_session)):
     """
     Get Indigo Protocol staking positions for a specific wallet.
 
@@ -105,7 +108,7 @@ async def get_indigo_staking(address: str):
 
 
 @router.get("/staking/strike/{address}")
-async def get_strike_staking(address: str):
+async def get_strike_staking(address: str, user_id: int = Depends(verify_session)):
     """
     Get Strike Finance staking positions for a specific wallet.
 
@@ -126,7 +129,7 @@ async def get_strike_staking(address: str):
 
 
 @router.get("/staking/liqwid/{address}")
-async def get_liqwid_staking(address: str):
+async def get_liqwid_staking(address: str, user_id: int = Depends(verify_session)):
     """
     Get Liqwid Finance staking positions for a specific wallet.
 
@@ -147,7 +150,7 @@ async def get_liqwid_staking(address: str):
 
 
 @router.get("/staking/surf/{address}")
-async def get_surf_lending(address: str):
+async def get_surf_lending(address: str, user_id: int = Depends(verify_session)):
     """
     Get Surf Lending (Flow Lending) positions for a specific wallet.
 
@@ -168,7 +171,7 @@ async def get_surf_lending(address: str):
 
 
 @router.get("/rewards/{address}")
-async def get_pending_rewards(address: str, refresh: bool = False):
+async def get_pending_rewards(address: str, refresh: bool = False, user_id: int = Depends(verify_session)):
     """
     Get all pending rewards for a wallet across all DeFi protocols.
 
@@ -196,7 +199,7 @@ async def get_pending_rewards(address: str, refresh: bool = False):
 
 
 @router.get("/rewards/indigo/{address}")
-async def get_indigo_rewards(address: str):
+async def get_indigo_rewards(address: str, user_id: int = Depends(verify_session)):
     """
     Get pending INDY rewards from Indigo Protocol.
     """
@@ -215,7 +218,7 @@ async def get_indigo_rewards(address: str):
 
 
 @router.get("/rewards/strike/{address}")
-async def get_strike_rewards(address: str):
+async def get_strike_rewards(address: str, user_id: int = Depends(verify_session)):
     """
     Get pending STRIKE rewards from Strike Finance.
     """
@@ -234,7 +237,7 @@ async def get_strike_rewards(address: str):
 
 
 @router.get("/rewards/liqwid/{address}")
-async def get_liqwid_rewards(address: str):
+async def get_liqwid_rewards(address: str, user_id: int = Depends(verify_session)):
     """
     Get pending LQ rewards from Liqwid Finance via SundaeSwap.
     """
@@ -254,13 +257,22 @@ async def get_liqwid_rewards(address: str):
 
 
 @router.get("/summary")
-async def get_defi_summary(refresh: bool = False):
+async def get_defi_summary(user_id: int = Depends(verify_session), refresh: bool = False):
     """
     Get aggregated DeFi summary across all tracked wallets.
 
     Returns consolidated view of all DeFi positions.
     """
-    cache_key = "defi_summary"
+    # Check if demo user
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        # Return demo DeFi summary with anime-themed protocols
+        summary = await demo_defi_service.get_defi_summary()
+        summary['demo_mode'] = True
+        return summary
+
+    # Normal mode
+    cache_key = f"defi_summary_{user_id}"
 
     if not refresh:
         cached = await get_cache(cache_key)
@@ -268,7 +280,7 @@ async def get_defi_summary(refresh: bool = False):
             cached['from_cache'] = True
             return cached
 
-    wallets = await get_all_wallets()
+    wallets = await get_all_wallets(user_id=user_id)
     cardano_wallets = [w for w in wallets if w['blockchain'] == 'cardano']
 
     if not cardano_wallets:

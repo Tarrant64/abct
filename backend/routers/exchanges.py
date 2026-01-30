@@ -9,8 +9,11 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.coinbase import coinbase_service
 from services.pricing import pricing_service
-from database import get_cache, set_cache
+from services.demo_exchange_service import demo_exchange_service
+from database import get_cache, set_cache, get_username_by_user_id
 from middleware.auth import verify_admin
+from middleware.demo_mode import is_demo_user
+from auth_utils import verify_session
 
 router = APIRouter(prefix="/exchanges", tags=["exchanges"])
 
@@ -64,26 +67,33 @@ async def get_exchange_status():
 
 
 @router.get("/coinbase")
-async def get_coinbase_portfolio(refresh: bool = Query(False, description="Force refresh cache")):
+async def get_coinbase_portfolio(user_id: int = Depends(verify_session), refresh: bool = Query(False, description="Force refresh cache")):
     """
     Get Coinbase portfolio with USD values.
     Only returns assets with USD value >= $1.00.
     """
+    # Check if demo user
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        # Return demo exchange balances
+        return await demo_exchange_service.get_portfolio_balances(user_id=user_id)
+
+    # Normal mode
     if not coinbase_service.is_configured():
         raise HTTPException(
             status_code=503,
             detail="Coinbase API not configured. Add cdp_api_key.json to project root."
         )
 
-    cache_key = "coinbase_portfolio"
+    cache_key = f"coinbase_portfolio"
 
     if not refresh:
-        cached = await get_cache(cache_key)
+        cached = await get_cache(cache_key, user_id=user_id)
         if cached:
             cached['from_cache'] = True
             return cached
 
-    portfolio = await coinbase_service.get_portfolio_balances()
+    portfolio = await coinbase_service.get_portfolio_balances(user_id=user_id)
 
     if not portfolio.get("assets"):
         return portfolio
@@ -153,13 +163,31 @@ async def get_coinbase_portfolio(refresh: bool = Query(False, description="Force
         "from_cache": False
     }
 
-    await set_cache(cache_key, result, EXCHANGE_CACHE_TTL)
+    await set_cache(cache_key, result, EXCHANGE_CACHE_TTL, user_id=user_id)
     return result
 
 
 @router.get("/summary")
-async def get_all_exchanges_summary():
+async def get_all_exchanges_summary(user_id: int = Depends(verify_session)):
     """Get summary of all configured exchanges."""
+    # Check if demo user
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        # Return demo exchange summary
+        coinbase_data = await demo_exchange_service.get_portfolio_balances(user_id=user_id)
+        return {
+            "exchanges": [{
+                "name": "Coinbase",
+                "total_usd": coinbase_data.get("total_usd", 0),
+                "asset_count": coinbase_data.get("asset_count", 0),
+                "status": "connected"
+            }],
+            "total_usd": coinbase_data.get("total_usd", 0),
+            "total_assets": coinbase_data.get("asset_count", 0),
+            "demo_mode": True
+        }
+
+    # Normal mode
     result = {
         "exchanges": [],
         "total_usd": 0,
@@ -169,7 +197,7 @@ async def get_all_exchanges_summary():
     # Coinbase
     if coinbase_service.is_configured():
         try:
-            coinbase_data = await get_coinbase_portfolio()
+            coinbase_data = await get_coinbase_portfolio(user_id=user_id)
             result["exchanges"].append({
                 "name": "Coinbase",
                 "total_usd": coinbase_data.get("total_usd", 0),
@@ -193,14 +221,14 @@ async def get_all_exchanges_summary():
     return result
 
 
-@router.post("/coinbase/refresh", dependencies=[Depends(verify_admin)])
-async def refresh_coinbase_portfolio():
-    """Refresh Coinbase portfolio data. Requires admin authentication."""
-    return await get_coinbase_portfolio(refresh=True)
+@router.post("/coinbase/refresh")
+async def refresh_coinbase_portfolio(user_id: int = Depends(verify_session)):
+    """Refresh Coinbase portfolio data."""
+    return await get_coinbase_portfolio(user_id=user_id, refresh=True)
 
 
 @router.get("/coinbase/orders")
-async def get_coinbase_open_orders():
+async def get_coinbase_open_orders(user_id: int = Depends(verify_session)):
     """
     Get open orders from Coinbase.
     Returns pending, open, or queued orders.
@@ -211,7 +239,7 @@ async def get_coinbase_open_orders():
             detail="Coinbase API not configured"
         )
 
-    orders = await coinbase_service.get_open_orders()
+    orders = await coinbase_service.get_open_orders(user_id=user_id)
     return {
         "orders": orders,
         "count": len(orders)

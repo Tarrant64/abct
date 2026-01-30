@@ -2,6 +2,36 @@
 
 const API_BASE = '';
 
+/**
+ * Get authentication headers for API requests
+ * @returns {Object} Headers object with Authorization token
+ */
+function getAuthHeaders() {
+    const token = localStorage.getItem('abct_token');
+    if (token) {
+        return {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        };
+    }
+    return { 'Content-Type': 'application/json' };
+}
+
+/**
+ * Authenticated fetch wrapper
+ * Automatically includes auth token in requests
+ */
+async function authFetch(url, options = {}) {
+    const token = localStorage.getItem('abct_token');
+    if (token) {
+        options.headers = {
+            ...options.headers,
+            'Authorization': `Bearer ${token}`
+        };
+    }
+    return fetch(url, options);
+}
+
 // Price data cache
 let prices = { ADA: 0, BTC: 0, ETH: 0, SOL: 0, MATIC: 0 };
 let displayMode = 'crypto'; // 'crypto' or 'usd'
@@ -172,7 +202,7 @@ let priceData = {};
 // Load prices from API (all tracked assets including DeFi)
 async function loadPrices() {
     try {
-        const response = await fetch(`${API_BASE}/prices/all`);
+        const response = await authFetch(`${API_BASE}/prices/all`);
         const data = await response.json();
         // Store full price data and convert to simple prices object
         prices = {};
@@ -511,7 +541,7 @@ function formatAddress(address) {
 // Load portfolio summary
 async function loadPortfolioSummary() {
     try {
-        const response = await fetch(`${API_BASE}/portfolio/summary`);
+        const response = await authFetch(`${API_BASE}/portfolio/summary`);
         const data = await response.json();
 
         // Debug logging
@@ -1060,7 +1090,7 @@ async function loadStakeKeyGovernanceInfo(stakeGroups) {
         if (!firstWallet) continue;
 
         try {
-            const response = await fetch(`${API_BASE}/wallets/${firstWallet.address}/governance`);
+            const response = await authFetch(`${API_BASE}/wallets/${firstWallet.address}/governance`);
             if (!response.ok) {
                 setSafeHTML(govEl, '<div class="gov-error">No staking info</div>');
                 continue;
@@ -1350,7 +1380,7 @@ async function toggleTokenTracking(assetId, track, ticker, decimals, tokenValue)
 
     // Then persist to backend
     try {
-        const response = await fetch(`${API_BASE}/portfolio/tokens/track`, {
+        const response = await authFetch(`${API_BASE}/portfolio/tokens/track`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1408,7 +1438,7 @@ async function loadStakingPositions() {
 
     try {
         // First get all wallets
-        const walletsResponse = await fetch(`${API_BASE}/wallets`);
+        const walletsResponse = await authFetch(`${API_BASE}/wallets`);
         const walletsData = await walletsResponse.json();
 
         const cardanoWallets = walletsData.wallets.filter(w => w.blockchain === 'cardano');
@@ -1430,7 +1460,7 @@ async function loadStakingPositions() {
             if (progressText) progressText.textContent = `Checking wallet ${processedWallets + 1} of ${totalWallets}...`;
 
             try {
-                const stakingResponse = await fetch(`${API_BASE}/defi/staking/${wallet.address}`);
+                const stakingResponse = await authFetch(`${API_BASE}/defi/staking/${wallet.address}`);
                 const stakingData = await stakingResponse.json();
 
                 for (const [protocol, data] of Object.entries(stakingData.protocols || {})) {
@@ -1751,7 +1781,7 @@ async function loadDefiPositions() {
     updateTotalPortfolioValue();
 
     try {
-        const response = await fetch(`${API_BASE}/defi/summary`);
+        const response = await authFetch(`${API_BASE}/defi/summary`);
         const data = await response.json();
 
         // Update summary counts
@@ -1996,10 +2026,10 @@ async function loadDefiGovernance() {
     try {
         // Get all data in parallel where possible
         const [walletsResponse, defiResponse, exchangeResponse, nativeAssetsResponse] = await Promise.all([
-            fetch(`${API_BASE}/wallets`),
-            fetch(`${API_BASE}/defi/summary`),
-            fetch(`${API_BASE}/exchanges/coinbase`).catch(() => ({ ok: false })),
-            fetch(`${API_BASE}/portfolio/assets`).catch(() => ({ ok: false }))
+            authFetch(`${API_BASE}/wallets`),
+            authFetch(`${API_BASE}/defi/summary`),
+            authFetch(`${API_BASE}/exchanges/coinbase`).catch(() => ({ ok: false })),
+            authFetch(`${API_BASE}/portfolio/assets`).catch(() => ({ ok: false }))
         ]);
 
         const walletsData = await walletsResponse.json();
@@ -2029,7 +2059,7 @@ async function loadDefiGovernance() {
             if (progressText) progressText.textContent = `Checking wallet ${processedWallets + 1} of ${totalWallets}...`;
 
             try {
-                const stakingResponse = await fetch(`${API_BASE}/defi/staking/${wallet.address}`);
+                const stakingResponse = await authFetch(`${API_BASE}/defi/staking/${wallet.address}`);
                 const stakingData = await stakingResponse.json();
 
                 for (const [protocol, data] of Object.entries(stakingData.protocols || {})) {
@@ -2535,15 +2565,15 @@ async function refreshDefiGovernance() {
 
     try {
         // Force refresh on backend
-        const cardanoWallets = await fetch(`${API_BASE}/wallets`).then(r => r.json());
+        const cardanoWallets = await authFetch(`${API_BASE}/wallets`).then(r => r.json());
         const refreshPromises = [];
 
         for (const wallet of cardanoWallets.wallets.filter(w => w.blockchain === 'cardano')) {
             refreshPromises.push(
-                fetch(`${API_BASE}/defi/staking/${wallet.address}?refresh=true`).catch(() => null)
+                authFetch(`${API_BASE}/defi/staking/${wallet.address}?refresh=true`).catch(() => null)
             );
         }
-        refreshPromises.push(fetch(`${API_BASE}/defi/summary?refresh=true`).catch(() => null));
+        refreshPromises.push(authFetch(`${API_BASE}/defi/summary?refresh=true`).catch(() => null));
 
         await Promise.all(refreshPromises);
         await loadDefiGovernance();
@@ -2570,7 +2600,7 @@ async function loadExchangeData() {
 
     try {
         // Check exchange status first
-        const statusResponse = await fetch(`${API_BASE}/exchanges/status`);
+        const statusResponse = await authFetch(`${API_BASE}/exchanges/status`);
         const statusData = await statusResponse.json();
 
         const coinbaseConfigured = statusData.exchanges?.coinbase?.configured;
@@ -2584,7 +2614,7 @@ async function loadExchangeData() {
         }
 
         // Fetch Coinbase portfolio
-        const response = await fetch(`${API_BASE}/exchanges/coinbase`);
+        const response = await authFetch(`${API_BASE}/exchanges/coinbase`);
 
         if (!response.ok) {
             const error = await response.json();
@@ -2697,7 +2727,7 @@ async function loadNFTs() {
     setSafeHTML(nftsList, '<p class="loading-state">Loading NFTs... (this may take a moment)</p>');
 
     try {
-        const response = await fetch(`${API_BASE}/nfts`);
+        const response = await authFetch(`${API_BASE}/nfts`);
 
         if (!response.ok) {
             setSafeHTML(nftsList, '<p class="empty-state">Error loading NFTs</p>');
@@ -2859,7 +2889,7 @@ async function refreshBalances() {
     refreshBtn.textContent = 'Refreshing...';
 
     try {
-        const response = await fetch(`${API_BASE}/wallets/refresh`, {
+        const response = await authFetch(`${API_BASE}/wallets/refresh`, {
             method: 'POST'
         });
         const data = await response.json();
@@ -2900,7 +2930,7 @@ async function addWallet(event) {
     }
 
     try {
-        const response = await fetch(`${API_BASE}/wallets`, {
+        const response = await authFetch(`${API_BASE}/wallets`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -2955,7 +2985,7 @@ async function editWalletLabel(address, button) {
         const newLabel = input.value.trim();
         if (newLabel && newLabel !== currentLabel) {
             try {
-                const response = await fetch(`${API_BASE}/wallets/${encodeURIComponent(address)}`, {
+                const response = await authFetch(`${API_BASE}/wallets/${encodeURIComponent(address)}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ label: newLabel })
@@ -3008,7 +3038,7 @@ async function deleteWallet(address) {
     try {
         showStatus('Deleting wallet...');
 
-        const response = await fetch(`${API_BASE}/wallets/${encodeURIComponent(address)}`, {
+        const response = await authFetch(`${API_BASE}/wallets/${encodeURIComponent(address)}`, {
             method: 'DELETE'
         });
 
@@ -3061,7 +3091,7 @@ async function refreshWallets() {
 
     try {
         // Force refresh the portfolio summary
-        const response = await fetch(`${API_BASE}/portfolio/summary?refresh=true`);
+        const response = await authFetch(`${API_BASE}/portfolio/summary?refresh=true`);
         const data = await response.json();
 
         walletTotals.ADA = data.cardano.total_ada;
@@ -3114,7 +3144,7 @@ async function refreshExchanges() {
 
     try {
         // Force refresh by adding refresh=true parameter
-        const response = await fetch(`${API_BASE}/exchanges/coinbase?refresh=true`);
+        const response = await authFetch(`${API_BASE}/exchanges/coinbase?refresh=true`);
 
         if (!response.ok) {
             throw new Error('Failed to fetch exchange data');
@@ -3177,7 +3207,7 @@ async function refreshDefi() {
     updateTotalPortfolioValue();
 
     try {
-        const response = await fetch(`${API_BASE}/defi/summary?refresh=true`);
+        const response = await authFetch(`${API_BASE}/defi/summary?refresh=true`);
         const data = await response.json();
 
         defiProtocolCount.textContent = `${data.protocols_used.length} protocol${data.protocols_used.length !== 1 ? 's' : ''}`;
@@ -3251,7 +3281,7 @@ async function refreshNFTs() {
     try {
         if (currentNFTChain === 'cardano') {
             // Force refresh Cardano NFTs
-            const response = await fetch(`${API_BASE}/nfts?force_refresh=true`);
+            const response = await authFetch(`${API_BASE}/nfts?force_refresh=true`);
 
             if (!response.ok) {
                 throw new Error('Failed to fetch NFTs');
@@ -3276,7 +3306,7 @@ async function refreshNFTs() {
             renderNFTs(data.nfts, data.ada_price);
         } else if (currentNFTChain === 'ethereum') {
             // Force refresh Ethereum NFTs
-            const response = await fetch(`${API_BASE}/nfts/ethereum?force_refresh=true`);
+            const response = await authFetch(`${API_BASE}/nfts/ethereum?force_refresh=true`);
 
             if (!response.ok) {
                 throw new Error('Failed to fetch Ethereum NFTs');
@@ -3301,7 +3331,7 @@ async function refreshNFTs() {
             renderEthereumNFTs(data.nfts, data.eth_price);
         } else if (currentNFTChain === 'solana') {
             // Force refresh Solana NFTs
-            const response = await fetch(`${API_BASE}/nfts/solana?force_refresh=true`);
+            const response = await authFetch(`${API_BASE}/nfts/solana?force_refresh=true`);
 
             if (!response.ok) {
                 throw new Error('Failed to fetch Solana NFTs');
@@ -3326,7 +3356,7 @@ async function refreshNFTs() {
             renderSolanaNFTs(data.nfts, data.sol_price);
         } else if (currentNFTChain === 'polygon') {
             // Force refresh Polygon NFTs
-            const response = await fetch(`${API_BASE}/nfts/polygon?force_refresh=true`);
+            const response = await authFetch(`${API_BASE}/nfts/polygon?force_refresh=true`);
 
             if (!response.ok) {
                 throw new Error('Failed to fetch Polygon NFTs');
@@ -3351,7 +3381,7 @@ async function refreshNFTs() {
             renderPolygonNFTs(data.nfts, data.matic_price);
         } else if (currentNFTChain === 'base') {
             // Force refresh Base NFTs
-            const response = await fetch(`${API_BASE}/nfts/base?force_refresh=true`);
+            const response = await authFetch(`${API_BASE}/nfts/base?force_refresh=true`);
 
             if (!response.ok) {
                 throw new Error('Failed to fetch Base NFTs');
@@ -3422,7 +3452,7 @@ async function loadEthereumNFTs() {
     }
 
     try {
-        const response = await fetch(`${API_BASE}/nfts/ethereum`);
+        const response = await authFetch(`${API_BASE}/nfts/ethereum`);
 
         if (!response.ok) {
             throw new Error('Failed to fetch Ethereum NFTs');
@@ -3591,7 +3621,7 @@ function updateNftSectionSummary() {
 // Initialize the image cache toggle from server state
 async function initImageCacheToggle() {
     try {
-        const response = await fetch(`${API_BASE}/nfts/images/config`);
+        const response = await authFetch(`${API_BASE}/nfts/images/config`);
         const config = await response.json();
 
         imageCacheEnabled = config.enabled || false;
@@ -3612,7 +3642,7 @@ async function initImageCacheToggle() {
 async function toggleImageCache(enabled) {
     try {
         const endpoint = enabled ? '/nfts/images/enable' : '/nfts/images/disable';
-        const response = await fetch(`${API_BASE}${endpoint}`, { method: 'POST' });
+        const response = await authFetch(`${API_BASE}${endpoint}`, { method: 'POST' });
         const data = await response.json();
 
         imageCacheEnabled = data.enabled;
@@ -3667,7 +3697,7 @@ async function syncNFTPrices() {
 
     try {
         // First check if the service is available
-        const statusResponse = await fetch(`${API_BASE}/nfts/prices/service-status`);
+        const statusResponse = await authFetch(`${API_BASE}/nfts/prices/service-status`);
         const statusData = await statusResponse.json();
 
         if (!statusData.configured) {
@@ -3681,7 +3711,7 @@ async function syncNFTPrices() {
         }
 
         // Sync prices
-        const response = await fetch(`${API_BASE}/nfts/prices/sync`, { method: 'POST' });
+        const response = await authFetch(`${API_BASE}/nfts/prices/sync`, { method: 'POST' });
         const data = await response.json();
 
         if (data.success) {
@@ -3712,7 +3742,7 @@ async function loadSolanaNFTs() {
     }
 
     try {
-        const response = await fetch(`${API_BASE}/nfts/solana`);
+        const response = await authFetch(`${API_BASE}/nfts/solana`);
 
         if (!response.ok) {
             throw new Error('Failed to fetch Solana NFTs');
@@ -3845,7 +3875,7 @@ async function loadPolygonNFTs() {
     }
 
     try {
-        const response = await fetch(`${API_BASE}/nfts/polygon`);
+        const response = await authFetch(`${API_BASE}/nfts/polygon`);
 
         if (!response.ok) {
             throw new Error('Failed to fetch Polygon NFTs');
@@ -3998,7 +4028,7 @@ async function loadBaseNFTs() {
     }
 
     try {
-        const response = await fetch(`${API_BASE}/nfts/base`);
+        const response = await authFetch(`${API_BASE}/nfts/base`);
 
         if (!response.ok) {
             throw new Error('Failed to fetch Base NFTs');
@@ -4146,7 +4176,7 @@ function renderBaseNFTs(nfts, ethPrice) {
 // Load NFT summaries for all chains (for combined totals on page load)
 async function loadAllNftSummaries() {
     try {
-        const response = await fetch(`${API_BASE}/nfts/all/summary`);
+        const response = await authFetch(`${API_BASE}/nfts/all/summary`);
         if (!response.ok) return;
 
         const data = await response.json();
@@ -4241,31 +4271,31 @@ async function globalRefreshAll() {
 
         // Refresh all sections with force refresh parameter
         const refreshPromises = [
-            fetch(`${API_BASE}/portfolio/summary?refresh=true`).then(r => r.json()),
-            fetch(`${API_BASE}/defi/summary?refresh=true`).then(r => r.json()),
-            fetch(`${API_BASE}/exchanges/coinbase?refresh=true`).then(r => r.json()).catch(() => null),
-            fetch(`${API_BASE}/nfts?force_refresh=true`).then(r => r.json()).catch(() => null)
+            authFetch(`${API_BASE}/portfolio/summary?refresh=true`).then(r => r.json()),
+            authFetch(`${API_BASE}/defi/summary?refresh=true`).then(r => r.json()),
+            authFetch(`${API_BASE}/exchanges/coinbase?refresh=true`).then(r => r.json()).catch(() => null),
+            authFetch(`${API_BASE}/nfts?force_refresh=true`).then(r => r.json()).catch(() => null)
         ];
 
         // Get wallets to refresh staking
-        const walletsResponse = await fetch(`${API_BASE}/wallets`);
+        const walletsResponse = await authFetch(`${API_BASE}/wallets`);
         const walletsData = await walletsResponse.json();
         const cardanoWallets = walletsData.wallets.filter(w => w.blockchain === 'cardano');
 
         // Refresh staking for all wallets with force refresh
         for (const wallet of cardanoWallets) {
             refreshPromises.push(
-                fetch(`${API_BASE}/defi/staking/${wallet.address}?refresh=true`).then(r => r.json()).catch(() => null)
+                authFetch(`${API_BASE}/defi/staking/${wallet.address}?refresh=true`).then(r => r.json()).catch(() => null)
             );
         }
 
         await Promise.all(refreshPromises);
 
         // Also refresh Ethereum, Solana, Polygon, and Base NFTs
-        fetch(`${API_BASE}/nfts/ethereum?force_refresh=true`).catch(() => null);
-        fetch(`${API_BASE}/nfts/solana?force_refresh=true`).catch(() => null);
-        fetch(`${API_BASE}/nfts/polygon?force_refresh=true`).catch(() => null);
-        fetch(`${API_BASE}/nfts/base?force_refresh=true`).catch(() => null);
+        authFetch(`${API_BASE}/nfts/ethereum?force_refresh=true`).catch(() => null);
+        authFetch(`${API_BASE}/nfts/solana?force_refresh=true`).catch(() => null);
+        authFetch(`${API_BASE}/nfts/polygon?force_refresh=true`).catch(() => null);
+        authFetch(`${API_BASE}/nfts/base?force_refresh=true`).catch(() => null);
 
         // Reload all UI components (force refresh for global refresh)
         await loadPortfolioSummary();
@@ -4355,7 +4385,7 @@ async function loadPortfolioHistory(range = '7d') {
     currentChartRange = range;
 
     try {
-        const response = await fetch(`${API_BASE}/portfolio/history?range=${range}`);
+        const response = await authFetch(`${API_BASE}/portfolio/history?range=${range}`);
         const data = await response.json();
 
         if (data.data && data.data.length > 0) {
@@ -4733,7 +4763,7 @@ async function addTokenDirect(policyId, blockchain, quantity, label) {
         };
 
         // Add the token
-        const response = await fetch(`${API_BASE}/custom-tokens`, {
+        const response = await authFetch(`${API_BASE}/custom-tokens`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(tokenData)
@@ -4787,7 +4817,7 @@ async function addTokenDirect(policyId, blockchain, quantity, label) {
 // Load custom tokens from API
 async function loadCustomTokens() {
     try {
-        const response = await fetch(`${API_BASE}/custom-tokens`);
+        const response = await authFetch(`${API_BASE}/custom-tokens`);
         const data = await response.json();
         customTokens = data.tokens || [];
 
@@ -4916,7 +4946,7 @@ async function toggleCustomTokenTracking(tokenId, include, tokenValue) {
 
     // Then persist to backend
     try {
-        const response = await fetch(`${API_BASE}/custom-tokens/${tokenId}/toggle`, {
+        const response = await authFetch(`${API_BASE}/custom-tokens/${tokenId}/toggle`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ include_in_total: include })
@@ -4961,7 +4991,7 @@ async function deleteCustomToken(tokenId) {
     }
 
     try {
-        const response = await fetch(`${API_BASE}/custom-tokens/${tokenId}`, {
+        const response = await authFetch(`${API_BASE}/custom-tokens/${tokenId}`, {
             method: 'DELETE'
         });
 
@@ -4989,7 +5019,7 @@ async function checkStartupStatus() {
     if (!indicator) return;
 
     try {
-        const response = await fetch(`${API_BASE}/api/startup-status`);
+        const response = await authFetch(`${API_BASE}/api/startup-status`);
         const status = await response.json();
 
         if (status.ready) {
