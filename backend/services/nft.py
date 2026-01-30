@@ -248,9 +248,19 @@ class NFTService:
             logger.info(f"Fetching collection data for {len(policy_ids)} collections")
             # Load from DB first
             for pid in policy_ids:
-                floor_price_data = await self._get_floor_price_from_db(pid)
-                if floor_price_data:
-                    temp_collection_cache[pid] = floor_price_data
+                db_price = await get_latest_nft_floor_price(pid)
+                if db_price and db_price.get('floor_price_ada') is not None:
+                    temp_collection_cache[pid] = {
+                        'found': True,
+                        'name': db_price.get('collection_name', ''),
+                        'floor_price_ada': db_price.get('floor_price_ada'),
+                        'verified': bool(db_price.get('verified')),
+                        'supply': db_price.get('supply'),
+                        'listings': db_price.get('listings', 0),
+                        'source': db_price.get('source', 'database'),
+                        'cached_at': datetime.fromisoformat(db_price['fetched_at']) if db_price.get('fetched_at') else datetime.now(),
+                        'from_db': True
+                    }
 
             # Fetch any missing from API
             uncached_policy_ids = [pid for pid in policy_ids if pid not in temp_collection_cache]
