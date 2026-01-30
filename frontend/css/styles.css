@@ -3311,7 +3311,7 @@ body.usd-primary .exchange-asset-item .balance-amount::after {
 }
 
 .summary-card.clickable .card-header::after {
-    content: '👁️';
+    content: '📊';
     font-size: 1.2rem;
     opacity: 0.6;
     margin-left: 10px;

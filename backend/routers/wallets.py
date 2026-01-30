@@ -133,6 +133,12 @@ async def list_wallets(user_id: int = Depends(verify_session)):
 
     return {"wallets": result, "total": len(result)}
 
+@router.get("/id/{wallet_id}/assets")
+async def get_wallet_assets_by_id(wallet_id: int, user_id: int = Depends(verify_session)):
+    """Get native assets for a specific wallet by ID."""
+    assets = await get_wallet_assets(wallet_id)
+    return {"assets": assets}
+
 @router.get("/{address}")
 async def get_wallet(address: str, user_id: int = Depends(verify_session)):
     """Get details for a specific wallet."""
