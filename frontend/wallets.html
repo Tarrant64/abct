@@ -876,6 +876,11 @@
             </div>
         </header>
 
+        <!-- Status Bar -->
+        <div id="statusBar" class="status-bar hidden">
+            <span id="statusMessage"></span>
+        </div>
+
         <div class="page-nav-header">
             <h2>Manage Assets</h2>
         </div>
@@ -1285,6 +1290,8 @@ base:0x789..." oninput="previewImport()"></textarea>
     <script>
         let wallets = [];
         let currentFilter = 'all';
+        const statusBar = document.getElementById('statusBar');
+        const statusMessage = document.getElementById('statusMessage');
 
         // Load wallets on page load
         document.addEventListener('DOMContentLoaded', loadWallets);
@@ -2252,11 +2259,26 @@ base:0x789..." oninput="previewImport()"></textarea>
 
         // Status Messages
         function showStatus(message, type) {
-            const el = document.getElementById('statusMessage');
-            el.textContent = message;
-            el.className = `status-message ${type}`;
+            const statusBar = document.getElementById('statusBar');
+            const statusMessage = document.getElementById('statusMessage');
+
+            if (!statusBar || !statusMessage) {
+                console.log(`Status: ${message}${type === 'error' ? ' (error)' : ''}`);
+                return;
+            }
+
+            statusMessage.textContent = message;
+            statusBar.classList.remove('hidden', 'error', 'success');
+
+            if (type === 'error') {
+                statusBar.classList.add('error');
+            } else if (type === 'success') {
+                statusBar.classList.add('success');
+            }
+
+            // Auto-hide after 5 seconds
             setTimeout(() => {
-                el.className = 'status-message';
+                statusBar.classList.add('hidden');
             }, 5000);
         }
 
