@@ -1295,7 +1295,7 @@ base:0x789..." oninput="previewImport()"></textarea>
                 const data = await response.json();
                 wallets = data.wallets || [];
                 updateCounts();
-                renderWallets();
+                renderWalletsList();
             } catch (error) {
                 console.error('Error loading wallets:', error);
                 showStatus('Failed to load wallets', 'error');
@@ -1322,10 +1322,10 @@ base:0x789..." oninput="previewImport()"></textarea>
                 tab.classList.toggle('active', tab.dataset.chain === chain);
             });
 
-            renderWallets();
+            renderWalletsList();
         }
 
-        function renderWallets() {
+        function renderWalletsList() {
             const container = document.getElementById('walletList');
             const filtered = currentFilter === 'all'
                 ? wallets
