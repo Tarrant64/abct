@@ -1330,6 +1330,61 @@ base:0x789..." oninput="previewImport()"></textarea>
             renderWalletsList();
         }
 
+        // Attach event listeners after DOM update (must be defined before renderWalletsList)
+        function attachWalletEventListeners() {
+            console.log('Attaching wallet event listeners...');
+
+            // Stake group toggle listeners
+            const stakeHeaders = document.querySelectorAll('.stake-group-header');
+            console.log('Found', stakeHeaders.length, 'stake group headers');
+            stakeHeaders.forEach(header => {
+                header.addEventListener('click', function() {
+                    const stakeGroup = this.closest('.stake-group');
+                    const stakeKey = stakeGroup.dataset.stakeKey;
+                    toggleStakeGroup(stakeKey);
+                });
+            });
+
+            // Token count badge listeners
+            const tokenBadges = document.querySelectorAll('.token-count');
+            console.log('Found', tokenBadges.length, 'token count badges');
+            tokenBadges.forEach(badge => {
+                badge.addEventListener('click', function(event) {
+                    event.stopPropagation();
+                    const walletId = parseInt(this.dataset.walletId);
+                    toggleWalletAssets(walletId, event);
+                });
+            });
+
+            // Edit button listeners
+            const editButtons = document.querySelectorAll('.wallet-edit-btn');
+            console.log('Found', editButtons.length, 'edit buttons');
+            editButtons.forEach(btn => {
+                btn.addEventListener('click', function(event) {
+                    event.stopPropagation();
+                    const id = parseInt(this.dataset.walletId);
+                    const address = this.dataset.walletAddress;
+                    const label = this.dataset.walletLabel;
+                    console.log('Edit clicked for wallet', id);
+                    openEditModal(id, address, label);
+                });
+            });
+
+            // Delete button listeners
+            const deleteButtons = document.querySelectorAll('.wallet-delete-btn');
+            console.log('Found', deleteButtons.length, 'delete buttons');
+            deleteButtons.forEach(btn => {
+                btn.addEventListener('click', function(event) {
+                    event.stopPropagation();
+                    const walletKey = this.dataset.walletKey;
+                    console.log('Delete clicked for wallet', walletKey);
+                    deleteWallet(walletKey);
+                });
+            });
+
+            console.log('Event listeners attached successfully');
+        }
+
         function renderWalletsList() {
             const container = document.getElementById('walletList');
             const filtered = currentFilter === 'all'
@@ -1443,46 +1498,6 @@ base:0x789..." oninput="previewImport()"></textarea>
                     </div>
                 </div>
             `;
-        }
-
-        function attachWalletEventListeners() {
-            // Stake group toggle listeners
-            document.querySelectorAll('.stake-group-header').forEach(header => {
-                header.addEventListener('click', function() {
-                    const stakeGroup = this.closest('.stake-group');
-                    const stakeKey = stakeGroup.dataset.stakeKey;
-                    toggleStakeGroup(stakeKey);
-                });
-            });
-
-            // Token count badge listeners
-            document.querySelectorAll('.token-count').forEach(badge => {
-                badge.addEventListener('click', function(event) {
-                    event.stopPropagation();
-                    const walletId = parseInt(this.dataset.walletId);
-                    toggleWalletAssets(walletId, event);
-                });
-            });
-
-            // Edit button listeners
-            document.querySelectorAll('.wallet-edit-btn').forEach(btn => {
-                btn.addEventListener('click', function(event) {
-                    event.stopPropagation();
-                    const id = parseInt(this.dataset.walletId);
-                    const address = this.dataset.walletAddress;
-                    const label = this.dataset.walletLabel;
-                    openEditModal(id, address, label);
-                });
-            });
-
-            // Delete button listeners
-            document.querySelectorAll('.wallet-delete-btn').forEach(btn => {
-                btn.addEventListener('click', function(event) {
-                    event.stopPropagation();
-                    const walletKey = this.dataset.walletKey;
-                    deleteWallet(walletKey);
-                });
-            });
         }
 
         async function toggleWalletAssets(walletId, event) {
@@ -2376,7 +2391,7 @@ base:0x789..." oninput="previewImport()"></textarea>
     </script>
 
     <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
-        <p>ABCT - Wallet Management | <span style="opacity: 0.6;">v0.12.0 (BUILD 1769804626)</span></p>
+        <p>ABCT - Wallet Management | <span style="opacity: 0.6;">v0.12.0 (BUILD 1769804954)</span></p>
     </footer>
 </body>
 </html>
