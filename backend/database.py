@@ -63,6 +63,21 @@ async def get_username_by_user_id(user_id: int) -> Optional[str]:
         return row[0] if row else None
 
 
+async def get_all_users():
+    """Get all users.
+
+    Returns:
+        List of user dictionaries
+    """
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT id, username, is_demo FROM users ORDER BY id"
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+
 async def _check_column_exists(db, table_name: str, column_name: str) -> bool:
     """Check if a column exists in a table."""
     cursor = await db.execute(f"PRAGMA table_info({table_name})")

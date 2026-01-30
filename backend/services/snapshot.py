@@ -54,14 +54,14 @@ class SnapshotService:
             self.nft_service = nft_service
         return self.nft_service
 
-    async def should_create_snapshot(self) -> bool:
-        """Check if we should create or update a snapshot."""
+    async def should_create_snapshot(self, user_id: int = None) -> bool:
+        """Check if we should create or update a snapshot for a user."""
         now_ct = datetime.now(CT_TIMEZONE)
         today = str(now_ct.date())
 
-        # Get the latest snapshot info
-        latest_date = await get_latest_snapshot_date()
-        latest_time = await get_latest_snapshot_time()
+        # Get the latest snapshot info for this user
+        latest_date = await get_latest_snapshot_date(user_id=user_id)
+        latest_time = await get_latest_snapshot_time(user_id=user_id)
 
         # If no snapshot exists at all, create one
         if not latest_date:
@@ -94,11 +94,12 @@ class SnapshotService:
 
         return False
 
-    async def create_snapshot(self, force: bool = False) -> dict:
+    async def create_snapshot(self, user_id: int = None, force: bool = False) -> dict:
         """
         Create or update a portfolio snapshot with current values.
 
         Args:
+            user_id: User ID to create snapshot for (required for multi-user)
             force: If True, create/update snapshot regardless of timing
 
         Returns:
@@ -109,12 +110,12 @@ class SnapshotService:
 
         # Check if we should create/update (unless forcing)
         if not force:
-            should_update = await self.should_create_snapshot()
+            should_update = await self.should_create_snapshot(user_id=user_id)
             if not should_update:
-                logger.info(f"Snapshot for {today} is still fresh, skipping")
+                logger.info(f"Snapshot for {today} (user {user_id}) is still fresh, skipping")
                 return {"status": "skipped", "date": today, "reason": "still_fresh"}
 
-        logger.info(f"Creating portfolio snapshot for {today}...")
+        logger.info(f"Creating portfolio snapshot for {today} (user {user_id})...")
 
         # Get pricing service
         pricing = await self._get_pricing_service()
@@ -126,8 +127,8 @@ class SnapshotService:
         eth_price = prices.get('ETH', {}).get('usd', 0)
         sol_price = prices.get('SOL', {}).get('usd', 0)
 
-        # Calculate wallet totals
-        wallets = await get_all_wallets()
+        # Calculate wallet totals for this user
+        wallets = await get_all_wallets(user_id=user_id)
         ada_amount = 0.0
         btc_amount = 0.0
         eth_amount = 0.0
@@ -155,19 +156,19 @@ class SnapshotService:
         )
 
         # Get staking value (from cache if available)
-        staking_value_usd = await self._get_staking_value(prices)
+        staking_value_usd = await self._get_staking_value(prices, user_id=user_id)
 
         # Get DeFi value (from cache if available)
-        defi_value_usd = await self._get_defi_value(prices)
+        defi_value_usd = await self._get_defi_value(prices, user_id=user_id)
 
         # Get exchange value (from cache if available)
-        exchange_value_usd = await self._get_exchange_value(prices)
+        exchange_value_usd = await self._get_exchange_value(prices, user_id=user_id)
 
         # Get NFT value (from cache if available)
-        nft_value_usd = await self._get_nft_value(ada_price)
+        nft_value_usd = await self._get_nft_value(ada_price, user_id=user_id)
 
         # Get tracked native tokens value (from cache if available)
-        tracked_tokens_value_usd = await self._get_tracked_tokens_value(prices)
+        tracked_tokens_value_usd = await self._get_tracked_tokens_value(prices, user_id=user_id)
 
         # Calculate total
         total_value_usd = (
@@ -199,9 +200,9 @@ class SnapshotService:
             'tracked_tokens_value_usd': tracked_tokens_value_usd
         }
 
-        # Save to database
-        await save_portfolio_snapshot(snapshot_data)
-        logger.info(f"Portfolio snapshot saved: ${total_value_usd:,.2f}")
+        # Save to database with user_id
+        await save_portfolio_snapshot(snapshot_data, user_id=user_id)
+        logger.info(f"Portfolio snapshot saved for user {user_id}: ${total_value_usd:,.2f}")
 
         return {
             "status": "created",
@@ -217,18 +218,18 @@ class SnapshotService:
             }
         }
 
-    async def _get_staking_value(self, prices: dict) -> float:
+    async def _get_staking_value(self, prices: dict, user_id: int = None) -> float:
         """Get total staking value from cached data."""
         try:
             from database import get_cache
             # Try to get cached staking data
-            wallets = await get_all_wallets()
+            wallets = await get_all_wallets(user_id=user_id)
             total_usd = 0.0
 
             for wallet in wallets:
                 if wallet['blockchain'] == 'cardano':
                     cache_key = f"staking_positions_{wallet['address']}"
-                    cached = await get_cache(cache_key)
+                    cached = await get_cache(cache_key, user_id=user_id)
                     if cached and 'positions' in cached:
                         for pos in cached['positions']:
                             amount = float(pos.get('staked_amount', 0))
@@ -241,11 +242,11 @@ class SnapshotService:
             logger.debug(f"Could not get staking value: {e}")
             return 0.0
 
-    async def _get_defi_value(self, prices: dict) -> float:
+    async def _get_defi_value(self, prices: dict, user_id: int = None) -> float:
         """Get total DeFi value from cached data."""
         try:
             from database import get_cache
-            cached = await get_cache("defi_summary")
+            cached = await get_cache("defi_summary", user_id=user_id)
             if cached and 'total_value_usd' in cached:
                 return float(cached['total_value_usd'])
             return 0.0
@@ -253,12 +254,12 @@ class SnapshotService:
             logger.debug(f"Could not get DeFi value: {e}")
             return 0.0
 
-    async def _get_exchange_value(self, prices: dict) -> float:
+    async def _get_exchange_value(self, prices: dict, user_id: int = None) -> float:
         """Get total exchange value from cached data."""
         try:
             from database import get_cache
             # Use the correct cache key from exchanges router
-            cached = await get_cache("coinbase_portfolio")
+            cached = await get_cache("coinbase_portfolio", user_id=user_id)
             if cached and 'total_usd' in cached:
                 return float(cached['total_usd'])
             return 0.0
@@ -266,7 +267,7 @@ class SnapshotService:
             logger.debug(f"Could not get exchange value: {e}")
             return 0.0
 
-    async def _get_tracked_tokens_value(self, prices: dict) -> float:
+    async def _get_tracked_tokens_value(self, prices: dict, user_id: int = None) -> float:
         """Get total tracked native tokens value from cached data.
 
         Note: Excludes DeFi tokens (those with policy_id in DEFI_PROTOCOLS)
@@ -276,10 +277,10 @@ class SnapshotService:
             from database import get_cache
             from services.defi import DEFI_PROTOCOLS
 
-            cached = await get_cache("native_assets_all")
+            cached = await get_cache("native_assets_all", user_id=user_id)
             if cached and 'assets' in cached:
                 from database import get_tracked_tokens
-                tracked_tokens = await get_tracked_tokens()
+                tracked_tokens = await get_tracked_tokens(user_id=user_id)
                 tracked_ids = {t['asset_id'] for t in tracked_tokens}
 
                 total_usd = 0.0
@@ -305,11 +306,11 @@ class SnapshotService:
             logger.debug(f"Could not get tracked tokens value: {e}")
             return 0.0
 
-    async def _get_nft_value(self, ada_price: float) -> float:
+    async def _get_nft_value(self, ada_price: float, user_id: int = None) -> float:
         """Get total NFT value from cached data."""
         try:
             nft_svc = await self._get_nft_service()
-            summary = await nft_svc.get_nft_summary()
+            summary = await nft_svc.get_nft_summary(user_id=user_id)
             total_ada = summary.get('total_value_ada', 0)
             return total_ada * ada_price
         except Exception as e:
@@ -317,11 +318,26 @@ class SnapshotService:
             return 0.0
 
     async def check_and_create_snapshot(self):
-        """Called on app startup - creates or updates snapshot if needed."""
-        if await self.should_create_snapshot():
-            logger.info("Creating/updating portfolio snapshot...")
-            result = await self.create_snapshot(force=True)
-            logger.info(f"Snapshot result: {result['status']}")
+        """Called on app startup - creates or updates snapshot if needed for all users."""
+        # Import here to avoid circular dependency
+        from database import get_all_users
+
+        try:
+            # Get all non-demo users
+            users = await get_all_users()
+            non_demo_users = [u for u in users if not u.get('is_demo', False)]
+
+            for user in non_demo_users:
+                user_id = user['id']
+                try:
+                    if await self.should_create_snapshot(user_id=user_id):
+                        logger.info(f"Creating/updating portfolio snapshot for user {user_id}...")
+                        result = await self.create_snapshot(user_id=user_id, force=True)
+                        logger.info(f"Snapshot result for user {user_id}: {result['status']}")
+                except Exception as e:
+                    logger.error(f"Failed to create snapshot for user {user_id}: {e}")
+        except Exception as e:
+            logger.error(f"Failed to check/create snapshots: {e}")
         else:
             logger.info("Portfolio snapshot is up to date (less than 4 hours old)")
 
