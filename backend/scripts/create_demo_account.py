@@ -479,8 +479,8 @@ async def create_demo_wallets(user_id):
                 unit = "POL"
 
             await db.execute(
-                "INSERT INTO balances (wallet_id, amount, unit, updated_at) VALUES (?, ?, ?, ?)",
-                (wallet_id, native_balance, unit, datetime.now())
+                "INSERT INTO balances (wallet_id, user_id, amount, unit, updated_at) VALUES (?, ?, ?, ?, ?)",
+                (wallet_id, user_id, native_balance, unit, datetime.now())
             )
 
             # Calculate value in USD
@@ -501,9 +501,9 @@ async def create_demo_wallets(user_id):
             # Add native assets (tokens, NFTs)
             for asset in native_assets:
                 await db.execute(
-                    """INSERT INTO native_assets (wallet_id, asset_id, policy_id, asset_name, quantity, decimals, updated_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                    (wallet_id, asset["asset_id"], asset["policy_id"], asset["asset_name"],
+                    """INSERT INTO native_assets (wallet_id, user_id, asset_id, policy_id, asset_name, quantity, decimals, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (wallet_id, user_id, asset["asset_id"], asset["policy_id"], asset["asset_name"],
                      asset["quantity"], asset.get("decimals", 0), datetime.now())
                 )
 
@@ -555,9 +555,9 @@ async def create_demo_nfts(user_id):
                 asset_id = f"{policy_id}{asset_name}"
 
                 await db.execute(
-                    """INSERT OR REPLACE INTO native_assets (wallet_id, asset_id, policy_id, asset_name, quantity, decimals, updated_at)
-                       VALUES (?, ?, ?, ?, '1', 0, ?)""",
-                    (wallet_id, asset_id, policy_id, asset_name, datetime.now())
+                    """INSERT OR REPLACE INTO native_assets (wallet_id, user_id, asset_id, policy_id, asset_name, quantity, decimals, updated_at)
+                       VALUES (?, ?, ?, ?, ?, '1', 0, ?)""",
+                    (wallet_id, user_id, asset_id, policy_id, asset_name, datetime.now())
                 )
 
             # Add floor price data
