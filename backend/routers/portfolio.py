@@ -291,7 +291,7 @@ async def get_all_native_assets(user_id: int = Depends(verify_session), refresh:
                 'wallet_count': 0,
                 'wallets': []
             }
-        asset_totals[asset_id]['total_quantity_raw'] += int(asset['quantity'])
+        asset_totals[asset_id]['total_quantity_raw'] += float(asset['quantity'])
         asset_totals[asset_id]['wallet_count'] += 1
         asset_totals[asset_id]['wallets'].append({
             'address': asset['wallet_address'],
