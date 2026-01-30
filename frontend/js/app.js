@@ -1200,7 +1200,7 @@ async function loadNativeAssets(forceRefresh = false) {
         const url = forceRefresh
             ? `${API_BASE}/portfolio/assets?refresh=true`
             : `${API_BASE}/portfolio/assets`;
-        const response = await fetch(url);
+        const response = await authFetch(url);
         const data = await response.json();
         nativeTokensData = data;
 
