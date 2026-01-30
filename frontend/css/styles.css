@@ -3204,6 +3204,119 @@ body.usd-primary .exchange-asset-item .balance-amount::after {
     border-top: 1px solid var(--border-color);
 }
 
+/* Asset Breakdown Modal */
+.asset-breakdown-modal {
+    width: 90%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.breakdown-stats {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+}
+
+.breakdown-stats .stat {
+    text-align: center;
+}
+
+.breakdown-stats .label {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 5px;
+}
+
+.breakdown-stats .value {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--accent-color);
+}
+
+.chart-container {
+    position: relative;
+    margin: 20px auto;
+    max-width: 400px;
+    max-height: 400px;
+}
+
+.breakdown-legend {
+    margin-top: 20px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.legend-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    margin-bottom: 5px;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+}
+
+.legend-item:hover {
+    background: var(--bg-tertiary);
+}
+
+.legend-color {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    margin-right: 10px;
+}
+
+.legend-label {
+    flex: 1;
+    display: flex;
+    align-items: center;
+}
+
+.legend-symbol {
+    font-weight: bold;
+    margin-right: 8px;
+}
+
+.legend-name {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.legend-value {
+    text-align: right;
+}
+
+.legend-percentage {
+    font-size: 0.85rem;
+    color: var(--accent-color);
+    margin-left: 10px;
+}
+
+/* Make blockchain cards clickable */
+.summary-card.clickable {
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.summary-card.clickable:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.summary-card.clickable .card-header::after {
+    content: '👁️';
+    font-size: 1.2rem;
+    opacity: 0.6;
+    margin-left: 10px;
+}
+
 .token-lookup-result {
     padding: 12px 16px;
     border-radius: 8px;

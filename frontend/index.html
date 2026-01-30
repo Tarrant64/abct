@@ -119,7 +119,7 @@
                     </div>
                 </div>
                 <div class="summary-cards">
-                    <div class="summary-card cardano">
+                    <div class="summary-card cardano clickable" onclick="openAssetBreakdown('cardano')">
                         <div class="card-header">
                             <span class="blockchain-icon">₳</span>
                             <span>Cardano</span>
@@ -140,7 +140,7 @@
                         </div>
                     </div>
 
-                    <div class="summary-card bitcoin">
+                    <div class="summary-card bitcoin clickable" onclick="openAssetBreakdown('bitcoin')">
                         <div class="card-header">
                             <span class="blockchain-icon">₿</span>
                             <span>Bitcoin</span>
@@ -159,7 +159,7 @@
                         </div>
                     </div>
 
-                    <div class="summary-card ethereum">
+                    <div class="summary-card ethereum clickable" onclick="openAssetBreakdown('ethereum')">
                         <div class="card-header">
                             <span class="blockchain-icon">Ξ</span>
                             <span>Ethereum</span>
@@ -180,7 +180,7 @@
                         </div>
                     </div>
 
-                    <div class="summary-card solana">
+                    <div class="summary-card solana clickable" onclick="openAssetBreakdown('solana')">
                         <div class="card-header">
                             <span class="blockchain-icon">◎</span>
                             <span>Solana</span>
@@ -201,7 +201,7 @@
                         </div>
                     </div>
 
-                    <div class="summary-card polygon">
+                    <div class="summary-card polygon clickable" onclick="openAssetBreakdown('polygon')">
                         <div class="card-header">
                             <span class="blockchain-icon">⬡</span>
                             <span>Polygon</span>
@@ -222,7 +222,7 @@
                         </div>
                     </div>
 
-                    <div class="summary-card base">
+                    <div class="summary-card base clickable" onclick="openAssetBreakdown('base')">
                         <div class="card-header">
                             <span class="blockchain-icon">Ⓑ</span>
                             <span>Base</span>
@@ -470,6 +470,33 @@
                     </div>
                 </div>
             </div>
+
+        <!-- Blockchain Asset Breakdown Modal -->
+        <div id="assetBreakdownModal" class="modal hidden">
+            <div class="modal-overlay" onclick="closeAssetBreakdownModal()"></div>
+            <div class="modal-content asset-breakdown-modal">
+                <div class="modal-header">
+                    <h2 id="breakdownChainName">Asset Breakdown</h2>
+                    <button class="modal-close" onclick="closeAssetBreakdownModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="breakdown-stats">
+                        <div class="stat">
+                            <span class="label">Total Value</span>
+                            <span class="value" id="breakdownTotalValue">$0.00</span>
+                        </div>
+                        <div class="stat">
+                            <span class="label">Asset Types</span>
+                            <span class="value" id="breakdownAssetCount">0</span>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="assetBreakdownChart" width="400" height="400"></canvas>
+                    </div>
+                    <div class="breakdown-legend" id="breakdownLegend"></div>
+                </div>
+            </div>
+        </div>
         </main>
 
         <footer>
