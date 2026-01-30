@@ -618,13 +618,22 @@ async def get_wallets_by_address(address: str):
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
-async def save_balance(wallet_id: int, amount: str, unit: str):
+async def save_balance(wallet_id: int, amount: str, unit: str, user_id: int = None):
     """Save or update the balance for a wallet."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
+        # Get user_id from wallet if not provided
+        if user_id is None:
+            cursor = await db.execute("SELECT user_id FROM wallets WHERE id = ?", (wallet_id,))
+            row = await cursor.fetchone()
+            if row:
+                user_id = row[0]
+            else:
+                raise ValueError(f"Wallet {wallet_id} not found")
+
         await db.execute("""
-            INSERT INTO balances (wallet_id, amount, unit, updated_at)
-            VALUES (?, ?, ?, ?)
-        """, (wallet_id, amount, unit, datetime.now()))
+            INSERT INTO balances (wallet_id, user_id, amount, unit, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (wallet_id, user_id, amount, unit, datetime.now()))
         await db.commit()
 
 async def clear_wallet_balances(wallet_id: int):
@@ -633,19 +642,29 @@ async def clear_wallet_balances(wallet_id: int):
         await db.execute("DELETE FROM balances WHERE wallet_id = ?", (wallet_id,))
         await db.commit()
 
-async def save_native_assets(wallet_id: int, assets: list):
+async def save_native_assets(wallet_id: int, assets: list, user_id: int = None):
     """Save native assets for a wallet."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
+        # Get user_id from wallet if not provided
+        if user_id is None:
+            cursor = await db.execute("SELECT user_id FROM wallets WHERE id = ?", (wallet_id,))
+            row = await cursor.fetchone()
+            if row:
+                user_id = row[0]
+            else:
+                raise ValueError(f"Wallet {wallet_id} not found")
+
         # Clear existing assets
         await db.execute("DELETE FROM native_assets WHERE wallet_id = ?", (wallet_id,))
 
         # Insert new assets
         for asset in assets:
             await db.execute("""
-                INSERT INTO native_assets (wallet_id, asset_id, policy_id, asset_name, quantity, decimals, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO native_assets (wallet_id, user_id, asset_id, policy_id, asset_name, quantity, decimals, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 wallet_id,
+                user_id,
                 asset.get('asset_id', ''),
                 asset.get('policy_id', ''),
                 asset.get('asset_name', ''),
