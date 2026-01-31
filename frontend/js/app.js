@@ -3245,10 +3245,10 @@ function renderNFTs(nfts, adaPrice) {
     });
 }
 
-// Refresh all balances
+// Sync wallet balances from blockchain
 async function refreshBalances() {
     refreshBtn.disabled = true;
-    refreshBtn.textContent = 'Refreshing...';
+    refreshBtn.textContent = 'Syncing...';
 
     try {
         const response = await authFetch(`${API_BASE}/wallets/refresh`, {
@@ -3265,11 +3265,11 @@ async function refreshBalances() {
         loadNFTs();
 
     } catch (error) {
-        console.error('Error refreshing balances:', error);
-        showStatus('Failed to refresh balances', true);
+        console.error('Error syncing wallets:', error);
+        showStatus('Failed to sync wallets', true);
     } finally {
         refreshBtn.disabled = false;
-        refreshBtn.textContent = 'Refresh Balances';
+        refreshBtn.textContent = 'Sync Wallets';
     }
 }
 
