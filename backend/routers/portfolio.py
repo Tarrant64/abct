@@ -1023,7 +1023,7 @@ async def get_portfolio_analytics(user_id: int = Depends(verify_session)):
 
     # Get all portfolio data
     summary = await get_portfolio_summary(user_id=user_id)
-    assets_data = await get_portfolio_assets(user_id=user_id)
+    assets_data = await get_all_native_assets(user_id=user_id)
     all_prices = await pricing_service.get_all_tracked_prices()
 
     # Token category mapping
@@ -1096,16 +1096,17 @@ async def get_portfolio_analytics(user_id: int = Depends(verify_session)):
 
     # Add tokens
     for asset in assets_data.get('assets', []):
-        if asset.get('value_usd', 0) > 0:
+        value_usd = asset.get('value_usd') or 0
+        if value_usd > 0:
             symbol = asset.get('ticker') or asset.get('asset_name', '')[:10]
             coin_allocations.append({
                 'symbol': symbol,
                 'name': asset.get('asset_name', symbol),
                 'quantity': asset.get('total_quantity', 0),
-                'value_usd': asset['value_usd'],
+                'value_usd': value_usd,
                 'category': TOKEN_CATEGORIES.get(symbol, 'Other')
             })
-            total_value += asset['value_usd']
+            total_value += value_usd
 
     # Calculate percentages for coin allocation
     for coin in coin_allocations:
@@ -1147,7 +1148,7 @@ async def get_portfolio_analytics(user_id: int = Depends(verify_session)):
     }
 
     # Cache for 1 hour (3600 seconds)
-    await set_cache(cache_key, result, ttl=3600, user_id=user_id)
+    await set_cache(cache_key, result, ttl_seconds=3600, user_id=user_id)
 
     return result
 
