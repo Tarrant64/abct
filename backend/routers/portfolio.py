@@ -1310,7 +1310,8 @@ async def get_blockchain_price_chart(
     """
     try:
         # Check cache first (1 hour TTL for historical data)
-        cache_key = f"price_chart_{blockchain}_{timeframe}_{user_id}"
+        # Cache key versioned to bust old ISO string format (v2 = Unix timestamps)
+        cache_key = f"price_chart_v2_{blockchain}_{timeframe}_{user_id}"
         cached = await get_cache(cache_key, user_id=user_id)
         if cached:
             return cached
