@@ -1359,23 +1359,62 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     padding: 30px;
     background: radial-gradient(circle, var(--bg-card) 0%, var(--bg-secondary) 100%);
     border-radius: 20px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.3),
+        0 0 60px rgba(0, 210, 106, 0.1);
     position: relative;
 }
 
-/* Glowing border effect for charts */
+/* Soft glowing border effect for charts */
 .analytics-chart-wrapper::before {
     content: '';
     position: absolute;
-    inset: -2px;
+    inset: -1px;
     border-radius: 20px;
-    padding: 2px;
-    background: linear-gradient(135deg, var(--accent-success), transparent, var(--accent-success));
+    padding: 1px;
+    background: linear-gradient(135deg,
+        rgba(0, 210, 106, 0.3),
+        transparent,
+        rgba(0, 210, 106, 0.3)
+    );
     -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
     -webkit-mask-composite: xor;
     mask-composite: exclude;
-    opacity: 0.3;
+    opacity: 0.5;
     z-index: -1;
+    filter: blur(1px);
+}
+
+/* Subtle pulse animation for chart wrapper */
+.analytics-chart-wrapper::after {
+    content: '';
+    position: absolute;
+    inset: -20px;
+    border-radius: 25px;
+    background: radial-gradient(circle, rgba(0, 210, 106, 0.05), transparent 70%);
+    z-index: -2;
+    animation: chartGlow 3s ease-in-out infinite;
+}
+
+@keyframes chartGlow {
+    0%, 100% {
+        opacity: 0.5;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.8;
+        transform: scale(1.02);
+    }
+}
+
+/* Add subtle glow to canvas */
+.analytics-chart-wrapper canvas {
+    filter: drop-shadow(0 0 15px rgba(0, 0, 0, 0.3));
+    transition: filter 0.3s ease;
+}
+
+.analytics-chart-wrapper:hover canvas {
+    filter: drop-shadow(0 0 20px rgba(0, 210, 106, 0.2));
 }
 
 .analytics-legend {
