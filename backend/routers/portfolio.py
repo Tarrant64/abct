@@ -15,6 +15,7 @@ from services.snapshot import snapshot_service
 from services.pricing import pricing_service
 from services.defi import DEFI_PROTOCOLS
 from services.taptools import taptools_wallet_service
+from services.logokit_service import logokit_service
 from auth_utils import verify_session
 
 
@@ -375,6 +376,10 @@ async def get_all_native_assets(user_id: int = Depends(verify_session), refresh:
             # Check if this token is being tracked
             is_tracked = asset_id in tracked_ids
 
+            # Generate LogoKit URL for this asset
+            logo_symbol = ticker if ticker else asset['asset_name'][:10] if asset['asset_name'] else 'UNKNOWN'
+            logo_url = logokit_service.get_crypto_logo_url(logo_symbol, size=64)
+
             asset_totals[asset_id] = {
                 'asset_id': asset_id,
                 'policy_id': policy_id,
@@ -383,6 +388,7 @@ async def get_all_native_assets(user_id: int = Depends(verify_session), refresh:
                 'decimals': decimals,
                 'tracked': is_tracked,
                 'blockchain': asset.get('blockchain', 'cardano'),
+                'logo_url': logo_url,
                 'total_quantity_raw': 0,
                 'wallet_count': 0,
                 'wallets': []
@@ -1090,7 +1096,8 @@ async def get_portfolio_analytics(user_id: int = Depends(verify_session)):
                 'name': symbol,
                 'quantity': qty,
                 'value_usd': value_usd,
-                'category': TOKEN_CATEGORIES.get(symbol, 'Other')
+                'category': TOKEN_CATEGORIES.get(symbol, 'Other'),
+                'logo_url': logokit_service.get_crypto_logo_url(symbol, size=64)
             })
             total_value += value_usd
 
@@ -1104,7 +1111,8 @@ async def get_portfolio_analytics(user_id: int = Depends(verify_session)):
                 'name': asset.get('asset_name', symbol),
                 'quantity': asset.get('total_quantity', 0),
                 'value_usd': value_usd,
-                'category': TOKEN_CATEGORIES.get(symbol, 'Other')
+                'category': TOKEN_CATEGORIES.get(symbol, 'Other'),
+                'logo_url': logokit_service.get_crypto_logo_url(symbol, size=64)
             })
             total_value += value_usd
 
@@ -1217,12 +1225,14 @@ async def get_blockchain_asset_breakdown(
         for a in chain_assets:
             asset_value = a.get('value_usd', 0) or 0
             if asset_value > 0:  # Only include tokens with value
+                token_symbol = a.get('ticker') or (a.get('asset_name', '')[:10] if a.get('asset_name') else 'Unknown')
                 token_list.append({
-                    'symbol': a.get('ticker') or (a.get('asset_name', '')[:10] if a.get('asset_name') else 'Unknown'),
+                    'symbol': token_symbol,
                     'name': a.get('asset_name', 'Unknown'),
                     'quantity': a.get('total_quantity', 0),
                     'value_usd': asset_value,
-                    'percentage': (asset_value / total_value * 100) if total_value > 0 else 0
+                    'percentage': (asset_value / total_value * 100) if total_value > 0 else 0,
+                    'logo_url': logokit_service.get_crypto_logo_url(token_symbol, size=64)
                 })
 
         # Sort tokens by value descending
@@ -1231,12 +1241,15 @@ async def get_blockchain_asset_breakdown(
         # Build response
         result = {
             'blockchain': blockchain,
+            'symbol': native_symbol,
+            'logo_url': logokit_service.get_blockchain_logo_url(blockchain, size=128),
             'total_value_usd': total_value,
             'native_coin': {
                 'symbol': native_symbol,
                 'quantity': native_qty,
                 'value_usd': native_value,
-                'percentage': native_pct
+                'percentage': native_pct,
+                'logo_url': logokit_service.get_crypto_logo_url(native_symbol, size=64)
             },
             'tokens': token_list,
             'nfts': {

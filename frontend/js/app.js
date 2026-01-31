@@ -84,6 +84,67 @@ function setSafeText(element, text) {
     element.textContent = text;
 }
 
+// ============================================================================
+// LOGOKIT API INTEGRATION
+// ============================================================================
+
+/**
+ * Get LogoKit URL for a token symbol (client-side helper).
+ *
+ * @param {string} symbol - Token symbol (BTC, ETH, ADA, etc.)
+ * @param {number} size - Optional size (64, 128, 256)
+ * @returns {string} LogoKit CDN URL
+ */
+function getLogoKitUrl(symbol, size = 64) {
+    const apiKey = 'LOGOKIT_KEY_REMOVED'; // Publishable token (safe for frontend)
+    return `https://img.logokit.com/crypto/${symbol.toUpperCase()}?token=${apiKey}${size ? `&size=${size}` : ''}`;
+}
+
+/**
+ * Create an <img> element for a token/crypto logo with fallback.
+ *
+ * @param {string} logoUrl - LogoKit URL
+ * @param {string} symbol - Token symbol (for alt text)
+ * @param {string} fallbackText - Text to show if image fails (default: first letter)
+ * @returns {HTMLElement} Image or fallback element
+ */
+function createTokenLogo(logoUrl, symbol, fallbackText = null) {
+    const container = document.createElement('div');
+    container.className = 'token-logo-container';
+
+    if (!fallbackText) {
+        fallbackText = symbol.charAt(0).toUpperCase();
+    }
+
+    // Create image
+    const img = document.createElement('img');
+    img.src = logoUrl;
+    img.alt = `${symbol} logo`;
+    img.className = 'token-logo-img';
+
+    // Create fallback (shown if image fails to load)
+    const fallback = document.createElement('div');
+    fallback.className = 'token-logo-fallback';
+    fallback.textContent = fallbackText;
+    fallback.style.display = 'none';
+
+    // Handle image load/error
+    img.onerror = () => {
+        img.style.display = 'none';
+        fallback.style.display = 'flex';
+    };
+
+    img.onload = () => {
+        img.style.display = 'block';
+        fallback.style.display = 'none';
+    };
+
+    container.appendChild(img);
+    container.appendChild(fallback);
+
+    return container;
+}
+
 // Helper to get total NFT value across all chains
 function getNftTotalUsd() {
     return (nftTotals.cardano || 0) + (nftTotals.ethereum || 0) + (nftTotals.solana || 0) + (nftTotals.polygon || 0) + (nftTotals.base || 0);
@@ -6270,6 +6331,8 @@ let priceChartSeries = null;
 let currentBlockchain = 'cardano';
 let currentTimeframe = '1M';
 let priceChartInitialized = false;
+let priceChartLoading = false;
+let priceChartLoadTimeout = null;
 
 async function initializePriceChart() {
     if (priceChartInitialized) return;
@@ -6366,9 +6429,23 @@ function getPriceChartColors(theme) {
 }
 
 async function loadPriceChartData(blockchain, timeframe) {
+    // Prevent rapid-fire requests (debounce)
+    if (priceChartLoading) {
+        console.log('Chart already loading, skipping request');
+        return;
+    }
+
+    priceChartLoading = true;
+
     try {
         const response = await authFetch(`${API_BASE}/portfolio/charts/blockchain/${blockchain}?timeframe=${timeframe}`);
         if (!response.ok) {
+            if (response.status === 404 || response.status === 503) {
+                const error = await response.json();
+                console.warn('Price data unavailable:', error.error || error.detail);
+                // Keep showing current chart, don't clear it
+                return;
+            }
             throw new Error(`API error: ${response.status}`);
         }
 
@@ -6409,6 +6486,11 @@ async function loadPriceChartData(blockchain, timeframe) {
 
     } catch (error) {
         console.error('Error loading price chart data:', error);
+    } finally {
+        // Reset loading state after a short delay to prevent rapid re-requests
+        setTimeout(() => {
+            priceChartLoading = false;
+        }, 500);
     }
 }
 

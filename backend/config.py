@@ -39,6 +39,10 @@ ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY", "")
 CMC_API_KEY = os.getenv("CMC_API_KEY", "")
 GRAPH_API_KEY = os.getenv("GRAPH_API_KEY", "")
 
+# LogoKit API Configuration
+LOGOKIT_API_KEY = os.getenv('LOGOKIT_API_KEY', 'LOGOKIT_KEY_REMOVED')
+LOGOKIT_BASE_URL = 'https://img.logokit.com'
+
 # Coinbase CDP API Key (loaded from JSON file)
 CDP_API_KEY_FILE = Path(__file__).parent.parent / "cdp_api_key.json"
 COINBASE_API_KEY_NAME = ""
