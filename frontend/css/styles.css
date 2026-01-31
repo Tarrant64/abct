@@ -1797,6 +1797,78 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     font-weight: bold;
 }
 
+/* ============================================================================
+   LOGOKIT TOKEN LOGO STYLING
+   ============================================================================ */
+
+/* Token Logo Container */
+.token-logo-container {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+}
+
+.token-logo-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+}
+
+.token-logo-fallback {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-success), var(--accent-color));
+    color: white;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+/* Small logo variant */
+.token-logo-container.small {
+    width: 24px;
+    height: 24px;
+}
+
+.token-logo-container.small .token-logo-fallback {
+    font-size: 0.8rem;
+}
+
+/* Large logo variant */
+.token-logo-container.large {
+    width: 64px;
+    height: 64px;
+}
+
+.token-logo-container.large .token-logo-fallback {
+    font-size: 1.8rem;
+}
+
+/* Blockchain icon image support (for LogoKit images) */
+.blockchain-icon-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+}
+
+.blockchain-icon-fallback {
+    width: 100%;
+    height: 100%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
 /* Price info in card header */
 .price-info {
     margin-left: auto;
