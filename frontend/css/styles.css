@@ -1024,6 +1024,198 @@ a.btn:active {
     color: var(--text-secondary);
 }
 
+/* Price Charts Container (4th Analytics Slide) */
+.price-charts-container {
+    display: flex;
+    gap: 20px;
+    height: 500px;
+    padding: 20px;
+}
+
+/* Blockchain Selector (Left Side) */
+.blockchain-selector {
+    flex: 0 0 180px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-y: auto;
+    padding-right: 8px;
+}
+
+.blockchain-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border: 2px solid transparent;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.blockchain-btn:hover {
+    background: var(--bg-tertiary);
+    border-color: rgba(0, 210, 106, 0.3);
+}
+
+.blockchain-btn.active {
+    background: var(--bg-tertiary);
+    border-color: var(--accent-success);
+    box-shadow: 0 0 20px rgba(0, 210, 106, 0.2);
+}
+
+.blockchain-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: white;
+    font-weight: bold;
+}
+
+.blockchain-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.blockchain-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.blockchain-symbol {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+/* Chart Area (Right Side) */
+.price-chart-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.chart-title-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.chart-title-wrapper h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: var(--text-primary);
+}
+
+.chart-stats {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.chart-stats .price {
+    font-size: 1.3rem;
+    font-weight: bold;
+    color: var(--accent-success);
+}
+
+.chart-stats .change {
+    font-size: 0.9rem;
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+
+.chart-stats .change.positive {
+    color: #00ff7f;
+    background: rgba(0, 255, 127, 0.1);
+}
+
+.chart-stats .change.negative {
+    color: #ff4444;
+    background: rgba(255, 68, 68, 0.1);
+}
+
+/* Chart Container */
+.price-chart-wrapper {
+    flex: 1;
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid var(--border-color);
+}
+
+/* Timeframe Selector */
+.timeframe-selector {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    padding: 10px;
+    background: var(--bg-secondary);
+    border-radius: 12px;
+}
+
+.timeframe-btn {
+    padding: 8px 16px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.timeframe-btn:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--accent-success);
+    color: var(--text-primary);
+}
+
+.timeframe-btn.active {
+    background: var(--accent-success);
+    border-color: var(--accent-success);
+    color: var(--bg-primary);
+}
+
+/* Mobile Responsive for Price Charts */
+@media (max-width: 768px) {
+    .price-charts-container {
+        flex-direction: column;
+        height: auto;
+    }
+
+    .blockchain-selector {
+        flex-direction: row;
+        overflow-x: auto;
+        overflow-y: visible;
+        padding-right: 0;
+        padding-bottom: 8px;
+    }
+
+    .blockchain-btn {
+        flex: 0 0 140px;
+    }
+
+    .price-chart-wrapper {
+        height: 350px;
+    }
+}
+
 /* Portfolio History Section */
 .history-section {
     margin-bottom: 40px;

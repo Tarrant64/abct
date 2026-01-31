@@ -6260,3 +6260,237 @@ function brightenColor(hex, percent) {
     // Convert back to hex
     return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
 }
+
+// ============================================================================
+// TradingView Lightweight Charts Integration (4th Analytics Slide)
+// ============================================================================
+
+let priceChart = null;
+let priceChartSeries = null;
+let currentBlockchain = 'cardano';
+let currentTimeframe = '1M';
+let priceChartInitialized = false;
+
+async function initializePriceChart() {
+    if (priceChartInitialized) return;
+
+    const container = document.getElementById('priceChart');
+    if (!container || !window.LightweightCharts) {
+        console.warn('Price chart container or LightweightCharts library not available');
+        return;
+    }
+
+    // Get theme colors
+    const theme = document.documentElement.getAttribute('data-theme') || 'default';
+    const chartColors = getPriceChartColors(theme);
+
+    // Create chart
+    priceChart = LightweightCharts.createChart(container, {
+        layout: {
+            background: { color: chartColors.background },
+            textColor: chartColors.text
+        },
+        grid: {
+            vertLines: { color: chartColors.gridLines },
+            horzLines: { color: chartColors.gridLines }
+        },
+        crosshair: {
+            mode: LightweightCharts.CrosshairMode.Normal
+        },
+        rightPriceScale: {
+            borderColor: chartColors.border
+        },
+        timeScale: {
+            borderColor: chartColors.border,
+            timeVisible: true,
+            secondsVisible: false
+        },
+        width: container.clientWidth,
+        height: container.clientHeight
+    });
+
+    // Create area series (green gradient)
+    priceChartSeries = priceChart.addAreaSeries({
+        topColor: 'rgba(0, 210, 106, 0.56)',
+        bottomColor: 'rgba(0, 210, 106, 0.04)',
+        lineColor: 'rgba(0, 210, 106, 1)',
+        lineWidth: 2
+    });
+
+    // Handle resize
+    const resizeObserver = new ResizeObserver(() => {
+        if (priceChart && container) {
+            priceChart.applyOptions({
+                width: container.clientWidth,
+                height: container.clientHeight
+            });
+        }
+    });
+    resizeObserver.observe(container);
+
+    priceChartInitialized = true;
+
+    // Load initial data (Cardano, 1M)
+    await loadPriceChartData('cardano', '1M');
+}
+
+function getPriceChartColors(theme) {
+    const themeColors = {
+        'default': {
+            background: '#1a1a2e',
+            text: '#eaeaea',
+            gridLines: '#2a2a4a',
+            border: '#3a3a5a'
+        },
+        'ocean-depths': {
+            background: '#0a1929',
+            text: '#b8e7fb',
+            gridLines: '#1e3a52',
+            border: '#2d5a7b'
+        },
+        'sunset-horizon': {
+            background: '#1a0f0a',
+            text: '#ffd8b8',
+            gridLines: '#3d2415',
+            border: '#5d3a25'
+        },
+        'cypherpunk': {
+            background: '#000000',
+            text: '#00ff41',
+            gridLines: '#003311',
+            border: '#005522'
+        }
+    };
+
+    return themeColors[theme] || themeColors['default'];
+}
+
+async function loadPriceChartData(blockchain, timeframe) {
+    try {
+        const response = await authFetch(`${API_BASE}/portfolio/charts/blockchain/${blockchain}?timeframe=${timeframe}`);
+        if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (!data.data || data.data.length === 0) {
+            console.warn('No chart data available');
+            return;
+        }
+
+        // Update chart series
+        if (priceChartSeries) {
+            priceChartSeries.setData(data.data);
+        }
+
+        // Update chart title and stats
+        const titleEl = document.getElementById('chartTitle');
+        if (titleEl) {
+            titleEl.textContent = `${blockchain.charAt(0).toUpperCase() + blockchain.slice(1)} (${data.symbol})`;
+        }
+
+        const priceEl = document.getElementById('chartPrice');
+        if (priceEl) {
+            priceEl.textContent = formatUSD(data.current_price);
+        }
+
+        const changeEl = document.getElementById('chartChange');
+        if (changeEl) {
+            const change = data.change_24h || 0;
+            changeEl.textContent = `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`;
+            changeEl.className = change >= 0 ? 'change positive' : 'change negative';
+        }
+
+        // Fit chart to data
+        if (priceChart) {
+            priceChart.timeScale().fitContent();
+        }
+
+    } catch (error) {
+        console.error('Error loading price chart data:', error);
+    }
+}
+
+function selectBlockchain(blockchain) {
+    currentBlockchain = blockchain;
+
+    // Update button states
+    document.querySelectorAll('.blockchain-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.blockchain === blockchain);
+    });
+
+    // Load new data
+    loadPriceChartData(blockchain, currentTimeframe);
+}
+
+function selectTimeframe(timeframe) {
+    currentTimeframe = timeframe;
+
+    // Update button states
+    document.querySelectorAll('.timeframe-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.timeframe === timeframe);
+    });
+
+    // Load new data
+    loadPriceChartData(currentBlockchain, timeframe);
+}
+
+// Initialize price chart when 4th slide becomes active
+function checkAndInitPriceChart() {
+    const priceChartSlide = document.querySelector('[data-slide="3"]');
+    if (priceChartSlide && priceChartSlide.classList.contains('active') && !priceChartInitialized) {
+        // Small delay to ensure DOM is ready
+        setTimeout(() => initializePriceChart(), 100);
+    }
+}
+
+// Hook into existing analytics slider navigation
+const originalGoToAnalyticsSlide = window.goToAnalyticsSlide;
+window.goToAnalyticsSlide = function(index) {
+    if (originalGoToAnalyticsSlide) {
+        originalGoToAnalyticsSlide(index);
+    }
+    if (index === 3) {
+        checkAndInitPriceChart();
+    }
+};
+
+const originalNextAnalyticsSlide = window.nextAnalyticsSlide;
+window.nextAnalyticsSlide = function() {
+    if (originalNextAnalyticsSlide) {
+        originalNextAnalyticsSlide();
+    }
+    checkAndInitPriceChart();
+};
+
+const originalPrevAnalyticsSlide = window.prevAnalyticsSlide;
+window.prevAnalyticsSlide = function() {
+    if (originalPrevAnalyticsSlide) {
+        originalPrevAnalyticsSlide();
+    }
+    checkAndInitPriceChart();
+};
+
+// Update changeTheme to recreate price chart
+const originalChangeTheme = window.changeTheme;
+window.changeTheme = function(themeName) {
+    if (originalChangeTheme) {
+        originalChangeTheme(themeName);
+    } else {
+        document.documentElement.setAttribute('data-theme', themeName);
+        localStorage.setItem('abct-theme', themeName);
+    }
+
+    // Recreate price chart with new theme colors
+    if (priceChart && priceChartInitialized) {
+        const container = document.getElementById('priceChart');
+        if (container) {
+            priceChart.remove();
+            priceChart = null;
+            priceChartSeries = null;
+            priceChartInitialized = false;
+            setTimeout(() => initializePriceChart(), 100);
+        }
+    }
+};
