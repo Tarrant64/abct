@@ -119,6 +119,56 @@
                         <span class="breakdown-item">Staking: $0.00</span>
                     </div>
                 </div>
+
+            <!-- Portfolio Value History Chart -->
+            <section class="history-section">
+                <div class="section-header-inline">
+                    <h2>Portfolio Value History</h2>
+                    <div class="history-range-selector">
+                        <button class="range-btn active" data-range="7d">7 Days</button>
+                        <button class="range-btn" data-range="4w">4 Weeks</button>
+                        <button class="range-btn" data-range="3m">3 Months</button>
+                    </div>
+                </div>
+                <div class="history-chart-container">
+                    <canvas id="portfolioHistoryChart"></canvas>
+                    <div class="chart-empty-state" id="chartEmptyState">
+                        <p>No historical data yet.</p>
+                        <p class="chart-empty-hint">Portfolio snapshots are captured daily at 12:00 PM CT.</p>
+                    </div>
+                </div>
+                <div class="chart-category-toggles">
+                    <span class="toggle-label">Include:</span>
+                    <label class="category-toggle">
+                        <input type="checkbox" id="chartWallets" checked onchange="updateChartCategories()">
+                        <span class="category-name">Wallets</span>
+                    </label>
+                    <label class="category-toggle">
+                        <input type="checkbox" id="chartExchanges" checked onchange="updateChartCategories()">
+                        <span class="category-name">Exchanges</span>
+                    </label>
+                    <label class="category-toggle">
+                        <input type="checkbox" id="chartStaking" checked onchange="updateChartCategories()">
+                        <span class="category-name">Staking</span>
+                    </label>
+                    <label class="category-toggle">
+                        <input type="checkbox" id="chartDefi" checked onchange="updateChartCategories()">
+                        <span class="category-name">DeFi</span>
+                    </label>
+                    <label class="category-toggle">
+                        <input type="checkbox" id="chartNfts" checked onchange="updateChartCategories()">
+                        <span class="category-name">NFTs</span>
+                    </label>
+                    <label class="category-toggle">
+                        <input type="checkbox" id="chartTrackedTokens" checked onchange="updateChartCategories()">
+                        <span class="category-name">Native Tokens</span>
+                    </label>
+                </div>
+                <div class="history-info">
+                    <span id="historyLastUpdate">Last snapshot: --</span>
+                </div>
+            </section>
+
                 <!-- Analytics Slider Container -->
                 <div class="analytics-slider-container">
                     <button class="slider-nav slider-nav-left" onclick="previousAnalyticsSlide()" aria-label="Previous slide">
@@ -365,55 +415,6 @@
                         <button class="slider-indicator" onclick="goToAnalyticsSlide(2)" aria-label="Slide 3"></button>
                         <button class="slider-indicator" onclick="goToAnalyticsSlide(3)" aria-label="Slide 4"></button>
                     </div>
-                </div>
-            </section>
-
-            <!-- Portfolio Value History Chart -->
-            <section class="history-section">
-                <div class="section-header-inline">
-                    <h2>Portfolio Value History</h2>
-                    <div class="history-range-selector">
-                        <button class="range-btn active" data-range="7d">7 Days</button>
-                        <button class="range-btn" data-range="4w">4 Weeks</button>
-                        <button class="range-btn" data-range="3m">3 Months</button>
-                    </div>
-                </div>
-                <div class="history-chart-container">
-                    <canvas id="portfolioHistoryChart"></canvas>
-                    <div class="chart-empty-state" id="chartEmptyState">
-                        <p>No historical data yet.</p>
-                        <p class="chart-empty-hint">Portfolio snapshots are captured daily at 12:00 PM CT.</p>
-                    </div>
-                </div>
-                <div class="chart-category-toggles">
-                    <span class="toggle-label">Include:</span>
-                    <label class="category-toggle">
-                        <input type="checkbox" id="chartWallets" checked onchange="updateChartCategories()">
-                        <span class="category-name">Wallets</span>
-                    </label>
-                    <label class="category-toggle">
-                        <input type="checkbox" id="chartExchanges" checked onchange="updateChartCategories()">
-                        <span class="category-name">Exchanges</span>
-                    </label>
-                    <label class="category-toggle">
-                        <input type="checkbox" id="chartStaking" checked onchange="updateChartCategories()">
-                        <span class="category-name">Staking</span>
-                    </label>
-                    <label class="category-toggle">
-                        <input type="checkbox" id="chartDefi" checked onchange="updateChartCategories()">
-                        <span class="category-name">DeFi</span>
-                    </label>
-                    <label class="category-toggle">
-                        <input type="checkbox" id="chartNfts" checked onchange="updateChartCategories()">
-                        <span class="category-name">NFTs</span>
-                    </label>
-                    <label class="category-toggle">
-                        <input type="checkbox" id="chartTrackedTokens" checked onchange="updateChartCategories()">
-                        <span class="category-name">Native Tokens</span>
-                    </label>
-                </div>
-                <div class="history-info">
-                    <span id="historyLastUpdate">Last snapshot: --</span>
                 </div>
             </section>
 
