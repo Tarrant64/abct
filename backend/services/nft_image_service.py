@@ -62,13 +62,23 @@ class NFTImageService:
             logger.info("NFT Image Service initialized")
 
     async def _get_client(self) -> httpx.AsyncClient:
-        """Get or create HTTP client."""
+        """Get or create HTTP client with optimized timeouts."""
         if self._http_client is None or self._http_client.is_closed:
             self._http_client = httpx.AsyncClient(
-                timeout=30.0,
+                timeout=httpx.Timeout(
+                    connect=10.0,   # Connection establishment
+                    read=90.0,      # Read timeout (allow slow IPFS)
+                    write=10.0,     # Request upload
+                    pool=10.0       # Connection pool wait
+                ),
                 follow_redirects=True,
+                limits=httpx.Limits(
+                    max_connections=100,        # Increase connection pool
+                    max_keepalive_connections=20
+                ),
                 headers={
-                    'User-Agent': 'ABCT-Portfolio-Tracker/1.0'
+                    'User-Agent': 'ABCT-Portfolio-Tracker/1.0',
+                    'Accept': 'image/*'
                 }
             )
         return self._http_client
@@ -175,9 +185,17 @@ class NFTImageService:
     # Image Fetching
     # ========================================================================
 
-    async def fetch_image(self, url: str) -> Tuple[Optional[bytes], Optional[str], Optional[str]]:
+    async def fetch_image(
+        self,
+        url: str,
+        max_retries: int = 3
+    ) -> Tuple[Optional[bytes], Optional[str], Optional[str]]:
         """
-        Fetch an image from URL.
+        Fetch an image from URL with retry logic and compression.
+
+        Args:
+            url: Image URL to fetch
+            max_retries: Maximum retry attempts (default: 3)
 
         Returns:
             Tuple of (image_data, image_format, error_message)
@@ -188,12 +206,9 @@ class NFTImageService:
         normalized_url = self._normalize_image_url(url)
         client = await self._get_client()
 
-        # Try primary URL and IPFS gateways as fallbacks
+        # Build gateway fallback list for IPFS URLs
         urls_to_try = [normalized_url]
-
-        # If it's an IPFS URL, add fallback gateways
         if 'ipfs' in normalized_url.lower() or '/ipfs/' in normalized_url:
-            # Extract the IPFS hash
             for gateway in IPFS_GATEWAYS:
                 if gateway in normalized_url:
                     ipfs_hash = normalized_url.split(gateway)[-1]
@@ -203,36 +218,79 @@ class NFTImageService:
                     break
 
         last_error = None
-        for try_url in urls_to_try:
-            try:
-                response = await client.get(try_url)
-                response.raise_for_status()
 
-                data = response.content
+        # Retry loop
+        for attempt in range(max_retries):
+            for gateway_idx, try_url in enumerate(urls_to_try):
+                try:
+                    # Add delay on retries
+                    if attempt > 0:
+                        delay = 2 ** attempt  # Exponential: 2s, 4s, 8s
+                        await asyncio.sleep(delay)
+                        logger.debug(f"Retry {attempt + 1}/{max_retries} for {try_url[:50]}...")
 
-                # Check size limit
-                if len(data) > self.max_size_bytes:
-                    return None, None, f"Image too large: {len(data)} bytes (max: {self.max_size_bytes})"
+                    response = await client.get(try_url)
+                    response.raise_for_status()
 
-                content_type = response.headers.get('content-type', '')
-                image_format = self._detect_image_format(content_type, data)
+                    data = response.content
 
-                if image_format == 'unknown':
-                    return None, None, f"Unknown image format"
+                    # Size check BEFORE compression
+                    if len(data) > self.max_size_bytes:
+                        logger.info(f"Large image ({len(data)} bytes), attempting compression...")
 
-                return data, image_format, None
+                        content_type = response.headers.get('content-type', '')
+                        image_format = self._detect_image_format(content_type, data)
 
-            except httpx.TimeoutException:
-                last_error = f"Timeout fetching {try_url}"
-                logger.debug(last_error)
-            except httpx.HTTPStatusError as e:
-                last_error = f"HTTP {e.response.status_code} for {try_url}"
-                logger.debug(last_error)
-            except Exception as e:
-                last_error = f"Error fetching {try_url}: {str(e)}"
-                logger.debug(last_error)
+                        if image_format == 'unknown':
+                            last_error = "Unknown image format for large file"
+                            continue
 
-        return None, None, last_error
+                        # Try compression
+                        compressed_data, new_format = self._compress_image(data, image_format)
+
+                        if len(compressed_data) <= self.max_size_bytes:
+                            logger.info(f"✓ Compression successful: {len(data)} → {len(compressed_data)} bytes")
+                            return compressed_data, new_format, None
+                        else:
+                            last_error = f"Image too large even after compression: {len(compressed_data)} bytes (max: {self.max_size_bytes})"
+                            continue
+
+                    # Normal size - detect format
+                    content_type = response.headers.get('content-type', '')
+                    image_format = self._detect_image_format(content_type, data)
+
+                    if image_format == 'unknown':
+                        last_error = "Unknown image format"
+                        continue
+
+                    # Apply compression to all images for consistency and space savings
+                    compressed_data, final_format = self._compress_image(data, image_format)
+
+                    return compressed_data, final_format, None
+
+                except httpx.TimeoutException as e:
+                    last_error = f"Timeout on {try_url[:50]}... (attempt {attempt + 1})"
+                    logger.debug(last_error)
+                    continue  # Try next gateway
+
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 429:
+                        # Rate limited - wait longer and try next gateway
+                        last_error = f"Rate limited by {try_url[:30]}... (attempt {attempt + 1})"
+                        logger.debug(last_error)
+                        await asyncio.sleep(5 * (attempt + 1))
+                        continue
+                    else:
+                        last_error = f"HTTP {e.response.status_code} for {try_url[:50]}... (attempt {attempt + 1})"
+                        logger.debug(last_error)
+                        continue
+
+                except Exception as e:
+                    last_error = f"Error fetching {try_url[:50]}...: {str(e)} (attempt {attempt + 1})"
+                    logger.debug(last_error)
+                    continue
+
+        return None, None, f"All retries exhausted: {last_error}"
 
     def _generate_thumbnail(self, image_data: bytes, image_format: str) -> Optional[bytes]:
         """Generate a thumbnail from image data."""
@@ -272,6 +330,61 @@ class NFTImageService:
             return img.width, img.height
         except Exception:
             return None, None
+
+    def _compress_image(self, image_data: bytes, image_format: str) -> Tuple[bytes, str]:
+        """
+        Compress image to WebP format with quality optimization.
+
+        Returns:
+            Tuple of (compressed_data, new_format)
+        """
+        if not PILLOW_AVAILABLE:
+            return image_data, image_format
+
+        # Skip compression for SVG (already compressed)
+        if image_format == 'svg':
+            return image_data, 'svg'
+
+        try:
+            img = Image.open(BytesIO(image_data))
+
+            # Preserve transparency for RGBA images
+            if img.mode in ('RGBA', 'LA', 'P'):
+                if 'transparency' in img.info or img.mode == 'RGBA':
+                    # WebP supports transparency
+                    output = BytesIO()
+                    img.save(output, format='WEBP', quality=85, method=6, lossless=False)
+                    compressed = output.getvalue()
+
+                    compression_ratio = len(compressed) / len(image_data)
+                    logger.debug(f"Compressed RGBA image: {len(image_data)} → {len(compressed)} bytes ({compression_ratio:.1%})")
+
+                    return compressed, 'webp'
+
+            # Convert to RGB for lossy WebP
+            img = img.convert('RGB')
+
+            # Dynamic quality based on original size
+            original_size_mb = len(image_data) / (1024 * 1024)
+            if original_size_mb > 5:
+                quality = 75  # More aggressive for large images
+            elif original_size_mb > 2:
+                quality = 80
+            else:
+                quality = 85
+
+            output = BytesIO()
+            img.save(output, format='WEBP', quality=quality, method=6)
+            compressed = output.getvalue()
+
+            compression_ratio = len(compressed) / len(image_data)
+            logger.info(f"Compressed image: {len(image_data)} → {len(compressed)} bytes ({compression_ratio:.1%}, quality={quality})")
+
+            return compressed, 'webp'
+
+        except Exception as e:
+            logger.warning(f"Failed to compress image: {e}")
+            return image_data, image_format
 
     # ========================================================================
     # Image Caching Operations
