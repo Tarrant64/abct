@@ -5,7 +5,7 @@ Provides methods to generate logo URLs for cryptocurrencies, tokens,
 and blockchain assets using the LogoKit API.
 """
 
-from backend.config import LOGOKIT_API_KEY, LOGOKIT_BASE_URL
+from config import LOGOKIT_API_KEY, LOGOKIT_BASE_URL
 from typing import Optional, Dict
 import logging
 
