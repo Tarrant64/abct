@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Reference - ABCT</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1769653325">
+    <!-- Session-based authentication -->
+    <script src="/static/js/session-auth.js?v=1769653325"></script>
+    <style>
+        /* Custom Redoc theming to match ABCT */
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-primary, #1a1a2e);
+        }
+
+        .api-help-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .api-help-header {
+            background: var(--gradient-header, linear-gradient(135deg, #16213e 0%, #0f3460 100%));
+            padding: 20px 30px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .api-help-header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            color: var(--text-primary, #eaeaea);
+        }
+
+        .back-link {
+            color: var(--accent-success, #00d26a);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            transition: opacity 0.2s;
+        }
+
+        .back-link:hover {
+            opacity: 0.8;
+        }
+
+        #redoc-container {
+            flex: 1;
+            overflow: auto;
+        }
+
+        /* Redoc theme customization */
+        redoc {
+            /* Text colors */
+            --text-color: #eaeaea;
+            --text-secondary: #a0a0a0;
+
+            /* Background colors */
+            --background-color: #1a1a2e;
+            --right-panel-background-color: #16213e;
+
+            /* Accent color */
+            --accent-color: #00d26a;
+
+            /* Menu colors */
+            --menu-background-color: #0f3460;
+            --menu-text-color: #eaeaea;
+
+            /* Code blocks */
+            --code-background-color: #0f3460;
+            --code-text-color: #00d26a;
+
+            /* Links */
+            --link-color: #00d26a;
+            --link-hover-color: #00ff7f;
+
+            /* Borders */
+            --border-color: #2a2a4a;
+
+            /* Typography */
+            --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --font-size: 15px;
+        }
+
+        /* Loading state */
+        .loading-state {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            color: var(--text-secondary);
+            font-size: 1.2rem;
+        }
+
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+            .api-help-header {
+                padding: 15px 20px;
+            }
+
+            .api-help-header h1 {
+                font-size: 1.2rem;
+            }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+    <script>
+        // XSS Protection - Safe HTML rendering
+        function setSafeHTML(element, html) {
+            if (!element) return;
+            if (typeof DOMPurify !== 'undefined') {
+                element.innerHTML = DOMPurify.sanitize(html);
+            } else {
+                console.warn('DOMPurify not loaded, falling back to textContent');
+                element.textContent = html;
+            }
+        }
+    </script>
+</head>
+<body>
+    <div class="api-help-container">
+        <div class="api-help-header">
+            <h1>📚 ABCT API Reference</h1>
+            <a href="/apis.html" class="back-link">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5M12 19l-7-7 7-7"/>
+                </svg>
+                Back to API Configuration
+            </a>
+        </div>
+
+        <div id="redoc-container">
+            <div class="loading-state">
+                <span>Loading API documentation...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Redoc Standalone -->
+    <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
+    <script>
+        // Initialize Redoc with custom theme
+        Redoc.init('/openapi.json', {
+            scrollYOffset: 80, // Account for header height
+            hideDownloadButton: false,
+            disableSearch: false,
+            theme: {
+                colors: {
+                    primary: {
+                        main: '#00d26a'
+                    },
+                    success: {
+                        main: '#00d26a'
+                    },
+                    text: {
+                        primary: '#eaeaea',
+                        secondary: '#a0a0a0'
+                    },
+                    background: {
+                        main: '#1a1a2e'
+                    },
+                    border: {
+                        dark: '#2a2a4a',
+                        light: '#3a3a5a'
+                    }
+                },
+                typography: {
+                    fontSize: '15px',
+                    lineHeight: '1.6',
+                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                    headings: {
+                        fontFamily: 'Montserrat, -apple-system, sans-serif',
+                        fontWeight: '600'
+                    },
+                    code: {
+                        fontSize: '14px',
+                        fontFamily: '"Monaco", "Courier New", monospace',
+                        backgroundColor: '#0f3460',
+                        color: '#00d26a'
+                    }
+                },
+                sidebar: {
+                    backgroundColor: '#0f3460',
+                    textColor: '#eaeaea',
+                    activeTextColor: '#00d26a'
+                },
+                rightPanel: {
+                    backgroundColor: '#16213e'
+                }
+            },
+            nativeScrollbars: false,
+            pathInMiddlePanel: true,
+            menuToggle: true
+        }, document.getElementById('redoc-container'));
+
+        // Load saved theme preference and apply
+        function loadSavedTheme() {
+            const savedTheme = localStorage.getItem('abct-theme') || 'default';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSavedTheme();
+        });
+    </script>
+</body>
+</html>

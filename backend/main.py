@@ -197,9 +197,48 @@ async def lifespan(app: FastAPI):
     await nft_scheduler.stop()
 
 app = FastAPI(
-    title="ABCT - Crypto Portfolio Tracker",
-    description="Track your Cardano and Bitcoin portfolios",
+    title="ABCT - A Better Crypto Tracker",
+    description="""
+## Welcome to ABCT API
+
+A comprehensive cryptocurrency portfolio tracking system supporting multiple blockchains and asset types.
+
+### 🌐 Supported Blockchains
+- **Cardano** (ADA) - Native assets, staking, NFTs
+- **Bitcoin** (BTC) - Native balance tracking
+- **Ethereum** (ETH) - ERC-20 tokens, NFTs
+- **Solana** (SOL) - SPL tokens, NFTs
+- **Polygon** (POL/MATIC) - Native and token support
+- **Base** (ETH) - Layer 2 support
+
+### 🎯 Core Features
+- **Multi-blockchain wallet tracking** - Monitor balances across all chains
+- **NFT collections** - Track floor prices and valuations
+- **DeFi positions** - Staking and protocol participation
+- **Exchange integration** - Coinbase and more
+- **Real-time pricing** - Multiple price feed integrations
+- **Portfolio analytics** - Historical tracking and visualizations
+
+### 🔐 Authentication
+All endpoints require session-based authentication. Login at `/login.html` to access the API.
+
+### ⚡ Rate Limits
+API calls are rate-limited per endpoint. Check response headers for limit information.
+
+### 📊 API Health
+Monitor API utilization and service status at `/apis.html`
+    """,
     version="1.0.0",
+    contact={
+        "name": "ABCT Project",
+        "url": "https://github.com/Tarrant64/abct",
+    },
+    license_info={
+        "name": "MIT License",
+        "url": "https://opensource.org/licenses/MIT",
+    },
+    docs_url="/docs",  # Swagger UI
+    redoc_url="/api-reference",  # Redoc documentation
     lifespan=lifespan
 )
 
@@ -344,6 +383,11 @@ async def logs_page():
 async def backup_page():
     """Serve the Backup & Restore page."""
     return FileResponse(str(frontend_path / "backup.html"))
+
+@app.get("/api-help.html")
+async def api_help_page():
+    """Serve the API Reference documentation page."""
+    return FileResponse(str(frontend_path / "api-help.html"))
 
 @app.get("/health")
 async def health_check():
