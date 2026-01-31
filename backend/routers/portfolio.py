@@ -1176,7 +1176,7 @@ async def get_blockchain_asset_breakdown(
         chain_data = summary.get(blockchain, {})
 
         # Get all assets filtered by blockchain (uses cache)
-        assets_data = await get_portfolio_assets(user_id=user_id)
+        assets_data = await get_all_native_assets(user_id=user_id)
         chain_assets = [a for a in assets_data['assets'] if a['blockchain'] == blockchain]
 
         # Calculate native coin value
@@ -1295,57 +1295,77 @@ async def get_blockchain_price_chart(
             'data_points': 30
         }
     """
-    # Map blockchain to symbol
-    blockchain_symbols = {
-        'cardano': 'ADA',
-        'bitcoin': 'BTC',
-        'ethereum': 'ETH',
-        'solana': 'SOL',
-        'polygon': 'MATIC',
-        'base': 'ETH'  # Base uses ETH
-    }
+    try:
+        # Check cache first (1 hour TTL for historical data)
+        cache_key = f"price_chart_{blockchain}_{timeframe}_{user_id}"
+        cached = await get_cache(cache_key, user_id=user_id)
+        if cached:
+            return cached
 
-    symbol = blockchain_symbols.get(blockchain.lower())
-    if not symbol:
-        raise HTTPException(400, f"Unsupported blockchain: {blockchain}")
-
-    # Map timeframe to days
-    timeframe_days = {
-        '7D': 7,
-        '1M': 30,
-        '3M': 90,
-        '6M': 180,
-        '1Y': 365,
-        'ALL': 365
-    }
-
-    days = timeframe_days.get(timeframe.upper(), 30)
-
-    # Fetch historical prices
-    historical = await pricing_service.get_historical_prices([symbol], days=days)
-
-    if symbol not in historical or not historical[symbol]:
-        raise HTTPException(404, f"No historical data available for {symbol}")
-
-    # Get current price and 24h change (use get_all_tracked_prices for metadata)
-    all_prices = await pricing_service.get_all_tracked_prices()
-    price_data = all_prices.get(symbol, {})
-
-    # Transform data for lightweight-charts
-    chart_data = [
-        {
-            'time': point['date'],
-            'value': point['price']
+        # Map blockchain to symbol
+        blockchain_symbols = {
+            'cardano': 'ADA',
+            'bitcoin': 'BTC',
+            'ethereum': 'ETH',
+            'solana': 'SOL',
+            'polygon': 'MATIC',
+            'base': 'ETH'  # Base uses ETH
         }
-        for point in historical[symbol]
-    ]
 
-    return {
-        'blockchain': blockchain,
-        'symbol': symbol,
-        'timeframe': timeframe.upper(),
-        'data': chart_data,
-        'current_price': price_data.get('usd', 0),
-        'change_24h': price_data.get('usd_1h_change', 0),
-        'data_points': len(chart_data)
-    }
+        symbol = blockchain_symbols.get(blockchain.lower())
+        if not symbol:
+            raise HTTPException(400, f"Unsupported blockchain: {blockchain}")
+
+        # Map timeframe to days
+        timeframe_days = {
+            '7D': 7,
+            '1M': 30,
+            '3M': 90,
+            '6M': 180,
+            '1Y': 365,
+            'ALL': 365
+        }
+
+        days = timeframe_days.get(timeframe.upper(), 30)
+
+        # Fetch historical prices
+        historical = await pricing_service.get_historical_prices([symbol], days=days)
+
+        if symbol not in historical or not historical[symbol]:
+            raise HTTPException(404, f"No historical data available for {symbol}")
+
+        # Get current price and 24h change (use get_all_tracked_prices for metadata)
+        all_prices = await pricing_service.get_all_tracked_prices()
+        price_data = all_prices.get(symbol, {})
+
+        # Transform data for lightweight-charts
+        chart_data = [
+            {
+                'time': point['date'],
+                'value': point['price']
+            }
+            for point in historical[symbol]
+        ]
+
+        result = {
+            'blockchain': blockchain,
+            'symbol': symbol,
+            'timeframe': timeframe.upper(),
+            'data': chart_data,
+            'current_price': price_data.get('usd', 0),
+            'change_24h': price_data.get('usd_1h_change', 0),
+            'data_points': len(chart_data)
+        }
+
+        # Cache for 1 hour (3600 seconds)
+        await set_cache(cache_key, result, ttl_seconds=3600, user_id=user_id)
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        logger.error(f"Error fetching price chart for {blockchain}: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(500, f"Error fetching price chart: {str(e)}")
