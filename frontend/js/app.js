@@ -6498,9 +6498,22 @@ async function loadPriceChartData(blockchain, timeframe, silent = false) {
 }
 
 function updateChartDisplay(blockchain, data) {
+    console.log(`[Chart] Updating display for ${blockchain}`, {
+        dataPoints: data.data ? data.data.length : 0,
+        firstPoint: data.data && data.data[0],
+        lastPoint: data.data && data.data[data.data.length - 1],
+        currentPrice: data.current_price
+    });
+
     // Update chart series
-    if (priceChartSeries) {
+    if (priceChartSeries && data.data && data.data.length > 0) {
         priceChartSeries.setData(data.data);
+        console.log(`[Chart] ✓ Set ${data.data.length} data points for ${blockchain}`);
+    } else {
+        console.warn(`[Chart] Cannot update chart:`, {
+            hasSeries: !!priceChartSeries,
+            hasData: !!(data.data && data.data.length > 0)
+        });
     }
 
     // Update chart title and stats
