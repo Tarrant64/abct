@@ -441,49 +441,39 @@ async def init_db():
             ON api_call_log(api_name, timestamp)
         """)
 
-        # Migration: Backfill api_call_log from today's api_usage data (one-time)
-        # This ensures we don't lose today's API call counts when switching to rolling window
+        # Migration: Clear api_call_log and start fresh (one-time cleanup)
+        # Previous migration backfilled from broken api_usage table (calendar day counts)
+        # This caused inflated counts (e.g., 138/100). Start fresh with rolling window.
         try:
-            # Check if migration has already been done
+            # Check if we need to clear the table (only do this once)
             cursor = await db.execute("SELECT COUNT(*) FROM api_call_log")
             log_count = (await cursor.fetchone())[0]
 
-            if log_count == 0:
-                # Table is empty, do migration
-                now = datetime.now()
-                today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-
-                # Get today's usage from api_usage table
+            # If table has entries, check if cleanup flag exists
+            if log_count > 0:
                 cursor = await db.execute("""
-                    SELECT api_name, call_count
-                    FROM api_usage
-                    WHERE period_start = ?
-                """, (today_start.isoformat(),))
-                rows = await cursor.fetchall()
+                    SELECT value FROM cache
+                    WHERE user_id IS NULL AND key = 'api_call_log_cleanup_done'
+                """)
+                cleanup_done = await cursor.fetchone()
 
-                # For each API with calls today, create log entries
-                # Spread timestamps across the last 12 hours to simulate realistic usage
-                for api_name, call_count in rows:
-                    if call_count > 0:
-                        # Create evenly-spaced timestamps over last 12 hours
-                        hours_ago = 12
-                        interval_seconds = (hours_ago * 3600) / max(call_count, 1)
+                if not cleanup_done:
+                    # Clear all entries and start fresh
+                    await db.execute("DELETE FROM api_call_log")
+                    await db.commit()
 
-                        for i in range(call_count):
-                            # Timestamp for this call (working backwards from now)
-                            seconds_ago = interval_seconds * i
-                            timestamp = now - timedelta(seconds=seconds_ago)
+                    # Set cleanup flag so we don't repeat this
+                    expires = datetime.now() + timedelta(days=365)
+                    await db.execute("""
+                        INSERT INTO cache (user_id, key, value, expires_at)
+                        VALUES (NULL, 'api_call_log_cleanup_done', 'true', ?)
+                    """, (expires.isoformat(),))
+                    await db.commit()
 
-                            await db.execute("""
-                                INSERT INTO api_call_log (api_name, timestamp)
-                                VALUES (?, ?)
-                            """, (api_name, timestamp.isoformat()))
-
-                await db.commit()
-                print(f"[Migration] Backfilled {sum(r[1] for r in rows)} API call log entries from today's usage")
+                    print(f"[Migration] Cleared {log_count} incorrect API call log entries. Starting fresh with rolling window tracking.")
         except Exception as e:
             # Migration failed, but don't block startup
-            print(f"[Migration] API call log backfill failed: {e}")
+            print(f"[Migration] API call log cleanup failed: {e}")
             pass
 
         # API rate limits table - stores custom rate limits for APIs
