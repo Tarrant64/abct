@@ -4806,6 +4806,36 @@ function getChartColors() {
         };
     }
 
+    if (theme === 'ocean-depths') {
+        return {
+            lineColor: '#00b4d8',
+            fillColor: 'rgba(0, 180, 216, 0.15)',
+            pointColor: '#00b4d8',
+            pointBorderColor: '#0a1628',
+            gridColor: 'rgba(26, 74, 110, 0.3)',
+            tickColor: '#7ec8e3',
+            tooltipBg: '#0d2137',
+            tooltipTitle: '#e0f4ff',
+            tooltipBody: '#00b4d8',
+            tooltipBorder: '#1a4a6e'
+        };
+    }
+
+    if (theme === 'sunset-horizon') {
+        return {
+            lineColor: '#ff6b35',
+            fillColor: 'rgba(255, 107, 53, 0.15)',
+            pointColor: '#ff6b35',
+            pointBorderColor: '#1a0a1a',
+            gridColor: 'rgba(92, 42, 92, 0.3)',
+            tickColor: '#ffb4a2',
+            tooltipBg: '#2d1233',
+            tooltipTitle: '#ffe4e1',
+            tooltipBody: '#ff6b35',
+            tooltipBorder: '#5c2a5c'
+        };
+    }
+
     // Default theme colors
     return {
         lineColor: '#00d26a',
