@@ -255,21 +255,30 @@
 
         .cache-btn {
             padding: 12px 24px;
-            background: linear-gradient(135deg, var(--accent-color), #2ecc71);
-            border: none;
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            border: 2px solid #27ae60;
             border-radius: 8px;
-            color: #000;
+            color: #fff;
             cursor: pointer;
             font-size: 1rem;
             font-weight: 600;
             transition: all 0.2s;
-            box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
+            box-shadow: 0 2px 8px rgba(46, 204, 113, 0.4);
             position: relative;
         }
 
         .cache-btn::before {
-            content: '📥 ';
-            margin-right: 5px;
+            content: '🗄️';
+            margin-right: 8px;
+            font-size: 1.1rem;
+        }
+
+        .cache-btn::after {
+            content: '⬇';
+            margin-left: 5px;
+            color: #2ecc71;
+            font-size: 1.2rem;
+            filter: brightness(1.8);
         }
 
         .cache-btn:hover {
@@ -819,19 +828,15 @@
 
             btn.disabled = true;
             btn.classList.add('caching');
-            btn.textContent = 'Caching...';
+            btn.textContent = 'Starting...';
             updateStatusIndicator('active', 'Caching Images');
 
-            if (auto) {
-                progress.textContent = '⏳ Automatically caching NFT images in background... (This may take a minute)';
-            } else {
-                progress.textContent = '⏳ Starting image cache... Please wait, do not refresh the page.';
-            }
+            progress.textContent = '⏳ Starting background image caching...';
             progress.style.display = 'block';
 
             try {
                 const chain = currentChain === 'all' ? null : currentChain;
-                // Use backend defaults (limit=200, max_concurrent=20)
+                // Background mode enabled by default on backend
                 const url = chain
                     ? `${API_BASE}/nfts/wall/cache-all?blockchain=${chain}`
                     : `${API_BASE}/nfts/wall/cache-all`;
@@ -839,40 +844,53 @@
                 const response = await authFetch(url, { method: 'POST' });
                 const data = await response.json();
 
-                const skipped = data.total_skipped || 0;
-                const total = data.total_cached + data.total_failed + skipped;
+                // Check if running in background mode
+                if (data.background) {
+                    progress.textContent = `✓ Image caching started in background! You can safely leave this page or continue browsing. Images will appear as they are cached. Refresh the page later to see newly cached NFTs.`;
+                    progress.style.borderLeftColor = '#2ecc71';
+                    updateStatusIndicator('active', 'Caching in Background');
 
-                progress.textContent = `✓ Batch complete! Newly cached: ${data.total_cached} | Failed: ${data.total_failed} | Already cached: ${skipped} (Total processed: ${total})`;
-                progress.style.borderLeftColor = '#2ecc71';
+                    btn.textContent = 'Caching in Progress...';
+                    btn.disabled = true;
 
-                // Reload data
-                await loadWallStatus();
-                await loadNfts();
-
-                updateStatusIndicator('idle', 'Ready');
-
-                // If there are still uncached images, suggest running again
-                if (data.total_cached > 0 || data.total_failed > 0) {
+                    // Re-enable button after 30 seconds to allow another batch
                     setTimeout(() => {
-                        const indicator = document.getElementById('cacheStatusIndicator');
-                        indicator.querySelector('.status-text').textContent = 'More images available';
-                    }, 1000);
+                        btn.disabled = false;
+                        btn.textContent = 'Cache More Images';
+                    }, 30000);
+
+                } else {
+                    // Synchronous mode (old behavior)
+                    const skipped = data.total_skipped || 0;
+                    const total = data.total_cached + data.total_failed + skipped;
+
+                    progress.textContent = `✓ Batch complete! Newly cached: ${data.total_cached} | Failed: ${data.total_failed} | Already cached: ${skipped} (Total processed: ${total})`;
+                    progress.style.borderLeftColor = '#2ecc71';
+
+                    // Reload data
+                    await loadWallStatus();
+                    await loadNfts();
+
+                    updateStatusIndicator('idle', 'Ready');
+
+                    // If there are still uncached images, suggest running again
+                    if (data.total_cached > 0 || data.total_failed > 0) {
+                        setTimeout(() => {
+                            const indicator = document.getElementById('cacheStatusIndicator');
+                            indicator.querySelector('.status-text').textContent = 'More images available';
+                        }, 1000);
+                    }
                 }
 
             } catch (error) {
-                progress.textContent = '✗ Error caching images: ' + error.message;
+                progress.textContent = '✗ Error starting cache process: ' + error.message;
                 progress.style.borderLeftColor = '#dc3545';
                 updateStatusIndicator('idle', 'Error');
-            } finally {
+
                 btn.classList.remove('caching');
+                btn.disabled = false;
+                btn.textContent = 'Cache Images';
 
-                // Re-enable button and update text based on status
-                // Note: loadWallStatus() will update the button text appropriately
-                setTimeout(() => {
-                    btn.disabled = false;
-                }, 500);
-
-                // Reset progress style after 8 seconds
                 setTimeout(() => {
                     progress.style.display = 'none';
                     progress.style.borderLeftColor = 'var(--accent-color)';
