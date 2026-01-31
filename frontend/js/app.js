@@ -5873,10 +5873,29 @@ function renderCoinAllocationChart() {
     const ctx = document.getElementById('coinAllocationChart').getContext('2d');
     if (coinAllocationChart) coinAllocationChart.destroy();
 
-    const coins = analyticsData.coin_allocation.slice(0, 10); // Top 10 coins
-    const labels = coins.map(c => c.symbol);
-    const values = coins.map(c => c.value_usd);
-    const colors = generateChartColors(coins.length);
+    // Top 6 coins, rest go into "Other"
+    const topCoins = analyticsData.coin_allocation.slice(0, 6);
+    const remainingCoins = analyticsData.coin_allocation.slice(6);
+
+    let coins, labels, values, colors;
+
+    if (remainingCoins.length > 0) {
+        const otherValue = remainingCoins.reduce((sum, c) => sum + c.value_usd, 0);
+        const otherPercentage = remainingCoins.reduce((sum, c) => sum + c.percentage, 0);
+
+        coins = [...topCoins, {
+            symbol: 'Other',
+            name: `${remainingCoins.length} other assets`,
+            value_usd: otherValue,
+            percentage: otherPercentage
+        }];
+    } else {
+        coins = topCoins;
+    }
+
+    labels = coins.map(c => c.symbol);
+    values = coins.map(c => c.value_usd);
+    colors = generateChartColors(coins.length);
 
     coinAllocationChart = new Chart(ctx, {
         type: 'doughnut',
@@ -5885,16 +5904,26 @@ function renderCoinAllocationChart() {
             datasets: [{
                 data: values,
                 backgroundColor: colors,
-                borderWidth: 2,
-                borderColor: getComputedStyle(document.body).getPropertyValue('--bg-primary')
+                borderWidth: 3,
+                borderColor: 'rgba(0, 0, 0, 0.3)',
+                hoverBorderWidth: 4,
+                hoverBorderColor: colors.map(c => c) // Same as background for glow effect
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: true,
+            cutout: '65%', // Thicker ring for modern look
             plugins: {
                 legend: { display: false },
                 tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12,
+                    cornerRadius: 8,
+                    titleColor: '#fff',
+                    bodyColor: '#fff',
+                    borderWidth: 1,
+                    borderColor: 'rgba(255, 255, 255, 0.2)',
                     callbacks: {
                         label: function(context) {
                             const percentage = coins[context.dataIndex].percentage;
@@ -5916,17 +5945,35 @@ function renderCoinAllocationChart() {
 
 function selectCoinSegment(index) {
     selectedCoinIndex = index;
-    const coin = analyticsData.coin_allocation[index];
+
+    // Get the coin data - handle "Other" aggregation
+    const topCoins = analyticsData.coin_allocation.slice(0, 6);
+    const remainingCoins = analyticsData.coin_allocation.slice(6);
+    let coins;
+    if (remainingCoins.length > 0) {
+        const otherValue = remainingCoins.reduce((sum, c) => sum + c.value_usd, 0);
+        const otherPercentage = remainingCoins.reduce((sum, c) => sum + c.percentage, 0);
+        coins = [...topCoins, {
+            symbol: 'Other',
+            name: `${remainingCoins.length} other assets`,
+            value_usd: otherValue,
+            percentage: otherPercentage
+        }];
+    } else {
+        coins = topCoins;
+    }
+
+    const coin = coins[index];
 
     // Update chart colors for selection effect
-    const colors = generateChartColors(analyticsData.coin_allocation.length);
+    const colors = generateChartColors(coins.length);
     colors[index] = brightenColor(colors[index], 40); // Make selected color brighter
 
     coinAllocationChart.data.datasets[0].backgroundColor = colors;
     coinAllocationChart.update();
 
     // Update legend selection
-    document.querySelectorAll('#coinAllocationLegend .analytics-legend-item').forEach((item, i) => {
+    document.querySelectorAll('#coinAllocationLegend .analytics-legend-item-compact').forEach((item, i) => {
         if (i === index) {
             item.classList.add('selected');
         } else {
@@ -5934,7 +5981,7 @@ function selectCoinSegment(index) {
         }
     });
 
-    // Show selection info
+    // Show selection info with full value
     document.getElementById('coinSelectionInfo').innerHTML = `
         <div class="selection-title">${coin.symbol}</div>
         <div class="selection-value">${formatUSD(coin.value_usd)}</div>
@@ -5945,13 +5992,12 @@ function selectCoinSegment(index) {
 function renderCoinLegend(coins, colors) {
     const legendDiv = document.getElementById('coinAllocationLegend');
     legendDiv.innerHTML = coins.map((coin, index) => `
-        <div class="analytics-legend-item" onclick="selectCoinSegment(${index})">
-            <div class="legend-label-group">
-                <div class="legend-color-dot" style="background-color: ${colors[index]};"></div>
-                <span class="legend-name">${coin.symbol}</span>
-                <span class="legend-percentage">${coin.percentage.toFixed(2)}%</span>
+        <div class="analytics-legend-item-compact" onclick="selectCoinSegment(${index})">
+            <div class="legend-color-dot-glow" style="background-color: ${colors[index]}; box-shadow: 0 0 8px ${colors[index]};"></div>
+            <div class="legend-compact-label">
+                <span class="legend-symbol">${coin.symbol}</span>
+                <span class="legend-percentage-compact">${coin.percentage.toFixed(1)}%</span>
             </div>
-            <div class="legend-value">${formatUSD(coin.value_usd)}</div>
         </div>
     `).join('');
 }
@@ -5974,16 +6020,26 @@ function renderCategoryAllocationChart() {
             datasets: [{
                 data: values,
                 backgroundColor: colors,
-                borderWidth: 2,
-                borderColor: getComputedStyle(document.body).getPropertyValue('--bg-primary')
+                borderWidth: 3,
+                borderColor: 'rgba(0, 0, 0, 0.3)',
+                hoverBorderWidth: 4,
+                hoverBorderColor: colors.map(c => c) // Same as background for glow effect
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: true,
+            cutout: '65%', // Thicker ring for modern look
             plugins: {
                 legend: { display: false },
                 tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    padding: 12,
+                    cornerRadius: 8,
+                    titleColor: '#fff',
+                    bodyColor: '#fff',
+                    borderWidth: 1,
+                    borderColor: 'rgba(255, 255, 255, 0.2)',
                     callbacks: {
                         label: function(context) {
                             const percentage = categories[context.dataIndex].percentage;
@@ -6016,7 +6072,7 @@ function selectCategorySegment(index) {
     categoryAllocationChart.update();
 
     // Update legend selection
-    document.querySelectorAll('#categoryAllocationLegend .analytics-legend-item').forEach((item, i) => {
+    document.querySelectorAll('#categoryAllocationLegend .analytics-legend-item-compact').forEach((item, i) => {
         if (i === index) {
             item.classList.add('selected');
         } else {
@@ -6043,39 +6099,103 @@ function selectCategorySegment(index) {
 function renderCategoryLegend(categories, colors) {
     const legendDiv = document.getElementById('categoryAllocationLegend');
     legendDiv.innerHTML = categories.map((category, index) => `
-        <div class="analytics-legend-item" onclick="selectCategorySegment(${index})">
-            <div class="legend-label-group">
-                <div class="legend-color-dot" style="background-color: ${colors[index]};"></div>
-                <span class="legend-name">${category.category}</span>
-                <span class="legend-percentage">${category.percentage.toFixed(2)}%</span>
+        <div class="analytics-legend-item-compact" onclick="selectCategorySegment(${index})">
+            <div class="legend-color-dot-glow" style="background-color: ${colors[index]}; box-shadow: 0 0 8px ${colors[index]};"></div>
+            <div class="legend-compact-label">
+                <span class="legend-symbol">${category.category}</span>
+                <span class="legend-percentage-compact">${category.percentage.toFixed(1)}%</span>
             </div>
-            <div class="legend-value">${formatUSD(category.value_usd)}</div>
         </div>
     `).join('');
 }
 
 function generateChartColors(count) {
-    const baseColors = [
-        '#3498DB', '#E74C3C', '#2ECC71', '#F39C12', '#9B59B6',
-        '#1ABC9C', '#E67E22', '#34495E', '#16A085', '#D35400'
-    ];
+    const theme = document.documentElement.getAttribute('data-theme') || 'default';
+
+    let baseColors;
+
+    if (theme === 'ocean-depths') {
+        // Ocean theme - vibrant blues, cyans, and aqua
+        baseColors = [
+            '#00b4d8', '#48cae4', '#06d6a0', '#90e0ef', '#0096c7',
+            '#023e8a', '#ffd166', '#8338ec', '#00f5ff', '#00d9ff'
+        ];
+    } else if (theme === 'sunset-horizon') {
+        // Sunset theme - oranges, reds, purples
+        baseColors = [
+            '#ff6b35', '#f77f00', '#d62828', '#fcbf49', '#f72585',
+            '#b5179e', '#7209b7', '#560bad', '#ffa500', '#ff4500'
+        ];
+    } else if (theme === 'cypherpunk1') {
+        // Cypherpunk theme - neon greens, cyans, magentas
+        baseColors = [
+            '#00ff41', '#00d9ff', '#ff00ff', '#39ff14', '#0ff0fc',
+            '#ff10f0', '#00ffff', '#adff2f', '#7fff00', '#00fa9a'
+        ];
+    } else {
+        // Default theme - balanced vibrant palette
+        baseColors = [
+            '#00d26a', '#3498db', '#e74c3c', '#f39c12', '#9b59b6',
+            '#1abc9c', '#e67e22', '#2ecc71', '#3498db', '#e91e63'
+        ];
+    }
+
     return baseColors.slice(0, count);
 }
 
 function generateCategoryColors(count) {
-    const categoryColors = {
-        'Layer 1 (L1)': '#8B5CF6',
-        'Decentralized Finance (DeFi)': '#10B981',
-        'Cardano Ecosystem': '#3B82F6',
-        'Infrastructure': '#F59E0B',
-        'Stablecoins': '#06B6D4',
-        'Meme': '#EC4899',
-        'Gaming': '#8B5CF6',
-        'Other': '#6B7280'
-    };
+    const theme = document.documentElement.getAttribute('data-theme') || 'default';
+
+    let categoryColors;
+
+    if (theme === 'ocean-depths') {
+        categoryColors = {
+            'Layer 1 (L1)': '#00b4d8',
+            'Decentralized Finance (DeFi)': '#06d6a0',
+            'Cardano Ecosystem': '#48cae4',
+            'Infrastructure': '#ffd166',
+            'Stablecoins': '#90e0ef',
+            'Meme': '#ff69b4',
+            'Gaming': '#8338ec',
+            'Other': '#6c757d'
+        };
+    } else if (theme === 'sunset-horizon') {
+        categoryColors = {
+            'Layer 1 (L1)': '#ff6b35',
+            'Decentralized Finance (DeFi)': '#fcbf49',
+            'Cardano Ecosystem': '#f77f00',
+            'Infrastructure': '#f72585',
+            'Stablecoins': '#d62828',
+            'Meme': '#b5179e',
+            'Gaming': '#7209b7',
+            'Other': '#6c757d'
+        };
+    } else if (theme === 'cypherpunk1') {
+        categoryColors = {
+            'Layer 1 (L1)': '#00ff41',
+            'Decentralized Finance (DeFi)': '#00d9ff',
+            'Cardano Ecosystem': '#ff00ff',
+            'Infrastructure': '#39ff14',
+            'Stablecoins': '#0ff0fc',
+            'Meme': '#ff10f0',
+            'Gaming': '#adff2f',
+            'Other': '#808080'
+        };
+    } else {
+        categoryColors = {
+            'Layer 1 (L1)': '#8b5cf6',
+            'Decentralized Finance (DeFi)': '#10b981',
+            'Cardano Ecosystem': '#3b82f6',
+            'Infrastructure': '#f59e0b',
+            'Stablecoins': '#06b6d4',
+            'Meme': '#ec4899',
+            'Gaming': '#8b5cf6',
+            'Other': '#6b7280'
+        };
+    }
 
     return analyticsData.category_allocation.map(cat =>
-        categoryColors[cat.category] || '#6B7280'
+        categoryColors[cat.category] || categoryColors['Other']
     );
 }
 
