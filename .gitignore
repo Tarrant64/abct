@@ -197,3 +197,12 @@ cdp_api_key.json
 
 # Legacy/Archive
 archive/
+
+# EXCLUDE directory - All work-in-progress files, plans, reference images, noise
+# This is the designated location for:
+# - Development planning documents
+# - Fix notes and overnight work summaries
+# - Reference images and mockups
+# - Any temporary .md files generated during development
+# - General noise that shouldn't be in the GitHub repo
+EXCLUDE/
