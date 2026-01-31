@@ -6,7 +6,7 @@
     <title>A Better Crypto Tracker</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1769653325">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1769898000">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
     <!-- TradingView Lightweight Charts for price charts -->
     <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
@@ -50,7 +50,7 @@
                         </a>
                         <a href="/wallets.html" class="waffle-menu-item">
                             <span class="waffle-item-icon">&#128176;</span>
-                            <span class="waffle-item-label">Manage Assets</span>
+                            <span class="waffle-item-label">Manage Wallets</span>
                         </a>
                         <a href="/apis.html" class="waffle-menu-item">
                             <span class="waffle-item-icon">&#128273;</span>
@@ -183,7 +183,7 @@
                             <div class="summary-cards">
                                 <div class="summary-card cardano clickable" onclick="openAssetBreakdown('cardano')">
                         <div class="card-header">
-                            <span class="blockchain-icon">₳</span>
+                            <img src="https://img.logokit.com/crypto/ADA?token=LOGOKIT_KEY_REMOVED&size=32" alt="Cardano" class="blockchain-logo" onerror="this.outerHTML='<span class=\'blockchain-icon\'>₳</span>'">
                             <span>Cardano</span>
                             <div class="price-info">
                                 <span class="token-price" id="adaPrice">$0.00</span>
@@ -204,7 +204,7 @@
 
                     <div class="summary-card bitcoin clickable" onclick="openAssetBreakdown('bitcoin')">
                         <div class="card-header">
-                            <span class="blockchain-icon">₿</span>
+                            <img src="https://img.logokit.com/crypto/BTC?token=LOGOKIT_KEY_REMOVED&size=32" alt="Bitcoin" class="blockchain-logo" onerror="this.outerHTML='<span class=\'blockchain-icon\'>₿</span>'">
                             <span>Bitcoin</span>
                             <div class="price-info">
                                 <span class="token-price" id="btcPrice">$0.00</span>
@@ -223,7 +223,7 @@
 
                     <div class="summary-card ethereum clickable" onclick="openAssetBreakdown('ethereum')">
                         <div class="card-header">
-                            <span class="blockchain-icon">Ξ</span>
+                            <img src="https://img.logokit.com/crypto/ETH?token=LOGOKIT_KEY_REMOVED&size=32" alt="Ethereum" class="blockchain-logo" onerror="this.outerHTML='<span class=\'blockchain-icon\'>Ξ</span>'">
                             <span>Ethereum</span>
                             <div class="price-info">
                                 <span class="token-price" id="ethPrice">$0.00</span>
@@ -244,7 +244,7 @@
 
                     <div class="summary-card solana clickable" onclick="openAssetBreakdown('solana')">
                         <div class="card-header">
-                            <span class="blockchain-icon">◎</span>
+                            <img src="https://img.logokit.com/crypto/SOL?token=LOGOKIT_KEY_REMOVED&size=32" alt="Solana" class="blockchain-logo" onerror="this.outerHTML='<span class=\'blockchain-icon\'>◎</span>'">
                             <span>Solana</span>
                             <div class="price-info">
                                 <span class="token-price" id="solPrice">$0.00</span>
@@ -265,7 +265,7 @@
 
                     <div class="summary-card polygon clickable" onclick="openAssetBreakdown('polygon')">
                         <div class="card-header">
-                            <span class="blockchain-icon">⬡</span>
+                            <img src="https://img.logokit.com/crypto/POL?token=LOGOKIT_KEY_REMOVED&size=32" alt="Polygon" class="blockchain-logo" onerror="this.outerHTML='<span class=\'blockchain-icon\'>⬡</span>'">
                             <span>Polygon</span>
                             <div class="price-info">
                                 <span class="token-price" id="maticPrice">$0.00</span>
@@ -286,7 +286,7 @@
 
                     <div class="summary-card base clickable" onclick="openAssetBreakdown('base')">
                         <div class="card-header">
-                            <span class="blockchain-icon">Ⓑ</span>
+                            <img src="https://avatars.githubusercontent.com/u/108554348?s=32" alt="Base" class="blockchain-logo" onerror="this.outerHTML='<span class=\'blockchain-icon\'>Ⓑ</span>'">
                             <span>Base</span>
                             <div class="price-info">
                                 <span class="token-price" id="baseEthPrice">$0.00</span>
@@ -610,6 +610,6 @@
         </footer>
     </div>
 
-    <script src="/static/js/app.js?v=26"></script>
+    <script src="/static/js/app.js?v=36"></script>
 </body>
 </html>

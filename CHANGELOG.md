@@ -7,6 +7,280 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.0] - 2026-01-31
+
+### 🎉 First Major Release - Production Ready
+
+ABCT v1.0.0 marks the first production-ready release with comprehensive multi-exchange support, visual enhancements, and a complete feature set for professional cryptocurrency portfolio tracking.
+
+### Added - Multi-Exchange Support 🌐
+
+#### 📊 Seven Exchange Integrations
+- **Complete Exchange API Support**: Native integration with 7 major cryptocurrency exchanges
+  - **Coinbase** (CDP API) - JWT authentication with EC private keys
+  - **Binance.com** - Global exchange with HMAC SHA256 authentication
+  - **Binance.US** - US-specific exchange with separate API
+  - **OKX** - HMAC SHA256 + passphrase authentication
+  - **Bitget** - HMAC SHA256 + passphrase authentication
+  - **Gate.io** - HMAC SHA512 authentication
+  - **KuCoin** - HMAC SHA256 + dual passphrase signatures
+
+#### 🔧 Exchange Services Architecture
+- **New Backend Services**: Dedicated service files for each exchange
+  - `backend/services/binance_service.py` - Binance.com integration
+  - `backend/services/binance_us_service.py` - Binance.US integration
+  - `backend/services/okx_service.py` - OKX integration
+  - `backend/services/bitget_service.py` - Bitget integration
+  - `backend/services/gate_service.py` - Gate.io integration
+  - `backend/services/kucoin_service.py` - KuCoin integration
+
+- **Unified Exchange Router**: Enhanced `backend/routers/exchanges.py`
+  - Generic `process_exchange_portfolio()` function for all exchanges
+  - Endpoints: `/exchanges/binance`, `/exchanges/okx`, `/exchanges/kucoin`, etc.
+  - `/exchanges/all` - Fetch all configured exchanges in one call
+  - `/exchanges/status` - Check which exchanges are configured
+  - `/exchanges/summary` - Aggregated exchange portfolio value
+  - 5-minute caching for all exchange data (configurable)
+  - Automatic USD pricing integration with CoinGecko/DefiLlama
+
+#### 🔐 Exchange Configuration
+- **Environment Variable Configuration**: Clean .env-based setup
+  - `BINANCE_API_KEY`, `BINANCE_API_SECRET`
+  - `BINANCE_US_API_KEY`, `BINANCE_US_API_SECRET`
+  - `OKX_API_KEY`, `OKX_API_SECRET`, `OKX_API_PASSPHRASE`
+  - `BITGET_API_KEY`, `BITGET_API_SECRET`, `BITGET_API_PASSPHRASE`
+  - `GATE_API_KEY`, `GATE_API_SECRET`
+  - `KUCOIN_API_KEY`, `KUCOIN_API_SECRET`, `KUCOIN_API_PASSPHRASE`
+  - Coinbase continues to use `cdp_api_key.json` file
+
+- **Comprehensive Documentation**: New Exchange Integration Guide
+  - `docs/docs/Exchange-Integration.md` - Complete setup instructions
+  - Security best practices (read-only API keys, IP whitelisting)
+  - Step-by-step configuration for each exchange
+  - API rate limits and troubleshooting
+  - Links to create API keys on each platform
+
+### Added - Visual Enhancements & UX Improvements 🎨
+
+#### 🏦 Exchange Management Interface
+- **New "Exchanges" Tab**: Added to Manage Wallets page (`wallets.html`)
+  - Renamed "Manage Assets" → "Manage Wallets" across entire application
+  - Three-tab interface: Self-Custody Wallets | Exchanges | Manual Tokens
+  - Exchange status cards showing configured vs. not-configured exchanges
+  - Visual indicators with exchange logos and color-coded badges
+  - Setup guide cards with direct links to API management pages
+  - Environment variable configuration instructions
+
+#### 🎨 Logo Integration with LogoKit API
+- **Blockchain Logos**: Added to all blockchain summary cards (Slider 1)
+  - Cardano, Bitcoin, Ethereum, Solana, Polygon, Base
+  - Logos from LogoKit API: `https://img.logokit.com/crypto/{SYMBOL}`
+  - Graceful fallback to emoji icons if logos fail to load
+
+- **Self-Custody Wallet Logos**: Token logos in wallet asset lists
+  - 24px blockchain logos for wallet headers
+  - 20px token logos for individual assets
+  - Native assets pinned to top with highlighting
+
+- **Exchange Logos**: Added to exchange wallets section
+  - Exchange-specific logos (Coinbase, Binance, OKX, etc.)
+  - Token logos for individual exchange assets
+  - 28px exchange logos in headers
+
+- **Staking Position Logos**: Token logos in DeFi section
+  - 24px token logos for staked assets
+  - Consistent styling across all sections
+
+- **Coin Allocation Chart Logos** (Slider 2)
+  - Token logos in pie chart legend
+  - 20px circular logos next to token symbols
+  - Excluded for "Other" category
+
+#### 🌈 Theme-Specific Color Improvements
+- **Cypherpunk Theme Pie Chart**: Diversified color palette
+  - Previously: Repetitive magenta colors causing duplicate segments
+  - Now: 12 distinct neon colors (magenta, cyan, purple, mint, hot pink, lime)
+  - Maintains cyberpunk aesthetic while improving readability
+  - Applied to both pie charts and category breakdowns
+
+- **CSS Styling**: New logo-specific classes
+  - `.blockchain-logo` (32px) - Main blockchain cards
+  - `.blockchain-logo-small` (24px) - Section headers
+  - `.exchange-logo` (28px) - Exchange headers
+  - `.asset-logo` (20px) - Individual assets
+  - `.token-logo-staking` (24px) - Staking positions
+  - `.coin-legend-logo` (20px) - Chart legends
+  - All logos with `border-radius: 50%` and `object-fit: cover`
+
+### Changed - Page Renaming & Navigation
+
+#### 🗂️ Consistent Terminology
+- **Renamed "Manage Assets"** → **"Manage Wallets"** globally
+  - Updated in all HTML files: index.html, apis.html, backup.html, nft-wall.html, security.html, services.html, logs.html
+  - Updated page titles, navigation menus, and waffle menus
+  - More accurate description of page functionality
+
+- **Enhanced Wallet Management**:
+  - Three-tab structure better organizes different asset types
+  - Self-custody wallets (blockchain addresses)
+  - Exchange wallets (API-connected centralized exchanges)
+  - Manual tokens (custom-added token holdings)
+
+### Technical Improvements
+
+#### 🔧 Exchange API Architecture
+- **Standardized Response Format**: All exchanges return consistent JSON structure
+  ```json
+  {
+    "exchange": "binance",
+    "total_usd": 1234.56,
+    "asset_count": 5,
+    "assets": [
+      {
+        "symbol": "BTC",
+        "name": "Bitcoin",
+        "balance": 0.05,
+        "usd_value": 1000.00
+      }
+    ],
+    "from_cache": false
+  }
+  ```
+
+- **Error Handling**: Per-exchange error handling
+  - One failing exchange doesn't break others
+  - Individual error messages returned
+  - `/exchanges/all` returns partial results on errors
+
+- **Rate Limiting**: Intelligent caching to respect API limits
+  - 5-minute cache TTL for all exchange endpoints
+  - Per-user cache isolation
+  - Manual refresh option bypasses cache
+
+#### 📊 Frontend Enhancements
+- **Exchange Rendering**: New `renderAllExchanges()` function in app.js
+  - Logo mapping for all 7 exchanges
+  - Graceful fallback URLs for exchange logos
+  - `renderExchangeAssets()` helper for asset lists
+  - Calls `/exchanges/all` for efficient data loading
+
+- **Exchange Status**: Real-time configuration checking
+  - `loadExchangeStatus()` fetches `/exchanges/status`
+  - Visual status cards with green (configured) / gray (not configured)
+  - Dynamic badge text: "✓ Configured" or "○ Not Configured"
+
+### Documentation Updates 📚
+
+#### New Documentation
+- **Exchange Integration Guide** (`docs/docs/Exchange-Integration.md`)
+  - Complete setup instructions for all 7 exchanges
+  - Security best practices and warnings
+  - API rate limits for each exchange
+  - Troubleshooting common issues
+  - Verification steps post-configuration
+
+#### Updated Documentation
+- **README.md**
+  - Updated version badge: v1.0.0
+  - Added multi-exchange support to features
+  - Updated API acknowledgments section
+  - Enhanced exchange integration instructions
+
+- **Architecture Documentation**
+  - Updated to reflect multi-exchange architecture
+  - New exchange services layer
+  - Standardized portfolio processing flow
+
+### Security & Best Practices 🔐
+
+#### API Security
+- **Read-Only API Keys**: Documentation emphasizes read-only permissions
+  - Never grant withdrawal or trading permissions
+  - IP whitelisting recommendations
+  - Environment variable storage (never commit to git)
+
+#### Configuration Management
+- **`.env` File**: All exchange credentials in single file
+  - `.env.example` updated with all exchange variables
+  - `.gitignore` properly excludes sensitive files
+  - Restart reminder after configuration changes
+
+### Fixed 🐛
+- **Coinbase Logo**: Fixed broken logo URL
+  - Changed from cryptologos.cc to coinbase.com/favicon.ico
+  - More reliable CDN source
+
+- **Token Logo Display**: Fixed HTML structure for asset logos
+  - Added `.asset-text-info` wrapper for proper flexbox layout
+  - Logos and text now properly aligned
+
+- **Repository Cleanliness**: Removed test files from root
+  - Deleted `test-css-loaded.html`
+  - Cleaned up temporary development files
+
+### Migration Notes 📦
+
+#### Upgrading from v0.13.x
+1. **Add Exchange API Keys** (Optional):
+   ```bash
+   # Copy .env.example to see new exchange variables
+   cp .env.example .env.new
+
+   # Add your exchange API keys to .env
+   nano .env
+   ```
+
+2. **No Database Migration Required**: Fully backward compatible
+   - Exchange data is fetched on-demand via API
+   - No schema changes to existing tables
+
+3. **Restart Backend**: Required to load new exchange services
+   ```bash
+   ./stop.sh
+   ./run.sh
+   ```
+
+4. **Docker Users**: Rebuild container
+   ```bash
+   cd abct-docker
+   docker-compose down
+   docker-compose up -d --build
+   ```
+
+### API Rate Limits ⏱️
+
+Each exchange has different rate limits (per ABCT's 5-minute cache):
+- **Coinbase CDP**: 10 requests/second
+- **Binance.com**: 1200 requests/minute (weight system)
+- **Binance.US**: Similar to Binance.com
+- **OKX**: 20 requests/2 seconds per endpoint
+- **Bitget**: 10 requests/second
+- **Gate.io**: 900 requests/minute
+- **KuCoin**: 100 requests/10 seconds
+
+ABCT's caching minimizes API calls and stays well within limits.
+
+### Breaking Changes ⚠️
+
+**None** - This release is fully backward compatible with v0.13.x.
+
+### Contributors 👥
+
+- Exchange integration architecture and implementation
+- LogoKit API integration for visual enhancements
+- Theme-specific color palette improvements
+- Documentation authoring
+
+### What's Next? 🚀
+
+Future releases will focus on:
+- **DashV2**: Widget-based customizable dashboard (in development)
+- **Additional Exchange Support**: Kraken, Crypto.com, Gemini
+- **Advanced Analytics**: Profit/loss tracking, tax reports
+- **Mobile App**: React Native companion app
+
+---
+
 ## [0.13.1] - 2026-01-30
 
 ### Added - Complete Portfolio History

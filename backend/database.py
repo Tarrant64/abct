@@ -299,6 +299,16 @@ async def init_db():
             ON portfolio_snapshots(user_id)
         """)
 
+        # Dashboard layouts table for DashV2 widget persistence
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS dashboard_layouts (
+                user_id INTEGER PRIMARY KEY,
+                layout_data TEXT NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
+
         # NFT collection floor prices - stores historical floor price data
         await db.execute("""
             CREATE TABLE IF NOT EXISTS nft_floor_prices (

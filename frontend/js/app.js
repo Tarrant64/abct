@@ -946,6 +946,7 @@ function renderWalletsGrouped(cardanoStakeGroups, bitcoinWallets, ethereumWallet
             <div class="blockchain-section cardano collapsed">
                 <div class="blockchain-section-header">
                     <div class="blockchain-info">
+                        <img src="https://img.logokit.com/crypto/ADA?token=LOGOKIT_KEY_REMOVED&size=24" alt="Cardano" class="blockchain-logo-small" onerror="this.style.display='none'">
                         <span class="blockchain-name">Cardano</span>
                         <span class="blockchain-stats">${cardanoStakeGroups.length} stake key${cardanoStakeGroups.length !== 1 ? 's' : ''} · ${totalCardanoAssets} asset${totalCardanoAssets !== 1 ? 's' : ''}</span>
                     </div>
@@ -1011,10 +1012,21 @@ function renderWalletsGrouped(cardanoStakeGroups, bitcoinWallets, ethereumWallet
 
         const blockchainName = blockchain.charAt(0).toUpperCase() + blockchain.slice(1);
 
+        // Blockchain logo mapping
+        const logoMap = {
+            'bitcoin': 'https://img.logokit.com/crypto/BTC?token=LOGOKIT_KEY_REMOVED&size=24',
+            'ethereum': 'https://img.logokit.com/crypto/ETH?token=LOGOKIT_KEY_REMOVED&size=24',
+            'solana': 'https://img.logokit.com/crypto/SOL?token=LOGOKIT_KEY_REMOVED&size=24',
+            'polygon': 'https://img.logokit.com/crypto/POL?token=LOGOKIT_KEY_REMOVED&size=24',
+            'base': 'https://avatars.githubusercontent.com/u/108554348?s=24'
+        };
+        const logoUrl = logoMap[blockchain] || '';
+
         return `
             <div class="blockchain-section ${blockchain} collapsed">
                 <div class="blockchain-section-header">
                     <div class="blockchain-info">
+                        ${logoUrl ? `<img src="${logoUrl}" alt="${blockchainName}" class="blockchain-logo-small" onerror="this.style.display='none'">` : ''}
                         <span class="blockchain-name">${blockchainName}</span>
                         <span class="blockchain-stats">${wallets.length} wallet${wallets.length !== 1 ? 's' : ''} · ${totalAssets} asset${totalAssets !== 1 ? 's' : ''}</span>
                     </div>
@@ -2684,9 +2696,13 @@ function renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeS
                 // Chain badge for staked position (default to cardano for now)
                 const chainBadge = '<span class="chain-badge cardano" title="Cardano">ADA</span>';
 
+                // Get token logo with fallback
+                const tokenLogoUrl = `https://img.logokit.com/crypto/${token}?token=LOGOKIT_KEY_REMOVED&size=32`;
+
                 html += `
                     <div class="defi-gov-card staked">
                         <div class="card-header">
+                            <img src="${tokenLogoUrl}" alt="${token}" class="token-logo-staking" onerror="this.style.display='none'">
                             <span class="protocol-name">${chainBadge} ${protocol}</span>
                             <span class="staked-badge">Staked</span>
                         </div>
@@ -3023,30 +3039,25 @@ async function loadExchangeData() {
     setSafeHTML(exchangesList, '<p class="loading-state">Loading exchange data...</p>');
 
     try {
-        // Check exchange status first
-        const statusResponse = await authFetch(`${API_BASE}/exchanges/status`);
-        const statusData = await statusResponse.json();
+        // Fetch all exchanges at once
+        const response = await authFetch(`${API_BASE}/exchanges/all`);
 
-        const coinbaseConfigured = statusData.exchanges?.coinbase?.configured;
+        if (!response.ok) {
+            const error = await response.json();
+            setSafeHTML(exchangesList, `<p class="empty-state error">Error: ${error.detail || 'Failed to load exchange data'}</p>`);
+            return;
+        }
 
-        if (!coinbaseConfigured) {
-            setSafeHTML(exchangesList, '<p class="empty-state">No exchanges configured. Add cdp_api_key.json for Coinbase.</p>');
+        const data = await response.json();
+
+        // Check if any exchanges are configured
+        if (!data.exchanges || data.exchanges.length === 0) {
+            setSafeHTML(exchangesList, '<p class="empty-state">No exchanges configured. Add API keys to .env file.</p>');
             if (exchangesSummary) {
                 setSafeHTML(exchangesSummary, '<span class="exchange-status not-configured">Not configured</span>');
             }
             return;
         }
-
-        // Fetch Coinbase portfolio
-        const response = await authFetch(`${API_BASE}/exchanges/coinbase`);
-
-        if (!response.ok) {
-            const error = await response.json();
-            setSafeHTML(exchangesList, `<p class="empty-state error">Error: ${error.detail || 'Failed to load Coinbase data'}</p>`);
-            return;
-        }
-
-        const data = await response.json();
 
         // Store exchange total for portfolio calculation
         exchangeTotals.usd = data.total_usd || 0;
@@ -3054,13 +3065,13 @@ async function loadExchangeData() {
         // Update summary
         if (exchangesSummary) {
             setSafeHTML(exchangesSummary, `
-                <span class="exchange-count">${data.asset_count || 0} assets</span>
+                <span class="exchange-count">${data.exchange_count || 0} exchange${data.exchange_count !== 1 ? 's' : ''} · ${data.total_assets || 0} assets</span>
                 <span class="exchange-total">${formatUSD(data.total_usd || 0)}</span>
             `);
         }
 
-        // Render exchange assets
-        renderExchangeAssets(data);
+        // Render all exchanges
+        renderAllExchanges(data.exchanges);
 
         // Update total portfolio value
         updateTotalPortfolioValue();
@@ -3074,52 +3085,119 @@ async function loadExchangeData() {
     }
 }
 
-// Render exchange assets
-function renderExchangeAssets(data) {
+// Render all exchanges
+function renderAllExchanges(exchanges) {
     const exchangesList = document.getElementById('exchangesList');
 
-    if (!data.assets || data.assets.length === 0) {
-        setSafeHTML(exchangesList, '<p class="empty-state">No assets with value >= $1.00 found.</p>');
+    if (!exchanges || exchanges.length === 0) {
+        setSafeHTML(exchangesList, '<p class="empty-state">No exchanges configured.</p>');
         return;
     }
 
-    // Group by exchange (for future multi-exchange support)
-    let html = `
-        <div class="exchange-section" data-exchange="coinbase">
-            <div class="exchange-header">
-                <span class="exchange-icon coinbase">CB</span>
-                <span class="exchange-name">Coinbase</span>
-                <span class="exchange-value">${formatUSDBlur(data.total_usd)}</span>
-            </div>
-            <div class="exchange-assets">
-    `;
+    let html = '';
 
-    for (const asset of data.assets) {
+    // Exchange logo mapping
+    const exchangeLogos = {
+        'coinbase': 'https://www.coinbase.com/favicon.ico',
+        'binance': 'https://bin.bnbstatic.com/static/images/common/favicon.ico',
+        'binance_us': 'https://www.binance.us/favicon.ico',
+        'okx': 'https://static.okx.com/cdn/assets/imgs/MjAyMQ/C18EFDB60B2E2E21.png',
+        'bitget': 'https://www.bitget.com/favicon.ico',
+        'gate': 'https://www.gate.io/favicon.ico',
+        'kucoin': 'https://www.kucoin.com/favicon.ico'
+    };
+
+    const exchangeNames = {
+        'coinbase': 'Coinbase',
+        'binance': 'Binance',
+        'binance_us': 'Binance.US',
+        'okx': 'OKX',
+        'bitget': 'Bitget',
+        'gate': 'Gate.io',
+        'kucoin': 'KuCoin'
+    };
+
+    const exchangeFallbacks = {
+        'coinbase': 'CB',
+        'binance': 'BN',
+        'binance_us': 'BN.US',
+        'okx': 'OKX',
+        'bitget': 'BG',
+        'gate': 'GT',
+        'kucoin': 'KC'
+    };
+
+    for (const exchange of exchanges) {
+        const exchangeId = exchange.exchange;
+        const exchangeName = exchangeNames[exchangeId] || exchange.name || exchangeId;
+        const logoUrl = exchangeLogos[exchangeId] || '';
+        const fallback = exchangeFallbacks[exchangeId] || exchangeId.substring(0, 2).toUpperCase();
+
+        html += `
+            <div class="exchange-section" data-exchange="${exchangeId}">
+                <div class="exchange-header">
+                    ${logoUrl ? `<img src="${logoUrl}" alt="${exchangeName}" class="exchange-logo" onerror="this.outerHTML='<span class=\\'exchange-icon ${exchangeId}\\'>${fallback}</span>'">` : `<span class="exchange-icon ${exchangeId}">${fallback}</span>`}
+                    <span class="exchange-name">${exchangeName}</span>
+                    <span class="exchange-value">${formatUSDBlur(exchange.total_usd || 0)}</span>
+                </div>
+        `;
+
+        if (exchange.error) {
+            html += `
+                <div class="exchange-error">
+                    <p class="error-message">Error loading ${exchangeName}: ${exchange.error}</p>
+                </div>
+            `;
+        } else if (exchange.assets && exchange.assets.length > 0) {
+            html += '<div class="exchange-assets">';
+            html += renderExchangeAssets(exchange.assets);
+            html += '</div>';
+        } else {
+            html += '<div class="exchange-assets"><p class="empty-state">No assets with value >= $1.00</p></div>';
+        }
+
+        html += '</div>';
+    }
+
+    setSafeHTML(exchangesList, html);
+}
+
+// Render exchange assets (helper function)
+function renderExchangeAssets(assets) {
+    let html = '';
+
+    // Format balance helper
+    const formatBalance = (val) => {
+        if (val >= 1000) {
+            return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        } else if (val >= 1) {
+            return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 });
+        } else {
+            return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 8 });
+        }
+    };
+
+    for (const asset of assets) {
         const balance = asset.balance;
         const available = asset.available_balance || balance;
         const held = asset.hold_balance || 0;
         const usdValue = asset.usd_value || 0;
         const price = asset.price || 0;
 
-        // Format balance based on size
-        const formatBalance = (val) => {
-            if (val >= 1000) {
-                return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            } else if (val >= 1) {
-                return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 });
-            } else {
-                return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 8 });
-            }
-        };
-
         const balanceFormatted = formatBalance(balance);
         const holdInfo = held > 0 ? `<span class="hold-indicator" title="In open orders">(${formatBalance(held)} in orders)</span>` : '';
+
+        // Get token logo with fallback
+        const tokenLogoUrl = `https://img.logokit.com/crypto/${asset.currency}?token=LOGOKIT_KEY_REMOVED&size=32`;
 
         html += `
             <div class="exchange-asset-item">
                 <div class="asset-info">
-                    <span class="asset-currency">${asset.currency}</span>
-                    <span class="asset-name-small">${asset.name !== asset.currency ? asset.name : ''}</span>
+                    <img src="${tokenLogoUrl}" alt="${asset.currency}" class="asset-logo" onerror="this.style.display='none'">
+                    <div class="asset-text-info">
+                        <span class="asset-currency">${asset.currency}</span>
+                        <span class="asset-name-small">${asset.name !== asset.currency ? asset.name : ''}</span>
+                    </div>
                 </div>
                 <div class="asset-balance">
                     <div class="balance-amount">${formatCryptoBlur(balanceFormatted, asset.currency)} ${holdInfo}</div>
@@ -3129,12 +3207,7 @@ function renderExchangeAssets(data) {
         `;
     }
 
-    html += `
-            </div>
-        </div>
-    `;
-
-    setSafeHTML(exchangesList, html);
+    return html;
 }
 
 // Load NFTs
@@ -5958,6 +6031,48 @@ function renderCoinAllocationChart() {
     values = coins.map(c => c.value_usd);
     colors = generateChartColors(coins.length);
 
+    // Plugin to draw coin symbol in center of doughnut
+    const coinCenterTextPlugin = {
+        id: 'coinCenterText',
+        afterDraw: (chart) => {
+            if (selectedCoinIndex !== null && selectedCoinIndex !== undefined) {
+                const ctx = chart.ctx;
+                const centerX = chart.chartArea.left + (chart.chartArea.right - chart.chartArea.left) / 2;
+                const centerY = chart.chartArea.top + (chart.chartArea.bottom - chart.chartArea.top) / 2;
+
+                ctx.save();
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#ffffff';
+
+                const coinSymbol = coins[selectedCoinIndex].symbol;
+
+                // Use consistent font size
+                const fontSize = 28;
+                ctx.font = `bold ${fontSize}px sans-serif`;
+
+                // Calculate available space
+                const chartWidth = chart.chartArea.right - chart.chartArea.left;
+                const chartHeight = chart.chartArea.bottom - chart.chartArea.top;
+                const radius = Math.min(chartWidth, chartHeight) / 2;
+                const innerRadius = radius * 0.65;
+                const maxWidth = innerRadius * 1.6;
+
+                const textWidth = ctx.measureText(coinSymbol).width;
+
+                // Wrap if needed (unlikely for coin symbols)
+                if (textWidth > maxWidth) {
+                    // Scale down font if symbol is too long
+                    const scaledFontSize = Math.floor(fontSize * (maxWidth / textWidth));
+                    ctx.font = `bold ${scaledFontSize}px sans-serif`;
+                }
+
+                ctx.fillText(coinSymbol, centerX, centerY);
+                ctx.restore();
+            }
+        }
+    };
+
     coinAllocationChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
@@ -5982,19 +6097,7 @@ function renderCoinAllocationChart() {
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    padding: 12,
-                    cornerRadius: 8,
-                    titleColor: '#fff',
-                    bodyColor: '#fff',
-                    borderWidth: 1,
-                    borderColor: 'rgba(255, 255, 255, 0.2)',
-                    callbacks: {
-                        label: function(context) {
-                            const percentage = coins[context.dataIndex].percentage;
-                            return `${context.label}: ${formatUSD(context.parsed)} (${percentage.toFixed(2)}%)`;
-                        }
-                    }
+                    enabled: false // No tooltip on chart
                 }
             },
             onClick: (event, elements) => {
@@ -6002,7 +6105,8 @@ function renderCoinAllocationChart() {
                     selectCoinSegment(elements[0].index);
                 }
             }
-        }
+        },
+        plugins: [coinCenterTextPlugin]
     });
 
     renderCoinLegend(coins, colors);
@@ -6055,18 +6159,26 @@ function selectCoinSegment(index) {
 
 function renderCoinLegend(coins, colors) {
     const legendDiv = document.getElementById('coinAllocationLegend');
-    legendDiv.innerHTML = coins.map((coin, index) => `
-        <div class="analytics-legend-item-compact" onclick="selectCoinSegment(${index})">
-            <div class="legend-color-dot-glow" style="background-color: ${colors[index]}; box-shadow: 0 0 8px ${colors[index]};"></div>
-            <div class="legend-compact-label">
-                <div class="legend-top-row">
-                    <span class="legend-symbol">${coin.symbol}</span>
-                    <span class="legend-value-inline">${formatUSD(coin.value_usd)}</span>
+    legendDiv.innerHTML = coins.map((coin, index) => {
+        // Get token logo URL (only for actual tokens, not "Other")
+        const tokenLogoUrl = coin.symbol !== 'Other'
+            ? `https://img.logokit.com/crypto/${coin.symbol}?token=LOGOKIT_KEY_REMOVED&size=32`
+            : '';
+
+        return `
+            <div class="analytics-legend-item-compact" onclick="selectCoinSegment(${index})">
+                ${tokenLogoUrl ? `<img src="${tokenLogoUrl}" alt="${coin.symbol}" class="coin-legend-logo" onerror="this.style.display='none'">` : ''}
+                <div class="legend-color-dot-glow" style="background-color: ${colors[index]}; box-shadow: 0 0 8px ${colors[index]};"></div>
+                <div class="legend-compact-label">
+                    <div class="legend-top-row">
+                        <span class="legend-symbol">${coin.symbol}</span>
+                        <span class="legend-value-inline">${formatUSD(coin.value_usd)}</span>
+                    </div>
+                    <span class="legend-percentage-compact">${coin.percentage.toFixed(1)}%</span>
                 </div>
-                <span class="legend-percentage-compact">${coin.percentage.toFixed(1)}%</span>
             </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 function renderCategoryAllocationChart() {
@@ -6079,6 +6191,78 @@ function renderCategoryAllocationChart() {
     const labels = categories.map(c => c.category);
     const values = categories.map(c => c.value_usd);
     const colors = generateCategoryColors(categories.length);
+
+    // Plugin to draw text in center of doughnut
+    const centerTextPlugin = {
+        id: 'centerText',
+        afterDraw: (chart) => {
+            if (selectedCategoryIndex !== null && selectedCategoryIndex !== undefined) {
+                const ctx = chart.ctx;
+                const centerX = chart.chartArea.left + (chart.chartArea.right - chart.chartArea.left) / 2;
+                const centerY = chart.chartArea.top + (chart.chartArea.bottom - chart.chartArea.top) / 2;
+
+                ctx.save();
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#ffffff';
+
+                let categoryName = categories[selectedCategoryIndex].category;
+
+                // Shorten category names for display
+                if (categoryName === 'Decentralized Finance') {
+                    categoryName = 'DeFi';
+                }
+
+                // Use consistent font size - just wrap if needed
+                const fontSize = 28;
+                ctx.font = `bold ${fontSize}px sans-serif`;
+
+                // Calculate available space
+                const chartWidth = chart.chartArea.right - chart.chartArea.left;
+                const chartHeight = chart.chartArea.bottom - chart.chartArea.top;
+                const radius = Math.min(chartWidth, chartHeight) / 2;
+                const innerRadius = radius * 0.65;
+                const maxWidth = innerRadius * 1.6;
+
+                const textWidth = ctx.measureText(categoryName).width;
+
+                // If text is too long, wrap it
+                const words = categoryName.split(' ');
+                if (textWidth > maxWidth && words.length > 1) {
+                    // Multi-line text
+                    const lines = [];
+                    let currentLine = '';
+
+                    for (const word of words) {
+                        const testLine = currentLine ? `${currentLine} ${word}` : word;
+                        const testWidth = ctx.measureText(testLine).width;
+
+                        if (testWidth > maxWidth && currentLine) {
+                            lines.push(currentLine);
+                            currentLine = word;
+                        } else {
+                            currentLine = testLine;
+                        }
+                    }
+                    if (currentLine) lines.push(currentLine);
+
+                    // Draw multi-line text
+                    const lineHeight = fontSize * 1.2;
+                    const totalHeight = lines.length * lineHeight;
+                    const startY = centerY - (totalHeight / 2) + (lineHeight / 2);
+
+                    lines.forEach((line, index) => {
+                        ctx.fillText(line, centerX, startY + (index * lineHeight));
+                    });
+                } else {
+                    // Single line text
+                    ctx.fillText(categoryName, centerX, centerY);
+                }
+
+                ctx.restore();
+            }
+        }
+    };
 
     categoryAllocationChart = new Chart(ctx, {
         type: 'doughnut',
@@ -6104,20 +6288,7 @@ function renderCategoryAllocationChart() {
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    padding: 12,
-                    cornerRadius: 8,
-                    titleColor: '#fff',
-                    bodyColor: '#fff',
-                    borderWidth: 1,
-                    borderColor: 'rgba(255, 255, 255, 0.2)',
-                    callbacks: {
-                        label: function(context) {
-                            const percentage = categories[context.dataIndex].percentage;
-                            const tokenCount = categories[context.dataIndex].token_count;
-                            return `${context.label}: ${formatUSD(context.parsed)} (${percentage.toFixed(2)}%) - ${tokenCount} tokens`;
-                        }
-                    }
+                    enabled: false // Tooltip disabled on chart - using legend hover instead
                 }
             },
             onClick: (event, elements) => {
@@ -6125,7 +6296,8 @@ function renderCategoryAllocationChart() {
                     selectCategorySegment(elements[0].index);
                 }
             }
-        }
+        },
+        plugins: [centerTextPlugin]
     });
 
     renderCategoryLegend(categories, colors);
@@ -6162,7 +6334,10 @@ function selectCategorySegment(index) {
 function renderCategoryLegend(categories, colors) {
     const legendDiv = document.getElementById('categoryAllocationLegend');
     legendDiv.innerHTML = categories.map((category, index) => `
-        <div class="analytics-legend-item-compact" onclick="selectCategorySegment(${index})">
+        <div class="analytics-legend-item-compact"
+             onclick="selectCategorySegment(${index})"
+             onmouseenter="showCategoryTooltip(event, ${index})"
+             onmouseleave="hideCategoryTooltip()">
             <div class="legend-color-dot-glow" style="background-color: ${colors[index]}; box-shadow: 0 0 8px ${colors[index]};"></div>
             <div class="legend-compact-label">
                 <div class="legend-top-row">
@@ -6175,68 +6350,144 @@ function renderCategoryLegend(categories, colors) {
     `).join('');
 }
 
+function showCategoryTooltip(event, categoryIndex) {
+    const category = analyticsData.category_allocation[categoryIndex];
+
+    // Remove existing tooltip if any
+    hideCategoryTooltip();
+
+    // Get top 5 assets sorted by value
+    if (!category.tokens || category.tokens.length === 0) return;
+
+    const topTokens = [...category.tokens]
+        .sort((a, b) => b.value_usd - a.value_usd)
+        .slice(0, 5);
+
+    // Create tooltip element
+    const tooltip = document.createElement('div');
+    tooltip.id = 'categoryTooltip';
+    tooltip.className = 'category-tooltip';
+
+    let html = `
+        <div class="category-tooltip-header">Top Assets in ${category.category}</div>
+        <div class="category-tooltip-body">
+    `;
+
+    topTokens.forEach((token, idx) => {
+        html += `
+            <div class="category-tooltip-item">
+                <span class="tooltip-rank">${idx + 1}.</span>
+                <span class="tooltip-symbol">${token.symbol}</span>
+                <span class="tooltip-value">${formatUSD(token.value_usd)}</span>
+            </div>
+        `;
+    });
+
+    if (category.token_count > 5) {
+        html += `
+            <div class="category-tooltip-more">
+                ... and ${category.token_count - 5} more token${category.token_count - 5 !== 1 ? 's' : ''}
+            </div>
+        `;
+    }
+
+    html += `</div>`;
+    tooltip.innerHTML = html;
+
+    // Position tooltip
+    document.body.appendChild(tooltip);
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const tooltipRect = tooltip.getBoundingClientRect();
+
+    // Position to the right of the legend item
+    let left = rect.right + 10;
+    let top = rect.top + (rect.height / 2) - (tooltipRect.height / 2);
+
+    // Adjust if tooltip goes off screen
+    if (left + tooltipRect.width > window.innerWidth) {
+        left = rect.left - tooltipRect.width - 10; // Show on left instead
+    }
+    if (top < 10) top = 10;
+    if (top + tooltipRect.height > window.innerHeight - 10) {
+        top = window.innerHeight - tooltipRect.height - 10;
+    }
+
+    tooltip.style.left = left + 'px';
+    tooltip.style.top = top + 'px';
+}
+
+function hideCategoryTooltip() {
+    const tooltip = document.getElementById('categoryTooltip');
+    if (tooltip) {
+        tooltip.remove();
+    }
+}
+
 function generateChartColors(count) {
     const theme = document.documentElement.getAttribute('data-theme') || 'default';
 
     let baseColors;
 
     if (theme === 'ocean-depths') {
-        // Ocean Depths - Professional aquatic palette
-        // Blues → Cyans → Teals → Coral accents (complementary warm)
+        // Ocean Depths - Aquatic blues with coral accents
+        // Matches --accent-cardano (#00b4d8), --accent-success (#06d6a0), --accent-bitcoin (#ffd166)
         baseColors = [
-            '#0096c7', // Deep ocean blue
-            '#00b4d8', // Bright cyan
+            '#00b4d8', // Bright cyan (matches theme accent)
+            '#06d6a0', // Teal green (success accent)
             '#48cae4', // Light cyan
+            '#0096c7', // Deep ocean blue
             '#90e0ef', // Sky blue
-            '#06d6a0', // Teal green
+            '#ffd166', // Coral yellow (bitcoin accent)
+            '#ef476f', // Coral pink (error accent)
+            '#118ab2', // Navy blue
             '#00f5d4', // Aqua
-            '#ffd166', // Coral accent
-            '#ef476f', // Pink accent
-            '#118ab2', // Navy
             '#073b4c'  // Deep teal
         ];
     } else if (theme === 'sunset-horizon') {
-        // Sunset Horizon - Warm gradient palette
-        // Oranges → Reds → Purples → Magentas (sunset progression)
+        // Sunset Horizon - Warm oranges, reds, purples
+        // Matches --accent-cardano (#ff6b35), --accent-bitcoin (#ffc145)
         baseColors = [
-            '#ff6b35', // Vivid orange
-            '#f77f00', // Amber
-            '#fcbf49', // Golden yellow
-            '#d62828', // Deep red
+            '#ff6b35', // Vivid orange (cardano accent)
+            '#ffc145', // Golden (bitcoin accent)
+            '#ff8c42', // Warm orange (ethereum accent)
             '#f72585', // Hot pink
             '#b5179e', // Magenta
+            '#d62828', // Deep red
             '#7209b7', // Purple
-            '#560bad', // Deep purple
-            '#ff9e00', // Bright orange
-            '#e63946'  // Crimson
+            '#fcbf49', // Amber yellow
+            '#ff3366', // Red (error accent)
+            '#560bad'  // Deep purple
         ];
     } else if (theme === 'cypherpunk1') {
-        // Cypherpunk - High-contrast neon palette
-        // Electric greens → Cyans → Magentas (cyberpunk aesthetic)
+        // Cypherpunk - Diverse neon cyberpunk palette
+        // Varied neons: magentas, cyans, purples, greens, blues for maximum contrast
         baseColors = [
-            '#39ff14', // Neon green
+            '#ea00d9', // Neon magenta (primary accent)
+            '#0abdc6', // Electric cyan (success accent)
+            '#7d00ff', // Neon purple
+            '#00ff9f', // Neon mint green
+            '#ff0080', // Hot pink
+            '#00e5ff', // Bright cyan
+            '#b300ff', // Purple
             '#00ff41', // Matrix green
-            '#adff2f', // Yellow-green
-            '#00d9ff', // Electric cyan
-            '#0ff0fc', // Bright cyan
-            '#00ffff', // Aqua cyan
-            '#ff00ff', // Magenta
-            '#ff10f0', // Hot magenta
             '#ff1493', // Deep pink
-            '#7fff00'  // Chartreuse
+            '#00ffff', // Aqua cyan
+            '#9d00ff', // Violet
+            '#39ff14', // Neon lime
         ];
     } else {
         // Default - Balanced professional palette
-        // Green → Blues → Reds → Purples → Oranges (diverse, accessible)
+        // Greens, blues, purples with warm accents
         baseColors = [
             '#00d26a', // Emerald green (primary)
             '#3498db', // Bright blue
-            '#e74c3c', // Coral red
-            '#9b59b6', // Amethyst purple
             '#1abc9c', // Turquoise
+            '#9b59b6', // Amethyst purple
             '#f39c12', // Orange
-            '#e91e63', // Pink
+            '#e74c3c', // Coral red
             '#2ecc71', // Green
+            '#e91e63', // Pink
             '#3b82f6', // Blue
             '#8b5cf6'  // Purple
         ];
@@ -6251,42 +6502,46 @@ function generateCategoryColors(count) {
     let categoryColors;
 
     if (theme === 'ocean-depths') {
+        // Ocean Depths - Aquatic blues with coral accents
         categoryColors = {
-            'Layer 1 (L1)': '#0096c7',        // Deep ocean blue
-            'Decentralized Finance (DeFi)': '#06d6a0', // Teal green
-            'Cardano Ecosystem': '#00b4d8',   // Bright cyan
-            'Infrastructure': '#ffd166',       // Coral accent
-            'Stablecoins': '#48cae4',         // Light cyan
-            'Meme': '#ef476f',                // Pink accent
+            'Layer 1 (L1)': '#00b4d8',        // Bright cyan (matches accent-cardano)
+            'Decentralized Finance (DeFi)': '#06d6a0', // Teal green (success)
+            'Cardano Ecosystem': '#48cae4',   // Light cyan
+            'Infrastructure': '#ffd166',       // Coral yellow (bitcoin accent)
+            'Stablecoins': '#0096c7',         // Deep ocean blue
+            'Meme': '#ef476f',                // Coral pink (error)
             'Gaming': '#90e0ef',              // Sky blue
             'Other': '#6c757d'                // Gray
         };
     } else if (theme === 'sunset-horizon') {
+        // Sunset Horizon - Warm oranges, reds, purples
         categoryColors = {
-            'Layer 1 (L1)': '#ff6b35',        // Vivid orange
-            'Decentralized Finance (DeFi)': '#fcbf49', // Golden yellow
-            'Cardano Ecosystem': '#f77f00',   // Amber
+            'Layer 1 (L1)': '#ff6b35',        // Vivid orange (cardano accent)
+            'Decentralized Finance (DeFi)': '#ffc145', // Golden (bitcoin accent)
+            'Cardano Ecosystem': '#ff8c42',   // Warm orange (ethereum accent)
             'Infrastructure': '#f72585',       // Hot pink
-            'Stablecoins': '#d62828',         // Deep red
-            'Meme': '#b5179e',                // Magenta
+            'Stablecoins': '#b5179e',         // Magenta
+            'Meme': '#ff3366',                // Red (error)
             'Gaming': '#7209b7',              // Purple
             'Other': '#6c757d'                // Gray
         };
     } else if (theme === 'cypherpunk1') {
+        // Cypherpunk - Diverse neon colors for each category
         categoryColors = {
-            'Layer 1 (L1)': '#39ff14',        // Neon green
-            'Decentralized Finance (DeFi)': '#00d9ff', // Electric cyan
-            'Cardano Ecosystem': '#00ff41',   // Matrix green
-            'Infrastructure': '#adff2f',       // Yellow-green
-            'Stablecoins': '#0ff0fc',         // Bright cyan
-            'Meme': '#ff00ff',                // Magenta
-            'Gaming': '#ff10f0',              // Hot magenta
+            'Layer 1 (L1)': '#ea00d9',        // Neon magenta (primary accent)
+            'Decentralized Finance (DeFi)': '#0abdc6', // Electric cyan (success)
+            'Cardano Ecosystem': '#7d00ff',   // Neon purple
+            'Infrastructure': '#00ff9f',       // Neon mint green
+            'Stablecoins': '#00e5ff',         // Bright cyan
+            'Meme': '#ff0080',                // Hot pink
+            'Gaming': '#00ff41',              // Matrix green
             'Other': '#808080'                // Gray
         };
     } else {
+        // Default - Balanced professional palette
         categoryColors = {
             'Layer 1 (L1)': '#3498db',        // Bright blue
-            'Decentralized Finance (DeFi)': '#00d26a', // Emerald green
+            'Decentralized Finance (DeFi)': '#00d26a', // Emerald green (primary)
             'Cardano Ecosystem': '#1abc9c',   // Turquoise
             'Infrastructure': '#f39c12',       // Orange
             'Stablecoins': '#9b59b6',         // Amethyst purple
