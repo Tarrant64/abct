@@ -5556,6 +5556,9 @@ async function openAssetBreakdown(blockchain) {
 
         // Fetch data
         const response = await authFetch(`${API_BASE}/portfolio/assets/${blockchain}`);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
         const data = await response.json();
 
         // Update values
