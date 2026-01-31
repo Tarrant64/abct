@@ -5449,25 +5449,35 @@ document.addEventListener('DOMContentLoaded', async () => {
         tokenForm.addEventListener('submit', handleTokenFormSubmit);
     }
 
+    // ========================================
+    // INSTANT LOAD - Show cached data first
+    // ========================================
     // Load prices first for USD calculations
     await loadPrices();
+
+    // Load portfolio summary from cache (instant)
     await loadPortfolioSummary();
 
-    // Load portfolio history chart
+    // Load portfolio history chart (non-blocking)
     loadPortfolioHistory('7d');
 
-    // Native assets now shown in Self-Custody Wallets section
-    // await loadNativeAssets();
-    await loadExchangeData();
-    await loadDefiGovernance();
+    // ========================================
+    // BACKGROUND UPDATES - Fetch fresh data
+    // ========================================
+    // These run in background and update UI when complete
+    // Use Promise.allSettled to prevent one failure from blocking others
+    Promise.allSettled([
+        loadExchangeData(),
+        loadDefiGovernance(),  // Slow - runs in background now
+        loadCustomTokens(),
+        loadAllNftSummaries()
+    ]).then(() => {
+        console.log('[Dashboard] Background data loading complete');
+        // Update portfolio total one final time with all fresh data
+        updateTotalPortfolioValue();
+    });
 
-    // Load custom tokens
-    await loadCustomTokens();
-
-    // Load NFT summaries for all chains first (to get combined totals)
-    await loadAllNftSummaries();
-
-    // Load NFTs for the default chain (Cardano)
+    // Load NFTs for the default chain (non-blocking)
     loadNFTs();
 });
 

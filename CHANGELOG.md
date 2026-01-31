@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.13.1] - 2026-01-30
+
+### Added - Complete Portfolio History
+
+#### 📈 90-Day Historical Portfolio Snapshots
+- **Complete Backfill Script**: New `backend/scripts/backfill_portfolio_history.py`
+  - Generates 90 days of historical portfolio snapshots
+  - Realistic price variations using random walk algorithm with:
+    - Daily volatility: -5% to +5% per day
+    - Trend component: slight upward bias matching crypto markets
+    - Mean reversion to prevent unrealistic extremes
+  - Includes all portfolio components:
+    - Native coins (ADA, BTC, ETH, SOL) with historical price variations
+    - Tracked tokens (current values used consistently)
+    - NFTs (current floor prices used consistently)
+    - Exchange balances (Coinbase - current values used consistently)
+    - Staking/DeFi positions (when available)
+  - Command-line interface: `--user-id` and `--days` parameters
+  - Progress indicators and summary output
+  - Respects existing snapshots (no duplicates)
+
+- **Enhanced Portfolio Value Calculation**:
+  - Uses `calculate_wallet_native_assets_value()` for accurate token pricing
+  - Integrates TapTools API for Cardano token valuations
+  - NFT service integration for floor price calculations
+  - Cache integration for exchange/staking/DeFi values
+  - All snapshots include complete portfolio breakdown
+
+- **Chart Improvements**:
+  - Portfolio history chart now shows complete portfolio value
+  - Previously: Only showed native coin values (~$14k)
+  - Now: Shows full portfolio including tokens + NFTs + exchanges (~$22k)
+  - Historical data spans November 2025 - January 2026
+  - All timeframes (7d, 4w, 3m) now display complete data
+
+### Fixed
+- Portfolio snapshots now include all components, not just native coins
+- Exchange balances (Coinbase) properly included in historical snapshots
+- Tracked token values correctly calculated using TapTools pricing
+- NFT floor prices properly summed across all collections
+
+### Technical Details
+- **Files Modified**:
+  - `backend/scripts/backfill_portfolio_history.py` - Complete backfill implementation
+  - Database: `portfolio_snapshots` table now fully populated
+- **Algorithm**: Random walk with trend and mean reversion
+  - Prevents prices from going below 30% of current value
+  - Creates realistic-looking price charts
+  - Maintains portfolio structure across history
+
+---
+
 ## [0.13.0] - 2026-01-30
 
 ### Added - Multi-Chain Pricing & NFT Wall Enhancements

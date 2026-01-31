@@ -612,7 +612,7 @@
                 // Update button text based on remaining images
                 const btn = document.getElementById('cacheBtn');
                 if (uncached > 0 && !btn.disabled) {
-                    btn.textContent = `Cache ${Math.min(50, uncached)} Images`;
+                    btn.textContent = `Cache ${Math.min(200, uncached)} Images`;
                 } else if (uncached === 0 && !btn.disabled) {
                     btn.textContent = 'All Images Cached ✓';
                     btn.disabled = true;
@@ -785,9 +785,10 @@
 
             try {
                 const chain = currentChain === 'all' ? null : currentChain;
+                // Use backend defaults (limit=200, max_concurrent=20)
                 const url = chain
-                    ? `${API_BASE}/nfts/wall/cache-all?blockchain=${chain}&limit=50`
-                    : `${API_BASE}/nfts/wall/cache-all?limit=50`;
+                    ? `${API_BASE}/nfts/wall/cache-all?blockchain=${chain}`
+                    : `${API_BASE}/nfts/wall/cache-all`;
 
                 const response = await authFetch(url, { method: 'POST' });
                 const data = await response.json();
@@ -893,7 +894,7 @@
     </script>
 
     <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
-        <p>ABCT - NFT Gallery | <span style="opacity: 0.6;">v0.13.0 (BUILD 1769818377)</span></p>
+        <p>ABCT - NFT Gallery | <span style="opacity: 0.6;">v0.13.1 (BUILD 1769826090)</span></p>
     </footer>
 </body>
 </html>

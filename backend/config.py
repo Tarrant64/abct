@@ -90,7 +90,7 @@ BALANCE_CACHE_TTL = 300  # 5 minutes
 
 # NFT Image Cache Settings
 NFT_IMAGE_CACHE_ENABLED = os.getenv("NFT_IMAGE_CACHE_ENABLED", "false").lower() == "true"
-NFT_IMAGE_MAX_SIZE_MB = int(os.getenv("NFT_IMAGE_MAX_SIZE_MB", "5"))
+NFT_IMAGE_MAX_SIZE_MB = int(os.getenv("NFT_IMAGE_MAX_SIZE_MB", "20"))
 NFT_IMAGE_THUMBNAIL_SIZE = int(os.getenv("NFT_IMAGE_THUMBNAIL_SIZE", "150"))
 
 # IPFS Gateways (fallback order)
