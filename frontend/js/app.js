@@ -6333,6 +6333,8 @@ let currentTimeframe = '1M';
 let priceChartInitialized = false;
 let priceChartLoading = false;
 let priceChartLoadTimeout = null;
+// Cache for storing fetched timeframe data: { 'cardano_1M': {...}, 'bitcoin_7D': {...} }
+let priceChartCache = {};
 
 async function initializePriceChart() {
     if (priceChartInitialized) return;
@@ -6395,6 +6397,9 @@ async function initializePriceChart() {
 
     // Load initial data (Cardano, 1M)
     await loadPriceChartData('cardano', '1M');
+
+    // Progressive pre-fetch: Load 7D and 3M in background for instant switching
+    prefetchCommonTimeframes('cardano');
 }
 
 function getPriceChartColors(theme) {
@@ -6428,14 +6433,28 @@ function getPriceChartColors(theme) {
     return themeColors[theme] || themeColors['default'];
 }
 
-async function loadPriceChartData(blockchain, timeframe) {
-    // Prevent rapid-fire requests (debounce)
-    if (priceChartLoading) {
+async function loadPriceChartData(blockchain, timeframe, silent = false) {
+    // Check cache first
+    const cacheKey = `${blockchain}_${timeframe}`;
+    if (priceChartCache[cacheKey]) {
+        const data = priceChartCache[cacheKey];
+
+        // If not silent, update the UI
+        if (!silent) {
+            updateChartDisplay(blockchain, data);
+        }
+        return data;
+    }
+
+    // Prevent rapid-fire requests (debounce) - only for non-silent requests
+    if (!silent && priceChartLoading) {
         console.log('Chart already loading, skipping request');
         return;
     }
 
-    priceChartLoading = true;
+    if (!silent) {
+        priceChartLoading = true;
+    }
 
     try {
         const response = await authFetch(`${API_BASE}/portfolio/charts/blockchain/${blockchain}?timeframe=${timeframe}`);
@@ -6444,7 +6463,7 @@ async function loadPriceChartData(blockchain, timeframe) {
                 const error = await response.json();
                 console.warn('Price data unavailable:', error.error || error.detail);
                 // Keep showing current chart, don't clear it
-                return;
+                return null;
             }
             throw new Error(`API error: ${response.status}`);
         }
@@ -6453,45 +6472,79 @@ async function loadPriceChartData(blockchain, timeframe) {
 
         if (!data.data || data.data.length === 0) {
             console.warn('No chart data available');
-            return;
+            return null;
         }
 
-        // Update chart series
-        if (priceChartSeries) {
-            priceChartSeries.setData(data.data);
+        // Store in cache
+        priceChartCache[cacheKey] = data;
+
+        // Update UI if not silent
+        if (!silent) {
+            updateChartDisplay(blockchain, data);
         }
 
-        // Update chart title and stats
-        const titleEl = document.getElementById('chartTitle');
-        if (titleEl) {
-            titleEl.textContent = `${blockchain.charAt(0).toUpperCase() + blockchain.slice(1)} (${data.symbol})`;
-        }
-
-        const priceEl = document.getElementById('chartPrice');
-        if (priceEl) {
-            priceEl.textContent = formatUSD(data.current_price);
-        }
-
-        const changeEl = document.getElementById('chartChange');
-        if (changeEl) {
-            const change = data.change_24h || 0;
-            changeEl.textContent = `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`;
-            changeEl.className = change >= 0 ? 'change positive' : 'change negative';
-        }
-
-        // Fit chart to data
-        if (priceChart) {
-            priceChart.timeScale().fitContent();
-        }
+        return data;
 
     } catch (error) {
-        console.error('Error loading price chart data:', error);
+        if (!silent) {
+            console.error('Error loading price chart data:', error);
+        }
+        return null;
     } finally {
         // Reset loading state after a short delay to prevent rapid re-requests
-        setTimeout(() => {
-            priceChartLoading = false;
-        }, 500);
+        if (!silent) {
+            setTimeout(() => {
+                priceChartLoading = false;
+            }, 500);
+        }
     }
+}
+
+function updateChartDisplay(blockchain, data) {
+    // Update chart series
+    if (priceChartSeries) {
+        priceChartSeries.setData(data.data);
+    }
+
+    // Update chart title and stats
+    const titleEl = document.getElementById('chartTitle');
+    if (titleEl) {
+        titleEl.textContent = `${blockchain.charAt(0).toUpperCase() + blockchain.slice(1)} (${data.symbol})`;
+    }
+
+    const priceEl = document.getElementById('chartPrice');
+    if (priceEl) {
+        priceEl.textContent = formatUSD(data.current_price);
+    }
+
+    const changeEl = document.getElementById('chartChange');
+    if (changeEl) {
+        const change = data.change_24h || 0;
+        changeEl.textContent = `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`;
+        changeEl.className = change >= 0 ? 'change positive' : 'change negative';
+    }
+
+    // Fit chart to data
+    if (priceChart) {
+        priceChart.timeScale().fitContent();
+    }
+}
+
+async function prefetchCommonTimeframes(blockchain) {
+    // Prefetch 7D and 3M in background (staggered to avoid rate limits)
+    console.log(`Pre-fetching common timeframes for ${blockchain}...`);
+
+    // Fetch 7D after 2 seconds
+    setTimeout(async () => {
+        await loadPriceChartData(blockchain, '7D', true);
+        console.log(`✓ Pre-fetched ${blockchain} 7D`);
+    }, 2000);
+
+    // Fetch 3M after 4 seconds
+    setTimeout(async () => {
+        await loadPriceChartData(blockchain, '3M', true);
+        console.log(`✓ Pre-fetched ${blockchain} 3M`);
+    }, 4000);
 }
 
 function selectBlockchain(blockchain) {
@@ -6502,8 +6555,11 @@ function selectBlockchain(blockchain) {
         btn.classList.toggle('active', btn.dataset.blockchain === blockchain);
     });
 
-    // Load new data
+    // Load new data for current timeframe
     loadPriceChartData(blockchain, currentTimeframe);
+
+    // Progressive pre-fetch: Load 7D and 3M in background for this blockchain
+    prefetchCommonTimeframes(blockchain);
 }
 
 function selectTimeframe(timeframe) {
