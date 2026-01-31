@@ -5578,9 +5578,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Load portfolio summary from cache (instant)
     await loadPortfolioSummary();
 
-    // Load portfolio history chart (non-blocking)
-    loadPortfolioHistory('7d');
-
     // ========================================
     // BACKGROUND UPDATES - Fetch fresh data
     // ========================================
@@ -5595,6 +5592,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log('[Dashboard] Background data loading complete');
         // Update portfolio total one final time with all fresh data
         updateTotalPortfolioValue();
+        // Load portfolio history chart NOW that all data is ready (shows correct current value)
+        loadPortfolioHistory('7d');
         // Pre-fetch asset breakdowns for instant modal opening
         prefetchAssetBreakdowns();
     });
