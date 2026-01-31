@@ -1327,9 +1327,9 @@ async def get_blockchain_price_chart(
     if symbol not in historical or not historical[symbol]:
         raise HTTPException(404, f"No historical data available for {symbol}")
 
-    # Get current price and 24h change
-    prices = await pricing_service.get_prices([symbol])
-    price_data = prices.get(symbol, {})
+    # Get current price and 24h change (use get_all_tracked_prices for metadata)
+    all_prices = await pricing_service.get_all_tracked_prices()
+    price_data = all_prices.get(symbol, {})
 
     # Transform data for lightweight-charts
     chart_data = [
@@ -1346,6 +1346,6 @@ async def get_blockchain_price_chart(
         'timeframe': timeframe.upper(),
         'data': chart_data,
         'current_price': price_data.get('usd', 0),
-        'change_24h': price_data.get('change_1h', 0),
+        'change_24h': price_data.get('usd_1h_change', 0),
         'data_points': len(chart_data)
     }
