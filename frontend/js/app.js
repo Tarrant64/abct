@@ -6331,7 +6331,7 @@ let priceChartSeries = null;
 let currentBlockchain = 'cardano';
 let currentTimeframe = '1M';
 let priceChartInitialized = false;
-let priceChartLoading = false;
+let priceChartLoadingSet = new Set(); // Track which blockchain+timeframe combos are currently loading
 let priceChartLoadTimeout = null;
 // Cache for storing fetched timeframe data: { 'cardano_1M': {...}, 'bitcoin_7D': {...} }
 let priceChartCache = {};
@@ -6446,15 +6446,15 @@ async function loadPriceChartData(blockchain, timeframe, silent = false) {
         return data;
     }
 
-    // Prevent rapid-fire requests (debounce) - only for non-silent requests
-    if (!silent && priceChartLoading) {
-        console.log('Chart already loading, skipping request');
+    // Prevent duplicate requests for the same blockchain+timeframe combo
+    const requestKey = `${blockchain}_${timeframe}`;
+    if (priceChartLoadingSet.has(requestKey)) {
+        console.log(`Chart data for ${blockchain} ${timeframe} already loading, skipping duplicate request`);
         return;
     }
 
-    if (!silent) {
-        priceChartLoading = true;
-    }
+    // Mark this request as in progress
+    priceChartLoadingSet.add(requestKey);
 
     try {
         const response = await authFetch(`${API_BASE}/portfolio/charts/blockchain/${blockchain}?timeframe=${timeframe}`);
@@ -6491,12 +6491,10 @@ async function loadPriceChartData(blockchain, timeframe, silent = false) {
         }
         return null;
     } finally {
-        // Reset loading state after a short delay to prevent rapid re-requests
-        if (!silent) {
-            setTimeout(() => {
-                priceChartLoading = false;
-            }, 500);
-        }
+        // Remove from loading set after a short delay to prevent rapid duplicate requests
+        setTimeout(() => {
+            priceChartLoadingSet.delete(requestKey);
+        }, 500);
     }
 }
 

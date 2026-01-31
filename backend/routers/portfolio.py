@@ -1260,7 +1260,7 @@ async def get_blockchain_asset_breakdown(
         }
 
         # Cache for 5 minutes (300 seconds)
-        await set_cache(cache_key, result, ttl=300, user_id=user_id)
+        await set_cache(cache_key, result, ttl_seconds=300, user_id=user_id)
 
         return result
 
