@@ -1107,6 +1107,10 @@ async def get_blockchain_asset_breakdown(
         raise
     except Exception as e:
         import traceback
-        print(f"[ERROR] Asset breakdown for {blockchain}: {str(e)}")
-        print(traceback.format_exc())
-        raise HTTPException(500, f"Failed to get asset breakdown: {str(e)}")
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"[ERROR] Asset breakdown for {blockchain} (user {user_id}): {str(e)}")
+        logger.error(traceback.format_exc())
+        # Return more detailed error message
+        error_detail = f"{type(e).__name__}: {str(e)}"
+        raise HTTPException(500, detail=error_detail)
