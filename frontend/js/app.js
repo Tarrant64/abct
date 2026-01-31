@@ -5666,7 +5666,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Load portfolio history chart NOW that all data is ready (shows correct current value)
         loadPortfolioHistory('7d');
         // Pre-fetch asset breakdowns for instant modal opening
-        prefetchAssetBreakdowns();
+        // Asset breakdowns load on-demand when user clicks blockchain cards
     });
 
     // Load NFTs for the default chain (non-blocking)
@@ -5678,18 +5678,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ===========================
 let assetBreakdownChart = null;
 
-// Pre-fetch asset breakdown data for all blockchains (cache warming)
-async function prefetchAssetBreakdowns() {
-    const blockchains = ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base'];
-
-    // Fire off all requests in parallel (don't wait for responses)
-    // This warms the backend cache so modals open instantly
-    blockchains.forEach(blockchain => {
-        authFetch(`${API_BASE}/portfolio/assets/${blockchain}`)
-            .then(r => r.json())
-            .catch(e => console.debug(`Pre-fetch ${blockchain} breakdown:`, e));
-    });
-}
+// Asset breakdown data loads on-demand when user clicks blockchain card
+// Backend caching (5min TTL) makes subsequent opens instant
 
 async function openAssetBreakdown(blockchain) {
     try {
@@ -6395,11 +6385,8 @@ async function initializePriceChart() {
 
     priceChartInitialized = true;
 
-    // Load initial data (Cardano, 1M)
+    // Load initial data (Cardano, 1M) - other timeframes load on-demand
     await loadPriceChartData('cardano', '1M');
-
-    // Progressive pre-fetch: Load 7D and 3M in background for instant switching
-    prefetchCommonTimeframes('cardano');
 }
 
 function getPriceChartColors(theme) {
@@ -6528,22 +6515,8 @@ function updateChartDisplay(blockchain, data) {
     }
 }
 
-async function prefetchCommonTimeframes(blockchain) {
-    // Prefetch 7D and 3M in background (staggered to avoid rate limits)
-    console.log(`Pre-fetching common timeframes for ${blockchain}...`);
-
-    // Fetch 7D after 2 seconds
-    setTimeout(async () => {
-        await loadPriceChartData(blockchain, '7D', true);
-        console.log(`✓ Pre-fetched ${blockchain} 7D`);
-    }, 2000);
-
-    // Fetch 3M after 4 seconds
-    setTimeout(async () => {
-        await loadPriceChartData(blockchain, '3M', true);
-        console.log(`✓ Pre-fetched ${blockchain} 3M`);
-    }, 4000);
-}
+// All chart data loads on-demand when user selects timeframe
+// Backend caching (1hr TTL) + client cache makes subsequent loads instant
 
 function selectBlockchain(blockchain) {
     currentBlockchain = blockchain;
@@ -6553,11 +6526,8 @@ function selectBlockchain(blockchain) {
         btn.classList.toggle('active', btn.dataset.blockchain === blockchain);
     });
 
-    // Load new data for current timeframe
+    // Load data for current timeframe only (other timeframes load on-demand)
     loadPriceChartData(blockchain, currentTimeframe);
-
-    // Progressive pre-fetch: Load 7D and 3M in background for this blockchain
-    prefetchCommonTimeframes(blockchain);
 }
 
 function selectTimeframe(timeframe) {
