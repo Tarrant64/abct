@@ -4738,6 +4738,70 @@ function updateChartCategories() {
 }
 
 // Load and render portfolio history chart
+// Helper functions to get current portfolio values for chart
+function getCurrentPortfolioTotal() {
+    // Calculate current total from in-memory data (same logic as updateTotalPortfolioValue)
+    const adaWalletValue = walletTotals.ADA * (prices.ADA || 0);
+    const btcWalletValue = walletTotals.BTC * (prices.BTC || 0);
+    const ethWalletValue = walletTotals.ETH * (prices.ETH || 0);
+    const solWalletValue = walletTotals.SOL * (prices.SOL || 0);
+    const maticWalletValue = walletTotals.MATIC * (prices.MATIC || 0);
+    const baseEthWalletValue = walletTotals.ETH_BASE * (prices.ETH || 0);
+    const walletsTotal = adaWalletValue + btcWalletValue + ethWalletValue + solWalletValue + maticWalletValue + baseEthWalletValue;
+
+    let stakingTotal = 0;
+    for (const [token, amount] of Object.entries(stakingTotals)) {
+        stakingTotal += amount * (prices[token] || 0);
+    }
+
+    let defiTotal = 0;
+    for (const [token, amount] of Object.entries(defiTotals)) {
+        defiTotal += amount * (prices[token] || 0);
+    }
+
+    const exchangesTotal = exchangeTotals.usd || 0;
+    const nftsTotal = getNftTotalUsd();
+    const trackedTokensTotal = trackedTokensValue || 0;
+    const customTokensTotal = customTokensValue || 0;
+
+    return walletsTotal + exchangesTotal + stakingTotal + defiTotal + nftsTotal + trackedTokensTotal + customTokensTotal;
+}
+
+function getCurrentPortfolioBreakdown() {
+    // Return breakdown for chart (matches snapshot format)
+    const adaWalletValue = walletTotals.ADA * (prices.ADA || 0);
+    const btcWalletValue = walletTotals.BTC * (prices.BTC || 0);
+    const ethWalletValue = walletTotals.ETH * (prices.ETH || 0);
+    const solWalletValue = walletTotals.SOL * (prices.SOL || 0);
+    const maticWalletValue = walletTotals.MATIC * (prices.MATIC || 0);
+    const baseEthWalletValue = walletTotals.ETH_BASE * (prices.ETH || 0);
+    const walletsTotal = adaWalletValue + btcWalletValue + ethWalletValue + solWalletValue + maticWalletValue + baseEthWalletValue;
+
+    let stakingTotal = 0;
+    for (const [token, amount] of Object.entries(stakingTotals)) {
+        stakingTotal += amount * (prices[token] || 0);
+    }
+
+    let defiTotal = 0;
+    for (const [token, amount] of Object.entries(defiTotals)) {
+        defiTotal += amount * (prices[token] || 0);
+    }
+
+    const exchangesTotal = exchangeTotals.usd || 0;
+    const nftsTotal = getNftTotalUsd();
+    const trackedTokensTotal = trackedTokensValue || 0;
+    const customTokensTotal = customTokensValue || 0;
+
+    return {
+        wallets: walletsTotal,
+        staking: stakingTotal,
+        defi: defiTotal,
+        exchange: exchangesTotal,
+        nfts: nftsTotal,
+        tracked_tokens: trackedTokensTotal + customTokensTotal
+    };
+}
+
 async function loadPortfolioHistory(range = '7d') {
     const chartContainer = document.getElementById('portfolioHistoryChart');
     const emptyState = document.getElementById('chartEmptyState');
@@ -4752,13 +4816,39 @@ async function loadPortfolioHistory(range = '7d') {
         const data = await response.json();
 
         if (data.data && data.data.length > 0) {
+            // Replace today's value with current live total portfolio value
+            const today = new Date().toISOString().split('T')[0];
+            const historyData = data.data.map(entry => {
+                if (entry.date === today) {
+                    // Calculate current total value from in-memory data
+                    const currentTotal = getCurrentPortfolioTotal();
+                    return {
+                        ...entry,
+                        value: currentTotal,
+                        // Update breakdown with current values if available
+                        breakdown: getCurrentPortfolioBreakdown()
+                    };
+                }
+                return entry;
+            });
+
+            // If today isn't in the data, add it
+            const hasToday = historyData.some(entry => entry.date === today);
+            if (!hasToday) {
+                historyData.push({
+                    date: today,
+                    value: getCurrentPortfolioTotal(),
+                    breakdown: getCurrentPortfolioBreakdown()
+                });
+            }
+
             // Store data globally for category toggle updates
-            portfolioHistoryData = data.data;
+            portfolioHistoryData = historyData;
 
             // Hide empty state, show chart
             if (emptyState) emptyState.style.display = 'none';
             chartContainer.style.display = 'block';
-            renderPortfolioChart(data.data, range);
+            renderPortfolioChart(historyData, range);
         } else {
             // Show empty state, hide chart
             portfolioHistoryData = null;
