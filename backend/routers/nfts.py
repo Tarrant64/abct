@@ -9,6 +9,7 @@ from typing import Optional, List
 import asyncio
 import sys
 import os
+import logging
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.nft import nft_service
@@ -26,6 +27,12 @@ from middleware.demo_mode import is_demo_user
 from auth_utils import verify_session
 
 router = APIRouter(prefix="/nfts", tags=["nfts"])
+
+# Logger
+logger = logging.getLogger(__name__)
+
+# Background caching tasks tracker
+background_cache_tasks = {}
 
 # Minimum USD value to display
 MIN_USD_VALUE = 1.00
@@ -1254,7 +1261,8 @@ async def cache_all_nft_images(
     blockchain: Optional[str] = None,
     max_concurrent: int = 20,
     limit: int = 200,
-    chain_parallelism: int = 5
+    chain_parallelism: int = 5,
+    background: bool = True
 ):
     """
     Cache images for all NFTs from the dashboard with parallel chain processing.
@@ -1265,6 +1273,7 @@ async def cache_all_nft_images(
         max_concurrent: Max concurrent image fetches per chain (default: 20)
         limit: Max images to cache in this batch per chain (default: 200)
         chain_parallelism: Max chains to process in parallel (default: 5)
+        background: Run in background and return immediately (default: True)
     """
     chains_to_process = [blockchain] if blockchain else ['cardano', 'ethereum', 'solana', 'polygon', 'base']
 
@@ -1374,21 +1383,79 @@ async def cache_all_nft_images(
                     'error': str(e)
                 }
 
-    # Process all chains in parallel
-    logger.info(f"Starting parallel NFT caching for chains: {chains_to_process}")
-    chain_results = await asyncio.gather(*[process_chain(chain) for chain in chains_to_process])
+    # Background task wrapper
+    async def run_caching_task():
+        """Execute the caching and update the task status."""
+        task_id = f"{user_id}_{blockchain or 'all'}"
+        try:
+            background_cache_tasks[task_id] = {
+                'status': 'running',
+                'progress': 'Starting...',
+                'user_id': user_id
+            }
 
-    # Aggregate results
-    results = {
-        'chains_processed': chain_results,
-        'total_cached': sum(r.get('fetched', 0) for r in chain_results),
-        'total_failed': sum(r.get('failed', 0) for r in chain_results),
-        'total_skipped': sum(r.get('skipped', 0) for r in chain_results)
-    }
+            # Process all chains in parallel
+            logger.info(f"Starting parallel NFT caching for chains: {chains_to_process}")
+            chain_results = await asyncio.gather(*[process_chain(chain) for chain in chains_to_process])
 
-    logger.info(f"NFT caching complete: {results['total_cached']} cached, {results['total_failed']} failed, {results['total_skipped']} skipped")
+            # Aggregate results
+            results = {
+                'chains_processed': chain_results,
+                'total_cached': sum(r.get('fetched', 0) for r in chain_results),
+                'total_failed': sum(r.get('failed', 0) for r in chain_results),
+                'total_skipped': sum(r.get('skipped', 0) for r in chain_results)
+            }
 
-    return results
+            logger.info(f"NFT caching complete: {results['total_cached']} cached, {results['total_failed']} failed, {results['total_skipped']} skipped")
+
+            # Update task status
+            background_cache_tasks[task_id] = {
+                'status': 'completed',
+                'results': results,
+                'user_id': user_id
+            }
+
+            return results
+
+        except Exception as e:
+            logger.error(f"Background caching error: {e}")
+            background_cache_tasks[task_id] = {
+                'status': 'failed',
+                'error': str(e),
+                'user_id': user_id
+            }
+            raise
+
+    if background:
+        # Start background task and return immediately
+        task_id = f"{user_id}_{blockchain or 'all'}"
+        asyncio.create_task(run_caching_task())
+        return {
+            'status': 'started',
+            'message': 'Image caching started in background. You can leave this page - the process will continue.',
+            'task_id': task_id,
+            'background': True
+        }
+    else:
+        # Run synchronously and wait for completion
+        return await run_caching_task()
+
+
+@router.get("/wall/cache-status")
+async def get_cache_task_status(user_id: int = Depends(verify_session), blockchain: Optional[str] = None):
+    """Check the status of a background caching task."""
+    task_id = f"{user_id}_{blockchain or 'all'}"
+
+    if task_id not in background_cache_tasks:
+        return {'status': 'not_found', 'message': 'No caching task found'}
+
+    task = background_cache_tasks[task_id]
+
+    # Verify user owns this task
+    if task.get('user_id') != user_id:
+        raise HTTPException(403, "Not authorized to view this task")
+
+    return task
 
 
 @router.get("/wall/nfts")
