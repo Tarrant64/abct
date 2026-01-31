@@ -2,12 +2,13 @@
 
 A self-hosted cryptocurrency portfolio tracker that aggregates data from multiple blockchains, exchanges, and DeFi protocols.
 
-![Version](https://img.shields.io/badge/version-0.13.1-blue.svg)
+![Version](https://img.shields.io/badge/version-1.0.0-brightgreen.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.109-teal.svg)
 ![Security](https://img.shields.io/badge/security-hardened-green.svg)
 ![Docker](https://img.shields.io/badge/docker-ready-blue.svg)
+![Exchanges](https://img.shields.io/badge/exchanges-7-purple.svg)
 
 ## ⚠️ Important: Intended Use
 
@@ -46,13 +47,35 @@ For a detailed overview of the system architecture, authentication flow, and dat
 
 ### Portfolio Tracking
 - **Multi-Blockchain Support**: Track wallets on Cardano, Bitcoin, Ethereum, Solana, Polygon, and Base
-- **Exchange Integration**: Connect to Coinbase for centralized holdings
+- **Multi-Exchange Integration**: Connect to 7 major exchanges (Coinbase, Binance, Binance.US, OKX, Bitget, Gate.io, KuCoin)
 - **DeFi Monitoring**: View Cardano staking positions with APY and rewards
 - **NFT Collection**: Browse your NFTs with floor price valuations
 - **Portfolio History**: Interactive charts showing value over time (7d, 4w, 3m)
 - **Privacy Mode**: Hide sensitive financial data with one click
 
-### New in v0.13.1 🎉
+### New in v1.0.0 🎉 - Production Ready!
+- **🌐 Seven Exchange Integrations**: Full API support for Binance, OKX, KuCoin, Bitget, Gate.io + existing Coinbase
+  - Automatic portfolio aggregation across all exchanges
+  - Read-only API keys for maximum security
+  - 5-minute smart caching to respect rate limits
+  - Individual exchange status monitoring
+  - Easy environment variable configuration
+- **🎨 Visual Enhancements**: LogoKit integration for blockchain and token logos
+  - Blockchain logos on all summary cards
+  - Token logos in wallet and exchange asset lists
+  - Exchange-specific branding throughout UI
+  - Improved pie chart colors for cypherpunk theme
+- **🗂️ Manage Wallets Interface**: Redesigned asset management
+  - Three-tab interface: Self-Custody | Exchanges | Manual Tokens
+  - Exchange configuration status dashboard
+  - Setup guide with direct links to API management
+  - Better organization of different asset types
+- **📚 Comprehensive Documentation**: Complete exchange integration guide
+  - Step-by-step setup for each exchange
+  - Security best practices and troubleshooting
+  - API rate limit documentation
+
+### New in v0.13.1
 - **📈 Complete Portfolio History**: 90-day historical snapshots with all components
   - Backfill script generates realistic historical price variations
   - Includes native coins, tracked tokens, NFTs, and exchange balances
@@ -227,8 +250,10 @@ The dashboard provides a comprehensive view of your crypto portfolio:
 | Blockfrost | **Yes** | Cardano blockchain data | [blockfrost.io](https://blockfrost.io) |
 | CExplorer | Recommended | Staking/rewards data | [cexplorer.io/api](https://cexplorer.io/api) |
 | TapTools | Optional | NFT floor prices | [taptools.io](https://taptools.io/openapi/subscription) |
-| Coinbase | Optional | Exchange integration | [portal.cdp.coinbase.com](https://portal.cdp.coinbase.com) |
 | Etherscan | Optional | Ethereum support | [etherscan.io](https://etherscan.io/apis) |
+| Coinbase | Optional | Exchange balances | [portal.cdp.coinbase.com](https://portal.cdp.coinbase.com) |
+| Binance | Optional | Exchange balances | [binance.com/en/my/settings/api-management](https://www.binance.com/en/my/settings/api-management) |
+| OKX | Optional | Exchange balances | [okx.com/account/my-api](https://www.okx.com/account/my-api) |
 
 ## 📁 Project Structure
 
@@ -255,7 +280,13 @@ ABCT/
 │   │   ├── ethereum.py        # Ethereum/EVM blockchain service
 │   │   ├── pricing.py         # Price aggregation
 │   │   ├── defi.py            # DeFi/staking service
-│   │   ├── coinbase.py        # Coinbase exchange service
+│   │   ├── coinbase.py        # Coinbase exchange service (v1.0.0+)
+│   │   ├── binance_service.py       # Binance.com exchange (v1.0.0+)
+│   │   ├── binance_us_service.py    # Binance.US exchange (v1.0.0+)
+│   │   ├── okx_service.py           # OKX exchange (v1.0.0+)
+│   │   ├── bitget_service.py        # Bitget exchange (v1.0.0+)
+│   │   ├── gate_service.py          # Gate.io exchange (v1.0.0+)
+│   │   ├── kucoin_service.py        # KuCoin exchange (v1.0.0+)
 │   │   ├── nft.py             # NFT service
 │   │   ├── nft_scheduler.py   # NFT background scheduler
 │   │   ├── snapshot.py        # Portfolio snapshot service
@@ -269,7 +300,7 @@ ABCT/
 │   └── utils/                 # Utility functions
 ├── frontend/                  # HTML/CSS/JS frontend
 │   ├── index.html             # Main dashboard
-│   ├── wallets.html           # Wallet manager
+│   ├── wallets.html           # Wallet manager (v1.0.0: includes exchange management)
 │   ├── services.html          # Services monitor (NFT scheduler)
 │   ├── backup.html            # Backup & restore (v0.10.0+)
 │   ├── login.html             # Login page (v0.12.0+)
@@ -278,8 +309,8 @@ ABCT/
 │   ├── nft-wall.html          # NFT gallery
 │   ├── logs.html              # System logs
 │   ├── static/demo-nfts/      # Demo NFT images (v0.12.0+)
-│   ├── css/styles.css         # Styling
-│   └── js/app.js              # Client-side logic
+│   ├── css/styles.css         # Styling (v1.0.0: logo classes)
+│   └── js/app.js              # Client-side logic (v1.0.0: exchange rendering)
 ├── abct-docker/               # Docker deployment
 │   ├── Dockerfile             # Container definition
 │   ├── nginx.conf             # Reverse proxy config
@@ -291,6 +322,8 @@ ABCT/
 ├── docs/                      # Documentation
 │   ├── ARCHITECTURE.md        # System architecture
 │   ├── BACKUP_RESTORE_GUIDE.md # Backup documentation
+│   ├── docs/
+│   │   └── Exchange-Integration.md  # Exchange setup guide (v1.0.0+)
 │   └── ...
 ├── .env                       # API keys (you create this)
 ├── .env.example               # Example configuration
@@ -388,16 +421,20 @@ ABCT_REQUIRE_AUTH=false               # Set to false for localhost-only
 # ABCT_SSL_KEY=/path/to/key.pem
 ```
 
-### Coinbase Integration
+### Exchange Integration
 
-1. Get API credentials from https://portal.cdp.coinbase.com/access/api
-2. Create `cdp_api_key.json` in project root:
-```json
-{
-    "name": "your-api-key-name",
-    "privateKey": "-----BEGIN EC PRIVATE KEY-----\n...\n-----END EC PRIVATE KEY-----\n"
-}
-```
+ABCT supports 7 major cryptocurrency exchanges. For detailed setup instructions, see [Exchange Integration Guide](docs/docs/Exchange-Integration.md).
+
+**Supported Exchanges:**
+- **Coinbase** (CDP API) - Place `cdp_api_key.json` file in project root
+- **Binance.com** - Add `BINANCE_API_KEY` and `BINANCE_API_SECRET` to .env
+- **Binance.US** - Add `BINANCE_US_API_KEY` and `BINANCE_US_API_SECRET` to .env
+- **OKX** - Add `OKX_API_KEY`, `OKX_API_SECRET`, `OKX_API_PASSPHRASE` to .env
+- **Bitget** - Add `BITGET_API_KEY`, `BITGET_API_SECRET`, `BITGET_API_PASSPHRASE` to .env
+- **Gate.io** - Add `GATE_API_KEY` and `GATE_API_SECRET` to .env
+- **KuCoin** - Add `KUCOIN_API_KEY`, `KUCOIN_API_SECRET`, `KUCOIN_API_PASSPHRASE` to .env
+
+**Security Note:** Always create API keys with **read-only** permissions. Never grant withdrawal or trading permissions.
 
 ## Development
 
@@ -433,6 +470,20 @@ For detailed security information, see [SECURITY.md](SECURITY.md)
 
 ## 📦 What's New
 
+### v1.0.0 - Production Ready Release (January 2026) 🎉
+- **Multi-Exchange Support**: Connect to 7 major cryptocurrency exchanges
+  - Binance.com, Binance.US, OKX, Bitget, Gate.io, KuCoin + existing Coinbase
+  - Standardized API integration with intelligent caching
+  - Complete setup documentation and troubleshooting guides
+- **Visual Enhancements**: LogoKit API integration for professional branding
+  - Blockchain logos on all cards and sections
+  - Token logos in asset lists and charts
+  - Exchange-specific logos and branding
+- **Manage Wallets Redesign**: Three-tab interface for better organization
+  - Self-Custody Wallets | Exchanges | Manual Tokens
+  - Exchange status dashboard and configuration guides
+- **Enhanced Theming**: Improved color palettes for pie charts across all themes
+
 ### v0.12.0 - Multi-User & Enhanced Visualization (January 2026)
 - **Multi-User Support**: Complete database restructure with user accounts and sessions
 - **Demo Mode**: Full-featured demo account with $1M portfolio and 30 diverse tokens
@@ -463,6 +514,7 @@ See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 ## 📖 Documentation
 
 - **[Docker Deployment Guide](docs/DOCKER_DEPLOYMENT.md)** - Complete multi-platform Docker setup
+- **[Exchange Integration Guide](docs/docs/Exchange-Integration.md)** - Setup for 7 supported exchanges (v1.0.0+)
 - **[Quick Start Guide](docs/)** - Get up and running
 - **[Architecture](docs/ARCHITECTURE.md)** - System design overview
 - **[Backup & Restore Guide](docs/BACKUP_RESTORE_GUIDE.md)** - Configuration management
@@ -540,7 +592,13 @@ Built with amazing open-source tools and data from leading blockchain API provid
 - [DefiLlama](https://defillama.com/) - Universal price fallback for all chains
 
 #### Exchange Integration
-- [Coinbase CDP](https://www.coinbase.com/cloud) - Exchange API for portfolio balances
+- [Coinbase CDP](https://www.coinbase.com/cloud) - Exchange API for portfolio balances (JWT authentication)
+- [Binance](https://www.binance.com/) - Global cryptocurrency exchange API
+- [Binance.US](https://www.binance.us/) - US-based exchange API
+- [OKX](https://www.okx.com/) - Multi-asset exchange API
+- [Bitget](https://www.bitget.com/) - Derivatives and spot trading exchange API
+- [Gate.io](https://www.gate.io/) - Comprehensive exchange API
+- [KuCoin](https://www.kucoin.com/) - Global cryptocurrency exchange API
 
 ### Privacy & Blockchain Innovation
 - [Midnight Network](https://midnight.network/) - Privacy-focused Cardano partner chain (NIGHT token support)
@@ -552,9 +610,10 @@ For detailed API information including rate limits and pricing, see [API Provide
 - **Repository**: https://github.com/Tarrant64/abct
 - **Releases**: https://github.com/Tarrant64/abct/releases
 - **Issues**: https://github.com/Tarrant64/abct/issues
-- **Latest Release**: [v0.12.0 - Multi-User & Enhanced Visualization](https://github.com/Tarrant64/abct/releases/tag/v0.12.0)
+- **Latest Release**: [v1.0.0 - Production Ready](https://github.com/Tarrant64/abct/releases/tag/v1.0.0)
 
 ---
 
-**Current Version:** v0.12.0 (BUILD 1769740718)
-**Last Updated:** January 2026
+**Current Version:** v1.0.0
+**Last Updated:** January 31, 2026
+**Release Date:** January 31, 2026
