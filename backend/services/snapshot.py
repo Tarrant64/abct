@@ -379,7 +379,7 @@ class SnapshotService:
 
         # If no today or today is $0, calculate current portfolio value
         if not today_in_history or today_has_zero:
-            current_value = await self._calculate_current_portfolio_value()
+            current_value = await self._calculate_current_portfolio_value(user_id=user_id)
 
             if current_value and current_value['total'] > 0:
                 today_data = {
@@ -397,8 +397,15 @@ class SnapshotService:
 
         return history
 
-    async def _calculate_current_portfolio_value(self) -> dict:
-        """Calculate current portfolio value with all components."""
+    async def _calculate_current_portfolio_value(self, user_id: int = None) -> dict:
+        """Calculate current portfolio value with all components for a specific user.
+
+        Args:
+            user_id: User ID to calculate portfolio for
+
+        Returns:
+            dict with total value and breakdown
+        """
         try:
             pricing = await self._get_pricing_service()
             prices = await pricing.get_all_tracked_prices()
@@ -408,8 +415,8 @@ class SnapshotService:
             eth_price = prices.get('ETH', {}).get('usd', 0)
             sol_price = prices.get('SOL', {}).get('usd', 0)
 
-            # Calculate wallet totals
-            wallets = await get_all_wallets()
+            # Calculate wallet totals for this user
+            wallets = await get_all_wallets(user_id=user_id)
             ada_amount = btc_amount = eth_amount = sol_amount = 0.0
 
             for wallet in wallets:
@@ -432,12 +439,12 @@ class SnapshotService:
                 sol_amount * sol_price
             )
 
-            # Get other component values
-            staking_value = await self._get_staking_value(prices)
-            defi_value = await self._get_defi_value(prices)
-            exchange_value = await self._get_exchange_value(prices)
-            nft_value = await self._get_nft_value(ada_price)
-            tracked_tokens_value = await self._get_tracked_tokens_value(prices)
+            # Get other component values for this user
+            staking_value = await self._get_staking_value(prices, user_id=user_id)
+            defi_value = await self._get_defi_value(prices, user_id=user_id)
+            exchange_value = await self._get_exchange_value(prices, user_id=user_id)
+            nft_value = await self._get_nft_value(ada_price, user_id=user_id)
+            tracked_tokens_value = await self._get_tracked_tokens_value(prices, user_id=user_id)
 
             total = (
                 wallet_value +
@@ -589,7 +596,7 @@ class SnapshotService:
             "note": "Historical data uses current holdings with historical prices. For accurate historical balances, transaction history reconstruction would be needed."
         }
 
-    async def backfill_component_values(self) -> dict:
+    async def backfill_component_values(self, user_id: int = None) -> dict:
         """
         Backfill historical snapshots with current staking/defi/exchange/NFT values.
 
@@ -597,29 +604,32 @@ class SnapshotService:
         existing snapshots to include non-wallet components based on current values,
         making the chart more accurate.
 
+        Args:
+            user_id: User ID to backfill snapshots for
+
         Returns:
             dict with status and count of updated snapshots
         """
-        logger.info("Backfilling historical snapshots with component values...")
+        logger.info(f"Backfilling historical snapshots with component values for user {user_id}...")
 
-        # Get current component values
+        # Get current component values for this user
         pricing = await self._get_pricing_service()
         prices = await pricing.get_all_tracked_prices()
         ada_price = prices.get('ADA', {}).get('usd', 0)
 
-        staking_value = await self._get_staking_value(prices)
-        defi_value = await self._get_defi_value(prices)
-        exchange_value = await self._get_exchange_value(prices)
-        nft_value = await self._get_nft_value(ada_price)
-        tracked_tokens_value = await self._get_tracked_tokens_value(prices)
+        staking_value = await self._get_staking_value(prices, user_id=user_id)
+        defi_value = await self._get_defi_value(prices, user_id=user_id)
+        exchange_value = await self._get_exchange_value(prices, user_id=user_id)
+        nft_value = await self._get_nft_value(ada_price, user_id=user_id)
+        tracked_tokens_value = await self._get_tracked_tokens_value(prices, user_id=user_id)
 
         total_components = staking_value + defi_value + exchange_value + nft_value + tracked_tokens_value
 
         logger.info(f"Component values to backfill: staking=${staking_value:.2f}, defi=${defi_value:.2f}, "
                    f"exchange=${exchange_value:.2f}, nfts=${nft_value:.2f}, tokens=${tracked_tokens_value:.2f}")
 
-        # Get all existing snapshots
-        snapshots = await get_portfolio_history(365)  # Get up to a year
+        # Get all existing snapshots for this user
+        snapshots = await get_portfolio_history(365, user_id=user_id)  # Get up to a year
 
         updated_count = 0
         for snapshot in snapshots:
@@ -666,7 +676,7 @@ class SnapshotService:
                 'tracked_tokens_value_usd': tracked_tokens_value
             }
 
-            await save_portfolio_snapshot(snapshot_data)
+            await save_portfolio_snapshot(snapshot_data, user_id=user_id)
             updated_count += 1
             logger.debug(f"Updated snapshot for {date_str}: ${new_total:,.2f}")
 
