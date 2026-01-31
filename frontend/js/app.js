@@ -6364,11 +6364,11 @@ async function initializePriceChart() {
         height: container.clientHeight
     });
 
-    // Create area series (green gradient)
+    // Create area series with theme colors
     priceChartSeries = priceChart.addAreaSeries({
-        topColor: 'rgba(0, 210, 106, 0.56)',
-        bottomColor: 'rgba(0, 210, 106, 0.04)',
-        lineColor: 'rgba(0, 210, 106, 1)',
+        topColor: chartColors.areaTop,
+        bottomColor: chartColors.areaBottom,
+        lineColor: chartColors.lineColor,
         lineWidth: 2
     });
 
@@ -6395,25 +6395,37 @@ function getPriceChartColors(theme) {
             background: '#1a1a2e',
             text: '#eaeaea',
             gridLines: '#2a2a4a',
-            border: '#3a3a5a'
+            border: '#3a3a5a',
+            areaTop: 'rgba(0, 210, 106, 0.56)',
+            areaBottom: 'rgba(0, 210, 106, 0.04)',
+            lineColor: 'rgba(0, 210, 106, 1)'
         },
         'ocean-depths': {
             background: '#0a1929',
             text: '#b8e7fb',
             gridLines: '#1e3a52',
-            border: '#2d5a7b'
+            border: '#2d5a7b',
+            areaTop: 'rgba(56, 189, 248, 0.56)',
+            areaBottom: 'rgba(56, 189, 248, 0.04)',
+            lineColor: 'rgba(56, 189, 248, 1)'
         },
         'sunset-horizon': {
             background: '#1a0f0a',
             text: '#ffd8b8',
             gridLines: '#3d2415',
-            border: '#5d3a25'
+            border: '#5d3a25',
+            areaTop: 'rgba(251, 146, 60, 0.56)',
+            areaBottom: 'rgba(251, 146, 60, 0.04)',
+            lineColor: 'rgba(251, 146, 60, 1)'
         },
         'cypherpunk': {
             background: '#000000',
             text: '#00ff41',
             gridLines: '#003311',
-            border: '#005522'
+            border: '#005522',
+            areaTop: 'rgba(0, 255, 65, 0.56)',
+            areaBottom: 'rgba(0, 255, 65, 0.04)',
+            lineColor: 'rgba(0, 255, 65, 1)'
         }
     };
 

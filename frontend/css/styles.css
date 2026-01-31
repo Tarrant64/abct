@@ -1443,6 +1443,7 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     position: relative;
     overflow: hidden;
     margin-top: 20px;
+    padding-bottom: 15px;
 }
 
 .analytics-slider {
@@ -1499,6 +1500,7 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     gap: 12px;
     justify-content: center;
     margin-top: 20px;
+    margin-bottom: 10px;
 }
 
 .slider-indicator {
