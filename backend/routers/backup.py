@@ -28,7 +28,7 @@ router = APIRouter(prefix="/backup", tags=["backup"])
 
 # Version for backup file format - increment if format changes
 BACKUP_FORMAT_VERSION = "1.0.0"
-ABCT_VERSION = "0.10.0"  # Current ABCT version
+ABCT_VERSION = "1.0.0"  # Current ABCT version
 
 # Tables to include in backup
 BACKUP_TABLES = {
