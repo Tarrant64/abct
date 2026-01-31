@@ -864,36 +864,63 @@ function renderWalletsGrouped(cardanoStakeGroups, bitcoinWallets, ethereumWallet
 
     let html = '';
 
-    // Render ALL Cardano wallets in stake key group format (even single wallets)
-    for (const group of cardanoStakeGroups) {
-        const walletCount = group.wallets.length;
-        const groupUsdValue = group.total_ada * (prices.ADA || 0);
-        const stakeId = group.stake_address ? group.stake_address.slice(0, 20) : 'none';
+    // Cardano Section
+    if (cardanoStakeGroups.length > 0) {
+        const totalCardanoAda = cardanoStakeGroups.reduce((sum, g) => sum + g.total_ada, 0);
+        const totalCardanoUsd = totalCardanoAda * (prices.ADA || 0);
+        const totalCardanoAssets = cardanoStakeGroups.reduce((sum, g) => sum + g.total_assets, 0);
+        const nativeAssetsValueUsd = cardanoStakeGroups.reduce((sum, g) => sum + (g.native_assets_value_usd || 0), 0);
 
-        // Render as collapsible group (always, even for single wallet)
         html += `
-            <div class="wallet-group cardano ${walletCount === 1 ? 'single-wallet' : ''}" data-stake="${group.stake_address || 'none'}">
-                <div class="wallet-group-header">
-                    <div class="group-info">
-                        <span class="group-label">Stake Key: ${group.stake_address_short || 'No Stake Key'}</span>
-                        <span class="group-wallet-count">${walletCount} address${walletCount !== 1 ? 'es' : ''}</span>
+            <div class="blockchain-section cardano collapsed">
+                <div class="blockchain-section-header">
+                    <div class="blockchain-info">
+                        <span class="blockchain-name">Cardano</span>
+                        <span class="blockchain-stats">${cardanoStakeGroups.length} stake key${cardanoStakeGroups.length !== 1 ? 's' : ''} · ${totalCardanoAssets} asset${totalCardanoAssets !== 1 ? 's' : ''}</span>
                     </div>
-                    <div class="group-balance">
-                        <div class="amount">${formatCryptoBlur(group.total_ada, 'ADA', 6)}</div>
-                        <div class="amount-usd">${formatUSDBlur(groupUsdValue)}</div>
+                    <div class="blockchain-balance">
+                        <div class="amount">${formatCryptoBlur(totalCardanoAda, 'ADA', 6)}</div>
+                        <div class="amount-usd">${formatUSDBlur(totalCardanoUsd + nativeAssetsValueUsd)}</div>
                     </div>
                     <span class="collapse-icon">▼</span>
                 </div>
-                <!-- Governance info at stake key level -->
-                <div class="stake-governance" id="stake-gov-${stakeId}">
-                    <div class="gov-loading">Loading staking info...</div>
-                </div>
-                <div class="wallet-group-content">
+                <div class="blockchain-section-content">
         `;
 
-        // Add each wallet in the group (without governance info)
-        for (const wallet of group.wallets) {
-            html += renderSingleWallet(wallet, 'cardano', true);
+        // Render ALL Cardano wallets in stake key group format
+        for (const group of cardanoStakeGroups) {
+            const walletCount = group.wallets.length;
+            const groupUsdValue = group.total_ada * (prices.ADA || 0);
+            const groupNativeAssetsValue = group.native_assets_value_usd || 0;
+            const stakeId = group.stake_address ? group.stake_address.slice(0, 20) : 'none';
+
+            html += `
+                <div class="wallet-group cardano collapsed ${walletCount === 1 ? 'single-wallet' : ''}" data-stake="${group.stake_address || 'none'}">
+                    <div class="wallet-group-header">
+                        <div class="group-info">
+                            <span class="group-label">Stake Key: ${group.stake_address_short || 'No Stake Key'}</span>
+                            <span class="group-wallet-count">${walletCount} address${walletCount !== 1 ? 'es' : ''}</span>
+                        </div>
+                        <div class="group-balance">
+                            <div class="amount">${formatCryptoBlur(group.total_ada, 'ADA', 6)}</div>
+                            <div class="amount-usd">${formatUSDBlur(groupUsdValue + groupNativeAssetsValue)}</div>
+                        </div>
+                        <span class="collapse-icon">▼</span>
+                    </div>
+                    <div class="stake-governance" id="stake-gov-${stakeId}">
+                        <div class="gov-loading">Loading staking info...</div>
+                    </div>
+                    <div class="wallet-group-content">
+            `;
+
+            for (const wallet of group.wallets) {
+                html += renderSingleWallet(wallet, 'cardano', true);
+            }
+
+            html += `
+                    </div>
+                </div>
+            `;
         }
 
         html += `
@@ -902,44 +929,64 @@ function renderWalletsGrouped(cardanoStakeGroups, bitcoinWallets, ethereumWallet
         `;
     }
 
-    // Render Bitcoin wallets (no grouping)
-    for (const wallet of bitcoinWallets) {
-        html += renderSingleWallet(wallet, 'bitcoin', false);
+    // Helper function to render blockchain section
+    function renderBlockchainSection(blockchain, wallets, unit, decimals) {
+        if (wallets.length === 0) return '';
+
+        const totalBalance = wallets.reduce((sum, w) => sum + w.balance, 0);
+        const totalAssets = wallets.reduce((sum, w) => sum + (w.native_assets_count || w.token_count || 0), 0);
+        const totalNativeAssetsValue = wallets.reduce((sum, w) => sum + (w.native_assets_value_usd || 0), 0);
+        const totalUsd = totalBalance * (prices[unit] || 0) + totalNativeAssetsValue;
+
+        const blockchainName = blockchain.charAt(0).toUpperCase() + blockchain.slice(1);
+
+        return `
+            <div class="blockchain-section ${blockchain} collapsed">
+                <div class="blockchain-section-header">
+                    <div class="blockchain-info">
+                        <span class="blockchain-name">${blockchainName}</span>
+                        <span class="blockchain-stats">${wallets.length} wallet${wallets.length !== 1 ? 's' : ''} · ${totalAssets} asset${totalAssets !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div class="blockchain-balance">
+                        <div class="amount">${formatCryptoBlur(totalBalance, unit, decimals)}</div>
+                        <div class="amount-usd">${formatUSDBlur(totalUsd)}</div>
+                    </div>
+                    <span class="collapse-icon">▼</span>
+                </div>
+                <div class="blockchain-section-content">
+                    ${wallets.map(w => renderSingleWallet(w, blockchain, false)).join('')}
+                </div>
+            </div>
+        `;
     }
 
-    // Render Ethereum wallets (no grouping)
-    for (const wallet of ethereumWallets) {
-        html += renderSingleWallet(wallet, 'ethereum', false);
-    }
-
-    // Render Solana wallets (no grouping)
-    for (const wallet of solanaWallets) {
-        html += renderSingleWallet(wallet, 'solana', false);
-    }
-
-    // Render Polygon wallets (no grouping)
-    for (const wallet of polygonWallets) {
-        html += renderSingleWallet(wallet, 'polygon', false);
-    }
-
-    // Render Base wallets (no grouping)
-    for (const wallet of baseWallets) {
-        html += renderSingleWallet(wallet, 'base', false);
-    }
+    html += renderBlockchainSection('bitcoin', bitcoinWallets, 'BTC', 8);
+    html += renderBlockchainSection('ethereum', ethereumWallets, 'ETH', 8);
+    html += renderBlockchainSection('solana', solanaWallets, 'SOL', 9);
+    html += renderBlockchainSection('polygon', polygonWallets, 'POL', 6);
+    html += renderBlockchainSection('base', baseWallets, 'ETH', 8);
 
     // Use innerHTML directly for internally generated HTML (not user input)
     walletsList.innerHTML = html;
 
-    // Attach event listeners after DOM update (DOMPurify was stripping onclick handlers)
+    // Attach event listeners after DOM update
     attachDashboardWalletEventListeners();
 
-    // Load governance info at the stake key level
+    // Load governance info at the stake key level (Cardano only)
     loadStakeKeyGovernanceInfo(cardanoStakeGroups);
 }
 
 // Attach event listeners for dashboard wallet buttons
 function attachDashboardWalletEventListeners() {
-    // Wallet group toggle listeners
+    // Blockchain section toggle listeners
+    document.querySelectorAll('.blockchain-section-header').forEach(header => {
+        header.addEventListener('click', function() {
+            const section = this.closest('.blockchain-section');
+            section.classList.toggle('collapsed');
+        });
+    });
+
+    // Wallet group toggle listeners (Cardano stake keys)
     document.querySelectorAll('.wallet-group-header').forEach(header => {
         header.addEventListener('click', function() {
             toggleWalletGroup(this);
@@ -994,29 +1041,235 @@ async function toggleDashboardWalletAssets(walletId) {
     try {
         const response = await authFetch(`${API_BASE}/wallets/id/${walletId}/assets`);
         const data = await response.json();
-        const assets = data.assets || [];
+        let assets = data.assets || [];
+        const nativeBalance = data.native_balance;
 
-        if (assets.length === 0) {
+        if (assets.length === 0 && !nativeBalance) {
             container.innerHTML = '<div style="text-align: center; padding: 10px; color: #888;">No assets found</div>';
         } else {
-            let html = '<div class="assets-grid">';
+            const blockchain = data.blockchain || 'cardano';
+            const isCardano = blockchain === 'cardano';
+
+            // Sort assets by total_value_usd descending
+            assets.sort((a, b) => {
+                const aVal = parseFloat(a.total_value_usd) || 0;
+                const bVal = parseFloat(b.total_value_usd) || 0;
+                return bVal - aVal;
+            });
+
+            // Calculate total portfolio value for percentage calculations (include native balance)
+            let totalPortfolioValue = 0;
+            if (nativeBalance) {
+                totalPortfolioValue += parseFloat(nativeBalance.total_value_usd) || 0;
+            }
             assets.forEach(asset => {
-                const quantity = formatTokenQuantity(asset.quantity);
+                totalPortfolioValue += parseFloat(asset.total_value_usd) || 0;
+            });
+
+            // Build table layout with native token pricing
+            // Determine native token symbol
+            const nativeSymbols = {
+                'cardano': 'ADA',
+                'bitcoin': 'BTC',
+                'ethereum': 'ETH',
+                'solana': 'SOL',
+                'polygon': 'POL',
+                'base': 'ETH'
+            };
+            const nativeSymbol = nativeSymbols[blockchain] || 'Token';
+
+            // Check if we should use table layout (when we have native pricing)
+            const useTableLayout = assets.some(a => a.price_native || a.price_ada) || nativeBalance;
+
+            if (useTableLayout) {
+                let html = `
+                    <div class="assets-table-wrapper">
+                        <table class="assets-table">
+                            <thead>
+                                <tr>
+                                    <th>Asset</th>
+                                    <th>${nativeSymbol} Price</th>
+                                    <th>Owned</th>
+                                    <th>${nativeSymbol}</th>
+                                    <th>$</th>
+                                    <th>% of Portfolio</th>
+                                    <th>Ignore</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+
+                // Always show native token first (pinned to top)
+                if (nativeBalance) {
+                    const actualQty = parseFloat(nativeBalance.actual_quantity) || 0;
+                    const totalValueUsd = parseFloat(nativeBalance.total_value_usd) || 0;
+                    const percentage = totalPortfolioValue > 0 ? (totalValueUsd / totalPortfolioValue * 100) : 0;
+
+                    const ticker = nativeBalance.ticker || nativeSymbol;
+                    const tokenName = nativeBalance.token_name || blockchain;
+
+                    const ownedStr = actualQty.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 });
+                    const totalNativeStr = actualQty.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 });
+                    const totalUsdStr = totalValueUsd > 0 ? '$' + totalValueUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '$0.00';
+
+                    html += `
+                        <tr class="native-asset-row">
+                            <td class="asset-name-cell">
+                                <div class="asset-ticker">${ticker}</div>
+                                <div class="asset-name-small">${tokenName}</div>
+                            </td>
+                            <td>1.000000</td>
+                            <td>${ownedStr}</td>
+                            <td class="ada-value">${totalNativeStr}</td>
+                            <td>${totalUsdStr}</td>
+                            <td>
+                                <div class="portfolio-bar-wrapper">
+                                    <div class="portfolio-bar" style="width: ${percentage}%"></div>
+                                    <span class="portfolio-pct">${percentage.toFixed(1)}%</span>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="ignore-na">-</span>
+                            </td>
+                        </tr>
+                    `;
+                }
+
+                // Then show all other assets sorted by value
+                assets.forEach(asset => {
+                    const actualQty = parseFloat(asset.actual_quantity) || 0;
+                    const ticker = asset.ticker || asset.asset_name?.substring(0, 10) || 'Unknown';
+                    const displayName = asset.token_name || asset.asset_name || 'Unknown';
+
+                    // Use generic native price or fallback to ADA price for backwards compatibility
+                    const priceNative = parseFloat(asset.price_native || asset.price_ada) || 0;
+                    const totalNative = parseFloat(asset.total_native || asset.total_ada) || 0;
+                    const totalValueUsd = parseFloat(asset.total_value_usd) || 0;
+
+                    // Only show if we have pricing data and value >= $1
+                    if (totalValueUsd < 1.00 && priceNative === 0) {
+                        return;
+                    }
+
+                    // Format values
+                    const priceNativeStr = priceNative > 0 ? priceNative.toFixed(6) : 'N/A';
+                    const ownedStr = actualQty.toLocaleString('en-US', { maximumFractionDigits: 2 });
+                    const totalNativeStr = totalNative > 0 ? totalNative.toLocaleString('en-US', { maximumFractionDigits: 6 }) : '0';
+                    const totalUsdStr = totalValueUsd > 0 ? '$' + totalValueUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '$0.00';
+
+                    // Calculate percentage
+                    const percentage = totalPortfolioValue > 0 ? (totalValueUsd / totalPortfolioValue * 100) : 0;
+
+                    // Get ignore status
+                    const assetId = asset.id;
+                    const isIgnored = asset.ignored === 1 || asset.ignored === true;
+
+                    html += `
+                        <tr class="${isIgnored ? 'asset-ignored' : ''}">
+                            <td class="asset-name-cell">
+                                <div class="asset-ticker">${ticker}</div>
+                                <div class="asset-name-small">${displayName}</div>
+                            </td>
+                            <td>${priceNativeStr}</td>
+                            <td>${ownedStr}</td>
+                            <td class="ada-value">${totalNativeStr}</td>
+                            <td>${totalUsdStr}</td>
+                            <td>
+                                <div class="portfolio-bar-wrapper">
+                                    <div class="portfolio-bar" style="width: ${percentage}%"></div>
+                                    <span class="portfolio-pct">${percentage.toFixed(1)}%</span>
+                                </div>
+                            </td>
+                            <td>
+                                <label class="ignore-toggle">
+                                    <input type="checkbox" ${isIgnored ? 'checked' : ''}
+                                           onchange="toggleAssetIgnore(${assetId}, this.checked)">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </td>
+                        </tr>
+                    `;
+                });
+
                 html += `
-                    <div class="asset-item">
-                        <div class="asset-name">${asset.asset_name || 'Unknown'}</div>
-                        <div class="asset-quantity">${quantity}</div>
+                            </tbody>
+                        </table>
                     </div>
                 `;
-            });
-            html += '</div>';
-            container.innerHTML = html;
+                container.innerHTML = html;
+            } else {
+                // Non-Cardano: use grid layout
+                let html = '<div class="assets-grid">';
+                assets.forEach(asset => {
+                    const actualQty = parseFloat(asset.actual_quantity) || 0;
+                    const quantity = actualQty >= 1000000
+                        ? (actualQty / 1000000).toFixed(2) + 'M'
+                        : actualQty >= 1000
+                        ? (actualQty / 1000).toFixed(2) + 'K'
+                        : actualQty.toLocaleString('en-US', { maximumFractionDigits: 6 });
+
+                    const ticker = asset.ticker || asset.asset_name?.substring(0, 10) || 'Unknown';
+                    const displayName = asset.token_name || asset.asset_name || 'Unknown';
+                    const totalValue = parseFloat(asset.total_value_usd) || 0;
+                    const priceUsd = parseFloat(asset.price_usd) || 0;
+
+                    const showPrice = totalValue >= 1.00;
+                    let priceDisplay = '';
+                    if (showPrice && priceUsd > 0) {
+                        const priceStr = priceUsd >= 1
+                            ? '$' + priceUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                            : priceUsd >= 0.01
+                            ? '$' + priceUsd.toFixed(4)
+                            : '$' + priceUsd.toFixed(8);
+                        priceDisplay = `<div class="asset-price">${priceStr}</div>`;
+                    } else if (showPrice) {
+                        priceDisplay = '<div class="asset-price">N/A</div>';
+                    }
+
+                    html += `
+                        <div class="asset-item">
+                            <div class="asset-info">
+                                <div class="asset-ticker">${ticker}</div>
+                                <div class="asset-name">${displayName}</div>
+                            </div>
+                            <div class="asset-values">
+                                <div class="asset-quantity">${quantity}</div>
+                                ${priceDisplay}
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                container.innerHTML = html;
+            }
         }
 
         container.dataset.loaded = 'true';
     } catch (error) {
         console.error('Error loading wallet assets:', error);
         container.innerHTML = '<div style="text-align: center; padding: 10px; color: #dc3545;">Failed to load assets</div>';
+    }
+}
+
+// Toggle asset ignore status
+async function toggleAssetIgnore(assetId, isIgnored) {
+    try {
+        const response = await authFetch(`${API_BASE}/wallets/assets/${assetId}/toggle-ignore`, {
+            method: 'POST'
+        });
+
+        if (response.ok) {
+            // Reload the portfolio summary to reflect changes
+            await loadPortfolioSummary();
+
+            // Show a brief confirmation
+            console.log(`Asset ${assetId} ${isIgnored ? 'ignored' : 'included'} in portfolio totals`);
+        } else {
+            throw new Error('Failed to toggle asset ignore status');
+        }
+    } catch (error) {
+        console.error('Error toggling asset ignore:', error);
+        alert('Failed to update asset status. Please try again.');
     }
 }
 
@@ -2929,9 +3182,10 @@ function renderNFTs(nfts, adaPrice) {
         const verifiedBadge = collection.verified ? '<span class="verified-badge" title="Verified Collection">✓</span>' : '';
 
         // Collections are collapsed by default
+        // NOTE: Do NOT use inline onclick - DOMPurify strips it out
         html += `
             <div class="nft-collection ${collectionClass} collapsed">
-                <div class="nft-collection-header" onclick="toggleNftCollection(this)">
+                <div class="nft-collection-header">
                     <span class="collapse-indicator">▶</span>
                     <div class="collection-info">
                         <span class="collection-name">${blurValue(collection.name)}${verifiedBadge}</span>
@@ -2981,6 +3235,14 @@ function renderNFTs(nfts, adaPrice) {
     }
 
     setSafeHTML(nftsList, html);
+
+    // Add click handlers after HTML is set (DOMPurify strips inline onclick)
+    const headers = nftsList.querySelectorAll('.nft-collection-header');
+    headers.forEach(header => {
+        header.addEventListener('click', function() {
+            toggleNftCollection(this);
+        });
+    });
 }
 
 // Refresh all balances
@@ -2997,7 +3259,7 @@ async function refreshBalances() {
         showStatus(data.message);
         await loadPrices();
         await loadPortfolioSummary();
-        await loadNativeAssets();
+        // await loadNativeAssets(); // Now in Self-Custody Wallets
         await loadExchangeData();
         await loadDefiGovernance();
         loadNFTs();
@@ -3046,7 +3308,7 @@ async function addWallet(event) {
             document.getElementById('walletLabel').value = '';
             await loadPrices();
             await loadPortfolioSummary();
-            await loadNativeAssets();
+            // await loadNativeAssets(); // Now in Self-Custody Wallets
             await loadExchangeData();
             await loadDefiGovernance();
             loadNFTs();
@@ -3343,25 +3605,26 @@ async function refreshDefi() {
     }
 }
 
-async function refreshAssets() {
-    const btn = document.querySelector('.native-tokens-section .section-refresh-btn');
-    if (btn) {
-        btn.classList.add('refreshing');
-    }
+// Native assets section removed - now shown in Self-Custody Wallets
+// async function refreshAssets() {
+//     const btn = document.querySelector('.native-tokens-section .section-refresh-btn');
+//     if (btn) {
+//         btn.classList.add('refreshing');
+//     }
 
-    try {
-        // Force refresh to get fresh data from blockchain
-        await loadNativeAssets(true);
-        showStatus('Native assets refreshed');
-    } catch (error) {
-        console.error('Error refreshing assets:', error);
-        showStatus('Failed to refresh assets', true);
-    } finally {
-        if (btn) {
-            btn.classList.remove('refreshing');
-        }
-    }
-}
+//     try {
+//         // Force refresh to get fresh data from blockchain
+//         await loadNativeAssets(true);
+//         showStatus('Native assets refreshed');
+//     } catch (error) {
+//         console.error('Error refreshing assets:', error);
+//         showStatus('Failed to refresh assets', true);
+//     } finally {
+//         if (btn) {
+//             btn.classList.remove('refreshing');
+//         }
+//     }
+// }
 
 async function refreshNFTs() {
     const btn = document.querySelector('.nfts-section .section-refresh-btn');
@@ -4399,7 +4662,7 @@ async function globalRefreshAll() {
 
         // Reload all UI components (force refresh for global refresh)
         await loadPortfolioSummary();
-        await loadNativeAssets(true);
+        // await loadNativeAssets(true); // Now in Self-Custody Wallets
         await loadExchangeData();
         await loadDefiGovernance();
 
@@ -5193,7 +5456,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Load portfolio history chart
     loadPortfolioHistory('7d');
 
-    await loadNativeAssets();
+    // Native assets now shown in Self-Custody Wallets section
+    // await loadNativeAssets();
     await loadExchangeData();
     await loadDefiGovernance();
 

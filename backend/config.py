@@ -37,6 +37,7 @@ ALCHEMY_API_KEY = os.getenv("ALCHEMY_API_KEY", "")
 HELIUS_API_KEY = os.getenv("HELIUS_API_KEY", "")
 ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY", "")
 CMC_API_KEY = os.getenv("CMC_API_KEY", "")
+GRAPH_API_KEY = os.getenv("GRAPH_API_KEY", "")
 
 # Coinbase CDP API Key (loaded from JSON file)
 CDP_API_KEY_FILE = Path(__file__).parent.parent / "cdp_api_key.json"

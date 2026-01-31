@@ -238,6 +238,7 @@ async def init_db():
                 asset_name TEXT,
                 quantity TEXT NOT NULL,
                 decimals INTEGER DEFAULT 0,
+                ignored INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
                 FOREIGN KEY (wallet_id) REFERENCES wallets(id) ON DELETE CASCADE,

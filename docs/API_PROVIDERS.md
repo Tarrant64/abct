@@ -4,7 +4,7 @@ This document provides detailed information about all external APIs used by ABCT
 
 ## Overview
 
-ABCT integrates with **15 different API providers** across 5 blockchain networks to provide comprehensive portfolio tracking. This architecture provides redundancy, fallback options, and specialized functionality.
+ABCT integrates with **16 different API providers** across 5 blockchain networks to provide comprehensive portfolio tracking. This architecture provides redundancy, fallback options, and specialized functionality.
 
 ## Categories
 
@@ -196,6 +196,45 @@ ABCT integrates with **15 different API providers** across 5 blockchain networks
 **Environment Variable:** `ETHERSCAN_API_KEY` (shared with Etherscan)
 
 **Note:** Polygonscan uses the same API key as Etherscan and Basescan.
+
+---
+
+### The Graph (Uniswap Subgraphs)
+**Purpose:** Decentralized token pricing via Uniswap liquidity pools
+**Status:** Optional (recommended for Ethereum/Polygon/Base token pricing)
+**What it provides:**
+- **Ethereum:** ERC-20 token prices in ETH via Uniswap V2/V3 pools
+- **Polygon:** Token prices in ETH equivalent
+- **Base:** Token prices in ETH
+- Native-token-denominated pricing (ETH per token)
+- Total Value Locked (TVL) data
+- Trading volume statistics
+- Comprehensive token metadata
+
+**Integration Details:**
+- **Uniswap V3 Subgraph ID:** `5zvR82QoaXYFyDEKLZ9t6v9adgnptxYpKpSbxtgVENFV`
+- **Uniswap V2 Subgraph ID:** `A3Np3RQbaBA6oKJgiwDJeo5T3zrYfGHPWFYayMwtNDum`
+- GraphQL query endpoint via The Graph Gateway
+- Batch queries: up to 100 tokens per request
+- 5-minute price caching for performance
+- Automatic USD conversion using ETH/USD price
+
+**Rate Limits:**
+- Free tier: **100,000 queries per 24 hours**
+- Tracked automatically via `api_usage` table
+- Monitored at `/api/status` endpoint
+
+**Pricing:** Free tier with 100K queries/day, paid plans available
+**Sign Up:** https://thegraph.com/studio/
+**API Docs:** https://thegraph.com/docs/
+**Environment Variable:** `GRAPH_API_KEY`
+
+**Implementation:**
+- Service: `backend/services/graph.py`
+- Documentation: `docs/GRAPH_API_INTEGRATION.md`
+- Methods: `get_token_price_eth()`, `get_multiple_token_prices()`, `get_token_data()`
+
+**Note:** Provides more accurate DeFi pricing than centralized price APIs by querying actual liquidity pool data. Integrated in v0.13.0.
 
 ---
 

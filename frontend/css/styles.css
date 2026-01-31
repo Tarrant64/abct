@@ -1982,11 +1982,21 @@ body.usd-primary .card-body .details {
 .assets-toggle {
     cursor: pointer;
     user-select: none;
-    transition: opacity 0.2s ease;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--accent-color);
+    padding: 4px 10px;
+    border-radius: 4px;
+    background-color: rgba(52, 152, 219, 0.1);
+    transition: all 0.2s ease;
+    display: inline-block;
+    margin-top: 6px;
 }
 
 .assets-toggle:hover {
-    opacity: 0.8;
+    background-color: rgba(52, 152, 219, 0.2);
+    transform: translateX(2px);
+    text-decoration: underline;
 }
 
 .wallet-assets-list {
@@ -2007,25 +2017,277 @@ body.usd-primary .card-body .details {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 8px 12px;
-    background-color: var(--bg-card);
-    border-radius: 4px;
-    font-size: 0.85rem;
+    padding: 14px 18px;
+    background: linear-gradient(135deg, rgba(52, 152, 219, 0.15) 0%, rgba(142, 68, 173, 0.15) 100%);
+    border: 1px solid rgba(52, 152, 219, 0.3);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+    gap: 12px;
+}
+
+.asset-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(180deg, #3498db 0%, #9b59b6 100%);
+    opacity: 0.8;
+}
+
+.asset-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.2);
+    border-color: rgba(52, 152, 219, 0.5);
+}
+
+.asset-info {
+    flex: 1;
+    min-width: 0;
+    padding-left: 8px;
+}
+
+.asset-ticker {
+    color: var(--text-primary);
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin-bottom: 2px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .asset-name {
-    color: var(--text-primary);
+    color: var(--text-secondary);
     font-weight: 500;
+    font-size: 0.75rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
+.asset-values {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+}
+
 .asset-quantity {
-    color: var(--text-secondary);
+    color: #3498db;
     font-family: 'SF Mono', Monaco, 'Courier New', monospace;
-    margin-left: 8px;
-    flex-shrink: 0;
+    font-weight: 700;
+    font-size: 0.95rem;
+    background: rgba(52, 152, 219, 0.1);
+    padding: 4px 10px;
+    border-radius: 6px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    white-space: nowrap;
+}
+
+.asset-price {
+    color: #27ae60;
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    font-weight: 600;
+    font-size: 0.8rem;
+    background: rgba(39, 174, 96, 0.1);
+    padding: 3px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+/* Cardano Asset Table Layout */
+.assets-table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    margin-top: 8px;
+}
+
+.assets-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.assets-table thead {
+    background: var(--bg-card);
+    border-bottom: 2px solid rgba(52, 152, 219, 0.3);
+}
+
+.assets-table th {
+    padding: 12px 10px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+.assets-table tbody tr {
+    border-bottom: 1px solid var(--bg-secondary);
+    transition: background-color 0.2s ease;
+}
+
+.assets-table tbody tr:hover {
+    background: rgba(52, 152, 219, 0.05);
+}
+
+.assets-table tbody tr.native-asset-row {
+    background: rgba(243, 156, 18, 0.08);
+    border-bottom: 2px solid rgba(243, 156, 18, 0.3);
+}
+
+.assets-table tbody tr.native-asset-row:hover {
+    background: rgba(243, 156, 18, 0.12);
+}
+
+.assets-table tbody tr.native-asset-row .asset-ticker {
+    color: #f39c12;
+}
+
+.assets-table td {
+    padding: 12px 10px;
+    color: var(--text-primary);
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+}
+
+.asset-name-cell {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+.asset-name-cell .asset-ticker {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+}
+
+.asset-name-cell .asset-name-small {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+}
+
+.ada-value {
+    color: #f39c12;
+    font-weight: 700;
+}
+
+.portfolio-bar-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 100px;
+}
+
+.portfolio-bar {
+    height: 6px;
+    background: linear-gradient(90deg, #3498db 0%, #9b59b6 100%);
+    border-radius: 3px;
+    min-width: 2px;
+}
+
+.portfolio-pct {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+/* Asset ignore toggle */
+.ignore-toggle {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+    cursor: pointer;
+}
+
+.ignore-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #27ae60;
+    border-radius: 24px;
+    transition: 0.3s;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    border-radius: 50%;
+    transition: 0.3s;
+}
+
+.ignore-toggle input:checked + .toggle-slider {
+    background-color: #e74c3c;
+}
+
+.ignore-toggle input:checked + .toggle-slider:before {
+    transform: translateX(20px);
+}
+
+.ignore-na {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.assets-table tbody tr.asset-ignored {
+    opacity: 0.5;
+    background: rgba(231, 76, 60, 0.05);
+}
+
+.assets-table tbody tr.asset-ignored td {
+    text-decoration: line-through;
+    color: var(--text-secondary);
+}
+
+.assets-table tbody tr.asset-ignored .ada-value {
+    color: var(--text-secondary);
+}
+
+/* Responsive table */
+@media (max-width: 768px) {
+    .assets-table-wrapper {
+        overflow-x: scroll;
+    }
+
+    .assets-table {
+        font-size: 0.8rem;
+    }
+
+    .assets-table th,
+    .assets-table td {
+        padding: 8px 6px;
+    }
+
+    .ignore-toggle {
+        width: 36px;
+        height: 20px;
+    }
+
+    .toggle-slider:before {
+        height: 14px;
+        width: 14px;
+    }
+
+    .ignore-toggle input:checked + .toggle-slider:before {
+        transform: translateX(16px);
+    }
 }
 
 .wallet-item .wallet-balance {
@@ -2301,6 +2563,87 @@ body.usd-primary .wallet-group-header .group-balance .amount::after {
     max-height: 0;
     opacity: 0;
     overflow: hidden;
+}
+
+/* Blockchain Section Styles */
+.blockchain-section {
+    background-color: var(--bg-card);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 12px;
+    border: 2px solid var(--border-color);
+}
+
+.blockchain-section-header {
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-secondary) 100%);
+}
+
+.blockchain-section-header:hover {
+    background: var(--bg-secondary);
+}
+
+.blockchain-section-header .blockchain-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.blockchain-section-header .blockchain-name {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.blockchain-section-header .blockchain-stats {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.blockchain-section-header .blockchain-balance {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.blockchain-section-header .blockchain-balance .amount {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.blockchain-section-header .blockchain-balance .amount-usd {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.blockchain-section-header .collapse-icon {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    transition: transform 0.2s ease;
+    margin-left: 16px;
+}
+
+.blockchain-section.collapsed .collapse-icon {
+    transform: rotate(-90deg);
+}
+
+.blockchain-section-content {
+    padding: 12px;
+    background-color: var(--bg-primary);
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+}
+
+.blockchain-section.collapsed .blockchain-section-content {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    padding: 0;
 }
 
 /* Stake Key Governance Section */

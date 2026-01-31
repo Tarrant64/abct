@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query, Depends
+from fastapi import APIRouter, Query, Depends, HTTPException
 from pydantic import BaseModel
 import sys
 import os
@@ -31,6 +31,81 @@ router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 PORTFOLIO_CACHE_TTL = 604800  # 7 days
 STAKE_CACHE_TTL = 3600  # 1 hour for stake address lookups
 
+async def calculate_wallet_native_assets_value(wallet_id: int, blockchain: str, user_id: int):
+    """Calculate total USD value of non-ignored native assets for a wallet."""
+    import aiosqlite
+    from config import DATABASE_PATH
+    from services.taptools import taptools_wallet_service
+
+    # Get non-ignored assets
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("""
+            SELECT
+                na.*,
+                COALESCE(ct.ticker, tm.ticker) as ticker,
+                w.address as wallet_address
+            FROM native_assets na
+            LEFT JOIN token_metadata tm ON na.asset_id = tm.asset_id
+            LEFT JOIN custom_tokens ct ON
+                ct.policy_id = na.policy_id
+                AND ct.asset_name = na.asset_name
+                AND ct.user_id = na.user_id
+            LEFT JOIN wallets w ON na.wallet_id = w.id
+            WHERE na.wallet_id = ? AND (na.ignored IS NULL OR na.ignored = 0)
+        """, (wallet_id,))
+        rows = await cursor.fetchall()
+        assets = [dict(row) for row in rows]
+
+    if not assets:
+        return 0.0
+
+    # Get ADA price for conversions
+    ada_price_usd = await pricing_service.get_price('ADA')
+
+    # For Cardano, try to get TapTools data
+    taptools_positions = {}
+    if blockchain == 'cardano' and taptools_wallet_service.is_configured() and assets:
+        try:
+            wallet_address = assets[0].get('wallet_address')
+            if wallet_address:
+                portfolio = await taptools_wallet_service.get_wallet_portfolio(wallet_address)
+                if portfolio and portfolio.get('positions'):
+                    for pos in portfolio['positions']:
+                        unit = pos.get('unit', '')
+                        if unit and unit != 'lovelace':
+                            taptools_positions[unit] = pos
+        except Exception:
+            pass
+
+    total_value_usd = 0.0
+
+    for asset in assets:
+        raw_qty = float(asset.get('quantity') or 0)
+        decimals = int(asset.get('decimals') or 0)
+        actual_qty = raw_qty / (10 ** decimals)
+
+        if actual_qty == 0:
+            continue
+
+        # Try TapTools first for Cardano
+        if blockchain == 'cardano' and asset.get('asset_id') in taptools_positions:
+            pos = taptools_positions[asset['asset_id']]
+            total_ada = float(pos.get('adaValue', 0))
+            if total_ada > 0 and ada_price_usd:
+                total_value_usd += total_ada * ada_price_usd
+        # Fallback to direct USD pricing
+        elif asset.get('ticker'):
+            try:
+                price_usd = await pricing_service.get_price(asset['ticker'].upper())
+                if price_usd and price_usd > 0:
+                    total_value_usd += actual_qty * price_usd
+            except Exception:
+                pass
+
+    return total_value_usd
+
+
 @router.get("/summary")
 async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh: bool = Query(False, description="Force refresh cache")):
     """Get a summary of the entire portfolio grouped by blockchain."""
@@ -50,36 +125,42 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
             'wallet_count': 0,
             'total_ada': 0.0,
             'native_assets_count': 0,
+            'native_assets_value_usd': 0.0,
             'wallets': [],
             'stake_groups': []  # Wallets grouped by stake key
         },
         'bitcoin': {
             'wallet_count': 0,
             'total_btc': 0.0,
+            'native_assets_value_usd': 0.0,
             'wallets': []
         },
         'ethereum': {
             'wallet_count': 0,
             'total_eth': 0.0,
             'token_count': 0,
+            'native_assets_value_usd': 0.0,
             'wallets': []
         },
         'solana': {
             'wallet_count': 0,
             'total_sol': 0.0,
             'token_count': 0,
+            'native_assets_value_usd': 0.0,
             'wallets': []
         },
         'polygon': {
             'wallet_count': 0,
             'total_matic': 0.0,
             'token_count': 0,
+            'native_assets_value_usd': 0.0,
             'wallets': []
         },
         'base': {
             'wallet_count': 0,
             'total_eth': 0.0,
             'token_count': 0,
+            'native_assets_value_usd': 0.0,
             'wallets': []
         }
     }
@@ -94,12 +175,18 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
 
         balance = float(balance_info['amount']) if balance_info else 0.0
 
+        # Calculate native assets value for this wallet
+        native_assets_value_usd = await calculate_wallet_native_assets_value(
+            wallet['id'], blockchain, user_id
+        )
+
         wallet_summary = {
             'id': wallet['id'],
             'address': wallet['address'],
             'address_short': f"{wallet['address'][:12]}...{wallet['address'][-8:]}",
             'label': wallet['label'],
             'balance': balance,
+            'native_assets_value_usd': native_assets_value_usd,
             'updated_at': wallet.get('updated_at')
         }
 
@@ -107,6 +194,7 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
             summary['cardano']['wallet_count'] += 1
             summary['cardano']['total_ada'] += balance
             summary['cardano']['native_assets_count'] += len(assets)
+            summary['cardano']['native_assets_value_usd'] += native_assets_value_usd
             wallet_summary['native_assets_count'] = len(assets)
 
             # Get stake address for grouping
@@ -120,11 +208,13 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
                         'stake_address_short': f"{stake_address[:12]}...{stake_address[-8:]}",
                         'wallets': [],
                         'total_ada': 0.0,
-                        'total_assets': 0
+                        'total_assets': 0,
+                        'native_assets_value_usd': 0.0
                     }
                 stake_groups[stake_address]['wallets'].append(wallet_summary)
                 stake_groups[stake_address]['total_ada'] += balance
                 stake_groups[stake_address]['total_assets'] += len(assets)
+                stake_groups[stake_address]['native_assets_value_usd'] += native_assets_value_usd
             else:
                 # No stake key - treat as individual wallet
                 stake_groups[f"no_stake_{wallet['address']}"] = {
@@ -132,7 +222,8 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
                     'stake_address_short': None,
                     'wallets': [wallet_summary],
                     'total_ada': balance,
-                    'total_assets': len(assets)
+                    'total_assets': len(assets),
+                    'native_assets_value_usd': native_assets_value_usd
                 }
 
             summary['cardano']['wallets'].append(wallet_summary)
@@ -140,12 +231,14 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
         elif blockchain == 'bitcoin':
             summary['bitcoin']['wallet_count'] += 1
             summary['bitcoin']['total_btc'] += balance
+            summary['bitcoin']['native_assets_value_usd'] += native_assets_value_usd
             summary['bitcoin']['wallets'].append(wallet_summary)
 
         elif blockchain == 'ethereum':
             summary['ethereum']['wallet_count'] += 1
             summary['ethereum']['total_eth'] += balance
             summary['ethereum']['token_count'] += len(assets)
+            summary['ethereum']['native_assets_value_usd'] += native_assets_value_usd
             wallet_summary['token_count'] = len(assets)
             summary['ethereum']['wallets'].append(wallet_summary)
 
@@ -153,6 +246,7 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
             summary['solana']['wallet_count'] += 1
             summary['solana']['total_sol'] += balance
             summary['solana']['token_count'] += len(assets)
+            summary['solana']['native_assets_value_usd'] += native_assets_value_usd
             wallet_summary['token_count'] = len(assets)
             summary['solana']['wallets'].append(wallet_summary)
 
@@ -160,6 +254,7 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
             summary['polygon']['wallet_count'] += 1
             summary['polygon']['total_matic'] += balance
             summary['polygon']['token_count'] += len(assets)
+            summary['polygon']['native_assets_value_usd'] += native_assets_value_usd
             wallet_summary['token_count'] = len(assets)
             summary['polygon']['wallets'].append(wallet_summary)
 
@@ -167,6 +262,7 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
             summary['base']['wallet_count'] += 1
             summary['base']['total_eth'] += balance
             summary['base']['token_count'] += len(assets)
+            summary['base']['native_assets_value_usd'] += native_assets_value_usd
             wallet_summary['token_count'] = len(assets)
             summary['base']['wallets'].append(wallet_summary)
 
@@ -988,4 +1084,89 @@ async def get_taptools_summary(user_id: int = Depends(verify_session)):
         'difference': round(total_taptools_ada - total_local_ada, 2),
         'difference_pct': round((total_taptools_ada - total_local_ada) / total_local_ada * 100, 1) if total_local_ada > 0 else 0,
         'stake_keys': results
+    }
+
+
+@router.get("/assets/{blockchain}")
+async def get_blockchain_asset_breakdown(
+    blockchain: str,
+    user_id: int = Depends(verify_session)
+):
+    """Get asset breakdown for a specific blockchain for doughnut chart display."""
+
+    # Validate blockchain
+    valid_chains = ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base']
+    if blockchain not in valid_chains:
+        raise HTTPException(400, f"Invalid blockchain: {blockchain}")
+
+    # Get portfolio summary for native coin balance
+    summary = await get_portfolio_summary(user_id=user_id)
+    chain_data = summary.get(blockchain, {})
+
+    # Get all assets filtered by blockchain
+    assets_data = await get_portfolio_assets(user_id=user_id)
+    chain_assets = [a for a in assets_data['assets'] if a['blockchain'] == blockchain]
+
+    # Calculate native coin value
+    native_symbols = {
+        'cardano': 'ADA', 'bitcoin': 'BTC', 'ethereum': 'ETH',
+        'solana': 'SOL', 'polygon': 'POL', 'base': 'ETH'
+    }
+    native_keys = {
+        'cardano': 'total_ada', 'bitcoin': 'total_btc', 'ethereum': 'total_eth',
+        'solana': 'total_sol', 'polygon': 'total_matic', 'base': 'total_eth'
+    }
+
+    native_symbol = native_symbols[blockchain]
+    native_qty = chain_data.get(native_keys[blockchain], 0)
+    native_price = await pricing_service.get_price(native_symbol)
+    native_value = native_qty * native_price if native_price else 0
+
+    # Get NFT value for this chain (placeholder for now)
+    nft_value = 0
+    nft_count = 0
+    # TODO: Query NFT service for this blockchain
+
+    # Calculate total value from tokens
+    tokens_value = sum(a.get('value_usd', 0) or 0 for a in chain_assets)
+
+    # Total value across all asset types
+    total_value = native_value + tokens_value + nft_value
+
+    # Calculate percentages
+    native_pct = (native_value / total_value * 100) if total_value > 0 else 0
+    nft_pct = (nft_value / total_value * 100) if total_value > 0 else 0
+
+    # Build token list
+    token_list = []
+    for a in chain_assets:
+        asset_value = a.get('value_usd', 0) or 0
+        if asset_value > 0:  # Only include tokens with value
+            token_list.append({
+                'symbol': a.get('ticker') or (a.get('asset_name', '')[:10] if a.get('asset_name') else 'Unknown'),
+                'name': a.get('asset_name', 'Unknown'),
+                'quantity': a.get('total_quantity', 0),
+                'value_usd': asset_value,
+                'percentage': (asset_value / total_value * 100) if total_value > 0 else 0
+            })
+
+    # Sort tokens by value descending
+    token_list.sort(key=lambda x: x['value_usd'], reverse=True)
+
+    # Build response
+    return {
+        'blockchain': blockchain,
+        'total_value_usd': total_value,
+        'native_coin': {
+            'symbol': native_symbol,
+            'quantity': native_qty,
+            'value_usd': native_value,
+            'percentage': native_pct
+        },
+        'tokens': token_list,
+        'nfts': {
+            'count': nft_count,
+            'value_usd': nft_value,
+            'percentage': nft_pct
+        }
     }
