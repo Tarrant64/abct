@@ -44,32 +44,6 @@
             text-decoration: underline;
         }
 
-        .wall-stats {
-            display: flex;
-            gap: 20px;
-            flex-wrap: wrap;
-            margin-bottom: 20px;
-        }
-
-        .wall-stat {
-            background: var(--bg-secondary);
-            padding: 15px 20px;
-            border-radius: 8px;
-            text-align: center;
-        }
-
-        .wall-stat .value {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: var(--accent-color);
-        }
-
-        .wall-stat .label {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-            margin-top: 5px;
-        }
-
         .chain-tabs {
             display: flex;
             gap: 10px;
@@ -109,6 +83,32 @@
 
         .chain-tab.active .count {
             background: rgba(0,0,0,0.3);
+        }
+
+        .chain-tab-value {
+            padding: 10px 20px;
+            background: var(--bg-tertiary);
+            border: 2px solid var(--accent-color);
+            border-radius: 8px;
+            font-size: 0.95rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            margin-left: auto; /* Push to the right */
+        }
+
+        .chain-tab-value .value-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .chain-tab-value .value-amount {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: var(--accent-color);
         }
 
         .nft-grid {
@@ -379,8 +379,8 @@
         body.privacy-mode .nft-value,
         body.privacy-mode .nft-name,
         body.privacy-mode .nft-collection,
-        body.privacy-mode .wall-stat .value,
-        body.privacy-mode .chain-tab .count {
+        body.privacy-mode .chain-tab .count,
+        body.privacy-mode .chain-tab-value .value-amount {
             filter: blur(8px);
             user-select: none;
         }
@@ -550,29 +550,6 @@
 
         <div class="cache-progress" id="cacheProgress" style="margin-bottom: 15px;"></div>
 
-        <div class="wall-stats" id="wallStats">
-            <div class="wall-stat">
-                <div class="value" id="totalNfts">-</div>
-                <div class="label">Total NFTs</div>
-            </div>
-            <div class="wall-stat">
-                <div class="value" id="cachedNfts">-</div>
-                <div class="label">Cached Images</div>
-            </div>
-            <div class="wall-stat">
-                <div class="value" id="cachePercent">-</div>
-                <div class="label">Cache Coverage</div>
-            </div>
-            <div class="wall-stat">
-                <div class="value" id="uncachedNfts">-</div>
-                <div class="label">Remaining</div>
-            </div>
-            <div class="wall-stat">
-                <div class="value" id="totalValue">-</div>
-                <div class="label">Total Value</div>
-            </div>
-        </div>
-
         <div class="chain-tabs" id="chainTabs">
             <button class="chain-tab active" data-chain="all" onclick="switchChain('all')">
                 All Chains <span class="count" id="countAll">0</span>
@@ -592,6 +569,11 @@
             <button class="chain-tab" data-chain="base" onclick="switchChain('base')">
                 Base <span class="count" id="countBase">0</span>
             </button>
+            <!-- Total Value Display (always rightmost) -->
+            <div class="chain-tab-value">
+                <span class="value-label">Total Value</span>
+                <span class="value-amount" id="totalValue">-</span>
+            </div>
         </div>
 
         <div class="nft-grid" id="nftGrid">
@@ -635,11 +617,6 @@
                 const totalWithImages = data.total_with_images || 0;
                 const totalCached = data.total_cached || 0;
                 const uncached = totalWithImages - totalCached;
-
-                document.getElementById('totalNfts').textContent = totalWithImages;
-                document.getElementById('cachedNfts').textContent = totalCached;
-                document.getElementById('cachePercent').textContent = (data.cache_percentage || 0) + '%';
-                document.getElementById('uncachedNfts').textContent = uncached;
 
                 // Update button text based on remaining images
                 const btn = document.getElementById('cacheBtn');
