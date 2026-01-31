@@ -441,6 +441,51 @@ async def init_db():
             ON api_call_log(api_name, timestamp)
         """)
 
+        # Migration: Backfill api_call_log from today's api_usage data (one-time)
+        # This ensures we don't lose today's API call counts when switching to rolling window
+        try:
+            # Check if migration has already been done
+            cursor = await db.execute("SELECT COUNT(*) FROM api_call_log")
+            log_count = (await cursor.fetchone())[0]
+
+            if log_count == 0:
+                # Table is empty, do migration
+                now = datetime.now()
+                today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+                # Get today's usage from api_usage table
+                cursor = await db.execute("""
+                    SELECT api_name, call_count
+                    FROM api_usage
+                    WHERE period_start = ?
+                """, (today_start.isoformat(),))
+                rows = await cursor.fetchall()
+
+                # For each API with calls today, create log entries
+                # Spread timestamps across the last 12 hours to simulate realistic usage
+                for api_name, call_count in rows:
+                    if call_count > 0:
+                        # Create evenly-spaced timestamps over last 12 hours
+                        hours_ago = 12
+                        interval_seconds = (hours_ago * 3600) / max(call_count, 1)
+
+                        for i in range(call_count):
+                            # Timestamp for this call (working backwards from now)
+                            seconds_ago = interval_seconds * i
+                            timestamp = now - timedelta(seconds=seconds_ago)
+
+                            await db.execute("""
+                                INSERT INTO api_call_log (api_name, timestamp)
+                                VALUES (?, ?)
+                            """, (api_name, timestamp.isoformat()))
+
+                await db.commit()
+                print(f"[Migration] Backfilled {sum(r[1] for r in rows)} API call log entries from today's usage")
+        except Exception as e:
+            # Migration failed, but don't block startup
+            print(f"[Migration] API call log backfill failed: {e}")
+            pass
+
         # API rate limits table - stores custom rate limits for APIs
         await db.execute("""
             CREATE TABLE IF NOT EXISTS api_rate_limits (
