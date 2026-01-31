@@ -2,7 +2,7 @@
 
 A self-hosted cryptocurrency portfolio tracker that aggregates data from multiple blockchains, exchanges, and DeFi protocols.
 
-![Version](https://img.shields.io/badge/version-0.12.0-blue.svg)
+![Version](https://img.shields.io/badge/version-0.13.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.109-teal.svg)
@@ -52,7 +52,37 @@ For a detailed overview of the system architecture, authentication flow, and dat
 - **Portfolio History**: Interactive charts showing value over time (7d, 4w, 3m)
 - **Privacy Mode**: Hide sensitive financial data with one click
 
-### New in v0.12.0 🎉
+### New in v0.13.0 🎉
+- **📊 Blockchain Asset Breakdown**: Interactive drill-down charts
+  - Click any blockchain card to see asset composition
+  - Doughnut charts showing native coin + tokens + NFTs
+  - Sortable legend with percentages and USD values
+  - Works across all 6 supported blockchains
+- **🔗 The Graph API Integration**: Ethereum-based token pricing
+  - Uniswap V2/V3 subgraph integration for accurate pricing
+  - ETH-denominated prices for Ethereum, Polygon, Base tokens
+  - 100K queries/day with automatic usage tracking
+  - 5-minute price caching for performance
+- **🌐 Multi-Chain Native Pricing**: Universal token pricing system
+  - Cardano: ADA-denominated via TapTools
+  - Ethereum/Base/Polygon: ETH-denominated via The Graph
+  - Solana: SOL-equivalent calculated from USD
+  - Automatic USD conversion with native token display
+- **🖼️ Enhanced NFT Wall**: Major performance improvements
+  - Fixed NFT collection expansion (DOMPurify compatibility)
+  - Prominent gradient cache button with live status
+  - Real-time background scheduler indicator
+  - Batch progress showing: cached/failed/skipped counts
+  - "Remaining" stat showing uncached images
+  - Auto-disables when all images cached
+- **🐛 Bug Fixes**:
+  - Fixed NFT expansion on dashboard (event delegation)
+  - Improved cache progress visibility and clarity
+  - Better batch caching status messages
+  - Enhanced background work visibility
+
+### Previous Releases
+#### v0.12.0
 - **👥 Multi-User Support**: Full multi-user architecture with user isolation
   - Separate portfolios for different users
   - Session-based authentication with secure tokens

@@ -7,6 +7,126 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.13.0] - 2026-01-30
+
+### Added - Multi-Chain Pricing & NFT Wall Enhancements
+
+#### 📊 Blockchain Asset Breakdown Charts
+- **Interactive Doughnut Charts**: Click any blockchain summary card to view detailed asset composition
+  - Beautiful Chart.js doughnut charts showing asset distribution
+  - Native coin + tokens + NFTs breakdown with percentages
+  - Color-coded segments with hover tooltips
+  - Scrollable legend with USD values and percentages
+  - New endpoint: `GET /portfolio/assets/{blockchain}`
+  - Works for all 6 blockchains: Cardano, Bitcoin, Ethereum, Solana, Polygon, Base
+  - Modal overlay with stats: total value, asset count
+  - Responsive design adapts to mobile and desktop
+
+#### 🔗 The Graph API Integration (Uniswap Subgraphs)
+- **Ethereum-Based Token Pricing**: Integration with The Graph for accurate DeFi pricing
+  - New service: `backend/services/graph.py` - GraphQL queries to Uniswap V2/V3
+  - Methods: `get_token_price_eth()`, `get_multiple_token_prices()`, `get_token_data()`
+  - ETH-denominated pricing for Ethereum, Polygon, Base tokens
+  - Batch queries support up to 100 tokens per request
+  - 5-minute price caching to reduce API calls
+  - API limit tracking: 100,000 queries per 24 hours
+  - Automatic usage monitoring via `api_usage` table
+  - Status endpoint shows calls remaining: `/api/status`
+  - Documentation: `docs/GRAPH_API_INTEGRATION.md`
+
+#### 🌐 Multi-Chain Native Token Pricing System
+- **Universal Native Pricing**: Token prices displayed in blockchain's native currency
+  - **Cardano**: ADA-denominated prices via TapTools API
+  - **Ethereum/Base/Polygon**: ETH-denominated prices via The Graph/Uniswap
+  - **Solana**: SOL-equivalent calculated from USD prices
+  - **Bitcoin**: BTC-equivalent calculated from USD prices
+  - Dynamic table headers: "ADA Price", "ETH Price", "SOL Price", etc.
+  - New response fields: `price_native`, `total_native` in wallet assets endpoint
+  - Automatic USD conversion with fallback pricing
+  - Native coin always pinned to top of asset lists
+
+#### 🖼️ NFT Wall Major Enhancements
+- **Fixed NFT Expansion**: Collections now properly expand/collapse on dashboard
+  - Issue: DOMPurify was stripping inline `onclick` handlers
+  - Solution: Event delegation - listeners added after HTML render
+  - Function: `toggleNftCollection()` now properly attached
+  - Collections start collapsed, expand to show individual NFTs
+
+- **Enhanced Cache Button**: Prominent, informative caching interface
+  - Gradient button with icon: "📥 Cache Images"
+  - Dynamic text shows remaining count: "Cache 15 Images"
+  - Pulsing animation when actively caching
+  - Auto-disables when all images cached: "All Images Cached ✓"
+  - Box shadow and hover effects for visibility
+
+- **Real-Time Status Indicator**: Background work visibility
+  - Live status dot: green pulsing when active, gray when idle
+  - Shows scheduler status: "Scheduler Active (Next: 3:45 PM)"
+  - Updates every 30 seconds automatically
+  - Shows caching progress: "Caching Images..."
+  - Integrates with NFT scheduler API: `/nft-scheduler/status`
+
+- **Improved Progress Messages**: Clear batch caching feedback
+  - Shows: "Newly cached: 8 | Failed: 0 | Already cached: 42 (Total: 50)"
+  - Distinguishes new vs. already-cached images
+  - Added "Remaining" stat in wall stats section
+  - Better color coding: green for success, red for errors
+  - Progress messages persist for 8 seconds with auto-hide
+
+### Changed
+- **Wallet Assets Endpoint**: Enhanced `/wallets/id/{wallet_id}/assets`
+  - Now returns `price_native` and `total_native` for all chains
+  - Queries The Graph for Ethereum-based token pricing
+  - Maintains backward compatibility with `price_ada`/`total_ada` fields
+  - Improved error handling for missing decimals
+
+- **Portfolio Router**: Added `HTTPException` import for new endpoint
+  - New endpoint uses portfolio summary + assets data
+  - Calculates native coin value from pricing service
+  - Aggregates tokens and NFTs into breakdown response
+
+### Fixed
+- **NFT Collection Expansion**: Collections now expand properly on dashboard
+  - Root cause: DOMPurify security library removing inline event handlers
+  - Solution: Event listeners attached after DOM render instead of inline
+  - Applies to all NFT collections across all chains
+
+- **Decimal Handling**: Improved NULL safety in native asset calculations
+  - Changed `asset.get('decimals', 0)` to `asset.get('decimals') or 0`
+  - Prevents `int(None)` errors when database has NULL decimals
+  - Applied in both `portfolio.py` and `wallets.py`
+
+### Documentation
+- **Graph API Integration Guide**: `docs/GRAPH_API_INTEGRATION.md`
+  - Complete API documentation and usage examples
+  - Rate limiting information (100K/24hrs)
+  - Monitoring instructions and troubleshooting
+  - Batch query examples and best practices
+  - Future enhancement roadmap
+
+- **Updated README**: v0.13.0 feature highlights
+  - Blockchain asset breakdown charts
+  - The Graph API integration
+  - Multi-chain native pricing system
+  - Enhanced NFT wall improvements
+
+### Technical Details
+- **New Files**:
+  - `backend/services/graph.py` (252 lines) - The Graph API service
+  - `docs/GRAPH_API_INTEGRATION.md` - Complete integration guide
+
+- **Modified Files**:
+  - `backend/routers/portfolio.py` - Added `/assets/{blockchain}` endpoint
+  - `backend/routers/wallets.py` - Multi-chain pricing integration
+  - `backend/config.py` - Added `GRAPH_API_KEY` configuration
+  - `frontend/js/app.js` - NFT expansion fix, native pricing display
+  - `frontend/index.html` - Asset breakdown modal HTML
+  - `frontend/nft-wall.html` - Enhanced caching UI and status
+  - `frontend/css/styles.css` - Breakdown modal and button styling
+  - `.env` - Added Graph API key
+
+---
+
 ## [0.12.0] - 2026-01-29
 
 ### Added - Multi-User Support & Enhanced Portfolio Visualization

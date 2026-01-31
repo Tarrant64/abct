@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime
 import asyncio
 import sys
 import os
@@ -19,6 +20,9 @@ from services.polygon import polygon_service
 from services.base import base_service
 from services.logging_service import get_logging_service
 from services.demo_wallet_service import demo_wallet_service
+from services.pricing import pricing_service
+from services.taptools import taptools_wallet_service
+from services.graph import graph_service
 from utils.address import parse_wallets_file, detect_blockchain, is_bitcoin_xpub, get_xpub_type
 from config import WALLETS_FILE, DATA_DIR
 from middleware.demo_mode import is_demo_user
@@ -135,9 +139,201 @@ async def list_wallets(user_id: int = Depends(verify_session)):
 
 @router.get("/id/{wallet_id}/assets")
 async def get_wallet_assets_by_id(wallet_id: int, user_id: int = Depends(verify_session)):
-    """Get native assets for a specific wallet by ID."""
-    assets = await get_wallet_assets(wallet_id)
-    return {"assets": assets}
+    """Get native assets for a specific wallet by ID with pricing information."""
+    import aiosqlite
+    from config import DATABASE_PATH
+
+    # First get the wallet to know its blockchain and address
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM wallets WHERE id = ?", (wallet_id,))
+        wallet_row = await cursor.fetchone()
+        if not wallet_row:
+            raise HTTPException(status_code=404, detail="Wallet not found")
+        wallet = dict(wallet_row)
+
+    # Get assets with ticker information from token_metadata and custom_tokens
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("""
+            SELECT
+                na.*,
+                COALESCE(ct.ticker, tm.ticker) as ticker,
+                COALESCE(ct.token_name, tm.name) as token_name
+            FROM native_assets na
+            LEFT JOIN token_metadata tm ON na.asset_id = tm.asset_id
+            LEFT JOIN custom_tokens ct ON
+                ct.policy_id = na.policy_id
+                AND ct.asset_name = na.asset_name
+                AND ct.user_id = na.user_id
+            WHERE na.wallet_id = ?
+            ORDER BY na.asset_name
+        """, (wallet_id,))
+        rows = await cursor.fetchall()
+        assets = [dict(row) for row in rows]
+
+    # Get native coin prices for USD conversions
+    ada_price_usd = await pricing_service.get_price('ADA')
+    eth_price_usd = await pricing_service.get_price('ETH')
+    sol_price_usd = await pricing_service.get_price('SOL')
+    pol_price_usd = await pricing_service.get_price('MATIC')
+
+    # For Cardano wallets, try to get TapTools data for ADA-denominated pricing
+    taptools_positions = {}
+    if wallet['blockchain'] == 'cardano' and taptools_wallet_service.is_configured():
+        try:
+            portfolio = await taptools_wallet_service.get_wallet_portfolio(wallet['address'])
+            if portfolio and portfolio.get('positions'):
+                # Index TapTools positions by unit (asset_id)
+                for pos in portfolio['positions']:
+                    unit = pos.get('unit', '')
+                    if unit and unit != 'lovelace':  # Skip ADA
+                        taptools_positions[unit] = pos
+        except Exception as e:
+            logger = get_logging_service()
+            logger.log_debug(f"TapTools data unavailable for wallet {wallet_id}: {e}")
+
+    # For Ethereum-based chains, try to get Graph/Uniswap data for native-token-denominated pricing
+    graph_prices = {}
+    if wallet['blockchain'] in ['ethereum', 'polygon', 'base'] and graph_service.is_configured():
+        try:
+            # Get token addresses for Graph API lookup
+            token_addresses = []
+            for asset in assets:
+                if asset.get('asset_id'):  # asset_id should be the contract address
+                    token_addresses.append(asset['asset_id'])
+
+            if token_addresses:
+                # Get prices in ETH for all tokens
+                graph_prices = await graph_service.get_multiple_token_prices(token_addresses)
+        except Exception as e:
+            logger = get_logging_service()
+            logger.log_debug(f"Graph API data unavailable for wallet {wallet_id}: {e}")
+
+    # Enrich assets with pricing information
+    enriched_assets = []
+    for asset in assets:
+        # Convert raw quantity to actual quantity using decimals
+        raw_qty = float(asset.get('quantity') or 0)
+        decimals = int(asset.get('decimals') or 0)
+        actual_qty = raw_qty / (10 ** decimals)
+
+        asset_data = {
+            **asset,
+            'actual_quantity': actual_qty,
+            'price_native': None,  # Price in native token (ADA/ETH/SOL/etc)
+            'total_native': None,  # Total value in native token
+            'price_usd': None,
+            'total_value_usd': None
+        }
+
+        # Keep ADA-specific fields for backwards compatibility
+        asset_data['price_ada'] = None
+        asset_data['total_ada'] = None
+
+        # For Cardano assets, try TapTools first (ADA-denominated)
+        if wallet['blockchain'] == 'cardano' and asset.get('asset_id') in taptools_positions:
+            pos = taptools_positions[asset['asset_id']]
+            price_ada = float(pos.get('price', 0))
+            total_ada = float(pos.get('adaValue', 0))
+
+            asset_data['price_ada'] = price_ada
+            asset_data['total_ada'] = total_ada
+            asset_data['price_native'] = price_ada
+            asset_data['total_native'] = total_ada
+
+            # Calculate USD value
+            if ada_price_usd and total_ada > 0:
+                asset_data['total_value_usd'] = total_ada * ada_price_usd
+                if actual_qty > 0:
+                    asset_data['price_usd'] = (total_ada * ada_price_usd) / actual_qty
+
+        # For Ethereum-based chains, try Graph API (ETH-denominated)
+        elif wallet['blockchain'] in ['ethereum', 'polygon', 'base'] and asset.get('asset_id') in graph_prices:
+            price_eth = graph_prices[asset['asset_id']]
+            total_eth = actual_qty * price_eth
+
+            asset_data['price_native'] = price_eth
+            asset_data['total_native'] = total_eth
+
+            # Calculate USD value
+            native_price_usd = eth_price_usd if wallet['blockchain'] in ['ethereum', 'base'] else pol_price_usd
+            if native_price_usd and total_eth > 0:
+                asset_data['total_value_usd'] = total_eth * native_price_usd
+                if actual_qty > 0:
+                    asset_data['price_usd'] = (total_eth * native_price_usd) / actual_qty
+
+        # Fallback to direct USD pricing if available
+        elif asset.get('ticker'):
+            try:
+                price_usd = await pricing_service.get_price(asset['ticker'].upper())
+                if price_usd and price_usd > 0:
+                    asset_data['price_usd'] = price_usd
+                    asset_data['total_value_usd'] = actual_qty * price_usd
+
+                    # Calculate native token equivalent
+                    if wallet['blockchain'] == 'cardano' and ada_price_usd and ada_price_usd > 0:
+                        asset_data['price_ada'] = price_usd / ada_price_usd
+                        asset_data['total_ada'] = (actual_qty * price_usd) / ada_price_usd
+                        asset_data['price_native'] = price_usd / ada_price_usd
+                        asset_data['total_native'] = (actual_qty * price_usd) / ada_price_usd
+                    elif wallet['blockchain'] in ['ethereum', 'base'] and eth_price_usd and eth_price_usd > 0:
+                        asset_data['price_native'] = price_usd / eth_price_usd
+                        asset_data['total_native'] = (actual_qty * price_usd) / eth_price_usd
+                    elif wallet['blockchain'] == 'solana' and sol_price_usd and sol_price_usd > 0:
+                        asset_data['price_native'] = price_usd / sol_price_usd
+                        asset_data['total_native'] = (actual_qty * price_usd) / sol_price_usd
+                    elif wallet['blockchain'] == 'polygon' and pol_price_usd and pol_price_usd > 0:
+                        asset_data['price_native'] = price_usd / pol_price_usd
+                        asset_data['total_native'] = (actual_qty * price_usd) / pol_price_usd
+            except Exception:
+                pass
+
+        enriched_assets.append(asset_data)
+
+    # Get wallet balance for native coin
+    wallet_balance = await get_wallet_balance(wallet_id)
+    native_balance = None
+
+    if wallet_balance:
+        balance_raw = float(wallet_balance.get('amount', 0))
+
+        # Define native coin parameters by blockchain
+        native_config = {
+            'cardano': {'ticker': 'ADA', 'name': 'Cardano', 'decimals': 6, 'price_usd': ada_price_usd},
+            'bitcoin': {'ticker': 'BTC', 'name': 'Bitcoin', 'decimals': 8, 'price_usd': await pricing_service.get_price('BTC')},
+            'ethereum': {'ticker': 'ETH', 'name': 'Ethereum', 'decimals': 18, 'price_usd': eth_price_usd},
+            'solana': {'ticker': 'SOL', 'name': 'Solana', 'decimals': 9, 'price_usd': sol_price_usd},
+            'polygon': {'ticker': 'POL', 'name': 'Polygon', 'decimals': 18, 'price_usd': pol_price_usd},
+            'base': {'ticker': 'ETH', 'name': 'Base (ETH)', 'decimals': 18, 'price_usd': eth_price_usd}
+        }
+
+        if wallet['blockchain'] in native_config:
+            config = native_config[wallet['blockchain']]
+            balance_actual = balance_raw / (10 ** config['decimals'])
+
+            native_balance = {
+                'ticker': config['ticker'],
+                'token_name': config['name'],
+                'actual_quantity': balance_actual,
+                'price_native': 1.0,  # Native coin priced in itself is always 1
+                'total_native': balance_actual,
+                'price_usd': config['price_usd'],
+                'total_value_usd': balance_actual * config['price_usd'] if config['price_usd'] else 0,
+                'is_native': True
+            }
+
+            # Keep ADA-specific fields for backwards compatibility
+            if wallet['blockchain'] == 'cardano':
+                native_balance['price_ada'] = 1.0
+                native_balance['total_ada'] = balance_actual
+
+    return {
+        "assets": enriched_assets,
+        "native_balance": native_balance,
+        "blockchain": wallet['blockchain'],
+        "native_coin_price_usd": native_balance['price_usd'] if native_balance else None
+    }
 
 @router.get("/{address}")
 async def get_wallet(address: str, user_id: int = Depends(verify_session)):
@@ -1051,6 +1247,40 @@ async def clear_ethereum_cache(user_id: int = Depends(verify_session)):
     """Clear Ethereum balance cache to force fresh fetches."""
     ethereum_service.clear_cache()
     return {"message": "Ethereum cache cleared"}
+
+
+@router.post("/assets/{asset_id}/toggle-ignore")
+async def toggle_asset_ignore(asset_id: int, user_id: int = Depends(verify_session)):
+    """Toggle the ignore flag for a native asset."""
+    import aiosqlite
+    from config import DATABASE_PATH
+
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        # Verify asset belongs to user
+        cursor = await db.execute(
+            "SELECT id, ignored FROM native_assets WHERE id = ? AND user_id = ?",
+            (asset_id, user_id)
+        )
+        row = await cursor.fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Asset not found")
+
+        current_ignored = row[1] or 0
+        new_ignored = 1 if current_ignored == 0 else 0
+
+        # Toggle the ignore flag
+        await db.execute(
+            "UPDATE native_assets SET ignored = ?, updated_at = ? WHERE id = ?",
+            (new_ignored, datetime.now(), asset_id)
+        )
+        await db.commit()
+
+        return {
+            "asset_id": asset_id,
+            "ignored": new_ignored == 1,
+            "message": "Asset ignored" if new_ignored == 1 else "Asset included"
+        }
 
 
 @router.get("/solana/status")
