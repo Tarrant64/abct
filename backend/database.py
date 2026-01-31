@@ -192,6 +192,10 @@ async def init_db():
             # Column already exists
             pass
 
+        # ===== IMPORTANT: Run user_id migration BEFORE creating indexes =====
+        # This ensures old databases get user_id columns added before we try to index them
+        await _migrate_add_user_id_columns(db)
+
         # Wallets table - address + blockchain + user is unique
         await db.execute("""
             CREATE TABLE IF NOT EXISTS wallets (
@@ -574,9 +578,6 @@ async def init_db():
         """)
 
         await db.commit()
-
-        # ===== MIGRATION: Add user_id columns to existing tables =====
-        await _migrate_add_user_id_columns(db)
 
 async def get_db():
     """Get database connection."""
