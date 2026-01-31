@@ -447,14 +447,21 @@ class PricingService:
         """Get cached prices without fetching."""
         return self.cache.copy()
 
-    async def get_historical_prices(self, days: int = 30) -> Dict[str, List[dict]]:
+    async def get_historical_prices(self, symbols: List[str] = None, days: int = 30) -> Dict[str, List[dict]]:
         """
-        Get historical prices for major assets (ADA, BTC, ETH) from CoinGecko.
-        Returns dict mapping symbol to list of {date, price} objects.
+        Get historical prices for specified symbols from CoinGecko.
+        Returns dict mapping symbol to list of {date, price, time} objects.
+
+        Args:
+            symbols: List of symbols (e.g., ['ADA', 'BTC', 'ETH', 'SOL', 'MATIC'])
+            days: Number of days (7, 30, 90, 180, 365)
 
         CoinGecko free API: /coins/{id}/market_chart gives daily prices for up to 365 days.
         """
-        symbols = ['ADA', 'BTC', 'ETH']
+        if symbols is None:
+            # Default to all blockchain native tokens
+            symbols = ['ADA', 'BTC', 'ETH', 'SOL', 'MATIC']
+
         historical_data = {}
 
         try:
@@ -478,13 +485,15 @@ class PricingService:
                         data = response.json()
                         prices = data.get('prices', [])
 
-                        # Convert to {date: price} format
+                        # Convert to {date, price, time} format
+                        # 'time' field is for TradingView lightweight-charts compatibility
                         historical_data[symbol] = []
                         for timestamp_ms, price in prices:
                             date = datetime.fromtimestamp(timestamp_ms / 1000).strftime('%Y-%m-%d')
                             historical_data[symbol].append({
                                 'date': date,
-                                'price': price
+                                'price': price,
+                                'time': date  # lightweight-charts expects 'time' key
                             })
 
                         logger.info(f"CoinGecko: fetched {len(prices)} historical prices for {symbol}")

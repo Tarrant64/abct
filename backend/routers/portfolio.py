@@ -1262,3 +1262,90 @@ async def get_blockchain_asset_breakdown(
         # Return more detailed error message
         error_detail = f"{type(e).__name__}: {str(e)}"
         raise HTTPException(500, detail=error_detail)
+
+
+@router.get("/charts/blockchain/{blockchain}")
+async def get_blockchain_price_chart(
+    blockchain: str,
+    timeframe: str = Query('1M', description="7D, 1M, 3M, 6M, 1Y, ALL"),
+    user_id: int = Depends(verify_session)
+):
+    """
+    Get historical price data for a blockchain's native coin.
+
+    Timeframes:
+        - 7D: 7 days
+        - 1M: 30 days (default)
+        - 3M: 90 days
+        - 6M: 180 days
+        - 1Y: 365 days
+        - ALL: 365 days (CoinGecko free tier limit)
+
+    Returns data in TradingView lightweight-charts format:
+        {
+            'blockchain': 'cardano',
+            'symbol': 'ADA',
+            'timeframe': '1M',
+            'data': [
+                { 'time': '2024-01-01', 'value': 0.5 },
+                { 'time': '2024-01-02', 'value': 0.52 }
+            ],
+            'current_price': 0.55,
+            'change_24h': 2.34,
+            'data_points': 30
+        }
+    """
+    # Map blockchain to symbol
+    blockchain_symbols = {
+        'cardano': 'ADA',
+        'bitcoin': 'BTC',
+        'ethereum': 'ETH',
+        'solana': 'SOL',
+        'polygon': 'MATIC',
+        'base': 'ETH'  # Base uses ETH
+    }
+
+    symbol = blockchain_symbols.get(blockchain.lower())
+    if not symbol:
+        raise HTTPException(400, f"Unsupported blockchain: {blockchain}")
+
+    # Map timeframe to days
+    timeframe_days = {
+        '7D': 7,
+        '1M': 30,
+        '3M': 90,
+        '6M': 180,
+        '1Y': 365,
+        'ALL': 365
+    }
+
+    days = timeframe_days.get(timeframe.upper(), 30)
+
+    # Fetch historical prices
+    historical = await pricing_service.get_historical_prices([symbol], days=days)
+
+    if symbol not in historical or not historical[symbol]:
+        raise HTTPException(404, f"No historical data available for {symbol}")
+
+    # Get current price and 24h change
+    prices = await pricing_service.get_prices([symbol])
+    price_data = prices.get(symbol, {})
+
+    # Transform data for lightweight-charts
+    chart_data = [
+        {
+            'time': point['date'],
+            'value': point['price']
+        }
+        for point in historical[symbol]
+    ]
+
+    return {
+        'blockchain': blockchain,
+        'symbol': symbol,
+        'timeframe': timeframe.upper(),
+        'data': chart_data,
+        'current_price': price_data.get('usd', 0),
+        'change_24h': price_data.get('change_1h', 0),
+        'data_points': len(chart_data)
+    }
