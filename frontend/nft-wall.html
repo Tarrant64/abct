@@ -224,36 +224,89 @@
 
         .cache-controls {
             display: flex;
-            gap: 10px;
+            gap: 15px;
             align-items: center;
+            flex-wrap: wrap;
         }
 
         .cache-btn {
-            padding: 10px 20px;
-            background: var(--accent-color);
+            padding: 12px 24px;
+            background: linear-gradient(135deg, var(--accent-color), #2ecc71);
             border: none;
             border-radius: 8px;
             color: #000;
             cursor: pointer;
-            font-size: 0.9rem;
-            transition: opacity 0.2s;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
+            position: relative;
+        }
+
+        .cache-btn::before {
+            content: '📥 ';
+            margin-right: 5px;
         }
 
         .cache-btn:hover {
-            opacity: 0.9;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.4);
         }
 
         .cache-btn:disabled {
-            opacity: 0.5;
+            opacity: 0.6;
             cursor: not-allowed;
+            transform: none;
+        }
+
+        .cache-btn.caching {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
         }
 
         .cache-progress {
             font-size: 0.95rem;
             color: var(--text-primary);
-            margin-top: 10px;
             font-weight: 500;
             min-height: 24px;
+            padding: 8px 12px;
+            background: var(--bg-secondary);
+            border-radius: 6px;
+            border-left: 3px solid var(--accent-color);
+        }
+
+        .cache-status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            background: var(--bg-secondary);
+            border-radius: 6px;
+            font-size: 0.9rem;
+            border: 1px solid var(--border-color, #444);
+        }
+
+        .cache-status-indicator .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #95a5a6;
+        }
+
+        .cache-status-indicator.active .status-dot {
+            background: #2ecc71;
+            box-shadow: 0 0 8px #2ecc71;
+            animation: blink 1.5s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
 
         .privacy-btn {
@@ -455,10 +508,15 @@
                 <h2>NFT Wall</h2>
             </div>
             <div class="cache-controls">
-                <span class="cache-progress" id="cacheProgress"></span>
+                <div class="cache-status-indicator" id="cacheStatusIndicator">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Idle</span>
+                </div>
                 <button class="cache-btn" id="cacheBtn" onclick="cacheImages()">Cache Images</button>
             </div>
         </div>
+
+        <div class="cache-progress" id="cacheProgress" style="margin-bottom: 15px;"></div>
 
         <div class="wall-stats" id="wallStats">
             <div class="wall-stat">
@@ -472,6 +530,10 @@
             <div class="wall-stat">
                 <div class="value" id="cachePercent">-</div>
                 <div class="label">Cache Coverage</div>
+            </div>
+            <div class="wall-stat">
+                <div class="value" id="uncachedNfts">-</div>
+                <div class="label">Remaining</div>
             </div>
             <div class="wall-stat">
                 <div class="value" id="totalValue">-</div>
@@ -538,9 +600,23 @@
                 const response = await authFetch(`${API_BASE}/nfts/wall/status`);
                 const data = await response.json();
 
-                document.getElementById('totalNfts').textContent = data.total_with_images || 0;
-                document.getElementById('cachedNfts').textContent = data.total_cached || 0;
+                const totalWithImages = data.total_with_images || 0;
+                const totalCached = data.total_cached || 0;
+                const uncached = totalWithImages - totalCached;
+
+                document.getElementById('totalNfts').textContent = totalWithImages;
+                document.getElementById('cachedNfts').textContent = totalCached;
                 document.getElementById('cachePercent').textContent = (data.cache_percentage || 0) + '%';
+                document.getElementById('uncachedNfts').textContent = uncached;
+
+                // Update button text based on remaining images
+                const btn = document.getElementById('cacheBtn');
+                if (uncached > 0 && !btn.disabled) {
+                    btn.textContent = `Cache ${Math.min(50, uncached)} Images`;
+                } else if (uncached === 0 && !btn.disabled) {
+                    btn.textContent = 'All Images Cached ✓';
+                    btn.disabled = true;
+                }
 
                 // Update chain counts in status
                 const byChain = data.by_chain || {};
@@ -552,11 +628,10 @@
                 }
 
                 // Auto-cache if no images are cached yet
-                const totalCached = data.total_cached || 0;
-                const totalWithImages = data.total_with_images || 0;
                 if (totalCached === 0 && totalWithImages > 0) {
                     console.log('No cached images found, starting automatic caching...');
                     document.getElementById('cacheProgress').textContent = 'Starting automatic image caching...';
+                    document.getElementById('cacheProgress').style.display = 'block';
                     setTimeout(() => cacheImages(true), 1000); // Auto-cache after 1 second
                 }
             } catch (error) {
@@ -677,19 +752,36 @@
             }
         }
 
+        // Update status indicator
+        function updateStatusIndicator(status, text) {
+            const indicator = document.getElementById('cacheStatusIndicator');
+            const statusText = indicator.querySelector('.status-text');
+
+            if (status === 'active') {
+                indicator.classList.add('active');
+                statusText.textContent = text || 'Caching...';
+            } else {
+                indicator.classList.remove('active');
+                statusText.textContent = text || 'Idle';
+            }
+        }
+
         // Cache images
         async function cacheImages(auto = false) {
             const btn = document.getElementById('cacheBtn');
             const progress = document.getElementById('cacheProgress');
 
             btn.disabled = true;
+            btn.classList.add('caching');
             btn.textContent = 'Caching...';
+            updateStatusIndicator('active', 'Caching Images');
 
             if (auto) {
-                progress.textContent = 'Automatically caching NFT images in background... (This may take a minute)';
+                progress.textContent = '⏳ Automatically caching NFT images in background... (This may take a minute)';
             } else {
-                progress.textContent = 'Starting image cache... Please wait, do not refresh the page.';
+                progress.textContent = '⏳ Starting image cache... Please wait, do not refresh the page.';
             }
+            progress.style.display = 'block';
 
             try {
                 const chain = currentChain === 'all' ? null : currentChain;
@@ -700,26 +792,44 @@
                 const response = await authFetch(url, { method: 'POST' });
                 const data = await response.json();
 
-                progress.textContent = `✓ Caching complete! Cached: ${data.total_cached} images | Failed: ${data.total_failed}`;
-                progress.style.color = 'var(--accent-color)';
-                progress.style.fontWeight = 'bold';
+                const skipped = data.total_skipped || 0;
+                const total = data.total_cached + data.total_failed + skipped;
+
+                progress.textContent = `✓ Batch complete! Newly cached: ${data.total_cached} | Failed: ${data.total_failed} | Already cached: ${skipped} (Total processed: ${total})`;
+                progress.style.borderLeftColor = '#2ecc71';
 
                 // Reload data
                 await loadWallStatus();
                 await loadNfts();
 
+                updateStatusIndicator('idle', 'Ready');
+
+                // If there are still uncached images, suggest running again
+                if (data.total_cached > 0 || data.total_failed > 0) {
+                    setTimeout(() => {
+                        const indicator = document.getElementById('cacheStatusIndicator');
+                        indicator.querySelector('.status-text').textContent = 'More images available';
+                    }, 1000);
+                }
+
             } catch (error) {
                 progress.textContent = '✗ Error caching images: ' + error.message;
-                progress.style.color = '#dc3545';
+                progress.style.borderLeftColor = '#dc3545';
+                updateStatusIndicator('idle', 'Error');
             } finally {
-                btn.disabled = false;
-                btn.textContent = 'Cache More Images';
+                btn.classList.remove('caching');
 
-                // Reset progress style after 5 seconds
+                // Re-enable button and update text based on status
+                // Note: loadWallStatus() will update the button text appropriately
                 setTimeout(() => {
-                    progress.style.color = '';
-                    progress.style.fontWeight = '';
-                }, 5000);
+                    btn.disabled = false;
+                }, 500);
+
+                // Reset progress style after 8 seconds
+                setTimeout(() => {
+                    progress.style.display = 'none';
+                    progress.style.borderLeftColor = 'var(--accent-color)';
+                }, 8000);
             }
         }
 
@@ -749,6 +859,25 @@
             if (e.key === 'Escape') closeModal();
         });
 
+        // Check background scheduler status
+        async function checkBackgroundStatus() {
+            try {
+                const response = await authFetch(`${API_BASE}/nft-scheduler/status`);
+                const data = await response.json();
+
+                if (data.enabled && data.running) {
+                    const nextRun = data.next_run ? new Date(data.next_run).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Unknown';
+                    updateStatusIndicator('active', `Scheduler Active (Next: ${nextRun})`);
+                } else if (data.enabled && !data.running) {
+                    updateStatusIndicator('idle', 'Scheduler Enabled (Idle)');
+                } else {
+                    updateStatusIndicator('idle', 'Idle');
+                }
+            } catch (error) {
+                console.error('Error checking background status:', error);
+            }
+        }
+
         // Privacy Mode Functions
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
@@ -756,11 +885,15 @@
             loadSavedTheme();
             loadWallStatus();
             loadNfts();
+            checkBackgroundStatus();
+
+            // Check background status every 30 seconds
+            setInterval(checkBackgroundStatus, 30000);
         });
     </script>
 
     <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
-        <p>ABCT - NFT Gallery | <span style="opacity: 0.6;">v0.12.0 (BUILD 1769811327)</span></p>
+        <p>ABCT - NFT Gallery | <span style="opacity: 0.6;">v0.13.0 (BUILD 1769818377)</span></p>
     </footer>
 </body>
 </html>
