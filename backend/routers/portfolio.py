@@ -1011,95 +1011,102 @@ async def get_blockchain_asset_breakdown(
     user_id: int = Depends(verify_session)
 ):
     """Get asset breakdown for a specific blockchain for doughnut chart display."""
-    from database import get_cache, set_cache
+    try:
+        # Validate blockchain
+        valid_chains = ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base']
+        if blockchain not in valid_chains:
+            raise HTTPException(400, f"Invalid blockchain: {blockchain}")
 
-    # Validate blockchain
-    valid_chains = ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base']
-    if blockchain not in valid_chains:
-        raise HTTPException(400, f"Invalid blockchain: {blockchain}")
+        # Check cache first (5 minute TTL)
+        cache_key = f"asset_breakdown_{blockchain}_{user_id}"
+        cached = await get_cache(cache_key, user_id=user_id)
+        if cached:
+            return cached
 
-    # Check cache first (5 minute TTL)
-    cache_key = f"asset_breakdown_{blockchain}_{user_id}"
-    cached = await get_cache(cache_key, user_id=user_id)
-    if cached:
-        return cached
+        # Get portfolio summary for native coin balance (uses cache)
+        summary = await get_portfolio_summary(user_id=user_id)
+        chain_data = summary.get(blockchain, {})
 
-    # Get portfolio summary for native coin balance (uses cache)
-    summary = await get_portfolio_summary(user_id=user_id)
-    chain_data = summary.get(blockchain, {})
+        # Get all assets filtered by blockchain (uses cache)
+        assets_data = await get_portfolio_assets(user_id=user_id)
+        chain_assets = [a for a in assets_data['assets'] if a['blockchain'] == blockchain]
 
-    # Get all assets filtered by blockchain (uses cache)
-    assets_data = await get_portfolio_assets(user_id=user_id)
-    chain_assets = [a for a in assets_data['assets'] if a['blockchain'] == blockchain]
-
-    # Calculate native coin value
-    native_symbols = {
-        'cardano': 'ADA', 'bitcoin': 'BTC', 'ethereum': 'ETH',
-        'solana': 'SOL', 'polygon': 'POL', 'base': 'ETH'
-    }
-    native_keys = {
-        'cardano': 'total_ada', 'bitcoin': 'total_btc', 'ethereum': 'total_eth',
-        'solana': 'total_sol', 'polygon': 'total_matic', 'base': 'total_eth'
-    }
-
-    native_symbol = native_symbols[blockchain]
-    native_qty = chain_data.get(native_keys[blockchain], 0)
-
-    # Get price from cache if possible
-    all_prices = await pricing_service.get_all_tracked_prices()
-    native_price = all_prices.get(native_symbol, {}).get('usd', 0)
-    native_value = native_qty * native_price if native_price else 0
-
-    # Get NFT value for this chain (placeholder for now)
-    nft_value = 0
-    nft_count = 0
-    # TODO: Query NFT service for this blockchain
-
-    # Calculate total value from tokens
-    tokens_value = sum(a.get('value_usd', 0) or 0 for a in chain_assets)
-
-    # Total value across all asset types
-    total_value = native_value + tokens_value + nft_value
-
-    # Calculate percentages
-    native_pct = (native_value / total_value * 100) if total_value > 0 else 0
-    nft_pct = (nft_value / total_value * 100) if total_value > 0 else 0
-
-    # Build token list
-    token_list = []
-    for a in chain_assets:
-        asset_value = a.get('value_usd', 0) or 0
-        if asset_value > 0:  # Only include tokens with value
-            token_list.append({
-                'symbol': a.get('ticker') or (a.get('asset_name', '')[:10] if a.get('asset_name') else 'Unknown'),
-                'name': a.get('asset_name', 'Unknown'),
-                'quantity': a.get('total_quantity', 0),
-                'value_usd': asset_value,
-                'percentage': (asset_value / total_value * 100) if total_value > 0 else 0
-            })
-
-    # Sort tokens by value descending
-    token_list.sort(key=lambda x: x['value_usd'], reverse=True)
-
-    # Build response
-    result = {
-        'blockchain': blockchain,
-        'total_value_usd': total_value,
-        'native_coin': {
-            'symbol': native_symbol,
-            'quantity': native_qty,
-            'value_usd': native_value,
-            'percentage': native_pct
-        },
-        'tokens': token_list,
-        'nfts': {
-            'count': nft_count,
-            'value_usd': nft_value,
-            'percentage': nft_pct
+        # Calculate native coin value
+        native_symbols = {
+            'cardano': 'ADA', 'bitcoin': 'BTC', 'ethereum': 'ETH',
+            'solana': 'SOL', 'polygon': 'POL', 'base': 'ETH'
         }
-    }
+        native_keys = {
+            'cardano': 'total_ada', 'bitcoin': 'total_btc', 'ethereum': 'total_eth',
+            'solana': 'total_sol', 'polygon': 'total_matic', 'base': 'total_eth'
+        }
 
-    # Cache for 5 minutes (300 seconds)
-    await set_cache(cache_key, result, ttl=300, user_id=user_id)
+        native_symbol = native_symbols[blockchain]
+        native_qty = chain_data.get(native_keys[blockchain], 0)
 
-    return result
+        # Get price from cache if possible
+        all_prices = await pricing_service.get_all_tracked_prices()
+        native_price = all_prices.get(native_symbol, {}).get('usd', 0)
+        native_value = native_qty * native_price if native_price else 0
+
+        # Get NFT value for this chain (placeholder for now)
+        nft_value = 0
+        nft_count = 0
+        # TODO: Query NFT service for this blockchain
+
+        # Calculate total value from tokens
+        tokens_value = sum(a.get('value_usd', 0) or 0 for a in chain_assets)
+
+        # Total value across all asset types
+        total_value = native_value + tokens_value + nft_value
+
+        # Calculate percentages
+        native_pct = (native_value / total_value * 100) if total_value > 0 else 0
+        nft_pct = (nft_value / total_value * 100) if total_value > 0 else 0
+
+        # Build token list
+        token_list = []
+        for a in chain_assets:
+            asset_value = a.get('value_usd', 0) or 0
+            if asset_value > 0:  # Only include tokens with value
+                token_list.append({
+                    'symbol': a.get('ticker') or (a.get('asset_name', '')[:10] if a.get('asset_name') else 'Unknown'),
+                    'name': a.get('asset_name', 'Unknown'),
+                    'quantity': a.get('total_quantity', 0),
+                    'value_usd': asset_value,
+                    'percentage': (asset_value / total_value * 100) if total_value > 0 else 0
+                })
+
+        # Sort tokens by value descending
+        token_list.sort(key=lambda x: x['value_usd'], reverse=True)
+
+        # Build response
+        result = {
+            'blockchain': blockchain,
+            'total_value_usd': total_value,
+            'native_coin': {
+                'symbol': native_symbol,
+                'quantity': native_qty,
+                'value_usd': native_value,
+                'percentage': native_pct
+            },
+            'tokens': token_list,
+            'nfts': {
+                'count': nft_count,
+                'value_usd': nft_value,
+                'percentage': nft_pct
+            }
+        }
+
+        # Cache for 5 minutes (300 seconds)
+        await set_cache(cache_key, result, ttl=300, user_id=user_id)
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] Asset breakdown for {blockchain}: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(500, f"Failed to get asset breakdown: {str(e)}")
