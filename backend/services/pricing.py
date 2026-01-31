@@ -454,9 +454,13 @@ class PricingService:
 
         Args:
             symbols: List of symbols (e.g., ['ADA', 'BTC', 'ETH', 'SOL', 'MATIC'])
-            days: Number of days (7, 30, 90, 180, 365)
+            days: Number of days (1, 7, 30, 90, 180, 365)
 
-        CoinGecko free API: /coins/{id}/market_chart gives daily prices for up to 365 days.
+        CoinGecko free API: /coins/{id}/market_chart
+        Automatic granularity:
+            - days=1: 5-minute intervals (288 data points)
+            - days=2-90: hourly intervals
+            - days>90: daily intervals
         """
         if symbols is None:
             # Default to all blockchain native tokens
@@ -471,13 +475,12 @@ class PricingService:
                     if not cg_id:
                         continue
 
-                    # CoinGecko market_chart endpoint - daily granularity for > 1 day
+                    # CoinGecko market_chart endpoint - auto granularity based on days
                     response = await client.get(
                         f"{COINGECKO_BASE_URL}/coins/{cg_id}/market_chart",
                         params={
                             'vs_currency': 'usd',
-                            'days': days,
-                            'interval': 'daily'
+                            'days': days
                         }
                     )
 
@@ -489,14 +492,30 @@ class PricingService:
                         # 'time' field is for TradingView lightweight-charts compatibility
                         historical_data[symbol] = []
                         for timestamp_ms, price in prices:
-                            date = datetime.fromtimestamp(timestamp_ms / 1000).strftime('%Y-%m-%d')
+                            timestamp_sec = timestamp_ms / 1000
+                            dt = datetime.fromtimestamp(timestamp_sec)
+
+                            # Format based on granularity
+                            if days == 1:
+                                # 5-minute intervals: use ISO timestamp (YYYY-MM-DDTHH:MM:SS)
+                                time_str = dt.strftime('%Y-%m-%dT%H:%M:%S')
+                                date_str = dt.strftime('%Y-%m-%d %H:%M')
+                            elif days <= 90:
+                                # Hourly intervals: use ISO timestamp
+                                time_str = dt.strftime('%Y-%m-%dT%H:%M:%S')
+                                date_str = dt.strftime('%Y-%m-%d %H:%M')
+                            else:
+                                # Daily intervals: use date only
+                                time_str = dt.strftime('%Y-%m-%d')
+                                date_str = dt.strftime('%Y-%m-%d')
+
                             historical_data[symbol].append({
-                                'date': date,
+                                'date': date_str,
                                 'price': price,
-                                'time': date  # lightweight-charts expects 'time' key
+                                'time': time_str  # lightweight-charts expects 'time' key
                             })
 
-                        logger.info(f"CoinGecko: fetched {len(prices)} historical prices for {symbol}")
+                        logger.info(f"CoinGecko: fetched {len(prices)} historical prices for {symbol} (days={days})")
                     elif response.status_code == 429:
                         logger.warning(f"CoinGecko rate limited for {symbol}, waiting...")
                         import asyncio

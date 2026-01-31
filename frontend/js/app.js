@@ -6319,7 +6319,7 @@ function brightenColor(hex, percent) {
 let priceChart = null;
 let priceChartSeries = null;
 let currentBlockchain = 'cardano';
-let currentTimeframe = '1M';
+let currentTimeframe = '1D';
 let priceChartInitialized = false;
 let priceChartLoadingSet = new Set(); // Track which blockchain+timeframe combos are currently loading
 let priceChartLoadTimeout = null;
@@ -6385,8 +6385,8 @@ async function initializePriceChart() {
 
     priceChartInitialized = true;
 
-    // Load initial data (Cardano, 1M) - other timeframes load on-demand
-    await loadPriceChartData('cardano', '1M');
+    // Load initial data (Cardano, 1D) - other timeframes load on-demand
+    await loadPriceChartData('cardano', '1D');
 }
 
 function getPriceChartColors(theme) {

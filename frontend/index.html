@@ -290,88 +290,35 @@
                             <div class="price-charts-container">
                                 <!-- Left Side: Blockchain Selector -->
                                 <div class="blockchain-selector">
-                                    <div class="blockchain-btn active" data-blockchain="cardano" data-symbol="ADA" onclick="selectBlockchain('cardano')">
-                                        <div class="blockchain-icon" style="background: #0033AD;">
-                                            <img src="https://img.logokit.com/crypto/ADA?token=pk_fr08287a4c625f400f32a9&size=64"
-                                                 alt="Cardano"
-                                                 class="blockchain-icon-img"
-                                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                                            <div class="blockchain-icon-fallback">₳</div>
-                                        </div>
-                                        <div class="blockchain-info">
-                                            <span class="blockchain-name">Cardano</span>
-                                            <span class="blockchain-symbol">ADA</span>
-                                        </div>
+                                    <div class="blockchain-btn active" data-blockchain="cardano" onclick="selectBlockchain('cardano')">
+                                        <img src="https://img.logokit.com/crypto/ADA?token=pk_fr08287a4c625f400f32a9&size=32" alt="Cardano" class="chain-logo" onerror="this.style.display='none';">
+                                        <span class="chain-name">Cardano</span>
+                                        <span class="chain-ticker">ADA</span>
                                     </div>
-
-                                    <div class="blockchain-btn" data-blockchain="bitcoin" data-symbol="BTC" onclick="selectBlockchain('bitcoin')">
-                                        <div class="blockchain-icon" style="background: #F7931A;">
-                                            <img src="https://img.logokit.com/crypto/BTC?token=pk_fr08287a4c625f400f32a9&size=64"
-                                                 alt="Bitcoin"
-                                                 class="blockchain-icon-img"
-                                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                                            <div class="blockchain-icon-fallback">₿</div>
-                                        </div>
-                                        <div class="blockchain-info">
-                                            <span class="blockchain-name">Bitcoin</span>
-                                            <span class="blockchain-symbol">BTC</span>
-                                        </div>
+                                    <div class="blockchain-btn" data-blockchain="bitcoin" onclick="selectBlockchain('bitcoin')">
+                                        <img src="https://img.logokit.com/crypto/BTC?token=pk_fr08287a4c625f400f32a9&size=32" alt="Bitcoin" class="chain-logo" onerror="this.style.display='none';">
+                                        <span class="chain-name">Bitcoin</span>
+                                        <span class="chain-ticker">BTC</span>
                                     </div>
-
-                                    <div class="blockchain-btn" data-blockchain="ethereum" data-symbol="ETH" onclick="selectBlockchain('ethereum')">
-                                        <div class="blockchain-icon" style="background: #627EEA;">
-                                            <img src="https://img.logokit.com/crypto/ETH?token=pk_fr08287a4c625f400f32a9&size=64"
-                                                 alt="Ethereum"
-                                                 class="blockchain-icon-img"
-                                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                                            <div class="blockchain-icon-fallback">Ξ</div>
-                                        </div>
-                                        <div class="blockchain-info">
-                                            <span class="blockchain-name">Ethereum</span>
-                                            <span class="blockchain-symbol">ETH</span>
-                                        </div>
+                                    <div class="blockchain-btn" data-blockchain="ethereum" onclick="selectBlockchain('ethereum')">
+                                        <img src="https://img.logokit.com/crypto/ETH?token=pk_fr08287a4c625f400f32a9&size=32" alt="Ethereum" class="chain-logo" onerror="this.style.display='none';">
+                                        <span class="chain-name">Ethereum</span>
+                                        <span class="chain-ticker">ETH</span>
                                     </div>
-
-                                    <div class="blockchain-btn" data-blockchain="solana" data-symbol="SOL" onclick="selectBlockchain('solana')">
-                                        <div class="blockchain-icon" style="background: #14F195;">
-                                            <img src="https://img.logokit.com/crypto/SOL?token=pk_fr08287a4c625f400f32a9&size=64"
-                                                 alt="Solana"
-                                                 class="blockchain-icon-img"
-                                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                                            <div class="blockchain-icon-fallback">◎</div>
-                                        </div>
-                                        <div class="blockchain-info">
-                                            <span class="blockchain-name">Solana</span>
-                                            <span class="blockchain-symbol">SOL</span>
-                                        </div>
+                                    <div class="blockchain-btn" data-blockchain="solana" onclick="selectBlockchain('solana')">
+                                        <img src="https://img.logokit.com/crypto/SOL?token=pk_fr08287a4c625f400f32a9&size=32" alt="Solana" class="chain-logo" onerror="this.style.display='none';">
+                                        <span class="chain-name">Solana</span>
+                                        <span class="chain-ticker">SOL</span>
                                     </div>
-
-                                    <div class="blockchain-btn" data-blockchain="polygon" data-symbol="POL" onclick="selectBlockchain('polygon')">
-                                        <div class="blockchain-icon" style="background: #8247E5;">
-                                            <img src="https://img.logokit.com/crypto/MATIC?token=pk_fr08287a4c625f400f32a9&size=64"
-                                                 alt="Polygon"
-                                                 class="blockchain-icon-img"
-                                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                                            <div class="blockchain-icon-fallback">⬡</div>
-                                        </div>
-                                        <div class="blockchain-info">
-                                            <span class="blockchain-name">Polygon</span>
-                                            <span class="blockchain-symbol">POL</span>
-                                        </div>
+                                    <div class="blockchain-btn" data-blockchain="polygon" onclick="selectBlockchain('polygon')">
+                                        <img src="https://img.logokit.com/crypto/MATIC?token=pk_fr08287a4c625f400f32a9&size=32" alt="Polygon" class="chain-logo" onerror="this.style.display='none';">
+                                        <span class="chain-name">Polygon</span>
+                                        <span class="chain-ticker">POL</span>
                                     </div>
-
-                                    <div class="blockchain-btn" data-blockchain="base" data-symbol="ETH" onclick="selectBlockchain('base')">
-                                        <div class="blockchain-icon" style="background: #0052FF;">
-                                            <img src="https://img.logokit.com/crypto/ETH?token=pk_fr08287a4c625f400f32a9&size=64"
-                                                 alt="Base"
-                                                 class="blockchain-icon-img"
-                                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                                            <div class="blockchain-icon-fallback">⬢</div>
-                                        </div>
-                                        <div class="blockchain-info">
-                                            <span class="blockchain-name">Base</span>
-                                            <span class="blockchain-symbol">ETH</span>
-                                        </div>
+                                    <div class="blockchain-btn" data-blockchain="base" onclick="selectBlockchain('base')">
+                                        <img src="https://img.logokit.com/crypto/ETH?token=pk_fr08287a4c625f400f32a9&size=32" alt="Base" class="chain-logo" onerror="this.style.display='none';">
+                                        <span class="chain-name">Base</span>
+                                        <span class="chain-ticker">ETH</span>
                                     </div>
                                 </div>
 
@@ -392,10 +339,11 @@
 
                                     <!-- Timeframe Selector -->
                                     <div class="timeframe-selector">
+                                        <button class="timeframe-btn" data-timeframe="1H" onclick="selectTimeframe('1H')">1H</button>
+                                        <button class="timeframe-btn" data-timeframe="4H" onclick="selectTimeframe('4H')">4H</button>
+                                        <button class="timeframe-btn active" data-timeframe="1D" onclick="selectTimeframe('1D')">1D</button>
                                         <button class="timeframe-btn" data-timeframe="7D" onclick="selectTimeframe('7D')">7D</button>
-                                        <button class="timeframe-btn active" data-timeframe="1M" onclick="selectTimeframe('1M')">1M</button>
                                         <button class="timeframe-btn" data-timeframe="3M" onclick="selectTimeframe('3M')">3M</button>
-                                        <button class="timeframe-btn" data-timeframe="6M" onclick="selectTimeframe('6M')">6M</button>
                                         <button class="timeframe-btn" data-timeframe="1Y" onclick="selectTimeframe('1Y')">1Y</button>
                                         <button class="timeframe-btn" data-timeframe="ALL" onclick="selectTimeframe('ALL')">ALL</button>
                                     </div>
