@@ -98,10 +98,15 @@ async def _migrate_add_user_id_columns(db):
     # Tables that need user_id column
     tables_needing_user_id = [
         'wallets',
+        'balances',
+        'native_assets',
+        'cache',
         'portfolio_snapshots',
         'custom_tokens',
         'api_settings',
         'security_settings',
+        'nft_collections',
+        'nft_image_cache',
     ]
 
     # Get or create admin user
