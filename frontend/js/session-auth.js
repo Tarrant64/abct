@@ -11,17 +11,35 @@
 let authCheckEnabled = true;  // Can be disabled via backend config
 
 /**
+ * Authenticated fetch wrapper
+ * Automatically includes auth token in requests
+ * @param {string} url - The URL to fetch
+ * @param {Object} options - Fetch options
+ * @returns {Promise<Response>} Fetch response
+ */
+async function authFetch(url, options = {}) {
+    const token = localStorage.getItem('abct_token');
+    if (token) {
+        options.headers = {
+            ...options.headers,
+            'Authorization': `Bearer ${token}`
+        };
+    }
+    return fetch(url, options);
+}
+
+/**
  * Check if user is authenticated
  * Verifies token with backend and redirects to login if invalid
  *
  * @returns {Promise<boolean>} True if authenticated, false otherwise
  */
-async function checkAuth() {
+async function checkAuth(redirectPath) {
     // Get token from localStorage
     const token = localStorage.getItem('abct_token');
 
     if (!token) {
-        redirectToLogin();
+        redirectToLogin(redirectPath);
         return false;
     }
 
@@ -45,7 +63,7 @@ async function checkAuth() {
             localStorage.removeItem('abct_token');
             localStorage.removeItem('abct_username');
             localStorage.removeItem('is_demo');
-            redirectToLogin();
+            redirectToLogin(redirectPath);
             return false;
         }
 
@@ -55,7 +73,7 @@ async function checkAuth() {
     } catch (error) {
         console.error('Auth check error:', error);
         // On error, redirect to login for security
-        redirectToLogin();
+        redirectToLogin(redirectPath);
         return false;
     }
 }
@@ -63,9 +81,10 @@ async function checkAuth() {
 /**
  * Redirect to login page
  * Preserves current URL as return destination
+ * @param {string} customPath - Optional custom path to redirect after login
  */
-function redirectToLogin() {
-    const currentPath = window.location.pathname + window.location.search;
+function redirectToLogin(customPath) {
+    const currentPath = customPath || (window.location.pathname + window.location.search);
     const loginUrl = `/login.html?redirect=${encodeURIComponent(currentPath)}`;
     window.location.href = loginUrl;
 }
@@ -686,6 +705,7 @@ function addSecurityDemoNotice() {
 }
 
 // Export functions for use in other scripts
+window.authFetch = authFetch;
 window.checkAuth = checkAuth;
 window.logout = logout;
 window.getCurrentUsername = getCurrentUsername;

@@ -57,6 +57,23 @@ if CDP_API_KEY_FILE.exists():
     except Exception as e:
         print(f"Warning: Failed to load CDP API key: {e}")
 
+# Exchange API Keys (from environment variables)
+BINANCE_API_KEY = os.getenv("BINANCE_API_KEY", "")
+BINANCE_API_SECRET = os.getenv("BINANCE_API_SECRET", "")
+BINANCE_US_API_KEY = os.getenv("BINANCE_US_API_KEY", "")
+BINANCE_US_API_SECRET = os.getenv("BINANCE_US_API_SECRET", "")
+OKX_API_KEY = os.getenv("OKX_API_KEY", "")
+OKX_API_SECRET = os.getenv("OKX_API_SECRET", "")
+OKX_API_PASSPHRASE = os.getenv("OKX_API_PASSPHRASE", "")
+BITGET_API_KEY = os.getenv("BITGET_API_KEY", "")
+BITGET_API_SECRET = os.getenv("BITGET_API_SECRET", "")
+BITGET_API_PASSPHRASE = os.getenv("BITGET_API_PASSPHRASE", "")
+GATE_API_KEY = os.getenv("GATE_API_KEY", "")
+GATE_API_SECRET = os.getenv("GATE_API_SECRET", "")
+KUCOIN_API_KEY = os.getenv("KUCOIN_API_KEY", "")
+KUCOIN_API_SECRET = os.getenv("KUCOIN_API_SECRET", "")
+KUCOIN_API_PASSPHRASE = os.getenv("KUCOIN_API_PASSPHRASE", "")
+
 # API Endpoints
 BLOCKFROST_BASE_URL = "https://cardano-mainnet.blockfrost.io/api/v0"
 CEXPLORER_BASE_URL = "https://api.cexplorer.io/v1"

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ABCT - Manage Assets</title>
+    <title>ABCT - Manage Wallets</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
     <link rel="stylesheet" href="/static/css/styles.css?v=1769653325">
@@ -845,7 +845,7 @@
                         </a>
                         <a href="/wallets.html" class="waffle-menu-item active">
                             <span class="waffle-item-icon">&#128176;</span>
-                            <span class="waffle-item-label">Manage Assets</span>
+                            <span class="waffle-item-label">Manage Wallets</span>
                         </a>
                         <a href="/apis.html" class="waffle-menu-item">
                             <span class="waffle-item-icon">&#128273;</span>
@@ -882,11 +882,11 @@
         </div>
 
         <div class="page-nav-header">
-            <h2>Manage Assets</h2>
+            <h2>Manage Wallets</h2>
         </div>
 
         <div class="wallet-header">
-            <h1>Manage Assets</h1>
+            <h1>Manage Wallets</h1>
             <div class="header-actions" id="walletHeaderActions">
                 <button class="btn btn-secondary" onclick="openImportModal()">
                     Import from File
@@ -908,7 +908,10 @@
         <!-- Asset Type Tabs -->
         <div class="asset-type-tabs">
             <button class="asset-tab active" data-type="wallets" onclick="switchAssetTab('wallets')">
-                Wallets
+                Self-Custody Wallets
+            </button>
+            <button class="asset-tab" data-type="exchanges" onclick="switchAssetTab('exchanges')">
+                Exchanges
             </button>
             <button class="asset-tab" data-type="tokens" onclick="switchAssetTab('tokens')">
                 Manual Tokens
@@ -947,6 +950,94 @@
                 <div class="empty-state">
                     <div class="loading"></div>
                     <p>Loading wallets...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Exchanges Section -->
+        <div id="exchangesSection" style="display: none;">
+            <div class="exchange-info-box">
+                <h3>🔐 Exchange API Configuration</h3>
+                <p>ABCT integrates with cryptocurrency exchanges to automatically track your exchange balances. Configure exchange API keys in your server environment to enable tracking.</p>
+                <p><strong>Security Note:</strong> Always create API keys with read-only permissions. Never grant withdrawal or trading permissions.</p>
+                <p><strong>How to Configure:</strong> Add the required environment variables to your <code>.env</code> file (or <code>cdp_api_key.json</code> for Coinbase). Restart the backend after making changes.</p>
+            </div>
+
+            <div class="exchange-status-container">
+                <h3>Configured Exchanges</h3>
+                <div id="exchangeStatusList" class="exchange-status-list">
+                    <div class="empty-state">
+                        <div class="loading"></div>
+                        <p>Loading exchange status...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="exchange-setup-guide">
+                <h3>Supported Exchanges</h3>
+                <div class="exchange-grid">
+                    <div class="exchange-card">
+                        <div class="exchange-card-header">
+                            <img src="https://www.coinbase.com/favicon.ico" alt="Coinbase" class="exchange-logo-large">
+                            <h4>Coinbase</h4>
+                        </div>
+                        <p>Place <code>cdp_api_key.json</code> file in project root with CDP API credentials.</p>
+                        <a href="https://coinbase.com/settings/api" target="_blank" class="setup-link">Create API Key →</a>
+                    </div>
+
+                    <div class="exchange-card">
+                        <div class="exchange-card-header">
+                            <img src="https://public.bnbstatic.com/static/images/common/favicon.ico" alt="Binance" class="exchange-logo-large">
+                            <h4>Binance.com</h4>
+                        </div>
+                        <p>Add <code>BINANCE_API_KEY</code> and <code>BINANCE_API_SECRET</code> to <code>.env</code> file.</p>
+                        <a href="https://www.binance.com/en/my/settings/api-management" target="_blank" class="setup-link">Create API Key →</a>
+                    </div>
+
+                    <div class="exchange-card">
+                        <div class="exchange-card-header">
+                            <img src="https://public.bnbstatic.us/static/images/common/favicon.ico" alt="Binance.US" class="exchange-logo-large">
+                            <h4>Binance.US</h4>
+                        </div>
+                        <p>Add <code>BINANCE_US_API_KEY</code> and <code>BINANCE_US_API_SECRET</code> to <code>.env</code> file.</p>
+                        <a href="https://www.binance.us/en/usercenter/settings/api-management" target="_blank" class="setup-link">Create API Key →</a>
+                    </div>
+
+                    <div class="exchange-card">
+                        <div class="exchange-card-header">
+                            <img src="https://static.okx.com/cdn/assets/imgs/MjAyMTQ/5C7F82ADE3C3FC61.png" alt="OKX" class="exchange-logo-large">
+                            <h4>OKX</h4>
+                        </div>
+                        <p>Add <code>OKX_API_KEY</code>, <code>OKX_API_SECRET</code>, and <code>OKX_API_PASSPHRASE</code> to <code>.env</code> file.</p>
+                        <a href="https://www.okx.com/account/my-api" target="_blank" class="setup-link">Create API Key →</a>
+                    </div>
+
+                    <div class="exchange-card">
+                        <div class="exchange-card-header">
+                            <img src="https://www.bitget.com/favicon.ico" alt="Bitget" class="exchange-logo-large">
+                            <h4>Bitget</h4>
+                        </div>
+                        <p>Add <code>BITGET_API_KEY</code>, <code>BITGET_API_SECRET</code>, and <code>BITGET_API_PASSPHRASE</code> to <code>.env</code> file.</p>
+                        <a href="https://www.bitget.com/en/account/newapi" target="_blank" class="setup-link">Create API Key →</a>
+                    </div>
+
+                    <div class="exchange-card">
+                        <div class="exchange-card-header">
+                            <img src="https://www.gate.io/favicon.ico" alt="Gate.io" class="exchange-logo-large">
+                            <h4>Gate.io</h4>
+                        </div>
+                        <p>Add <code>GATE_API_KEY</code> and <code>GATE_API_SECRET</code> to <code>.env</code> file.</p>
+                        <a href="https://www.gate.io/myaccount/apiv4keys" target="_blank" class="setup-link">Create API Key →</a>
+                    </div>
+
+                    <div class="exchange-card">
+                        <div class="exchange-card-header">
+                            <img src="https://assets.staticimg.com/cms/media/7xbKmPPqZHqXfggnJcDJFPWIB5cxwOT8rCRNsCiI4.png" alt="KuCoin" class="exchange-logo-large">
+                            <h4>KuCoin</h4>
+                        </div>
+                        <p>Add <code>KUCOIN_API_KEY</code>, <code>KUCOIN_API_SECRET</code>, and <code>KUCOIN_API_PASSPHRASE</code> to <code>.env</code> file.</p>
+                        <a href="https://www.kucoin.com/account/api" target="_blank" class="setup-link">Create API Key →</a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1167,6 +1258,160 @@ base:0x789..." oninput="previewImport()"></textarea>
             color: #888;
             min-width: 60px;
             text-align: center;
+        }
+
+        /* Exchange Management Styles */
+        .exchange-info-box {
+            background: rgba(102, 126, 234, 0.1);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .exchange-info-box h3 {
+            margin: 0 0 10px 0;
+            color: #667eea;
+        }
+
+        .exchange-info-box p {
+            margin: 8px 0;
+            color: #b0b0b0;
+            line-height: 1.6;
+        }
+
+        .exchange-status-container {
+            margin-bottom: 30px;
+        }
+
+        .exchange-status-container h3 {
+            margin-bottom: 15px;
+            color: #e0e0e0;
+        }
+
+        .exchange-status-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+        }
+
+        .exchange-status-card {
+            background: #2a2a3e;
+            border: 1px solid #3a3a4e;
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .exchange-status-card.configured {
+            border-color: rgba(74, 222, 128, 0.3);
+            background: rgba(74, 222, 128, 0.05);
+        }
+
+        .exchange-status-card.not-configured {
+            opacity: 0.6;
+        }
+
+        .exchange-logo-large {
+            width: 40px;
+            height: 40px;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+
+        .exchange-status-info {
+            flex: 1;
+        }
+
+        .exchange-status-info h4 {
+            margin: 0 0 4px 0;
+            font-size: 16px;
+            color: #e0e0e0;
+        }
+
+        .exchange-status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .exchange-status-badge.configured {
+            background: rgba(74, 222, 128, 0.2);
+            color: #4ade80;
+        }
+
+        .exchange-status-badge.not-configured {
+            background: rgba(156, 163, 175, 0.2);
+            color: #9ca3af;
+        }
+
+        .exchange-setup-guide h3 {
+            margin-bottom: 20px;
+            color: #e0e0e0;
+        }
+
+        .exchange-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .exchange-card {
+            background: #2a2a3e;
+            border: 1px solid #3a3a4e;
+            border-radius: 12px;
+            padding: 20px;
+            transition: all 0.2s;
+        }
+
+        .exchange-card:hover {
+            border-color: rgba(102, 126, 234, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .exchange-card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .exchange-card-header h4 {
+            margin: 0;
+            color: #e0e0e0;
+            font-size: 18px;
+        }
+
+        .exchange-card p {
+            color: #b0b0b0;
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+
+        .exchange-card code {
+            background: rgba(102, 126, 234, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #a0a0ff;
+        }
+
+        .setup-link {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .setup-link:hover {
+            color: #764ba2;
+            text-decoration: underline;
         }
     </style>
 
@@ -2166,15 +2411,18 @@ base:0x789..." oninput="previewImport()"></textarea>
 
             // Show/hide sections
             document.getElementById('walletsSection').style.display = tab === 'wallets' ? 'block' : 'none';
+            document.getElementById('exchangesSection').style.display = tab === 'exchanges' ? 'block' : 'none';
             document.getElementById('tokensSection').style.display = tab === 'tokens' ? 'block' : 'none';
 
             // Show/hide header actions
             document.getElementById('walletHeaderActions').style.display = tab === 'wallets' ? 'flex' : 'none';
             document.getElementById('tokenHeaderActions').style.display = tab === 'tokens' ? 'flex' : 'none';
 
-            // Load tokens if switching to tokens tab
+            // Load data based on tab
             if (tab === 'tokens') {
                 loadManualTokens();
+            } else if (tab === 'exchanges') {
+                loadExchangeStatus();
             }
         }
 
@@ -2241,6 +2489,84 @@ base:0x789..." oninput="previewImport()"></textarea>
                 return (num / 1000).toFixed(2) + 'K';
             }
             return num.toLocaleString(undefined, { maximumFractionDigits: 6 });
+        }
+
+        // Exchange Management
+        async function loadExchangeStatus() {
+            try {
+                const response = await authFetch('/exchanges/status');
+                const data = await response.json();
+                renderExchangeStatus(data.exchanges);
+            } catch (error) {
+                console.error('Error loading exchange status:', error);
+                const container = document.getElementById('exchangeStatusList');
+                setSafeHTML(container, `
+                    <div class="empty-state">
+                        <p style="color: #ff6b6b;">Failed to load exchange status</p>
+                    </div>
+                `);
+            }
+        }
+
+        function renderExchangeStatus(exchanges) {
+            const container = document.getElementById('exchangeStatusList');
+
+            const exchangeInfo = [
+                {
+                    key: 'coinbase',
+                    name: 'Coinbase',
+                    logo: 'https://www.coinbase.com/favicon.ico'
+                },
+                {
+                    key: 'binance',
+                    name: 'Binance.com',
+                    logo: 'https://public.bnbstatic.com/static/images/common/favicon.ico'
+                },
+                {
+                    key: 'binance_us',
+                    name: 'Binance.US',
+                    logo: 'https://public.bnbstatic.us/static/images/common/favicon.ico'
+                },
+                {
+                    key: 'okx',
+                    name: 'OKX',
+                    logo: 'https://static.okx.com/cdn/assets/imgs/MjAyMTQ/5C7F82ADE3C3FC61.png'
+                },
+                {
+                    key: 'bitget',
+                    name: 'Bitget',
+                    logo: 'https://www.bitget.com/favicon.ico'
+                },
+                {
+                    key: 'gate',
+                    name: 'Gate.io',
+                    logo: 'https://www.gate.io/favicon.ico'
+                },
+                {
+                    key: 'kucoin',
+                    name: 'KuCoin',
+                    logo: 'https://assets.staticimg.com/cms/media/7xbKmPPqZHqXfggnJcDJFPWIB5cxwOT8rCRNsCiI4.png'
+                }
+            ];
+
+            const html = exchangeInfo.map(exchange => {
+                const status = exchanges[exchange.key];
+                const isConfigured = status?.configured || false;
+
+                return `
+                    <div class="exchange-status-card ${isConfigured ? 'configured' : 'not-configured'}">
+                        <img src="${exchange.logo}" alt="${exchange.name}" class="exchange-logo-large" onerror="this.style.display='none'">
+                        <div class="exchange-status-info">
+                            <h4>${exchange.name}</h4>
+                            <span class="exchange-status-badge ${isConfigured ? 'configured' : 'not-configured'}">
+                                ${isConfigured ? '✓ Configured' : '○ Not Configured'}
+                            </span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            setSafeHTML(container, html);
         }
 
         // Add Token Modal
