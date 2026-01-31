@@ -408,7 +408,7 @@ async def init_db():
             )
         """)
 
-        # API usage tracking table - stores API call counts per period
+        # API usage tracking table - stores API call counts per period (legacy aggregated view)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS api_usage (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -425,6 +425,20 @@ async def init_db():
         await db.execute("""
             CREATE INDEX IF NOT EXISTS idx_api_usage_api_period
             ON api_usage(api_name, period_start)
+        """)
+
+        # API call log - stores individual call timestamps for rolling window tracking
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS api_call_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                api_name TEXT NOT NULL,
+                timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_api_call_log_api_time
+            ON api_call_log(api_name, timestamp)
         """)
 
         # API rate limits table - stores custom rate limits for APIs
@@ -1670,11 +1684,20 @@ async def clear_pending_mode(user_id: int = None):
 async def record_api_call(api_name: str, period_seconds: int = 86400):
     """
     Record an API call for usage tracking.
-    Groups calls into periods (default: daily).
+
+    Stores individual call timestamps for accurate rolling window tracking.
+    Also maintains legacy aggregated period counts for historical reporting.
     """
     async with aiosqlite.connect(DATABASE_PATH) as db:
         now = datetime.now()
-        # Calculate period start (beginning of current period)
+
+        # Insert into call log for rolling window tracking
+        await db.execute("""
+            INSERT INTO api_call_log (api_name, timestamp)
+            VALUES (?, ?)
+        """, (api_name, now.isoformat()))
+
+        # Also update legacy aggregated table for historical reporting
         period_start = now.replace(
             hour=0, minute=0, second=0, microsecond=0
         ) if period_seconds == 86400 else now.replace(
@@ -1683,7 +1706,6 @@ async def record_api_call(api_name: str, period_seconds: int = 86400):
 
         period_end = period_start + timedelta(seconds=period_seconds)
 
-        # Try to update existing record, insert if not exists
         await db.execute("""
             INSERT INTO api_usage (api_name, period_start, period_end, call_count, updated_at)
             VALUES (?, ?, ?, 1, ?)
@@ -1691,60 +1713,101 @@ async def record_api_call(api_name: str, period_seconds: int = 86400):
                 call_count = call_count + 1,
                 updated_at = excluded.updated_at
         """, (api_name, period_start.isoformat(), period_end.isoformat(), now.isoformat()))
+
         await db.commit()
 
 
 async def get_api_usage(api_name: str, period_seconds: int = 86400) -> dict:
     """
-    Get current API usage for the current period.
-    Returns usage data with call count and period info.
+    Get current API usage using a rolling time window.
+
+    Uses api_call_log to count calls within the last N seconds from now.
+    This provides accurate rolling window tracking (e.g., last 24 hours)
+    instead of calendar day boundaries.
+
+    Args:
+        api_name: Name of the API
+        period_seconds: Rolling window size in seconds (default: 86400 = 24 hours)
+
+    Returns:
+        dict with api_name, call_count, period_start, period_end
     """
     async with aiosqlite.connect(DATABASE_PATH) as db:
-        db.row_factory = aiosqlite.Row
         now = datetime.now()
-
-        # Calculate current period start
-        period_start = now.replace(
-            hour=0, minute=0, second=0, microsecond=0
-        ) if period_seconds == 86400 else now.replace(
-            minute=0, second=0, microsecond=0
-        ) if period_seconds == 3600 else now.replace(second=0, microsecond=0)
+        window_start = now - timedelta(seconds=period_seconds)
 
         cursor = await db.execute("""
-            SELECT * FROM api_usage
-            WHERE api_name = ? AND period_start = ?
-        """, (api_name, period_start.isoformat()))
+            SELECT COUNT(*) as call_count
+            FROM api_call_log
+            WHERE api_name = ? AND timestamp >= ?
+        """, (api_name, window_start.isoformat()))
         row = await cursor.fetchone()
 
-        if row:
-            return {
-                'api_name': row['api_name'],
-                'call_count': row['call_count'],
-                'period_start': row['period_start'],
-                'period_end': row['period_end']
-            }
         return {
             'api_name': api_name,
-            'call_count': 0,
-            'period_start': period_start.isoformat(),
-            'period_end': (period_start + timedelta(seconds=period_seconds)).isoformat()
+            'call_count': row[0] if row else 0,
+            'period_start': window_start.isoformat(),
+            'period_end': now.isoformat()
         }
 
 
-async def get_all_api_usage() -> list:
-    """Get current period usage for all APIs."""
+async def get_all_api_usage(period_seconds: int = 86400) -> list:
+    """
+    Get rolling window usage for all APIs that have been called.
+
+    Uses api_call_log to count calls within the last N seconds from now.
+
+    Args:
+        period_seconds: Rolling window size in seconds (default: 86400 = 24 hours)
+
+    Returns:
+        List of dicts with api_name and call_count
+    """
     async with aiosqlite.connect(DATABASE_PATH) as db:
-        db.row_factory = aiosqlite.Row
         now = datetime.now()
-        period_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        window_start = now - timedelta(seconds=period_seconds)
 
         cursor = await db.execute("""
-            SELECT * FROM api_usage
-            WHERE period_start = ?
+            SELECT api_name, COUNT(*) as call_count
+            FROM api_call_log
+            WHERE timestamp >= ?
+            GROUP BY api_name
             ORDER BY api_name
-        """, (period_start.isoformat(),))
+        """, (window_start.isoformat(),))
         rows = await cursor.fetchall()
-        return [dict(row) for row in rows]
+
+        return [
+            {
+                'api_name': row[0],
+                'call_count': row[1]
+            }
+            for row in rows
+        ]
+
+
+async def cleanup_old_api_call_logs(days_to_keep: int = 7):
+    """
+    Clean up old API call log entries to prevent table bloat.
+
+    Removes entries older than the specified number of days.
+    Should be called periodically (e.g., daily via cron or startup).
+
+    Args:
+        days_to_keep: Number of days of history to retain (default: 7)
+
+    Returns:
+        Number of rows deleted
+    """
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cutoff_time = datetime.now() - timedelta(days=days_to_keep)
+
+        cursor = await db.execute("""
+            DELETE FROM api_call_log
+            WHERE timestamp < ?
+        """, (cutoff_time.isoformat(),))
+
+        await db.commit()
+        return cursor.rowcount
 
 
 async def get_api_rate_limit(api_name: str) -> dict:
