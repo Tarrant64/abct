@@ -46,8 +46,8 @@ API_REGISTRY = {
         "docs_url": "https://www.taptools.io/",
         "env_var": "TAPTOOLS_API_KEY",
         "pricing": "paid",
-        "pricing_note": "Subscription required (~$10/mo), limits vary by plan",
-        "default_limit": None,  # Varies by plan, not documented
+        "pricing_note": "$9/mo plan: 100 requests/day",
+        "default_limit": 100,  # $9/mo plan limit
         "default_period": 86400,
         "period_label": "day"
     },
