@@ -5505,6 +5505,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log('[Dashboard] Background data loading complete');
         // Update portfolio total one final time with all fresh data
         updateTotalPortfolioValue();
+        // Pre-fetch asset breakdowns for instant modal opening
+        prefetchAssetBreakdowns();
     });
 
     // Load NFTs for the default chain (non-blocking)
@@ -5516,18 +5518,49 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ===========================
 let assetBreakdownChart = null;
 
+// Pre-fetch asset breakdown data for all blockchains (cache warming)
+async function prefetchAssetBreakdowns() {
+    const blockchains = ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base'];
+
+    // Fire off all requests in parallel (don't wait for responses)
+    // This warms the backend cache so modals open instantly
+    blockchains.forEach(blockchain => {
+        authFetch(`${API_BASE}/portfolio/assets/${blockchain}`)
+            .then(r => r.json())
+            .catch(e => console.debug(`Pre-fetch ${blockchain} breakdown:`, e));
+    });
+}
+
 async function openAssetBreakdown(blockchain) {
     try {
-        document.getElementById('assetBreakdownModal').classList.remove('hidden');
-        document.getElementById('breakdownChainName').textContent =
-            `${blockchain.charAt(0).toUpperCase() + blockchain.slice(1)} Asset Breakdown`;
+        // Open modal immediately with loading state
+        const modal = document.getElementById('assetBreakdownModal');
+        const chainName = document.getElementById('breakdownChainName');
+        const totalValue = document.getElementById('breakdownTotalValue');
+        const assetCount = document.getElementById('breakdownAssetCount');
+        const legendDiv = document.getElementById('breakdownLegend');
 
+        modal.classList.remove('hidden');
+        chainName.textContent = `${blockchain.charAt(0).toUpperCase() + blockchain.slice(1)} Asset Breakdown`;
+
+        // Show loading state
+        totalValue.textContent = 'Loading...';
+        assetCount.textContent = '...';
+        legendDiv.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-secondary);">Loading asset data...</div>';
+
+        // Clear any existing chart
+        if (assetBreakdownChart) {
+            assetBreakdownChart.destroy();
+            assetBreakdownChart = null;
+        }
+
+        // Fetch data
         const response = await authFetch(`${API_BASE}/portfolio/assets/${blockchain}`);
         const data = await response.json();
 
-        document.getElementById('breakdownTotalValue').textContent = formatUSD(data.total_value_usd);
-        document.getElementById('breakdownAssetCount').textContent =
-            1 + data.tokens.length + (data.nfts.count > 0 ? 1 : 0);
+        // Update values
+        totalValue.textContent = formatUSD(data.total_value_usd);
+        assetCount.textContent = 1 + data.tokens.length + (data.nfts.count > 0 ? 1 : 0);
 
         const labels = [];
         const values = [];
