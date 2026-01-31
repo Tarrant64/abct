@@ -87,6 +87,17 @@ async def lifespan(app: FastAPI):
     logger.info("Database initialized")
     await log_service.info("main", "Main database initialized")
 
+    # Clean up old API call logs (keep last 7 days)
+    logger.info("Cleaning up old API call logs...")
+    try:
+        from database import cleanup_old_api_call_logs
+        deleted_count = await cleanup_old_api_call_logs(days_to_keep=7)
+        logger.info(f"Cleaned up {deleted_count} old API call log entries")
+        await log_service.info("main", f"API call log cleanup: {deleted_count} entries removed")
+    except Exception as e:
+        logger.warning(f"API call log cleanup failed: {e}")
+        await log_service.warning("main", f"API call log cleanup failed: {e}")
+
     # Initialize authentication tables
     logger.info("Initializing authentication system...")
     try:
