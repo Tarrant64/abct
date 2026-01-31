@@ -490,29 +490,26 @@ class PricingService:
 
                         # Convert to {date, price, time} format
                         # 'time' field is for TradingView lightweight-charts compatibility
+                        # TradingView expects: Unix timestamp (seconds) for intraday, YYYY-MM-DD for daily
                         historical_data[symbol] = []
                         for timestamp_ms, price in prices:
-                            timestamp_sec = timestamp_ms / 1000
+                            timestamp_sec = int(timestamp_ms / 1000)
                             dt = datetime.fromtimestamp(timestamp_sec)
 
                             # Format based on granularity
-                            if days == 1:
-                                # 5-minute intervals: use ISO timestamp (YYYY-MM-DDTHH:MM:SS)
-                                time_str = dt.strftime('%Y-%m-%dT%H:%M:%S')
-                                date_str = dt.strftime('%Y-%m-%d %H:%M')
-                            elif days <= 90:
-                                # Hourly intervals: use ISO timestamp
-                                time_str = dt.strftime('%Y-%m-%dT%H:%M:%S')
+                            if days <= 90:
+                                # Intraday/hourly: use Unix timestamp in seconds
+                                time_value = timestamp_sec
                                 date_str = dt.strftime('%Y-%m-%d %H:%M')
                             else:
-                                # Daily intervals: use date only
-                                time_str = dt.strftime('%Y-%m-%d')
+                                # Daily intervals: use YYYY-MM-DD string
+                                time_value = dt.strftime('%Y-%m-%d')
                                 date_str = dt.strftime('%Y-%m-%d')
 
                             historical_data[symbol].append({
                                 'date': date_str,
                                 'price': price,
-                                'time': time_str  # lightweight-charts expects 'time' key
+                                'time': time_value  # Unix timestamp (int) or date string
                             })
 
                         logger.info(f"CoinGecko: fetched {len(prices)} historical prices for {symbol} (days={days})")
