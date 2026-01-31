@@ -151,6 +151,30 @@
             font-size: 0.9rem;
         }
 
+        .nft-card .image-container .no-image-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-tertiary);
+            padding: 20px;
+            text-align: center;
+        }
+
+        .nft-card .image-container .no-image-placeholder .nft-text {
+            font-size: 3rem;
+            font-weight: bold;
+            color: white;
+            margin-bottom: 10px;
+        }
+
+        .nft-card .image-container .no-image-placeholder .no-cache-text {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
         .nft-card .nft-info {
             padding: 12px;
         }
@@ -452,7 +476,6 @@
                     <select id="themeSelect" onchange="changeTheme(this.value)" title="Select theme">
                         <option value="default">Default</option>
                         <option value="cypherpunk1">Cypherpunk 1</option>
-                        <option value="green-terminal">Green Terminal</option>
                         <option value="ocean-depths">Ocean Depths</option>
                         <option value="sunset-horizon">Sunset Horizon</option>
                     </select>
@@ -618,12 +641,25 @@
                     btn.disabled = true;
                 }
 
-                // Update chain counts in status
+                // Update chain counts in status and show/hide tabs
                 const byChain = data.by_chain || {};
-                for (const [chain, info] of Object.entries(byChain)) {
-                    const el = document.getElementById(`count${chain.charAt(0).toUpperCase() + chain.slice(1)}`);
-                    if (el && info.cached !== undefined) {
-                        el.textContent = info.cached;
+                const allChains = ['cardano', 'ethereum', 'solana', 'polygon', 'base'];
+
+                for (const chain of allChains) {
+                    const info = byChain[chain];
+                    const count = info ? info.cached : 0;
+                    const tab = document.querySelector(`.chain-tab[data-chain="${chain}"]`);
+                    const countEl = document.getElementById(`count${chain.charAt(0).toUpperCase() + chain.slice(1)}`);
+
+                    if (countEl) countEl.textContent = count;
+
+                    // Hide tabs for chains with 0 cached NFTs
+                    if (tab) {
+                        if (count === 0) {
+                            tab.style.display = 'none';
+                        } else {
+                            tab.style.display = 'flex';
+                        }
                     }
                 }
 
@@ -664,9 +700,24 @@
                 document.getElementById('countAll').textContent = data.total_count || 0;
 
                 const byChain = data.by_chain || {};
-                for (const [chain, count] of Object.entries(byChain)) {
-                    const el = document.getElementById(`count${chain.charAt(0).toUpperCase() + chain.slice(1)}`);
-                    if (el) el.textContent = count;
+
+                // Update chain counts and show/hide tabs based on whether they have NFTs
+                const allChains = ['cardano', 'ethereum', 'solana', 'polygon', 'base'];
+                for (const chain of allChains) {
+                    const count = byChain[chain] || 0;
+                    const tab = document.querySelector(`.chain-tab[data-chain="${chain}"]`);
+                    const countEl = document.getElementById(`count${chain.charAt(0).toUpperCase() + chain.slice(1)}`);
+
+                    if (countEl) countEl.textContent = count;
+
+                    // Hide tabs for chains with 0 NFTs
+                    if (tab) {
+                        if (count === 0) {
+                            tab.style.display = 'none';
+                        } else {
+                            tab.style.display = 'flex';
+                        }
+                    }
                 }
 
                 // Calculate total value
@@ -712,7 +763,7 @@
                         <img class="nft-image" src="${nft.thumbnail_url}"
                              alt="${nft.name}"
                              loading="lazy"
-                             onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23333%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2250%22 text-anchor=%22middle%22 fill=%22%23666%22 font-size=%2212%22>No Image</text></svg>'">
+                             onerror="this.parentElement.innerHTML='<span class=\\'chain-badge ${nft.blockchain}\\'>${nft.blockchain}</span><div class=\\'no-image-placeholder\\'><div class=\\'nft-text\\'>NFT</div><div class=\\'no-cache-text\\'>No cached image found</div></div>';">
                     </div>
                     <div class="nft-info">
                         <div class="nft-name">${escapeHtml(nft.name)}</div>
