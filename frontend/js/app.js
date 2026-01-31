@@ -182,11 +182,21 @@ function changeTheme(themeName) {
         themeSelect.value = themeName;
     }
 
-    // Re-render chart with new theme colors
+    // Re-render portfolio history chart with new theme colors
     if (portfolioChart) {
         const activeRangeBtn = document.querySelector('.range-btn.active');
         const currentRange = activeRangeBtn ? activeRangeBtn.dataset.range : '7d';
         loadPortfolioHistory(currentRange);
+    }
+
+    // Re-render analytics charts with new theme colors
+    if (analyticsData) {
+        if (coinAllocationChart) {
+            renderCoinAllocationChart();
+        }
+        if (categoryAllocationChart) {
+            renderCategoryAllocationChart();
+        }
     }
 }
 
@@ -5963,16 +5973,14 @@ function selectCoinSegment(index) {
         coins = topCoins;
     }
 
-    const coin = coins[index];
-
-    // Update chart colors for selection effect
+    // Update chart colors for selection effect (brighten selected segment)
     const colors = generateChartColors(coins.length);
-    colors[index] = brightenColor(colors[index], 40); // Make selected color brighter
+    colors[index] = brightenColor(colors[index], 40);
 
     coinAllocationChart.data.datasets[0].backgroundColor = colors;
     coinAllocationChart.update();
 
-    // Update legend selection
+    // Update legend selection (visual highlight)
     document.querySelectorAll('#coinAllocationLegend .analytics-legend-item-compact').forEach((item, i) => {
         if (i === index) {
             item.classList.add('selected');
@@ -5980,13 +5988,6 @@ function selectCoinSegment(index) {
             item.classList.remove('selected');
         }
     });
-
-    // Show selection info with full value
-    document.getElementById('coinSelectionInfo').innerHTML = `
-        <div class="selection-title">${coin.symbol}</div>
-        <div class="selection-value">${formatUSD(coin.value_usd)}</div>
-        <div style="color: var(--text-secondary); font-size: 0.9rem;">${coin.percentage.toFixed(2)}% of portfolio</div>
-    `;
 }
 
 function renderCoinLegend(coins, colors) {
@@ -5995,7 +5996,10 @@ function renderCoinLegend(coins, colors) {
         <div class="analytics-legend-item-compact" onclick="selectCoinSegment(${index})">
             <div class="legend-color-dot-glow" style="background-color: ${colors[index]}; box-shadow: 0 0 8px ${colors[index]};"></div>
             <div class="legend-compact-label">
-                <span class="legend-symbol">${coin.symbol}</span>
+                <div class="legend-top-row">
+                    <span class="legend-symbol">${coin.symbol}</span>
+                    <span class="legend-value-inline">${formatUSD(coin.value_usd)}</span>
+                </div>
                 <span class="legend-percentage-compact">${coin.percentage.toFixed(1)}%</span>
             </div>
         </div>
@@ -6062,16 +6066,15 @@ function renderCategoryAllocationChart() {
 
 function selectCategorySegment(index) {
     selectedCategoryIndex = index;
-    const category = analyticsData.category_allocation[index];
 
-    // Update chart colors for selection effect
+    // Update chart colors for selection effect (brighten selected segment)
     const colors = generateCategoryColors(analyticsData.category_allocation.length);
     colors[index] = brightenColor(colors[index], 40);
 
     categoryAllocationChart.data.datasets[0].backgroundColor = colors;
     categoryAllocationChart.update();
 
-    // Update legend selection
+    // Update legend selection (visual highlight)
     document.querySelectorAll('#categoryAllocationLegend .analytics-legend-item-compact').forEach((item, i) => {
         if (i === index) {
             item.classList.add('selected');
@@ -6079,21 +6082,6 @@ function selectCategorySegment(index) {
             item.classList.remove('selected');
         }
     });
-
-    // Show selection info with token breakdown
-    const tokenList = category.tokens.map(t =>
-        `<div style="display: flex; justify-content: space-between; padding: 5px 10px; background: var(--bg-tertiary); border-radius: 4px; margin-top: 5px;">
-            <span>${t.symbol}</span>
-            <span>${formatUSD(t.value_usd)}</span>
-        </div>`
-    ).join('');
-
-    document.getElementById('categorySelectionInfo').innerHTML = `
-        <div class="selection-title">${category.category}</div>
-        <div class="selection-value">${formatUSD(category.value_usd)}</div>
-        <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 10px;">${category.percentage.toFixed(2)}% of portfolio (${category.token_count} tokens)</div>
-        <div style="max-height: 200px; overflow-y: auto; width: 100%;">${tokenList}</div>
-    `;
 }
 
 function renderCategoryLegend(categories, colors) {
@@ -6102,7 +6090,10 @@ function renderCategoryLegend(categories, colors) {
         <div class="analytics-legend-item-compact" onclick="selectCategorySegment(${index})">
             <div class="legend-color-dot-glow" style="background-color: ${colors[index]}; box-shadow: 0 0 8px ${colors[index]};"></div>
             <div class="legend-compact-label">
-                <span class="legend-symbol">${category.category}</span>
+                <div class="legend-top-row">
+                    <span class="legend-symbol">${category.category}</span>
+                    <span class="legend-value-inline">${formatUSD(category.value_usd)}</span>
+                </div>
                 <span class="legend-percentage-compact">${category.percentage.toFixed(1)}%</span>
             </div>
         </div>
@@ -6115,28 +6106,64 @@ function generateChartColors(count) {
     let baseColors;
 
     if (theme === 'ocean-depths') {
-        // Ocean theme - vibrant blues, cyans, and aqua
+        // Ocean Depths - Professional aquatic palette
+        // Blues → Cyans → Teals → Coral accents (complementary warm)
         baseColors = [
-            '#00b4d8', '#48cae4', '#06d6a0', '#90e0ef', '#0096c7',
-            '#023e8a', '#ffd166', '#8338ec', '#00f5ff', '#00d9ff'
+            '#0096c7', // Deep ocean blue
+            '#00b4d8', // Bright cyan
+            '#48cae4', // Light cyan
+            '#90e0ef', // Sky blue
+            '#06d6a0', // Teal green
+            '#00f5d4', // Aqua
+            '#ffd166', // Coral accent
+            '#ef476f', // Pink accent
+            '#118ab2', // Navy
+            '#073b4c'  // Deep teal
         ];
     } else if (theme === 'sunset-horizon') {
-        // Sunset theme - oranges, reds, purples
+        // Sunset Horizon - Warm gradient palette
+        // Oranges → Reds → Purples → Magentas (sunset progression)
         baseColors = [
-            '#ff6b35', '#f77f00', '#d62828', '#fcbf49', '#f72585',
-            '#b5179e', '#7209b7', '#560bad', '#ffa500', '#ff4500'
+            '#ff6b35', // Vivid orange
+            '#f77f00', // Amber
+            '#fcbf49', // Golden yellow
+            '#d62828', // Deep red
+            '#f72585', // Hot pink
+            '#b5179e', // Magenta
+            '#7209b7', // Purple
+            '#560bad', // Deep purple
+            '#ff9e00', // Bright orange
+            '#e63946'  // Crimson
         ];
     } else if (theme === 'cypherpunk1') {
-        // Cypherpunk theme - neon greens, cyans, magentas
+        // Cypherpunk - High-contrast neon palette
+        // Electric greens → Cyans → Magentas (cyberpunk aesthetic)
         baseColors = [
-            '#00ff41', '#00d9ff', '#ff00ff', '#39ff14', '#0ff0fc',
-            '#ff10f0', '#00ffff', '#adff2f', '#7fff00', '#00fa9a'
+            '#39ff14', // Neon green
+            '#00ff41', // Matrix green
+            '#adff2f', // Yellow-green
+            '#00d9ff', // Electric cyan
+            '#0ff0fc', // Bright cyan
+            '#00ffff', // Aqua cyan
+            '#ff00ff', // Magenta
+            '#ff10f0', // Hot magenta
+            '#ff1493', // Deep pink
+            '#7fff00'  // Chartreuse
         ];
     } else {
-        // Default theme - balanced vibrant palette
+        // Default - Balanced professional palette
+        // Green → Blues → Reds → Purples → Oranges (diverse, accessible)
         baseColors = [
-            '#00d26a', '#3498db', '#e74c3c', '#f39c12', '#9b59b6',
-            '#1abc9c', '#e67e22', '#2ecc71', '#3498db', '#e91e63'
+            '#00d26a', // Emerald green (primary)
+            '#3498db', // Bright blue
+            '#e74c3c', // Coral red
+            '#9b59b6', // Amethyst purple
+            '#1abc9c', // Turquoise
+            '#f39c12', // Orange
+            '#e91e63', // Pink
+            '#2ecc71', // Green
+            '#3b82f6', // Blue
+            '#8b5cf6'  // Purple
         ];
     }
 
@@ -6150,47 +6177,47 @@ function generateCategoryColors(count) {
 
     if (theme === 'ocean-depths') {
         categoryColors = {
-            'Layer 1 (L1)': '#00b4d8',
-            'Decentralized Finance (DeFi)': '#06d6a0',
-            'Cardano Ecosystem': '#48cae4',
-            'Infrastructure': '#ffd166',
-            'Stablecoins': '#90e0ef',
-            'Meme': '#ff69b4',
-            'Gaming': '#8338ec',
-            'Other': '#6c757d'
+            'Layer 1 (L1)': '#0096c7',        // Deep ocean blue
+            'Decentralized Finance (DeFi)': '#06d6a0', // Teal green
+            'Cardano Ecosystem': '#00b4d8',   // Bright cyan
+            'Infrastructure': '#ffd166',       // Coral accent
+            'Stablecoins': '#48cae4',         // Light cyan
+            'Meme': '#ef476f',                // Pink accent
+            'Gaming': '#90e0ef',              // Sky blue
+            'Other': '#6c757d'                // Gray
         };
     } else if (theme === 'sunset-horizon') {
         categoryColors = {
-            'Layer 1 (L1)': '#ff6b35',
-            'Decentralized Finance (DeFi)': '#fcbf49',
-            'Cardano Ecosystem': '#f77f00',
-            'Infrastructure': '#f72585',
-            'Stablecoins': '#d62828',
-            'Meme': '#b5179e',
-            'Gaming': '#7209b7',
-            'Other': '#6c757d'
+            'Layer 1 (L1)': '#ff6b35',        // Vivid orange
+            'Decentralized Finance (DeFi)': '#fcbf49', // Golden yellow
+            'Cardano Ecosystem': '#f77f00',   // Amber
+            'Infrastructure': '#f72585',       // Hot pink
+            'Stablecoins': '#d62828',         // Deep red
+            'Meme': '#b5179e',                // Magenta
+            'Gaming': '#7209b7',              // Purple
+            'Other': '#6c757d'                // Gray
         };
     } else if (theme === 'cypherpunk1') {
         categoryColors = {
-            'Layer 1 (L1)': '#00ff41',
-            'Decentralized Finance (DeFi)': '#00d9ff',
-            'Cardano Ecosystem': '#ff00ff',
-            'Infrastructure': '#39ff14',
-            'Stablecoins': '#0ff0fc',
-            'Meme': '#ff10f0',
-            'Gaming': '#adff2f',
-            'Other': '#808080'
+            'Layer 1 (L1)': '#39ff14',        // Neon green
+            'Decentralized Finance (DeFi)': '#00d9ff', // Electric cyan
+            'Cardano Ecosystem': '#00ff41',   // Matrix green
+            'Infrastructure': '#adff2f',       // Yellow-green
+            'Stablecoins': '#0ff0fc',         // Bright cyan
+            'Meme': '#ff00ff',                // Magenta
+            'Gaming': '#ff10f0',              // Hot magenta
+            'Other': '#808080'                // Gray
         };
     } else {
         categoryColors = {
-            'Layer 1 (L1)': '#8b5cf6',
-            'Decentralized Finance (DeFi)': '#10b981',
-            'Cardano Ecosystem': '#3b82f6',
-            'Infrastructure': '#f59e0b',
-            'Stablecoins': '#06b6d4',
-            'Meme': '#ec4899',
-            'Gaming': '#8b5cf6',
-            'Other': '#6b7280'
+            'Layer 1 (L1)': '#3498db',        // Bright blue
+            'Decentralized Finance (DeFi)': '#00d26a', // Emerald green
+            'Cardano Ecosystem': '#1abc9c',   // Turquoise
+            'Infrastructure': '#f39c12',       // Orange
+            'Stablecoins': '#9b59b6',         // Amethyst purple
+            'Meme': '#e91e63',                // Pink
+            'Gaming': '#8b5cf6',              // Purple
+            'Other': '#6b7280'                // Gray
         };
     }
 

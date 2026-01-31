@@ -1421,9 +1421,16 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
 .legend-compact-label {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 3px;
     flex: 1;
     min-width: 0;
+}
+
+.legend-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
 }
 
 .legend-symbol {
@@ -1433,6 +1440,15 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    flex: 1;
+}
+
+.legend-value-inline {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--accent-success);
+    white-space: nowrap;
+    margin-left: auto;
 }
 
 .legend-percentage-compact {
@@ -1493,39 +1509,7 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
 }
 
 .analytics-selection-info {
-    margin-top: 20px;
-    text-align: center;
-    padding: 20px;
-    background: linear-gradient(135deg, var(--bg-tertiary), var(--bg-card));
-    border-radius: 12px;
-    min-height: 80px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    border: 1px solid var(--accent-success);
-    box-shadow: 0 0 20px rgba(0, 210, 106, 0.15);
-    transition: all 0.3s ease;
-}
-
-.analytics-selection-info:not(:empty) {
-    box-shadow: 0 0 30px rgba(0, 210, 106, 0.3);
-}
-
-.analytics-selection-info .selection-title {
-    font-size: 1.3rem;
-    font-weight: 700;
-    color: var(--accent-success);
-    margin-bottom: 8px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
-
-.analytics-selection-info .selection-value {
-    font-size: 1.8rem;
-    font-weight: bold;
-    color: var(--text-primary);
-    text-shadow: 0 2px 8px rgba(0, 210, 106, 0.2);
+    display: none; /* Hidden - now showing info inline in legend */
 }
 
 .summary-cards {
