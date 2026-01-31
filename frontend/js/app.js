@@ -5914,10 +5914,10 @@ function renderCoinAllocationChart() {
             datasets: [{
                 data: values,
                 backgroundColor: colors,
-                borderWidth: 2,
-                borderColor: 'rgba(0, 0, 0, 0.2)',
+                borderWidth: 0, // No border by default - seamless segments
+                borderColor: 'transparent',
                 hoverBorderWidth: 5,
-                hoverBorderColor: 'rgba(255, 255, 255, 0.5)', // Soft white glow on hover
+                hoverBorderColor: 'rgba(255, 255, 255, 0.6)', // Soft white glow on hover
                 shadowOffsetX: 0,
                 shadowOffsetY: 0,
                 shadowBlur: 20,
@@ -5981,11 +5981,11 @@ function selectCoinSegment(index) {
     const colors = generateChartColors(coins.length);
     colors[index] = brightenColor(colors[index], 40);
 
-    // Create soft glowing border effect for selected segment
-    const borderColors = new Array(coins.length).fill('rgba(0, 0, 0, 0.2)');
-    borderColors[index] = 'rgba(0, 210, 106, 0.8)'; // Soft green glow (80% opacity)
-    const borderWidths = new Array(coins.length).fill(2);
-    borderWidths[index] = 5; // Slightly thicker for selected
+    // Create soft white glowing border for selected segment (same as hover)
+    const borderColors = new Array(coins.length).fill('transparent');
+    borderColors[index] = 'rgba(255, 255, 255, 0.6)'; // Soft white glow
+    const borderWidths = new Array(coins.length).fill(0);
+    borderWidths[index] = 5; // Glowing outline for selected
 
     coinAllocationChart.data.datasets[0].backgroundColor = colors;
     coinAllocationChart.data.datasets[0].borderColor = borderColors;
@@ -6036,10 +6036,10 @@ function renderCategoryAllocationChart() {
             datasets: [{
                 data: values,
                 backgroundColor: colors,
-                borderWidth: 2,
-                borderColor: 'rgba(0, 0, 0, 0.2)',
+                borderWidth: 0, // No border by default - seamless segments
+                borderColor: 'transparent',
                 hoverBorderWidth: 5,
-                hoverBorderColor: 'rgba(255, 255, 255, 0.5)', // Soft white glow on hover
+                hoverBorderColor: 'rgba(255, 255, 255, 0.6)', // Soft white glow on hover
                 shadowOffsetX: 0,
                 shadowOffsetY: 0,
                 shadowBlur: 20,
@@ -6087,11 +6087,11 @@ function selectCategorySegment(index) {
     const colors = generateCategoryColors(analyticsData.category_allocation.length);
     colors[index] = brightenColor(colors[index], 40);
 
-    // Create soft glowing border effect for selected segment
-    const borderColors = new Array(analyticsData.category_allocation.length).fill('rgba(0, 0, 0, 0.2)');
-    borderColors[index] = 'rgba(0, 210, 106, 0.8)'; // Soft green glow (80% opacity)
-    const borderWidths = new Array(analyticsData.category_allocation.length).fill(2);
-    borderWidths[index] = 5; // Slightly thicker for selected
+    // Create soft white glowing border for selected segment (same as hover)
+    const borderColors = new Array(analyticsData.category_allocation.length).fill('transparent');
+    borderColors[index] = 'rgba(255, 255, 255, 0.6)'; // Soft white glow
+    const borderWidths = new Array(analyticsData.category_allocation.length).fill(0);
+    borderWidths[index] = 5; // Glowing outline for selected
 
     categoryAllocationChart.data.datasets[0].backgroundColor = colors;
     categoryAllocationChart.data.datasets[0].borderColor = borderColors;
