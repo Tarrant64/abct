@@ -5834,12 +5834,12 @@ async function loadAnalyticsData() {
 }
 
 function nextAnalyticsSlide() {
-    currentAnalyticsSlide = (currentAnalyticsSlide + 1) % 3;
+    currentAnalyticsSlide = (currentAnalyticsSlide + 1) % 4;
     updateAnalyticsSlide();
 }
 
 function previousAnalyticsSlide() {
-    currentAnalyticsSlide = (currentAnalyticsSlide - 1 + 3) % 3;
+    currentAnalyticsSlide = (currentAnalyticsSlide - 1 + 4) % 4;
     updateAnalyticsSlide();
 }
 
@@ -6464,10 +6464,10 @@ window.nextAnalyticsSlide = function() {
     checkAndInitPriceChart();
 };
 
-const originalPrevAnalyticsSlide = window.prevAnalyticsSlide;
-window.prevAnalyticsSlide = function() {
-    if (originalPrevAnalyticsSlide) {
-        originalPrevAnalyticsSlide();
+const originalPreviousAnalyticsSlide = window.previousAnalyticsSlide;
+window.previousAnalyticsSlide = function() {
+    if (originalPreviousAnalyticsSlide) {
+        originalPreviousAnalyticsSlide();
     }
     checkAndInitPriceChart();
 };
