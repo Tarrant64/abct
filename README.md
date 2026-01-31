@@ -2,7 +2,7 @@
 
 A self-hosted cryptocurrency portfolio tracker that aggregates data from multiple blockchains, exchanges, and DeFi protocols.
 
-![Version](https://img.shields.io/badge/version-0.13.0-blue.svg)
+![Version](https://img.shields.io/badge/version-0.13.1-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.109-teal.svg)
@@ -51,6 +51,14 @@ For a detailed overview of the system architecture, authentication flow, and dat
 - **NFT Collection**: Browse your NFTs with floor price valuations
 - **Portfolio History**: Interactive charts showing value over time (7d, 4w, 3m)
 - **Privacy Mode**: Hide sensitive financial data with one click
+
+### New in v0.13.1 🎉
+- **📈 Complete Portfolio History**: 90-day historical snapshots with all components
+  - Backfill script generates realistic historical price variations
+  - Includes native coins, tracked tokens, NFTs, and exchange balances
+  - Daily snapshots with auto-refresh every 4 hours
+  - Chart now shows complete portfolio value (not just native coins)
+  - All components properly tracked: wallets + tokens + NFTs + exchanges
 
 ### New in v0.13.0 🎉
 - **📊 Blockchain Asset Breakdown**: Interactive drill-down charts

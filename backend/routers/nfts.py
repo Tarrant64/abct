@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Optional, List
+import asyncio
 import sys
 import os
 
@@ -1251,121 +1252,141 @@ async def get_nft_wall_status(user_id: int = Depends(verify_session)):
 async def cache_all_nft_images(
     user_id: int = Depends(verify_session),
     blockchain: Optional[str] = None,
-    max_concurrent: int = 3,
-    limit: int = 100
+    max_concurrent: int = 20,
+    limit: int = 200,
+    chain_parallelism: int = 5
 ):
     """
-    Cache images for all NFTs from the dashboard.
+    Cache images for all NFTs from the dashboard with parallel chain processing.
     Only caches NFTs that have image URLs and aren't already cached.
 
     Args:
         blockchain: Optional chain to limit caching to
-        max_concurrent: Max concurrent image fetches (default 3 to avoid rate limits)
-        limit: Max images to cache in this batch
+        max_concurrent: Max concurrent image fetches per chain (default: 20)
+        limit: Max images to cache in this batch per chain (default: 200)
+        chain_parallelism: Max chains to process in parallel (default: 5)
     """
-    results = {
-        'chains_processed': [],
-        'total_cached': 0,
-        'total_failed': 0,
-        'total_skipped': 0
-    }
-
     chains_to_process = [blockchain] if blockchain else ['cardano', 'ethereum', 'solana', 'polygon', 'base']
 
-    for chain in chains_to_process:
-        nfts_to_cache = []
+    # Create semaphore for chain-level concurrency
+    chain_semaphore = asyncio.Semaphore(chain_parallelism)
 
-        try:
-            if chain == 'cardano':
-                nfts = await nft_service.get_all_nfts(user_id=user_id, force_refresh=False)
+    async def process_chain(chain: str):
+        """Process a single blockchain's NFT caching."""
+        async with chain_semaphore:
+            nfts_to_cache = []
 
-                # For Cardano, we need to fetch image URLs from Blockfrost metadata
-                # Only fetch for NFTs that don't already have image URLs
-                nfts_needing_images = [n for n in nfts if not _get_nft_image_url(n)]
-                if nfts_needing_images:
-                    # Batch fetch image URLs (limit to avoid overwhelming the API)
-                    batch_to_fetch = nfts_needing_images[:limit]
-                    image_urls = await nft_service.batch_fetch_image_urls(batch_to_fetch, max_concurrent=max_concurrent)
+            try:
+                if chain == 'cardano':
+                    nfts = await nft_service.get_all_nfts(user_id=user_id, force_refresh=False)
 
-                    # Update the NFTs with fetched image URLs
+                    # For Cardano, we need to fetch image URLs from Blockfrost metadata
+                    # Only fetch for NFTs that don't already have image URLs
+                    nfts_needing_images = [n for n in nfts if not _get_nft_image_url(n)]
+                    if nfts_needing_images:
+                        # Batch fetch image URLs (limit to avoid overwhelming the API)
+                        batch_to_fetch = nfts_needing_images[:limit]
+                        image_urls = await nft_service.batch_fetch_image_urls(batch_to_fetch, max_concurrent=10)
+
+                        # Update the NFTs with fetched image URLs
+                        for nft in nfts:
+                            asset_id = nft.get('asset_id')
+                            if asset_id in image_urls:
+                                nft['image'] = image_urls[asset_id]
+
+                    # Now collect NFTs with images
                     for nft in nfts:
-                        asset_id = nft.get('asset_id')
-                        if asset_id in image_urls:
-                            nft['image'] = image_urls[asset_id]
+                        image_url = _get_nft_image_url(nft)
+                        if image_url:
+                            nfts_to_cache.append({
+                                'asset_id': nft.get('unit') or nft.get('asset_id'),
+                                'image_url': image_url
+                            })
 
-                # Now collect NFTs with images
-                for nft in nfts:
-                    image_url = _get_nft_image_url(nft)
-                    if image_url:
-                        nfts_to_cache.append({
-                            'asset_id': nft.get('unit') or nft.get('asset_id'),
-                            'image_url': image_url
-                        })
+                elif chain == 'ethereum' and ethereum_nft_service.is_configured():
+                    nfts = await ethereum_nft_service.get_all_ethereum_nfts(user_id=user_id, force_refresh=False)
+                    for nft in nfts:
+                        if _get_nft_image_url(nft):
+                            nfts_to_cache.append({
+                                'asset_id': f"{nft.get('contract_address')}_{nft.get('token_id')}",
+                                'image_url': _get_nft_image_url(nft)
+                            })
 
-            elif chain == 'ethereum' and ethereum_nft_service.is_configured():
-                nfts = await ethereum_nft_service.get_all_ethereum_nfts(user_id=user_id, force_refresh=False)
-                for nft in nfts:
-                    if _get_nft_image_url(nft):
-                        nfts_to_cache.append({
-                            'asset_id': f"{nft.get('contract_address')}_{nft.get('token_id')}",
-                            'image_url': _get_nft_image_url(nft)
-                        })
+                elif chain == 'solana' and solana_nft_service.is_configured():
+                    nfts = await solana_nft_service.get_all_solana_nfts(user_id=user_id, force_refresh=False)
+                    for nft in nfts:
+                        if _get_nft_image_url(nft):
+                            nfts_to_cache.append({
+                                'asset_id': nft.get('mint') or nft.get('asset_id'),
+                                'image_url': _get_nft_image_url(nft)
+                            })
 
-            elif chain == 'solana' and solana_nft_service.is_configured():
-                nfts = await solana_nft_service.get_all_solana_nfts(user_id=user_id, force_refresh=False)
-                for nft in nfts:
-                    if _get_nft_image_url(nft):
-                        nfts_to_cache.append({
-                            'asset_id': nft.get('mint') or nft.get('asset_id'),
-                            'image_url': _get_nft_image_url(nft)
-                        })
+                elif chain == 'polygon' and polygon_service.is_configured():
+                    wallets = await get_all_wallets(user_id=user_id)
+                    polygon_wallets = [w for w in wallets if w['blockchain'] == 'polygon']
+                    nfts = await polygon_service.get_all_polygon_nfts(polygon_wallets, force_refresh=False)
+                    for nft in nfts:
+                        if _get_nft_image_url(nft):
+                            nfts_to_cache.append({
+                                'asset_id': f"{nft.get('contract_address')}_{nft.get('token_id')}",
+                                'image_url': _get_nft_image_url(nft)
+                            })
 
-            elif chain == 'polygon' and polygon_service.is_configured():
-                wallets = await get_all_wallets(user_id=user_id)
-                polygon_wallets = [w for w in wallets if w['blockchain'] == 'polygon']
-                nfts = await polygon_service.get_all_polygon_nfts(polygon_wallets, force_refresh=False)
-                for nft in nfts:
-                    if _get_nft_image_url(nft):
-                        nfts_to_cache.append({
-                            'asset_id': f"{nft.get('contract_address')}_{nft.get('token_id')}",
-                            'image_url': _get_nft_image_url(nft)
-                        })
+                elif chain == 'base' and base_service.is_configured():
+                    wallets = await get_all_wallets(user_id=user_id)
+                    base_wallets = [w for w in wallets if w['blockchain'] == 'base']
+                    nfts = await base_service.get_all_base_nfts(base_wallets, force_refresh=False)
+                    for nft in nfts:
+                        if _get_nft_image_url(nft):
+                            nfts_to_cache.append({
+                                'asset_id': f"{nft.get('contract_address')}_{nft.get('token_id')}",
+                                'image_url': _get_nft_image_url(nft)
+                            })
 
-            elif chain == 'base' and base_service.is_configured():
-                wallets = await get_all_wallets(user_id=user_id)
-                base_wallets = [w for w in wallets if w['blockchain'] == 'base']
-                nfts = await base_service.get_all_base_nfts(base_wallets, force_refresh=False)
-                for nft in nfts:
-                    if _get_nft_image_url(nft):
-                        nfts_to_cache.append({
-                            'asset_id': f"{nft.get('contract_address')}_{nft.get('token_id')}",
-                            'image_url': _get_nft_image_url(nft)
-                        })
+                # Limit the batch size
+                nfts_to_cache = nfts_to_cache[:limit]
 
-            # Limit the batch size
-            nfts_to_cache = nfts_to_cache[:limit]
+                if nfts_to_cache:
+                    logger.info(f"[{chain}] Caching {len(nfts_to_cache)} images with {max_concurrent} concurrent downloads")
+                    batch_result = await nft_image_service.batch_cache_images(
+                        nfts=nfts_to_cache,
+                        blockchain=chain,
+                        max_concurrent=max_concurrent
+                    )
+                    return {
+                        'chain': chain,
+                        'fetched': batch_result.get('fetched', 0),
+                        'failed': batch_result.get('failed', 0),
+                        'skipped': batch_result.get('skipped', 0)
+                    }
+                else:
+                    return {
+                        'chain': chain,
+                        'fetched': 0,
+                        'failed': 0,
+                        'skipped': 0
+                    }
 
-            if nfts_to_cache:
-                batch_result = await nft_image_service.batch_cache_images(
-                    nfts=nfts_to_cache,
-                    blockchain=chain,
-                    max_concurrent=max_concurrent
-                )
-                results['chains_processed'].append({
+            except Exception as e:
+                logger.error(f"Error processing chain {chain}: {e}")
+                return {
                     'chain': chain,
-                    'fetched': batch_result.get('fetched', 0),
-                    'failed': batch_result.get('failed', 0),
-                    'skipped': batch_result.get('skipped', 0)
-                })
-                results['total_cached'] += batch_result.get('fetched', 0)
-                results['total_failed'] += batch_result.get('failed', 0)
-                results['total_skipped'] += batch_result.get('skipped', 0)
+                    'error': str(e)
+                }
 
-        except Exception as e:
-            results['chains_processed'].append({
-                'chain': chain,
-                'error': str(e)
-            })
+    # Process all chains in parallel
+    logger.info(f"Starting parallel NFT caching for chains: {chains_to_process}")
+    chain_results = await asyncio.gather(*[process_chain(chain) for chain in chains_to_process])
+
+    # Aggregate results
+    results = {
+        'chains_processed': chain_results,
+        'total_cached': sum(r.get('fetched', 0) for r in chain_results),
+        'total_failed': sum(r.get('failed', 0) for r in chain_results),
+        'total_skipped': sum(r.get('skipped', 0) for r in chain_results)
+    }
+
+    logger.info(f"NFT caching complete: {results['total_cached']} cached, {results['total_failed']} failed, {results['total_skipped']} skipped")
 
     return results
 
