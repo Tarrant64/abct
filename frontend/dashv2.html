@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="default">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DashV2 - ABCT Dashboard</title>
+
+    <!-- Existing ABCT CSS -->
+    <link rel="stylesheet" href="/static/css/styles.css?v=1">
+
+    <!-- Gridstack CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridstack@10.1.2/dist/gridstack.min.css">
+
+    <!-- DashV2 CSS -->
+    <link rel="stylesheet" href="/static/css/dashv2.css?v=1769885152">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header with edit/view toggle -->
+        <header class="dashv2-header">
+            <div class="header-left">
+                <h1>DashV2</h1>
+                <span class="experimental-badge">Experimental</span>
+            </div>
+            <div class="header-controls">
+                <div class="theme-selector">
+                    <select id="themeSelect" onchange="changeTheme(this.value)" title="Select theme">
+                        <option value="default">Default</option>
+                        <option value="cypherpunk1">Cypherpunk 1</option>
+                        <option value="ocean-depths">Ocean Depths</option>
+                        <option value="sunset-horizon">Sunset Horizon</option>
+                    </select>
+                </div>
+                <div class="edit-toggle-wrapper">
+                    <label class="edit-toggle">
+                        <input type="checkbox" id="toggleEditMode">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">Edit Mode</span>
+                    </label>
+                </div>
+                <button id="resetLayoutBtn" class="btn btn-danger" title="Reset to default layout">
+                    Reset Layout
+                </button>
+                <a href="/" class="btn btn-secondary" title="Back to main dashboard">
+                    Back to Dashboard
+                </a>
+            </div>
+        </header>
+
+        <!-- Add Widget Bar -->
+        <div class="add-widget-bar" id="addWidgetBar">
+            <button id="addWidgetBtn" class="btn btn-primary" title="Add a new widget">
+                + Add Widget
+            </button>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loadingState" class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading dashboard...</p>
+        </div>
+
+        <!-- Gridstack container -->
+        <div class="grid-stack"></div>
+
+        <!-- Add Widget Modal -->
+        <div id="addWidgetModal" class="modal hidden">
+            <div class="modal-overlay" onclick="closeAddWidgetModal()"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Add Widget</h2>
+                    <button class="modal-close" onclick="closeAddWidgetModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="widgetList" class="widget-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <!-- External libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gridstack@10.1.2/dist/gridstack-all.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js"></script>
+    <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+
+    <!-- Auth and utilities -->
+    <script src="/static/js/session-auth.js"></script>
+
+    <!-- Widget implementations (must load BEFORE registry) -->
+    <script src="/static/js/widgets/portfolio-summary.js?v=10"></script>
+    <script src="/static/js/widgets/blockchain-prices.js?v=10"></script>
+    <script src="/static/js/widgets/price-chart.js?v=1769885302"></script>
+    <script src="/static/js/widgets/recent-wallets.js?v=10"></script>
+    <script src="/static/js/widgets/nft-gallery.js?v=10"></script>
+    <script src="/static/js/widgets/custom-token.js?v=1769885152"></script>
+
+    <!-- Widget registry (uses functions from above) -->
+    <script src="/static/js/widgets/registry.js?v=10"></script>
+
+    <!-- Main dashboard controller -->
+    <script src="/static/js/dashv2.js?v=10"></script>
+</body>
+</html>
