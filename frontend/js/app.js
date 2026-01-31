@@ -5708,3 +5708,295 @@ function closeAssetBreakdownModal() {
         assetBreakdownChart = null;
     }
 }
+
+// ============================================================================
+// Analytics Slider
+// ============================================================================
+
+let currentAnalyticsSlide = 0;
+let coinAllocationChart = null;
+let categoryAllocationChart = null;
+let analyticsData = null;
+let selectedCoinIndex = null;
+let selectedCategoryIndex = null;
+
+async function loadAnalyticsData() {
+    try {
+        const response = await authFetch(`${API_BASE}/portfolio/analytics`);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        analyticsData = await response.json();
+        renderCoinAllocationChart();
+        renderCategoryAllocationChart();
+    } catch (error) {
+        console.error('Error loading analytics data:', error);
+    }
+}
+
+function nextAnalyticsSlide() {
+    currentAnalyticsSlide = (currentAnalyticsSlide + 1) % 3;
+    updateAnalyticsSlide();
+}
+
+function previousAnalyticsSlide() {
+    currentAnalyticsSlide = (currentAnalyticsSlide - 1 + 3) % 3;
+    updateAnalyticsSlide();
+}
+
+function goToAnalyticsSlide(index) {
+    currentAnalyticsSlide = index;
+    updateAnalyticsSlide();
+}
+
+function updateAnalyticsSlide() {
+    const slides = document.querySelectorAll('.analytics-slide');
+    const indicators = document.querySelectorAll('.slider-indicator');
+    const slider = document.querySelector('.analytics-slider');
+
+    slides.forEach((slide, index) => {
+        if (index === currentAnalyticsSlide) {
+            slide.classList.add('active');
+        } else {
+            slide.classList.remove('active');
+        }
+    });
+
+    indicators.forEach((indicator, index) => {
+        if (index === currentAnalyticsSlide) {
+            indicator.classList.add('active');
+        } else {
+            indicator.classList.remove('active');
+        }
+    });
+
+    slider.style.transform = `translateX(-${currentAnalyticsSlide * 100}%)`;
+
+    // Load analytics data when switching to chart slides
+    if (currentAnalyticsSlide > 0 && !analyticsData) {
+        loadAnalyticsData();
+    }
+}
+
+function renderCoinAllocationChart() {
+    if (!analyticsData || !analyticsData.coin_allocation) return;
+
+    const ctx = document.getElementById('coinAllocationChart').getContext('2d');
+    if (coinAllocationChart) coinAllocationChart.destroy();
+
+    const coins = analyticsData.coin_allocation.slice(0, 10); // Top 10 coins
+    const labels = coins.map(c => c.symbol);
+    const values = coins.map(c => c.value_usd);
+    const colors = generateChartColors(coins.length);
+
+    coinAllocationChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: values,
+                backgroundColor: colors,
+                borderWidth: 2,
+                borderColor: getComputedStyle(document.body).getPropertyValue('--bg-primary')
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const percentage = coins[context.dataIndex].percentage;
+                            return `${context.label}: ${formatUSD(context.parsed)} (${percentage.toFixed(2)}%)`;
+                        }
+                    }
+                }
+            },
+            onClick: (event, elements) => {
+                if (elements.length > 0) {
+                    selectCoinSegment(elements[0].index);
+                }
+            }
+        }
+    });
+
+    renderCoinLegend(coins, colors);
+}
+
+function selectCoinSegment(index) {
+    selectedCoinIndex = index;
+    const coin = analyticsData.coin_allocation[index];
+
+    // Update chart colors for selection effect
+    const colors = generateChartColors(analyticsData.coin_allocation.length);
+    colors[index] = brightenColor(colors[index], 40); // Make selected color brighter
+
+    coinAllocationChart.data.datasets[0].backgroundColor = colors;
+    coinAllocationChart.update();
+
+    // Update legend selection
+    document.querySelectorAll('#coinAllocationLegend .analytics-legend-item').forEach((item, i) => {
+        if (i === index) {
+            item.classList.add('selected');
+        } else {
+            item.classList.remove('selected');
+        }
+    });
+
+    // Show selection info
+    document.getElementById('coinSelectionInfo').innerHTML = `
+        <div class="selection-title">${coin.symbol}</div>
+        <div class="selection-value">${formatUSD(coin.value_usd)}</div>
+        <div style="color: var(--text-secondary); font-size: 0.9rem;">${coin.percentage.toFixed(2)}% of portfolio</div>
+    `;
+}
+
+function renderCoinLegend(coins, colors) {
+    const legendDiv = document.getElementById('coinAllocationLegend');
+    legendDiv.innerHTML = coins.map((coin, index) => `
+        <div class="analytics-legend-item" onclick="selectCoinSegment(${index})">
+            <div class="legend-label-group">
+                <div class="legend-color-dot" style="background-color: ${colors[index]};"></div>
+                <span class="legend-name">${coin.symbol}</span>
+                <span class="legend-percentage">${coin.percentage.toFixed(2)}%</span>
+            </div>
+            <div class="legend-value">${formatUSD(coin.value_usd)}</div>
+        </div>
+    `).join('');
+}
+
+function renderCategoryAllocationChart() {
+    if (!analyticsData || !analyticsData.category_allocation) return;
+
+    const ctx = document.getElementById('categoryAllocationChart').getContext('2d');
+    if (categoryAllocationChart) categoryAllocationChart.destroy();
+
+    const categories = analyticsData.category_allocation;
+    const labels = categories.map(c => c.category);
+    const values = categories.map(c => c.value_usd);
+    const colors = generateCategoryColors(categories.length);
+
+    categoryAllocationChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: values,
+                backgroundColor: colors,
+                borderWidth: 2,
+                borderColor: getComputedStyle(document.body).getPropertyValue('--bg-primary')
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const percentage = categories[context.dataIndex].percentage;
+                            const tokenCount = categories[context.dataIndex].token_count;
+                            return `${context.label}: ${formatUSD(context.parsed)} (${percentage.toFixed(2)}%) - ${tokenCount} tokens`;
+                        }
+                    }
+                }
+            },
+            onClick: (event, elements) => {
+                if (elements.length > 0) {
+                    selectCategorySegment(elements[0].index);
+                }
+            }
+        }
+    });
+
+    renderCategoryLegend(categories, colors);
+}
+
+function selectCategorySegment(index) {
+    selectedCategoryIndex = index;
+    const category = analyticsData.category_allocation[index];
+
+    // Update chart colors for selection effect
+    const colors = generateCategoryColors(analyticsData.category_allocation.length);
+    colors[index] = brightenColor(colors[index], 40);
+
+    categoryAllocationChart.data.datasets[0].backgroundColor = colors;
+    categoryAllocationChart.update();
+
+    // Update legend selection
+    document.querySelectorAll('#categoryAllocationLegend .analytics-legend-item').forEach((item, i) => {
+        if (i === index) {
+            item.classList.add('selected');
+        } else {
+            item.classList.remove('selected');
+        }
+    });
+
+    // Show selection info with token breakdown
+    const tokenList = category.tokens.map(t =>
+        `<div style="display: flex; justify-content: space-between; padding: 5px 10px; background: var(--bg-tertiary); border-radius: 4px; margin-top: 5px;">
+            <span>${t.symbol}</span>
+            <span>${formatUSD(t.value_usd)}</span>
+        </div>`
+    ).join('');
+
+    document.getElementById('categorySelectionInfo').innerHTML = `
+        <div class="selection-title">${category.category}</div>
+        <div class="selection-value">${formatUSD(category.value_usd)}</div>
+        <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 10px;">${category.percentage.toFixed(2)}% of portfolio (${category.token_count} tokens)</div>
+        <div style="max-height: 200px; overflow-y: auto; width: 100%;">${tokenList}</div>
+    `;
+}
+
+function renderCategoryLegend(categories, colors) {
+    const legendDiv = document.getElementById('categoryAllocationLegend');
+    legendDiv.innerHTML = categories.map((category, index) => `
+        <div class="analytics-legend-item" onclick="selectCategorySegment(${index})">
+            <div class="legend-label-group">
+                <div class="legend-color-dot" style="background-color: ${colors[index]};"></div>
+                <span class="legend-name">${category.category}</span>
+                <span class="legend-percentage">${category.percentage.toFixed(2)}%</span>
+            </div>
+            <div class="legend-value">${formatUSD(category.value_usd)}</div>
+        </div>
+    `).join('');
+}
+
+function generateChartColors(count) {
+    const baseColors = [
+        '#3498DB', '#E74C3C', '#2ECC71', '#F39C12', '#9B59B6',
+        '#1ABC9C', '#E67E22', '#34495E', '#16A085', '#D35400'
+    ];
+    return baseColors.slice(0, count);
+}
+
+function generateCategoryColors(count) {
+    const categoryColors = {
+        'Layer 1 (L1)': '#8B5CF6',
+        'Decentralized Finance (DeFi)': '#10B981',
+        'Cardano Ecosystem': '#3B82F6',
+        'Infrastructure': '#F59E0B',
+        'Stablecoins': '#06B6D4',
+        'Meme': '#EC4899',
+        'Gaming': '#8B5CF6',
+        'Other': '#6B7280'
+    };
+
+    return analyticsData.category_allocation.map(cat =>
+        categoryColors[cat.category] || '#6B7280'
+    );
+}
+
+function brightenColor(hex, percent) {
+    // Convert hex to RGB
+    const num = parseInt(hex.replace('#', ''), 16);
+    const r = Math.min(255, ((num >> 16) & 255) + percent);
+    const g = Math.min(255, ((num >> 8) & 255) + percent);
+    const b = Math.min(255, (num & 255) + percent);
+
+    // Convert back to hex
+    return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
+}

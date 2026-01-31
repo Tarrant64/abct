@@ -1005,6 +1005,153 @@ async def get_taptools_summary(user_id: int = Depends(verify_session)):
     }
 
 
+@router.get("/analytics")
+async def get_portfolio_analytics(user_id: int = Depends(verify_session)):
+    """
+    Get portfolio analytics for coin allocation and category allocation charts.
+
+    Returns:
+        dict with coin_allocation and category_allocation data, cached for 1 hour
+    """
+    from datetime import datetime, timedelta
+
+    # Check cache (1 hour TTL)
+    cache_key = f"portfolio_analytics_{user_id}"
+    cached = await get_cache(cache_key, user_id=user_id)
+    if cached:
+        return cached
+
+    # Get all portfolio data
+    summary = await get_portfolio_summary(user_id=user_id)
+    assets_data = await get_portfolio_assets(user_id=user_id)
+    all_prices = await pricing_service.get_all_tracked_prices()
+
+    # Token category mapping
+    TOKEN_CATEGORIES = {
+        # Layer 1
+        'ADA': 'Layer 1 (L1)', 'BTC': 'Layer 1 (L1)', 'ETH': 'Layer 1 (L1)',
+        'SOL': 'Layer 1 (L1)', 'POL': 'Layer 1 (L1)', 'MATIC': 'Layer 1 (L1)',
+
+        # DeFi
+        'INDY': 'Decentralized Finance (DeFi)', 'SUNDAE': 'Decentralized Finance (DeFi)',
+        'MIN': 'Decentralized Finance (DeFi)', 'WMT': 'Decentralized Finance (DeFi)',
+        'MILK': 'Decentralized Finance (DeFi)', 'LQ': 'Decentralized Finance (DeFi)',
+
+        # Cardano Ecosystem
+        'SNEK': 'Cardano Ecosystem', 'HOSKY': 'Cardano Ecosystem',
+        'IAG': 'Cardano Ecosystem', 'NMKR': 'Cardano Ecosystem',
+        'BOOK': 'Cardano Ecosystem', 'HUNTER': 'Cardano Ecosystem',
+
+        # Infrastructure/Oracles
+        'CHARLI': 'Infrastructure', 'ORCFAX': 'Infrastructure',
+
+        # Stablecoins
+        'USDC': 'Stablecoins', 'USDT': 'Stablecoins', 'DJED': 'Stablecoins',
+        'iUSD': 'Stablecoins',
+
+        # Meme
+        'NIGHT': 'Meme', 'STRIKE': 'Meme',
+
+        # Gaming/Metaverse
+        'HUNT': 'Gaming', 'DUST': 'Gaming',
+    }
+
+    # Calculate coin allocation
+    coin_allocations = []
+    total_value = 0
+
+    # Add native coins
+    for blockchain in ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon']:
+        chain_data = summary.get(blockchain, {})
+        if blockchain == 'cardano':
+            qty = chain_data.get('total_ada', 0)
+            symbol = 'ADA'
+        elif blockchain == 'bitcoin':
+            qty = chain_data.get('total_btc', 0)
+            symbol = 'BTC'
+        elif blockchain == 'ethereum':
+            qty = chain_data.get('total_eth', 0)
+            symbol = 'ETH'
+        elif blockchain == 'solana':
+            qty = chain_data.get('total_sol', 0)
+            symbol = 'SOL'
+        elif blockchain == 'polygon':
+            qty = chain_data.get('total_matic', 0)
+            symbol = 'POL'
+        else:
+            continue
+
+        price = all_prices.get(symbol, {}).get('usd', 0)
+        value_usd = qty * price
+
+        if value_usd > 0:
+            coin_allocations.append({
+                'symbol': symbol,
+                'name': symbol,
+                'quantity': qty,
+                'value_usd': value_usd,
+                'category': TOKEN_CATEGORIES.get(symbol, 'Other')
+            })
+            total_value += value_usd
+
+    # Add tokens
+    for asset in assets_data.get('assets', []):
+        if asset.get('value_usd', 0) > 0:
+            symbol = asset.get('ticker') or asset.get('asset_name', '')[:10]
+            coin_allocations.append({
+                'symbol': symbol,
+                'name': asset.get('asset_name', symbol),
+                'quantity': asset.get('total_quantity', 0),
+                'value_usd': asset['value_usd'],
+                'category': TOKEN_CATEGORIES.get(symbol, 'Other')
+            })
+            total_value += asset['value_usd']
+
+    # Calculate percentages for coin allocation
+    for coin in coin_allocations:
+        coin['percentage'] = (coin['value_usd'] / total_value * 100) if total_value > 0 else 0
+
+    # Sort by value descending
+    coin_allocations.sort(key=lambda x: x['value_usd'], reverse=True)
+
+    # Calculate category allocation
+    category_totals = {}
+    for coin in coin_allocations:
+        category = coin['category']
+        if category not in category_totals:
+            category_totals[category] = {
+                'category': category,
+                'value_usd': 0,
+                'tokens': []
+            }
+        category_totals[category]['value_usd'] += coin['value_usd']
+        category_totals[category]['tokens'].append({
+            'symbol': coin['symbol'],
+            'value_usd': coin['value_usd']
+        })
+
+    # Calculate category percentages
+    category_allocations = list(category_totals.values())
+    for category in category_allocations:
+        category['percentage'] = (category['value_usd'] / total_value * 100) if total_value > 0 else 0
+        category['token_count'] = len(category['tokens'])
+
+    # Sort by value descending
+    category_allocations.sort(key=lambda x: x['value_usd'], reverse=True)
+
+    result = {
+        'total_value_usd': total_value,
+        'coin_allocation': coin_allocations,
+        'category_allocation': category_allocations,
+        'generated_at': datetime.now().isoformat()
+    }
+
+    # Cache for 1 hour (3600 seconds)
+    await set_cache(cache_key, result, ttl=3600, user_id=user_id)
+
+    return result
+
+
 @router.get("/assets/{blockchain}")
 async def get_blockchain_asset_breakdown(
     blockchain: str,

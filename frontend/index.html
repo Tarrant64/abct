@@ -117,8 +117,19 @@
                         <span class="breakdown-item">Staking: $0.00</span>
                     </div>
                 </div>
-                <div class="summary-cards">
-                    <div class="summary-card cardano clickable" onclick="openAssetBreakdown('cardano')">
+                <!-- Analytics Slider Container -->
+                <div class="analytics-slider-container">
+                    <button class="slider-nav slider-nav-left" onclick="previousAnalyticsSlide()" aria-label="Previous slide">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                    </button>
+
+                    <div class="analytics-slider">
+                        <!-- Slide 1: Blockchain Summary Cards -->
+                        <div class="analytics-slide active" data-slide="0">
+                            <div class="summary-cards">
+                                <div class="summary-card cardano clickable" onclick="openAssetBreakdown('cardano')">
                         <div class="card-header">
                             <span class="blockchain-icon">₳</span>
                             <span>Cardano</span>
@@ -239,7 +250,51 @@
                                 <span id="baseTokens">0 tokens</span>
                                 <span id="baseNfts">0 NFTs</span>
                             </div>
+                                </div>
+                            </div>
                         </div>
+                        </div>
+
+                        <!-- Slide 2: Coin Allocation Chart -->
+                        <div class="analytics-slide" data-slide="1">
+                            <div class="analytics-chart-container">
+                                <h3 class="analytics-title">Coin Allocation</h3>
+                                <div class="analytics-content">
+                                    <div class="analytics-chart-wrapper">
+                                        <canvas id="coinAllocationChart"></canvas>
+                                    </div>
+                                    <div class="analytics-legend" id="coinAllocationLegend"></div>
+                                </div>
+                                <div class="analytics-selection-info" id="coinSelectionInfo"></div>
+                            </div>
+                        </div>
+
+                        <!-- Slide 3: Category Allocation Chart -->
+                        <div class="analytics-slide" data-slide="2">
+                            <div class="analytics-chart-container">
+                                <h3 class="analytics-title">Asset Allocation by Category</h3>
+                                <div class="analytics-content">
+                                    <div class="analytics-chart-wrapper">
+                                        <canvas id="categoryAllocationChart"></canvas>
+                                    </div>
+                                    <div class="analytics-legend" id="categoryAllocationLegend"></div>
+                                </div>
+                                <div class="analytics-selection-info" id="categorySelectionInfo"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button class="slider-nav slider-nav-right" onclick="nextAnalyticsSlide()" aria-label="Next slide">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                    </button>
+
+                    <!-- Slide Indicators -->
+                    <div class="slider-indicators">
+                        <button class="slider-indicator active" onclick="goToAnalyticsSlide(0)" aria-label="Slide 1"></button>
+                        <button class="slider-indicator" onclick="goToAnalyticsSlide(1)" aria-label="Slide 2"></button>
+                        <button class="slider-indicator" onclick="goToAnalyticsSlide(2)" aria-label="Slide 3"></button>
                     </div>
                 </div>
             </section>
