@@ -5916,8 +5916,8 @@ function renderCoinAllocationChart() {
                 backgroundColor: colors,
                 borderWidth: 3,
                 borderColor: 'rgba(0, 0, 0, 0.3)',
-                hoverBorderWidth: 4,
-                hoverBorderColor: colors.map(c => c) // Same as background for glow effect
+                hoverBorderWidth: 6,
+                hoverBorderColor: '#ffffff' // Bright white outline on hover
             }]
         },
         options: {
@@ -5977,7 +5977,15 @@ function selectCoinSegment(index) {
     const colors = generateChartColors(coins.length);
     colors[index] = brightenColor(colors[index], 40);
 
+    // Create glowing border effect for selected segment
+    const borderColors = new Array(coins.length).fill('rgba(0, 0, 0, 0.3)');
+    borderColors[index] = '#00d26a'; // Bright green glow
+    const borderWidths = new Array(coins.length).fill(3);
+    borderWidths[index] = 6; // Thicker border for selected
+
     coinAllocationChart.data.datasets[0].backgroundColor = colors;
+    coinAllocationChart.data.datasets[0].borderColor = borderColors;
+    coinAllocationChart.data.datasets[0].borderWidth = borderWidths;
     coinAllocationChart.update();
 
     // Update legend selection (visual highlight)
@@ -6026,8 +6034,8 @@ function renderCategoryAllocationChart() {
                 backgroundColor: colors,
                 borderWidth: 3,
                 borderColor: 'rgba(0, 0, 0, 0.3)',
-                hoverBorderWidth: 4,
-                hoverBorderColor: colors.map(c => c) // Same as background for glow effect
+                hoverBorderWidth: 6,
+                hoverBorderColor: '#ffffff' // Bright white outline on hover
             }]
         },
         options: {
@@ -6071,7 +6079,15 @@ function selectCategorySegment(index) {
     const colors = generateCategoryColors(analyticsData.category_allocation.length);
     colors[index] = brightenColor(colors[index], 40);
 
+    // Create glowing border effect for selected segment
+    const borderColors = new Array(analyticsData.category_allocation.length).fill('rgba(0, 0, 0, 0.3)');
+    borderColors[index] = '#00d26a'; // Bright green glow
+    const borderWidths = new Array(analyticsData.category_allocation.length).fill(3);
+    borderWidths[index] = 6; // Thicker border for selected
+
     categoryAllocationChart.data.datasets[0].backgroundColor = colors;
+    categoryAllocationChart.data.datasets[0].borderColor = borderColors;
+    categoryAllocationChart.data.datasets[0].borderWidth = borderWidths;
     categoryAllocationChart.update();
 
     // Update legend selection (visual highlight)
