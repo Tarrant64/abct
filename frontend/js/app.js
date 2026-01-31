@@ -5619,8 +5619,17 @@ async function openAssetBreakdown(blockchain) {
 
     } catch (error) {
         console.error('Error loading asset breakdown:', error);
-        closeAssetBreakdownModal();
-        alert('Failed to load asset breakdown.');
+
+        // Show error in modal instead of closing it
+        legendDiv.innerHTML = `
+            <div style="text-align: center; padding: 20px; color: #dc3545;">
+                <h3>Error Loading Asset Breakdown</h3>
+                <p>${error.message || 'Unknown error occurred'}</p>
+                <button onclick="closeAssetBreakdownModal()" style="margin-top: 15px; padding: 8px 16px; background: var(--accent-color); border: none; border-radius: 4px; color: white; cursor: pointer;">Close</button>
+            </div>
+        `;
+        totalValue.textContent = 'Error';
+        assetCount.textContent = '-';
     }
 }
 
