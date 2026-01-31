@@ -647,15 +647,19 @@
 
                 for (const chain of allChains) {
                     const info = byChain[chain];
-                    const count = info ? info.cached : 0;
+
+                    // Show tab if chain has NFTs with images (even if not cached yet)
+                    const hasNfts = info && (info.with_images > 0 || info.total_nfts > 0);
+                    const cachedCount = info ? (info.cached || 0) : 0;
+
                     const tab = document.querySelector(`.chain-tab[data-chain="${chain}"]`);
                     const countEl = document.getElementById(`count${chain.charAt(0).toUpperCase() + chain.slice(1)}`);
 
-                    if (countEl) countEl.textContent = count;
+                    if (countEl) countEl.textContent = cachedCount;
 
-                    // Hide tabs for chains with 0 cached NFTs
+                    // Show/hide tabs based on whether chain has NFTs (not just cached)
                     if (tab) {
-                        if (count === 0) {
+                        if (!hasNfts || (info && info.configured === false)) {
                             tab.style.display = 'none';
                         } else {
                             tab.style.display = 'flex';
@@ -701,23 +705,12 @@
 
                 const byChain = data.by_chain || {};
 
-                // Update chain counts and show/hide tabs based on whether they have NFTs
+                // Update chain counts (but don't hide tabs - loadWallStatus() handles that)
                 const allChains = ['cardano', 'ethereum', 'solana', 'polygon', 'base'];
                 for (const chain of allChains) {
                     const count = byChain[chain] || 0;
-                    const tab = document.querySelector(`.chain-tab[data-chain="${chain}"]`);
                     const countEl = document.getElementById(`count${chain.charAt(0).toUpperCase() + chain.slice(1)}`);
-
                     if (countEl) countEl.textContent = count;
-
-                    // Hide tabs for chains with 0 NFTs
-                    if (tab) {
-                        if (count === 0) {
-                            tab.style.display = 'none';
-                        } else {
-                            tab.style.display = 'flex';
-                        }
-                    }
                 }
 
                 // Calculate total value
@@ -746,10 +739,12 @@
                 : allNfts.filter(n => n.blockchain === currentChain);
 
             if (nftsToShow.length === 0) {
+                const chainName = currentChain === 'all' ? 'any blockchain' : currentChain.charAt(0).toUpperCase() + currentChain.slice(1);
                 setSafeHTML(grid, `
                     <div class="empty-state">
-                        <h3>No Cached Images</h3>
-                        <p>Click "Cache Images" to download NFT images for display.</p>
+                        <h3>No Cached Images for ${chainName}</h3>
+                        <p>You have NFTs on this blockchain, but their images haven't been cached yet.</p>
+                        <p style="margin-top: 15px;">Click the <strong>"Cache Images"</strong> button above to download and display your NFT images.</p>
                     </div>
                 `);
 
