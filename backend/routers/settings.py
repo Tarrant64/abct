@@ -33,8 +33,8 @@ API_REGISTRY = {
         "docs_url": "https://blockfrost.io/",
         "env_var": "BLOCKFROST_API_KEY",
         "pricing": "free",
-        "pricing_note": "Free tier: 10 requests/sec, burst of 500 requests (no documented daily limit)",
-        "default_limit": None,  # Rate limit is per-second, not daily
+        "pricing_note": "Free tier: 50,000 requests/day, 10 requests/sec, burst of 500 requests",
+        "default_limit": 50000,  # 50k requests per day on free tier
         "default_period": 86400,
         "period_label": "day"
     },
