@@ -17,7 +17,7 @@ from database import (
     get_api_usage, get_all_api_usage, get_api_rate_limit, save_api_rate_limit,
     delete_api_rate_limit, get_all_api_rate_limits
 )
-from middleware.auth import verify_admin
+from auth_utils import verify_session
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -286,9 +286,9 @@ async def get_api_status(api_id: str):
     }
 
 
-@router.put("/apis/{api_id}", dependencies=[Depends(verify_admin)])
-async def enable_api(api_id: str, data: APIKeyUpdate):
-    """Enable an API and save its key. Requires admin authentication."""
+@router.put("/apis/{api_id}")
+async def enable_api(api_id: str, data: APIKeyUpdate, user_id: int = Depends(verify_session)):
+    """Enable an API and save its key. Requires authentication."""
     if api_id not in API_REGISTRY:
         raise HTTPException(status_code=404, detail=f"Unknown API: {api_id}")
 
@@ -305,9 +305,9 @@ async def enable_api(api_id: str, data: APIKeyUpdate):
     }
 
 
-@router.delete("/apis/{api_id}", dependencies=[Depends(verify_admin)])
-async def disable_api(api_id: str):
-    """Disable an API and clear its saved key. Requires admin authentication."""
+@router.delete("/apis/{api_id}")
+async def disable_api(api_id: str, user_id: int = Depends(verify_session)):
+    """Disable an API and clear its saved key. Requires authentication."""
     if api_id not in API_REGISTRY:
         raise HTTPException(status_code=404, detail=f"Unknown API: {api_id}")
 
@@ -558,9 +558,9 @@ async def get_single_api_utilization(api_id: str):
     }
 
 
-@router.put("/api-utilization/{api_id}/limit", dependencies=[Depends(verify_admin)])
-async def update_api_rate_limit(api_id: str, data: RateLimitUpdate):
-    """Update custom rate limit for an API. Requires admin authentication."""
+@router.put("/api-utilization/{api_id}/limit")
+async def update_api_rate_limit(api_id: str, data: RateLimitUpdate, user_id: int = Depends(verify_session)):
+    """Update custom rate limit for an API. Requires authentication."""
     if api_id not in API_REGISTRY:
         raise HTTPException(status_code=404, detail=f"Unknown API: {api_id}")
 
@@ -577,9 +577,9 @@ async def update_api_rate_limit(api_id: str, data: RateLimitUpdate):
     }
 
 
-@router.delete("/api-utilization/{api_id}/limit", dependencies=[Depends(verify_admin)])
-async def reset_api_rate_limit(api_id: str):
-    """Reset rate limit to default for an API. Requires admin authentication."""
+@router.delete("/api-utilization/{api_id}/limit")
+async def reset_api_rate_limit(api_id: str, user_id: int = Depends(verify_session)):
+    """Reset rate limit to default for an API. Requires authentication."""
     if api_id not in API_REGISTRY:
         raise HTTPException(status_code=404, detail=f"Unknown API: {api_id}")
 
