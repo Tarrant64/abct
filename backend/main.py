@@ -47,7 +47,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import PROJECT_ROOT, DATA_DIR, CERTS_DIR, DEFAULT_CERT_PATH, DEFAULT_KEY_PATH, NFT_SCHEDULER_ENABLED
 from database import init_db
 from nft_image_database import init_nft_image_db
-from routers import wallets, portfolio, defi, prices, exchanges, nfts, custom_tokens, settings, security, logs, nft_scheduler as nft_scheduler_router, backup, auth, dashboard, mobile
+from routers import wallets, portfolio, defi, prices, exchanges, nfts, custom_tokens, settings, security, logs, nft_scheduler as nft_scheduler_router, backup, auth, dashboard, mobile, nmkr
 
 from middleware import RequestSizeLimitMiddleware, RATE_LIMITING_AVAILABLE
 from services.logging_service import get_logging_service
@@ -336,6 +336,7 @@ app.include_router(logs.router)
 app.include_router(nft_scheduler_router.router)
 app.include_router(backup.router)
 app.include_router(dashboard.router)
+app.include_router(nmkr.router)
 
 # Mount static files (frontend)
 frontend_path = PROJECT_ROOT / "frontend"
