@@ -990,9 +990,9 @@
                 Default limit: <span id="defaultLimitDisplay">-</span> requests/day
             </p>
             <div class="modal-actions">
-                <button class="btn btn-secondary btn-small" onclick="closeLimitModal()">Cancel</button>
-                <button class="btn btn-secondary btn-small" onclick="resetToDefault()">Reset to Default</button>
-                <button class="btn btn-primary btn-small" onclick="saveLimitChange()">Save</button>
+                <button class="btn btn-secondary btn-small" id="btnCancelLimit">Cancel</button>
+                <button class="btn btn-secondary btn-small" id="btnResetLimit">Reset to Default</button>
+                <button class="btn btn-primary btn-small" id="btnSaveLimit">Save</button>
             </div>
         </div>
     </div>
@@ -1005,6 +1005,11 @@
         document.addEventListener('DOMContentLoaded', () => {
             loadApis();
             loadUtilization();
+
+            // Attach modal button listeners
+            document.getElementById('btnCancelLimit').addEventListener('click', closeLimitModal);
+            document.getElementById('btnResetLimit').addEventListener('click', resetToDefault);
+            document.getElementById('btnSaveLimit').addEventListener('click', saveLimitChange);
         });
 
         async function loadApis() {
@@ -1051,8 +1056,12 @@
                         </div>
                     </div>
                 `;
-                        setSafeHTML(container, htmlContent);
             });
+
+            setSafeHTML(container, htmlContent);
+
+            // Attach event listeners after rendering (DOMPurify strips inline handlers)
+            attachApiEventListeners();
         }
 
         function renderApiItem(api) {
@@ -1081,22 +1090,22 @@
                         ${api.configured ? `
                             <div class="toggle-container">
                                 <label class="toggle-switch">
-                                    <input type="checkbox" ${api.enabled ? 'checked' : ''}
-                                           onchange="toggleApi('${api.id}', this.checked)">
+                                    <input type="checkbox" class="api-toggle" data-api-id="${api.id}" ${api.enabled ? 'checked' : ''}>
                                     <span class="toggle-slider"></span>
                                 </label>
                                 <span style="color: #888; font-size: 12px;">${api.enabled ? 'Enabled' : 'Disabled'}</span>
                             </div>
-                            <button class="btn btn-danger btn-small" onclick="disableApi('${api.id}')">
+                            <button class="btn btn-danger btn-small btn-remove-api" data-api-id="${api.id}">
                                 Remove Key
                             </button>
                         ` : `
                             <div class="api-key-input">
                                 <input type="password"
+                                       class="api-key-field"
                                        id="key-${api.id}"
-                                       placeholder="Enter API key..."
-                                       onkeypress="if(event.key==='Enter') saveApiKey('${api.id}')">
-                                <button class="btn btn-success btn-small" onclick="saveApiKey('${api.id}')">
+                                       data-api-id="${api.id}"
+                                       placeholder="Enter API key...">
+                                <button class="btn btn-success btn-small btn-save-api" data-api-id="${api.id}">
                                     Save
                                 </button>
                             </div>
@@ -1104,6 +1113,43 @@
                     </div>
                 </div>
             `;
+        }
+
+        function attachApiEventListeners() {
+            // Save API key buttons
+            document.querySelectorAll('.btn-save-api').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const apiId = e.target.getAttribute('data-api-id');
+                    saveApiKey(apiId);
+                });
+            });
+
+            // Remove API key buttons
+            document.querySelectorAll('.btn-remove-api').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const apiId = e.target.getAttribute('data-api-id');
+                    disableApi(apiId);
+                });
+            });
+
+            // Toggle API enabled/disabled
+            document.querySelectorAll('.api-toggle').forEach(toggle => {
+                toggle.addEventListener('change', (e) => {
+                    const apiId = e.target.getAttribute('data-api-id');
+                    const enabled = e.target.checked;
+                    toggleApi(apiId, enabled);
+                });
+            });
+
+            // Enter key in API key input fields
+            document.querySelectorAll('.api-key-field').forEach(input => {
+                input.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        const apiId = e.target.getAttribute('data-api-id');
+                        saveApiKey(apiId);
+                    }
+                });
+            });
         }
 
         async function saveApiKey(apiId) {
@@ -1223,6 +1269,14 @@
             }
 
             setSafeHTML(grid, relevantApis.map(api => renderUtilizationCard(api)).join(''));
+
+            // Attach event listeners for edit limit buttons
+            document.querySelectorAll('.btn-edit-limit').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const apiId = e.target.getAttribute('data-api-id');
+                    openLimitModal(apiId);
+                });
+            });
         }
 
         function renderUtilizationCard(api) {
@@ -1256,7 +1310,7 @@
                         <span class="utilization-reset">Resets in ${api.reset_in}</span>
                     </div>
                     <div class="utilization-card-actions">
-                        <button class="btn-icon" onclick="openLimitModal('${api.api_id}')" title="Set custom rate limit">
+                        <button class="btn-icon btn-edit-limit" data-api-id="${api.api_id}" title="Set custom rate limit">
                             ${hasLimit ? 'Edit' : 'Set'} Limit
                         </button>
                     </div>
