@@ -1,6 +1,6 @@
 # ABCT - A Better Crypto Tracker
 
-A self-hosted cryptocurrency portfolio tracker that aggregates data from multiple blockchains, exchanges, and DeFi protocols.  **NOTE:** **THIS WILL HAVE PERIODIC BUGS AS I'M WORKING THROUGH THIS TO LEARN MORE ABOUT CONNECTING TO BLOCKCHAIN INFRASTRUCTURES VIA API, WHAT WORKS WEL, AND WHAT DOESN'T. **
+A self-hosted cryptocurrency portfolio tracker that aggregates data from multiple blockchains, exchanges, and DeFi protocols.  
 
 ![Version](https://img.shields.io/badge/version-1.0.0-brightgreen.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
@@ -13,6 +13,7 @@ A self-hosted cryptocurrency portfolio tracker that aggregates data from multipl
 ## ⚠️ Important: Intended Use
 
 **ABCT is designed for personal, self-hosted use on trusted local networks.**
+**NOTE:** **THIS WILL HAVE PERIODIC BUGS AS I'M WORKING THROUGH THIS TO LEARN MORE ABOUT CONNECTING TO BLOCKCHAIN INFRASTRUCTURES VIA API, WHAT WORKS WEL, AND WHAT DOESN'T. **
 
 This is a hobby project for tracking your personal cryptocurrency portfolio. It is:
 
