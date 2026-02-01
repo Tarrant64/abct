@@ -282,6 +282,17 @@ EOF
         echo "  ⚠ Service may still be starting. Check: docker logs $CONTAINER_NAME"
     fi
 
+    echo ""
+    echo "Running database migration (if needed)..."
+
+    # Run database schema fix for api_settings table
+    # This is safe to run multiple times - it will only migrate if needed
+    if docker exec "$CONTAINER_NAME" python3 /app/backend/fix_api_settings_schema.py 2>&1; then
+        echo "  ✓ Database schema up to date"
+    else
+        echo "  ⚠ Database migration may have failed (check logs if API management doesn't work)"
+    fi
+
 ENDSSH
 
 # Get result (check if SSH command succeeded)
