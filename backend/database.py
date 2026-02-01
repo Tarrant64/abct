@@ -1574,6 +1574,41 @@ async def save_api_setting(api_name: str, api_key: str, enabled: bool = True, us
         await db.commit()
 
 
+async def update_api_enabled_status(api_name: str, enabled: bool, user_id: int = None):
+    """Update only the enabled status of an API without changing the key.
+
+    Args:
+        api_name: API name
+        enabled: Whether the API should be enabled
+        user_id: User ID (defaults to current user from context)
+
+    Returns:
+        bool: True if updated successfully, False if API not configured
+    """
+    if user_id is None:
+        user_id = get_current_user_id()
+
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        # Check if API key exists first
+        cursor = await db.execute("""
+            SELECT api_key FROM api_settings
+            WHERE user_id = ? AND api_name = ? AND api_key IS NOT NULL
+        """, (user_id, api_name))
+        row = await cursor.fetchone()
+
+        if not row:
+            return False  # Can't enable/disable if no key configured
+
+        # Update only the enabled status
+        await db.execute("""
+            UPDATE api_settings
+            SET enabled = ?, updated_at = ?
+            WHERE user_id = ? AND api_name = ?
+        """, (1 if enabled else 0, datetime.now(), user_id, api_name))
+        await db.commit()
+        return True
+
+
 async def delete_api_setting(api_name: str, user_id: int = None):
     """Disable an API and clear its key for a user.
 

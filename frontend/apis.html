@@ -1157,13 +1157,25 @@
         }
 
         async function toggleApi(apiId, enabled) {
-            // If disabling, just call disable
-            if (!enabled) {
-                // Get the API item to re-render if toggle changed
+            try {
+                const response = await authFetch(`/settings/apis/${apiId}/enabled`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: enabled })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to toggle API');
+                }
+
+                showStatus(enabled ? 'API enabled' : 'API disabled', 'success');
                 await loadApis();
-                return;
+            } catch (error) {
+                showStatus(error.message, 'error');
+                // Reload to reset the toggle to correct state
+                await loadApis();
             }
-            // If enabling but already has key, nothing needed (toggle is visual)
         }
 
         function showStatus(message, type) {
