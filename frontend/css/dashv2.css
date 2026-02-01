@@ -1,0 +1,950 @@
+/* DashV2 Widget Dashboard Styles */
+
+.dashboard-container {
+    padding: 1rem;
+    max-width: 100%;
+    margin: 0 auto;
+}
+
+/* Header Styles */
+.dashv2-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: var(--card-bg);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.dashv2-header h1 {
+    margin: 0;
+    font-size: 1.5rem;
+    color: var(--text-primary);
+}
+
+.experimental-badge {
+    background: var(--accent-color);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.header-controls {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.header-controls .btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    cursor: pointer;
+    border: none;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.header-controls .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Edit Mode Toggle Switch */
+.edit-toggle-wrapper {
+    display: flex;
+    align-items: center;
+}
+
+.edit-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+}
+
+.edit-toggle input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: relative;
+    width: 50px;
+    height: 26px;
+    background: var(--border-color);
+    border-radius: 13px;
+    transition: all 0.3s ease;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.toggle-slider::before {
+    content: '🔒';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    left: 3px;
+    top: 3px;
+    background: #888;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    line-height: 20px;
+}
+
+.edit-toggle input:checked + .toggle-slider {
+    background: #dc3545;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3), 0 0 12px rgba(220, 53, 69, 0.5);
+}
+
+.edit-toggle input:checked + .toggle-slider::before {
+    content: '✏️';
+    background: white;
+    transform: translateX(24px);
+}
+
+.toggle-label {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+/* Add Widget Bar */
+.add-widget-bar {
+    display: none;
+    padding: 0.75rem 1rem;
+    background: var(--card-bg);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.add-widget-bar.visible {
+    display: block;
+}
+
+.add-widget-bar #addWidgetBtn {
+    width: 100%;
+    padding: 0.75rem;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+/* Theme Selector */
+.theme-selector {
+    display: inline-flex;
+    align-items: center;
+}
+
+.theme-selector select {
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.theme-selector select:hover {
+    border-color: var(--accent-color);
+}
+
+.theme-selector select:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px var(--accent-color);
+    opacity: 0.9;
+}
+
+/* Loading State */
+.loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem;
+    text-align: center;
+}
+
+.loading-state.hidden {
+    display: none;
+}
+
+.spinner {
+    border: 3px solid var(--border-color);
+    border-top: 3px solid var(--accent-color);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin-bottom: 1rem;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Gridstack Overrides */
+.grid-stack {
+    background: transparent;
+    min-height: calc(100vh - 180px);
+}
+
+.grid-stack-item {
+    background: transparent;
+}
+
+.grid-stack-item-content {
+    background: var(--card-bg);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    inset: 0 !important;
+}
+
+/* Edit Mode Styles */
+body.edit-mode .grid-stack-item {
+    cursor: move;
+}
+
+body.edit-mode .grid-stack-item-content {
+    border: 2px solid rgba(234, 0, 217, 0.6) !important;
+    position: relative;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 8px rgba(234, 0, 217, 0.3),
+                0 0 16px rgba(234, 0, 217, 0.2),
+                0 2px 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+body.edit-mode .grid-stack-item-content:hover {
+    border: 3px solid #ea00d9 !important;
+    animation: glow-pulse-intense 1s ease-in-out infinite !important;
+    box-shadow: 0 0 12px #ea00d9,
+                0 0 25px #ea00d9,
+                0 0 37px rgba(234, 0, 217, 0.6),
+                0 0 50px rgba(234, 0, 217, 0.4),
+                inset 0 0 10px rgba(234, 0, 217, 0.1) !important;
+}
+
+@keyframes glow-pulse-intense {
+    0%, 100% {
+        box-shadow: 0 0 12px #ea00d9,
+                    0 0 25px #ea00d9,
+                    0 0 37px rgba(234, 0, 217, 0.6),
+                    0 0 50px rgba(234, 0, 217, 0.4),
+                    inset 0 0 10px rgba(234, 0, 217, 0.1);
+    }
+    50% {
+        box-shadow: 0 0 17px #ea00d9,
+                    0 0 35px #ea00d9,
+                    0 0 52px rgba(234, 0, 217, 0.7),
+                    0 0 70px rgba(234, 0, 217, 0.5),
+                    inset 0 0 15px rgba(234, 0, 217, 0.15);
+    }
+}
+
+body.view-mode .grid-stack-item {
+    cursor: default;
+}
+
+body.view-mode .widget-remove {
+    display: none !important;
+}
+
+body.view-mode .grid-stack-item-content {
+    border: none !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+    outline: none !important;
+    animation: none !important;
+}
+
+/* Widget Card Styles */
+.widget-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background: var(--header-bg);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.widget-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--text-primary);
+}
+
+.widget-icon {
+    font-size: 1.2rem;
+}
+
+.widget-remove {
+    background: transparent;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+    font-size: 1.2rem;
+    transition: all 0.2s;
+    opacity: 0.8;
+}
+
+.widget-remove::before {
+    content: '🗑️';
+}
+
+.widget-remove:hover {
+    color: #dc3545;
+    transform: scale(1.2);
+    opacity: 1;
+    filter: drop-shadow(0 0 4px rgba(220, 53, 69, 0.8));
+}
+
+.widget-body {
+    flex: 1;
+    padding: 1rem;
+    overflow: auto;
+}
+
+/* Widget Loading State */
+.widget-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-secondary);
+}
+
+.widget-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--danger-color);
+    text-align: center;
+    padding: 1rem;
+}
+
+.widget-error-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.widget-error button {
+    margin-top: 1rem;
+    padding: 0.5rem 1rem;
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.widget-error button:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+.widget-error .btn-danger {
+    background: var(--danger-color);
+}
+
+.widget-error .btn-danger:hover {
+    background: var(--danger-hover);
+}
+
+/* Add Widget Modal */
+.modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal.hidden {
+    display: none;
+}
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+}
+
+.modal-content {
+    position: relative;
+    background: var(--card-bg);
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow: auto;
+    z-index: 10000;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h2 {
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.modal-close {
+    background: transparent;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.modal-close:hover {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+/* Widget List */
+.widget-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1rem;
+}
+
+.widget-card {
+    background: var(--hover-bg);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.widget-card:hover {
+    border-color: var(--accent-color);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.widget-card-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.widget-card-title {
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.widget-card-description {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+/* Specific Widget Styles */
+
+/* Portfolio Summary Widget */
+.portfolio-summary {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.portfolio-total {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--accent-color);
+    margin-bottom: 1rem;
+}
+
+.portfolio-breakdown {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.75rem;
+}
+
+.breakdown-item {
+    padding: 0.75rem;
+    background: var(--hover-bg);
+    border-radius: 6px;
+}
+
+.breakdown-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+}
+
+.breakdown-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Blockchain Prices Widget */
+.blockchain-prices {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.75rem;
+}
+
+.price-card {
+    padding: 1rem;
+    background: var(--hover-bg);
+    border-radius: 6px;
+    text-align: center;
+}
+
+.price-card-symbol {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.price-card-value {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+
+.price-card-change {
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.price-card-change.positive {
+    color: var(--success-color);
+}
+
+.price-card-change.negative {
+    color: var(--danger-color);
+}
+
+/* Price Chart Widget */
+.price-chart-container {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.chart-controls {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.chart-controls select,
+.chart-controls button {
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
+.chart-controls button.active {
+    background: var(--accent-color);
+    color: white;
+    border-color: var(--accent-color);
+}
+
+#priceChartCanvas {
+    flex: 1;
+    min-height: 200px;
+}
+
+/* Recent Wallets Widget */
+.wallets-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.wallet-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    background: var(--hover-bg);
+    border-radius: 0;
+    position: relative;
+}
+
+.wallet-item:first-child {
+    border-radius: 6px 6px 0 0;
+}
+
+.wallet-item:last-child {
+    border-radius: 0 0 6px 6px;
+}
+
+.wallet-item:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0.75rem;
+    right: 0.75rem;
+    height: 3px;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        var(--accent-color, #4CAF50) 10%,
+        var(--accent-color, #4CAF50) 90%,
+        transparent
+    );
+    opacity: 0.8;
+    box-shadow: 0 0 8px var(--accent-color, #4CAF50);
+}
+
+.wallet-info {
+    flex: 1;
+}
+
+.wallet-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+
+.wallet-balance {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.wallet-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--accent-color);
+}
+
+/* NFT Gallery Widget */
+.nft-gallery {
+    display: grid;
+    gap: 0.75rem;
+    height: 100%;
+    overflow-y: auto;
+}
+
+.nft-gallery-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    text-align: center;
+}
+
+.nft-card {
+    background: var(--hover-bg);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+    cursor: pointer;
+}
+
+.nft-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.nft-image-wrapper {
+    position: relative;
+    width: 100%;
+    padding-top: 100%; /* 1:1 aspect ratio */
+    background: var(--bg-secondary);
+    overflow: hidden;
+}
+
+.nft-image {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.nft-placeholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+}
+
+.nft-info {
+    padding: 0.5rem;
+}
+
+.nft-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 0.25rem;
+}
+
+.nft-price {
+    font-size: 0.75rem;
+    color: var(--accent-color);
+    font-weight: 600;
+}
+
+/* Custom Token Widget */
+.custom-token-setup {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 2rem;
+    text-align: center;
+}
+
+.custom-token-setup .setup-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.custom-token-setup h3 {
+    margin: 0 0 0.5rem 0;
+    color: var(--text-primary);
+}
+
+.custom-token-setup p {
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+}
+
+.token-input-group {
+    display: flex;
+    gap: 0.5rem;
+    width: 100%;
+    max-width: 300px;
+}
+
+.token-ticker-input {
+    flex: 1;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+.token-ticker-input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+}
+
+.token-examples {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.token-example {
+    padding: 0.25rem 0.75rem;
+    background: var(--hover-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.token-example:hover {
+    background: var(--accent-color);
+    color: white;
+    border-color: var(--accent-color);
+}
+
+.custom-token-display {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.token-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.token-ticker {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.token-change-btn {
+    background: var(--hover-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    cursor: pointer;
+    font-size: 1rem;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+}
+
+.token-change-btn:hover {
+    background: var(--accent-color);
+    color: white;
+    border-color: var(--accent-color);
+}
+
+.token-price-main {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--accent-color);
+    margin-bottom: 1rem;
+}
+
+.token-changes {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.token-change-item {
+    padding: 0.75rem;
+    background: var(--hover-bg);
+    border-radius: 6px;
+    text-align: center;
+}
+
+.change-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+}
+
+.change-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.change-value.positive {
+    color: var(--success-color);
+}
+
+.change-value.negative {
+    color: var(--danger-color);
+}
+
+.token-market-cap {
+    text-align: center;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .dashv2-header {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: stretch;
+    }
+
+    .header-controls {
+        flex-wrap: wrap;
+    }
+
+    .widget-list {
+        grid-template-columns: 1fr;
+    }
+
+    .portfolio-breakdown {
+        grid-template-columns: 1fr;
+    }
+
+    .blockchain-prices {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Dark mode adjustments (if you have dark theme) */
+[data-theme="dark"] .grid-stack-item-content {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .modal-content {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
