@@ -1030,7 +1030,7 @@
             const container = document.getElementById('apiCategories');
             setSafeHTML(container, '');
 
-            const categoryOrder = ['cardano', 'evm', 'solana', 'pricing'];
+            const categoryOrder = ['cardano', 'evm', 'solana', 'pricing', 'analytics', 'services', 'exchanges'];
             let htmlContent = '';
 
             categoryOrder.forEach(catId => {
@@ -1069,6 +1069,14 @@
             const statusText = api.configured ? 'Configured' : 'Not configured';
             const sourceText = api.source ? `(${api.source})` : '';
 
+            // Check if this API requires additional fields (exchanges)
+            const requiresSecret = api.requires_secret || false;
+            const requiresPassphrase = api.requires_passphrase || false;
+
+            // Special note for Coinbase
+            const isCoinbase = api.id === 'coinbase';
+            const coinbaseNote = isCoinbase ? '<div style="font-size: 12px; color: #888; margin-top: 8px;">⚠️ Coinbase requires placing <code>cdp_api_key.json</code> file in project root directory instead of UI configuration.</div>' : '';
+
             return `
                 <div class="api-item" data-api-id="${api.id}">
                     <div class="api-info">
@@ -1096,15 +1104,31 @@
                                 <span style="color: #888; font-size: 12px;">${api.enabled ? 'Enabled' : 'Disabled'}</span>
                             </div>
                             <button class="btn btn-danger btn-small btn-remove-api" data-api-id="${api.id}">
-                                Remove Key
+                                Remove
                             </button>
+                        ` : isCoinbase ? `
+                            ${coinbaseNote}
                         ` : `
-                            <div class="api-key-input">
+                            <div class="api-key-input ${requiresSecret || requiresPassphrase ? 'multi-field' : ''}">
                                 <input type="password"
                                        class="api-key-field"
                                        id="key-${api.id}"
                                        data-api-id="${api.id}"
-                                       placeholder="Enter API key...">
+                                       placeholder="API Key">
+                                ${requiresSecret ? `
+                                    <input type="password"
+                                           class="api-secret-field"
+                                           id="secret-${api.id}"
+                                           data-api-id="${api.id}"
+                                           placeholder="API Secret">
+                                ` : ''}
+                                ${requiresPassphrase ? `
+                                    <input type="password"
+                                           class="api-passphrase-field"
+                                           id="passphrase-${api.id}"
+                                           data-api-id="${api.id}"
+                                           placeholder="API Passphrase">
+                                ` : ''}
                                 <button class="btn btn-success btn-small btn-save-api" data-api-id="${api.id}">
                                     Save
                                 </button>
@@ -1154,18 +1178,44 @@
 
         async function saveApiKey(apiId) {
             const input = document.getElementById(`key-${apiId}`);
-            const apiKey = input.value.trim();
+            const apiKey = input ? input.value.trim() : '';
 
             if (!apiKey) {
                 showApiStatus('Please enter an API key', 'error');
                 return;
             }
 
+            // Check for additional fields (exchange APIs)
+            const secretInput = document.getElementById(`secret-${apiId}`);
+            const passphraseInput = document.getElementById(`passphrase-${apiId}`);
+
+            const payload = { api_key: apiKey };
+
+            // Add secret if present
+            if (secretInput) {
+                const secret = secretInput.value.trim();
+                if (!secret) {
+                    showApiStatus('Please enter API Secret', 'error');
+                    return;
+                }
+                payload.api_secret = secret;
+            }
+
+            // Add passphrase if present
+            if (passphraseInput) {
+                const passphrase = passphraseInput.value.trim();
+                if (!passphrase) {
+                    showApiStatus('Please enter API Passphrase', 'error');
+                    return;
+                }
+                payload.api_passphrase = passphrase;
+            }
+
             try {
                 const response = await authFetch(`/settings/apis/${apiId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ api_key: apiKey })
+                    body: JSON.stringify(payload)
                 });
 
                 if (!response.ok) {
@@ -1173,7 +1223,7 @@
                     throw new Error(error.detail || 'Failed to save API key');
                 }
 
-                showApiStatus('API key saved successfully', 'success');
+                showApiStatus('API credentials saved successfully', 'success');
                 await loadApis();
             } catch (error) {
                 showApiStatus(error.message, 'error');
