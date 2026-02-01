@@ -1019,7 +1019,7 @@
                 renderApis(apiData);
             } catch (error) {
                 console.error('Error loading APIs:', error);
-                showStatus('Failed to load APIs', 'error');
+                showApiStatus('Failed to load APIs', 'error');
             }
         }
 
@@ -1157,7 +1157,7 @@
             const apiKey = input.value.trim();
 
             if (!apiKey) {
-                showStatus('Please enter an API key', 'error');
+                showApiStatus('Please enter an API key', 'error');
                 return;
             }
 
@@ -1173,10 +1173,10 @@
                     throw new Error(error.detail || 'Failed to save API key');
                 }
 
-                showStatus('API key saved successfully', 'success');
+                showApiStatus('API key saved successfully', 'success');
                 await loadApis();
             } catch (error) {
-                showStatus(error.message, 'error');
+                showApiStatus(error.message, 'error');
             }
         }
 
@@ -1195,10 +1195,10 @@
                     throw new Error(error.detail || 'Failed to disable API');
                 }
 
-                showStatus('API disabled and key removed', 'success');
+                showApiStatus('API disabled and key removed', 'success');
                 await loadApis();
             } catch (error) {
-                showStatus(error.message, 'error');
+                showApiStatus(error.message, 'error');
             }
         }
 
@@ -1210,21 +1210,34 @@
                     body: JSON.stringify({ enabled: enabled })
                 });
 
+                console.log('Toggle response status:', response.status);
+
                 if (!response.ok) {
-                    const error = await response.json();
+                    const errorText = await response.text();
+                    console.error('Toggle error response:', errorText);
+                    let error;
+                    try {
+                        error = JSON.parse(errorText);
+                    } catch {
+                        error = { detail: errorText };
+                    }
                     throw new Error(error.detail || 'Failed to toggle API');
                 }
 
-                showStatus(enabled ? 'API enabled' : 'API disabled', 'success');
+                const result = await response.json();
+                console.log('Toggle success:', result);
+
+                showApiStatus(enabled ? 'API enabled' : 'API disabled', 'success');
                 await loadApis();
             } catch (error) {
-                showStatus(error.message, 'error');
+                console.error('Toggle error:', error);
+                showApiStatus(error.message, 'error');
                 // Reload to reset the toggle to correct state
                 await loadApis();
             }
         }
 
-        function showStatus(message, type) {
+        function showApiStatus(message, type) {
             const el = document.getElementById('statusMessage');
             el.textContent = message;
             el.className = `status-message ${type}`;
@@ -1351,7 +1364,7 @@
             const newLimit = parseInt(limitInput.value);
 
             if (isNaN(newLimit) || newLimit <= 0) {
-                showStatus('Please enter a valid positive number', 'error');
+                showApiStatus('Please enter a valid positive number', 'error');
                 return;
             }
 
@@ -1367,11 +1380,11 @@
                     throw new Error(error.detail || 'Failed to update rate limit');
                 }
 
-                showStatus('Rate limit updated successfully', 'success');
+                showApiStatus('Rate limit updated successfully', 'success');
                 closeLimitModal();
                 await loadUtilization();
             } catch (error) {
-                showStatus(error.message, 'error');
+                showApiStatus(error.message, 'error');
             }
         }
 
@@ -1388,11 +1401,11 @@
                     throw new Error(error.detail || 'Failed to reset rate limit');
                 }
 
-                showStatus('Rate limit reset to default', 'success');
+                showApiStatus('Rate limit reset to default', 'success');
                 closeLimitModal();
                 await loadUtilization();
             } catch (error) {
-                showStatus(error.message, 'error');
+                showApiStatus(error.message, 'error');
             }
         }
 
