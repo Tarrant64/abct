@@ -1009,7 +1009,7 @@
 
         async function loadApis() {
             try {
-                const response = await fetch('/settings/apis');
+                const response = await authFetch('/settings/apis');
                 apiData = await response.json();
                 renderApis(apiData);
             } catch (error) {
@@ -1116,7 +1116,7 @@
             }
 
             try {
-                const response = await fetch(`/settings/apis/${apiId}`, {
+                const response = await authFetch(`/settings/apis/${apiId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ api_key: apiKey })
@@ -1140,7 +1140,7 @@
             }
 
             try {
-                const response = await fetch(`/settings/apis/${apiId}`, {
+                const response = await authFetch(`/settings/apis/${apiId}`, {
                     method: 'DELETE'
                 });
 
@@ -1181,7 +1181,7 @@
 
         async function loadUtilization() {
             try {
-                const response = await fetch('/settings/api-utilization');
+                const response = await authFetch('/settings/api-utilization');
                 utilizationData = await response.json();
                 renderUtilization(utilizationData);
             } catch (error) {
@@ -1290,7 +1290,7 @@
             }
 
             try {
-                const response = await fetch(`/settings/api-utilization/${currentEditApiId}/limit`, {
+                const response = await authFetch(`/settings/api-utilization/${currentEditApiId}/limit`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ requests_limit: newLimit })
@@ -1313,7 +1313,7 @@
             if (!currentEditApiId) return;
 
             try {
-                const response = await fetch(`/settings/api-utilization/${currentEditApiId}/limit`, {
+                const response = await authFetch(`/settings/api-utilization/${currentEditApiId}/limit`, {
                     method: 'DELETE'
                 });
 
