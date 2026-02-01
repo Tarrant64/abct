@@ -425,6 +425,8 @@ async def init_db():
                 user_id INTEGER NOT NULL,
                 api_name TEXT NOT NULL,
                 api_key TEXT,
+                api_secret TEXT,
+                api_passphrase TEXT,
                 enabled INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -432,6 +434,16 @@ async def init_db():
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
         """)
+
+        # Add api_secret and api_passphrase columns if they don't exist (migration)
+        try:
+            await db.execute("ALTER TABLE api_settings ADD COLUMN api_secret TEXT")
+        except Exception:
+            pass  # Column already exists
+        try:
+            await db.execute("ALTER TABLE api_settings ADD COLUMN api_passphrase TEXT")
+        except Exception:
+            pass  # Column already exists
 
         # API usage tracking table - stores API call counts per period (legacy aggregated view)
         await db.execute("""
@@ -1556,7 +1568,8 @@ async def get_all_api_settings(user_id: int = None) -> list:
         return [dict(row) for row in rows]
 
 
-async def save_api_setting(api_name: str, api_key: str, enabled: bool = True, user_id: int = None):
+async def save_api_setting(api_name: str, api_key: str, enabled: bool = True, user_id: int = None,
+                           api_secret: str = None, api_passphrase: str = None):
     """Save or update an API setting for a user.
 
     Args:
@@ -1564,19 +1577,23 @@ async def save_api_setting(api_name: str, api_key: str, enabled: bool = True, us
         api_key: API key
         enabled: Whether the API is enabled
         user_id: User ID (defaults to current user from context)
+        api_secret: API secret (for exchange APIs)
+        api_passphrase: API passphrase (for some exchange APIs)
     """
     if user_id is None:
         user_id = get_current_user_id()
 
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute("""
-            INSERT INTO api_settings (user_id, api_name, api_key, enabled, updated_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO api_settings (user_id, api_name, api_key, api_secret, api_passphrase, enabled, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id, api_name) DO UPDATE SET
                 api_key = excluded.api_key,
+                api_secret = excluded.api_secret,
+                api_passphrase = excluded.api_passphrase,
                 enabled = excluded.enabled,
                 updated_at = excluded.updated_at
-        """, (user_id, api_name, api_key, 1 if enabled else 0, datetime.now()))
+        """, (user_id, api_name, api_key, api_secret, api_passphrase, 1 if enabled else 0, datetime.now()))
         await db.commit()
 
 
