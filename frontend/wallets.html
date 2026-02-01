@@ -957,88 +957,19 @@
         <!-- Exchanges Section -->
         <div id="exchangesSection" style="display: none;">
             <div class="exchange-info-box">
-                <h3>🔐 Exchange API Configuration</h3>
-                <p>ABCT integrates with cryptocurrency exchanges to automatically track your exchange balances. Configure exchange API keys in your server environment to enable tracking.</p>
-                <p><strong>Security Note:</strong> Always create API keys with read-only permissions. Never grant withdrawal or trading permissions.</p>
-                <p><strong>How to Configure:</strong> Add the required environment variables to your <code>.env</code> file (or <code>cdp_api_key.json</code> for Coinbase). Restart the backend after making changes.</p>
-            </div>
-
-            <div class="exchange-status-container">
-                <h3>Configured Exchanges</h3>
-                <div id="exchangeStatusList" class="exchange-status-list">
-                    <div class="empty-state">
-                        <div class="loading"></div>
-                        <p>Loading exchange status...</p>
-                    </div>
+                <h3>🏦 Exchange API Configuration</h3>
+                <p style="font-size: 16px; line-height: 1.6;">
+                    Exchange API configuration has been moved to the <strong>Manage APIs</strong> page for easier management.
+                </p>
+                <div style="margin-top: 20px;">
+                    <a href="/apis.html" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none;">
+                        <span>⚙️</span>
+                        <span>Go to Manage APIs</span>
+                    </a>
                 </div>
-            </div>
-
-            <div class="exchange-setup-guide">
-                <h3>Supported Exchanges</h3>
-                <div class="exchange-grid">
-                    <div class="exchange-card">
-                        <div class="exchange-card-header">
-                            <img src="https://www.coinbase.com/favicon.ico" alt="Coinbase" class="exchange-logo-large">
-                            <h4>Coinbase</h4>
-                        </div>
-                        <p>Place <code>cdp_api_key.json</code> file in project root with CDP API credentials.</p>
-                        <a href="https://coinbase.com/settings/api" target="_blank" class="setup-link">Create API Key →</a>
-                    </div>
-
-                    <div class="exchange-card">
-                        <div class="exchange-card-header">
-                            <img src="https://public.bnbstatic.com/static/images/common/favicon.ico" alt="Binance" class="exchange-logo-large">
-                            <h4>Binance.com</h4>
-                        </div>
-                        <p>Add <code>BINANCE_API_KEY</code> and <code>BINANCE_API_SECRET</code> to <code>.env</code> file.</p>
-                        <a href="https://www.binance.com/en/my/settings/api-management" target="_blank" class="setup-link">Create API Key →</a>
-                    </div>
-
-                    <div class="exchange-card">
-                        <div class="exchange-card-header">
-                            <img src="https://public.bnbstatic.us/static/images/common/favicon.ico" alt="Binance.US" class="exchange-logo-large">
-                            <h4>Binance.US</h4>
-                        </div>
-                        <p>Add <code>BINANCE_US_API_KEY</code> and <code>BINANCE_US_API_SECRET</code> to <code>.env</code> file.</p>
-                        <a href="https://www.binance.us/en/usercenter/settings/api-management" target="_blank" class="setup-link">Create API Key →</a>
-                    </div>
-
-                    <div class="exchange-card">
-                        <div class="exchange-card-header">
-                            <img src="https://static.okx.com/cdn/assets/imgs/MjAyMTQ/5C7F82ADE3C3FC61.png" alt="OKX" class="exchange-logo-large">
-                            <h4>OKX</h4>
-                        </div>
-                        <p>Add <code>OKX_API_KEY</code>, <code>OKX_API_SECRET</code>, and <code>OKX_API_PASSPHRASE</code> to <code>.env</code> file.</p>
-                        <a href="https://www.okx.com/account/my-api" target="_blank" class="setup-link">Create API Key →</a>
-                    </div>
-
-                    <div class="exchange-card">
-                        <div class="exchange-card-header">
-                            <img src="https://www.bitget.com/favicon.ico" alt="Bitget" class="exchange-logo-large">
-                            <h4>Bitget</h4>
-                        </div>
-                        <p>Add <code>BITGET_API_KEY</code>, <code>BITGET_API_SECRET</code>, and <code>BITGET_API_PASSPHRASE</code> to <code>.env</code> file.</p>
-                        <a href="https://www.bitget.com/en/account/newapi" target="_blank" class="setup-link">Create API Key →</a>
-                    </div>
-
-                    <div class="exchange-card">
-                        <div class="exchange-card-header">
-                            <img src="https://www.gate.io/favicon.ico" alt="Gate.io" class="exchange-logo-large">
-                            <h4>Gate.io</h4>
-                        </div>
-                        <p>Add <code>GATE_API_KEY</code> and <code>GATE_API_SECRET</code> to <code>.env</code> file.</p>
-                        <a href="https://www.gate.io/myaccount/apiv4keys" target="_blank" class="setup-link">Create API Key →</a>
-                    </div>
-
-                    <div class="exchange-card">
-                        <div class="exchange-card-header">
-                            <img src="https://assets.staticimg.com/cms/media/7xbKmPPqZHqXfggnJcDJFPWIB5cxwOT8rCRNsCiI4.png" alt="KuCoin" class="exchange-logo-large">
-                            <h4>KuCoin</h4>
-                        </div>
-                        <p>Add <code>KUCOIN_API_KEY</code>, <code>KUCOIN_API_SECRET</code>, and <code>KUCOIN_API_PASSPHRASE</code> to <code>.env</code> file.</p>
-                        <a href="https://www.kucoin.com/account/api" target="_blank" class="setup-link">Create API Key →</a>
-                    </div>
-                </div>
+                <p style="margin-top: 20px; font-size: 14px; color: #888;">
+                    You can configure API keys for Coinbase, Binance.com, Binance.US, OKX, Bitget, Gate.io, and KuCoin directly from the web interface.
+                </p>
             </div>
         </div>
 
