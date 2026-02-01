@@ -1,23 +1,20 @@
 """
 Coinbase Service - Fetches portfolio data from Coinbase using CDP API.
 
-Uses JWT authentication with EC private key.
+Uses CDP API Key authentication with JWT signing.
+Requires JSON file upload with 'name' and 'privateKey' fields.
 Only returns assets with USD value >= $1.00.
 """
 
 import httpx
 import logging
+import json
 import time
-import secrets
 from typing import Dict, List, Optional
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.backends import default_backend
-import jwt
 import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import COINBASE_API_KEY_NAME, COINBASE_API_PRIVATE_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -28,74 +25,164 @@ MIN_USD_VALUE = 1.00
 
 
 class CoinbaseService:
-    """Service for fetching portfolio data from Coinbase."""
+    """Service for fetching portfolio data from Coinbase CDP API."""
 
     def __init__(self):
-        self.api_key_name = COINBASE_API_KEY_NAME
-        self.private_key_pem = COINBASE_API_PRIVATE_KEY
-        self._private_key = None
+        self.api_name = 'coinbase'
+        self._credentials_cache = {}
+        self._cache_time = {}
 
-    def _load_private_key(self):
-        """Load the EC private key from PEM string."""
-        if self._private_key is None and self.private_key_pem:
-            self._private_key = serialization.load_pem_private_key(
-                self.private_key_pem.encode(),
+    async def get_cdp_credentials(self, user_id: int = 1) -> Optional[Dict]:
+        """
+        Get CDP API credentials (name + privateKey) from database.
+
+        Returns:
+            Dict with 'name' and 'privateKey' or None if not configured
+        """
+        # Check cache first (5 minute TTL)
+        from datetime import datetime, timedelta
+        now = datetime.utcnow()
+        cache_key = f"cdp_creds_{user_id}"
+
+        if cache_key in self._credentials_cache:
+            if now - self._cache_time.get(cache_key, datetime.min) < timedelta(minutes=5):
+                return self._credentials_cache[cache_key]
+
+        # Try database
+        try:
+            from database import get_api_setting
+            setting = await get_api_setting(self.api_name, user_id=user_id)
+
+            if setting and setting.get('enabled') and setting.get('api_key'):
+                # api_key field stores the JSON credentials
+                try:
+                    credentials = json.loads(setting['api_key'])
+                    if 'name' in credentials and 'privateKey' in credentials:
+                        self._credentials_cache[cache_key] = credentials
+                        self._cache_time[cache_key] = now
+                        return credentials
+                except json.JSONDecodeError:
+                    logger.error("Failed to parse CDP API credentials JSON from database, trying file fallback")
+        except Exception as e:
+            logger.debug(f"Could not fetch CDP credentials from database: {e}")
+
+        # Try loading from file (fallback for development)
+        cdp_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'cdp_api_key.json')
+        if os.path.exists(cdp_file):
+            try:
+                with open(cdp_file, 'r') as f:
+                    credentials = json.load(f)
+                    if 'name' in credentials and 'privateKey' in credentials:
+                        logger.info("Loaded CDP credentials from file (development mode)")
+                        self._credentials_cache[cache_key] = credentials
+                        self._cache_time[cache_key] = now
+                        return credentials
+            except Exception as e:
+                logger.error(f"Failed to load CDP credentials from file: {e}")
+
+        return None
+
+    async def is_configured(self, user_id: int = 1) -> bool:
+        """Check if CDP API credentials are configured."""
+        credentials = await self.get_cdp_credentials(user_id)
+        return credentials is not None
+
+    def _generate_jwt(self, api_key_name: str, private_key: str, request_method: str, request_path: str) -> str:
+        """
+        Generate JWT token for CDP API authentication.
+
+        Args:
+            api_key_name: The 'name' field from CDP API key JSON
+            private_key: The 'privateKey' field (PEM format EC private key)
+            request_method: HTTP method (GET, POST, etc.)
+            request_path: API endpoint path (e.g., '/api/v3/brokerage/accounts')
+
+        Returns:
+            JWT token string
+        """
+        try:
+            import jwt
+            import secrets
+            from cryptography.hazmat.primitives import serialization
+            from cryptography.hazmat.backends import default_backend
+        except ImportError:
+            logger.error("PyJWT and cryptography libraries required for CDP API. Install: pip install PyJWT cryptography")
+            raise
+
+        # Extract key ID from full path (e.g., 'organizations/.../apiKeys/KEY_ID')
+        key_id = api_key_name.split('/')[-1]
+
+        # Load private key
+        try:
+            private_key_obj = serialization.load_pem_private_key(
+                private_key.encode(),
                 password=None,
                 backend=default_backend()
             )
-        return self._private_key
+        except Exception as e:
+            logger.error(f"Failed to load private key: {e}")
+            raise
 
-    def _generate_jwt(self, request_method: str, request_path: str) -> str:
-        """Generate a JWT token for Coinbase API authentication."""
-        private_key = self._load_private_key()
-        if not private_key:
-            raise ValueError("Private key not loaded")
-
-        # Extract key ID from key name (format: organizations/{org}/apiKeys/{key_id})
-        key_id = self.api_key_name.split("/")[-1] if "/" in self.api_key_name else self.api_key_name
-
-        uri = f"{request_method} {COINBASE_API_BASE.replace('https://', '')}{request_path}"
+        # Create JWT payload (use format from working version)
+        uri = f"{request_method} {COINBASE_API_BASE.replace('https://', '').replace('http://', '')}{request_path}"
 
         now = int(time.time())
         payload = {
-            "sub": key_id,
-            "iss": "cdp",
-            "nbf": now,
-            "exp": now + 120,  # 2 minute expiry
-            "aud": ["cdp_service"],
-            "uris": [uri],
+            'sub': key_id,  # Use extracted key ID, not full path
+            'iss': 'cdp',
+            'nbf': now,
+            'exp': now + 120,  # 2 minute expiry
+            'aud': ['cdp_service'],  # Add audience field
+            'uris': [uri]  # Plural 'uris' as array
         }
 
-        headers = {
-            "kid": key_id,
-            "nonce": secrets.token_hex(16),
-        }
-
+        # Generate JWT with proper random nonce
         token = jwt.encode(
             payload,
-            private_key,
-            algorithm="ES256",
-            headers=headers
+            private_key_obj,
+            algorithm='ES256',
+            headers={'kid': key_id, 'nonce': secrets.token_hex(16)}
         )
 
         return token
 
-    def is_configured(self) -> bool:
-        """Check if Coinbase API is properly configured."""
-        return bool(self.api_key_name and self.private_key_pem)
+    async def _get_headers(self, request_method: str, request_path: str, user_id: int = None) -> dict:
+        """Get request headers with CDP JWT authentication."""
+        credentials = await self.get_cdp_credentials(user_id=user_id or 1)
 
-    async def _make_request(self, method: str, path: str, params: dict = None) -> Optional[dict]:
-        """Make an authenticated request to the Coinbase API."""
-        if not self.is_configured():
-            logger.warning("Coinbase API not configured")
+        if not credentials:
+            return {}
+
+        try:
+            jwt_token = self._generate_jwt(
+                credentials['name'],
+                credentials['privateKey'],
+                request_method,
+                request_path
+            )
+
+            return {
+                "Authorization": f"Bearer {jwt_token}",
+                "Content-Type": "application/json",
+            }
+        except Exception as e:
+            logger.error(f"Failed to generate CDP JWT: {e}")
+            return {}
+
+    async def _make_request(self, method: str, path: str, params: dict = None, user_id: int = None) -> Optional[dict]:
+        """Make an authenticated request to the Coinbase CDP API."""
+        if not await self.is_configured(user_id=user_id or 1):
+            logger.warning("Coinbase CDP API not configured")
             return None
 
         try:
-            token = self._generate_jwt(method, path)
-            headers = {
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json",
-            }
+            headers = await self._get_headers(method, path, user_id=user_id)
+
+            if not headers:
+                logger.error("Failed to generate CDP authentication headers")
+                return None
+
+            logger.info(f"Coinbase CDP API request: {method} {path}")
 
             async with httpx.AsyncClient(timeout=30.0) as client:
                 url = f"{COINBASE_API_BASE}{path}"
@@ -103,6 +190,8 @@ class CoinbaseService:
                     response = await client.get(url, headers=headers, params=params)
                 else:
                     response = await client.request(method, url, headers=headers, params=params)
+
+                logger.info(f"Coinbase API response: {response.status_code}")
 
                 if response.status_code == 200:
                     return response.json()
@@ -114,7 +203,7 @@ class CoinbaseService:
             logger.error(f"Coinbase API request failed: {e}")
             return None
 
-    async def get_accounts(self) -> List[dict]:
+    async def get_accounts(self, user_id: int = None) -> List[dict]:
         """
         Get all accounts (wallets) from Coinbase.
         Paginates through all results.
@@ -128,7 +217,7 @@ class CoinbaseService:
             if cursor:
                 params["cursor"] = cursor
 
-            data = await self._make_request("GET", path, params)
+            data = await self._make_request("GET", path, params, user_id=user_id)
             if not data:
                 break
 
@@ -142,108 +231,168 @@ class CoinbaseService:
 
         return accounts
 
-    async def get_portfolio_balances(self, user_id: int = None) -> Dict:
+    async def get_portfolio(self, user_id: int = None) -> Dict[str, any]:
         """
-        Get portfolio balances from Coinbase.
-        Includes both available and held balances (funds in open orders).
-        Only returns assets with USD value >= MIN_USD_VALUE.
-        """
-        accounts = await self.get_accounts()
+        Get portfolio summary with all asset balances.
 
-        if not accounts:
-            return {
-                "exchange": "coinbase",
-                "configured": self.is_configured(),
-                "assets": [],
-                "total_usd": 0,
-                "error": "No accounts found or API error"
+        Returns:
+            {
+                'total_value_usd': float,
+                'assets': [
+                    {
+                        'currency': str,
+                        'balance': float,
+                        'value_usd': float,
+                        'available_balance': float,
+                        'hold_balance': float
+                    }
+                ]
             }
+        """
+        accounts = await self.get_accounts(user_id=user_id)
+        if not accounts:
+            logger.warning("Coinbase: No accounts returned from API")
+            return {'total_value_usd': 0.0, 'assets': []}
 
+        logger.info(f"Coinbase: Processing {len(accounts)} accounts")
+        total_value = 0.0
         assets = []
-        total_usd = 0.0
-
         for account in accounts:
             try:
-                # Get both available and held balances
-                available = float(account.get("available_balance", {}).get("value", 0))
-                held = float(account.get("hold", {}).get("value", 0))
+                currency = account.get('currency', 'UNKNOWN')
+
+                # CDP API v3 has available_balance and hold structure
+                available_bal = account.get('available_balance', {})
+                available = float(available_bal.get('value', 0))
+
+                hold_bal = account.get('hold', {})
+                held = float(hold_bal.get('value', 0))
+
                 total_balance = available + held
 
                 # Skip if no balance at all
                 if total_balance <= 0:
                     continue
 
-                currency = account.get("currency", "")
-
                 asset_data = {
-                    "currency": currency,
-                    "name": account.get("name", currency),
-                    "balance": total_balance,
-                    "available_balance": available,
-                    "hold_balance": held,
-                    "uuid": account.get("uuid", ""),
-                    "type": account.get("type", ""),
+                    'currency': currency,
+                    'name': account.get('name', currency),
+                    'balance': total_balance,
+                    'available_balance': available,
+                    'hold_balance': held,
+                    'uuid': account.get('uuid', ''),
                 }
 
                 # Check if this is USD directly
-                if currency == "USD":
-                    asset_data["usd_value"] = total_balance
+                if currency == 'USD':
+                    asset_data['value_usd'] = total_balance
                     if total_balance >= MIN_USD_VALUE:
                         assets.append(asset_data)
-                        total_usd += total_balance
+                        total_value += total_balance
                 else:
-                    # For crypto assets, we'll need to get prices
-                    # Store with a placeholder, we'll calculate USD in the router
-                    asset_data["usd_value"] = None  # To be calculated
-                    asset_data["needs_price"] = True
+                    # For crypto assets, price will be calculated by router
+                    asset_data['value_usd'] = 0.0  # To be calculated
+                    asset_data['needs_price'] = True
                     assets.append(asset_data)
 
             except Exception as e:
-                logger.error(f"Error processing account: {e}")
+                logger.error(f"Error processing Coinbase account: {e}")
                 continue
 
+        logger.info(f"Coinbase: Returning {len(assets)} assets with total USD ${total_value:.2f}")
         return {
-            "exchange": "coinbase",
-            "configured": True,
-            "assets": assets,
-            "total_usd": total_usd,
-            "account_count": len(accounts),
-            "filtered_count": len(assets)
+            'total_value_usd': total_value,
+            'assets': assets,
+            'account_count': len(accounts),
+            'filtered_count': len(assets)
         }
 
-    async def get_open_orders(self) -> List[dict]:
+    async def get_portfolio_balances(self, user_id: int = None) -> dict:
         """
-        Get all open orders from Coinbase.
-        Returns orders that are pending, open, or partially filled.
+        Get portfolio balances in standardized format for exchange router.
+
+        Args:
+            user_id: Optional user ID (for multi-user support)
+
+        Returns:
+            Standardized exchange portfolio format matching other exchange services
         """
-        path = "/api/v3/brokerage/orders/historical/batch"
-        params = {
-            "order_status": ["OPEN", "PENDING", "QUEUED"],
-            "limit": 100
-        }
-
-        data = await self._make_request("GET", path, params)
-        if not data:
-            return []
-
-        orders = data.get("orders", [])
-        return [
-            {
-                "order_id": order.get("order_id"),
-                "product_id": order.get("product_id"),
-                "side": order.get("side"),
-                "order_type": order.get("order_type"),
-                "status": order.get("status"),
-                "size": order.get("order_configuration", {}).get("limit_limit_gtc", {}).get("base_size"),
-                "price": order.get("order_configuration", {}).get("limit_limit_gtc", {}).get("limit_price"),
-                "filled_size": order.get("filled_size"),
-                "created_time": order.get("created_time"),
+        if not await self.is_configured(user_id=user_id):
+            return {
+                'exchange': 'coinbase',
+                'configured': False,
+                'assets': [],
+                'total_usd': 0,
+                'asset_count': 0
             }
-            for order in orders
-        ]
+
+        try:
+            portfolio = await self.get_portfolio(user_id=user_id)
+
+            # Convert to standardized format
+            standardized_assets = []
+            for asset in portfolio.get('assets', []):
+                standardized_assets.append({
+                    'currency': asset['currency'],
+                    'name': asset.get('name', asset['currency']),
+                    'balance': asset['balance'],
+                    'available_balance': asset.get('available_balance', asset['balance']),
+                    'hold_balance': asset.get('hold_balance', 0.0),
+                    'value_usd': asset.get('value_usd', 0.0),
+                    'uuid': asset.get('uuid', ''),
+                    'needs_price': asset.get('needs_price', asset.get('value_usd', 0.0) == 0)
+                })
+
+            return {
+                'exchange': 'coinbase',
+                'configured': True,
+                'assets': standardized_assets,
+                'total_usd': portfolio.get('total_value_usd', 0),
+                'asset_count': len(standardized_assets)
+            }
+
+        except Exception as e:
+            logger.error(f"Error fetching Coinbase portfolio balances: {e}")
+            return {
+                'exchange': 'coinbase',
+                'configured': True,
+                'assets': [],
+                'total_usd': 0,
+                'asset_count': 0,
+                'error': str(e)
+            }
+
+    async def get_open_orders(self, user_id: int = None) -> dict:
+        """
+        Get open orders from Coinbase.
+
+        Returns:
+            Orders list (CDP API v3 format)
+        """
+        data = await self._make_request("GET", "/api/v3/brokerage/orders/historical/batch", user_id=user_id)
+
+        if not data:
+            return {
+                'exchange': 'coinbase',
+                'orders': [],
+                'total_count': 0
+            }
+
+        orders = data.get('orders', [])
+        # Filter for open orders only
+        open_orders = [o for o in orders if o.get('status') in ['OPEN', 'PENDING']]
+
+        return {
+            'exchange': 'coinbase',
+            'orders': open_orders,
+            'total_count': len(open_orders)
+        }
 
     async def get_spot_price(self, currency_pair: str) -> Optional[float]:
-        """Get spot price for a currency pair (e.g., 'BTC-USD')."""
+        """
+        Get spot price for a currency pair (e.g., 'BTC-USD').
+        Uses public Coinbase API endpoint - no authentication required.
+        """
         path = f"/v2/prices/{currency_pair}/spot"
 
         try:
