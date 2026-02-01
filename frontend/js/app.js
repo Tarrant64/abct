@@ -1696,6 +1696,9 @@ function renderNativeAssets(valuableAssets, allAssets) {
                 ? '<span class="defi-badge" title="Counted in DeFi Tokens section">DeFi</span>'
                 : '';
 
+            // Get logo URL (from NMKR or LogoKit)
+            const logoUrl = asset.logo_url || '';
+
             return `
                 <div class="native-token-item ${isTracked ? 'tracked' : ''} ${isDefiToken ? 'is-defi' : ''} ${blockchain}"
                      data-asset-id="${asset.asset_id}"
@@ -1709,6 +1712,7 @@ function renderNativeAssets(valuableAssets, allAssets) {
                             <span class="toggle-slider"></span>
                         </label>
                     </div>
+                    ${logoUrl ? `<img src="${logoUrl}" alt="${displayName}" class="token-logo" onerror="this.style.display='none';">` : ''}
                     <div class="token-info">
                         <div class="token-name">
                             ${getBlockchainBadge(blockchain)}
@@ -1736,9 +1740,11 @@ function renderNativeAssets(valuableAssets, allAssets) {
             const displayName = asset.ticker || asset.asset_name || 'Unknown';
             const qty = asset.total_quantity_formatted || asset.total_quantity_raw?.toLocaleString() || '0';
             const blockchain = asset.blockchain || 'cardano';
+            const logoUrl = asset.logo_url || '';
 
             return `
                 <div class="native-token-item other ${blockchain}">
+                    ${logoUrl ? `<img src="${logoUrl}" alt="${displayName}" class="token-logo" onerror="this.style.display='none';">` : ''}
                     <div class="token-info">
                         <div class="token-name">
                             ${getBlockchainBadge(blockchain)}
@@ -3394,6 +3400,10 @@ async function refreshBalances() {
     refreshBtn.disabled = true;
     refreshBtn.textContent = 'Syncing...';
 
+    // Clear asset breakdown cache since we're syncing fresh data
+    assetBreakdownCache.clear();
+    console.log('Cleared asset breakdown cache');
+
     try {
         const response = await authFetch(`${API_BASE}/wallets/refresh`, {
             method: 'POST'
@@ -3403,6 +3413,9 @@ async function refreshBalances() {
         showStatus(data.message);
         await loadPrices();
         await loadPortfolioSummary();
+
+        // Re-fetch asset breakdowns in background after sync
+        preFetchAssetBreakdowns();
         // await loadNativeAssets(); // Now in Self-Custody Wallets
         await loadExchangeData();
         await loadDefiGovernance();
@@ -3594,6 +3607,9 @@ async function refreshWallets() {
     if (btn) {
         btn.classList.add('refreshing');
     }
+
+    // Clear asset breakdown cache
+    assetBreakdownCache.clear();
 
     try {
         // Force refresh the portfolio summary
@@ -5154,10 +5170,6 @@ function renderPortfolioChart(historyData, range) {
                     backgroundColor: colors.tooltipBg,
                     titleColor: colors.tooltipTitle,
                     bodyColor: colors.tooltipBody,
-                    bodyFont: {
-                        size: 18,
-                        weight: 'bold'
-                    },
                     borderColor: colors.tooltipBorder,
                     borderWidth: 2,
                     padding: 14,
@@ -5169,9 +5181,55 @@ function renderPortfolioChart(historyData, range) {
                             return historyData[dataIndex].date;
                         },
                         label: function(context) {
+                            // Total value (large/primary text)
                             return formatUSD(context.parsed.y);
+                        },
+                        footer: function(context) {
+                            const dataIndex = context[0].dataIndex;
+                            const dataPoint = historyData[dataIndex];
+                            const lines = [];
+
+                            // Add breakdown if available
+                            if (dataPoint.breakdown) {
+                                const breakdown = dataPoint.breakdown;
+
+                                if (breakdown.wallets > 0) {
+                                    lines.push(`Wallets: ${formatUSD(breakdown.wallets)}`);
+                                }
+                                if (breakdown.exchange > 0) {
+                                    lines.push(`Exchanges: ${formatUSD(breakdown.exchange)}`);
+                                }
+                                if (breakdown.staking > 0) {
+                                    lines.push(`Staking: ${formatUSD(breakdown.staking)}`);
+                                }
+                                if (breakdown.defi > 0) {
+                                    lines.push(`DeFi: ${formatUSD(breakdown.defi)}`);
+                                }
+                                if (breakdown.nfts > 0) {
+                                    lines.push(`NFTs: ${formatUSD(breakdown.nfts)}`);
+                                }
+                                if (breakdown.tracked_tokens > 0) {
+                                    lines.push(`Tokens: ${formatUSD(breakdown.tracked_tokens)}`);
+                                }
+                            }
+
+                            return lines;
                         }
-                    }
+                    },
+                    // Style for the main label (total value) - large and bold
+                    bodyFont: {
+                        size: 18,
+                        weight: 'bold'
+                    },
+                    // Style for the breakdown (footer) - smaller text
+                    footerFont: {
+                        size: 11,
+                        weight: 'normal'
+                    },
+                    footerColor: colors.tooltipBody,
+                    footerAlign: 'left',
+                    footerSpacing: 4,
+                    footerMarginTop: 8
                 }
             },
             scales: {
@@ -5739,7 +5797,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Load portfolio history chart NOW that all data is ready (shows correct current value)
         loadPortfolioHistory('7d');
         // Pre-fetch asset breakdowns for instant modal opening
-        // Asset breakdowns load on-demand when user clicks blockchain cards
+        preFetchAssetBreakdowns();
     });
 
     // Load NFTs for the default chain (non-blocking)
@@ -5751,12 +5809,323 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ===========================
 let assetBreakdownChart = null;
 
-// Asset breakdown data loads on-demand when user clicks blockchain card
-// Backend caching (5min TTL) makes subsequent opens instant
+// Cache for asset breakdown data - pre-fetched for instant modal opening
+const assetBreakdownCache = {
+    data: {}, // blockchain -> { assets, timestamp }
+    defiLlama: {}, // blockchain -> { mcap, tvl, stablecoins, volume, timestamp }
+    ttl: 5 * 60 * 1000, // 5 minutes
+    isStale(blockchain, cacheType = 'data') {
+        const cache = cacheType === 'data' ? this.data : this.defiLlama;
+        const cached = cache[blockchain];
+        if (!cached || !cached.timestamp) return true;
+        return Date.now() - cached.timestamp > this.ttl;
+    },
+    get(blockchain, cacheType = 'data') {
+        const cache = cacheType === 'data' ? this.data : this.defiLlama;
+        return cache[blockchain];
+    },
+    set(blockchain, value, cacheType = 'data') {
+        const cache = cacheType === 'data' ? this.data : this.defiLlama;
+        cache[blockchain] = { ...value, timestamp: Date.now() };
+    },
+    clear() {
+        this.data = {};
+        this.defiLlama = {};
+    }
+};
+
+// Pre-fetch all blockchain breakdowns for instant modal opening
+async function preFetchAssetBreakdowns() {
+    console.log('Pre-fetching asset breakdowns for all blockchains...');
+
+    const blockchains = ['cardano', 'ethereum', 'bitcoin', 'solana', 'polygon', 'base'];
+
+    // Fetch all in parallel
+    const promises = blockchains.map(async (blockchain) => {
+        try {
+            // Fetch asset data
+            const response = await authFetch(`${API_BASE}/portfolio/assets/${blockchain}`);
+            if (response.ok) {
+                const data = await response.json();
+                assetBreakdownCache.set(blockchain, data, 'data');
+                console.log(`✓ Cached breakdown for ${blockchain}`);
+            }
+
+            // Fetch DeFillama metrics
+            const metrics = await fetchDeFiLlamaMetrics(blockchain);
+            if (metrics) {
+                assetBreakdownCache.set(blockchain, metrics, 'defiLlama');
+                console.log(`✓ Cached DeFillama metrics for ${blockchain}`);
+            }
+        } catch (error) {
+            console.warn(`Failed to pre-fetch ${blockchain}:`, error);
+        }
+    });
+
+    await Promise.all(promises);
+    console.log('Asset breakdown pre-fetching complete');
+}
+
+// DeFillama API Integration
+async function fetchDeFiLlamaMetrics(blockchain) {
+    try {
+        // Check cache first
+        const cached = assetBreakdownCache.get(blockchain, 'defiLlama');
+        if (cached && !assetBreakdownCache.isStale(blockchain, 'defiLlama')) {
+            console.log(`Using cached DeFillama metrics for ${blockchain}`);
+            return cached;
+        }
+
+        // Map internal blockchain names to DeFillama chain names
+        const chainMap = {
+            'cardano': 'Cardano',
+            'ethereum': 'Ethereum',
+            'bitcoin': 'Bitcoin',
+            'solana': 'Solana',
+            'polygon': 'Polygon',
+            'base': 'Base'
+        };
+
+        const defiLlamaChain = chainMap[blockchain];
+        if (!defiLlamaChain) return null;
+
+        console.log(`Fetching fresh DeFillama metrics for ${defiLlamaChain}...`);
+
+        let mcap = null, tvl = null, stablecoins = null, volume = null;
+
+        // First check if we already have market cap from our price data
+        const blockchainPriceMap = {
+            'cardano': 'cardano',
+            'ethereum': 'ethereum',
+            'bitcoin': 'bitcoin',
+            'solana': 'solana',
+            'polygon': 'polygon',
+            'base': 'ethereum' // Base uses ETH
+        };
+
+        const priceKey = blockchainPriceMap[blockchain];
+        if (priceKey && window.portfolioData && window.portfolioData.prices) {
+            const priceInfo = window.portfolioData.prices[priceKey];
+            if (priceInfo && priceInfo.market_cap) {
+                mcap = priceInfo.market_cap;
+                console.log(`Using cached market cap for ${blockchain}:`, mcap);
+            }
+        }
+
+        // Fetch TVL data
+        try {
+            const chainsResponse = await fetch('https://api.llama.fi/v2/chains');
+            if (chainsResponse.ok) {
+                const chainsData = await chainsResponse.json();
+                const chainData = chainsData.find(c => c.name === defiLlamaChain || c.gecko_id === blockchain);
+                console.log('Chain data from DeFillama:', chainData);
+                if (chainData) {
+                    tvl = chainData.tvl;
+                }
+            }
+        } catch (e) {
+            console.error('TVL fetch error:', e);
+        }
+
+        // Fetch stablecoin data - Bitcoin doesn't support stablecoins
+        const chainsWithStables = ['ethereum', 'solana', 'polygon', 'base', 'cardano'];
+        if (chainsWithStables.includes(blockchain)) {
+            try {
+                const stablesResponse = await fetch('https://stablecoins.llama.fi/stablecoins?includePrices=true');
+                if (stablesResponse.ok) {
+                    const stablesData = await stablesResponse.json();
+                    console.log('Stablecoins API response:', stablesData);
+
+                    // Sum up all stablecoins on this chain
+                    let totalStables = 0;
+                    if (stablesData.peggedAssets) {
+                        stablesData.peggedAssets.forEach(stable => {
+                            // Check if this stablecoin exists on our chain
+                            const chainKey = blockchain.charAt(0).toUpperCase() + blockchain.slice(1);
+                            const chainCirculating = stable.chainCirculating?.[chainKey] || stable.chainCirculating?.[defiLlamaChain];
+                            if (chainCirculating && chainCirculating.current) {
+                                totalStables += parseFloat(chainCirculating.current.peggedUSD || 0);
+                            }
+                        });
+                    }
+                    stablecoins = totalStables > 0 ? totalStables : null;
+                    console.log('Total stablecoins on chain:', stablecoins);
+                }
+            } catch (e) {
+                console.error('Stablecoins fetch error:', e);
+                stablecoins = null;
+            }
+        } else {
+            // Bitcoin doesn't have stablecoins - explicitly set to 'N/A'
+            stablecoins = 'N/A';
+        }
+
+        // Fetch market cap - Try CoinGecko first, then CMC as fallback
+        try {
+            const coinGeckoIds = {
+                'cardano': 'cardano',
+                'ethereum': 'ethereum',
+                'bitcoin': 'bitcoin',
+                'solana': 'solana',
+                'polygon': 'matic-network',
+                'base': 'ethereum' // Base chain uses ETH
+            };
+
+            const coinId = coinGeckoIds[blockchain];
+            if (coinId) {
+                // Try CoinGecko first
+                try {
+                    const cgResponse = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd&include_market_cap=true`);
+                    if (cgResponse.ok) {
+                        const cgData = await cgResponse.json();
+                        console.log('CoinGecko data:', cgData);
+                        if (cgData[coinId] && cgData[coinId].usd_market_cap) {
+                            mcap = cgData[coinId].usd_market_cap;
+                        }
+                    }
+                } catch (cgError) {
+                    console.warn('CoinGecko market cap fetch failed for', blockchain, '- using default N/A');
+                    // CMC fallback removed - endpoint not configured
+                }
+            }
+        } catch (e) {
+            console.error('Market cap fetch error:', e);
+        }
+
+        // Fetch 24h volume from DeFillama DEX aggregator
+        try {
+            const volumeResponse = await fetch(`https://api.llama.fi/overview/dexs/${defiLlamaChain}?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true&dataType=dailyVolume`);
+            if (volumeResponse.ok) {
+                const volumeData = await volumeResponse.json();
+                console.log('Volume data from DeFillama:', volumeData);
+                // Get the most recent day's total volume
+                if (volumeData.totalDataChart && volumeData.totalDataChart.length > 0) {
+                    volume = volumeData.totalDataChart[volumeData.totalDataChart.length - 1][1];
+                } else if (volumeData.total24h) {
+                    volume = volumeData.total24h;
+                }
+            }
+        } catch (e) {
+            console.error('Volume fetch error:', e);
+        }
+
+        console.log('Final metrics:', { mcap, tvl, stablecoins, volume });
+        return { mcap, tvl, stablecoins, volume };
+    } catch (error) {
+        console.error('Error fetching DeFillama metrics:', error);
+        return null;
+    }
+}
+
+function updateDeFiLlamaMetrics(metrics) {
+    const mcapEl = document.getElementById('chainMcap');
+    const tvlEl = document.getElementById('chainTvl');
+    const stablesEl = document.getElementById('chainStables');
+    const volumeEl = document.getElementById('chainVolume');
+
+    if (!metrics) {
+        mcapEl.textContent = 'Loading...';
+        tvlEl.textContent = 'Loading...';
+        stablesEl.textContent = 'Loading...';
+        volumeEl.textContent = 'Loading...';
+        return;
+    }
+
+    // Handle each metric - use N/A for explicitly unavailable data, show value or N/A for null
+    mcapEl.textContent = metrics.mcap === 'N/A' ? 'N/A' : (metrics.mcap ? formatCompactUSD(metrics.mcap) : 'N/A');
+    tvlEl.textContent = metrics.tvl === 'N/A' ? 'N/A' : (metrics.tvl ? formatCompactUSD(metrics.tvl) : 'N/A');
+    stablesEl.textContent = metrics.stablecoins === 'N/A' ? 'N/A' : (metrics.stablecoins ? formatCompactUSD(metrics.stablecoins) : 'N/A');
+    volumeEl.textContent = metrics.volume === 'N/A' ? 'N/A' : (metrics.volume ? formatCompactUSD(metrics.volume) : 'N/A');
+}
+
+function formatCompactUSD(value) {
+    if (!value || value === 0 || value === 'N/A') return 'N/A';
+
+    const numValue = parseFloat(value);
+    if (isNaN(numValue)) return 'N/A';
+
+    if (numValue >= 1e12) {
+        return '$' + (numValue / 1e12).toFixed(2) + 'T';
+    } else if (numValue >= 1e9) {
+        return '$' + (numValue / 1e9).toFixed(2) + 'B';
+    } else if (numValue >= 1e6) {
+        return '$' + (numValue / 1e6).toFixed(2) + 'M';
+    } else if (numValue >= 1e3) {
+        return '$' + (numValue / 1e3).toFixed(2) + 'K';
+    } else {
+        return formatUSD(numValue);
+    }
+}
+
+// Helper function to render breakdown data (used for both cached and fresh data)
+function renderBreakdownData(data) {
+    const totalValue = document.getElementById('breakdownTotalValue');
+    const assetCount = document.getElementById('breakdownAssetCount');
+
+    // Get blockchain from current modal title (a bit hacky but works)
+    const chainName = document.getElementById('breakdownChainName').textContent;
+    const blockchain = chainName.split(' ')[0].toLowerCase();
+
+    // Update values
+    totalValue.textContent = formatUSD(data.total_value_usd);
+    assetCount.textContent = 1 + data.tokens.length + (data.nfts.count > 0 ? 1 : 0);
+
+    const labels = [];
+    const values = [];
+    const colors = [];
+    const legendItems = [];
+
+    // Add native coin
+    if (data.native_coin.value_usd > 0) {
+        labels.push(data.native_coin.symbol);
+        values.push(data.native_coin.value_usd);
+        colors.push(getBlockchainColor(blockchain));
+        legendItems.push({
+            color: getBlockchainColor(blockchain),
+            symbol: data.native_coin.symbol,
+            name: 'Native Coin',
+            value_usd: data.native_coin.value_usd,
+            percentage: data.native_coin.percentage
+        });
+    }
+
+    // Add tokens
+    data.tokens.forEach((token, idx) => {
+        if (token.value_usd > 0) {
+            labels.push(token.symbol);
+            values.push(token.value_usd);
+            colors.push(generateColorForToken(idx));
+            legendItems.push({
+                color: generateColorForToken(idx),
+                symbol: token.symbol,
+                name: token.name,
+                value_usd: token.value_usd,
+                percentage: token.percentage
+            });
+        }
+    });
+
+    // Add NFTs
+    if (data.nfts.count > 0 && data.nfts.value_usd > 0) {
+        labels.push('NFTs');
+        values.push(data.nfts.value_usd);
+        colors.push('#9B59B6');
+        legendItems.push({
+            color: '#9B59B6',
+            symbol: 'NFTs',
+            name: `${data.nfts.count} NFTs`,
+            value_usd: data.nfts.value_usd,
+            percentage: data.nfts.percentage
+        });
+    }
+
+    renderAssetBreakdownChart(labels, values, colors);
+    renderBreakdownLegend(legendItems);
+}
 
 async function openAssetBreakdown(blockchain) {
     try {
-        // Open modal immediately with loading state
+        // Open modal immediately
         const modal = document.getElementById('assetBreakdownModal');
         const chainName = document.getElementById('breakdownChainName');
         const totalValue = document.getElementById('breakdownTotalValue');
@@ -5766,79 +6135,66 @@ async function openAssetBreakdown(blockchain) {
         modal.classList.remove('hidden');
         chainName.textContent = `${blockchain.charAt(0).toUpperCase() + blockchain.slice(1)} Asset Breakdown`;
 
-        // Show loading state
-        totalValue.textContent = 'Loading...';
-        assetCount.textContent = '...';
-        legendDiv.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-secondary);">Loading asset data...</div>';
-
         // Clear any existing chart
         if (assetBreakdownChart) {
             assetBreakdownChart.destroy();
             assetBreakdownChart = null;
         }
 
-        // Fetch data
+        // Check cache for instant display
+        const cachedData = assetBreakdownCache.get(blockchain, 'data');
+        const cachedMetrics = assetBreakdownCache.get(blockchain, 'defiLlama');
+        const hasCache = cachedData && !assetBreakdownCache.isStale(blockchain, 'data');
+
+        if (hasCache) {
+            // Show cached data instantly!
+            console.log(`Showing cached breakdown for ${blockchain}`);
+            renderBreakdownData(cachedData);
+
+            // Show cached DeFillama metrics if available
+            if (cachedMetrics && !assetBreakdownCache.isStale(blockchain, 'defiLlama')) {
+                updateDeFiLlamaMetrics(cachedMetrics);
+            } else {
+                // Fetch fresh metrics in background
+                updateDeFiLlamaMetrics(null);
+                fetchDeFiLlamaMetrics(blockchain).then(metrics => {
+                    if (metrics) {
+                        assetBreakdownCache.set(blockchain, metrics, 'defiLlama');
+                        updateDeFiLlamaMetrics(metrics);
+                    }
+                });
+            }
+
+            // Don't fetch fresh data - cache is good
+            return;
+        }
+
+        // No cache or stale - show loading state
+        totalValue.textContent = 'Loading...';
+        assetCount.textContent = '...';
+        legendDiv.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-secondary);">Loading asset data...</div>';
+        updateDeFiLlamaMetrics(null);
+
+        // Fetch DeFillama metrics in parallel
+        fetchDeFiLlamaMetrics(blockchain).then(metrics => {
+            if (metrics) {
+                assetBreakdownCache.set(blockchain, metrics, 'defiLlama');
+                updateDeFiLlamaMetrics(metrics);
+            }
+        });
+
+        // Fetch fresh data
         const response = await authFetch(`${API_BASE}/portfolio/assets/${blockchain}`);
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         const data = await response.json();
 
-        // Update values
-        totalValue.textContent = formatUSD(data.total_value_usd);
-        assetCount.textContent = 1 + data.tokens.length + (data.nfts.count > 0 ? 1 : 0);
+        // Cache the fresh data
+        assetBreakdownCache.set(blockchain, data, 'data');
 
-        const labels = [];
-        const values = [];
-        const colors = [];
-        const legendItems = [];
-
-        // Add native coin
-        if (data.native_coin.value_usd > 0) {
-            labels.push(data.native_coin.symbol);
-            values.push(data.native_coin.value_usd);
-            colors.push(getBlockchainColor(blockchain));
-            legendItems.push({
-                color: getBlockchainColor(blockchain),
-                symbol: data.native_coin.symbol,
-                name: 'Native Coin',
-                value_usd: data.native_coin.value_usd,
-                percentage: data.native_coin.percentage
-            });
-        }
-
-        // Add tokens
-        data.tokens.forEach((token, idx) => {
-            if (token.value_usd > 0) {
-                labels.push(token.symbol);
-                values.push(token.value_usd);
-                colors.push(generateColorForToken(idx));
-                legendItems.push({
-                    color: generateColorForToken(idx),
-                    symbol: token.symbol,
-                    name: token.name,
-                    value_usd: token.value_usd,
-                    percentage: token.percentage
-                });
-            }
-        });
-
-        // Add NFTs
-        if (data.nfts.count > 0 && data.nfts.value_usd > 0) {
-            labels.push('NFTs');
-            values.push(data.nfts.value_usd);
-            colors.push('#9B59B6');
-            legendItems.push({
-                color: '#9B59B6',
-                symbol: 'NFTs',
-                name: `${data.nfts.count} NFTs`,
-                value_usd: data.nfts.value_usd,
-                percentage: data.nfts.percentage
-            });
-        }
-
-        renderAssetBreakdownChart(labels, values, colors);
-        renderBreakdownLegend(legendItems);
+        // Render the data
+        renderBreakdownData(data);
 
     } catch (error) {
         console.error('Error loading asset breakdown:', error);
@@ -5867,8 +6223,10 @@ function renderAssetBreakdownChart(labels, values, colors) {
             datasets: [{
                 data: values,
                 backgroundColor: colors,
-                borderWidth: 2,
-                borderColor: getComputedStyle(document.body).getPropertyValue('--bg-primary')
+                borderWidth: 3,
+                borderColor: getComputedStyle(document.body).getPropertyValue('--bg-primary'),
+                hoverBorderWidth: 5,
+                hoverBorderColor: '#00d26a'
             }]
         },
         options: {
@@ -5877,6 +6235,14 @@ function renderAssetBreakdownChart(labels, values, colors) {
             plugins: {
                 legend: { display: false },
                 tooltip: {
+                    enabled: true,
+                    backgroundColor: 'rgba(26, 26, 46, 0.95)',
+                    titleColor: '#e0e0e0',
+                    bodyColor: '#e0e0e0',
+                    borderColor: 'rgba(0, 210, 106, 0.3)',
+                    borderWidth: 1,
+                    padding: 12,
+                    displayColors: true,
                     callbacks: {
                         label: function(context) {
                             const total = context.dataset.data.reduce((a, b) => a + b, 0);
@@ -5885,6 +6251,15 @@ function renderAssetBreakdownChart(labels, values, colors) {
                         }
                     }
                 }
+            },
+            onClick: (event, elements) => {
+                if (elements.length > 0) {
+                    const index = elements[0].index;
+                    selectBreakdownSegment(index);
+                }
+            },
+            onHover: (event, elements) => {
+                event.native.target.style.cursor = elements.length > 0 ? 'pointer' : 'default';
             }
         }
     });
@@ -5892,19 +6267,53 @@ function renderAssetBreakdownChart(labels, values, colors) {
 
 function renderBreakdownLegend(items) {
     const legendDiv = document.getElementById('breakdownLegend');
-    legendDiv.innerHTML = items.map(item => `
-        <div class="legend-item">
-            <div class="legend-label">
-                <div class="legend-color" style="background-color: ${item.color};"></div>
-                <span class="legend-symbol">${item.symbol}</span>
-                <span class="legend-name">${item.name}</span>
+
+    // Render compact legend items matching slider 2 style
+    legendDiv.innerHTML = items.map((item, index) => `
+        <div class="breakdown-legend-item-compact" data-index="${index}" onclick="selectBreakdownSegment(${index})">
+            <div class="breakdown-legend-color" style="background-color: ${item.color};"></div>
+            <div class="breakdown-legend-info">
+                <div class="breakdown-legend-symbol">${item.symbol}</div>
+                <div class="breakdown-legend-value">${formatUSD(item.value_usd)}</div>
             </div>
-            <div class="legend-value">
-                <div>${formatUSD(item.value_usd)}</div>
-                <div class="legend-percentage">${item.percentage.toFixed(1)}%</div>
-            </div>
+            <div class="breakdown-legend-percentage">${item.percentage.toFixed(1)}%</div>
         </div>
     `).join('');
+
+    // Store items for selection
+    window.breakdownLegendItems = items;
+}
+
+// Handle segment selection for breakdown chart
+function selectBreakdownSegment(index) {
+    const items = window.breakdownLegendItems;
+    if (!items || !items[index]) return;
+
+    const item = items[index];
+    const selectionInfo = document.getElementById('breakdownSelectionInfo');
+
+    // Update selection info
+    selectionInfo.innerHTML = `
+        <div class="selection-name">${item.symbol} - ${item.name}</div>
+        <div class="selection-value">${formatUSD(item.value_usd)}</div>
+        <div class="selection-percentage">${item.percentage.toFixed(2)}% of total holdings</div>
+    `;
+    selectionInfo.classList.add('visible');
+
+    // Highlight selected legend item
+    document.querySelectorAll('.breakdown-legend-item-compact').forEach((el, i) => {
+        if (i === index) {
+            el.classList.add('selected');
+        } else {
+            el.classList.remove('selected');
+        }
+    });
+
+    // Highlight chart segment
+    if (assetBreakdownChart) {
+        assetBreakdownChart.setActiveElements([{ datasetIndex: 0, index: index }]);
+        assetBreakdownChart.update();
+    }
 }
 
 function getBlockchainColor(blockchain) {
@@ -5926,6 +6335,20 @@ function generateColorForToken(index) {
 
 function closeAssetBreakdownModal() {
     document.getElementById('assetBreakdownModal').classList.add('hidden');
+
+    // Clear selection info
+    const selectionInfo = document.getElementById('breakdownSelectionInfo');
+    if (selectionInfo) {
+        selectionInfo.classList.remove('visible');
+        selectionInfo.innerHTML = '';
+    }
+
+    // Clear selected legend items
+    document.querySelectorAll('.breakdown-legend-item-compact').forEach(el => {
+        el.classList.remove('selected');
+    });
+
+    // Destroy chart
     if (assetBreakdownChart) {
         assetBreakdownChart.destroy();
         assetBreakdownChart = null;

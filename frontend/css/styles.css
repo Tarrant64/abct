@@ -3792,6 +3792,16 @@ body.usd-primary .exchange-asset-item .balance-amount::after {
     border-color: #14F195;
 }
 
+/* Token logo image */
+.token-logo {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--bg-secondary);
+}
+
 /* Chain badge for tokens */
 .chain-badge {
     display: inline-block;
@@ -4327,18 +4337,83 @@ body.usd-primary .exchange-asset-item .balance-amount::after {
 /* Asset Breakdown Modal */
 .asset-breakdown-modal {
     width: 90%;
-    max-width: 600px;
+    max-width: 1000px;
     max-height: 90vh;
     overflow-y: auto;
+    padding: 40px;
+    position: relative;
+}
+
+.asset-breakdown-modal .modal-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 10;
+}
+
+.breakdown-title {
+    text-align: center;
+    margin-bottom: 30px;
+    font-size: 1.5rem;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+/* DeFi Llama Metrics Section */
+.defillama-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 15px;
+    margin-bottom: 25px;
+    padding: 20px;
+    background: linear-gradient(135deg, rgba(0, 210, 106, 0.05) 0%, transparent 100%);
+    border-radius: 12px;
+    border: 1px solid rgba(0, 210, 106, 0.1);
+}
+
+.metric-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 15px;
+    background: var(--bg-secondary);
+    border-radius: 10px;
+    transition: all 0.3s ease;
+    border: 1px solid transparent;
+}
+
+.metric-card:hover {
+    background: var(--bg-tertiary);
+    border-color: rgba(0, 210, 106, 0.3);
+    transform: translateY(-2px);
+}
+
+.metric-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+}
+
+.metric-value {
+    font-size: 1.3rem;
+    font-weight: bold;
+    color: var(--text-primary);
+    background: linear-gradient(135deg, #00d26a 0%, #00ff88 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .breakdown-stats {
     display: flex;
     justify-content: space-around;
-    margin-bottom: 20px;
+    margin-bottom: 25px;
     padding: 15px;
     background: var(--bg-secondary);
-    border-radius: 8px;
+    border-radius: 10px;
 }
 
 .breakdown-stats .stat {
@@ -4359,31 +4434,219 @@ body.usd-primary .exchange-asset-item .balance-amount::after {
     color: var(--accent-color);
 }
 
-.chart-container {
-    position: relative;
-    margin: 20px auto;
+/* Breakdown Chart Content - Matching Slider 2/3 Style */
+.breakdown-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    align-items: center;
+    padding: 20px 0;
+}
+
+.breakdown-chart-wrapper {
     max-width: 400px;
     max-height: 400px;
+    margin: 0 auto;
+    padding: 30px;
+    background: radial-gradient(circle, var(--bg-card) 0%, var(--bg-secondary) 100%);
+    border-radius: 20px;
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.3),
+        0 0 60px rgba(0, 210, 106, 0.1);
+    position: relative;
+}
+
+/* Soft glowing border effect for breakdown chart */
+.breakdown-chart-wrapper::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: 20px;
+    padding: 1px;
+    background: linear-gradient(135deg,
+        rgba(0, 210, 106, 0.3),
+        transparent,
+        rgba(0, 210, 106, 0.3)
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0.5;
+    z-index: -1;
+    filter: blur(1px);
+}
+
+/* Subtle pulse animation for breakdown chart wrapper */
+.breakdown-chart-wrapper::after {
+    content: '';
+    position: absolute;
+    inset: -20px;
+    border-radius: 25px;
+    background: radial-gradient(circle, rgba(0, 210, 106, 0.05), transparent 70%);
+    z-index: -2;
+    animation: chartGlow 3s ease-in-out infinite;
+}
+
+/* Add subtle glow to canvas */
+.breakdown-chart-wrapper canvas {
+    filter: drop-shadow(0 0 15px rgba(0, 0, 0, 0.3));
+    transition: filter 0.3s ease;
+}
+
+.breakdown-chart-wrapper:hover canvas {
+    filter: drop-shadow(0 0 20px rgba(0, 210, 106, 0.2));
 }
 
 .breakdown-legend {
-    margin-top: 20px;
-    max-height: 200px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    max-height: 400px;
     overflow-y: auto;
+    padding-right: 10px;
 }
 
+.breakdown-legend::-webkit-scrollbar {
+    width: 6px;
+}
+
+.breakdown-legend::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+    border-radius: 3px;
+}
+
+.breakdown-legend::-webkit-scrollbar-thumb {
+    background: rgba(0, 210, 106, 0.3);
+    border-radius: 3px;
+}
+
+.breakdown-legend::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 210, 106, 0.5);
+}
+
+/* Compact legend items matching slider 2 style */
+.breakdown-legend-item-compact {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--bg-secondary);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid transparent;
+    position: relative;
+    overflow: hidden;
+}
+
+.breakdown-legend-item-compact:hover {
+    background: var(--bg-tertiary);
+    border-color: rgba(0, 210, 106, 0.2);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.breakdown-legend-item-compact.selected {
+    background: var(--bg-tertiary);
+    border-color: rgba(0, 210, 106, 0.4);
+    box-shadow: 0 0 20px rgba(0, 210, 106, 0.2);
+}
+
+.breakdown-legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.breakdown-legend-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.breakdown-legend-symbol {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.breakdown-legend-value {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.breakdown-legend-percentage {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--accent-color);
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+/* Selection info box matching slider 2 */
+.breakdown-selection-info {
+    margin-top: 25px;
+    padding: 20px;
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+    border-radius: 12px;
+    border: 1px solid rgba(0, 210, 106, 0.2);
+    text-align: center;
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.breakdown-selection-info.visible {
+    opacity: 1;
+}
+
+.breakdown-selection-info .selection-name {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.breakdown-selection-info .selection-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    background: linear-gradient(135deg, #00d26a 0%, #00ff88 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.breakdown-selection-info .selection-percentage {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+}
+
+/* Legacy support for old legend items */
 .legend-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px;
-    margin-bottom: 5px;
+    padding: 12px 15px;
     background: var(--bg-secondary);
-    border-radius: 6px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid transparent;
 }
 
 .legend-item:hover {
     background: var(--bg-tertiary);
+    border-color: rgba(0, 210, 106, 0.2);
+    transform: translateY(-2px);
 }
 
 .legend-color {
@@ -4417,6 +4680,45 @@ body.usd-primary .exchange-asset-item .balance-amount::after {
     font-size: 0.85rem;
     color: var(--accent-color);
     margin-left: 10px;
+}
+
+/* Responsive Design for Asset Breakdown Modal */
+@media (max-width: 768px) {
+    .asset-breakdown-modal {
+        max-width: 95%;
+        padding: 20px;
+    }
+
+    .breakdown-title {
+        font-size: 1.2rem;
+        margin-bottom: 20px;
+    }
+
+    .defillama-metrics {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        padding: 15px;
+    }
+
+    .breakdown-content {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+
+    .breakdown-chart-wrapper {
+        max-width: 100%;
+        padding: 20px;
+    }
+
+    .breakdown-legend {
+        max-height: 300px;
+        grid-template-columns: 1fr;
+    }
+
+    .breakdown-selection-info {
+        margin-top: 15px;
+        padding: 15px;
+    }
 }
 
 /* Make blockchain cards clickable */
