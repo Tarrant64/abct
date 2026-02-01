@@ -224,6 +224,12 @@
             padding: 20px;
             background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, transparent 100%);
             border-bottom: 1px solid #2a2a3e;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .category-header:hover {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, transparent 100%);
         }
 
         .category-info {
@@ -280,11 +286,27 @@
             border-radius: 20px;
             font-size: 12px;
             color: #888;
+            margin-right: 10px;
+        }
+
+        .collapse-icon {
+            color: var(--text-secondary, #888);
+            font-size: 0.8rem;
+            transition: transform 0.2s ease;
+        }
+
+        .api-category:not(.expanded) .collapse-icon {
+            transform: rotate(-90deg);
         }
 
         /* API Items */
         .api-list {
             padding: 0;
+            display: none;
+        }
+
+        .api-list.expanded {
+            display: block;
         }
 
         .api-item {
@@ -583,14 +605,18 @@
             color: #888;
         }
 
-        .utilization-toggle {
-            color: #888;
-            font-size: 20px;
-            transition: transform 0.3s;
+        .utilization-section .collapse-icon {
+            color: var(--text-secondary, #888);
+            font-size: 0.8rem;
+            transition: transform 0.2s ease;
         }
 
-        .utilization-toggle.expanded {
-            transform: rotate(180deg);
+        .utilization-section.expanded .collapse-icon {
+            transform: rotate(0deg);
+        }
+
+        .utilization-section:not(.expanded) .collapse-icon {
+            transform: rotate(-90deg);
         }
 
         .utilization-content {
@@ -929,6 +955,10 @@
         <div class="api-header">
             <h2>Manage APIs</h2>
             <div class="header-actions">
+                <button onclick="reloadAllApiKeys()" class="btn btn-secondary" style="display: flex; align-items: center; gap: 8px;" title="Clear API key caches and reload from database immediately">
+                    <span>🔄</span>
+                    <span>Reload APIs</span>
+                </button>
                 <a href="/api-help.html" class="btn btn-primary" style="display: flex; align-items: center; gap: 8px; text-decoration: none;">
                     <span>📚</span>
                     <span>API Reference</span>
@@ -957,7 +987,7 @@
                         <p>Track your API rate limit usage across all configured APIs</p>
                     </div>
                 </div>
-                <span class="utilization-toggle" id="utilizationToggle">&#9660;</span>
+                <span class="collapse-icon">▼</span>
             </div>
             <div class="utilization-content" id="utilizationContent">
                 <div class="utilization-summary" id="utilizationSummary">
@@ -1055,8 +1085,8 @@
                 const configuredCount = category.apis.filter(a => a.configured).length;
 
                 htmlContent += `
-                    <div class="api-category">
-                        <div class="category-header">
+                    <div class="api-category" data-category-id="${catId}">
+                        <div class="category-header" data-category-id="${catId}">
                             <div class="category-info">
                                 <div class="category-icon ${catId}">${category.icon}</div>
                                 <div>
@@ -1064,9 +1094,12 @@
                                     <div class="category-desc">${category.description}</div>
                                 </div>
                             </div>
-                            <div class="category-count">${configuredCount}/${category.apis.length} configured</div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div class="category-count">${configuredCount}/${category.apis.length} configured</div>
+                                <span class="collapse-icon">▼</span>
+                            </div>
                         </div>
-                        <div class="api-list">
+                        <div class="api-list" id="list-${catId}">
                             ${category.apis.map(api => renderApiItem(api)).join('')}
                         </div>
                     </div>
@@ -1077,6 +1110,7 @@
 
             // Attach event listeners after rendering (DOMPurify strips inline handlers)
             attachApiEventListeners();
+            attachCategoryToggleListeners();
         }
 
         function renderApiItem(api) {
@@ -1084,13 +1118,10 @@
             const statusText = api.configured ? 'Configured' : 'Not configured';
             const sourceText = api.source ? `(${api.source})` : '';
 
-            // Check if this API requires additional fields (exchanges)
+            // Check if this API requires additional fields
             const requiresSecret = api.requires_secret || false;
             const requiresPassphrase = api.requires_passphrase || false;
-
-            // Special note for Coinbase
-            const isCoinbase = api.id === 'coinbase';
-            const coinbaseNote = isCoinbase ? '<div style="font-size: 12px; color: #888; margin-top: 8px;">⚠️ Coinbase requires placing <code>cdp_api_key.json</code> file in project root directory instead of UI configuration.</div>' : '';
+            const requiresFileUpload = api.requires_file_upload || false;
 
             return `
                 <div class="api-item" data-api-id="${api.id}">
@@ -1121,21 +1152,36 @@
                             <button class="btn btn-danger btn-small btn-remove-api" data-api-id="${api.id}">
                                 Remove
                             </button>
-                        ` : isCoinbase ? `
-                            ${coinbaseNote}
+                        ` : requiresFileUpload ? `
+                            <div class="api-file-upload">
+                                <input type="file"
+                                       class="api-file-field"
+                                       id="file-${api.id}"
+                                       data-api-id="${api.id}"
+                                       accept=".json"
+                                       style="display: none;">
+                                <button class="btn btn-secondary btn-small btn-choose-file" data-api-id="${api.id}">
+                                    Choose File
+                                </button>
+                                <span class="file-name" id="filename-${api.id}" style="color: #888; font-size: 12px; margin: 0 10px;">No file chosen</span>
+                                <button class="btn btn-success btn-small btn-upload-file" data-api-id="${api.id}" disabled>
+                                    Upload
+                                </button>
+                                ${api.file_upload_hint ? `<div style="color: #888; font-size: 11px; margin-top: 8px;">${api.file_upload_hint}</div>` : ''}
+                            </div>
                         ` : `
                             <div class="api-key-input ${requiresSecret || requiresPassphrase ? 'multi-field' : ''}">
                                 <input type="password"
                                        class="api-key-field"
                                        id="key-${api.id}"
                                        data-api-id="${api.id}"
-                                       placeholder="API Key">
+                                       placeholder="${api.placeholder || 'API Key'}">
                                 ${requiresSecret ? `
                                     <input type="password"
                                            class="api-secret-field"
                                            id="secret-${api.id}"
                                            data-api-id="${api.id}"
-                                           placeholder="API Secret">
+                                           placeholder="${api.secret_placeholder || 'API Secret'}">
                                 ` : ''}
                                 ${requiresPassphrase ? `
                                     <input type="password"
@@ -1187,6 +1233,50 @@
                         const apiId = e.target.getAttribute('data-api-id');
                         saveApiKey(apiId);
                     }
+                });
+            });
+
+            // File upload - Choose File buttons
+            document.querySelectorAll('.btn-choose-file').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const apiId = e.target.getAttribute('data-api-id');
+                    const fileInput = document.getElementById(`file-${apiId}`);
+                    fileInput.click();
+                });
+            });
+
+            // File upload - File input change
+            document.querySelectorAll('.api-file-field').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const apiId = e.target.getAttribute('data-api-id');
+                    const fileNameSpan = document.getElementById(`filename-${apiId}`);
+                    const uploadBtn = document.querySelector(`.btn-upload-file[data-api-id="${apiId}"]`);
+
+                    if (e.target.files && e.target.files[0]) {
+                        fileNameSpan.textContent = e.target.files[0].name;
+                        uploadBtn.disabled = false;
+                    } else {
+                        fileNameSpan.textContent = 'No file chosen';
+                        uploadBtn.disabled = true;
+                    }
+                });
+            });
+
+            // File upload - Upload buttons
+            document.querySelectorAll('.btn-upload-file').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const apiId = e.target.getAttribute('data-api-id');
+                    uploadApiFile(apiId);
+                });
+            });
+        }
+
+        function attachCategoryToggleListeners() {
+            // Category header click to toggle
+            document.querySelectorAll('.category-header').forEach(header => {
+                header.addEventListener('click', (e) => {
+                    const categoryId = e.currentTarget.getAttribute('data-category-id');
+                    toggleCategory(categoryId);
                 });
             });
         }
@@ -1261,6 +1351,44 @@
                 }
 
                 showApiStatus('API disabled and key removed', 'success');
+                await loadApis();
+            } catch (error) {
+                showApiStatus(error.message, 'error');
+            }
+        }
+
+        async function uploadApiFile(apiId) {
+            const fileInput = document.getElementById(`file-${apiId}`);
+            const file = fileInput.files[0];
+
+            if (!file) {
+                showApiStatus('Please select a file', 'error');
+                return;
+            }
+
+            // Validate JSON file
+            if (!file.name.endsWith('.json')) {
+                showApiStatus('Please upload a JSON file', 'error');
+                return;
+            }
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                showApiStatus('Uploading...', 'loading');
+
+                const response = await authFetch(`/settings/apis/${apiId}/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to upload file');
+                }
+
+                showApiStatus('Credentials uploaded successfully', 'success');
                 await loadApis();
             } catch (error) {
                 showApiStatus(error.message, 'error');
@@ -1397,11 +1525,11 @@
         }
 
         function toggleUtilization() {
+            const section = document.getElementById('utilizationSection');
             const content = document.getElementById('utilizationContent');
-            const toggle = document.getElementById('utilizationToggle');
 
+            section.classList.toggle('expanded');
             content.classList.toggle('expanded');
-            toggle.classList.toggle('expanded');
         }
 
         function openLimitModal(apiId) {
@@ -1474,8 +1602,65 @@
             }
         }
 
+        async function reloadAllApiKeys() {
+            try {
+                showApiStatus('Reloading all API keys...', 'info');
+
+                const response = await authFetch('/settings/apis/reload', {
+                    method: 'POST'
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to reload API keys');
+                }
+
+                const data = await response.json();
+                showApiStatus(data.message || 'API keys reloaded successfully', 'success');
+
+                // Reload the page data to reflect any changes
+                await loadApis();
+                await loadUtilization();
+
+            } catch (error) {
+                showApiStatus(error.message, 'error');
+            }
+        }
+
         // Auto-refresh utilization every 60 seconds
         setInterval(loadUtilization, 60000);
+
+        // Category toggle functions
+        function toggleCategory(categoryId) {
+            const category = document.querySelector(`[data-category-id="${categoryId}"]`);
+            const list = document.getElementById(`list-${categoryId}`);
+
+            if (category && list) {
+                category.classList.toggle('expanded');
+                list.classList.toggle('expanded');
+            }
+        }
+
+        function toggleAllSections() {
+            const btn = document.getElementById('sectionsToggleBtn');
+            const allCategories = document.querySelectorAll('.api-category');
+            const allLists = document.querySelectorAll('.api-list');
+
+            // Check if any section is expanded
+            const anyExpanded = Array.from(allCategories).some(cat => cat.classList.contains('expanded'));
+
+            if (anyExpanded) {
+                // Collapse all
+                allCategories.forEach(cat => cat.classList.remove('expanded'));
+                allLists.forEach(list => list.classList.remove('expanded'));
+                btn.textContent = 'Expand All';
+            } else {
+                // Expand all
+                allCategories.forEach(cat => cat.classList.add('expanded'));
+                allLists.forEach(list => list.classList.add('expanded'));
+                btn.textContent = 'Collapse All';
+            }
+        }
 
         // Waffle menu toggle
     </script>
