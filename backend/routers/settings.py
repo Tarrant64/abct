@@ -13,7 +13,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database import (
-    get_all_api_settings, get_api_setting, save_api_setting, delete_api_setting, get_api_key,
+    get_all_api_settings, get_api_setting, save_api_setting, delete_api_setting,
+    update_api_enabled_status, get_api_key,
     get_api_usage, get_all_api_usage, get_api_rate_limit, save_api_rate_limit,
     delete_api_rate_limit, get_all_api_rate_limits
 )
@@ -192,6 +193,10 @@ class APIKeyUpdate(BaseModel):
     api_key: str
 
 
+class APIEnabledUpdate(BaseModel):
+    enabled: bool
+
+
 @router.get("/apis")
 async def list_apis():
     """
@@ -296,12 +301,30 @@ async def enable_api(api_id: str, data: APIKeyUpdate, user_id: int = Depends(ver
     if not api_key:
         raise HTTPException(status_code=400, detail="API key is required")
 
-    await save_api_setting(api_id, api_key, enabled=True)
+    await save_api_setting(api_id, api_key, enabled=True, user_id=user_id)
 
     return {
         "message": f"{API_REGISTRY[api_id]['name']} API enabled",
         "api_id": api_id,
         "enabled": True
+    }
+
+
+@router.patch("/apis/{api_id}/enabled")
+async def toggle_api_enabled(api_id: str, data: APIEnabledUpdate, user_id: int = Depends(verify_session)):
+    """Toggle API enabled/disabled status without changing the key. Requires authentication."""
+    if api_id not in API_REGISTRY:
+        raise HTTPException(status_code=404, detail=f"Unknown API: {api_id}")
+
+    success = await update_api_enabled_status(api_id, data.enabled, user_id=user_id)
+
+    if not success:
+        raise HTTPException(status_code=400, detail="API key not configured. Please save an API key first.")
+
+    return {
+        "message": f"{API_REGISTRY[api_id]['name']} API {'enabled' if data.enabled else 'disabled'}",
+        "api_id": api_id,
+        "enabled": data.enabled
     }
 
 
@@ -311,7 +334,7 @@ async def disable_api(api_id: str, user_id: int = Depends(verify_session)):
     if api_id not in API_REGISTRY:
         raise HTTPException(status_code=404, detail=f"Unknown API: {api_id}")
 
-    await delete_api_setting(api_id)
+    await delete_api_setting(api_id, user_id=user_id)
 
     return {
         "message": f"{API_REGISTRY[api_id]['name']} API disabled",
