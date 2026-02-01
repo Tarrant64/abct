@@ -162,6 +162,151 @@ API_REGISTRY = {
         "default_period": 86400,
         "period_label": "day"
     },
+
+    # Data & Analytics APIs
+    "thegraph": {
+        "name": "The Graph",
+        "category": "analytics",
+        "description": "Decentralized protocol for indexing and querying blockchain data",
+        "required": False,
+        "docs_url": "https://thegraph.com/studio/apikeys/",
+        "env_var": "GRAPH_API_KEY",
+        "pricing": "free",
+        "pricing_note": "Free tier: 100,000 queries/mo",
+        "default_limit": 3333,  # ~100k/month = 3333/day
+        "default_period": 86400,
+        "period_label": "day"
+    },
+    "dune": {
+        "name": "Dune Analytics",
+        "category": "analytics",
+        "description": "Blockchain analytics and SQL queries",
+        "required": False,
+        "docs_url": "https://dune.com/settings/api",
+        "env_var": "DUNE_API_KEY",
+        "pricing": "free",
+        "pricing_note": "Free tier: 1,000 queries/mo",
+        "default_limit": 33,  # ~1k/month = 33/day
+        "default_period": 86400,
+        "period_label": "day"
+    },
+
+    # Service APIs
+    "logokit": {
+        "name": "LogoKit",
+        "category": "services",
+        "description": "Logo and icon service for crypto tokens and brands",
+        "required": False,
+        "docs_url": "https://logokit.com/",
+        "env_var": "LOGOKIT_API_KEY",
+        "pricing": "free",
+        "pricing_note": "Free tier available",
+        "default_limit": None,
+        "default_period": 86400,
+        "period_label": "day"
+    },
+
+    # Exchange APIs
+    "coinbase": {
+        "name": "Coinbase",
+        "category": "exchanges",
+        "description": "Track Coinbase exchange balances (requires cdp_api_key.json file)",
+        "required": False,
+        "docs_url": "https://coinbase.com/settings/api",
+        "env_var": "COINBASE_CONFIGURED",  # Special handling for file-based config
+        "pricing": "free",
+        "pricing_note": "Read-only API access (no trading)",
+        "default_limit": None,
+        "default_period": 86400,
+        "period_label": "day"
+    },
+    "binance": {
+        "name": "Binance.com",
+        "category": "exchanges",
+        "description": "Track Binance.com exchange balances",
+        "required": False,
+        "docs_url": "https://www.binance.com/en/my/settings/api-management",
+        "env_var": "BINANCE_API_KEY",
+        "pricing": "free",
+        "pricing_note": "Read-only API access (no trading)",
+        "default_limit": None,
+        "default_period": 86400,
+        "period_label": "day",
+        "requires_secret": True  # Also needs BINANCE_API_SECRET
+    },
+    "binance_us": {
+        "name": "Binance.US",
+        "category": "exchanges",
+        "description": "Track Binance.US exchange balances",
+        "required": False,
+        "docs_url": "https://www.binance.us/en/usercenter/settings/api-management",
+        "env_var": "BINANCE_US_API_KEY",
+        "pricing": "free",
+        "pricing_note": "Read-only API access (no trading)",
+        "default_limit": None,
+        "default_period": 86400,
+        "period_label": "day",
+        "requires_secret": True  # Also needs BINANCE_US_API_SECRET
+    },
+    "okx": {
+        "name": "OKX",
+        "category": "exchanges",
+        "description": "Track OKX exchange balances",
+        "required": False,
+        "docs_url": "https://www.okx.com/account/my-api",
+        "env_var": "OKX_API_KEY",
+        "pricing": "free",
+        "pricing_note": "Read-only API access (no trading)",
+        "default_limit": None,
+        "default_period": 86400,
+        "period_label": "day",
+        "requires_secret": True,  # Also needs OKX_API_SECRET
+        "requires_passphrase": True  # Also needs OKX_API_PASSPHRASE
+    },
+    "bitget": {
+        "name": "Bitget",
+        "category": "exchanges",
+        "description": "Track Bitget exchange balances",
+        "required": False,
+        "docs_url": "https://www.bitget.com/en/account/newapi",
+        "env_var": "BITGET_API_KEY",
+        "pricing": "free",
+        "pricing_note": "Read-only API access (no trading)",
+        "default_limit": None,
+        "default_period": 86400,
+        "period_label": "day",
+        "requires_secret": True,  # Also needs BITGET_API_SECRET
+        "requires_passphrase": True  # Also needs BITGET_API_PASSPHRASE
+    },
+    "gate": {
+        "name": "Gate.io",
+        "category": "exchanges",
+        "description": "Track Gate.io exchange balances",
+        "required": False,
+        "docs_url": "https://www.gate.io/myaccount/apiv4keys",
+        "env_var": "GATE_API_KEY",
+        "pricing": "free",
+        "pricing_note": "Read-only API access (no trading)",
+        "default_limit": None,
+        "default_period": 86400,
+        "period_label": "day",
+        "requires_secret": True  # Also needs GATE_API_SECRET
+    },
+    "kucoin": {
+        "name": "KuCoin",
+        "category": "exchanges",
+        "description": "Track KuCoin exchange balances",
+        "required": False,
+        "docs_url": "https://www.kucoin.com/account/api",
+        "env_var": "KUCOIN_API_KEY",
+        "pricing": "free",
+        "pricing_note": "Read-only API access (no trading)",
+        "default_limit": None,
+        "default_period": 86400,
+        "period_label": "day",
+        "requires_secret": True,  # Also needs KUCOIN_API_SECRET
+        "requires_passphrase": True  # Also needs KUCOIN_API_PASSPHRASE
+    },
 }
 
 # Category labels for grouping
@@ -185,12 +330,29 @@ CATEGORIES = {
         "name": "Pricing",
         "description": "Cryptocurrency price data providers",
         "icon": "$"
+    },
+    "analytics": {
+        "name": "Data & Analytics",
+        "description": "Blockchain analytics and data indexing",
+        "icon": "📊"
+    },
+    "services": {
+        "name": "Services",
+        "description": "Supporting services for crypto tracking",
+        "icon": "🛠️"
+    },
+    "exchanges": {
+        "name": "Exchanges",
+        "description": "Cryptocurrency exchange integrations",
+        "icon": "🏦"
     }
 }
 
 
 class APIKeyUpdate(BaseModel):
     api_key: str
+    api_secret: Optional[str] = None  # For exchange APIs
+    api_passphrase: Optional[str] = None  # For some exchange APIs (OKX, Bitget, KuCoin)
 
 
 class APIEnabledUpdate(BaseModel):
@@ -301,7 +463,12 @@ async def enable_api(api_id: str, data: APIKeyUpdate, user_id: int = Depends(ver
     if not api_key:
         raise HTTPException(status_code=400, detail="API key is required")
 
-    await save_api_setting(api_id, api_key, enabled=True, user_id=user_id)
+    # Get optional secret and passphrase (for exchange APIs)
+    api_secret = data.api_secret.strip() if data.api_secret else None
+    api_passphrase = data.api_passphrase.strip() if data.api_passphrase else None
+
+    await save_api_setting(api_id, api_key, enabled=True, user_id=user_id,
+                          api_secret=api_secret, api_passphrase=api_passphrase)
 
     return {
         "message": f"{API_REGISTRY[api_id]['name']} API enabled",
