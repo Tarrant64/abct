@@ -1,8 +1,11 @@
 import aiosqlite
+import logging
 from datetime import datetime, timedelta
 from pathlib import Path
 from config import DATABASE_PATH
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # MULTI-USER CONTEXT
@@ -1591,6 +1594,8 @@ async def update_api_enabled_status(api_name: str, enabled: bool, user_id: int =
     if user_id is None:
         user_id = get_current_user_id()
 
+    logger.info(f"update_api_enabled_status: api_name={api_name}, enabled={enabled}, user_id={user_id}")
+
     async with aiosqlite.connect(DATABASE_PATH) as db:
         # Check if API key exists first
         cursor = await db.execute("""
@@ -1599,7 +1604,10 @@ async def update_api_enabled_status(api_name: str, enabled: bool, user_id: int =
         """, (user_id, api_name))
         row = await cursor.fetchone()
 
+        logger.info(f"update_api_enabled_status: Query result for user_id={user_id}, api_name={api_name}: {row}")
+
         if not row:
+            logger.warning(f"update_api_enabled_status: No API key found for user_id={user_id}, api_name={api_name}")
             return False  # Can't enable/disable if no key configured
 
         # Update only the enabled status
