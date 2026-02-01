@@ -419,11 +419,14 @@ async def init_db():
         # API settings table - stores enabled APIs and their keys (system-wide)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS api_settings (
-                api_name TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                api_name TEXT NOT NULL,
                 api_key TEXT,
                 enabled INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                PRIMARY KEY (user_id, api_name),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             )
         """)
 
