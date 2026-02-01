@@ -5,11 +5,12 @@ Provides endpoints for managing API keys and their enabled status.
 API keys are stored in the database and can override environment variables.
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from pydantic import BaseModel
 from typing import Optional
 import os
 import sys
+import json
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database import (
@@ -42,13 +43,39 @@ API_REGISTRY = {
     "taptools": {
         "name": "TapTools",
         "category": "cardano",
-        "description": "Cardano NFT floor prices and token analytics",
+        "description": "Cardano NFT floor prices only (use nftcdn/nmkr for metadata)",
         "required": False,
         "docs_url": "https://www.taptools.io/",
         "env_var": "TAPTOOLS_API_KEY",
         "pricing": "paid",
         "pricing_note": "$9/mo plan: 100 requests/day",
         "default_limit": 100,  # $9/mo plan limit
+        "default_period": 86400,
+        "period_label": "day"
+    },
+    "nftcdn": {
+        "name": "NFT CDN",
+        "category": "cardano",
+        "description": "Cardano NFT metadata and images (prioritized over TapTools)",
+        "required": False,
+        "docs_url": "https://nftcdn.io/doc",
+        "env_var": "NFTCDN_API_KEY",
+        "pricing": "paid",
+        "pricing_note": "Paid service for NFT metadata and images",
+        "default_limit": None,
+        "default_period": 86400,
+        "period_label": "day"
+    },
+    "nmkr": {
+        "name": "NMKR Studio",
+        "category": "cardano",
+        "description": "Cardano NFT metadata via NMKR Studio API (prioritized over TapTools)",
+        "required": False,
+        "docs_url": "https://studio-api.nmkr.io/swagger/index.html",
+        "env_var": "NMKR_API_KEY",
+        "pricing": "free",
+        "pricing_note": "Free API access for NFT metadata",
+        "default_limit": None,
         "default_period": 86400,
         "period_label": "day"
     },
@@ -210,15 +237,17 @@ API_REGISTRY = {
     "coinbase": {
         "name": "Coinbase",
         "category": "exchanges",
-        "description": "Track Coinbase exchange balances (requires cdp_api_key.json file)",
+        "description": "Track Coinbase exchange balances (requires CDP API key JSON file)",
         "required": False,
-        "docs_url": "https://coinbase.com/settings/api",
-        "env_var": "COINBASE_CONFIGURED",  # Special handling for file-based config
+        "docs_url": "https://docs.cdp.coinbase.com/coinbase-app/docs/welcome",
+        "env_var": "COINBASE_API_KEY",
         "pricing": "free",
         "pricing_note": "Read-only API access (no trading)",
         "default_limit": None,
         "default_period": 86400,
-        "period_label": "day"
+        "period_label": "day",
+        "requires_file_upload": True,
+        "file_upload_hint": "Upload CDP API key JSON file (contains 'name' and 'privateKey' fields)"
     },
     "binance": {
         "name": "Binance.com",
@@ -231,8 +260,7 @@ API_REGISTRY = {
         "pricing_note": "Read-only API access (no trading)",
         "default_limit": None,
         "default_period": 86400,
-        "period_label": "day",
-        "requires_secret": True  # Also needs BINANCE_API_SECRET
+        "period_label": "day"
     },
     "binance_us": {
         "name": "Binance.US",
@@ -245,8 +273,7 @@ API_REGISTRY = {
         "pricing_note": "Read-only API access (no trading)",
         "default_limit": None,
         "default_period": 86400,
-        "period_label": "day",
-        "requires_secret": True  # Also needs BINANCE_US_API_SECRET
+        "period_label": "day"
     },
     "okx": {
         "name": "OKX",
@@ -259,9 +286,7 @@ API_REGISTRY = {
         "pricing_note": "Read-only API access (no trading)",
         "default_limit": None,
         "default_period": 86400,
-        "period_label": "day",
-        "requires_secret": True,  # Also needs OKX_API_SECRET
-        "requires_passphrase": True  # Also needs OKX_API_PASSPHRASE
+        "period_label": "day"
     },
     "bitget": {
         "name": "Bitget",
@@ -274,9 +299,7 @@ API_REGISTRY = {
         "pricing_note": "Read-only API access (no trading)",
         "default_limit": None,
         "default_period": 86400,
-        "period_label": "day",
-        "requires_secret": True,  # Also needs BITGET_API_SECRET
-        "requires_passphrase": True  # Also needs BITGET_API_PASSPHRASE
+        "period_label": "day"
     },
     "gate": {
         "name": "Gate.io",
@@ -289,8 +312,7 @@ API_REGISTRY = {
         "pricing_note": "Read-only API access (no trading)",
         "default_limit": None,
         "default_period": 86400,
-        "period_label": "day",
-        "requires_secret": True  # Also needs GATE_API_SECRET
+        "period_label": "day"
     },
     "kucoin": {
         "name": "KuCoin",
@@ -303,9 +325,7 @@ API_REGISTRY = {
         "pricing_note": "Read-only API access (no trading)",
         "default_limit": None,
         "default_period": 86400,
-        "period_label": "day",
-        "requires_secret": True,  # Also needs KUCOIN_API_SECRET
-        "requires_passphrase": True  # Also needs KUCOIN_API_PASSPHRASE
+        "period_label": "day"
     },
 }
 
@@ -406,7 +426,14 @@ async def list_apis():
             "docs_url": api_info['docs_url'],
             "enabled": enabled,
             "configured": has_key,
-            "source": source
+            "source": source,
+            "requires_secret": api_info.get('requires_secret', False),
+            "requires_passphrase": api_info.get('requires_passphrase', False),
+            "requires_file_upload": api_info.get('requires_file_upload', False),
+            "file_upload_hint": api_info.get('file_upload_hint'),
+            "placeholder": api_info.get('placeholder'),
+            "secret_placeholder": api_info.get('secret_placeholder'),
+            "pricing": api_info.get('pricing', 'unknown')
         })
 
     return {
@@ -507,6 +534,52 @@ async def disable_api(api_id: str, user_id: int = Depends(verify_session)):
         "message": f"{API_REGISTRY[api_id]['name']} API disabled",
         "api_id": api_id,
         "enabled": False
+    }
+
+
+@router.post("/apis/{api_id}/upload")
+async def upload_api_file(api_id: str, file: UploadFile = File(...), user_id: int = Depends(verify_session)):
+    """
+    Upload a configuration file for APIs that require file-based credentials (e.g., Coinbase CDP).
+    The file contents will be stored as a JSON string in the api_settings table.
+    Requires authentication.
+    """
+    if api_id not in API_REGISTRY:
+        raise HTTPException(status_code=404, detail=f"Unknown API: {api_id}")
+
+    api_info = API_REGISTRY[api_id]
+    if not api_info.get('requires_file_upload'):
+        raise HTTPException(status_code=400, detail=f"{api_info['name']} does not accept file uploads")
+
+    # Validate file type (JSON only for now)
+    if not file.filename.endswith('.json'):
+        raise HTTPException(status_code=400, detail="Only JSON files are accepted")
+
+    # Read and parse JSON file
+    try:
+        contents = await file.read()
+        credentials = json.loads(contents.decode('utf-8'))
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON file")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to read file: {str(e)}")
+
+    # Validate structure for Coinbase CDP (must have 'name' and 'privateKey')
+    if api_id == 'coinbase':
+        if 'name' not in credentials or 'privateKey' not in credentials:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid CDP API key file. Must contain 'name' and 'privateKey' fields"
+            )
+
+    # Store as JSON string in database
+    api_key_json = json.dumps(credentials)
+    await save_api_setting(api_id, api_key_json, enabled=True, user_id=user_id)
+
+    return {
+        "message": f"{api_info['name']} credentials uploaded successfully",
+        "api_id": api_id,
+        "enabled": True
     }
 
 
@@ -779,4 +852,55 @@ async def reset_api_rate_limit(api_id: str, user_id: int = Depends(verify_sessio
         "message": f"Rate limit reset to default for {API_REGISTRY[api_id]['name']}",
         "api_id": api_id,
         "default_limit": API_REGISTRY[api_id].get('default_limit', 1000)
+    }
+
+
+@router.post("/apis/reload")
+async def reload_all_api_keys(user_id: int = Depends(verify_session)):
+    """
+    Clear all API key caches, forcing services to reload keys from database.
+
+    This is useful after updating API keys via the web interface to ensure
+    they are recognized immediately without waiting for the 60-second cache TTL.
+    """
+    import importlib
+    import sys
+
+    # List of service modules to reload
+    service_modules = [
+        'services.taptools',
+        'services.cardano',
+        'services.polygon',
+        'services.base',
+        'services.nft_price_client',
+        'services.solana',
+        'services.ethereum',
+        'services.etherscan',
+        'services.coinbase',
+    ]
+
+    reloaded_count = 0
+
+    for module_name in service_modules:
+        try:
+            if module_name in sys.modules:
+                module = sys.modules[module_name]
+
+                # Find service instances and clear their caches
+                for attr_name in dir(module):
+                    attr = getattr(module, attr_name)
+
+                    # Check if it's a service instance with clear_cache method
+                    if hasattr(attr, 'clear_cache') and callable(attr.clear_cache):
+                        attr.clear_cache()
+                        reloaded_count += 1
+                        logger.info(f"Cleared cache for {module_name}.{attr_name}")
+
+        except Exception as e:
+            logger.warning(f"Could not reload {module_name}: {e}")
+
+    return {
+        "message": f"API key caches cleared for {reloaded_count} service(s)",
+        "detail": "All services will reload keys from database on next API call",
+        "services_reloaded": reloaded_count
     }
