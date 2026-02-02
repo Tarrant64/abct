@@ -2,13 +2,15 @@
 
 A self-hosted cryptocurrency portfolio tracker that aggregates data from multiple blockchains, exchanges, and DeFi protocols.  
 
-![Version](https://img.shields.io/badge/version-1.0.0-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-1.0.1-brightgreen.svg)
+![Build](https://img.shields.io/badge/build-1770000515-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.109-teal.svg)
 ![Security](https://img.shields.io/badge/security-hardened-green.svg)
 ![Docker](https://img.shields.io/badge/docker-ready-blue.svg)
 ![Exchanges](https://img.shields.io/badge/exchanges-7-purple.svg)
+![Themes](https://img.shields.io/badge/themes-5-purple.svg)
 
 ## ⚠️ Important: Intended Use
 
@@ -471,6 +473,37 @@ For detailed security information, see [SECURITY.md](SECURITY.md)
 
 ## 📦 What's New
 
+### v1.0.1 - UI & Theme System Overhaul (February 2026) ✨
+- **🎨 Complete Theme Redesign**: Reimagined theme system with enhanced visual polish
+  - Renamed "Default" theme to "Dark Mode" for clarity
+  - **New Light Theme**: Clean, modern white theme with refined UI elements
+  - Removed "Green Terminal" theme
+  - 5 professionally designed themes: Dark Mode, Light, Cypherpunk 1, Ocean Depths, Sunset Horizon
+- **💎 Light Theme Polish**: Comprehensive styling for modern aesthetics
+  - Rounded corners throughout (10-24px range for visual hierarchy)
+  - Layered shadow effects for depth and elevation
+  - Proper contrast and readability
+  - White backgrounds with subtle gray accents (#e5e7eb borders)
+  - Professional button and input styling
+- **✨ Dark Mode Enhancements**: Improved visibility and polish
+  - Glowing green borders on headers and sections (rgba(0, 210, 106, 0.4))
+  - Enhanced shadow effects for better depth perception
+  - Improved contrast for better readability
+  - Consistent rounded corners matching light theme
+- **🎯 UI Refinements**: Better spacing and visual hierarchy
+  - Header and section headers now use rounded, padded containers
+  - Improved text indentation (16-24px padding)
+  - Portfolio card with enhanced shadows and borders
+  - Chart containers with proper background styling per theme
+  - Consistent waffle menu integration across all pages
+- **🎭 Theme Selector Relocation**: Moved from header to waffle menu dropdown
+  - More intuitive navigation structure
+  - Cleaner header design
+  - Theme selection with all navigation in one place
+- **🔧 Cache Busting**: Build version system for immediate CSS/JS updates
+  - Version 1770000515
+  - No more browser cache issues after updates
+
 ### v1.0.0 - Production Ready Release (January 2026) 🎉
 - **Multi-Exchange Support**: Connect to 7 major cryptocurrency exchanges
   - Binance.com, Binance.US, OKX, Bitget, Gate.io, KuCoin + existing Coinbase
@@ -615,6 +648,6 @@ For detailed API information including rate limits and pricing, see [API Provide
 
 ---
 
-**Current Version:** v1.0.0
-**Last Updated:** January 31, 2026
-**Release Date:** January 31, 2026
+**Current Version:** v1.0.1 (BUILD 1770000515)
+**Last Updated:** February 1, 2026
+**Release Date:** February 1, 2026
