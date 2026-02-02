@@ -283,15 +283,29 @@ EOF
     fi
 
     echo ""
-    echo "Running database migration (if needed)..."
+    echo "Running database migrations..."
 
-    # Run database schema fix for api_settings table
-    # This is safe to run multiple times - it will only migrate if needed
-    if docker exec "$CONTAINER_NAME" python3 /app/backend/fix_api_settings_schema.py 2>&1; then
-        echo "  ✓ Database schema up to date"
+    # Run comprehensive SQL migration script (applies all .sql migrations)
+    echo "  Applying SQL migrations..."
+    if docker exec "$CONTAINER_NAME" python3 /app/backend/run_migrations.py 2>&1; then
+        echo "  ✓ SQL migrations applied"
     else
-        echo "  ⚠ Database migration may have failed (check logs if API management doesn't work)"
+        echo "  ⚠ SQL migration may have failed"
     fi
+
+    # Run Python migrations (safe to run multiple times)
+    echo "  Applying Python migrations..."
+    docker exec "$CONTAINER_NAME" python3 /app/backend/migrations/add_snapshot_quantities.py 2>&1 || true
+
+    # Run legacy schema fixes (safe to run multiple times)
+    echo "  Running schema fixes..."
+    if docker exec "$CONTAINER_NAME" python3 /app/backend/fix_api_settings_schema.py 2>&1; then
+        echo "  ✓ Schema fixes applied"
+    else
+        echo "  ⚠ Schema fix may have failed"
+    fi
+
+    echo "  ✓ Database migrations complete"
 
 ENDSSH
 

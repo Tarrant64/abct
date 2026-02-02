@@ -600,6 +600,37 @@ async def init_db():
             ON nft_scheduler_api_calls(called_at)
         """)
 
+        # Hidden tokens table - stores spam/unwanted tokens filtered by users
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS hidden_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                blockchain TEXT NOT NULL,
+                token_address TEXT NOT NULL,
+                token_symbol TEXT,
+                token_name TEXT,
+                reason TEXT DEFAULT 'spam',
+                hidden_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                UNIQUE(user_id, blockchain, token_address),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_hidden_tokens_user
+            ON hidden_tokens(user_id)
+        """)
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_hidden_tokens_blockchain
+            ON hidden_tokens(user_id, blockchain)
+        """)
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_hidden_tokens_lookup
+            ON hidden_tokens(user_id, blockchain, token_address)
+        """)
+
         await db.commit()
 
 async def get_db():
@@ -774,13 +805,22 @@ async def save_native_assets(wallet_id: int, assets: list, user_id: int = None):
         await db.commit()
 
 async def get_wallet_assets(wallet_id: int):
-    """Get all native assets for a wallet."""
+    """Get all native assets for a wallet, excluding hidden spam tokens."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            "SELECT * FROM native_assets WHERE wallet_id = ? ORDER BY asset_name",
-            (wallet_id,)
-        )
+        cursor = await db.execute("""
+            SELECT na.*
+            FROM native_assets na
+            JOIN wallets w ON na.wallet_id = w.id
+            LEFT JOIN hidden_tokens ht ON (
+                na.user_id = ht.user_id
+                AND w.blockchain = ht.blockchain
+                AND (na.policy_id = ht.token_address OR na.asset_id = ht.token_address)
+            )
+            WHERE na.wallet_id = ?
+            AND ht.id IS NULL
+            ORDER BY na.asset_name
+        """, (wallet_id,))
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
