@@ -183,6 +183,19 @@ GITHUB_RELEASE_*.md
 *_FEATURE_COMPLETE.md
 POST_DEPLOYMENT*.md
 
+# Planning and status documents (root level)
+DASHV2_STATUS.md
+DEVELOPMENT_CHECKLIST.md
+*_TEST_RESULTS.md
+*_FIXES.md
+*_IMPROVEMENTS.md
+*_ENHANCEMENTS.md
+*_ANALYSIS.md
+NFT_*.md
+METADATA_*.md
+TAPTOOLS_*.md
+UNIVERSAL_*.md
+
 # Sync reports (local development artifacts)
 SYNC_REPORT*.txt
 SECURITY_INCIDENT*.md

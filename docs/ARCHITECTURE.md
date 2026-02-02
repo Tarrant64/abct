@@ -1,11 +1,12 @@
-# ABCT Architecture (v0.12.0)
+# ABCT Architecture (v1.0.1)
 
 ## System Overview
 
 ```
 +-----------------------------------------------------------------------------------+
-|                              ABCT System (v0.12.0)                                 |
+|                              ABCT System (v1.0.1)                                  |
 |                         Multi-User Portfolio Tracker                              |
+|                              BUILD 1770000515                                     |
 +-----------------------------------------------------------------------------------+
 
                                    +-----------------+
@@ -247,11 +248,21 @@ Demo User (user_id=13, is_demo=1):
 - **httpx**: Async HTTP client for API calls
 
 ### Frontend
-- **HTML5/CSS3**: Modern responsive design
+- **HTML5/CSS3**: Modern responsive design with rounded corners and layered shadows
 - **Vanilla JavaScript**: No framework dependencies
 - **Chart.js v4.4.1**: Portfolio charts and asset breakdowns
-- **DOMPurify**: XSS protection
-- **CSS Custom Properties**: Theme support
+- **TradingView Lightweight Charts**: Price chart visualization
+- **DOMPurify v3.0.8**: XSS protection on all dynamic HTML
+- **Theme System (v1.0.1)**: 5 professionally designed themes
+  - **Dark Mode** (default): Original dark blue theme with glowing borders
+  - **Light**: Clean white theme with subtle shadows and refined UI
+  - **Cypherpunk 1**: Neon cyberpunk with glowing effects
+  - **Ocean Depths**: Deep blue oceanic palette
+  - **Sunset Horizon**: Purple/orange sunset gradient
+  - CSS Custom Properties (`[data-theme]` attribute)
+  - Per-theme overrides for borders, shadows, and colors
+  - localStorage persistence
+- **Cache Busting**: Build version system (v=1770000515) for immediate updates
 
 ### External Services
 - **Blockfrost**: Cardano blockchain data
@@ -294,7 +305,20 @@ Demo User (user_id=13, is_demo=1):
 +-----------------------------------------------------------------------------------+
 ```
 
-## Key Features (v0.12.0)
+## Key Features (v1.0.1)
+
+### UI & Theme System (v1.0.1)
+- **5 Professional Themes**: Dark Mode, Light, Cypherpunk 1, Ocean Depths, Sunset Horizon
+- **Light Theme**: Modern white theme with refined UI elements
+  - Rounded corners (10-24px) for visual hierarchy
+  - Layered shadow effects for depth
+  - Proper contrast and readability
+  - Professional button and input styling
+- **Dark Mode Polish**: Glowing borders and enhanced depth
+- **Unified Navigation**: Theme selector integrated into waffle menu
+- **Cache Busting**: Build version system prevents stale CSS/JS
+
+### Multi-User Support (v0.12.0)
 
 ### Multi-User Support
 - User account system with authentication
