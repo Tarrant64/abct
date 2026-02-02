@@ -166,6 +166,15 @@ test-abct-backup*.json
 
 # Deployment scripts (local only)
 deploy.sh
+run.sh
+stop.sh
+
+# Test scripts (local only)
+test_*.sh
+test_*.py
+
+# Mobile API (not in production)
+backend/routers/mobile.py
 
 # Development documentation (keep local only)
 docs/development/
