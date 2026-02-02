@@ -298,6 +298,33 @@
             font-size: 14px;
             color: #e0e0e0;
             word-break: break-all;
+            display: inline-block;
+        }
+
+        .copy-address-btn {
+            margin-left: 8px;
+            padding: 4px 6px;
+            background: transparent;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            font-size: 16px;
+            opacity: 0.4;
+            transition: opacity 0.2s;
+            vertical-align: middle;
+        }
+
+        .copy-address-btn:hover {
+            opacity: 0.8;
+        }
+
+        .copy-address-btn.copied {
+            color: #28a745;
+            opacity: 1;
+        }
+
+        .stake-key-display {
+            font-family: 'Monaco', 'Menlo', monospace;
         }
 
         .wallet-label {
@@ -454,6 +481,8 @@
         .wallet-asset-item {
             display: flex;
             justify-content: space-between;
+            align-items: center;
+            gap: 10px;
             padding: 8px 10px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
@@ -821,15 +850,6 @@
                 <button id="sectionsToggleBtn" class="btn btn-sections" onclick="toggleAllSections()" title="Expand/Collapse all sections">
                     Expand All
                 </button>
-                <div class="theme-selector">
-                    <select id="themeSelect" onchange="changeTheme(this.value)" title="Select theme">
-                        <option value="default">Default</option>
-                        <option value="cypherpunk1">Cypherpunk 1</option>
-                        <option value="green-terminal">Green Terminal</option>
-                        <option value="ocean-depths">Ocean Depths</option>
-                        <option value="sunset-horizon">Sunset Horizon</option>
-                    </select>
-                </div>
                 <div class="waffle-menu-container">
                     <button class="waffle-menu-btn" onclick="toggleWaffleMenu()" title="Menu">
                         <span class="waffle-icon">
@@ -863,6 +883,10 @@
                             <span class="waffle-item-icon">&#128230;</span>
                             <span class="waffle-item-label">Backup & Restore</span>
                         </a>
+                        <a href="/cache.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128452;</span>
+                            <span class="waffle-item-label">Cache Management</span>
+                        </a>
                         <a href="/nft-wall.html" class="waffle-menu-item">
                             <span class="waffle-item-icon">&#128444;</span>
                             <span class="waffle-item-label">NFT Wall</span>
@@ -871,6 +895,17 @@
                             <span class="waffle-item-icon">&#128221;</span>
                             <span class="waffle-item-label">System Logs</span>
                         </a>
+                        <div class="waffle-menu-divider"></div>
+                        <div class="waffle-menu-theme">
+                            <span class="waffle-item-icon">&#127912;</span>
+                            <select id="themeSelect" onchange="changeTheme(this.value)" title="Select theme">
+                                <option value="dark-mode">Dark Mode</option>
+                                <option value="light">Light</option>
+                                <option value="cypherpunk1">Cypherpunk 1</option>
+                                <option value="ocean-depths">Ocean Depths</option>
+                                <option value="sunset-horizon">Sunset Horizon</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1605,13 +1640,23 @@ base:0x789..." oninput="previewImport()"></textarea>
                 const totalAssets = groupWallets.reduce((sum, w) => sum + (w.native_assets_count || 0), 0);
                 const groupLabel = groupWallets[0].label || '';
 
+                const stakeKeyPrefix = stakeKey.startsWith('stake1') ? 'stake1' : stakeKey.slice(0, 6);
+                const stakeKeySuffix = stakeKey.slice(-6);
+                const stakeKeyDisplay = `${stakeKeyPrefix}${'•'.repeat(3)}${stakeKeySuffix}`;
+
                 html += `
                     <div class="stake-group" data-stake-key="${stakeKey}">
                         <div class="stake-group-header">
                             <div class="stake-group-info">
                                 <span class="expand-icon">▶</span>
                                 <span class="chain cardano">cardano</span>
-                                <span class="stake-key-display">${stakeKey.slice(0, 15)}...${stakeKey.slice(-8)}</span>
+                                <span class="stake-key-display">${stakeKeyDisplay}</span>
+                                <button class="copy-address-btn" onclick="copyToClipboard('${stakeKey}', this); event.stopPropagation();" title="Copy stake key">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg>
+                                </button>
                                 ${groupLabel ? `<span class="group-label">${groupLabel}</span>` : ''}
                             </div>
                             <div class="stake-group-summary">
@@ -1649,17 +1694,27 @@ base:0x789..." oninput="previewImport()"></textarea>
             const walletContainerId = `wallet-${wallet.id}`;
             const hasAssets = wallet.native_assets_count && wallet.native_assets_count > 0;
 
+            const displayAddress = formatAddressDisplay(wallet.address, wallet.blockchain);
+
             return `
                 <div class="wallet-item ${isGrouped ? 'grouped' : ''}" data-chain="${wallet.blockchain}" data-wallet-id="${wallet.id}" data-wallet-address="${wallet.address}" data-wallet-label="${wallet.label || ''}" id="${walletContainerId}">
                     <div class="wallet-info" style="flex: 1; min-width: 0;">
-                        <div class="wallet-address">${wallet.address.slice(0, 20)}...${wallet.address.slice(-12)}</div>
+                        <div style="display: flex; align-items: center;">
+                            <div class="wallet-address">${displayAddress}</div>
+                            <button class="copy-address-btn" onclick="copyToClipboard('${wallet.address}', this)" title="Copy address">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
+                            </button>
+                        </div>
                         <div class="wallet-label">
                             ${!isGrouped ? `<span class="chain ${wallet.blockchain}">${wallet.blockchain}</span>` : ''}
                             ${wallet.label ? `<span class="label-text">${wallet.label}</span>` : ''}
                             ${hasAssets ? `<span class="token-count" data-wallet-id="${wallet.id}">${wallet.native_assets_count} token${wallet.native_assets_count !== 1 ? 's' : ''} ▼</span>` : ''}
                         </div>
                         <div class="wallet-assets-container" id="assets-${wallet.id}">
-                            <div class="loading" style="text-align: center; padding: 10px;">Loading assets...</div>
+                            <div style="text-align: center; padding: 10px;"><div class="loading"></div></div>
                         </div>
                     </div>
                     <div class="wallet-balance">
@@ -1705,12 +1760,19 @@ base:0x789..." oninput="previewImport()"></textarea>
                 if (assets.length === 0) {
                     container.innerHTML = '<div style="text-align: center; padding: 10px; color: #888;">No native assets</div>';
                 } else {
-                    container.innerHTML = assets.map(asset => `
-                        <div class="wallet-asset-item">
-                            <div class="wallet-asset-name">${asset.asset_name || 'Unknown'}</div>
-                            <div class="wallet-asset-quantity">${formatTokenQuantity(asset.quantity)}</div>
-                        </div>
-                    `).join('');
+                    container.innerHTML = assets.map(asset => {
+                        const logoHtml = asset.logo_url
+                            ? `<img src="${asset.logo_url}" alt="${asset.asset_name || 'Unknown'}" class="token-logo" onerror="this.style.display='none';">`
+                            : '';
+
+                        return `
+                            <div class="wallet-asset-item">
+                                ${logoHtml}
+                                <div class="wallet-asset-name">${asset.asset_name || 'Unknown'}</div>
+                                <div class="wallet-asset-quantity">${formatTokenQuantity(asset.quantity)}</div>
+                            </div>
+                        `;
+                    }).join('');
                 }
 
                 container.dataset.loaded = 'true';
@@ -1758,6 +1820,59 @@ base:0x789..." oninput="previewImport()"></textarea>
                 'MATIC': 'POL'
             };
             return units[unit] || unit;
+        }
+
+        // Format address with chain identifier + dots + last chars
+        function formatAddressDisplay(address, blockchain) {
+            if (!address) return '';
+
+            let prefix = '';
+            const lastChars = 6;
+
+            // Determine chain-specific prefix
+            if (blockchain === 'cardano') {
+                // Cardano addresses: addr1, stake1, etc.
+                prefix = address.match(/^(addr1|stake1|addr_test1)/)?.[0] || address.slice(0, 5);
+            } else if (blockchain === 'bitcoin') {
+                // Bitcoin: bc1, 1, 3, etc.
+                if (address.startsWith('bc1')) {
+                    prefix = 'bc1';
+                } else if (address.startsWith('tb1')) {
+                    prefix = 'tb1';
+                } else {
+                    prefix = address.slice(0, 1); // 1 or 3 for legacy addresses
+                }
+            } else if (blockchain === 'ethereum' || blockchain === 'polygon' || blockchain === 'base') {
+                // Ethereum-like: 0x
+                prefix = '0x';
+            } else if (blockchain === 'solana') {
+                // Solana: first 4-5 chars
+                prefix = address.slice(0, 4);
+            } else {
+                // Default: first 5 chars
+                prefix = address.slice(0, 5);
+            }
+
+            const suffix = address.slice(-lastChars);
+            return `${prefix}${'•'.repeat(3)}${suffix}`;
+        }
+
+        // Copy to Clipboard
+        function copyToClipboard(text, button) {
+            navigator.clipboard.writeText(text).then(() => {
+                // Visual feedback
+                const originalHTML = button.innerHTML;
+                button.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+                button.classList.add('copied');
+
+                setTimeout(() => {
+                    button.innerHTML = originalHTML;
+                    button.classList.remove('copied');
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                alert('Failed to copy address');
+            });
         }
 
         // Add Wallet Modal
