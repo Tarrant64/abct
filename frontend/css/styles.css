@@ -7,9 +7,9 @@
   Default theme is applied when no data-theme is set.
 ===============================================================================*/
 
-/* Default Theme - Original dark blue */
+/* Dark Mode Theme - Original dark blue (default) */
 :root,
-[data-theme="default"] {
+[data-theme="dark-mode"] {
     --bg-primary: #1a1a2e;
     --bg-secondary: #16213e;
     --bg-card: #0f3460;
@@ -25,6 +25,25 @@
     --chart-fill: rgba(0, 210, 106, 0.1);
     --gradient-card: linear-gradient(135deg, #1e3a5f 0%, #0f3460 50%, #1a1a2e 100%);
     --gradient-header: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-card) 100%);
+}
+
+/* Light Mode Theme - Clean white/light palette */
+[data-theme="light"] {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f5f7fa;
+    --bg-card: #ffffff;
+    --text-primary: #1a1a2e;
+    --text-secondary: #6b7280;
+    --accent-cardano: #0052cc;
+    --accent-bitcoin: #f7931a;
+    --accent-ethereum: #627eea;
+    --accent-success: #00b894;
+    --accent-error: #d63031;
+    --border-color: #e5e7eb;
+    --chart-line: #00b894;
+    --chart-fill: rgba(0, 184, 148, 0.1);
+    --gradient-card: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    --gradient-header: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);
 }
 
 /* Ocean Depths Theme - Deep blue oceanic palette */
@@ -1923,6 +1942,15 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     margin-right: 8px;
 }
 
+.token-logo-line {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
 .coin-legend-logo {
     width: 20px;
     height: 20px;
@@ -2449,6 +2477,7 @@ body.usd-primary .card-body .details {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 10px;
     padding: 8px;
     margin-bottom: 4px;
     background-color: var(--bg-card);
@@ -2707,6 +2736,9 @@ body.usd-primary .card-body .details {
 
 .asset-name-cell {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .asset-name-cell .asset-ticker {
@@ -4560,6 +4592,15 @@ body.usd-primary .exchange-asset-item .balance-amount::after {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
+.breakdown-token-logo {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--bg-secondary);
+}
+
 .breakdown-legend-info {
     flex: 1;
     min-width: 0;
@@ -5324,7 +5365,7 @@ body.usd-primary .exchange-asset-item .balance-amount::after {
 
 .defi-gov-line {
     display: grid;
-    grid-template-columns: 80px 1fr 100px auto;
+    grid-template-columns: auto 80px 1fr 100px auto;
     gap: 12px;
     align-items: center;
     padding: 10px 14px;
@@ -5510,7 +5551,7 @@ body.usd-primary .exchange-asset-item .balance-amount::after {
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .defi-gov-line {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: auto 1fr 1fr;
         gap: 8px;
     }
 
@@ -5525,7 +5566,7 @@ body.usd-primary .exchange-asset-item .balance-amount::after {
     }
 
     .stablecoins-list .stable-line {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: auto 1fr 1fr;
     }
 
     .stable-line .line-chains,
@@ -6453,4 +6494,378 @@ body.privacy-mode h3,
 body.privacy-mode .section-title {
     filter: none !important;
     user-select: auto !important;
+}
+
+/* Copy Address Button */
+.copy-address-btn {
+    background: transparent;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    padding: 4px;
+    opacity: 0.4;
+    transition: opacity 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.copy-address-btn:hover {
+    opacity: 1;
+}
+
+.copy-address-btn svg {
+    display: block;
+}
+
+/* Waffle Menu Theme Selector */
+.waffle-menu-divider {
+    height: 1px;
+    background: #3a3a4e;
+    margin: 8px 0;
+}
+
+.waffle-menu-theme {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    color: #888;
+}
+
+.waffle-menu-theme .waffle-item-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.waffle-menu-theme select {
+    flex: 1;
+    background: #2a2a3e;
+    border: 1px solid #3a3a4e;
+    color: #e0e0e0;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    outline: none;
+}
+
+.waffle-menu-theme select:hover {
+    border-color: #667eea;
+}
+
+.waffle-menu-theme select:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+/* Light theme adjustments for waffle menu */
+[data-theme="light"] .waffle-menu-dropdown {
+    background: #ffffff;
+    border-color: #e5e7eb;
+}
+
+[data-theme="light"] .waffle-menu-item {
+    color: #1a1a2e;
+}
+
+[data-theme="light"] .waffle-menu-item:hover {
+    background: #f5f7fa;
+}
+
+[data-theme="light"] .waffle-menu-divider {
+    background: #e5e7eb;
+}
+
+[data-theme="light"] .waffle-menu-theme {
+    color: #6b7280;
+}
+
+[data-theme="light"] .waffle-menu-theme select {
+    background: #f5f7fa;
+    border-color: #e5e7eb;
+    color: #1a1a2e;
+}
+
+/* Light theme additional overrides */
+[data-theme="light"] body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+[data-theme="light"] .card,
+[data-theme="light"] .wallet-item,
+[data-theme="light"] .nft-item,
+[data-theme="light"] .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] header {
+    background: var(--gradient-header);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 20px 24px !important;
+    margin-bottom: 30px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .btn {
+    background: #f5f7fa;
+    color: #1a1a2e;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light"] .btn:hover {
+    background: #e9ecef;
+    border-color: #d1d5db;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+}
+
+[data-theme="light"] .btn-primary {
+    background: #667eea;
+    color: #ffffff;
+    border-color: #667eea;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+}
+
+[data-theme="light"] .btn-primary:hover {
+    background: #5568d3;
+    border-color: #5568d3;
+    box-shadow: 0 4px 6px rgba(102, 126, 234, 0.3);
+}
+
+[data-theme="light"] input,
+[data-theme="light"] select,
+[data-theme="light"] textarea {
+    background: #ffffff;
+    color: #1a1a2e;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light"] input:focus,
+[data-theme="light"] select:focus,
+[data-theme="light"] textarea:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1), 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light"] .section-header {
+    background: var(--gradient-header);
+    border-bottom: 1px solid var(--border-color);
+}
+
+[data-theme="light"] .modal-content,
+[data-theme="light"] .spam-modal-content {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+}
+
+[data-theme="light"] .modal-header {
+    border-bottom-color: #e5e7eb;
+}
+
+[data-theme="light"] .waffle-menu-btn {
+    background: rgba(102, 126, 234, 0.1);
+    border-color: rgba(102, 126, 234, 0.2);
+}
+
+[data-theme="light"] .waffle-menu-btn:hover {
+    background: rgba(102, 126, 234, 0.15);
+}
+
+[data-theme="light"] .waffle-icon span {
+    background: #667eea;
+}
+
+/* Light theme - Portfolio card */
+[data-theme="light"] .total-portfolio-card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 20px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .total-portfolio-card .total-label {
+    color: #6b7280;
+}
+
+[data-theme="light"] .total-portfolio-card .total-value {
+    color: #00b894;
+}
+
+[data-theme="light"] .total-portfolio-card .total-breakdown {
+    color: #6b7280;
+}
+
+[data-theme="light"] .total-portfolio-card .breakdown-item {
+    background-color: #f5f7fa;
+    border-radius: 24px;
+}
+
+/* Light theme - Chart container */
+[data-theme="light"] .history-chart-container {
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Light theme - Summary cards */
+[data-theme="light"] .summary-card {
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .summary-card:hover {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Light theme - Section headers */
+[data-theme="light"] .section-header-inline,
+[data-theme="light"] .collapsible-section .section-header {
+    background: var(--gradient-header);
+    color: var(--text-primary);
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 16px 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .section-header-inline h2,
+[data-theme="light"] .collapsible-section .section-header h2 {
+    margin: 0;
+    padding: 0;
+}
+
+[data-theme="light"] .summary-header {
+    background: var(--gradient-header);
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 16px 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+/* Light theme - History section headers */
+[data-theme="light"] .history-section .section-header-inline {
+    background: var(--gradient-header);
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 16px 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+/* Light theme - Page headers */
+[data-theme="light"] .page-header {
+    background: var(--gradient-header);
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 16px 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+/* Light theme - Wallet items */
+[data-theme="light"] .wallet-item {
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .wallet-item:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Light theme - Range buttons and toggles */
+[data-theme="light"] .range-btn {
+    border-radius: 10px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light"] .range-btn.active {
+    box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+}
+
+/* Light theme - Modals */
+[data-theme="light"] .modal-content,
+[data-theme="light"] .spam-modal-content {
+    border-radius: 16px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Light theme - NFT items */
+[data-theme="light"] .nft-item,
+[data-theme="light"] .nft-card {
+    border-radius: 12px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .nft-item:hover,
+[data-theme="light"] .nft-card:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Light theme - Exchange and staking cards */
+[data-theme="light"] .exchange-section,
+[data-theme="light"] .staking-card {
+    border-radius: 12px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+/* Light theme - Token cards */
+[data-theme="light"] .token-card,
+[data-theme="light"] .asset-item {
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/*===============================================================================
+  DARK MODE THEME - Specific Overrides with Glowing Borders
+===============================================================================*/
+
+/* Dark mode - Main header with glowing border */
+[data-theme="dark-mode"] header {
+    border: 1px solid rgba(0, 210, 106, 0.4);
+    border-radius: 16px;
+    padding: 20px 24px !important;
+    box-shadow: 0 0 20px rgba(0, 210, 106, 0.2), 0 4px 6px rgba(0, 0, 0, 0.3);
+    margin-bottom: 30px;
+}
+
+/* Dark mode - Section headers with glowing borders */
+[data-theme="dark-mode"] .section-header-inline,
+[data-theme="dark-mode"] .collapsible-section .section-header {
+    border: 1px solid rgba(0, 210, 106, 0.4);
+    border-radius: 12px;
+    padding: 16px 20px;
+    box-shadow: 0 0 15px rgba(0, 210, 106, 0.2), 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark-mode"] .summary-header {
+    border: 1px solid rgba(0, 210, 106, 0.4);
+    border-radius: 12px;
+    padding: 16px 20px;
+    box-shadow: 0 0 15px rgba(0, 210, 106, 0.2), 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark-mode"] .history-section .section-header-inline {
+    border: 1px solid rgba(0, 210, 106, 0.4);
+    border-radius: 12px;
+    padding: 16px 20px;
+    box-shadow: 0 0 15px rgba(0, 210, 106, 0.2), 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark-mode"] .page-header {
+    border: 1px solid rgba(0, 210, 106, 0.4);
+    border-radius: 12px;
+    padding: 16px 20px;
+    box-shadow: 0 0 15px rgba(0, 210, 106, 0.2), 0 2px 4px rgba(0, 0, 0, 0.3);
 }

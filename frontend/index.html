@@ -26,14 +26,6 @@
                 <button id="sectionsToggleBtn" class="btn btn-sections" onclick="toggleAllSections()" title="Expand/Collapse all sections">
                     Expand All
                 </button>
-                <div class="theme-selector">
-                    <select id="themeSelect" onchange="changeTheme(this.value)" title="Select theme">
-                        <option value="default">Default</option>
-                        <option value="cypherpunk1">Cypherpunk 1</option>
-                        <option value="ocean-depths">Ocean Depths</option>
-                        <option value="sunset-horizon">Sunset Horizon</option>
-                    </select>
-                </div>
                 <button id="refreshBtn" class="btn btn-primary" title="Sync wallet balances from blockchain">Sync Wallets</button>
                 <div class="waffle-menu-container">
                     <button class="waffle-menu-btn" onclick="toggleWaffleMenu()" title="Menu">
@@ -68,6 +60,10 @@
                             <span class="waffle-item-icon">&#128230;</span>
                             <span class="waffle-item-label">Backup & Restore</span>
                         </a>
+                        <a href="/cache.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128452;</span>
+                            <span class="waffle-item-label">Cache Management</span>
+                        </a>
                         <a href="/nft-wall.html" class="waffle-menu-item">
                             <span class="waffle-item-icon">&#128444;</span>
                             <span class="waffle-item-label">NFT Wall</span>
@@ -76,6 +72,17 @@
                             <span class="waffle-item-icon">&#128221;</span>
                             <span class="waffle-item-label">System Logs</span>
                         </a>
+                        <div class="waffle-menu-divider"></div>
+                        <div class="waffle-menu-theme">
+                            <span class="waffle-item-icon">&#127912;</span>
+                            <select id="themeSelect" onchange="changeTheme(this.value)" title="Select theme">
+                                <option value="dark-mode">Dark Mode</option>
+                                <option value="light">Light</option>
+                                <option value="cypherpunk1">Cypherpunk 1</option>
+                                <option value="ocean-depths">Ocean Depths</option>
+                                <option value="sunset-horizon">Sunset Horizon</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -97,12 +104,6 @@
             <section class="summary-section">
                 <div class="section-header-inline summary-header">
                     <h2>Portfolio Summary</h2>
-                    <div class="display-toggle display-toggle-compact">
-                        <button id="displayToggle" class="toggle-btn toggle-btn-compact" onclick="toggleDisplayMode()">
-                            <span class="toggle-option active" data-mode="crypto">Crypto</span>
-                            <span class="toggle-option" data-mode="usd">USD</span>
-                        </button>
-                    </div>
                 </div>
                 <div class="total-portfolio-card">
                     <div class="total-header">
@@ -286,7 +287,7 @@
 
                     <div class="summary-card base clickable" onclick="openAssetBreakdown('base')">
                         <div class="card-header">
-                            <img src="https://avatars.githubusercontent.com/u/108554348?s=32" alt="Base" class="blockchain-logo" onerror="this.outerHTML='<span class=\'blockchain-icon\'>Ⓑ</span>'">
+                            <img src="https://img.logokit.com/crypto/ETH?token=LOGOKIT_KEY_REMOVED&size=32" alt="Base" class="blockchain-logo" onerror="this.outerHTML='<span class=\'blockchain-icon\'>Ⓑ</span>'">
                             <span>Base</span>
                             <div class="price-info">
                                 <span class="token-price" id="baseEthPrice">$0.00</span>
@@ -361,7 +362,7 @@
                                         <span class="chain-ticker">SOL</span>
                                     </div>
                                     <div class="blockchain-btn" data-blockchain="polygon" onclick="selectBlockchain('polygon')">
-                                        <img src="https://img.logokit.com/crypto/MATIC?token=LOGOKIT_KEY_REMOVED&size=32" alt="Polygon" class="chain-logo" onerror="this.style.display='none';">
+                                        <img src="https://img.logokit.com/crypto/POL?token=LOGOKIT_KEY_REMOVED&size=32" alt="Polygon" class="chain-logo" onerror="this.style.display='none';">
                                         <span class="chain-name">Polygon</span>
                                         <span class="chain-ticker">POL</span>
                                     </div>
@@ -417,6 +418,16 @@
                     </div>
                 </div>
             </section>
+
+            <!-- Display Mode Toggle -->
+            <div class="display-toggle-container" style="text-align: center; margin: 20px 0;">
+                <div class="display-toggle display-toggle-compact" style="display: inline-block;">
+                    <button id="displayToggle" class="toggle-btn toggle-btn-compact" onclick="toggleDisplayMode()">
+                        <span class="toggle-option active" data-mode="crypto">Crypto</span>
+                        <span class="toggle-option" data-mode="usd">USD</span>
+                    </button>
+                </div>
+            </div>
 
             <!-- Wallets List -->
             <section class="wallets-section collapsible-section collapsed">
@@ -581,14 +592,35 @@
         <div id="assetBreakdownModal" class="modal hidden">
             <div class="modal-overlay" onclick="closeAssetBreakdownModal()"></div>
             <div class="modal-content asset-breakdown-modal">
-                <div class="modal-header">
-                    <h2 id="breakdownChainName">Asset Breakdown</h2>
-                    <button class="modal-close" onclick="closeAssetBreakdownModal()">&times;</button>
-                </div>
+                <button class="modal-close" onclick="closeAssetBreakdownModal()">&times;</button>
                 <div class="modal-body">
+                    <!-- Title matching slider style -->
+                    <h3 class="breakdown-title" id="breakdownChainName">Asset Breakdown</h3>
+
+                    <!-- DeFi Llama Metrics -->
+                    <div class="defillama-metrics" id="defillamaMetrics">
+                        <div class="metric-card">
+                            <span class="metric-label">Market Cap</span>
+                            <span class="metric-value" id="chainMcap">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">TVL</span>
+                            <span class="metric-value" id="chainTvl">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">Stablecoins</span>
+                            <span class="metric-value" id="chainStables">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">24h Volume</span>
+                            <span class="metric-value" id="chainVolume">-</span>
+                        </div>
+                    </div>
+
+                    <!-- Portfolio Stats -->
                     <div class="breakdown-stats">
                         <div class="stat">
-                            <span class="label">Total Value</span>
+                            <span class="label">Your Holdings</span>
                             <span class="value" id="breakdownTotalValue">$0.00</span>
                         </div>
                         <div class="stat">
@@ -596,10 +628,17 @@
                             <span class="value" id="breakdownAssetCount">0</span>
                         </div>
                     </div>
-                    <div class="chart-container">
-                        <canvas id="assetBreakdownChart" width="400" height="400"></canvas>
+
+                    <!-- Chart with matching styling -->
+                    <div class="breakdown-content">
+                        <div class="breakdown-chart-wrapper">
+                            <canvas id="assetBreakdownChart" width="400" height="400"></canvas>
+                        </div>
+                        <div class="breakdown-legend" id="breakdownLegend"></div>
                     </div>
-                    <div class="breakdown-legend" id="breakdownLegend"></div>
+
+                    <!-- Selection info (shows selected segment details) -->
+                    <div class="breakdown-selection-info" id="breakdownSelectionInfo"></div>
                 </div>
             </div>
         </div>

@@ -474,15 +474,6 @@
                 <button id="sectionsToggleBtn" class="btn btn-sections" onclick="toggleAllSections()" title="Expand/Collapse all sections">
                     Expand All
                 </button>
-                <div class="theme-selector">
-                    <select id="themeSelect" onchange="changeTheme(this.value)" title="Select theme">
-                        <option value="default">Default</option>
-                        <option value="cypherpunk1">Cypherpunk 1</option>
-                        <option value="green-terminal">Green Terminal</option>
-                        <option value="ocean-depths">Ocean Depths</option>
-                        <option value="sunset-horizon">Sunset Horizon</option>
-                    </select>
-                </div>
                 <div class="waffle-menu-container">
                     <button class="waffle-menu-btn" onclick="toggleWaffleMenu()" title="Menu">
                         <span class="waffle-icon">
@@ -516,6 +507,10 @@
                             <span class="waffle-item-icon">&#128230;</span>
                             <span class="waffle-item-label">Backup & Restore</span>
                         </a>
+                        <a href="/cache.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128452;</span>
+                            <span class="waffle-item-label">Cache Management</span>
+                        </a>
                         <a href="/nft-wall.html" class="waffle-menu-item">
                             <span class="waffle-item-icon">&#128444;</span>
                             <span class="waffle-item-label">NFT Wall</span>
@@ -524,6 +519,17 @@
                             <span class="waffle-item-icon">&#128221;</span>
                             <span class="waffle-item-label">System Logs</span>
                         </a>
+                        <div class="waffle-menu-divider"></div>
+                        <div class="waffle-menu-theme">
+                            <span class="waffle-item-icon">&#127912;</span>
+                            <select id="themeSelect" onchange="changeTheme(this.value)" title="Select theme">
+                                <option value="dark-mode">Dark Mode</option>
+                                <option value="light">Light</option>
+                                <option value="cypherpunk1">Cypherpunk 1</option>
+                                <option value="ocean-depths">Ocean Depths</option>
+                                <option value="sunset-horizon">Sunset Horizon</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -604,6 +610,19 @@
                         </label>
                         <p class="option-description">
                             Include NFT collections being tracked by the background scheduler.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="option-item">
+                    <input type="checkbox" id="optimizeCardano" class="option-checkbox" checked>
+                    <div class="option-content">
+                        <label for="optimizeCardano" class="option-label">
+                            Optimize Cardano Wallets
+                            <span class="option-badge" style="background: var(--success-color);">RECOMMENDED</span>
+                        </label>
+                        <p class="option-description">
+                            Export only stake addresses (stake1...) for Cardano. Payment addresses will be automatically discovered on import. This reduces backup size and ensures you always have the latest associated addresses.
                         </p>
                     </div>
                 </div>
@@ -890,7 +909,8 @@
                     include_api_keys: document.getElementById('includeApiKeys').checked,
                     include_security_settings: document.getElementById('includeSecuritySettings').checked,
                     include_custom_tokens: document.getElementById('includeCustomTokens').checked,
-                    include_nft_collections: document.getElementById('includeNftCollections').checked
+                    include_nft_collections: document.getElementById('includeNftCollections').checked,
+                    optimize_cardano: document.getElementById('optimizeCardano').checked
                 };
 
                 const token = localStorage.getItem('abct_token');
