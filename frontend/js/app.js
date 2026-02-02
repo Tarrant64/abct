@@ -263,7 +263,7 @@ function changeTheme(themeName) {
 
 function loadSavedTheme() {
     // Load saved theme from localStorage
-    const savedTheme = localStorage.getItem('abct-theme') || 'default';
+    const savedTheme = localStorage.getItem('abct-theme') || 'dark-mode';
     changeTheme(savedTheme);
 }
 
@@ -607,6 +607,50 @@ function formatAddress(address) {
         return `${address.slice(0, 12)}...${address.slice(-8)}`;
     }
     return address;
+}
+
+function formatAddressDisplay(address, blockchain) {
+    if (!address) return '';
+    let prefix = '';
+    const lastChars = 6;
+
+    // Determine chain-specific prefix
+    if (blockchain === 'cardano') {
+        prefix = address.match(/^(addr1|stake1|addr_test1)/)?.[0] || address.slice(0, 5);
+    } else if (blockchain === 'bitcoin') {
+        if (address.startsWith('bc1')) {
+            prefix = 'bc1';
+        } else if (address.startsWith('tb1')) {
+            prefix = 'tb1';
+        } else {
+            prefix = address.slice(0, 1);
+        }
+    } else if (blockchain === 'ethereum' || blockchain === 'polygon' || blockchain === 'base') {
+        prefix = '0x';
+    } else if (blockchain === 'solana') {
+        prefix = address.slice(0, 4);
+    } else {
+        prefix = address.slice(0, 5);
+    }
+
+    const suffix = address.slice(-lastChars);
+    return `${prefix}${'•'.repeat(3)}${suffix}`;
+}
+
+function copyToClipboard(text, button) {
+    navigator.clipboard.writeText(text).then(() => {
+        const originalHTML = button.innerHTML;
+        button.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+        `;
+        setTimeout(() => {
+            button.innerHTML = originalHTML;
+        }, 1500);
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+    });
 }
 
 // Load portfolio summary
@@ -1085,6 +1129,15 @@ function attachDashboardWalletEventListeners() {
         });
     });
 
+    // Copy address button listeners
+    document.querySelectorAll('.copy-address-btn').forEach(btn => {
+        btn.addEventListener('click', function(event) {
+            event.stopPropagation();
+            const address = this.dataset.address;
+            copyToClipboard(address, this);
+        });
+    });
+
     // Delete wallet button listeners
     document.querySelectorAll('.delete-wallet-btn').forEach(btn => {
         btn.addEventListener('click', function(event) {
@@ -1223,6 +1276,7 @@ async function toggleDashboardWalletAssets(walletId) {
                     const actualQty = parseFloat(asset.actual_quantity) || 0;
                     const ticker = asset.ticker || asset.asset_name?.substring(0, 10) || 'Unknown';
                     const displayName = asset.token_name || asset.asset_name || 'Unknown';
+                    const logoUrl = asset.logo_url || '';
 
                     // Use generic native price or fallback to ADA price for backwards compatibility
                     const priceNative = parseFloat(asset.price_native || asset.price_ada) || 0;
@@ -1250,8 +1304,11 @@ async function toggleDashboardWalletAssets(walletId) {
                     html += `
                         <tr class="${isIgnored ? 'asset-ignored' : ''}">
                             <td class="asset-name-cell">
-                                <div class="asset-ticker">${ticker}</div>
-                                <div class="asset-name-small">${displayName}</div>
+                                ${logoUrl ? `<img src="${logoUrl}" alt="${displayName}" class="token-logo" onerror="this.style.display='none';">` : ''}
+                                <div style="flex: 1;">
+                                    <div class="asset-ticker">${ticker}</div>
+                                    <div class="asset-name-small">${displayName}</div>
+                                </div>
                             </td>
                             <td>${priceNativeStr}</td>
                             <td>${ownedStr}</td>
@@ -1293,6 +1350,7 @@ async function toggleDashboardWalletAssets(walletId) {
 
                     const ticker = asset.ticker || asset.asset_name?.substring(0, 10) || 'Unknown';
                     const displayName = asset.token_name || asset.asset_name || 'Unknown';
+                    const logoUrl = asset.logo_url || '';
                     const totalValue = parseFloat(asset.total_value_usd) || 0;
                     const priceUsd = parseFloat(asset.price_usd) || 0;
 
@@ -1311,6 +1369,7 @@ async function toggleDashboardWalletAssets(walletId) {
 
                     html += `
                         <div class="asset-item">
+                            ${logoUrl ? `<img src="${logoUrl}" alt="${displayName}" class="token-logo" onerror="this.style.display='none';">` : ''}
                             <div class="asset-info">
                                 <div class="asset-ticker">${ticker}</div>
                                 <div class="asset-name">${displayName}</div>
@@ -1493,7 +1552,15 @@ function renderSingleWallet(wallet, blockchain, isGrouped) {
                         </svg>
                     </button>
                 </div>
-                <span class="wallet-address">${formatAddress(wallet.address)}</span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="wallet-address">${formatAddressDisplay(wallet.address, blockchain)}</span>
+                    <button class="copy-address-btn" data-address="${wallet.address}" title="Copy full address">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                    </button>
+                </div>
                 ${explorerLinks}
             </div>
             <div class="wallet-balance">
@@ -1501,7 +1568,7 @@ function renderSingleWallet(wallet, blockchain, isGrouped) {
                 <div class="amount-usd">${formatUSDBlur(usdValue)}</div>
                 ${assetsInfo && hasAssets ? `<div class="assets assets-toggle" data-wallet-id="${walletId}">${assetsInfo} ▼</div>` : (assetsInfo ? `<div class="assets">${assetsInfo}</div>` : '')}
             </div>
-            ${hasAssets ? `<div class="wallet-assets-list" id="assets-${walletId}" style="display: none;"><div class="loading">Loading assets...</div></div>` : ''}
+            ${hasAssets ? `<div class="wallet-assets-list" id="assets-${walletId}" style="display: none;"><div style="text-align: center; padding: 10px;"><div class="loading"></div></div></div>` : ''}
         </div>
     `;
 }
@@ -2523,10 +2590,13 @@ async function loadDefiGovernance() {
 
                     for (const stake of data.staked || []) {
                         if (!allStaking[protocol].staked[stake.token]) {
-                            allStaking[protocol].staked[stake.token] = { amount: 0, positions: 0 };
+                            allStaking[protocol].staked[stake.token] = { amount: 0, positions: 0, logo_url: stake.logo_url };
                         }
                         allStaking[protocol].staked[stake.token].amount += stake.amount;
                         allStaking[protocol].staked[stake.token].positions += stake.positions;
+                        if (stake.logo_url && !allStaking[protocol].staked[stake.token].logo_url) {
+                            allStaking[protocol].staked[stake.token].logo_url = stake.logo_url;
+                        }
                     }
 
                     if (protocol === 'Indigo') {
@@ -2702,8 +2772,8 @@ function renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeS
                 // Chain badge for staked position (default to cardano for now)
                 const chainBadge = '<span class="chain-badge cardano" title="Cardano">ADA</span>';
 
-                // Get token logo with fallback
-                const tokenLogoUrl = `https://img.logokit.com/crypto/${token}?token=pk_fr08287a4c625f400f32a9&size=32`;
+                // Use backend logo URL or fallback to LogoKit
+                const tokenLogoUrl = data.logo_url || `https://img.logokit.com/crypto/${token}?token=pk_fr08287a4c625f400f32a9&size=32`;
 
                 html += `
                     <div class="defi-gov-card staked">
@@ -2767,8 +2837,12 @@ function renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeS
             // Default to cardano for now; can be extended when we support other chains
             const chain = pos.blockchain || 'cardano';
 
+            // Get token logo with fallback
+            const tokenLogoUrl = `https://img.logokit.com/crypto/${pos.asset_name}?token=pk_fr08287a4c625f400f32a9&size=32`;
+
             html += `
                 <div class="defi-gov-line">
+                    <img src="${tokenLogoUrl}" alt="${pos.asset_name}" class="token-logo-line" onerror="this.style.display='none'">
                     <span class="line-token">${getGovChainBadge(chain)} ${pos.asset_name}</span>
                     <span class="line-amount">${blurValue(pos.quantity_formatted)}</span>
                     <span class="line-value">${usdValue > 0 ? formatUSDBlur(usdValue) : '--'}</span>
@@ -2884,8 +2958,12 @@ function renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeS
             if (chains.exchange) breakdownParts.push(`Exchange: ${chains.exchange.toFixed(2)}`);
             const breakdown = breakdownParts.join(' · ');
 
+            // Get token logo with fallback
+            const stableLogoUrl = `https://img.logokit.com/crypto/${symbol}?token=pk_fr08287a4c625f400f32a9&size=32`;
+
             html += `
                 <div class="defi-gov-line stable-line">
+                    <img src="${stableLogoUrl}" alt="${symbol}" class="token-logo-line" onerror="this.style.display='none'">
                     <span class="line-token">${symbol}</span>
                     <span class="line-chains">${chainBadges}</span>
                     <span class="line-amount" title="${breakdown}">${blurValue(total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}))}</span>
@@ -2919,8 +2997,12 @@ function renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeS
                     .map(c => getChainBadge(c))
                     .join('');
 
+                // Get token logo with fallback
+                const hiddenStableLogoUrl = `https://img.logokit.com/crypto/${symbol}?token=pk_fr08287a4c625f400f32a9&size=32`;
+
                 html += `
                     <div class="defi-gov-line stable-line hidden-stable">
+                        <img src="${hiddenStableLogoUrl}" alt="${symbol}" class="token-logo-line" onerror="this.style.display='none'">
                         <span class="line-token">${symbol}</span>
                         <span class="line-chains">${chainBadges}</span>
                         <span class="line-amount">${blurValue(total.toLocaleString(undefined, {minimumFractionDigits: 4, maximumFractionDigits: 6}))}</span>
@@ -3945,7 +4027,7 @@ async function refreshNFTs() {
 }
 
 // Switch NFT chain tab
-function switchNFTChain(chain) {
+async function switchNFTChain(chain) {
     currentNFTChain = chain;
 
     // Update tab appearance
@@ -3953,7 +4035,10 @@ function switchNFTChain(chain) {
         tab.classList.toggle('active', tab.dataset.chain === chain);
     });
 
-    // Load NFTs for the selected chain
+    // First ensure all chain stats are loaded/updated
+    await loadAllNftSummaries();
+
+    // Then load NFTs for the selected chain
     if (chain === 'cardano') {
         loadNFTs();
     } else if (chain === 'ethereum') {
@@ -5039,7 +5124,22 @@ async function loadPortfolioHistory(range = '7d') {
 // Get theme colors for chart
 function getChartColors() {
     const style = getComputedStyle(document.documentElement);
-    const theme = document.documentElement.getAttribute('data-theme') || 'default';
+    const theme = document.documentElement.getAttribute('data-theme') || 'dark-mode';
+
+    if (theme === 'light') {
+        return {
+            lineColor: '#00b894',
+            fillColor: 'rgba(0, 184, 148, 0.1)',
+            pointColor: '#00b894',
+            pointBorderColor: '#ffffff',
+            gridColor: 'rgba(229, 231, 235, 0.8)',
+            tickColor: '#6b7280',
+            tooltipBg: '#ffffff',
+            tooltipTitle: '#1a1a2e',
+            tooltipBody: '#00b894',
+            tooltipBorder: '#e5e7eb'
+        };
+    }
 
     if (theme === 'cypherpunk1') {
         return {
@@ -6100,7 +6200,8 @@ function renderBreakdownData(data) {
                 symbol: token.symbol,
                 name: token.name,
                 value_usd: token.value_usd,
-                percentage: token.percentage
+                percentage: token.percentage,
+                logo_url: token.logo_url || null
             });
         }
     });
@@ -6225,8 +6326,9 @@ function renderAssetBreakdownChart(labels, values, colors) {
                 backgroundColor: colors,
                 borderWidth: 3,
                 borderColor: getComputedStyle(document.body).getPropertyValue('--bg-primary'),
-                hoverBorderWidth: 5,
-                hoverBorderColor: '#00d26a'
+                hoverBorderWidth: 1,
+                hoverBorderColor: '#00d26a',
+                borderRadius: 8
             }]
         },
         options: {
@@ -6269,16 +6371,22 @@ function renderBreakdownLegend(items) {
     const legendDiv = document.getElementById('breakdownLegend');
 
     // Render compact legend items matching slider 2 style
-    legendDiv.innerHTML = items.map((item, index) => `
-        <div class="breakdown-legend-item-compact" data-index="${index}" onclick="selectBreakdownSegment(${index})">
-            <div class="breakdown-legend-color" style="background-color: ${item.color};"></div>
-            <div class="breakdown-legend-info">
-                <div class="breakdown-legend-symbol">${item.symbol}</div>
-                <div class="breakdown-legend-value">${formatUSD(item.value_usd)}</div>
+    legendDiv.innerHTML = items.map((item, index) => {
+        const logoHtml = item.logo_url
+            ? `<img src="${item.logo_url}" alt="${item.symbol}" class="breakdown-token-logo" onerror="this.style.display='none';">`
+            : '';
+
+        return `
+            <div class="breakdown-legend-item-compact" data-index="${index}" onclick="selectBreakdownSegment(${index})">
+                ${logoHtml}
+                <div class="breakdown-legend-info">
+                    <div class="breakdown-legend-symbol">${item.symbol}</div>
+                    <div class="breakdown-legend-value">${formatUSD(item.value_usd)}</div>
+                </div>
+                <div class="breakdown-legend-percentage">${item.percentage.toFixed(1)}%</div>
             </div>
-            <div class="breakdown-legend-percentage">${item.percentage.toFixed(1)}%</div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 
     // Store items for selection
     window.breakdownLegendItems = items;
@@ -6505,12 +6613,13 @@ function renderCoinAllocationChart() {
                 backgroundColor: colors,
                 borderWidth: 0, // No border by default - seamless segments
                 borderColor: 'transparent',
-                hoverBorderWidth: 5,
+                hoverBorderWidth: 1,
                 hoverBorderColor: 'rgba(255, 255, 255, 0.6)', // Soft white glow on hover
                 shadowOffsetX: 0,
                 shadowOffsetY: 0,
                 shadowBlur: 20,
-                shadowColor: 'rgba(255, 255, 255, 0.3)'
+                shadowColor: 'rgba(255, 255, 255, 0.3)',
+                borderRadius: 8
             }]
         },
         options: {
@@ -6583,15 +6692,16 @@ function selectCoinSegment(index) {
 function renderCoinLegend(coins, colors) {
     const legendDiv = document.getElementById('coinAllocationLegend');
     legendDiv.innerHTML = coins.map((coin, index) => {
-        // Get token logo URL (only for actual tokens, not "Other")
-        const tokenLogoUrl = coin.symbol !== 'Other'
-            ? `https://img.logokit.com/crypto/${coin.symbol}?token=pk_fr08287a4c625f400f32a9&size=32`
-            : '';
+        // Use logo_url from backend data, or fallback to LogoKit for "Other" case
+        const tokenLogoUrl = coin.logo_url || (
+            coin.symbol !== 'Other'
+                ? `https://img.logokit.com/crypto/${coin.symbol}?token=pk_fr08287a4c625f400f32a9&size=32`
+                : ''
+        );
 
         return `
             <div class="analytics-legend-item-compact" onclick="selectCoinSegment(${index})">
                 ${tokenLogoUrl ? `<img src="${tokenLogoUrl}" alt="${coin.symbol}" class="coin-legend-logo" onerror="this.style.display='none'">` : ''}
-                <div class="legend-color-dot-glow" style="background-color: ${colors[index]}; box-shadow: 0 0 8px ${colors[index]};"></div>
                 <div class="legend-compact-label">
                     <div class="legend-top-row">
                         <span class="legend-symbol">${coin.symbol}</span>
@@ -6696,12 +6806,13 @@ function renderCategoryAllocationChart() {
                 backgroundColor: colors,
                 borderWidth: 0, // No border by default - seamless segments
                 borderColor: 'transparent',
-                hoverBorderWidth: 5,
+                hoverBorderWidth: 1,
                 hoverBorderColor: 'rgba(255, 255, 255, 0.6)', // Soft white glow on hover
                 shadowOffsetX: 0,
                 shadowOffsetY: 0,
                 shadowBlur: 20,
-                shadowColor: 'rgba(255, 255, 255, 0.3)'
+                shadowColor: 'rgba(255, 255, 255, 0.3)',
+                borderRadius: 8
             }]
         },
         options: {
@@ -6761,7 +6872,6 @@ function renderCategoryLegend(categories, colors) {
              onclick="selectCategorySegment(${index})"
              onmouseenter="showCategoryTooltip(event, ${index})"
              onmouseleave="hideCategoryTooltip()">
-            <div class="legend-color-dot-glow" style="background-color: ${colors[index]}; box-shadow: 0 0 8px ${colors[index]};"></div>
             <div class="legend-compact-label">
                 <div class="legend-top-row">
                     <span class="legend-symbol">${category.category}</span>
@@ -6848,7 +6958,7 @@ function hideCategoryTooltip() {
 }
 
 function generateChartColors(count) {
-    const theme = document.documentElement.getAttribute('data-theme') || 'default';
+    const theme = document.documentElement.getAttribute('data-theme') || 'dark-mode';
 
     let baseColors;
 
@@ -6920,7 +7030,7 @@ function generateChartColors(count) {
 }
 
 function generateCategoryColors(count) {
-    const theme = document.documentElement.getAttribute('data-theme') || 'default';
+    const theme = document.documentElement.getAttribute('data-theme') || 'dark-mode';
 
     let categoryColors;
 
@@ -7014,7 +7124,7 @@ async function initializePriceChart() {
     }
 
     // Get theme colors
-    const theme = document.documentElement.getAttribute('data-theme') || 'default';
+    const theme = document.documentElement.getAttribute('data-theme') || 'dark-mode';
     const chartColors = getPriceChartColors(theme);
 
     // Create chart
@@ -7069,7 +7179,7 @@ async function initializePriceChart() {
 
 function getPriceChartColors(theme) {
     const themeColors = {
-        'default': {
+        'dark-mode': {
             background: '#1a1a2e',
             text: '#eaeaea',
             gridLines: '#2a2a4a',
@@ -7077,6 +7187,15 @@ function getPriceChartColors(theme) {
             areaTop: 'rgba(0, 210, 106, 0.56)',
             areaBottom: 'rgba(0, 210, 106, 0.04)',
             lineColor: 'rgba(0, 210, 106, 1)'
+        },
+        'light': {
+            background: '#ffffff',
+            text: '#1a1a2e',
+            gridLines: '#e5e7eb',
+            border: '#d1d5db',
+            areaTop: 'rgba(0, 184, 148, 0.4)',
+            areaBottom: 'rgba(0, 184, 148, 0.05)',
+            lineColor: 'rgba(0, 184, 148, 1)'
         },
         'ocean-depths': {
             background: '#0a1929',
@@ -7107,7 +7226,7 @@ function getPriceChartColors(theme) {
         }
     };
 
-    return themeColors[theme] || themeColors['default'];
+    return themeColors[theme] || themeColors['dark-mode'];
 }
 
 async function loadPriceChartData(blockchain, timeframe, silent = false) {

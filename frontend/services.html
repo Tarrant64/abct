@@ -377,15 +377,6 @@
                 <button id="sectionsToggleBtn" class="btn btn-sections" onclick="toggleAllSections()" title="Expand/Collapse all sections">
                     Expand All
                 </button>
-                <div class="theme-selector">
-                    <select id="themeSelect" onchange="changeTheme(this.value)" title="Select theme">
-                        <option value="default">Default</option>
-                        <option value="cypherpunk1">Cypherpunk 1</option>
-                        <option value="green-terminal">Green Terminal</option>
-                        <option value="ocean-depths">Ocean Depths</option>
-                        <option value="sunset-horizon">Sunset Horizon</option>
-                    </select>
-                </div>
                 <div class="waffle-menu-container">
                     <button class="waffle-menu-btn" onclick="toggleWaffleMenu()" title="Menu">
                         <span class="waffle-icon">
@@ -419,6 +410,10 @@
                             <span class="waffle-item-icon">&#128230;</span>
                             <span class="waffle-item-label">Backup & Restore</span>
                         </a>
+                        <a href="/cache.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128452;</span>
+                            <span class="waffle-item-label">Cache Management</span>
+                        </a>
                         <a href="/nft-wall.html" class="waffle-menu-item">
                             <span class="waffle-item-icon">&#128444;</span>
                             <span class="waffle-item-label">NFT Wall</span>
@@ -427,6 +422,17 @@
                             <span class="waffle-item-icon">&#128221;</span>
                             <span class="waffle-item-label">System Logs</span>
                         </a>
+                        <div class="waffle-menu-divider"></div>
+                        <div class="waffle-menu-theme">
+                            <span class="waffle-item-icon">&#127912;</span>
+                            <select id="themeSelect" onchange="changeTheme(this.value)" title="Select theme">
+                                <option value="dark-mode">Dark Mode</option>
+                                <option value="light">Light</option>
+                                <option value="cypherpunk1">Cypherpunk 1</option>
+                                <option value="ocean-depths">Ocean Depths</option>
+                                <option value="sunset-horizon">Sunset Horizon</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
             </div>
