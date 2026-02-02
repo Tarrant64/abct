@@ -56,7 +56,46 @@ For a detailed overview of the system architecture, authentication flow, and dat
 - **Portfolio History**: Interactive charts showing value over time (7d, 4w, 3m)
 - **Privacy Mode**: Hide sensitive financial data with one click
 
-### New in v1.0.0 🎉 - Production Ready!
+### Infrastructure
+- **Self-Hosted**: Your data stays on your machine
+- **Docker Ready**: Single container deployment
+- **Optional HTTPS**: SSL/TLS encryption support
+- **Secure Logging**: Audit trails with sensitive data redaction
+
+## 📦 What's New
+
+### v1.0.1 - UI & Theme System Overhaul (February 2026) ✨
+- **🎨 Complete Theme Redesign**: Reimagined theme system with enhanced visual polish
+  - Renamed "Default" theme to "Dark Mode" for clarity
+  - **New Light Theme**: Clean, modern white theme with refined UI elements
+  - Removed "Green Terminal" theme
+  - 5 professionally designed themes: Dark Mode, Light, Cypherpunk 1, Ocean Depths, Sunset Horizon
+- **💎 Light Theme Polish**: Comprehensive styling for modern aesthetics
+  - Rounded corners throughout (10-24px range for visual hierarchy)
+  - Layered shadow effects for depth and elevation
+  - Proper contrast and readability
+  - White backgrounds with subtle gray accents (#e5e7eb borders)
+  - Professional button and input styling
+- **✨ Dark Mode Enhancements**: Improved visibility and polish
+  - Glowing green borders on headers and sections (rgba(0, 210, 106, 0.4))
+  - Enhanced shadow effects for better depth perception
+  - Improved contrast for better readability
+  - Consistent rounded corners matching light theme
+- **🎯 UI Refinements**: Better spacing and visual hierarchy
+  - Header and section headers now use rounded, padded containers
+  - Improved text indentation (16-24px padding)
+  - Portfolio card with enhanced shadows and borders
+  - Chart containers with proper background styling per theme
+  - Consistent waffle menu integration across all pages
+- **🎭 Theme Selector Relocation**: Moved from header to waffle menu dropdown
+  - More intuitive navigation structure
+  - Cleaner header design
+  - Theme selection with all navigation in one place
+- **🔧 Cache Busting**: Build version system for immediate CSS/JS updates
+  - Version 1770000515
+  - No more browser cache issues after updates
+
+### v1.0.0 - Production Ready Release (January 2026) 🎉
 - **🌐 Seven Exchange Integrations**: Full API support for Binance, OKX, KuCoin, Bitget, Gate.io + existing Coinbase
   - Automatic portfolio aggregation across all exchanges
   - Read-only API keys for maximum security
@@ -78,7 +117,7 @@ For a detailed overview of the system architecture, authentication flow, and dat
   - Security best practices and troubleshooting
   - API rate limit documentation
 
-### New in v0.13.1
+### v0.13.1 - Complete Portfolio History
 - **📈 Complete Portfolio History**: 90-day historical snapshots with all components
   - Backfill script generates realistic historical price variations
   - Includes native coins, tracked tokens, NFTs, and exchange balances
@@ -86,7 +125,7 @@ For a detailed overview of the system architecture, authentication flow, and dat
   - Chart now shows complete portfolio value (not just native coins)
   - All components properly tracked: wallets + tokens + NFTs + exchanges
 
-### New in v0.13.0 🎉
+### v0.13.0 - Asset Breakdown & Token Pricing 🎉
 - **📊 Blockchain Asset Breakdown**: Interactive drill-down charts
   - Click any blockchain card to see asset composition
   - Doughnut charts showing native coin + tokens + NFTs
@@ -115,8 +154,7 @@ For a detailed overview of the system architecture, authentication flow, and dat
   - Better batch caching status messages
   - Enhanced background work visibility
 
-### Previous Releases
-#### v0.12.0
+### v0.12.0 - Multi-User & Enhanced Visualization
 - **👥 Multi-User Support**: Full multi-user architecture with user isolation
   - Separate portfolios for different users
   - Session-based authentication with secure tokens
@@ -139,18 +177,24 @@ For a detailed overview of the system architecture, authentication flow, and dat
   - Improved multi-user database schema
   - Enhanced session token handling
 
-### Previous Releases
-#### v0.10.0
-- **🔄 Backup & Restore**: Export/import your entire configuration
+### v0.10.0 - Backup & Restore Release
+- **🔄 Complete Backup System**: Export/import all your configuration data
+  - Migration ready for moving to new servers
+  - Selective export options
+  - Import modes: Merge (safe) or Replace (full restore)
+  - Security warnings for sensitive data in backups
 - **⏰ NFT Background Scheduler**: Automatic 24/7 NFT floor price updates
   - Smart rate limiting (95 calls/day)
   - State persistence and priority queue
 
-### Infrastructure
-- **Self-Hosted**: Your data stays on your machine
-- **Docker Ready**: Single container deployment
-- **Optional HTTPS**: SSL/TLS encryption support
-- **Secure Logging**: Audit trails with sensitive data redaction
+### v0.9.0 - NFT Scheduler Integration
+- **Single Container**: NFT price service integrated into main app
+- **Background Updates**: Automatic 24/7 NFT floor price collection
+- **Smart Rate Limiting**: Respects TapTools 95 calls/day limit
+- **State Persistence**: Resumes exactly where it left off after restart
+- **UI Controls**: Enable/disable from Services page
+
+See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
 ## 🔐 Default Login Credentials
 
@@ -470,80 +514,6 @@ pytest
 **Note:** This application is designed for **self-hosted, localhost-only** use. The optional authentication feature allows running without credentials on trusted local installations, or with Basic Auth if you expose it on your network.
 
 For detailed security information, see [SECURITY.md](SECURITY.md)
-
-## 📦 What's New
-
-### v1.0.1 - UI & Theme System Overhaul (February 2026) ✨
-- **🎨 Complete Theme Redesign**: Reimagined theme system with enhanced visual polish
-  - Renamed "Default" theme to "Dark Mode" for clarity
-  - **New Light Theme**: Clean, modern white theme with refined UI elements
-  - Removed "Green Terminal" theme
-  - 5 professionally designed themes: Dark Mode, Light, Cypherpunk 1, Ocean Depths, Sunset Horizon
-- **💎 Light Theme Polish**: Comprehensive styling for modern aesthetics
-  - Rounded corners throughout (10-24px range for visual hierarchy)
-  - Layered shadow effects for depth and elevation
-  - Proper contrast and readability
-  - White backgrounds with subtle gray accents (#e5e7eb borders)
-  - Professional button and input styling
-- **✨ Dark Mode Enhancements**: Improved visibility and polish
-  - Glowing green borders on headers and sections (rgba(0, 210, 106, 0.4))
-  - Enhanced shadow effects for better depth perception
-  - Improved contrast for better readability
-  - Consistent rounded corners matching light theme
-- **🎯 UI Refinements**: Better spacing and visual hierarchy
-  - Header and section headers now use rounded, padded containers
-  - Improved text indentation (16-24px padding)
-  - Portfolio card with enhanced shadows and borders
-  - Chart containers with proper background styling per theme
-  - Consistent waffle menu integration across all pages
-- **🎭 Theme Selector Relocation**: Moved from header to waffle menu dropdown
-  - More intuitive navigation structure
-  - Cleaner header design
-  - Theme selection with all navigation in one place
-- **🔧 Cache Busting**: Build version system for immediate CSS/JS updates
-  - Version 1770000515
-  - No more browser cache issues after updates
-
-### v1.0.0 - Production Ready Release (January 2026) 🎉
-- **Multi-Exchange Support**: Connect to 7 major cryptocurrency exchanges
-  - Binance.com, Binance.US, OKX, Bitget, Gate.io, KuCoin + existing Coinbase
-  - Standardized API integration with intelligent caching
-  - Complete setup documentation and troubleshooting guides
-- **Visual Enhancements**: LogoKit API integration for professional branding
-  - Blockchain logos on all cards and sections
-  - Token logos in asset lists and charts
-  - Exchange-specific logos and branding
-- **Manage Wallets Redesign**: Three-tab interface for better organization
-  - Self-Custody Wallets | Exchanges | Manual Tokens
-  - Exchange status dashboard and configuration guides
-- **Enhanced Theming**: Improved color palettes for pie charts across all themes
-
-### v0.12.0 - Multi-User & Enhanced Visualization (January 2026)
-- **Multi-User Support**: Complete database restructure with user accounts and sessions
-- **Demo Mode**: Full-featured demo account with $1M portfolio and 30 diverse tokens
-- **Asset Breakdown Charts**: Interactive doughnut charts showing blockchain asset distribution
-- **Expandable Wallet Assets**: Native assets visible directly under each wallet
-- **Enhanced NFT Wall**: Multi-chain NFT display with anime-themed demo images
-- **Password Management**: Change password functionality with admin dropdown
-- **Improved UX**: Clickable stake key groups and token count badges
-
-### Previous Releases
-
-#### v0.10.0 - Backup & Restore Release (January 2026)
-- **Complete Backup System**: Export/import all your configuration data
-- **Migration Ready**: Easily move to new servers
-- **Selective Export**: Choose what data to include
-- **Import Modes**: Merge (safe) or Replace (full restore)
-- **Security Warnings**: Alerts for sensitive data in backups
-
-#### v0.9.0 - NFT Scheduler Integration (January 2026)
-- **Single Container**: NFT price service integrated into main app
-- **Background Updates**: Automatic 24/7 NFT floor price collection
-- **Smart Rate Limiting**: Respects TapTools 95 calls/day limit
-- **State Persistence**: Resumes exactly where it left off after restart
-- **UI Controls**: Enable/disable from Services page
-
-See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
 ## 📖 Documentation
 
