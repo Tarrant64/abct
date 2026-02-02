@@ -164,6 +164,9 @@ backup/
 *abct-backup*.json
 test-abct-backup*.json
 
+# Deployment scripts (local only)
+deploy.sh
+
 # Development documentation (keep local only)
 docs/development/
 *_SUMMARY.md
