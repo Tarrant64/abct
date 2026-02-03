@@ -23,6 +23,8 @@ from services.demo_wallet_service import demo_wallet_service
 from services.pricing import pricing_service
 from services.taptools import taptools_wallet_service
 from services.graph import graph_service
+from services.nmkr_service import nmkr_service
+from services.logokit_service import logokit_service
 from utils.address import parse_wallets_file, detect_blockchain, is_bitcoin_xpub, get_xpub_type
 from config import WALLETS_FILE, DATA_DIR
 from middleware.demo_mode import is_demo_user
@@ -224,7 +226,8 @@ async def get_wallet_assets_by_id(wallet_id: int, user_id: int = Depends(verify_
             'price_native': None,  # Price in native token (ADA/ETH/SOL/etc)
             'total_native': None,  # Total value in native token
             'price_usd': None,
-            'total_value_usd': None
+            'total_value_usd': None,
+            'logo_url': None
         }
 
         # Keep ADA-specific fields for backwards compatibility
@@ -289,6 +292,38 @@ async def get_wallet_assets_by_id(wallet_id: int, user_id: int = Depends(verify_
             except Exception:
                 pass
 
+        # Add logo URL with multiple fallback strategies
+        logo_url = None
+        if wallet['blockchain'] == 'cardano':
+            # For Cardano native tokens, use comprehensive fallback chain
+            policy_id = asset.get('policy_id')
+            asset_id = asset.get('asset_id', '')
+
+            # Extract hex asset name from asset_id (format: policy_id + asset_name_hex)
+            asset_name_hex = asset_id[len(policy_id):] if policy_id and len(asset_id) > len(policy_id) else None
+
+            if policy_id and asset_name_hex:
+                ticker = asset_data.get('ticker')
+                # Try NMKR → Cardano Token Registry → Blockfrost → LogoKit
+                logo_url = await nmkr_service.get_token_logo_with_fallbacks(
+                    policy_id,
+                    asset_name_hex,
+                    ticker=ticker,
+                    user_id=user_id
+                )
+
+        # Non-Cardano fallback to LogoKit
+        if not logo_url:
+            ticker = asset_data.get('ticker')
+            if ticker:
+                logo_url = logokit_service.get_crypto_logo_url(ticker, size=64)
+            else:
+                # Use asset name as fallback
+                asset_name = asset.get('asset_name', '')[:10]
+                if asset_name:
+                    logo_url = logokit_service.get_crypto_logo_url(asset_name, size=64)
+
+        asset_data['logo_url'] = logo_url
         enriched_assets.append(asset_data)
 
     # Get wallet balance for native coin
@@ -446,6 +481,15 @@ async def refresh_all_balances(user_id: int = Depends(verify_session)):
         except Exception as e:
             import logging
             logging.warning(f"Could not repopulate portfolio cache: {e}")
+
+        # Start background logo pre-fetching (don't wait for completion)
+        try:
+            asyncio.create_task(nmkr_service.prefetch_logos_for_wallet_assets(user_id))
+            import logging
+            logging.info("Started background logo pre-fetching")
+        except Exception as e:
+            import logging
+            logging.warning(f"Could not start logo pre-fetching: {e}")
 
     return {
         "message": f"Refreshed {success_count}/{len(wallets)} wallets",

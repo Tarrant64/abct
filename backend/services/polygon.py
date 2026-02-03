@@ -18,8 +18,9 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import ALCHEMY_API_KEY, ALCHEMY_POLYGON_URL
+from config import ALCHEMY_POLYGON_URL
 from database import get_cache, set_cache
+from services.api_key_manager import APIKeyManager
 
 logger = logging.getLogger(__name__)
 
@@ -32,11 +33,11 @@ POLYGON_NFT_CACHE_KEY = "polygon_nft_all_data"
 POLYGON_CACHE_TTL = 86400 * 30  # 30 days
 
 
-class PolygonService:
+class PolygonService(APIKeyManager):
     """Service for fetching Polygon wallet data from Alchemy API."""
 
     def __init__(self):
-        self.api_key = ALCHEMY_API_KEY
+        super().__init__(api_name='alchemy', env_var='ALCHEMY_API_KEY')
         self.base_url = ALCHEMY_POLYGON_URL
         self._balance_cache: Dict[str, dict] = {}
         self._nft_cache: Dict[str, dict] = {}
@@ -46,9 +47,24 @@ class PolygonService:
         self.last_nft_refresh: Optional[datetime] = None
         self._db_cache_loaded = False
 
-    def is_configured(self) -> bool:
+    async def _get_v2_url(self) -> str:
+        """Get Alchemy v2 API URL with API key."""
+        api_key = await self.get_api_key()
+        if not api_key:
+            return ""
+        return f"{self.base_url}/v2/{api_key}"
+
+    async def _get_nft_url(self) -> str:
+        """Get Alchemy NFT API URL with API key."""
+        api_key = await self.get_api_key()
+        if not api_key:
+            return ""
+        return f"{self.base_url}/nft/v3/{api_key}"
+
+    async def is_configured(self) -> bool:
         """Check if the API key is configured."""
-        return bool(self.api_key)
+        key = await self.get_api_key()
+        return bool(key)
 
     def is_polygon_address(self, address: str) -> bool:
         """Check if an address could be a Polygon address (same format as Ethereum)."""
@@ -75,7 +91,7 @@ class PolygonService:
         Returns:
             MATIC balance as float, or None if error
         """
-        if not self.is_configured():
+        if not await self.is_configured():
             logger.warning("Alchemy API key not configured")
             return None
 
@@ -89,7 +105,7 @@ class PolygonService:
                 }
 
                 response = await client.post(
-                    f"{self.base_url}/v2/{self.api_key}",
+                    await self._get_v2_url(),
                     json=payload
                 )
 
@@ -123,7 +139,7 @@ class PolygonService:
         Returns:
             List of token balances with metadata
         """
-        if not self.is_configured():
+        if not await self.is_configured():
             logger.warning("Alchemy API key not configured")
             return []
 
@@ -137,7 +153,7 @@ class PolygonService:
                 }
 
                 response = await client.post(
-                    f"{self.base_url}/v2/{self.api_key}",
+                    await self._get_v2_url(),
                     json=payload
                 )
 
@@ -198,7 +214,7 @@ class PolygonService:
             }
 
             response = await client.post(
-                f"{self.base_url}/v2/{self.api_key}",
+                await self._get_v2_url(),
                 json=payload
             )
 
@@ -224,7 +240,7 @@ class PolygonService:
         if not self.is_polygon_address(address):
             return None
 
-        if not self.is_configured():
+        if not await self.is_configured():
             logger.warning("Alchemy API key not configured for Polygon")
             return None
 
@@ -266,7 +282,7 @@ class PolygonService:
         Returns:
             Dictionary with NFTs and pagination info
         """
-        if not self.is_configured():
+        if not await self.is_configured():
             logger.warning("Alchemy API key not configured")
             return None
 
@@ -283,7 +299,7 @@ class PolygonService:
                     params['pageKey'] = page_key
 
                 response = await client.get(
-                    f"{self.base_url}/nft/v3/{self.api_key}/getNFTsForOwner",
+                    f"{await self._get_nft_url()}/getNFTsForOwner",
                     params=params
                 )
 
@@ -377,7 +393,7 @@ class PolygonService:
         if not force_refresh and self._is_nft_cache_valid():
             return list(self._nft_cache.values())
 
-        if not self.is_configured():
+        if not await self.is_configured():
             logger.warning("Alchemy API key not configured")
             return []
 

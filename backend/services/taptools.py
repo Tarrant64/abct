@@ -15,7 +15,8 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import TAPTOOLS_API_KEY, TAPTOOLS_BASE_URL
+from config import TAPTOOLS_BASE_URL
+from services.api_key_manager import APIKeyManager
 
 # Import API tracker
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'middleware'))
@@ -24,18 +25,19 @@ from api_tracker import get_taptools_client
 logger = logging.getLogger(__name__)
 
 
-class TapToolsWalletService:
+class TapToolsWalletService(APIKeyManager):
     """Service for TapTools wallet portfolio data."""
 
     def __init__(self):
+        super().__init__(api_name='taptools', env_var='TAPTOOLS_API_KEY')
         self.api_base = TAPTOOLS_BASE_URL
-        self.headers = {"x-api-key": TAPTOOLS_API_KEY} if TAPTOOLS_API_KEY else {}
         self._cache: Dict[str, dict] = {}
         self._cache_ttl = timedelta(minutes=5)
 
-    def is_configured(self) -> bool:
-        """Check if TapTools API key is configured."""
-        return bool(TAPTOOLS_API_KEY)
+    async def _get_headers(self) -> dict:
+        """Get request headers with current API key."""
+        api_key = await self.get_api_key()
+        return {"x-api-key": api_key} if api_key else {}
 
     async def get_wallet_portfolio(self, address: str) -> Optional[Dict]:
         """
@@ -58,7 +60,7 @@ class TapToolsWalletService:
                 'source': 'TapTools'
             }
         """
-        if not self.is_configured():
+        if not await self.is_configured():
             logger.debug("TapTools API not configured")
             return None
 
@@ -70,7 +72,8 @@ class TapToolsWalletService:
                 return cached['data']
 
         try:
-            async with get_taptools_client(headers=self.headers, timeout=30) as client:
+            headers = await self._get_headers()
+            async with get_taptools_client(headers=headers, timeout=30) as client:
                 response = await client.get(
                     f"{self.api_base}/wallet/portfolio/positions",
                     params={"address": address}

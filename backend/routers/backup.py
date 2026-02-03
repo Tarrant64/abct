@@ -19,16 +19,89 @@ from datetime import datetime
 import json
 import sys
 import os
+import logging
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database import get_db
 from auth_utils import verify_session
+from services.cardano import cardano_service, is_stake_address
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/backup", tags=["backup"])
 
 # Version for backup file format - increment if format changes
 BACKUP_FORMAT_VERSION = "1.0.0"
 ABCT_VERSION = "1.0.0"  # Current ABCT version
+
+
+async def optimize_cardano_wallets(wallets: List[Dict]) -> List[Dict]:
+    """
+    Optimize Cardano wallets for export by only including stake addresses.
+
+    For Cardano payment addresses (addr1...), queries the Cardano service to get
+    the associated stake address and exports that instead. This reduces the number
+    of wallets exported and allows the import to auto-discover payment addresses.
+
+    For non-Cardano wallets, includes them as-is.
+    """
+    optimized = []
+    seen_stake_addresses = set()
+    cardano_payment_to_stake = {}  # Cache of payment -> stake lookups
+
+    logger.info(f"Optimizing {len(wallets)} wallets for Cardano stake keys...")
+
+    for wallet in wallets:
+        blockchain = wallet.get('blockchain', '').lower()
+        address = wallet.get('address', '')
+
+        # Non-Cardano wallets: include as-is
+        if blockchain != 'cardano':
+            optimized.append(wallet)
+            continue
+
+        # Cardano stake address: include if not already seen
+        if is_stake_address(address):
+            if address not in seen_stake_addresses:
+                seen_stake_addresses.add(address)
+                optimized.append(wallet)
+                logger.info(f"  ✓ Including stake address: {address[:20]}...")
+            else:
+                logger.info(f"  ⊘ Skipping duplicate stake address: {address[:20]}...")
+            continue
+
+        # Cardano payment address: get its stake address
+        try:
+            # Check cache first
+            if address in cardano_payment_to_stake:
+                stake_addr = cardano_payment_to_stake[address]
+            else:
+                stake_addr = await cardano_service.get_stake_address(address)
+                cardano_payment_to_stake[address] = stake_addr
+
+            if stake_addr and stake_addr not in seen_stake_addresses:
+                # Create a new wallet entry with the stake address
+                stake_wallet = wallet.copy()
+                stake_wallet['address'] = stake_addr
+                stake_wallet['label'] = wallet.get('label', '') or f"Stake key"
+                optimized.append(stake_wallet)
+                seen_stake_addresses.add(stake_addr)
+                logger.info(f"  ✓ Replaced payment address {address[:20]}... with stake {stake_addr[:20]}...")
+            elif stake_addr:
+                logger.info(f"  ⊘ Skipping payment address {address[:20]}... (stake key already exported)")
+            else:
+                # No stake address found, include the payment address as-is
+                optimized.append(wallet)
+                logger.info(f"  ⚠ No stake address found for {address[:20]}..., including payment address")
+
+        except Exception as e:
+            logger.warning(f"  ⚠ Error getting stake address for {address[:20]}...: {e}")
+            # On error, include the payment address as-is
+            optimized.append(wallet)
+
+    logger.info(f"Optimization complete: {len(wallets)} wallets → {len(optimized)} wallets ({len(wallets) - len(optimized)} removed)")
+
+    return optimized
 
 # Tables to include in backup
 BACKUP_TABLES = {
@@ -75,6 +148,7 @@ class BackupOptions(BaseModel):
     include_security_settings: bool = False
     include_custom_tokens: bool = True
     include_nft_collections: bool = True
+    optimize_cardano: bool = True  # Only export stake keys for Cardano, not payment addresses
 
 
 class ImportOptions(BaseModel):
@@ -136,9 +210,13 @@ async def export_backup(options: BackupOptions):
             # Convert to list of dicts
             if rows:
                 columns = [description[0] for description in cursor.description]
-                backup["data"][table_name] = [
-                    dict(zip(columns, row)) for row in rows
-                ]
+                all_rows = [dict(zip(columns, row)) for row in rows]
+
+                # Special handling for wallets table with Cardano optimization
+                if table_name == "wallets" and options.optimize_cardano:
+                    backup["data"][table_name] = await optimize_cardano_wallets(all_rows)
+                else:
+                    backup["data"][table_name] = all_rows
             else:
                 backup["data"][table_name] = []
 
@@ -156,6 +234,13 @@ async def export_backup(options: BackupOptions):
             backup["warnings"].append(
                 "This backup contains SSL/certificate configuration. Certificate files are NOT included - only paths are saved."
             )
+
+        if options.optimize_cardano and backup["data"].get("wallets"):
+            cardano_stake_count = len([w for w in backup["data"]["wallets"] if w.get('blockchain') == 'cardano' and is_stake_address(w.get('address', ''))])
+            if cardano_stake_count > 0:
+                backup["warnings"].append(
+                    f"Cardano optimization enabled: {cardano_stake_count} stake address(es) exported. Payment addresses will be auto-discovered on import."
+                )
 
         # Generate filename
         timestamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
@@ -385,47 +470,145 @@ async def import_backup(options: ImportOptions, user_id: int = Depends(verify_se
                 updated_count = 0
                 skipped_count = 0
 
-                for row in table_data:
-                    try:
-                        # Get column names and values
-                        columns = list(row.keys())
-                        values = list(row.values())
+                # Special handling for wallets table - expand stake addresses
+                if table_name == "wallets":
+                    for row in table_data:
+                        try:
+                            address = row.get('address', '')
+                            blockchain = row.get('blockchain', '').lower()
+                            label = row.get('label', '')
 
-                        # Remove auto-increment IDs for most tables (let DB generate new ones)
-                        # Exception: security_settings uses id=1 as singleton
-                        if table_name != "security_settings" and "id" in columns:
-                            id_index = columns.index("id")
-                            columns.pop(id_index)
-                            values.pop(id_index)
+                            # Cardano stake address: expand to payment addresses
+                            if blockchain == 'cardano' and is_stake_address(address):
+                                logger.info(f"Importing Cardano stake address: {address[:20]}...")
+                                payment_addresses = await cardano_service.get_addresses_from_stake(address)
 
-                        # Override user_id for user-specific tables
-                        # This ensures imported data belongs to the current user
-                        user_tables = ["wallets", "custom_tokens", "portfolio_history", "portfolio_snapshots"]
-                        if table_name in user_tables and "user_id" in columns:
-                            user_id_index = columns.index("user_id")
-                            values[user_id_index] = user_id
+                                if not payment_addresses:
+                                    logger.warning(f"  No payment addresses found for stake {address[:20]}...")
+                                    skipped_count += 1
+                                    import_summary["warnings"].append(
+                                        f"Stake address {address[:20]}... has no associated payment addresses (inactive)"
+                                    )
+                                    continue
 
-                        # Build INSERT OR REPLACE query for merge mode
-                        placeholders = ",".join(["?" for _ in values])
-                        columns_str = ",".join(columns)
+                                # Import each payment address
+                                for pay_addr in payment_addresses:
+                                    try:
+                                        # Check if already exists
+                                        check_cursor = await db.execute(
+                                            "SELECT id FROM wallets WHERE user_id = ? AND address = ? AND blockchain = ?",
+                                            (user_id, pay_addr, 'cardano')
+                                        )
+                                        existing = await check_cursor.fetchone()
 
-                        if options.mode == "merge":
-                            # Use INSERT OR REPLACE to handle conflicts
-                            query = f"INSERT OR REPLACE INTO {table_name} ({columns_str}) VALUES ({placeholders})"
-                        else:
-                            # Replace mode: just insert (tables already cleared)
-                            query = f"INSERT INTO {table_name} ({columns_str}) VALUES ({placeholders})"
+                                        if existing:
+                                            skipped_count += 1
+                                            continue
 
-                        await db.execute(query, values)
-                        imported_count += 1
+                                        # Insert payment address
+                                        await db.execute(
+                                            "INSERT INTO wallets (user_id, address, blockchain, label, created_at, updated_at) VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))",
+                                            (user_id, pay_addr, 'cardano', label or f"From {address[:15]}...")
+                                        )
+                                        imported_count += 1
 
-                    except Exception as e:
-                        skipped_count += 1
-                        import_summary["warnings"].append(
-                            f"Failed to import row in {table_name}: {str(e)}"
-                        )
+                                    except Exception as e:
+                                        logger.error(f"  Failed to import payment address {pay_addr}: {e}")
+                                        skipped_count += 1
 
-                await db.commit()
+                                logger.info(f"  ✓ Expanded stake address to {len(payment_addresses)} payment address(es)")
+                                continue
+
+                            # Regular wallet: import normally
+                            # Check if already exists
+                            check_cursor = await db.execute(
+                                "SELECT id FROM wallets WHERE user_id = ? AND address = ? AND blockchain = ?",
+                                (user_id, address, blockchain)
+                            )
+                            existing = await check_cursor.fetchone()
+
+                            if existing:
+                                skipped_count += 1
+                                continue
+
+                            # Insert wallet
+                            await db.execute(
+                                "INSERT INTO wallets (user_id, address, blockchain, label, created_at, updated_at) VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))",
+                                (user_id, address, blockchain, label)
+                            )
+                            imported_count += 1
+
+                        except Exception as e:
+                            skipped_count += 1
+                            logger.error(f"Failed to import wallet: {str(e)} | Row: {row}")
+                            import_summary["warnings"].append(
+                                f"Failed to import wallet {row.get('address', 'unknown')}: {str(e)}"
+                            )
+
+                    await db.commit()
+
+                else:
+                    # Non-wallet tables: use generic import logic
+                    # Get valid columns for this table
+                    cursor = await db.execute(f"PRAGMA table_info({table_name})")
+                    table_columns = [col[1] for col in await cursor.fetchall()]
+
+                    for row in table_data:
+                        try:
+                            # Get column names and values, filtering to only valid columns
+                            all_columns = list(row.keys())
+                            filtered_columns = []
+                            filtered_values = []
+
+                            for col in all_columns:
+                                if col in table_columns:
+                                    filtered_columns.append(col)
+                                    filtered_values.append(row[col])
+
+                            columns = filtered_columns
+                            values = filtered_values
+
+                            # Remove auto-increment IDs for most tables (let DB generate new ones)
+                            # Exception: security_settings uses id=1 as singleton
+                            if table_name != "security_settings" and "id" in columns:
+                                id_index = columns.index("id")
+                                columns.pop(id_index)
+                                values.pop(id_index)
+
+                            # Override user_id for user-specific tables
+                            # This ensures imported data belongs to the current user
+                            user_tables = ["custom_tokens", "portfolio_history", "portfolio_snapshots"]
+                            if table_name in user_tables and "user_id" in columns:
+                                user_id_index = columns.index("user_id")
+                                values[user_id_index] = user_id
+
+                            # Build INSERT OR IGNORE query for merge mode (skip duplicates)
+                            placeholders = ",".join(["?" for _ in values])
+                            columns_str = ",".join(columns)
+
+                            if options.mode == "merge":
+                                # Use INSERT OR IGNORE to skip conflicts without errors
+                                query = f"INSERT OR IGNORE INTO {table_name} ({columns_str}) VALUES ({placeholders})"
+                            else:
+                                # Replace mode: just insert (tables already cleared)
+                                query = f"INSERT INTO {table_name} ({columns_str}) VALUES ({placeholders})"
+
+                            cursor = await db.execute(query, values)
+                            # Check if row was actually inserted (rowcount > 0)
+                            if cursor.rowcount > 0:
+                                imported_count += 1
+                            else:
+                                # Row was skipped due to conflict (already exists)
+                                skipped_count += 1
+
+                        except Exception as e:
+                            skipped_count += 1
+                            logger.error(f"Failed to import row in {table_name}: {str(e)} | Row: {row}")
+                            import_summary["warnings"].append(
+                                f"Failed to import row in {table_name}: {str(e)}"
+                            )
+
+                    await db.commit()
 
                 import_summary["tables_processed"][table_name] = {
                     "status": "success",

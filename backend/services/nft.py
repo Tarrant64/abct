@@ -2,9 +2,18 @@
 NFT Service - Fetches and caches NFT data for Cardano.
 
 Identifies NFTs from native assets (quantity = 1) and enriches with:
-- Collection data from TapTools API (requires API key)
-- Floor prices where available
-- Metadata from Blockfrost as fallback
+- Metadata/Images: NFT CDN → NMKR → Blockfrost (priority order)
+- Collection Info: Blockfrost/Koios (free services)
+- Floor Prices: TapTools ONLY (minimize calls to paid service)
+
+Priority System:
+1. NFT CDN (if configured) - Fast metadata and images
+2. NMKR Studio (if configured) - Comprehensive NFT data
+3. Blockfrost/Koios (always available) - Free fallback for metadata
+4. TapTools (stats endpoint only) - Floor prices and market data
+
+This minimizes calls to TapTools (limited paid API) by only using it for floor prices,
+while getting metadata from free or alternative sources.
 """
 
 import httpx
@@ -23,12 +32,23 @@ from database import (
     get_collections_needing_price_update, get_nft_price_stats
 )
 
+# Import new priority NFT metadata services
+try:
+    from services.nftcdn import nftcdn_service
+except ImportError:
+    nftcdn_service = None
+
+try:
+    from services.nmkr import nmkr_service
+except ImportError:
+    nmkr_service = None
+
 logger = logging.getLogger(__name__)
 
-# TapTools API (requires API key for floor prices)
+# TapTools API (floor prices ONLY - minimize calls to paid service)
 TAPTOOLS_API_BASE = "https://openapi.taptools.io/api/v1"
 
-# Koios API (free, no auth required - for collection metadata)
+# Koios API (free, no auth required - for collection metadata fallback)
 KOIOS_API_BASE = "https://api.koios.rest/api/v1"
 
 # Cache settings - use long TTL for persistent database cache
@@ -79,15 +99,35 @@ class NFTService:
         if self.is_rate_limited():
             rate_limit_info = f"Rate limited until {self._rate_limit_reset.isoformat()}" if self._rate_limit_reset else "Rate limited"
 
+        # Check which metadata services are configured
+        metadata_sources = []
+        if nftcdn_service:
+            try:
+                import asyncio
+                if asyncio.run(nftcdn_service.is_configured()):
+                    metadata_sources.append("NFT CDN")
+            except:
+                pass
+        if nmkr_service:
+            try:
+                import asyncio
+                if asyncio.run(nmkr_service.is_configured()):
+                    metadata_sources.append("NMKR")
+            except:
+                pass
+        metadata_sources.append("Blockfrost")  # Always available as fallback
+
         return {
             "taptools_configured": self.is_taptools_configured(),
-            "koios_available": True,  # Koios is always available (free, no auth)
+            "nftcdn_configured": "NFT CDN" in metadata_sources,
+            "nmkr_configured": "NMKR" in metadata_sources,
+            "blockfrost_available": True,
             "cached_nfts": len(self.nft_cache),
             "cached_collections": len(self.collection_cache),
             "last_refresh": self.last_full_refresh.isoformat() if self.last_full_refresh else None,
             "floor_prices": "rate_limited" if self.is_rate_limited() else ("available" if self.is_taptools_configured() else "unavailable (TapTools API key required)"),
             "rate_limit_status": rate_limit_info,
-            "metadata_source": "TapTools + Koios" if self.is_taptools_configured() else "Koios (free)",
+            "metadata_priority": " → ".join(metadata_sources),
             "note": "TapTools API key required for floor prices. Get one at https://www.taptools.io/openapi/subscription" if not self.is_taptools_configured() else ("Rate limit reached - using cached floor prices" if self.is_rate_limited() else "Full NFT data available")
         }
 
@@ -129,31 +169,33 @@ class NFTService:
         return None
 
     def _extract_image_from_metadata(self, metadata: dict) -> Optional[str]:
-        """Extract image URL from CIP-25 NFT metadata."""
+        """
+        Extract image URL from CIP-25 NFT metadata.
+        Prioritizes 'files' array over 'image' field for better resolution.
+        """
         if not metadata:
             return None
 
-        # Direct image field (most common)
+        # PRIORITY 1: Check files array first (CIP-25 standard, usually higher resolution)
+        files = metadata.get('files', [])
+        if files and isinstance(files, list):
+            for file in files:
+                if isinstance(file, dict):
+                    # Get src field (don't filter by mediaType to get first available file)
+                    src = file.get('src')
+                    if src:
+                        if isinstance(src, list):
+                            src = ''.join(src)
+                        return self._normalize_ipfs_url(src)
+
+        # PRIORITY 2: Direct image field (fallback, may be thumbnail)
         image = metadata.get('image')
         if image:
             if isinstance(image, list):
                 image = ''.join(image)
             return self._normalize_ipfs_url(image)
 
-        # Check files array (CIP-25 standard)
-        files = metadata.get('files', [])
-        if files and isinstance(files, list):
-            for file in files:
-                if isinstance(file, dict):
-                    media_type = file.get('mediaType', '')
-                    if 'image' in media_type.lower():
-                        src = file.get('src')
-                        if src:
-                            if isinstance(src, list):
-                                src = ''.join(src)
-                            return self._normalize_ipfs_url(src)
-
-        # Check logo field
+        # PRIORITY 3: Check logo field (last resort)
         logo = metadata.get('logo')
         if logo:
             if isinstance(logo, list):
@@ -162,8 +204,84 @@ class NFTService:
 
         return None
 
+    async def _fetch_nft_metadata_priority(self, policy_id: str, asset_name_hex: str) -> Optional[dict]:
+        """
+        Fetch NFT metadata using priority system.
+
+        Priority order:
+        1. NFT CDN (if configured)
+        2. NMKR (if configured)
+        3. Blockfrost (fallback)
+
+        Returns metadata dict with 'image', 'name', 'description', etc.
+        """
+        # Try NFT CDN first (priority #1)
+        if nftcdn_service:
+            try:
+                if await nftcdn_service.is_configured():
+                    logger.debug(f"Trying NFT CDN for {policy_id[:16]}...")
+                    metadata = await nftcdn_service.get_nft_metadata(policy_id, asset_name_hex)
+                    if metadata:
+                        logger.debug(f"Got metadata from NFT CDN for {policy_id[:16]}")
+                        return {**metadata, '_source': 'nftcdn'}
+            except Exception as e:
+                logger.debug(f"NFT CDN failed for {policy_id[:16]}: {e}")
+
+        # Try NMKR second (priority #2)
+        if nmkr_service:
+            try:
+                if await nmkr_service.is_configured():
+                    logger.debug(f"Trying NMKR for {policy_id[:16]}...")
+                    metadata = await nmkr_service.get_nft_metadata(policy_id, asset_name_hex)
+                    if metadata:
+                        logger.debug(f"Got metadata from NMKR for {policy_id[:16]}")
+                        return {**metadata, '_source': 'nmkr'}
+            except Exception as e:
+                logger.debug(f"NMKR failed for {policy_id[:16]}: {e}")
+
+        # Fallback to Blockfrost (priority #3)
+        logger.debug(f"Falling back to Blockfrost for {policy_id[:16]}")
+        return None  # Will let existing Blockfrost code handle it
+
     async def _fetch_nft_image_url(self, asset_id: str) -> Optional[str]:
-        """Fetch the image URL for an NFT from Blockfrost metadata."""
+        """
+        Fetch the image URL for an NFT using priority system.
+
+        Priority order:
+        1. NFT CDN (if configured)
+        2. NMKR (if configured)
+        3. Blockfrost (fallback)
+        """
+        # Extract policy_id and asset_name_hex from asset_id
+        policy_id = asset_id[:56] if len(asset_id) >= 56 else asset_id
+        asset_name_hex = asset_id[56:] if len(asset_id) > 56 else ''
+
+        # Try NFT CDN first (priority #1)
+        if nftcdn_service:
+            try:
+                if await nftcdn_service.is_configured():
+                    logger.debug(f"Trying NFT CDN for image: {asset_id[:20]}...")
+                    image_url = await nftcdn_service.get_nft_image(policy_id, asset_name_hex)
+                    if image_url:
+                        logger.debug(f"Got image from NFT CDN for {asset_id[:20]}")
+                        return self._normalize_ipfs_url(image_url)
+            except Exception as e:
+                logger.debug(f"NFT CDN image fetch failed for {asset_id[:20]}: {e}")
+
+        # Try NMKR second (priority #2)
+        if nmkr_service:
+            try:
+                if await nmkr_service.is_configured():
+                    logger.debug(f"Trying NMKR for image: {asset_id[:20]}...")
+                    image_url = await nmkr_service.get_nft_image(policy_id, asset_name_hex)
+                    if image_url:
+                        logger.debug(f"Got image from NMKR for {asset_id[:20]}")
+                        return self._normalize_ipfs_url(image_url)
+            except Exception as e:
+                logger.debug(f"NMKR image fetch failed for {asset_id[:20]}: {e}")
+
+        # Fallback to Blockfrost (priority #3)
+        logger.debug(f"Falling back to Blockfrost for image: {asset_id[:20]}...")
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
                 response = await client.get(
@@ -178,6 +296,7 @@ class NFTService:
                     if onchain:
                         image_url = self._extract_image_from_metadata(onchain)
                         if image_url:
+                            logger.debug(f"Got image from Blockfrost for {asset_id[:20]}")
                             return image_url
 
                     # Try metadata field as fallback
@@ -185,12 +304,13 @@ class NFTService:
                     if metadata:
                         image_url = self._extract_image_from_metadata(metadata)
                         if image_url:
+                            logger.debug(f"Got image from Blockfrost metadata for {asset_id[:20]}")
                             return image_url
 
                 return None
 
         except Exception as e:
-            logger.debug(f"Error fetching image for {asset_id[:20]}...: {e}")
+            logger.debug(f"Error fetching image from Blockfrost for {asset_id[:20]}...: {e}")
             return None
 
     async def get_all_nfts(self, user_id: int = None, force_refresh: bool = False) -> List[dict]:
@@ -321,7 +441,19 @@ class NFTService:
             logger.error(f"Error saving NFT cache to database: {e}")
 
     async def _fetch_collection_data(self, policy_ids: List[str]) -> None:
-        """Fetch collection data from TapTools API for multiple policy IDs."""
+        """
+        Fetch collection data for multiple policy IDs.
+
+        Strategy (in order of priority):
+        1. Try NFT CDN for collection metadata (enhanced, has collection names)
+        2. Try NMKR for collection metadata
+        3. Fall back to Blockfrost/Koios for on-chain metadata (free)
+        4. Get floor prices from TapTools if configured (paid service - minimize calls)
+        """
+        from services.nftcdn import nftcdn_service
+        from services.nmkr import nmkr_service
+        from services.metadata_extractor import metadata_extractor
+
         for policy_id in policy_ids:
             if policy_id in self.collection_cache:
                 cache_entry = self.collection_cache[policy_id]
@@ -329,70 +461,112 @@ class NFTService:
                     continue
 
             try:
-                # Only try TapTools if API key is configured and not rate limited
+                # First, try to get collection metadata from NFT CDN (priority)
+                collection_data = None
+
+                # Try NFT CDN first - it has better collection name data
+                try:
+                    logger.debug(f"Trying NFT CDN for collection {policy_id[:16]}...")
+                    nftcdn_data = await nftcdn_service.get_collection_metadata(policy_id)
+                    if nftcdn_data:
+                        # Use metadata extractor to parse flexibly
+                        unified = metadata_extractor.extract_unified_metadata(nftcdn_data, 'nftcdn')
+                        if unified['collection_name']:
+                            collection_data = {
+                                'found': True,
+                                'name': unified['collection_name'],
+                                'description': unified['description'],
+                                'source': 'nftcdn'
+                            }
+                            logger.info(f"✓ Got collection '{unified['collection_name']}' from NFT CDN for {policy_id[:16]}...")
+                except Exception as e:
+                    logger.debug(f"NFT CDN failed for {policy_id[:16]}: {e}")
+
+                # Try NMKR if NFT CDN didn't work
+                if not collection_data:
+                    try:
+                        logger.debug(f"Trying NMKR for collection {policy_id[:16]}...")
+                        nmkr_data = await nmkr_service.get_collection_metadata(policy_id)
+                        if nmkr_data:
+                            # Use metadata extractor to parse flexibly
+                            unified = metadata_extractor.extract_unified_metadata(nmkr_data, 'nmkr')
+                            if unified['collection_name']:
+                                collection_data = {
+                                    'found': True,
+                                    'name': unified['collection_name'],
+                                    'description': unified['description'],
+                                    'source': 'nmkr'
+                                }
+                                logger.info(f"✓ Got collection '{unified['collection_name']}' from NMKR for {policy_id[:16]}...")
+                    except Exception as e:
+                        logger.debug(f"NMKR failed for {policy_id[:16]}: {e}")
+
+                # Fall back to Blockfrost/Koios if NFT CDN and NMKR didn't work
+                if not collection_data:
+                    logger.debug(f"Falling back to Blockfrost/Koios for collection {policy_id[:16]}...")
+                    collection_data = await self._fetch_from_blockfrost(policy_id)
+
+                # Then, try to get floor price from TapTools (ONLY if configured and not rate limited)
+                floor_price_data = None
                 if self.is_taptools_configured() and not self.is_rate_limited():
                     async with httpx.AsyncClient(timeout=30.0) as client:
-                        # Get collection info (name, description, etc.)
-                        info_response = await client.get(
-                            f"{TAPTOOLS_API_BASE}/nft/collection/info",
+                        # ONLY fetch stats for floor price (NOT info endpoint)
+                        stats_response = await client.get(
+                            f"{TAPTOOLS_API_BASE}/nft/collection/stats",
                             params={"policy": policy_id},
                             headers=self.taptools_headers
                         )
 
-                        # Check for rate limiting immediately
-                        if info_response.status_code == 429:
+                        # Check for rate limiting
+                        if stats_response.status_code == 429:
                             self.set_rate_limited()
-                            # Fall through to Blockfrost fallback
-                        else:
-                            # Get collection stats (floor price, listings, volume)
-                            stats_response = await client.get(
-                                f"{TAPTOOLS_API_BASE}/nft/collection/stats",
-                                params={"policy": policy_id},
-                                headers=self.taptools_headers
-                            )
+                        elif stats_response.status_code == 200:
+                            stats_data = stats_response.json()
+                            floor_price_data = {
+                                'floor_price_ada': float(stats_data.get('price')) if stats_data.get('price') else None,
+                                'listings': stats_data.get('listings', 0),
+                                'volume': stats_data.get('volume', 0),
+                                'top_offer': stats_data.get('topOffer'),
+                                'owners': stats_data.get('owners'),
+                                'source': 'taptools-stats'
+                            }
+                            # If TapTools has supply, prefer it over Blockfrost
+                            if stats_data.get('supply'):
+                                floor_price_data['supply'] = stats_data['supply']
+                        elif stats_response.status_code == 401:
+                            logger.warning("TapTools API key invalid or expired")
+                        elif stats_response.status_code != 404:
+                            logger.debug(f"TapTools stats returned {stats_response.status_code} for {policy_id[:16]}...")
 
-                            # Check for rate limiting on stats call
-                            if stats_response.status_code == 429:
-                                self.set_rate_limited()
-                                # Fall through to Blockfrost fallback
-                            elif info_response.status_code == 200 or stats_response.status_code == 200:
-                                info_data = info_response.json() if info_response.status_code == 200 else {}
-                                stats_data = stats_response.json() if stats_response.status_code == 200 else {}
-
-                                # Floor price is in stats endpoint as 'price'
-                                floor_price = stats_data.get('price')
-
-                                self.collection_cache[policy_id] = {
-                                    'found': True,
-                                    'name': info_data.get('name', ''),
-                                    'description': info_data.get('description', ''),
-                                    'floor_price_ada': float(floor_price) if floor_price else None,
-                                    'verified': info_data.get('verified', False),
-                                    'supply': stats_data.get('supply') or info_data.get('supply'),
-                                    'listings': stats_data.get('listings', 0),
-                                    'volume': stats_data.get('volume', 0),
-                                    'top_offer': stats_data.get('topOffer'),
-                                    'owners': stats_data.get('owners'),
-                                    'source': 'taptools',
-                                    'cached_at': datetime.now()
-                                }
-                                continue
-                            elif info_response.status_code == 401:
-                                logger.warning("TapTools API key invalid or expired")
-                            elif info_response.status_code == 404 and stats_response.status_code == 404:
-                                # Collection not found on TapTools, try Blockfrost
-                                pass
-                            else:
-                                logger.debug(f"TapTools returned info:{info_response.status_code} stats:{stats_response.status_code} for {policy_id[:16]}...")
-
-                # Fallback to Blockfrost for basic metadata (no floor price)
-                self.collection_cache[policy_id] = await self._fetch_from_blockfrost(policy_id)
+                # Merge metadata from Blockfrost/Koios with floor price from TapTools
+                if collection_data and floor_price_data:
+                    # Combine both sources
+                    merged_data = {**collection_data, **floor_price_data}
+                    merged_data['source'] = 'blockfrost+taptools'
+                    merged_data['cached_at'] = datetime.now()
+                    self.collection_cache[policy_id] = merged_data
+                elif floor_price_data:
+                    # Only have TapTools data (unlikely, but handle it)
+                    floor_price_data['found'] = True
+                    floor_price_data['cached_at'] = datetime.now()
+                    self.collection_cache[policy_id] = floor_price_data
+                elif collection_data:
+                    # Only have Blockfrost/Koios data (no floor price)
+                    collection_data['cached_at'] = datetime.now()
+                    self.collection_cache[policy_id] = collection_data
+                else:
+                    # Nothing found
+                    self.collection_cache[policy_id] = {
+                        'found': False,
+                        'cached_at': datetime.now()
+                    }
 
             except Exception as e:
                 logger.error(f"Error fetching collection {policy_id[:16]}...: {e}")
                 # Try Blockfrost as fallback
                 try:
                     self.collection_cache[policy_id] = await self._fetch_from_blockfrost(policy_id)
+                    self.collection_cache[policy_id]['cached_at'] = datetime.now()
                 except:
                     self.collection_cache[policy_id] = {
                         'found': False,
@@ -455,6 +629,8 @@ class NFTService:
 
     async def _fetch_from_blockfrost(self, policy_id: str) -> dict:
         """Fallback to fetch basic collection info from Blockfrost."""
+        from services.metadata_extractor import metadata_extractor
+
         # First try Koios (free and often has better metadata)
         koios_result = await self._fetch_from_koios(policy_id)
         if koios_result:
@@ -472,19 +648,32 @@ class NFTService:
                 if response.status_code == 200:
                     assets = response.json()
                     if assets and len(assets) > 0:
-                        # Get metadata for the first asset to find collection name
-                        first_asset = assets[0]
-                        metadata = first_asset.get('onchain_metadata', {})
-                        return {
-                            'found': True,
-                            'name': metadata.get('name', metadata.get('project', 'Unknown Collection')),
-                            'description': metadata.get('description', ''),
-                            'floor_price_ada': None,  # No price from Blockfrost
-                            'verified': False,
-                            'supply': None,
-                            'source': 'blockfrost',
-                            'cached_at': datetime.now()
-                        }
+                        # Get full asset metadata for the first asset
+                        first_asset_id = assets[0].get('asset')
+                        if first_asset_id:
+                            asset_response = await client.get(
+                                f"{BLOCKFROST_BASE_URL}/assets/{first_asset_id}",
+                                headers=self.blockfrost_headers
+                            )
+
+                            if asset_response.status_code == 200:
+                                asset_data = asset_response.json()
+
+                                # Use metadata extractor for flexible field parsing
+                                unified = metadata_extractor.extract_unified_metadata(asset_data, 'blockfrost')
+
+                                collection_name = unified['collection_name'] or unified['nft_name'] or 'Unknown Collection'
+
+                                return {
+                                    'found': True,
+                                    'name': collection_name,
+                                    'description': unified['description'] or '',
+                                    'floor_price_ada': None,  # No price from Blockfrost
+                                    'verified': False,
+                                    'supply': None,
+                                    'source': 'blockfrost',
+                                    'cached_at': datetime.now()
+                                }
         except Exception as e:
             logger.debug(f"Blockfrost fallback failed for {policy_id[:16]}...: {e}")
 
@@ -795,20 +984,27 @@ class NFTService:
 
     async def collect_floor_prices_incremental(self, batch_size: int = 5, max_batches: int = 3) -> dict:
         """
-        Incrementally collect floor prices for collections that need updates.
+        Incrementally collect floor prices for CARDANO NFT collections that need updates.
+
+        NOTE: This is Cardano-specific. Other chains (Ethereum, Solana, Polygon, Base)
+        fetch floor prices on-demand from their respective APIs and are NOT affected
+        by Cardano rate limits.
 
         This method:
         1. Prioritizes collections without any price data
         2. Then updates collections with oldest data
-        3. Stops gracefully on rate limits
-        4. Saves progress to the database
+        3. Stops gracefully on rate limits (saves progress before stopping)
+        4. Saves all progress to the database
 
         Args:
             batch_size: Number of collections to fetch per batch
             max_batches: Maximum number of batches to process (to limit API calls)
 
         Returns:
-            dict with collection status
+            dict with collection status:
+            - status: 'completed', 'rate_limited', or 'skipped'
+            - collections_updated: Number of collections successfully updated
+            - rate_limited: Boolean indicating if rate limit was hit
         """
         if not self.is_taptools_configured():
             return {
@@ -841,110 +1037,92 @@ class NFTService:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 for policy_id in collections_to_update:
                     try:
-                        # Fetch from TapTools - add delay between calls to avoid rate limits
                         import asyncio
 
-                        info_response = await client.get(
-                            f"{TAPTOOLS_API_BASE}/nft/collection/info",
-                            params={"policy": policy_id},
-                            headers=self.taptools_headers
-                        )
+                        # First, get collection metadata from Blockfrost/Koios (free)
+                        metadata = await self._fetch_from_blockfrost(policy_id)
+                        collection_name = metadata.get('name', '') if metadata else ''
 
-                        # Check for rate limiting on info call first
-                        if info_response.status_code == 429:
-                            logger.warning(f"Rate limited by TapTools, stopping collection")
-                            rate_limit_hit = True
-                            total_rate_limited += 1
-                            break
-
-                        # Small delay before stats call to respect rate limits
-                        await asyncio.sleep(1.0)
-
+                        # Then, ONLY fetch floor price from TapTools (minimize paid API calls)
                         stats_response = await client.get(
                             f"{TAPTOOLS_API_BASE}/nft/collection/stats",
                             params={"policy": policy_id},
                             headers=self.taptools_headers
                         )
 
-                        # Check for rate limiting on stats call - save info data anyway
+                        # Check for rate limiting
                         if stats_response.status_code == 429:
-                            logger.warning(f"Rate limited by TapTools on stats call")
-                            # Save partial data from info call if successful
-                            if info_response.status_code == 200:
-                                info_data = info_response.json()
-                                collection_name = info_data.get('name', '')
+                            logger.warning(f"Rate limited by TapTools, stopping collection")
+                            # Save metadata without floor price if we have it
+                            if metadata:
                                 price_data = {
                                     'policy_id': policy_id,
                                     'collection_name': collection_name,
-                                    'floor_price_ada': None,  # No floor price without stats
-                                    'supply': info_data.get('supply'),
-                                    'verified': info_data.get('verified', False),
-                                    'source': 'taptools-partial',
+                                    'floor_price_ada': None,
+                                    'supply': metadata.get('supply'),
+                                    'verified': False,
+                                    'source': metadata.get('source', 'blockfrost'),
                                     'fetched_at': datetime.now().isoformat()
                                 }
                                 await save_nft_floor_price(price_data)
-                                logger.info(f"Saved partial data for {collection_name or policy_id[:16]} (no floor price)")
+                                logger.info(f"Saved metadata for {collection_name or policy_id[:16]} (no floor price - rate limited)")
                                 total_updated += 1
                             rate_limit_hit = True
                             total_rate_limited += 1
                             break
 
-                        if info_response.status_code == 200 or stats_response.status_code == 200:
-                            info_data = info_response.json() if info_response.status_code == 200 else {}
-                            stats_data = stats_response.json() if stats_response.status_code == 200 else {}
-
+                        if stats_response.status_code == 200:
+                            stats_data = stats_response.json()
                             floor_price = stats_data.get('price')
-                            collection_name = info_data.get('name', '')
 
-                            # Save to database
+                            # Combine metadata from Blockfrost/Koios with floor price from TapTools
                             price_data = {
                                 'policy_id': policy_id,
                                 'collection_name': collection_name,
                                 'floor_price_ada': float(floor_price) if floor_price else None,
                                 'listings': stats_data.get('listings', 0),
-                                'supply': stats_data.get('supply') or info_data.get('supply'),
-                                'verified': info_data.get('verified', False),
-                                'source': 'taptools',
+                                'supply': stats_data.get('supply') or (metadata.get('supply') if metadata else None),
+                                'verified': metadata.get('verified', False) if metadata else False,
+                                'source': 'blockfrost+taptools' if metadata else 'taptools',
                                 'fetched_at': datetime.now().isoformat()
                             }
                             await save_nft_floor_price(price_data)
 
                             # Update in-memory cache
-                            self.collection_cache[policy_id] = {
-                                'found': True,
+                            cache_entry = metadata if metadata else {'found': True}
+                            cache_entry.update({
                                 'name': collection_name,
                                 'floor_price_ada': float(floor_price) if floor_price else None,
-                                'verified': info_data.get('verified', False),
-                                'supply': stats_data.get('supply') or info_data.get('supply'),
                                 'listings': stats_data.get('listings', 0),
-                                'source': 'taptools',
+                                'supply': stats_data.get('supply') or cache_entry.get('supply'),
+                                'source': 'blockfrost+taptools' if metadata else 'taptools',
                                 'cached_at': datetime.now()
-                            }
+                            })
+                            self.collection_cache[policy_id] = cache_entry
 
                             total_updated += 1
                             logger.debug(f"Updated price for {collection_name or policy_id[:16]}: {floor_price} ADA")
 
                         else:
-                            # Try fallback to Koios for metadata (no floor price)
-                            koios_data = await self._fetch_from_koios(policy_id)
-                            if koios_data:
+                            # TapTools doesn't have data, save metadata only (no floor price)
+                            if metadata:
                                 price_data = {
                                     'policy_id': policy_id,
-                                    'collection_name': koios_data.get('name'),
+                                    'collection_name': collection_name,
                                     'floor_price_ada': None,
-                                    'supply': koios_data.get('supply'),
+                                    'supply': metadata.get('supply'),
                                     'verified': False,
-                                    'source': 'koios',
+                                    'source': metadata.get('source', 'blockfrost'),
                                     'fetched_at': datetime.now().isoformat()
                                 }
                                 await save_nft_floor_price(price_data)
-                                self.collection_cache[policy_id] = koios_data
+                                self.collection_cache[policy_id] = metadata
                                 total_updated += 1
                             else:
                                 total_skipped += 1
 
                         # Delay between collections to be nice to the API
-                        await asyncio.sleep(1.5)
+                        await asyncio.sleep(1.0)
 
                     except Exception as e:
                         logger.error(f"Error fetching price for {policy_id[:16]}: {e}")

@@ -10,6 +10,7 @@ proper token metadata and images but aren't available through generic crypto log
 
 import httpx
 import logging
+import binascii
 from typing import Optional, Dict
 import sys
 import os
@@ -117,6 +118,313 @@ class NMKRService:
             return None
 
         return f"{base_url}?apikey={api_key}"
+
+    async def get_token_ipfs_image_url(
+        self,
+        policy_id: str,
+        token_name_hex: str,
+        user_id: int = 1
+    ) -> Optional[str]:
+        """
+        Fetch token image from NMKR and convert IPFS URL to HTTP gateway URL.
+
+        This method makes an actual API call to NMKR to get the image URL,
+        then converts ipfs:// URLs to https://ipfs.io/ipfs/ gateway URLs
+        that can be used directly in <img> tags.
+
+        Args:
+            policy_id: Cardano policy ID (hex)
+            token_name_hex: Token name in hexadecimal format
+            user_id: User ID for API key lookup
+
+        Returns:
+            HTTP gateway URL for the image, or None if fetch fails
+        """
+        api_key = await self.get_api_key(user_id)
+        if not api_key:
+            return None
+
+        nmkr_url = f"{self.base_url}/v2/GetPreviewImageForToken/{policy_id}/{token_name_hex}"
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(
+                    nmkr_url,
+                    headers={"Authorization": api_key}
+                )
+
+                if response.status_code == 200:
+                    ipfs_url = response.text.strip()
+
+                    # Convert IPFS URL to HTTP gateway URL
+                    if ipfs_url.startswith("ipfs://"):
+                        ipfs_hash = ipfs_url.replace("ipfs://", "")
+                        return f"https://ipfs.io/ipfs/{ipfs_hash}"
+                    else:
+                        # Return as-is if not IPFS
+                        return ipfs_url
+                else:
+                    logger.debug(f"NMKR returned {response.status_code} for {policy_id}/{token_name_hex}")
+                    return None
+
+        except Exception as e:
+            logger.debug(f"Failed to fetch NMKR image URL: {e}")
+            return None
+
+    async def get_cached_logo_url(
+        self,
+        policy_id: str,
+        token_name_hex: str
+    ) -> Optional[str]:
+        """
+        Get logo URL from database cache.
+
+        Args:
+            policy_id: Cardano policy ID (hex)
+            token_name_hex: Token name in hexadecimal format
+
+        Returns:
+            Cached logo URL or None if not in cache
+        """
+        import aiosqlite
+        from config import DATABASE_PATH
+
+        asset_id = policy_id + token_name_hex
+
+        try:
+            async with aiosqlite.connect(DATABASE_PATH) as db:
+                cursor = await db.execute(
+                    "SELECT logo_url FROM token_metadata WHERE asset_id = ?",
+                    (asset_id,)
+                )
+                row = await cursor.fetchone()
+                if row and row[0]:
+                    logger.debug(f"Got cached logo URL for {asset_id}")
+                    return row[0]
+        except Exception as e:
+            logger.debug(f"Cache lookup failed: {e}")
+
+        return None
+
+    async def save_logo_url_to_cache(
+        self,
+        policy_id: str,
+        token_name_hex: str,
+        logo_url: str
+    ):
+        """
+        Save logo URL to database cache.
+
+        Args:
+            policy_id: Cardano policy ID (hex)
+            token_name_hex: Token name in hexadecimal format
+            logo_url: Logo URL to cache
+        """
+        import aiosqlite
+        from config import DATABASE_PATH
+
+        asset_id = policy_id + token_name_hex
+
+        try:
+            async with aiosqlite.connect(DATABASE_PATH) as db:
+                # Insert or update token_metadata with logo_url
+                await db.execute("""
+                    INSERT INTO token_metadata (asset_id, policy_id, logo_url, updated_at)
+                    VALUES (?, ?, ?, datetime('now'))
+                    ON CONFLICT(asset_id) DO UPDATE SET
+                        logo_url = excluded.logo_url,
+                        updated_at = datetime('now')
+                """, (asset_id, policy_id, logo_url))
+                await db.commit()
+                logger.debug(f"Cached logo URL for {asset_id}")
+        except Exception as e:
+            logger.debug(f"Cache save failed: {e}")
+
+    async def get_token_logo_with_fallbacks(
+        self,
+        policy_id: str,
+        token_name_hex: str,
+        ticker: Optional[str] = None,
+        user_id: int = 1,
+        use_cache: bool = True
+    ) -> Optional[str]:
+        """
+        Get token logo with multiple fallback strategies and caching.
+
+        Tries in order:
+        1. Database cache (if use_cache=True)
+        2. NMKR API (if configured)
+        3. Cardano Token Registry (GitHub)
+        4. Blockfrost on-chain metadata (if configured)
+        5. LogoKit (ticker-based)
+
+        Args:
+            policy_id: Cardano policy ID (hex)
+            token_name_hex: Token name in hexadecimal format
+            ticker: Optional ticker symbol for LogoKit fallback
+            user_id: User ID for API key lookup
+            use_cache: Whether to check/update cache (default: True)
+
+        Returns:
+            Image URL or None if all methods fail
+        """
+        # Check cache first
+        if use_cache:
+            cached_url = await self.get_cached_logo_url(policy_id, token_name_hex)
+            if cached_url:
+                return cached_url
+        # Try to fetch logo from various sources
+        logo_url = None
+
+        # Try NMKR first (if configured)
+        if await self.is_configured(user_id):
+            nmkr_url = await self.get_token_ipfs_image_url(policy_id, token_name_hex, user_id)
+            if nmkr_url:
+                logger.debug(f"Got logo from NMKR for {policy_id}/{token_name_hex}")
+                logo_url = nmkr_url
+
+        # Try Cardano Token Registry (free, no auth required)
+        if not logo_url:
+            try:
+                # Registry uses GitHub raw JSON with base64-encoded logos
+                registry_url = f"https://raw.githubusercontent.com/cardano-foundation/cardano-token-registry/master/mappings/{policy_id}{token_name_hex}.json"
+
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    response = await client.get(registry_url)
+                    if response.status_code == 200:
+                        metadata = response.json()
+
+                        # Extract logo from JSON structure
+                        if 'logo' in metadata and 'value' in metadata['logo']:
+                            logo_base64 = metadata['logo']['value']
+
+                            # Return as data URL for direct browser display
+                            data_url = f"data:image/png;base64,{logo_base64}"
+                            logger.debug(f"Got logo from Cardano Token Registry for {policy_id}/{token_name_hex}")
+                            logo_url = data_url
+            except Exception as e:
+                logger.debug(f"Cardano Token Registry check failed: {e}")
+
+        # Try Blockfrost on-chain metadata (if configured)
+        if not logo_url:
+            try:
+                from services.cardano import cardano_service
+
+                if cardano_service.blockfrost_api:
+                    asset_id = policy_id + token_name_hex
+                    metadata = await cardano_service.get_asset_metadata(asset_id)
+
+                    if metadata and metadata.get('onchain_metadata'):
+                        onchain = metadata['onchain_metadata']
+
+                        # Try various common metadata fields
+                        onchain_logo = None
+                        if 'logo' in onchain:
+                            onchain_logo = onchain['logo']
+                        elif 'image' in onchain:
+                            onchain_logo = onchain['image']
+
+                        if onchain_logo:
+                            # Convert IPFS URLs to HTTP gateway
+                            if onchain_logo.startswith('ipfs://'):
+                                ipfs_hash = onchain_logo.replace('ipfs://', '')
+                                onchain_logo = f"https://ipfs.io/ipfs/{ipfs_hash}"
+
+                            logger.debug(f"Got logo from Blockfrost metadata for {policy_id}/{token_name_hex}")
+                            logo_url = onchain_logo
+            except Exception as e:
+                logger.debug(f"Blockfrost metadata check failed: {e}")
+
+        # Final fallback to LogoKit (if ticker provided)
+        if not logo_url and ticker:
+            from services.logokit_service import logokit_service
+            logokit_url = logokit_service.get_crypto_logo_url(ticker, size=64)
+            logger.debug(f"Falling back to LogoKit for {ticker}")
+            logo_url = logokit_url
+
+        # Save to cache before returning (if we found a URL and caching is enabled)
+        if logo_url and use_cache:
+            await self.save_logo_url_to_cache(policy_id, token_name_hex, logo_url)
+
+        return logo_url
+
+    async def prefetch_logos_for_wallet_assets(self, user_id: int = 1):
+        """
+        Background task to pre-fetch and cache logos for all wallet assets.
+
+        This should be called after wallet sync to populate the logo cache
+        without blocking the user.
+
+        Args:
+            user_id: User ID for API key lookup
+        """
+        import aiosqlite
+        from config import DATABASE_PATH
+
+        try:
+            # Get all unique native assets without cached logos
+            async with aiosqlite.connect(DATABASE_PATH) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute("""
+                    SELECT DISTINCT
+                        na.policy_id,
+                        na.asset_id,
+                        COALESCE(ct.ticker, tm.ticker) as ticker
+                    FROM native_assets na
+                    LEFT JOIN token_metadata tm ON na.asset_id = tm.asset_id
+                    LEFT JOIN custom_tokens ct ON
+                        ct.policy_id = na.policy_id
+                        AND ct.asset_name = na.asset_name
+                        AND ct.user_id = na.user_id
+                    WHERE tm.logo_url IS NULL OR tm.logo_url = ''
+                    LIMIT 100
+                """)
+                rows = await cursor.fetchall()
+                assets = [dict(row) for row in rows]
+
+            if not assets:
+                logger.debug("No assets need logo pre-fetching")
+                return
+
+            logger.info(f"Pre-fetching logos for {len(assets)} assets...")
+
+            # Fetch logos in small batches to avoid overloading APIs
+            batch_size = 5
+            for i in range(0, len(assets), batch_size):
+                batch = assets[i:i + batch_size]
+
+                # Process batch concurrently
+                import asyncio
+                tasks = []
+                for asset in batch:
+                    policy_id = asset['policy_id']
+                    asset_id = asset['asset_id']
+                    ticker = asset.get('ticker')
+
+                    # Extract hex asset name
+                    asset_name_hex = asset_id[len(policy_id):] if len(asset_id) > len(policy_id) else None
+
+                    if policy_id and asset_name_hex:
+                        task = self.get_token_logo_with_fallbacks(
+                            policy_id,
+                            asset_name_hex,
+                            ticker=ticker,
+                            user_id=user_id,
+                            use_cache=True  # Will cache automatically
+                        )
+                        tasks.append(task)
+
+                # Wait for batch to complete
+                if tasks:
+                    await asyncio.gather(*tasks, return_exceptions=True)
+
+                # Small delay between batches to be nice to APIs
+                await asyncio.sleep(0.5)
+
+            logger.info(f"Completed logo pre-fetching for {len(assets)} assets")
+
+        except Exception as e:
+            logger.error(f"Logo pre-fetching failed: {e}")
 
     async def get_token_metadata(
         self,

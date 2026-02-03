@@ -5,8 +5,8 @@ import logging
 import sys
 import os
 sys.path.insert(0, str(__file__).rsplit('/', 2)[0])
-from config import BLOCKFROST_API_KEY, BLOCKFROST_BASE_URL, CEXPLORER_API_KEY, CEXPLORER_BASE_URL
-from database import get_token_metadata, save_token_metadata
+from config import BLOCKFROST_BASE_URL, CEXPLORER_BASE_URL
+from database import get_token_metadata, save_token_metadata, get_api_key
 
 # Import API tracker
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'middleware'))
@@ -18,12 +18,76 @@ class CardanoService:
     """Service for fetching Cardano wallet data with Blockfrost primary and cexplorer fallback."""
 
     def __init__(self):
-        self.blockfrost_headers = {
-            "project_id": BLOCKFROST_API_KEY
-        }
-        self.cexplorer_headers = {
-            "api-key": CEXPLORER_API_KEY
-        }
+        # API keys are now loaded dynamically from database or environment
+        self._blockfrost_key_cache = None
+        self._blockfrost_cache_time = None
+        self._cexplorer_key_cache = None
+        self._cexplorer_cache_time = None
+        self._cache_ttl_seconds = 60  # 1 minute cache
+
+    async def _get_blockfrost_key(self) -> str:
+        """Get Blockfrost API key from database or environment."""
+        from datetime import datetime, timedelta
+        now = datetime.utcnow()
+
+        # Check cache
+        if self._blockfrost_key_cache and self._blockfrost_cache_time:
+            if now - self._blockfrost_cache_time < timedelta(seconds=self._cache_ttl_seconds):
+                return self._blockfrost_key_cache
+
+        # Try database
+        try:
+            db_key = await get_api_key('blockfrost', user_id=1)
+            if db_key:
+                self._blockfrost_key_cache = db_key
+                self._blockfrost_cache_time = now
+                return db_key
+        except Exception:
+            pass
+
+        # Fall back to environment
+        import os
+        env_key = os.getenv('BLOCKFROST_API_KEY', '')
+        self._blockfrost_key_cache = env_key
+        self._blockfrost_cache_time = now
+        return env_key
+
+    async def _get_cexplorer_key(self) -> str:
+        """Get CExplorer API key from database or environment."""
+        from datetime import datetime, timedelta
+        now = datetime.utcnow()
+
+        # Check cache
+        if self._cexplorer_key_cache and self._cexplorer_cache_time:
+            if now - self._cexplorer_cache_time < timedelta(seconds=self._cache_ttl_seconds):
+                return self._cexplorer_key_cache
+
+        # Try database
+        try:
+            db_key = await get_api_key('cexplorer', user_id=1)
+            if db_key:
+                self._cexplorer_key_cache = db_key
+                self._cexplorer_cache_time = now
+                return db_key
+        except Exception:
+            pass
+
+        # Fall back to environment
+        import os
+        env_key = os.getenv('CEXPLORER_API_KEY', '')
+        self._cexplorer_key_cache = env_key
+        self._cexplorer_cache_time = now
+        return env_key
+
+    async def _get_blockfrost_headers(self) -> dict:
+        """Get Blockfrost request headers."""
+        key = await self._get_blockfrost_key()
+        return {"project_id": key} if key else {}
+
+    async def _get_cexplorer_headers(self) -> dict:
+        """Get CExplorer request headers."""
+        key = await self._get_cexplorer_key()
+        return {"api-key": key} if key else {}
 
     async def get_address_info(self, address: str) -> Optional[dict]:
         """
@@ -42,11 +106,11 @@ class CardanoService:
     async def _get_address_blockfrost(self, address: str) -> Optional[dict]:
         """Fetch address data from Blockfrost API."""
         try:
-            async with get_blockfrost_client(headers=self.blockfrost_headers, timeout=30.0) as client:
+            async with get_blockfrost_client(headers=await self._get_blockfrost_headers(), timeout=30.0) as client:
                 # Get address info
                 response = await client.get(
                     f"{BLOCKFROST_BASE_URL}/addresses/{address}",
-                    headers=self.blockfrost_headers,
+                    headers=await self._get_blockfrost_headers(),
                     timeout=30.0
                 )
 
@@ -121,7 +185,7 @@ class CardanoService:
                 # cexplorer API endpoint for address info
                 response = await client.get(
                     f"{CEXPLORER_BASE_URL}/address/{address}/balance",
-                    headers=self.cexplorer_headers,
+                    headers=await self._get_cexplorer_headers(),
                     timeout=30.0
                 )
 
@@ -167,7 +231,7 @@ class CardanoService:
         try:
             response = await client.get(
                 f"{CEXPLORER_BASE_URL}/address/{address}/asset",
-                headers=self.cexplorer_headers,
+                headers=await self._get_cexplorer_headers(),
                 timeout=30.0
             )
 
@@ -198,7 +262,7 @@ class CardanoService:
             async with httpx.AsyncClient() as client:
                 response = await client.get(
                     f"{BLOCKFROST_BASE_URL}/addresses/{address}",
-                    headers=self.blockfrost_headers,
+                    headers=await self._get_blockfrost_headers(),
                     timeout=30.0
                 )
 
@@ -217,7 +281,7 @@ class CardanoService:
             async with httpx.AsyncClient() as client:
                 response = await client.get(
                     f"{BLOCKFROST_BASE_URL}/assets/{asset_id}",
-                    headers=self.blockfrost_headers,
+                    headers=await self._get_blockfrost_headers(),
                     timeout=30.0
                 )
 
@@ -305,7 +369,7 @@ class CardanoService:
             async with httpx.AsyncClient() as client:
                 response = await client.get(
                     f"{BLOCKFROST_BASE_URL}/accounts/{stake_address}",
-                    headers=self.blockfrost_headers,
+                    headers=await self._get_blockfrost_headers(),
                     timeout=30.0
                 )
 
@@ -353,7 +417,7 @@ class CardanoService:
                 while True:
                     response = await client.get(
                         f"{BLOCKFROST_BASE_URL}/accounts/{stake_address}/addresses",
-                        headers=self.blockfrost_headers,
+                        headers=await self._get_blockfrost_headers(),
                         params={'page': page, 'count': 100},
                         timeout=30.0
                     )
@@ -449,7 +513,7 @@ class CardanoService:
             async with httpx.AsyncClient() as client:
                 response = await client.get(
                     f"{BLOCKFROST_BASE_URL}/pools/{pool_id}/metadata",
-                    headers=self.blockfrost_headers,
+                    headers=await self._get_blockfrost_headers(),
                     timeout=30.0
                 )
 
@@ -481,7 +545,7 @@ class CardanoService:
                 # Blockfrost Conway governance endpoint
                 response = await client.get(
                     f"{BLOCKFROST_BASE_URL}/accounts/{stake_address}",
-                    headers=self.blockfrost_headers,
+                    headers=await self._get_blockfrost_headers(),
                     timeout=30.0
                 )
 
@@ -521,7 +585,7 @@ class CardanoService:
         try:
             response = await client.get(
                 f"{BLOCKFROST_BASE_URL}/governance/dreps/{drep_id}/metadata",
-                headers=self.blockfrost_headers,
+                headers=await self._get_blockfrost_headers(),
                 timeout=30.0
             )
             logger.info(f"Blockfrost DRep metadata response for {drep_id}: status={response.status_code}")
@@ -582,7 +646,7 @@ class CardanoService:
             try:
                 response = await client.get(
                     f"{BLOCKFROST_BASE_URL}/governance/dreps/{drep_id}",
-                    headers=self.blockfrost_headers,
+                    headers=await self._get_blockfrost_headers(),
                     timeout=30.0
                 )
                 logger.info(f"Blockfrost DRep info response: status={response.status_code}")

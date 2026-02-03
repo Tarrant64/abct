@@ -16,7 +16,8 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import HELIUS_API_KEY, HELIUS_BASE_URL
+from config import HELIUS_BASE_URL
+from services.api_key_manager import APIKeyManager
 
 logger = logging.getLogger(__name__)
 
@@ -24,18 +25,19 @@ logger = logging.getLogger(__name__)
 LAMPORTS_PER_SOL = 1_000_000_000
 
 
-class SolanaService:
+class SolanaService(APIKeyManager):
     """Service for fetching Solana wallet data from Helius API."""
 
     def __init__(self):
-        self.api_key = HELIUS_API_KEY
+        super().__init__(api_name='helius', env_var='HELIUS_API_KEY')
         self.base_url = HELIUS_BASE_URL
         self._balance_cache: Dict[str, dict] = {}
         self._cache_ttl = timedelta(minutes=5)
 
-    def is_configured(self) -> bool:
+    async def is_configured(self) -> bool:
         """Check if the API key is configured."""
-        return bool(self.api_key)
+        key = await self.get_api_key()
+        return bool(key)
 
     def is_solana_address(self, address: str) -> bool:
         """Check if an address is a valid Solana address."""
@@ -61,7 +63,7 @@ class SolanaService:
         try:
             response = await client.post(
                 f"{self.base_url}/token-metadata",
-                params={"api-key": self.api_key},
+                params={"api-key": await self.get_api_key()},
                 json={"mintAccounts": mint_addresses}
             )
 
@@ -108,7 +110,7 @@ class SolanaService:
         if not self.is_solana_address(address):
             return None
 
-        if not self.is_configured():
+        if not await self.is_configured():
             logger.warning("Helius API key not configured")
             return None
 
@@ -123,7 +125,7 @@ class SolanaService:
                 # Get SOL balance and token balances using the balances endpoint
                 response = await client.get(
                     f"{self.base_url}/addresses/{address}/balances",
-                    params={"api-key": self.api_key}
+                    params={"api-key": await self.get_api_key()}
                 )
 
                 if response.status_code != 200:
