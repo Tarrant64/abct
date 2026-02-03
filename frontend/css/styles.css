@@ -6982,12 +6982,12 @@ body.privacy-mode .section-title {
     min-width: 200px;
 }
 
-/* Transaction list container */
+/* Transaction list container - Transparent for free-floating cards */
 .transaction-list {
-    background: var(--bg-card);
+    background: transparent;
     border-radius: 12px;
-    overflow: hidden;
-    border: 1px solid var(--border-color);
+    overflow: visible;
+    border: none;
 }
 
 /* Transaction table - Sleek card style */
@@ -7392,9 +7392,9 @@ body.privacy-mode .section-title {
 /* Light theme overrides for transactions */
 [data-theme="light"] .filter-bar,
 [data-theme="light"] .transaction-list {
-    background: #f9fafb;
-    border: 1px solid #e5e7eb;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+    background: transparent;
+    border: none;
+    box-shadow: none;
 }
 
 [data-theme="light"] .stats-grid {
