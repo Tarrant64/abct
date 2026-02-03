@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark-mode">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transaction History - ABCT</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1770080959">
+    <!-- DOMPurify for XSS protection -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+    <!-- Session-based authentication -->
+    <script src="/static/js/session-auth.js?v=1770080959"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Transaction History</h1>
+            <div class="header-actions">
+                <button id="privacyBtn" class="btn btn-privacy" onclick="togglePrivacyMode()" title="Toggle privacy mode">
+                    Privacy Mode
+                </button>
+                <div class="waffle-menu-container">
+                    <button class="waffle-menu-btn" onclick="toggleWaffleMenu()" title="Menu">
+                        <span class="waffle-icon">
+                            <span></span><span></span><span></span>
+                            <span></span><span></span><span></span>
+                            <span></span><span></span><span></span>
+                        </span>
+                    </button>
+                    <div class="waffle-menu-dropdown" id="waffleMenu">
+                        <a href="/" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128200;</span>
+                            <span class="waffle-item-label">Dashboard</span>
+                        </a>
+                        <a href="/wallets.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128176;</span>
+                            <span class="waffle-item-label">Manage Wallets</span>
+                        </a>
+                        <a href="/transactions.html" class="waffle-menu-item active">
+                            <span class="waffle-item-icon">&#128260;</span>
+                            <span class="waffle-item-label">Transactions</span>
+                        </a>
+                        <a href="/apis.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128273;</span>
+                            <span class="waffle-item-label">APIs</span>
+                        </a>
+                        <a href="/services.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#9881;</span>
+                            <span class="waffle-item-label">Services</span>
+                        </a>
+                        <a href="/security.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128274;</span>
+                            <span class="waffle-item-label">Security</span>
+                        </a>
+                        <a href="/backup.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128230;</span>
+                            <span class="waffle-item-label">Backup & Restore</span>
+                        </a>
+                        <a href="/cache.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128452;</span>
+                            <span class="waffle-item-label">Cache Management</span>
+                        </a>
+                        <a href="/nft-wall.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128444;</span>
+                            <span class="waffle-item-label">NFT Wall</span>
+                        </a>
+                        <a href="/logs.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128221;</span>
+                            <span class="waffle-item-label">System Logs</span>
+                        </a>
+                        <div class="waffle-menu-divider"></div>
+                        <div class="waffle-menu-theme">
+                            <span class="waffle-item-icon">&#127912;</span>
+                            <select id="themeSelect" onchange="changeTheme(this.value)" title="Select theme">
+                                <option value="dark-mode">Dark Mode</option>
+                                <option value="light">Light</option>
+                                <option value="cypherpunk1">Cypherpunk 1</option>
+                                <option value="ocean-depths">Ocean Depths</option>
+                                <option value="sunset-horizon">Sunset Horizon</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <!-- Status Bar -->
+            <div id="statusBar" class="status-bar hidden">
+                <span id="statusMessage"></span>
+            </div>
+
+            <!-- Filter Bar -->
+            <section class="filter-section">
+                <div class="section-header-inline">
+                    <h2>Filters</h2>
+                </div>
+                <div class="filter-bar">
+                    <div class="filter-group">
+                        <label for="daysFilter">Time Period:</label>
+                        <select id="daysFilter" onchange="loadTransactions()">
+                            <option value="7" selected>Last 7 days</option>
+                            <option value="30">Last 30 days</option>
+                            <option value="90">Last 90 days</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="blockchainFilter">Blockchain:</label>
+                        <select id="blockchainFilter" onchange="loadTransactions()">
+                            <option value="">All Chains</option>
+                            <option value="cardano">Cardano</option>
+                            <option value="ethereum">Ethereum</option>
+                            <option value="bitcoin">Bitcoin</option>
+                            <option value="solana">Solana</option>
+                            <option value="polygon">Polygon</option>
+                            <option value="base">Base</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="directionFilter">Direction:</label>
+                        <select id="directionFilter" onchange="loadTransactions()">
+                            <option value="">All Directions</option>
+                            <option value="received">Received</option>
+                            <option value="sent">Sent</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="searchBox">Search:</label>
+                        <input type="search" id="searchBox" placeholder="Hash, address, token..." onkeyup="handleSearchKeyup(event)">
+                    </div>
+
+                    <button class="btn btn-primary" onclick="refreshTransactions()" title="Fetch latest transactions from blockchains">
+                        &#128260; Refresh
+                    </button>
+                </div>
+            </section>
+
+            <!-- Transaction Stats -->
+            <section class="stats-section" id="statsSection" style="display: none;">
+                <div class="section-header-inline">
+                    <h2>Statistics</h2>
+                </div>
+                <div class="stats-grid" id="statsGrid">
+                    <!-- Stats populated by JS -->
+                </div>
+            </section>
+
+            <!-- Transaction Table (Wireshark-style) -->
+            <section class="transactions-section">
+                <div class="section-header-inline">
+                    <h2>Transactions</h2>
+                    <span id="txCount" class="badge">0</span>
+                </div>
+                <div class="transaction-list">
+                    <div id="loadingIndicator" class="loading-indicator" style="display: none;">
+                        <span class="spinner"></span>
+                        <p>Loading transactions...</p>
+                    </div>
+
+                    <div id="emptyState" class="empty-state" style="display: none;">
+                        <p>No transactions found for the selected filters.</p>
+                        <button class="btn btn-primary" onclick="refreshTransactions()">Fetch Transactions</button>
+                    </div>
+
+                    <table id="txTable" style="display: none;">
+                        <thead>
+                            <tr>
+                                <th width="5%"></th>
+                                <th width="15%">Time</th>
+                                <th width="10%">Chain</th>
+                                <th width="10%">Direction</th>
+                                <th width="15%">Amount</th>
+                                <th width="10%">Token</th>
+                                <th width="35%">Hash</th>
+                            </tr>
+                        </thead>
+                        <tbody id="txTableBody">
+                            <!-- Rows populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Processing Modal -->
+            <div id="processingModal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <h2>Fetching Transactions...</h2>
+                    <div class="spinner"></div>
+                    <p id="processingStatus">Loading transactions from blockchains...</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/js/transactions.js?v=1770080959"></script>
+</body>
+</html>
