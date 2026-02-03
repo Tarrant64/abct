@@ -6,11 +6,11 @@
     <title>Transaction History - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1770088643">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1770088895">
     <!-- DOMPurify for XSS protection -->
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1770088643"></script>
+    <script src="/static/js/session-auth.js?v=1770088895"></script>
 </head>
 <body>
     <div class="container">
@@ -92,11 +92,12 @@
             </div>
 
             <!-- Filter Bar -->
-            <section class="filter-section">
-                <div class="section-header-inline">
+            <section class="filter-section collapsible-section">
+                <div class="section-header" onclick="toggleSection(this)">
                     <h2>Filters</h2>
+                    <span class="collapse-icon">▼</span>
                 </div>
-                <div class="filter-bar">
+                <div class="section-content filter-bar" style="display: none;">
                     <div class="filter-group">
                         <label for="daysFilter">Time Period:</label>
                         <select id="daysFilter" onchange="loadTransactions()">
@@ -198,6 +199,6 @@
         </main>
     </div>
 
-    <script src="/static/js/transactions.js?v=1770088643"></script>
+    <script src="/static/js/transactions.js?v=1770088895"></script>
 </body>
 </html>
