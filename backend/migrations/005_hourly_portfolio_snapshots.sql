@@ -17,6 +17,8 @@ END;
 -- SQLite doesn't support ALTER CONSTRAINT, so we need to recreate the table
 -- Create new table with all current columns plus the new UNIQUE constraint
 
+-- Create new table with columns in EXACT same order as current table
+-- Base columns (from database.py)
 CREATE TABLE IF NOT EXISTS portfolio_snapshots_new (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER REFERENCES users(id),
@@ -34,10 +36,7 @@ CREATE TABLE IF NOT EXISTS portfolio_snapshots_new (
     exchange_value_usd REAL DEFAULT 0,
     nft_value_usd REAL DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    sol_amount REAL DEFAULT 0,
-    sol_price REAL DEFAULT 0,
-    matic_price REAL DEFAULT 0,
-    tracked_tokens_value_usd REAL DEFAULT 0,
+    -- Additional columns (from add_snapshot_quantities.py - in order they were added)
     exchange_btc_amount REAL DEFAULT 0,
     exchange_eth_amount REAL DEFAULT 0,
     exchange_ada_amount REAL DEFAULT 0,
@@ -45,27 +44,17 @@ CREATE TABLE IF NOT EXISTS portfolio_snapshots_new (
     exchange_matic_amount REAL DEFAULT 0,
     exchange_other_json TEXT DEFAULT '{}',
     tracked_tokens_json TEXT DEFAULT '{}',
+    sol_amount REAL DEFAULT 0,
+    sol_price REAL DEFAULT 0,
+    matic_price REAL DEFAULT 0,
+    tracked_tokens_value_usd REAL DEFAULT 0,
+    -- NEW: Change UNIQUE constraint to use snapshot_time instead of snapshot_date
     UNIQUE(user_id, snapshot_time)
 );
 
--- Copy existing data using explicit column names to handle different schemas
-INSERT OR IGNORE INTO portfolio_snapshots_new (
-    id, user_id, snapshot_date, snapshot_time, total_value_usd,
-    ada_amount, ada_price, btc_amount, btc_price, eth_amount, eth_price,
-    staking_value_usd, defi_value_usd, exchange_value_usd, nft_value_usd, created_at,
-    sol_amount, sol_price, matic_price, tracked_tokens_value_usd,
-    exchange_btc_amount, exchange_eth_amount, exchange_ada_amount,
-    exchange_sol_amount, exchange_matic_amount, exchange_other_json, tracked_tokens_json
-)
-SELECT
-    id, user_id, snapshot_date, snapshot_time, total_value_usd,
-    ada_amount, ada_price, btc_amount, btc_price, eth_amount, eth_price,
-    staking_value_usd, defi_value_usd, exchange_value_usd, nft_value_usd, created_at,
-    COALESCE(sol_amount, 0), COALESCE(sol_price, 0), COALESCE(matic_price, 0), COALESCE(tracked_tokens_value_usd, 0),
-    COALESCE(exchange_btc_amount, 0), COALESCE(exchange_eth_amount, 0), COALESCE(exchange_ada_amount, 0),
-    COALESCE(exchange_sol_amount, 0), COALESCE(exchange_matic_amount, 0),
-    COALESCE(exchange_other_json, '{}'), COALESCE(tracked_tokens_json, '{}')
-FROM portfolio_snapshots;
+-- Copy ALL data from old table (column order matches exactly)
+INSERT OR IGNORE INTO portfolio_snapshots_new
+SELECT * FROM portfolio_snapshots;
 
 -- Drop old table
 DROP TABLE portfolio_snapshots;
