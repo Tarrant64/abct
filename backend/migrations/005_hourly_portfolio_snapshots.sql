@@ -6,7 +6,7 @@
 DROP TABLE IF EXISTS portfolio_snapshots_new;
 
 -- Remove this migration from tracking if it was marked as applied but failed
-DELETE FROM schema_migrations WHERE migration_name = '005_hourly_portfolio_snapshots.sql';
+DELETE FROM schema_migrations WHERE filename = '005_hourly_portfolio_snapshots.sql';
 
 -- SQLite doesn't support ALTER CONSTRAINT, so we need to recreate the table
 -- Create new table with columns in EXACT same order as current table
