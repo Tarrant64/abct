@@ -18,8 +18,9 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import ALCHEMY_API_KEY, ALCHEMY_BASE_URL
+from config import ALCHEMY_BASE_URL
 from database import get_all_wallets, get_cache, set_cache
+from services.api_key_manager import APIKeyManager
 
 logger = logging.getLogger(__name__)
 
@@ -28,11 +29,11 @@ ETH_NFT_CACHE_KEY = "eth_nft_all_data"
 ETH_NFT_CACHE_TTL = 86400 * 30  # 30 days - persistent until manual refresh
 
 
-class EthereumNFTService:
+class EthereumNFTService(APIKeyManager):
     """Service for fetching Ethereum NFTs from Alchemy API."""
 
     def __init__(self):
-        self.api_key = ALCHEMY_API_KEY
+        super().__init__(api_name='alchemy', env_var='ALCHEMY_API_KEY')
         self.base_url = ALCHEMY_BASE_URL
         self._nft_cache: Dict[str, dict] = {}
         self._collection_cache: Dict[str, dict] = {}  # contract_address -> collection data
@@ -40,9 +41,10 @@ class EthereumNFTService:
         self.last_refresh: Optional[datetime] = None
         self._db_cache_loaded = False  # Track if we've loaded from DB cache
 
-    def is_configured(self) -> bool:
+    async def is_configured(self) -> bool:
         """Check if the API key is configured."""
-        return bool(self.api_key)
+        key = await self.get_api_key()
+        return bool(key)
 
     async def get_nfts_for_owner(self, address: str, page_key: str = None) -> Optional[dict]:
         """
@@ -55,10 +57,11 @@ class EthereumNFTService:
         Returns:
             Dictionary with NFTs and pagination info
         """
-        if not self.is_configured():
+        if not await self.is_configured():
             logger.warning("Alchemy API key not configured")
             return None
 
+        api_key = await self.get_api_key()
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 params = {
@@ -72,7 +75,7 @@ class EthereumNFTService:
                     params['pageKey'] = page_key
 
                 response = await client.get(
-                    f"{self.base_url}/{self.api_key}/getNFTsForOwner",
+                    f"{self.base_url}/{api_key}/getNFTsForOwner",
                     params=params
                 )
 
@@ -167,7 +170,7 @@ class EthereumNFTService:
         if not force_refresh and self._is_cache_valid():
             return list(self._nft_cache.values())
 
-        if not self.is_configured():
+        if not await self.is_configured():
             logger.warning("Alchemy API key not configured")
             return []
 
@@ -295,14 +298,14 @@ class EthereumNFTService:
         self.last_refresh = None
         self._db_cache_loaded = False
 
-    def get_status(self) -> dict:
+    async def get_status(self) -> dict:
         """Get service status and configuration."""
         collections_with_floor = sum(
             1 for c in self._collection_cache.values()
             if c.get('floor_price_eth') and c['floor_price_eth'] > 0
         )
         return {
-            'configured': self.is_configured(),
+            'configured': await self.is_configured(),
             'cached_nfts': len(self._nft_cache),
             'cached_collections': len(self._collection_cache),
             'collections_with_floor_price': collections_with_floor,
