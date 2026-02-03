@@ -419,6 +419,65 @@ async def init_db():
         except:
             pass  # Column already exists
 
+        # Migration: Change UNIQUE constraint from (user_id, snapshot_date) to (user_id, snapshot_time)
+        # This allows multiple snapshots per day for hourly tracking
+        try:
+            # Check if the old constraint exists by looking at the table schema
+            cursor = await db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='portfolio_snapshots'")
+            schema = await cursor.fetchone()
+
+            if schema and 'UNIQUE(user_id, snapshot_date)' in schema[0]:
+                logger.info("Migrating portfolio_snapshots to support hourly snapshots...")
+
+                # Create new table with updated constraint
+                await db.execute("""
+                    CREATE TABLE IF NOT EXISTS portfolio_snapshots_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER REFERENCES users(id),
+                        snapshot_date DATE NOT NULL,
+                        snapshot_time TIMESTAMP NOT NULL,
+                        total_value_usd REAL NOT NULL,
+                        ada_amount REAL DEFAULT 0,
+                        ada_price REAL DEFAULT 0,
+                        btc_amount REAL DEFAULT 0,
+                        btc_price REAL DEFAULT 0,
+                        eth_amount REAL DEFAULT 0,
+                        eth_price REAL DEFAULT 0,
+                        sol_amount REAL DEFAULT 0,
+                        sol_price REAL DEFAULT 0,
+                        staking_value_usd REAL DEFAULT 0,
+                        defi_value_usd REAL DEFAULT 0,
+                        exchange_value_usd REAL DEFAULT 0,
+                        nft_value_usd REAL DEFAULT 0,
+                        tracked_tokens_value_usd REAL DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE(user_id, snapshot_time)
+                    )
+                """)
+
+                # Copy existing data
+                await db.execute("""
+                    INSERT INTO portfolio_snapshots_new
+                    SELECT * FROM portfolio_snapshots
+                """)
+
+                # Drop old table and rename new one
+                await db.execute("DROP TABLE portfolio_snapshots")
+                await db.execute("ALTER TABLE portfolio_snapshots_new RENAME TO portfolio_snapshots")
+
+                # Recreate index
+                await db.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_portfolio_snapshots_user_id
+                    ON portfolio_snapshots(user_id)
+                """)
+
+                await db.commit()
+                logger.info("Successfully migrated portfolio_snapshots for hourly support")
+        except Exception as e:
+            logger.warning(f"Portfolio snapshots migration warning: {e}")
+            # Migration failed, table might already be migrated or doesn't exist yet
+            pass
+
         # API settings table - stores enabled APIs and their keys (system-wide)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS api_settings (
@@ -963,7 +1022,9 @@ async def get_cache_status():
 
 # Portfolio snapshot functions
 async def save_portfolio_snapshot(snapshot_data: dict, user_id: int = None):
-    """Save a daily portfolio snapshot for a user.
+    """Save a portfolio snapshot for a user.
+
+    Now supports hourly snapshots - uses snapshot_time as unique identifier.
 
     Args:
         snapshot_data: Snapshot data dictionary
@@ -981,8 +1042,7 @@ async def save_portfolio_snapshot(snapshot_data: dict, user_id: int = None):
                 staking_value_usd, defi_value_usd, exchange_value_usd, nft_value_usd,
                 tracked_tokens_value_usd
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(user_id, snapshot_date) DO UPDATE SET
-                snapshot_time = excluded.snapshot_time,
+            ON CONFLICT(user_id, snapshot_time) DO UPDATE SET
                 total_value_usd = excluded.total_value_usd,
                 ada_amount = excluded.ada_amount,
                 ada_price = excluded.ada_price,
@@ -1019,12 +1079,13 @@ async def save_portfolio_snapshot(snapshot_data: dict, user_id: int = None):
         await db.commit()
 
 
-async def get_portfolio_history(days: int = 7, user_id: int = None) -> list:
+async def get_portfolio_history(days: int = 7, user_id: int = None, hourly: bool = False) -> list:
     """Get portfolio snapshots for a user.
 
     Args:
         days: Number of days of history to retrieve
         user_id: User ID (defaults to current user from context)
+        hourly: If True, return all snapshots (hourly). If False, return one per day.
 
     Returns:
         List of snapshot records
@@ -1034,29 +1095,68 @@ async def get_portfolio_history(days: int = 7, user_id: int = None) -> list:
 
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
-        if user_id is not None:
-            cursor = await db.execute("""
-                SELECT snapshot_date, total_value_usd, snapshot_time,
-                       ada_amount, ada_price, btc_amount, btc_price, eth_amount, eth_price,
-                       sol_amount, sol_price,
-                       staking_value_usd, defi_value_usd, exchange_value_usd, nft_value_usd,
-                       COALESCE(tracked_tokens_value_usd, 0) as tracked_tokens_value_usd
-                FROM portfolio_snapshots
-                WHERE user_id = ? AND snapshot_date >= date('now', ?)
-                ORDER BY snapshot_date ASC
-            """, (user_id, f'-{days} days'))
+
+        if hourly:
+            # Return all snapshots within the time range (for hourly charts)
+            if user_id is not None:
+                cursor = await db.execute("""
+                    SELECT snapshot_date, total_value_usd, snapshot_time,
+                           ada_amount, ada_price, btc_amount, btc_price, eth_amount, eth_price,
+                           sol_amount, sol_price,
+                           staking_value_usd, defi_value_usd, exchange_value_usd, nft_value_usd,
+                           COALESCE(tracked_tokens_value_usd, 0) as tracked_tokens_value_usd
+                    FROM portfolio_snapshots
+                    WHERE user_id = ? AND snapshot_time >= datetime('now', ?)
+                    ORDER BY snapshot_time ASC
+                """, (user_id, f'-{days} days'))
+            else:
+                cursor = await db.execute("""
+                    SELECT snapshot_date, total_value_usd, snapshot_time,
+                           ada_amount, ada_price, btc_amount, btc_price, eth_amount, eth_price,
+                           sol_amount, sol_price,
+                           staking_value_usd, defi_value_usd, exchange_value_usd, nft_value_usd,
+                           COALESCE(tracked_tokens_value_usd, 0) as tracked_tokens_value_usd
+                    FROM portfolio_snapshots
+                    WHERE snapshot_time >= datetime('now', ?)
+                    ORDER BY snapshot_time ASC
+                """, (f'-{days} days',))
         else:
-            # Fallback for backward compatibility
-            cursor = await db.execute("""
-                SELECT snapshot_date, total_value_usd, snapshot_time,
-                       ada_amount, ada_price, btc_amount, btc_price, eth_amount, eth_price,
-                       sol_amount, sol_price,
-                       staking_value_usd, defi_value_usd, exchange_value_usd, nft_value_usd,
-                       COALESCE(tracked_tokens_value_usd, 0) as tracked_tokens_value_usd
-                FROM portfolio_snapshots
-                WHERE snapshot_date >= date('now', ?)
-                ORDER BY snapshot_date ASC
-            """, (f'-{days} days',))
+            # Return one snapshot per day (for daily charts) - get the latest one for each day
+            if user_id is not None:
+                cursor = await db.execute("""
+                    SELECT snapshot_date, total_value_usd, snapshot_time,
+                           ada_amount, ada_price, btc_amount, btc_price, eth_amount, eth_price,
+                           sol_amount, sol_price,
+                           staking_value_usd, defi_value_usd, exchange_value_usd, nft_value_usd,
+                           COALESCE(tracked_tokens_value_usd, 0) as tracked_tokens_value_usd
+                    FROM portfolio_snapshots
+                    WHERE user_id = ? AND snapshot_date >= date('now', ?)
+                    AND id IN (
+                        SELECT id FROM portfolio_snapshots ps2
+                        WHERE ps2.user_id = portfolio_snapshots.user_id
+                        AND ps2.snapshot_date = portfolio_snapshots.snapshot_date
+                        ORDER BY ps2.snapshot_time DESC
+                        LIMIT 1
+                    )
+                    ORDER BY snapshot_date ASC
+                """, (user_id, f'-{days} days'))
+            else:
+                cursor = await db.execute("""
+                    SELECT snapshot_date, total_value_usd, snapshot_time,
+                           ada_amount, ada_price, btc_amount, btc_price, eth_amount, eth_price,
+                           sol_amount, sol_price,
+                           staking_value_usd, defi_value_usd, exchange_value_usd, nft_value_usd,
+                           COALESCE(tracked_tokens_value_usd, 0) as tracked_tokens_value_usd
+                    FROM portfolio_snapshots
+                    WHERE snapshot_date >= date('now', ?)
+                    AND id IN (
+                        SELECT id FROM portfolio_snapshots ps2
+                        WHERE ps2.snapshot_date = portfolio_snapshots.snapshot_date
+                        ORDER BY ps2.snapshot_time DESC
+                        LIMIT 1
+                    )
+                    ORDER BY snapshot_date ASC
+                """, (f'-{days} days',))
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
