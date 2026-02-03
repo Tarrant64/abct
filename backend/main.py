@@ -489,6 +489,11 @@ async def cache_page():
     """Serve the Cache Management page."""
     return FileResponse(str(frontend_path / "cache.html"))
 
+@app.get("/transactions.html")
+async def transactions_page():
+    """Serve the Transaction History page."""
+    return FileResponse(str(frontend_path / "transactions.html"))
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
