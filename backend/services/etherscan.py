@@ -118,6 +118,12 @@ class EtherscanService(APIKeyManager):
                     # "No transactions found" is not an error
                     if 'No transactions found' in str(result):
                         return {'result': []}
+                    # Deprecation warnings still contain valid data
+                    if message == 'NOTOK' and 'deprecated' in str(result).lower():
+                        logger.warning(f"{chain_config['explorer_name']} API: {message} - {result}")
+                        # Still return data if it exists
+                        if isinstance(result, list):
+                            return data
                     logger.warning(f"{chain_config['explorer_name']} API: {message} - {result}")
                     return None
 
