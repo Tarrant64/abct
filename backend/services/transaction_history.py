@@ -408,7 +408,7 @@ class TransactionHistoryService:
             SELECT
                 th.*,
                 w.address as wallet_address,
-                w.name as wallet_name
+                w.label as wallet_name
             FROM transaction_history th
             LEFT JOIN wallets w ON th.wallet_id = w.id
             WHERE th.user_id = ? AND th.tx_time >= ?
