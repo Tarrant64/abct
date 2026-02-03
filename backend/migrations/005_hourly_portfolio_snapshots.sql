@@ -2,24 +2,17 @@
 -- Changes UNIQUE constraint from (user_id, snapshot_date) to (user_id, snapshot_time)
 -- This allows multiple snapshots per day for hourly tracking
 
--- Check if migration is needed by seeing if we can query the table
--- If this migration has already run, skip it
-SELECT CASE
-    WHEN EXISTS (
-        SELECT 1 FROM sqlite_master
-        WHERE type='index'
-        AND name='idx_portfolio_snapshots_time'
-    )
-    THEN 'SKIP_MIGRATION'
-    ELSE 'RUN_MIGRATION'
-END;
+-- Clean up any partially-applied migration from previous failures
+DROP TABLE IF EXISTS portfolio_snapshots_new;
+
+-- Remove this migration from tracking if it was marked as applied but failed
+DELETE FROM schema_migrations WHERE migration_name = '005_hourly_portfolio_snapshots.sql';
 
 -- SQLite doesn't support ALTER CONSTRAINT, so we need to recreate the table
--- Create new table with all current columns plus the new UNIQUE constraint
-
 -- Create new table with columns in EXACT same order as current table
--- Base columns (from database.py)
-CREATE TABLE IF NOT EXISTS portfolio_snapshots_new (
+
+-- Base columns (from database.py) + Additional columns (from add_snapshot_quantities.py)
+CREATE TABLE portfolio_snapshots_new (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER REFERENCES users(id),
     snapshot_date DATE NOT NULL,
