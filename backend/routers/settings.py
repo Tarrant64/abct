@@ -8,9 +8,11 @@ API keys are stored in the database and can override environment variables.
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime, timedelta
 import os
 import sys
 import json
+import logging
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database import (
@@ -22,6 +24,7 @@ from database import (
 from auth_utils import verify_session
 
 router = APIRouter(prefix="/settings", tags=["settings"])
+logger = logging.getLogger(__name__)
 
 # API Registry - defines all supported APIs with metadata
 # Default rate limits are for free tiers; users can customize via the UI
@@ -161,6 +164,19 @@ API_REGISTRY = {
         "default_period": 86400,
         "period_label": "day"
     },
+    "moralis": {
+        "name": "Moralis",
+        "category": "services",
+        "description": "Spam token detection for EVM and Solana chains (on-demand filtering)",
+        "required": False,
+        "docs_url": "https://docs.moralis.com/web3-data-api/evm/spam-detection",
+        "env_var": "MORALIS_API_KEY",
+        "pricing": "free",
+        "pricing_note": "Free tier: 40,000 compute units/month",
+        "default_limit": 1333,  # ~40k CU / 30 days = 1333 CU/day
+        "default_period": 86400,
+        "period_label": "day"
+    },
 
     # Pricing APIs
     "coingecko": {
@@ -193,7 +209,7 @@ API_REGISTRY = {
     # Data & Analytics APIs
     "thegraph": {
         "name": "The Graph",
-        "category": "analytics",
+        "category": "services",
         "description": "Decentralized protocol for indexing and querying blockchain data",
         "required": False,
         "docs_url": "https://thegraph.com/studio/apikeys/",
@@ -206,7 +222,7 @@ API_REGISTRY = {
     },
     "dune": {
         "name": "Dune Analytics",
-        "category": "analytics",
+        "category": "services",
         "description": "Blockchain analytics and SQL queries",
         "required": False,
         "docs_url": "https://dune.com/settings/api",
@@ -351,14 +367,9 @@ CATEGORIES = {
         "description": "Cryptocurrency price data providers",
         "icon": "$"
     },
-    "analytics": {
-        "name": "Data & Analytics",
-        "description": "Blockchain analytics and data indexing",
-        "icon": "📊"
-    },
     "services": {
         "name": "Services",
-        "description": "Supporting services for crypto tracking",
+        "description": "Analytics, utilities, and supporting services for crypto tracking",
         "icon": "🛠️"
     },
     "exchanges": {
@@ -903,4 +914,131 @@ async def reload_all_api_keys(user_id: int = Depends(verify_session)):
         "message": f"API key caches cleared for {reloaded_count} service(s)",
         "detail": "All services will reload keys from database on next API call",
         "services_reloaded": reloaded_count
+    }
+
+
+# ============================================================================
+# STARTUP TASK THROTTLING & RATE LIMIT MANAGEMENT
+# ============================================================================
+
+@router.get("/startup-tasks")
+async def get_startup_tasks_status(user_id: int = Depends(verify_session)):
+    """
+    Get status of all startup tasks and their cooldowns.
+
+    Shows when tasks last ran and if they're currently in cooldown period.
+    Useful for debugging why certain tasks might be skipped on startup.
+    """
+    from services.rate_limit_tracker import rate_limit_tracker
+
+    tasks = await rate_limit_tracker.get_all_task_status()
+    rate_limits = await rate_limit_tracker.get_all_rate_limit_status()
+
+    return {
+        "tasks": tasks,
+        "rate_limits": rate_limits,
+        "summary": {
+            "total_tasks": len(tasks),
+            "tasks_in_cooldown": sum(1 for t in tasks if t.get('is_in_cooldown')),
+            "services_rate_limited": sum(1 for r in rate_limits if r.get('is_rate_limited'))
+        }
+    }
+
+
+@router.post("/startup-tasks/{service}/{task}/force")
+async def force_run_task(
+    service: str,
+    task: str,
+    user_id: int = Depends(verify_session)
+):
+    """
+    Force a startup task to run immediately, bypassing cooldown.
+
+    This is useful for manual refresh operations. The task will still be tracked
+    and subject to cooldown for the next automatic run.
+
+    IMPORTANT: This only resets the cooldown timer. The actual task execution
+    must be triggered separately (e.g., via the respective API endpoint).
+
+    Args:
+        service: Service name (taptools, portfolio, etc.)
+        task: Task name (nft_floor_prices, snapshot, etc.)
+    """
+    from services.rate_limit_tracker import rate_limit_tracker
+
+    # Check if service is rate limited
+    if await rate_limit_tracker.is_rate_limited(service):
+        raise HTTPException(
+            status_code=429,
+            detail=f"Service '{service}' is currently rate limited. Clear the rate limit first."
+        )
+
+    # Mark the task as manually run (resets cooldown)
+    await rate_limit_tracker.mark_task_run(task, service, run_type='manual')
+
+    logger.info(f"Manual task trigger: {service}/{task} (user_id={user_id})")
+
+    return {
+        "message": f"Task cooldown reset for {service}/{task}",
+        "service": service,
+        "task": task,
+        "run_type": "manual",
+        "note": "Cooldown timer reset. Trigger the actual task via its respective API endpoint."
+    }
+
+
+@router.post("/rate-limits/{service}/clear")
+async def clear_service_rate_limit(
+    service: str,
+    user_id: int = Depends(verify_session)
+):
+    """
+    Manually clear rate limit status for a service.
+
+    Use this to recover from rate limiting if you've verified the limit period
+    has passed or if you want to attempt API calls again.
+
+    Args:
+        service: Service name (taptools, alchemy, etc.)
+    """
+    from services.rate_limit_tracker import rate_limit_tracker
+
+    await rate_limit_tracker.clear_rate_limit(service)
+
+    logger.info(f"Rate limit manually cleared for service '{service}' (user_id={user_id})")
+
+    return {
+        "message": f"Rate limit cleared for service '{service}'",
+        "service": service,
+        "note": "Service can now be used for API calls. Use with caution to avoid hitting limits again."
+    }
+
+
+@router.post("/rate-limits/{service}/mark")
+async def mark_service_rate_limited(
+    service: str,
+    recovery_minutes: int = 60,
+    user_id: int = Depends(verify_session)
+):
+    """
+    Manually mark a service as rate limited.
+
+    Use this if you've hit a rate limit manually and want to prevent
+    automatic tasks from attempting to use the service.
+
+    Args:
+        service: Service name
+        recovery_minutes: How long to block the service (default: 60 minutes)
+    """
+    from services.rate_limit_tracker import rate_limit_tracker
+
+    await rate_limit_tracker.mark_rate_limited(service, recovery_minutes)
+
+    logger.info(f"Service '{service}' manually marked as rate limited for {recovery_minutes} minutes (user_id={user_id})")
+
+    return {
+        "message": f"Service '{service}' marked as rate limited",
+        "service": service,
+        "recovery_minutes": recovery_minutes,
+        "blocked_until": (datetime.now() + timedelta(minutes=recovery_minutes)).isoformat()
     }
