@@ -1,5 +1,16 @@
 """
 Transaction History Service - Fetch and normalize transactions from all blockchains
+
+Supported Blockchains:
+- Cardano: Blockfrost API for transaction history with UTXO parsing
+- Ethereum: Etherscan API for transactions and token transfers
+- Bitcoin: Blockstream API with Mempool.space fallback
+- Solana: Helius API for enhanced transaction data
+- Polygon: Polygonscan API (EVM-compatible)
+- Base: Basescan API (EVM-compatible)
+
+Note: Exchange transaction support (Coinbase, Binance, etc.) is handled separately
+through the exchanges router as they use different APIs and data models.
 """
 
 import logging
@@ -21,6 +32,7 @@ from services.bitcoin import bitcoin_service
 from services.solana import solana_service
 from services.polygon import polygon_service
 from services.base import base_service
+from services.coinbase import coinbase_service
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +65,14 @@ class TransactionHistoryService:
                 status = tx.get('status', {})
                 block_time = status.get('block_time', 0)
                 tx_time = datetime.fromtimestamp(block_time) if block_time > 0 else datetime.utcnow()
+            elif blockchain == 'cardano':
+                # Cardano uses block_time
+                block_time = tx.get('block_time', 0)
+                tx_time = datetime.fromtimestamp(block_time) if block_time > 0 else datetime.utcnow()
+            elif blockchain == 'solana':
+                # Solana uses timestamp
+                timestamp = tx.get('timestamp', 0)
+                tx_time = datetime.fromtimestamp(timestamp) if timestamp > 0 else datetime.utcnow()
             else:
                 # Unknown format, keep the transaction to be safe
                 return True
@@ -213,11 +233,70 @@ class TransactionHistoryService:
 
     async def _fetch_cardano_transactions(self, address: str, limit: int) -> List[dict]:
         """Fetch Cardano transactions via Blockfrost."""
-        # Blockfrost doesn't have a direct transaction history endpoint
-        # We'll need to use address/transactions endpoint
-        # For now, return empty list - can be implemented when Blockfrost adds support
-        logger.info("Cardano transaction history not yet implemented")
-        return []
+        import httpx
+        from config import BLOCKFROST_BASE_URL
+
+        try:
+            # Get Blockfrost API key
+            blockfrost_key = await cardano_service._get_blockfrost_key()
+            if not blockfrost_key:
+                logger.warning("Blockfrost API key not configured")
+                return []
+
+            headers = {"project_id": blockfrost_key}
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                # Get address transactions
+                response = await client.get(
+                    f"{BLOCKFROST_BASE_URL}/addresses/{address}/transactions",
+                    headers=headers,
+                    params={"count": limit, "order": "desc"}
+                )
+
+                if response.status_code == 404:
+                    # Address has no transactions
+                    return []
+
+                if response.status_code != 200:
+                    logger.error(f"Blockfrost transactions error: {response.status_code}")
+                    return []
+
+                tx_hashes = response.json()
+
+                # Fetch details for each transaction
+                detailed_txs = []
+                for tx_info in tx_hashes[:limit]:
+                    tx_hash = tx_info.get('tx_hash')
+                    if not tx_hash:
+                        continue
+
+                    # Get transaction details
+                    tx_response = await client.get(
+                        f"{BLOCKFROST_BASE_URL}/txs/{tx_hash}",
+                        headers=headers
+                    )
+
+                    if tx_response.status_code == 200:
+                        tx_detail = tx_response.json()
+
+                        # Get UTXOs for the transaction
+                        utxo_response = await client.get(
+                            f"{BLOCKFROST_BASE_URL}/txs/{tx_hash}/utxos",
+                            headers=headers
+                        )
+
+                        if utxo_response.status_code == 200:
+                            utxos = utxo_response.json()
+                            tx_detail['utxos'] = utxos
+
+                        detailed_txs.append(tx_detail)
+
+                logger.info(f"Fetched {len(detailed_txs)} Cardano transactions")
+                return detailed_txs
+
+        except Exception as e:
+            logger.error(f"Error fetching Cardano transactions: {e}")
+            return []
 
     async def _fetch_ethereum_transactions(self, address: str, limit: int) -> List[dict]:
         """Fetch Ethereum transactions via Etherscan."""
@@ -300,10 +379,39 @@ class TransactionHistoryService:
             return []
 
     async def _fetch_solana_transactions(self, address: str, limit: int) -> List[dict]:
-        """Fetch Solana transactions."""
-        # Solana service would need transaction history method
-        logger.info("Solana transaction history not yet implemented")
-        return []
+        """Fetch Solana transactions using Helius API."""
+        import httpx
+        from config import HELIUS_BASE_URL
+
+        try:
+            # Get Helius API key
+            helius_key = await solana_service.get_api_key()
+            if not helius_key:
+                logger.warning("Helius API key not configured")
+                return []
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                # Get transaction signatures for the address
+                # Using Helius enhanced transactions endpoint
+                response = await client.get(
+                    f"{HELIUS_BASE_URL}/addresses/{address}/transactions",
+                    params={
+                        "api-key": helius_key,
+                        "limit": limit
+                    }
+                )
+
+                if response.status_code != 200:
+                    logger.error(f"Helius transactions error: {response.status_code}")
+                    return []
+
+                transactions = response.json()
+                logger.info(f"Fetched {len(transactions)} Solana transactions")
+                return transactions
+
+        except Exception as e:
+            logger.error(f"Error fetching Solana transactions: {e}")
+            return []
 
     async def _fetch_polygon_transactions(self, address: str, limit: int) -> List[dict]:
         """Fetch Polygon transactions via Polygonscan."""
@@ -423,21 +531,99 @@ class TransactionHistoryService:
         }
 
     async def _normalize_cardano_transaction(self, tx: dict, wallet_address: str) -> dict:
-        """Normalize Cardano transaction."""
-        # Placeholder - implement when Cardano tx API is available
+        """Normalize Cardano transaction from Blockfrost format."""
+        # Get transaction timestamp
+        block_time = tx.get('block_time', 0)
+        tx_time = datetime.fromtimestamp(block_time) if block_time > 0 else datetime.utcnow()
+
+        # Parse UTXOs to determine direction and amount
+        utxos = tx.get('utxos', {})
+        inputs = utxos.get('inputs', [])
+        outputs = utxos.get('outputs', [])
+
+        # Check if wallet is in inputs (sending)
+        is_sender = False
+        for input_utxo in inputs:
+            if input_utxo.get('address') == wallet_address:
+                is_sender = True
+                break
+
+        # Calculate amounts
+        amount_lovelace = 0
+        token_symbol = 'ADA'
+        token_name = 'Cardano'
+        from_addresses = []
+        to_addresses = []
+
+        if is_sender:
+            # Sent transaction - sum outputs not going back to wallet
+            direction = 'sent'
+            for output in outputs:
+                output_addr = output.get('address', '')
+                if output_addr != wallet_address:
+                    # Find ADA amount
+                    for amount_item in output.get('amount', []):
+                        if amount_item.get('unit') == 'lovelace':
+                            amount_lovelace += int(amount_item.get('quantity', 0))
+                    if output_addr and output_addr not in to_addresses:
+                        to_addresses.append(output_addr)
+
+            # Get sender addresses from inputs
+            for input_utxo in inputs:
+                addr = input_utxo.get('address', '')
+                if addr and addr not in from_addresses:
+                    from_addresses.append(addr)
+        else:
+            # Received transaction - sum outputs to wallet
+            direction = 'received'
+            for output in outputs:
+                if output.get('address') == wallet_address:
+                    for amount_item in output.get('amount', []):
+                        if amount_item.get('unit') == 'lovelace':
+                            amount_lovelace += int(amount_item.get('quantity', 0))
+                        else:
+                            # Native token - use first non-ADA token found
+                            if token_symbol == 'ADA':
+                                asset_id = amount_item.get('unit', '')
+                                asset_name_hex = asset_id[56:] if len(asset_id) > 56 else ''
+                                try:
+                                    token_name = bytes.fromhex(asset_name_hex).decode('utf-8')
+                                    token_symbol = token_name[:10]  # Truncate if too long
+                                except:
+                                    token_symbol = 'TOKEN'
+
+            # Get sender addresses
+            for input_utxo in inputs:
+                addr = input_utxo.get('address', '')
+                if addr and addr not in from_addresses:
+                    from_addresses.append(addr)
+
+            to_addresses = [wallet_address]
+
+        # Convert lovelace to ADA
+        amount_ada = amount_lovelace / 1_000_000
+
+        # Get fee
+        fee_lovelace = int(tx.get('fees', 0))
+        fee_ada = fee_lovelace / 1_000_000
+
         return {
             'blockchain': 'cardano',
             'tx_hash': tx.get('hash', ''),
-            'tx_time': datetime.utcnow(),
-            'direction': 'received',
-            'amount': '0',
-            'token_symbol': 'ADA',
-            'token_name': 'Cardano',
-            'from_address': '',
-            'to_address': wallet_address,
-            'fee': '0',
+            'tx_time': tx_time,
+            'direction': direction,
+            'amount': str(amount_ada),
+            'token_symbol': token_symbol,
+            'token_name': token_name,
+            'from_address': from_addresses[0] if from_addresses else '',
+            'to_address': to_addresses[0] if to_addresses else wallet_address,
+            'fee': str(fee_ada),
             'status': 'confirmed',
-            'metadata': '{}'
+            'metadata': json.dumps({
+                'block_height': tx.get('block_height', 0),
+                'slot': tx.get('slot', 0),
+                'size': tx.get('size', 0)
+            })
         }
 
     async def _normalize_bitcoin_transaction(self, tx: dict, wallet_address: str) -> dict:
@@ -528,21 +714,96 @@ class TransactionHistoryService:
         }
 
     async def _normalize_solana_transaction(self, tx: dict, wallet_address: str) -> dict:
-        """Normalize Solana transaction."""
-        # Placeholder - implement when Solana tx API is available
+        """Normalize Solana transaction from Helius format."""
+        # Get transaction timestamp
+        timestamp = tx.get('timestamp', 0)
+        tx_time = datetime.fromtimestamp(timestamp) if timestamp > 0 else datetime.utcnow()
+
+        # Get native transfers
+        native_transfers = tx.get('nativeTransfers', [])
+        token_transfers = tx.get('tokenTransfers', [])
+
+        # Determine direction and amount
+        direction = 'received'
+        amount = 0
+        token_symbol = 'SOL'
+        token_name = 'Solana'
+        from_address = ''
+        to_address = wallet_address
+
+        # Check native SOL transfers
+        for transfer in native_transfers:
+            from_addr = transfer.get('fromUserAccount', '')
+            to_addr = transfer.get('toUserAccount', '')
+            transfer_amount = transfer.get('amount', 0)
+
+            if from_addr == wallet_address:
+                # Sending SOL
+                direction = 'sent'
+                amount += transfer_amount
+                to_address = to_addr
+                from_address = from_addr
+            elif to_addr == wallet_address:
+                # Receiving SOL
+                direction = 'received'
+                amount += transfer_amount
+                from_address = from_addr
+                to_address = to_addr
+
+        # Check SPL token transfers if no native transfers
+        if amount == 0 and token_transfers:
+            for transfer in token_transfers:
+                from_addr = transfer.get('fromUserAccount', '')
+                to_addr = transfer.get('toUserAccount', '')
+                transfer_amount = transfer.get('tokenAmount', 0)
+                mint = transfer.get('mint', '')
+
+                if from_addr == wallet_address or to_addr == wallet_address:
+                    # Get token info
+                    token_symbol = transfer.get('tokenSymbol', 'TOKEN')
+                    token_name = transfer.get('tokenName', token_symbol)
+
+                    if from_addr == wallet_address:
+                        direction = 'sent'
+                        amount = transfer_amount
+                        to_address = to_addr
+                        from_address = from_addr
+                    else:
+                        direction = 'received'
+                        amount = transfer_amount
+                        from_address = from_addr
+                        to_address = to_addr
+                    break
+
+        # Convert lamports to SOL for native transfers
+        if token_symbol == 'SOL':
+            amount = amount / 1_000_000_000
+
+        # Get fee
+        fee_lamports = tx.get('fee', 0)
+        fee_sol = fee_lamports / 1_000_000_000
+
+        # Get status
+        err = tx.get('transactionError')
+        status = 'failed' if err else 'confirmed'
+
         return {
             'blockchain': 'solana',
             'tx_hash': tx.get('signature', ''),
-            'tx_time': datetime.utcnow(),
-            'direction': 'received',
-            'amount': '0',
-            'token_symbol': 'SOL',
-            'token_name': 'Solana',
-            'from_address': '',
-            'to_address': wallet_address,
-            'fee': '0',
-            'status': 'confirmed',
-            'metadata': '{}'
+            'tx_time': tx_time,
+            'direction': direction,
+            'amount': str(amount),
+            'token_symbol': token_symbol,
+            'token_name': token_name,
+            'from_address': from_address,
+            'to_address': to_address,
+            'fee': str(fee_sol),
+            'status': status,
+            'metadata': json.dumps({
+                'slot': tx.get('slot', 0),
+                'type': tx.get('type', 'UNKNOWN'),
+                'source': tx.get('source', 'HELIUS')
+            })
         }
 
     async def save_transactions(
