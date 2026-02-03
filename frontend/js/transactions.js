@@ -257,9 +257,9 @@ function renderTransactions(transactions) {
 
         // Create expandable details row
         const detailsRow = document.createElement('tr');
-        detailsRow.id = `details-${index}`;
+        detailsRow.id = `details-${globalIndex}`;
         detailsRow.className = 'tx-details-row';
-        detailsRow.style.display = expandedRows.has(index) ? 'table-row' : 'none';
+        detailsRow.style.display = expandedRows.has(globalIndex) ? 'table-row' : 'none';
         detailsRow.innerHTML = `
             <td colspan="7">
                 <div class="tx-details">
