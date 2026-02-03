@@ -79,6 +79,7 @@ KUCOIN_API_PASSPHRASE = os.getenv("KUCOIN_API_PASSPHRASE", "")
 BLOCKFROST_BASE_URL = "https://cardano-mainnet.blockfrost.io/api/v0"
 CEXPLORER_BASE_URL = "https://api.cexplorer.io/v1"
 BLOCKSTREAM_BASE_URL = "https://blockstream.info/api"
+MEMPOOL_BASE_URL = "https://mempool.space/api"  # Fallback for Bitcoin transactions
 TAPTOOLS_BASE_URL = "https://openapi.taptools.io/api/v1"
 BEACONCHAIN_BASE_URL = "https://beaconcha.in/api/v1"
 ALCHEMY_BASE_URL = "https://eth-mainnet.g.alchemy.com/nft/v3"
