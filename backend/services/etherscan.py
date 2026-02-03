@@ -23,10 +23,15 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from services.api_key_manager import APIKeyManager, ETHERSCAN_BASE_URL, BASESCAN_BASE_URL, POLYGONSCAN_BASE_URL
+from services.api_key_manager import APIKeyManager
 from database import get_cache, set_cache
 
 logger = logging.getLogger(__name__)
+
+# API Base URLs for different chains
+ETHERSCAN_BASE_URL = "https://api.etherscan.io/api"
+BASESCAN_BASE_URL = "https://api.basescan.org/api"
+POLYGONSCAN_BASE_URL = "https://api.polygonscan.com/api"
 
 # Cache settings
 ETHERSCAN_CACHE_TTL = 300  # 5 minutes for transaction data
@@ -313,10 +318,10 @@ class EtherscanService(APIKeyManager):
 
         return data.get('result')
 
-    def get_status(self) -> dict:
+    async def get_status(self) -> dict:
         """Get service status."""
         return {
-            'configured': self.is_configured(),
+            'configured': await self.is_configured(),
             'supported_chains': list(self.CHAINS.keys()),
             'api_key_set': bool(await self.get_api_key())
         }
