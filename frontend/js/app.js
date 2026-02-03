@@ -5061,10 +5061,24 @@ async function loadPortfolioHistory(range = '7d') {
         const data = await response.json();
 
         if (data.data && data.data.length > 0) {
-            // Replace today's value with current live total portfolio value
-            const today = new Date().toISOString().split('T')[0];
+            // For hourly data (1d), use current timestamp; for daily data, use today's date
+            const now = new Date();
+            const today = now.toISOString().split('T')[0];
+            const isHourly = range === '1d';
+
             const historyData = data.data.map(entry => {
-                if (entry.date === today) {
+                // For hourly: check if entry is recent (within last hour)
+                // For daily: check if entry is today
+                let isCurrent = false;
+                if (isHourly) {
+                    const entryTime = new Date(entry.date);
+                    const hoursDiff = (now - entryTime) / (1000 * 60 * 60);
+                    isCurrent = hoursDiff < 1; // Within last hour
+                } else {
+                    isCurrent = entry.date === today;
+                }
+
+                if (isCurrent) {
                     // Calculate current total value from in-memory data
                     const currentTotal = getCurrentPortfolioTotal();
                     return {
@@ -5077,11 +5091,22 @@ async function loadPortfolioHistory(range = '7d') {
                 return entry;
             });
 
-            // If today isn't in the data, add it
-            const hasToday = historyData.some(entry => entry.date === today);
-            if (!hasToday) {
+            // Add current data point if not present
+            let hasCurrentData = false;
+            if (isHourly) {
+                // For hourly, check if we have data from the last hour
+                hasCurrentData = historyData.some(entry => {
+                    const entryTime = new Date(entry.date);
+                    const hoursDiff = (now - entryTime) / (1000 * 60 * 60);
+                    return hoursDiff < 1;
+                });
+            } else {
+                hasCurrentData = historyData.some(entry => entry.date === today);
+            }
+
+            if (!hasCurrentData) {
                 historyData.push({
-                    date: today,
+                    date: isHourly ? now.toISOString() : today,
                     value: getCurrentPortfolioTotal(),
                     breakdown: getCurrentPortfolioBreakdown()
                 });
@@ -5386,6 +5411,13 @@ function initHistoryRangeButtons() {
 
 // Format date for chart display based on range
 function formatChartDate(dateStr, range) {
+    // For 1d range, dateStr is an ISO timestamp (hourly data)
+    if (range === '1d') {
+        const date = new Date(dateStr);
+        return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    }
+
+    // For other ranges, dateStr is a date string (daily data)
     const date = new Date(dateStr + 'T12:00:00'); // Add time to avoid timezone issues
     if (range === '7d') {
         return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });

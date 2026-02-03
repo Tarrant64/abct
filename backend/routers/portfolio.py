@@ -377,21 +377,25 @@ async def get_all_native_assets(user_id: int = Depends(verify_session), refresh:
             # Check if this token is being tracked
             is_tracked = asset_id in tracked_ids
 
-            # Generate logo URL - try NMKR for Cardano native assets, fallback to LogoKit
+            # Generate logo URL with multiple fallback strategies
             logo_url = None
             blockchain = asset.get('blockchain', 'cardano')
 
-            # For Cardano native assets with policy_id, try NMKR first
+            # For Cardano native assets with policy_id, use comprehensive fallback chain
             if blockchain == 'cardano' and policy_id and asset_id:
                 # Extract hex asset name from asset_id (format: policy_id + asset_name_hex)
-                # asset_id = policy_id + asset_name_hex (both concatenated)
                 asset_name_hex = asset_id[len(policy_id):] if len(asset_id) > len(policy_id) else None
 
-                if asset_name_hex and await nmkr_service.is_configured(user_id):
-                    # Use backend proxy URL (hides API key from frontend)
-                    logo_url = nmkr_service.get_token_image_proxy_url(policy_id, asset_name_hex)
+                if asset_name_hex:
+                    # Try NMKR → Cardano Token Registry → Blockfrost → LogoKit
+                    logo_url = await nmkr_service.get_token_logo_with_fallbacks(
+                        policy_id,
+                        asset_name_hex,
+                        ticker=ticker,
+                        user_id=user_id
+                    )
 
-            # Fallback to LogoKit if NMKR not available or not Cardano
+            # Non-Cardano fallback to LogoKit
             if not logo_url:
                 logo_symbol = ticker if ticker else asset['asset_name'][:10] if asset['asset_name'] else 'UNKNOWN'
                 logo_url = logokit_service.get_crypto_logo_url(logo_symbol, size=64)
@@ -541,15 +545,15 @@ async def _enrich_cached_assets_with_prices(cached_data: dict) -> dict:
 @router.get("/history")
 async def get_portfolio_history(
     user_id: int = Depends(verify_session),
-    range: str = Query("7d", description="Time range: 7d (7 days), 4w (4 weeks), 3m (3 months)")
+    range: str = Query("7d", description="Time range: 1d (1 day hourly), 7d (7 days), 4w (4 weeks), 3m (3 months)")
 ):
     """
     Get portfolio value history for charting.
 
-    Returns daily snapshots of total portfolio value.
+    Returns hourly snapshots for 1d range, daily snapshots for longer ranges.
     """
     # Map range to days
-    days_map = {"7d": 7, "4w": 28, "3m": 90}
+    days_map = {"1d": 1, "7d": 7, "4w": 28, "3m": 90}
     days = days_map.get(range, 7)
 
     history = await snapshot_service.get_history(days, user_id=user_id)
@@ -1248,7 +1252,7 @@ async def get_blockchain_asset_breakdown(
                     'quantity': a.get('total_quantity', 0),
                     'value_usd': asset_value,
                     'percentage': (asset_value / total_value * 100) if total_value > 0 else 0,
-                    'logo_url': logokit_service.get_crypto_logo_url(token_symbol, size=64)
+                    'logo_url': a.get('logo_url')  # Use cached logo URL from asset data
                 })
 
         # Sort tokens by value descending

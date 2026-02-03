@@ -47,7 +47,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import PROJECT_ROOT, DATA_DIR, CERTS_DIR, DEFAULT_CERT_PATH, DEFAULT_KEY_PATH, NFT_SCHEDULER_ENABLED
 from database import init_db
 from nft_image_database import init_nft_image_db
-from routers import wallets, portfolio, defi, prices, exchanges, nfts, custom_tokens, settings, security, logs, nft_scheduler as nft_scheduler_router, backup, auth, dashboard, mobile, nmkr
+from routers import wallets, portfolio, defi, prices, exchanges, nfts, custom_tokens, settings, security, logs, nft_scheduler as nft_scheduler_router, backup, auth, dashboard, mobile, nmkr, cache, spam
 
 from middleware import RequestSizeLimitMiddleware, RATE_LIMITING_AVAILABLE
 from services.logging_service import get_logging_service
@@ -146,29 +146,60 @@ async def lifespan(app: FastAPI):
             startup_status["nft_prices"] = "loading"
 
             # First, load any stored prices from the database
-            logger.info("Loading NFT floor prices from database...")
+            logger.info("Loading Cardano NFT floor prices from database...")
             loaded = await nft_service.load_floor_prices_from_db()
-            logger.info(f"Loaded {loaded} floor prices from database")
+            logger.info(f"Loaded {loaded} Cardano floor prices from database")
 
             # Then incrementally collect new prices (small batches to avoid rate limits)
-            logger.info("Starting incremental NFT floor price collection...")
+            # Note: This is Cardano-only. Other chains (Ethereum, Solana, Polygon, Base)
+            # fetch floor prices on-demand from their respective APIs (Alchemy, etc.)
+            logger.info("Starting incremental Cardano NFT floor price collection...")
             result = await nft_service.collect_floor_prices_incremental(
                 batch_size=5,  # 5 collections per batch
                 max_batches=2  # Only 2 batches on startup to avoid blocking
             )
             startup_status["nft_prices"] = "ready"
-            logger.info(f"NFT price collection: {result['status']}, updated {result['collections_updated']} collections")
+
+            if result['status'] == 'rate_limited':
+                logger.warning(f"Cardano NFT price collection rate limited after updating {result['collections_updated']} collections. Other chains unaffected.")
+            else:
+                logger.info(f"Cardano NFT price collection: {result['status']}, updated {result['collections_updated']} collections")
 
         except Exception as e:
             startup_status["nft_prices"] = "error"
-            logger.warning(f"Could not collect NFT floor prices: {e}")
+            logger.warning(f"Could not collect Cardano NFT floor prices: {e}. Other chains (Ethereum, Solana, etc.) unaffected.")
         finally:
             # Mark overall ready once NFT prices are done (last task)
             startup_status["ready"] = True
 
+    # Periodic snapshot task - runs every 4 hours to create snapshots
+    async def periodic_snapshot_task():
+        """Background task that creates portfolio snapshots every 4 hours."""
+        import asyncio
+        from services.snapshot import snapshot_service
+
+        while True:
+            try:
+                # Wait 4 hours between snapshots
+                await asyncio.sleep(4 * 3600)
+
+                logger.info("Periodic snapshot task: Creating portfolio snapshots...")
+                await log_service.info("main", "Periodic snapshot task: Creating portfolio snapshots")
+
+                await snapshot_service.check_and_create_snapshot()
+
+                logger.info("Periodic snapshot task: Snapshot creation complete")
+                await log_service.info("main", "Periodic snapshot task: Snapshot creation complete")
+            except Exception as e:
+                logger.error(f"Periodic snapshot task error: {e}")
+                await log_service.error("main", f"Periodic snapshot task error: {e}")
+                # Continue running despite errors
+                await asyncio.sleep(3600)  # Wait 1 hour before retrying on error
+
     # Start background tasks (non-blocking)
     asyncio.create_task(create_snapshot_background())
     asyncio.create_task(collect_nft_prices_background())
+    asyncio.create_task(periodic_snapshot_task())
 
     # Initialize and optionally start NFT background scheduler
     startup_status["nft_scheduler"] = "initializing"
@@ -337,6 +368,8 @@ app.include_router(nft_scheduler_router.router)
 app.include_router(backup.router)
 app.include_router(dashboard.router)
 app.include_router(nmkr.router)
+app.include_router(cache.router)
+app.include_router(spam.router)
 
 # Mount static files (frontend)
 frontend_path = PROJECT_ROOT / "frontend"
@@ -396,6 +429,11 @@ async def api_help_page():
 async def dashv2_page():
     """Serve the DashV2 experimental widget dashboard page."""
     return FileResponse(str(frontend_path / "dashv2.html"))
+
+@app.get("/cache.html")
+async def cache_page():
+    """Serve the Cache Management page."""
+    return FileResponse(str(frontend_path / "cache.html"))
 
 @app.get("/health")
 async def health_check():
