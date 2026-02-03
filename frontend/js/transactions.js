@@ -32,6 +32,16 @@ async function loadTransactions() {
 
     try {
         const response = await authFetch(`/transactions?${params}`);
+
+        // Check if response is JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            console.error('Non-JSON response received:', response.status, response.statusText);
+            showStatus('Server error: Invalid response format', 'error');
+            showEmptyState();
+            return;
+        }
+
         const data = await response.json();
 
         if (data.success) {
@@ -43,7 +53,7 @@ async function loadTransactions() {
                 showEmptyState();
             }
         } else {
-            showStatus('Error loading transactions', 'error');
+            showStatus(data.message || 'Error loading transactions', 'error');
         }
     } catch (error) {
         console.error('Error loading transactions:', error);
@@ -73,6 +83,15 @@ async function refreshTransactions() {
         const response = await authFetch(`/transactions/refresh?${params}`, {
             method: 'POST'
         });
+
+        // Check if response is JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            console.error('Non-JSON response received:', response.status, response.statusText);
+            showStatus('Server error: Invalid response format', 'error');
+            return;
+        }
+
         const data = await response.json();
 
         if (data.success) {
@@ -82,7 +101,7 @@ async function refreshTransactions() {
             // Reload the table
             await loadTransactions();
         } else {
-            showStatus('Error refreshing transactions', 'error');
+            showStatus(data.message || 'Error refreshing transactions', 'error');
         }
     } catch (error) {
         console.error('Error refreshing transactions:', error);
@@ -141,14 +160,24 @@ function renderTransactions(transactions) {
                             <strong>From:</strong>
                             <div class="detail-content">
                                 <span class="address">${formatAddress(tx.from_address)}</span>
-                                ${tx.from_address ? `<button class="btn-copy" onclick="copyToClipboard('${tx.from_address}', event)" title="Copy address">&#128203;</button>` : ''}
+                                ${tx.from_address ? `<button class="copy-address-btn" onclick="copyToClipboard('${tx.from_address}', this); event.stopPropagation();" title="Copy address">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg>
+                                </button>` : ''}
                             </div>
                         </div>
                         <div class="detail-item">
                             <strong>To:</strong>
                             <div class="detail-content">
                                 <span class="address">${formatAddress(tx.to_address)}</span>
-                                ${tx.to_address ? `<button class="btn-copy" onclick="copyToClipboard('${tx.to_address}', event)" title="Copy address">&#128203;</button>` : ''}
+                                ${tx.to_address ? `<button class="copy-address-btn" onclick="copyToClipboard('${tx.to_address}', this); event.stopPropagation();" title="Copy address">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg>
+                                </button>` : ''}
                             </div>
                         </div>
                         <div class="detail-item">
@@ -167,7 +196,12 @@ function renderTransactions(transactions) {
                             <strong>Full Hash:</strong>
                             <div class="detail-content">
                                 <span class="hash-full">${tx.tx_hash}</span>
-                                <button class="btn-copy" onclick="copyToClipboard('${tx.tx_hash}', event)" title="Copy hash">&#128203;</button>
+                                <button class="copy-address-btn" onclick="copyToClipboard('${tx.tx_hash}', this); event.stopPropagation();" title="Copy hash">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -333,13 +367,18 @@ function formatFee(fee, blockchain) {
 /**
  * Copy to clipboard
  */
-async function copyToClipboard(text, event) {
-    if (event) {
-        event.stopPropagation();
-    }
-
+async function copyToClipboard(text, button) {
     try {
         await navigator.clipboard.writeText(text);
+
+        // Add visual feedback
+        if (button) {
+            button.classList.add('copied');
+            setTimeout(() => {
+                button.classList.remove('copied');
+            }, 2000);
+        }
+
         showStatus('Copied to clipboard', 'success');
     } catch (err) {
         console.error('Failed to copy:', err);

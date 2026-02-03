@@ -6514,6 +6514,11 @@ body.privacy-mode .section-title {
     opacity: 1;
 }
 
+.copy-address-btn.copied {
+    color: #28a745;
+    opacity: 1;
+}
+
 .copy-address-btn svg {
     display: block;
 }
