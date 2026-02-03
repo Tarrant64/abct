@@ -6990,16 +6990,16 @@ body.privacy-mode .section-title {
     border: 1px solid var(--border-color);
 }
 
-/* Transaction table - Wireshark style */
+/* Transaction table - Sleek card style */
 #txTable {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0 10px;
     font-size: 0.9rem;
 }
 
 #txTable thead {
     background: var(--bg-secondary);
-    border-bottom: 2px solid var(--border-color);
 }
 
 #txTable thead th {
@@ -7010,25 +7010,63 @@ body.privacy-mode .section-title {
     font-size: 0.85rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    background: transparent;
+    border: none;
 }
 
 #txTable tbody tr {
-    border-bottom: 1px solid var(--border-color);
+    border: none;
 }
 
-/* Main transaction row */
+/* Main transaction row - Glossy rounded container */
 .tx-row {
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: all 0.3s ease;
+    background: linear-gradient(135deg,
+        rgba(255, 255, 255, 0.05) 0%,
+        rgba(255, 255, 255, 0.02) 100%);
+    backdrop-filter: blur(10px);
+    box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.tx-row td:first-child {
+    border-radius: 16px 0 0 16px;
+    padding-left: 20px;
+}
+
+.tx-row td:last-child {
+    border-radius: 0 16px 16px 0;
+    padding-right: 20px;
 }
 
 .tx-row:hover {
-    background: var(--bg-secondary);
+    transform: translateY(-2px);
+    background: linear-gradient(135deg,
+        rgba(255, 255, 255, 0.08) 0%,
+        rgba(255, 255, 255, 0.04) 100%);
+    box-shadow:
+        0 4px 16px rgba(0, 0, 0, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15),
+        0 0 20px rgba(var(--accent-primary-rgb), 0.1);
 }
 
 .tx-row td {
-    padding: 12px 16px;
+    padding: 16px;
     vertical-align: middle;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-left: none;
+    border-right: none;
+    background: transparent;
+}
+
+.tx-row td:first-child {
+    border-left: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.tx-row td:last-child {
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 /* Expand/collapse cell */
@@ -7121,38 +7159,69 @@ body.privacy-mode .section-title {
     color: #00b894;
 }
 
-/* Transaction details row */
+/* Transaction details row - Sleek expanded view */
 .tx-details-row {
-    background: var(--bg-secondary);
+    background: transparent;
+}
+
+.tx-details-row td {
+    padding: 0 20px 16px 20px !important;
+    border: none !important;
 }
 
 .tx-details {
     padding: 20px;
-    border-top: 1px solid var(--border-color);
+    margin: -10px 0 0 0;
+    background: linear-gradient(135deg,
+        rgba(0, 0, 0, 0.2) 0%,
+        rgba(0, 0, 0, 0.1) 100%);
+    border-radius: 12px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .detail-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 15px;
+    gap: 12px;
 }
 
 .detail-item {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 8px;
+    padding: 12px 16px;
+    background: linear-gradient(135deg,
+        rgba(255, 255, 255, 0.03) 0%,
+        rgba(255, 255, 255, 0.01) 100%);
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+        0 2px 4px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    transition: all 0.2s ease;
+}
+
+.detail-item:hover {
+    transform: translateY(-1px);
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow:
+        0 4px 8px rgba(0, 0, 0, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .detail-item strong {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    font-weight: 600;
 }
 
 .detail-item span {
     font-size: 0.9rem;
     color: var(--text-primary);
+    word-break: break-word;
 }
 
 .detail-full {
@@ -7322,19 +7391,67 @@ body.privacy-mode .section-title {
 
 /* Light theme overrides for transactions */
 [data-theme="light"] .filter-bar,
-[data-theme="light"] .transaction-list,
+[data-theme="light"] .transaction-list {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
 [data-theme="light"] .stats-grid {
     background: #ffffff;
     border: 1px solid #e5e7eb;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
 }
 
+[data-theme="light"] #txTable thead th {
+    background-color: #f3f4f6;
+}
+
+[data-theme="light"] .tx-row {
+    background: linear-gradient(135deg,
+        rgba(255, 255, 255, 0.95) 0%,
+        rgba(249, 250, 251, 0.9) 100%);
+    box-shadow:
+        0 2px 4px rgba(0, 0, 0, 0.06),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
 [data-theme="light"] .tx-row:hover {
-    background: #f9fafb;
+    background: linear-gradient(135deg,
+        rgba(255, 255, 255, 1) 0%,
+        rgba(249, 250, 251, 0.95) 100%);
+    box-shadow:
+        0 4px 12px rgba(0, 0, 0, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 1),
+        0 0 20px rgba(102, 126, 234, 0.08);
 }
 
 [data-theme="light"] .tx-details-row {
-    background: #f5f7fa;
+    background: transparent;
+}
+
+[data-theme="light"] .tx-details {
+    background: linear-gradient(135deg,
+        rgba(243, 244, 246, 0.8) 0%,
+        rgba(249, 250, 251, 0.6) 100%);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .detail-item {
+    background: linear-gradient(135deg,
+        rgba(255, 255, 255, 0.9) 0%,
+        rgba(249, 250, 251, 0.8) 100%);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow:
+        0 2px 4px rgba(0, 0, 0, 0.04),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+[data-theme="light"] .detail-item:hover {
+    border-color: rgba(102, 126, 234, 0.2);
+    box-shadow:
+        0 4px 8px rgba(0, 0, 0, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 1);
 }
 
 [data-theme="light"] .chain-badge.chain-cardano {
