@@ -120,17 +120,45 @@ async def lifespan(app: FastAPI):
     async def create_snapshot_background():
         try:
             from services.snapshot import snapshot_service
+            from services.rate_limit_tracker import rate_limit_tracker
+
             startup_status["snapshot_check"] = "loading"
+
+            # Check if we should run snapshot creation (30 minute cooldown)
+            should_run, reason = await rate_limit_tracker.should_run_task(
+                task_name='portfolio_snapshot',
+                service='portfolio',
+                cooldown_minutes=30
+            )
+
+            if not should_run:
+                logger.info(f"Skipping portfolio snapshot: {reason}")
+                startup_status["snapshot_check"] = "skipped"
+                return
+
             logger.info("Checking for portfolio snapshot...")
             await snapshot_service.check_and_create_snapshot()
             startup_status["snapshot_check"] = "ready"
 
-            # Warm the portfolio cache for faster page loads
+            # Mark task as run
+            await rate_limit_tracker.mark_task_run('portfolio_snapshot', 'portfolio', 'auto')
+
+            # Warm the portfolio cache for faster page loads (separate cooldown check)
             try:
-                logger.info("Warming portfolio cache...")
-                from routers.portfolio import get_portfolio_summary
-                await get_portfolio_summary(refresh=False)
-                logger.info("Portfolio cache warmed successfully")
+                should_warm, warm_reason = await rate_limit_tracker.should_run_task(
+                    task_name='cache_warm',
+                    service='portfolio',
+                    cooldown_minutes=10  # Shorter cooldown for cache warming
+                )
+
+                if should_warm:
+                    logger.info("Warming portfolio cache...")
+                    from routers.portfolio import get_portfolio_summary
+                    await get_portfolio_summary(refresh=False)
+                    logger.info("Portfolio cache warmed successfully")
+                    await rate_limit_tracker.mark_task_run('cache_warm', 'portfolio', 'auto')
+                else:
+                    logger.info(f"Skipping cache warm: {warm_reason}")
             except Exception as cache_error:
                 logger.warning(f"Could not warm portfolio cache: {cache_error}")
 
@@ -142,8 +170,29 @@ async def lifespan(app: FastAPI):
     async def collect_nft_prices_background():
         try:
             from services.nft import nft_service
+            from services.rate_limit_tracker import rate_limit_tracker
 
             startup_status["nft_prices"] = "loading"
+
+            # CRITICAL: Taptools has very strict rate limits (100 requests/day on $9/mo plan)
+            # Use aggressive 4-hour cooldown to protect the API key
+            should_run, reason = await rate_limit_tracker.should_run_task(
+                task_name='nft_floor_prices',
+                service='taptools',
+                cooldown_minutes=240  # 4 HOURS for Taptools protection
+            )
+
+            if not should_run:
+                logger.info(f"Skipping Taptools NFT floor price collection: {reason}")
+                startup_status["nft_prices"] = "skipped"
+
+                # Still load cached prices from database even if we skip API calls
+                logger.info("Loading cached Cardano NFT floor prices from database...")
+                loaded = await nft_service.load_floor_prices_from_db()
+                logger.info(f"Loaded {loaded} cached Cardano floor prices from database")
+
+                startup_status["ready"] = True
+                return
 
             # First, load any stored prices from the database
             logger.info("Loading Cardano NFT floor prices from database...")
@@ -161,9 +210,13 @@ async def lifespan(app: FastAPI):
             startup_status["nft_prices"] = "ready"
 
             if result['status'] == 'rate_limited':
-                logger.warning(f"Cardano NFT price collection rate limited after updating {result['collections_updated']} collections. Other chains unaffected.")
+                # Mark Taptools as rate limited in the tracker
+                await rate_limit_tracker.mark_rate_limited('taptools', recovery_minutes=1440)  # 24 hours
+                logger.warning(f"Cardano NFT price collection rate limited after updating {result['collections_updated']} collections. Taptools blocked for 24 hours.")
             else:
                 logger.info(f"Cardano NFT price collection: {result['status']}, updated {result['collections_updated']} collections")
+                # Mark task as successfully run
+                await rate_limit_tracker.mark_task_run('nft_floor_prices', 'taptools', 'auto')
 
         except Exception as e:
             startup_status["nft_prices"] = "error"
