@@ -31,6 +31,62 @@ class TransactionHistoryService:
     def __init__(self):
         self.supported_blockchains = ['cardano', 'ethereum', 'bitcoin', 'solana', 'polygon', 'base']
 
+    def _is_transaction_newer(self, tx: dict, newest_dt: datetime, blockchain: str) -> bool:
+        """
+        Check if a transaction is newer than the newest one in database.
+
+        Args:
+            tx: Raw transaction from blockchain API
+            newest_dt: Newest transaction datetime from database
+            blockchain: Blockchain name
+
+        Returns:
+            True if transaction is newer than newest_dt
+        """
+        try:
+            if blockchain in ['ethereum', 'polygon', 'base']:
+                # EVM chains use 'timeStamp' field
+                timestamp = int(tx.get('timeStamp', tx.get('timestamp', 0)))
+                tx_time = datetime.fromtimestamp(timestamp) if timestamp > 0 else datetime.utcnow()
+            elif blockchain == 'bitcoin':
+                # Bitcoin uses status.block_time
+                status = tx.get('status', {})
+                block_time = status.get('block_time', 0)
+                tx_time = datetime.fromtimestamp(block_time) if block_time > 0 else datetime.utcnow()
+            else:
+                # Unknown format, keep the transaction to be safe
+                return True
+
+            return tx_time > newest_dt
+
+        except Exception as e:
+            logger.error(f"Error comparing transaction time: {e}")
+            return True  # Keep transaction if we can't determine age
+
+    async def get_transaction_bounds(self, user_id: int, wallet_id: int, blockchain: str) -> Optional[dict]:
+        """
+        Get the newest and oldest transaction timestamps for a wallet.
+
+        Returns:
+            Dict with 'newest' and 'oldest' datetime, or None if no transactions exist
+        """
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            cursor = await db.execute("""
+                SELECT
+                    MAX(tx_time) as newest,
+                    MIN(tx_time) as oldest
+                FROM transaction_history
+                WHERE user_id = ? AND wallet_id = ? AND blockchain = ?
+            """, (user_id, wallet_id, blockchain))
+
+            row = await cursor.fetchone()
+            if row and row[0]:  # If newest exists
+                return {
+                    'newest': row[0],
+                    'oldest': row[1]
+                }
+            return None
+
     async def fetch_transactions(
         self,
         user_id: int,
@@ -71,11 +127,29 @@ class TransactionHistoryService:
             logger.info(f"Fetching transactions for {chain} wallet {address[:12]}...")
 
             try:
+                # Check existing transaction bounds for smart fetching
+                bounds = await self.get_transaction_bounds(user_id, wallet_id, chain)
+                if bounds:
+                    newest = bounds['newest']
+                    oldest = bounds['oldest']
+                    logger.info(f"Existing transactions: newest={newest}, oldest={oldest}")
+                    logger.info("Fetching only new transactions since last fetch")
+
                 transactions = await self._fetch_blockchain_transactions(
                     chain, address, days
                 )
 
                 if transactions:
+                    # Filter out transactions we already have (if bounds exist)
+                    if bounds:
+                        # Convert newest to comparable format
+                        newest_dt = datetime.fromisoformat(bounds['newest']) if isinstance(bounds['newest'], str) else bounds['newest']
+
+                        original_count = len(transactions)
+                        # Keep only transactions newer than what we have
+                        transactions = [tx for tx in transactions if self._is_transaction_newer(tx, newest_dt, chain)]
+                        logger.info(f"Filtered {original_count - len(transactions)} duplicate transactions")
+
                     # Normalize and save
                     normalized = []
                     for tx in transactions:
@@ -85,9 +159,12 @@ class TransactionHistoryService:
                         if normalized_tx:
                             normalized.append(normalized_tx)
 
-                    await self.save_transactions(user_id, wallet_id, normalized)
-                    counts[chain] = counts.get(chain, 0) + len(normalized)
-                    logger.info(f"Saved {len(normalized)} transactions for {chain}")
+                    if normalized:
+                        await self.save_transactions(user_id, wallet_id, normalized)
+                        counts[chain] = counts.get(chain, 0) + len(normalized)
+                        logger.info(f"Saved {len(normalized)} new transactions for {chain}")
+                    else:
+                        logger.info(f"No new transactions found for {chain} wallet")
 
             except Exception as e:
                 logger.error(f"Error fetching {chain} transactions: {e}")
@@ -149,9 +226,15 @@ class TransactionHistoryService:
         return txs + token_txs
 
     async def _fetch_bitcoin_transactions(self, address: str, limit: int) -> List[dict]:
-        """Fetch Bitcoin transactions from Blockstream API."""
-        import httpx
+        """
+        Fetch Bitcoin transactions from Blockstream API with Mempool.space fallback.
 
+        Uses smart fetching to avoid re-fetching existing transactions.
+        """
+        import httpx
+        from config import MEMPOOL_BASE_URL
+
+        # Try Blockstream first
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 # Get transaction list
@@ -160,8 +243,9 @@ class TransactionHistoryService:
                 )
 
                 if response.status_code != 200:
-                    logger.error(f"Blockstream API error: {response.status_code}")
-                    return []
+                    logger.warning(f"Blockstream API error: {response.status_code}, trying Mempool.space fallback")
+                    # Try Mempool.space fallback
+                    return await self._fetch_bitcoin_transactions_mempool(address, limit)
 
                 txs = response.json()[:limit]
 
@@ -174,10 +258,45 @@ class TransactionHistoryService:
                     if tx_response.status_code == 200:
                         detailed_txs.append(tx_response.json())
 
+                logger.info(f"Fetched {len(detailed_txs)} Bitcoin transactions from Blockstream")
                 return detailed_txs
 
         except Exception as e:
-            logger.error(f"Error fetching Bitcoin transactions: {e}")
+            logger.error(f"Blockstream error: {e}, trying Mempool.space fallback")
+            return await self._fetch_bitcoin_transactions_mempool(address, limit)
+
+    async def _fetch_bitcoin_transactions_mempool(self, address: str, limit: int) -> List[dict]:
+        """Fetch Bitcoin transactions from Mempool.space API (fallback)."""
+        import httpx
+        from config import MEMPOOL_BASE_URL
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                # Mempool.space has the same API format as Blockstream
+                response = await client.get(
+                    f"{MEMPOOL_BASE_URL}/address/{address}/txs"
+                )
+
+                if response.status_code != 200:
+                    logger.error(f"Mempool.space API error: {response.status_code}")
+                    return []
+
+                txs = response.json()[:limit]
+
+                # Fetch full details
+                detailed_txs = []
+                for tx in txs:
+                    tx_response = await client.get(
+                        f"{MEMPOOL_BASE_URL}/tx/{tx['txid']}"
+                    )
+                    if tx_response.status_code == 200:
+                        detailed_txs.append(tx_response.json())
+
+                logger.info(f"Fetched {len(detailed_txs)} Bitcoin transactions from Mempool.space (fallback)")
+                return detailed_txs
+
+        except Exception as e:
+            logger.error(f"Mempool.space error: {e}")
             return []
 
     async def _fetch_solana_transactions(self, address: str, limit: int) -> List[dict]:
