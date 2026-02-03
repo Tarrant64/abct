@@ -6,10 +6,15 @@ Falls back to TapTools direct calls if the service is unavailable.
 """
 
 import os
+import sys
 import httpx
 import logging
 from typing import Optional, Dict, List
 from datetime import datetime, timedelta
+
+# Import database functions
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from database import get_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -26,14 +31,50 @@ class NFTPriceClient:
         self._available = None
         self._last_check = None
         self._check_interval = timedelta(minutes=5)
+        self._cached_api_url = None
+        self._api_url_cache_time = None
+        self._api_url_cache_ttl = timedelta(minutes=1)  # Cache API URL for 1 minute
 
-    def is_configured(self) -> bool:
+    async def _get_service_url(self) -> str:
+        """Get the service URL from database or environment variable.
+
+        Checks in this order:
+        1. Database API setting (if recently added via UI)
+        2. Environment variable (if set in .env)
+        3. Cached value
+        """
+        # Check cache first
+        now = datetime.utcnow()
+        if self._cached_api_url and self._api_url_cache_time:
+            if now - self._api_url_cache_time < self._api_url_cache_ttl:
+                return self._cached_api_url
+
+        # Try database first (allows runtime updates via UI)
+        try:
+            db_url = await get_api_key('nft_price_service', user_id=1)  # Default to admin user
+            if db_url:
+                self._cached_api_url = db_url
+                self._api_url_cache_time = now
+                return db_url
+        except Exception as e:
+            logger.debug(f"Could not fetch API URL from database: {e}")
+
+        # Fall back to environment variable
+        if NFT_PRICE_SERVICE_URL:
+            self._cached_api_url = NFT_PRICE_SERVICE_URL
+            self._api_url_cache_time = now
+            return NFT_PRICE_SERVICE_URL
+
+        return ""
+
+    async def is_configured(self) -> bool:
         """Check if the Cardano NFT Price Service is configured."""
-        return bool(self.service_url)
+        url = await self._get_service_url()
+        return bool(url)
 
     async def is_available(self) -> bool:
         """Check if the Cardano NFT Price Service is available."""
-        if not self.is_configured():
+        if not await self.is_configured():
             return False
 
         # Cache availability check for 5 minutes
@@ -43,8 +84,9 @@ class NFTPriceClient:
                 return self._available
 
         try:
+            service_url = await self._get_service_url()
             async with httpx.AsyncClient(timeout=NFT_PRICE_SERVICE_TIMEOUT) as client:
-                response = await client.get(f"{self.service_url}/health")
+                response = await client.get(f"{service_url}/health")
                 self._available = response.status_code == 200
                 self._last_check = now
                 return self._available
@@ -60,8 +102,9 @@ class NFTPriceClient:
             return None
 
         try:
+            service_url = await self._get_service_url()
             async with httpx.AsyncClient(timeout=NFT_PRICE_SERVICE_TIMEOUT) as client:
-                response = await client.get(f"{self.service_url}/floor/{policy_id}")
+                response = await client.get(f"{service_url}/floor/{policy_id}")
 
                 if response.status_code != 200:
                     return None
@@ -84,6 +127,7 @@ class NFTPriceClient:
             return {}
 
         try:
+            service_url = await self._get_service_url()
             async with httpx.AsyncClient(timeout=NFT_PRICE_SERVICE_TIMEOUT) as client:
                 # Batch into chunks of 50
                 all_floors = {}
@@ -92,7 +136,7 @@ class NFTPriceClient:
                     ids_param = ",".join(chunk)
 
                     response = await client.get(
-                        f"{self.service_url}/floors",
+                        f"{service_url}/floors",
                         params={"policy_ids": ids_param}
                     )
 
@@ -110,12 +154,13 @@ class NFTPriceClient:
 
     async def get_service_status(self) -> Optional[Dict]:
         """Get status of the Cardano NFT Price Service."""
-        if not self.is_configured():
+        if not await self.is_configured():
             return None
 
         try:
+            service_url = await self._get_service_url()
             async with httpx.AsyncClient(timeout=NFT_PRICE_SERVICE_TIMEOUT) as client:
-                response = await client.get(f"{self.service_url}/status")
+                response = await client.get(f"{service_url}/status")
 
                 if response.status_code == 200:
                     return response.json()
@@ -131,9 +176,10 @@ class NFTPriceClient:
             return False
 
         try:
+            service_url = await self._get_service_url()
             async with httpx.AsyncClient(timeout=NFT_PRICE_SERVICE_TIMEOUT) as client:
                 response = await client.post(
-                    f"{self.service_url}/collections/register",
+                    f"{service_url}/collections/register",
                     params={
                         "policy_id": policy_id,
                         "name": name,
@@ -152,9 +198,10 @@ class NFTPriceClient:
             return 0
 
         try:
+            service_url = await self._get_service_url()
             async with httpx.AsyncClient(timeout=NFT_PRICE_SERVICE_TIMEOUT) as client:
                 response = await client.post(
-                    f"{self.service_url}/collections/register-batch",
+                    f"{service_url}/collections/register-batch",
                     json=collections
                 )
 

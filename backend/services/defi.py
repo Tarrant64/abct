@@ -1064,6 +1064,25 @@ class DeFiService:
 
         return rewards
 
+    async def _get_token_logo_url(self, token_symbol: str) -> Optional[str]:
+        """Get cached logo URL for a token from database."""
+        try:
+            import sqlite3
+            from database import get_db_connection
+
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT logo_url FROM token_metadata WHERE ticker = ?", (token_symbol,))
+            row = cursor.fetchone()
+            conn.close()
+
+            if row and row[0]:
+                return row[0]
+        except Exception as e:
+            logger.error(f"Error fetching logo for {token_symbol}: {e}")
+
+        return None
+
     async def get_all_staking_positions(self, address: str) -> Dict:
         """
         Get all protocol staking positions for an address.
@@ -1080,12 +1099,14 @@ class DeFiService:
         indigo = await self.get_indigo_staking(address)
         if indigo:
             indigo_rewards = await self.get_indigo_pending_rewards(address)
+            indy_logo = await self._get_token_logo_url('INDY')
             staking['protocols']['Indigo'] = {
                 'staked': [{
                     'token': 'INDY',
                     'amount': indigo['total_staked_indy'],
                     'amount_formatted': f"{indigo['total_staked_indy']:,.6f}",
-                    'positions': indigo['position_count']
+                    'positions': indigo['position_count'],
+                    'logo_url': indy_logo
                 }],
                 'pending_indy': indigo_rewards.get('pending_indy', 0) if indigo_rewards else 0,
                 'pending_ada': indigo_rewards.get('pending_ada', 0) if indigo_rewards else 0,
@@ -1104,12 +1125,14 @@ class DeFiService:
         strike = await self.get_strike_staking(address)
         if strike:
             strike_rewards = await self.get_strike_pending_rewards(address)
+            strike_logo = await self._get_token_logo_url('STRIKE')
             staking['protocols']['Strike'] = {
                 'staked': [{
                     'token': 'STRIKE',
                     'amount': strike['total_staked_strike'],
                     'amount_formatted': f"{strike['total_staked_strike']:,.6f}",
-                    'positions': strike['position_count']
+                    'positions': strike['position_count'],
+                    'logo_url': strike_logo
                 }],
                 'pending_rewards': strike_rewards.get('pending_rewards', 0) if strike_rewards else 0,
                 'accumulated_rewards': strike_rewards.get('accumulated_rewards', 0) if strike_rewards else 0,
@@ -1125,12 +1148,14 @@ class DeFiService:
         liqwid = await self.get_liqwid_staking(address)
         if liqwid:
             liqwid_rewards = await self.get_liqwid_pending_rewards(address)
+            lq_logo = await self._get_token_logo_url('LQ')
             staking['protocols']['Liqwid'] = {
                 'staked': [{
                     'token': 'LQ',
                     'amount': liqwid['total_staked_lq'],
                     'amount_formatted': f"{liqwid['total_staked_lq']:,.6f}",
-                    'positions': liqwid['position_count']
+                    'positions': liqwid['position_count'],
+                    'logo_url': lq_logo
                 }],
                 'pending_rewards': liqwid_rewards.get('pending_rewards', 0) if liqwid_rewards else 0,
                 'reward_token': 'LQ',
@@ -1146,12 +1171,14 @@ class DeFiService:
         # Iagon staking (old contract - calculated from transaction history)
         iagon = await self.get_iagon_staking(address)
         if iagon:
+            iag_logo = await self._get_token_logo_url('IAG')
             staking['protocols']['Iagon'] = {
                 'staked': [{
                     'token': 'IAG',
                     'amount': iagon['total_staked_iag'],
                     'amount_formatted': f"{iagon['total_staked_iag']:,.6f}",
-                    'positions': iagon['position_count']
+                    'positions': iagon['position_count'],
+                    'logo_url': iag_logo
                 }],
                 'total_deposited': iagon['total_deposited'],
                 'total_withdrawn': iagon['total_withdrawn'],

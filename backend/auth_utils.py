@@ -75,3 +75,49 @@ async def verify_session(authorization: Optional[str] = Header(None)) -> int:
         )
 
     return session_data['user_id']
+
+
+async def verify_session_optional(authorization: Optional[str] = Header(None)) -> Optional[int]:
+    """
+    Dependency to optionally verify session token.
+
+    Unlike verify_session, this does not raise an exception if no auth is provided.
+    Useful for endpoints that can work with or without authentication (e.g., public image proxies).
+
+    Args:
+        authorization: Authorization header value (Bearer token)
+
+    Returns:
+        User ID if authenticated, None if not authenticated
+    """
+    # If auth not required globally, return admin user
+    if not is_auth_required():
+        return 1
+
+    # No authorization header provided - return None instead of raising
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+
+    token = authorization[7:]  # Remove "Bearer " prefix
+
+    try:
+        # Import database functions here to avoid circular imports
+        from database import get_session, cleanup_expired_sessions
+
+        # Clean expired sessions from database
+        await cleanup_expired_sessions()
+
+        # Check if token exists and is valid in database
+        session_data = await get_session(token)
+        if not session_data:
+            return None
+
+        # Check if session is expired
+        expires_at = datetime.fromisoformat(session_data['expires_at'])
+        if expires_at < datetime.utcnow():
+            return None
+
+        return session_data['user_id']
+    except Exception:
+        # On any error, just return None (not authenticated)
+        return None

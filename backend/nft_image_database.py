@@ -55,6 +55,11 @@ async def init_nft_image_db():
             CREATE INDEX IF NOT EXISTS idx_nft_images_fetched
             ON nft_images(fetched_at)
         """)
+        # Composite index for wall query performance (fetch_status + blockchain)
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_nft_images_status_chain
+            ON nft_images(fetch_status, blockchain)
+        """)
 
         # Configuration table for image caching settings
         await db.execute("""

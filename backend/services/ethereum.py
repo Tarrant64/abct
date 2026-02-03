@@ -17,7 +17,8 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import BEACONCHAIN_API_KEY, BEACONCHAIN_BASE_URL
+from config import BEACONCHAIN_BASE_URL
+from services.api_key_manager import APIKeyManager
 
 logger = logging.getLogger(__name__)
 
@@ -26,11 +27,11 @@ MIN_REQUEST_INTERVAL = 60  # 1 request per minute for free tier
 MONTHLY_LIMIT = 1000
 
 
-class EthereumService:
+class EthereumService(APIKeyManager):
     """Service for fetching Ethereum wallet data from beaconcha.in."""
 
     def __init__(self):
-        self.api_key = BEACONCHAIN_API_KEY
+        super().__init__(api_name='beaconchain', env_var='BEACONCHAIN_API_KEY')
         self.base_url = BEACONCHAIN_BASE_URL
         self.last_request_time: Optional[datetime] = None
         self.request_count = 0
@@ -38,9 +39,10 @@ class EthereumService:
         self._balance_cache: Dict[str, dict] = {}
         self._cache_ttl = timedelta(minutes=10)
 
-    def is_configured(self) -> bool:
+    async def is_configured(self) -> bool:
         """Check if the API key is configured."""
-        return bool(self.api_key)
+        key = await self.get_api_key()
+        return bool(key)
 
     def is_ethereum_address(self, address: str) -> bool:
         """Check if an address is a valid Ethereum address."""
@@ -68,7 +70,7 @@ class EthereumService:
 
     async def _make_request(self, endpoint: str, params: Optional[dict] = None) -> Optional[dict]:
         """Make a rate-limited request to beaconcha.in API."""
-        if not self.is_configured():
+        if not await self.is_configured():
             logger.warning("Beaconcha.in API key not configured")
             return None
 
@@ -86,7 +88,7 @@ class EthereumService:
         await self._wait_for_rate_limit()
 
         url = f"{self.base_url}{endpoint}"
-        headers = {"apikey": self.api_key}
+        headers = {"apikey": await self.get_api_key()}
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:

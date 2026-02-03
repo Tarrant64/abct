@@ -3,8 +3,11 @@ Exchange Router - API endpoints for cryptocurrency exchange integrations.
 """
 
 from fastapi import APIRouter, HTTPException, Query, Depends
+import logging
 import sys
 import os
+
+logger = logging.getLogger(__name__)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.coinbase import coinbase_service
@@ -102,14 +105,24 @@ async def get_coinbase_portfolio(user_id: int = Depends(verify_session), refresh
     Get Coinbase portfolio with USD values.
     Only returns assets with USD value >= $1.00.
     """
+    import sys
+    sys.stderr.write(f"[COINBASE DEBUG] GET /exchanges/coinbase called for user_id={user_id}, refresh={refresh}\n")
+    sys.stderr.flush()
+    print(f"[COINBASE DEBUG] GET /exchanges/coinbase called for user_id={user_id}, refresh={refresh}", flush=True)
+    logger.info(f"GET /exchanges/coinbase called for user_id={user_id}, refresh={refresh}")
+
     # Check if demo user
     username = await get_username_by_user_id(user_id)
     if username and await is_demo_user(username):
         # Return demo exchange balances
+        logger.info("Returning demo exchange data for Coinbase")
         return await demo_exchange_service.get_portfolio_balances(user_id=user_id)
 
     # Normal mode
-    if not coinbase_service.is_configured():
+    is_configured = await coinbase_service.is_configured(user_id=user_id)
+    logger.info(f"Coinbase is_configured: {is_configured}")
+
+    if not is_configured:
         raise HTTPException(
             status_code=503,
             detail="Coinbase API not configured. Add cdp_api_key.json to project root."
@@ -120,10 +133,13 @@ async def get_coinbase_portfolio(user_id: int = Depends(verify_session), refresh
     if not refresh:
         cached = await get_cache(cache_key, user_id=user_id)
         if cached:
+            logger.info(f"Returning cached Coinbase data: {len(cached.get('assets', []))} assets")
             cached['from_cache'] = True
             return cached
 
+    logger.info("Fetching fresh Coinbase portfolio data...")
     portfolio = await coinbase_service.get_portfolio_balances(user_id=user_id)
+    logger.info(f"Coinbase portfolio result: {portfolio.get('asset_count', 0)} assets, ${portfolio.get('total_usd', 0)} total")
 
     if not portfolio.get("assets"):
         return portfolio
@@ -345,7 +361,7 @@ async def process_exchange_portfolio(exchange_service, exchange_name: str, user_
 @router.get("/binance")
 async def get_binance_portfolio(user_id: int = Depends(verify_session), refresh: bool = Query(False)):
     """Get Binance portfolio with USD values."""
-    if not binance_service.is_configured():
+    if not await binance_service.is_configured():
         raise HTTPException(
             status_code=503,
             detail="Binance API not configured. Add BINANCE_API_KEY and BINANCE_API_SECRET to .env file."
@@ -356,7 +372,7 @@ async def get_binance_portfolio(user_id: int = Depends(verify_session), refresh:
 @router.get("/binance-us")
 async def get_binance_us_portfolio(user_id: int = Depends(verify_session), refresh: bool = Query(False)):
     """Get Binance.US portfolio with USD values."""
-    if not binance_us_service.is_configured():
+    if not await binance_us_service.is_configured():
         raise HTTPException(
             status_code=503,
             detail="Binance.US API not configured. Add BINANCE_US_API_KEY and BINANCE_US_API_SECRET to .env file."
@@ -367,7 +383,7 @@ async def get_binance_us_portfolio(user_id: int = Depends(verify_session), refre
 @router.get("/okx")
 async def get_okx_portfolio(user_id: int = Depends(verify_session), refresh: bool = Query(False)):
     """Get OKX portfolio with USD values."""
-    if not okx_service.is_configured():
+    if not await okx_service.is_configured():
         raise HTTPException(
             status_code=503,
             detail="OKX API not configured. Add OKX_API_KEY, OKX_API_SECRET, and OKX_API_PASSPHRASE to .env file."
@@ -378,7 +394,7 @@ async def get_okx_portfolio(user_id: int = Depends(verify_session), refresh: boo
 @router.get("/bitget")
 async def get_bitget_portfolio(user_id: int = Depends(verify_session), refresh: bool = Query(False)):
     """Get Bitget portfolio with USD values."""
-    if not bitget_service.is_configured():
+    if not await bitget_service.is_configured():
         raise HTTPException(
             status_code=503,
             detail="Bitget API not configured. Add BITGET_API_KEY, BITGET_API_SECRET, and BITGET_API_PASSPHRASE to .env file."
@@ -389,7 +405,7 @@ async def get_bitget_portfolio(user_id: int = Depends(verify_session), refresh: 
 @router.get("/gate")
 async def get_gate_portfolio(user_id: int = Depends(verify_session), refresh: bool = Query(False)):
     """Get Gate.io portfolio with USD values."""
-    if not gate_service.is_configured():
+    if not await gate_service.is_configured():
         raise HTTPException(
             status_code=503,
             detail="Gate.io API not configured. Add GATE_API_KEY and GATE_API_SECRET to .env file."
@@ -400,7 +416,7 @@ async def get_gate_portfolio(user_id: int = Depends(verify_session), refresh: bo
 @router.get("/kucoin")
 async def get_kucoin_portfolio(user_id: int = Depends(verify_session), refresh: bool = Query(False)):
     """Get KuCoin portfolio with USD values."""
-    if not kucoin_service.is_configured():
+    if not await kucoin_service.is_configured():
         raise HTTPException(
             status_code=503,
             detail="KuCoin API not configured. Add KUCOIN_API_KEY, KUCOIN_API_SECRET, and KUCOIN_API_PASSPHRASE to .env file."
@@ -414,7 +430,7 @@ async def get_coinbase_open_orders(user_id: int = Depends(verify_session)):
     Get open orders from Coinbase.
     Returns pending, open, or queued orders.
     """
-    if not coinbase_service.is_configured():
+    if not await coinbase_service.is_configured():
         raise HTTPException(
             status_code=503,
             detail="Coinbase API not configured"
