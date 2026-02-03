@@ -4,6 +4,9 @@
 
 let currentTransactions = [];
 let expandedRows = new Set();
+let currentPage = 1;
+let pageSize = 20;
+let filteredTransactions = [];
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
@@ -112,37 +115,55 @@ async function refreshTransactions() {
 }
 
 /**
- * Render transactions in the table
+ * Render transactions in the table with pagination
  */
 function renderTransactions(transactions) {
     const tbody = document.getElementById('txTableBody');
     const table = document.getElementById('txTable');
+    const paginationControls = document.getElementById('paginationControls');
 
-    if (!transactions || transactions.length === 0) {
+    // Store all transactions
+    filteredTransactions = transactions || [];
+
+    if (filteredTransactions.length === 0) {
         table.style.display = 'none';
+        paginationControls.style.display = 'none';
         return;
     }
 
+    // Calculate pagination
+    const totalPages = Math.ceil(filteredTransactions.length / pageSize);
+    const startIdx = (currentPage - 1) * pageSize;
+    const endIdx = Math.min(startIdx + pageSize, filteredTransactions.length);
+    const pageTransactions = filteredTransactions.slice(startIdx, endIdx);
+
+    // Clear and render table
     tbody.innerHTML = '';
     table.style.display = 'table';
+    paginationControls.style.display = 'flex';
 
-    transactions.forEach((tx, index) => {
+    pageTransactions.forEach((tx, pageIndex) => {
+        const globalIndex = startIdx + pageIndex;
+
         // Create main row
         const row = document.createElement('tr');
         row.className = 'tx-row';
-        row.id = `tx-row-${index}`;
-        row.onclick = () => toggleDetails(index);
+        row.id = `tx-row-${globalIndex}`;
+        row.onclick = () => toggleDetails(globalIndex);
 
-        const expandIcon = expandedRows.has(index) ? '&#9660;' : '&#9658;';
+        const expandIcon = expandedRows.has(globalIndex) ? '&#9660;' : '&#9658;';
+
+        // Format tokens (handle multiple for Cardano)
+        const tokenDisplay = formatTokens(tx);
 
         row.innerHTML = `
             <td class="expand-cell">${expandIcon}</td>
-            <td>${formatTime(tx.tx_time)}</td>
+            <td><span class="tx-badge time-badge">${formatTime(tx.tx_time)}</span></td>
             <td><span class="chain-badge chain-${tx.blockchain}">${formatChainName(tx.blockchain)}</span></td>
             <td><span class="direction-badge direction-${tx.direction}">${tx.direction}</span></td>
-            <td class="amount-cell">${formatAmount(tx.amount)} ${tx.token_symbol}</td>
-            <td>${tx.token_name || tx.token_symbol || 'N/A'}</td>
-            <td class="hash-cell">${formatHash(tx.tx_hash, tx.blockchain)}</td>
+            <td class="amount-cell"><span class="tx-badge amount-badge">${formatAmount(tx.amount)} ${tx.token_symbol}</span></td>
+            <td>${tokenDisplay}</td>
+            <td class="hash-cell"><span class="tx-badge hash-badge">${formatHash(tx.tx_hash, tx.blockchain)}</span></td>
         `;
 
         tbody.appendChild(row);
@@ -211,6 +232,9 @@ function renderTransactions(transactions) {
 
         tbody.appendChild(detailsRow);
     });
+
+    // Update pagination controls
+    updatePaginationControls(startIdx + 1, endIdx, filteredTransactions.length, currentPage, totalPages);
 }
 
 /**
@@ -523,6 +547,97 @@ function loadSavedTheme() {
 function changeTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
+}
+
+/**
+ * Format tokens (handle multiple for Cardano)
+ */
+function formatTokens(tx) {
+    // Check if metadata contains multiple tokens (Cardano multi-asset transactions)
+    if (tx.metadata && typeof tx.metadata === 'string') {
+        try {
+            const metadata = JSON.parse(tx.metadata);
+            if (metadata.tokens && Array.isArray(metadata.tokens) && metadata.tokens.length > 1) {
+                // Multiple tokens - show up to 3, then "..."
+                const tokenNames = metadata.tokens.map(t => t.symbol || t.name).filter(Boolean);
+                if (tokenNames.length <= 3) {
+                    return `<div class="token-list">${tokenNames.map(name =>
+                        `<span class="token-item">${name}</span>`
+                    ).join('')}</div>`;
+                } else {
+                    return `<div class="token-list">
+                        ${tokenNames.slice(0, 3).map(name =>
+                            `<span class="token-item">${name}</span>`
+                        ).join('')}
+                        <span class="token-more">+${tokenNames.length - 3} more</span>
+                    </div>`;
+                }
+            }
+        } catch (e) {
+            // Ignore parsing errors
+        }
+    }
+
+    // Single token or fallback
+    const tokenName = tx.token_name || tx.token_symbol || 'N/A';
+    return `<span class="token-badge">${tokenName}</span>`;
+}
+
+/**
+ * Update pagination controls
+ */
+function updatePaginationControls(start, end, total, page, totalPages) {
+    document.getElementById('pageStart').textContent = start;
+    document.getElementById('pageEnd').textContent = end;
+    document.getElementById('totalTransactions').textContent = total;
+    document.getElementById('currentPage').textContent = page;
+    document.getElementById('totalPages').textContent = totalPages;
+
+    // Update button states
+    const firstBtn = document.getElementById('firstPageBtn');
+    const prevBtn = document.getElementById('prevPageBtn');
+    const nextBtn = document.getElementById('nextPageBtn');
+    const lastBtn = document.getElementById('lastPageBtn');
+
+    firstBtn.disabled = page === 1;
+    prevBtn.disabled = page === 1;
+    nextBtn.disabled = page === totalPages;
+    lastBtn.disabled = page === totalPages;
+}
+
+/**
+ * Pagination functions
+ */
+function goToFirstPage() {
+    currentPage = 1;
+    renderTransactions(filteredTransactions);
+}
+
+function previousPage() {
+    if (currentPage > 1) {
+        currentPage--;
+        renderTransactions(filteredTransactions);
+    }
+}
+
+function nextPage() {
+    const totalPages = Math.ceil(filteredTransactions.length / pageSize);
+    if (currentPage < totalPages) {
+        currentPage++;
+        renderTransactions(filteredTransactions);
+    }
+}
+
+function goToLastPage() {
+    currentPage = Math.ceil(filteredTransactions.length / pageSize);
+    renderTransactions(filteredTransactions);
+}
+
+function changePageSize() {
+    const select = document.getElementById('pageSizeSelect');
+    pageSize = parseInt(select.value);
+    currentPage = 1; // Reset to first page
+    renderTransactions(filteredTransactions);
 }
 
 /**

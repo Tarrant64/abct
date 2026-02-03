@@ -7115,33 +7115,39 @@ body.privacy-mode .section-title {
 }
 
 .chain-badge.chain-cardano {
-    background: rgba(0, 51, 173, 0.2);
-    color: #0033ad;
+    background: rgba(0, 82, 255, 0.25);
+    color: #5c9eff;
+    border: 1px solid rgba(92, 158, 255, 0.3);
 }
 
 .chain-badge.chain-ethereum {
-    background: rgba(98, 126, 234, 0.2);
-    color: #627eea;
+    background: rgba(98, 126, 234, 0.25);
+    color: #8ba4f5;
+    border: 1px solid rgba(139, 164, 245, 0.3);
 }
 
 .chain-badge.chain-bitcoin {
-    background: rgba(247, 147, 26, 0.2);
-    color: #f7931a;
+    background: rgba(247, 147, 26, 0.25);
+    color: #ffb74d;
+    border: 1px solid rgba(255, 183, 77, 0.3);
 }
 
 .chain-badge.chain-solana {
-    background: rgba(20, 241, 149, 0.2);
-    color: #14F195;
+    background: rgba(20, 241, 149, 0.25);
+    color: #3dffb3;
+    border: 1px solid rgba(61, 255, 179, 0.3);
 }
 
 .chain-badge.chain-polygon {
-    background: rgba(130, 71, 229, 0.2);
-    color: #8247E5;
+    background: rgba(130, 71, 229, 0.25);
+    color: #a673f0;
+    border: 1px solid rgba(166, 115, 240, 0.3);
 }
 
 .chain-badge.chain-base {
-    background: rgba(0, 82, 255, 0.2);
-    color: #0052ff;
+    background: rgba(0, 82, 255, 0.25);
+    color: #5c9eff;
+    border: 1px solid rgba(92, 158, 255, 0.3);
 }
 
 /* Direction badges */
@@ -7261,6 +7267,148 @@ body.privacy-mode .section-title {
 
 .status-failed {
     color: #d63031;
+}
+
+/* Badge styling for table cells */
+.tx-row .amount-cell,
+.tx-row .hash-cell {
+    font-family: 'Courier New', monospace;
+}
+
+.tx-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    background: linear-gradient(135deg,
+        rgba(255, 255, 255, 0.08) 0%,
+        rgba(255, 255, 255, 0.04) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(4px);
+}
+
+.tx-row td:not(:first-child):not(:last-child) {
+    padding: 12px 8px !important;
+}
+
+/* Time badge */
+.time-badge {
+    color: #a0aec0;
+}
+
+/* Amount badge */
+.amount-badge {
+    color: #ffd93d;
+    font-weight: 600;
+}
+
+/* Hash badge */
+.hash-badge {
+    color: #64b5f6;
+    font-size: 0.75rem;
+}
+
+/* Token badge */
+.token-badge {
+    color: #9575cd;
+    padding: 3px 8px;
+    font-size: 0.75rem;
+}
+
+/* Multiple tokens display */
+.token-list {
+    display: inline-flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.token-item {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    background: rgba(149, 117, 205, 0.2);
+    border: 1px solid rgba(149, 117, 205, 0.3);
+    color: #b39ddb;
+}
+
+.token-more {
+    color: #9575cd;
+    font-size: 0.7rem;
+    font-style: italic;
+}
+
+/* Pagination Controls */
+.pagination-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    margin-top: 20px;
+    background: linear-gradient(135deg,
+        rgba(255, 255, 255, 0.05) 0%,
+        rgba(255, 255, 255, 0.02) 100%);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.pagination-info {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.pagination-buttons {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.pagination-buttons .btn {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+}
+
+.pagination-buttons .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.page-indicator {
+    padding: 0 12px;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.pagination-size {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+}
+
+.pagination-size label {
+    color: var(--text-secondary);
+}
+
+.pagination-size select {
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.pagination-size select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(0, 210, 106, 0.2);
 }
 
 /* Copy button */
@@ -7507,6 +7655,52 @@ body.privacy-mode .section-title {
 [data-theme="light"] .direction-badge.direction-received {
     background: rgba(0, 184, 148, 0.1);
     color: #00a884;
+}
+
+[data-theme="light"] .tx-badge {
+    background: linear-gradient(135deg,
+        rgba(0, 0, 0, 0.04) 0%,
+        rgba(0, 0, 0, 0.02) 100%);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .time-badge {
+    color: #64748b;
+}
+
+[data-theme="light"] .amount-badge {
+    color: #f59e0b;
+}
+
+[data-theme="light"] .hash-badge {
+    color: #3b82f6;
+}
+
+[data-theme="light"] .token-badge {
+    color: #8b5cf6;
+}
+
+[data-theme="light"] .token-item {
+    background: rgba(139, 92, 246, 0.15);
+    border-color: rgba(139, 92, 246, 0.3);
+    color: #7c3aed;
+}
+
+[data-theme="light"] .token-more {
+    color: #8b5cf6;
+}
+
+[data-theme="light"] .pagination-controls {
+    background: linear-gradient(135deg,
+        rgba(255, 255, 255, 0.8) 0%,
+        rgba(249, 250, 251, 0.6) 100%);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .pagination-size select {
+    background: rgba(0, 0, 0, 0.02);
+    border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 /* Responsive design for transaction table */
