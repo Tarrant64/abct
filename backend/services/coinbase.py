@@ -406,6 +406,46 @@ class CoinbaseService:
 
         return None
 
+    async def get_transactions(self, user_id: int = None, limit: int = 100) -> List[dict]:
+        """
+        Get transaction history from Coinbase.
+
+        Returns:
+            List of transactions from CDP API v3
+        """
+        transactions = []
+        path = "/api/v3/brokerage/orders/historical/batch"
+        cursor = None
+
+        try:
+            while len(transactions) < limit:
+                params = {
+                    "limit": min(250, limit - len(transactions)),
+                    "order_status": "FILLED"  # Only completed transactions
+                }
+                if cursor:
+                    params["cursor"] = cursor
+
+                data = await self._make_request("GET", path, params, user_id=user_id)
+                if not data:
+                    break
+
+                orders = data.get("orders", [])
+                transactions.extend(orders)
+
+                # Check for pagination
+                if data.get("has_next") and data.get("cursor"):
+                    cursor = data["cursor"]
+                else:
+                    break
+
+            logger.info(f"Fetched {len(transactions)} Coinbase transactions")
+            return transactions[:limit]
+
+        except Exception as e:
+            logger.error(f"Error fetching Coinbase transactions: {e}")
+            return []
+
 
 # Singleton instance
 coinbase_service = CoinbaseService()
