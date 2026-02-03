@@ -21,7 +21,7 @@ router = APIRouter(prefix="/transactions", tags=["transactions"])
 @router.get("")
 async def get_transaction_history(
     user_id: int = Depends(verify_session),
-    days: int = Query(7, ge=1, le=90, description="Number of days to look back"),
+    days: int = Query(7, ge=1, le=100000, description="Number of days to look back"),
     blockchain: Optional[str] = Query(None, description="Filter by blockchain"),
     direction: Optional[str] = Query(None, description="Filter by direction (sent/received)"),
     search: Optional[str] = Query(None, description="Search in tx hash, addresses, tokens"),
@@ -91,7 +91,7 @@ async def get_transaction_history(
 @router.post("/refresh")
 async def refresh_transaction_history(
     user_id: int = Depends(verify_session),
-    days: int = Query(7, ge=1, le=90, description="Number of days to fetch"),
+    days: int = Query(7, ge=1, le=100000, description="Number of days to fetch"),
     blockchain: Optional[str] = Query(None, description="Fetch for specific blockchain only")
 ):
     """
