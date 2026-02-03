@@ -2,9 +2,11 @@
 Transaction History Router - API endpoints for consolidated transaction history
 """
 
-from fastapi import APIRouter, Query, Depends, HTTPException
-from typing import Optional
+from fastapi import APIRouter, Query, Depends, HTTPException, BackgroundTasks
+from typing import Optional, Dict
 import logging
+import asyncio
+from datetime import datetime
 
 import sys
 import os
@@ -16,6 +18,9 @@ from auth_utils import verify_session
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
+
+# Background task tracking
+background_tasks: Dict[int, Dict] = {}  # user_id -> task info
 
 
 @router.get("")
@@ -88,6 +93,106 @@ async def get_transaction_history(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+async def _background_fetch_task(user_id: int, days: int, blockchain: Optional[str]):
+    """Background task to fetch transactions"""
+    try:
+        background_tasks[user_id]['status'] = 'running'
+        background_tasks[user_id]['message'] = 'Fetching transactions from blockchains...'
+
+        logger.info(f"Background fetch started for user {user_id}, days={days}, blockchain={blockchain}")
+
+        counts = await transaction_history_service.fetch_transactions(
+            user_id, days, blockchain
+        )
+
+        total = sum(counts.values())
+        background_tasks[user_id]['status'] = 'completed'
+        background_tasks[user_id]['message'] = f'Fetched {total} transactions'
+        background_tasks[user_id]['counts'] = counts
+        background_tasks[user_id]['total_fetched'] = total
+        background_tasks[user_id]['completed_at'] = datetime.now().isoformat()
+
+        logger.info(f"Background fetch completed for user {user_id}: {counts}")
+
+    except Exception as e:
+        logger.error(f"Background fetch failed for user {user_id}: {e}")
+        background_tasks[user_id]['status'] = 'failed'
+        background_tasks[user_id]['message'] = f'Error: {str(e)}'
+        background_tasks[user_id]['error'] = str(e)
+
+
+@router.post("/refresh/start")
+async def start_background_refresh(
+    background_tasks_runner: BackgroundTasks,
+    user_id: int = Depends(verify_session),
+    days: int = Query(7, ge=1, le=100000, description="Number of days to fetch"),
+    blockchain: Optional[str] = Query(None, description="Fetch for specific blockchain only")
+):
+    """
+    Start background transaction fetch task.
+    Returns immediately while fetch continues in background.
+
+    Args:
+        user_id: Authenticated user ID (from session)
+        days: Number of days of history to fetch
+        blockchain: Optionally fetch only for specific blockchain
+
+    Returns:
+        Task ID and initial status
+    """
+    # Check if already running
+    if user_id in background_tasks and background_tasks[user_id]['status'] == 'running':
+        return {
+            'success': False,
+            'message': 'Transaction fetch already in progress',
+            'task_id': user_id
+        }
+
+    # Initialize task
+    background_tasks[user_id] = {
+        'task_id': user_id,
+        'status': 'starting',
+        'message': 'Starting transaction fetch...',
+        'started_at': datetime.now().isoformat(),
+        'days': days,
+        'blockchain': blockchain
+    }
+
+    # Start background task
+    background_tasks_runner.add_task(_background_fetch_task, user_id, days, blockchain)
+
+    return {
+        'success': True,
+        'message': 'Transaction fetch started',
+        'task_id': user_id
+    }
+
+
+@router.get("/refresh/status")
+async def get_refresh_status(
+    user_id: int = Depends(verify_session)
+):
+    """
+    Get status of background transaction fetch task.
+
+    Returns:
+        Current status of fetch task
+    """
+    if user_id not in background_tasks:
+        return {
+            'success': True,
+            'status': 'none',
+            'message': 'No fetch task running'
+        }
+
+    task = background_tasks[user_id]
+
+    return {
+        'success': True,
+        **task
+    }
+
+
 @router.post("/refresh")
 async def refresh_transaction_history(
     user_id: int = Depends(verify_session),
@@ -95,7 +200,9 @@ async def refresh_transaction_history(
     blockchain: Optional[str] = Query(None, description="Fetch for specific blockchain only")
 ):
     """
-    Fetch fresh transaction data from blockchains.
+    Fetch fresh transaction data from blockchains (blocking).
+
+    DEPRECATED: Use /refresh/start for background fetching instead.
 
     This endpoint explicitly refreshes transaction data from blockchain APIs.
     Use this when you want to force a refresh without immediately viewing results.
