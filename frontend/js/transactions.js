@@ -7,11 +7,13 @@ let expandedRows = new Set();
 let currentPage = 1;
 let pageSize = 20;
 let filteredTransactions = [];
+let fetchStatusPoll = null;
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', async () => {
     loadSavedTheme();
     await loadTransactions();
+    checkFetchStatus(); // Check if there's an ongoing fetch
 });
 
 /**
@@ -68,14 +70,11 @@ async function loadTransactions() {
 }
 
 /**
- * Refresh transactions from blockchain APIs
+ * Refresh transactions from blockchain APIs (background)
  */
 async function refreshTransactions() {
     const days = document.getElementById('daysFilter').value;
     const blockchain = document.getElementById('blockchainFilter').value;
-
-    showProcessingModal(true);
-    updateProcessingStatus('Fetching transactions from blockchains...');
 
     const params = new URLSearchParams({
         days: days,
@@ -83,34 +82,122 @@ async function refreshTransactions() {
     });
 
     try {
-        const response = await authFetch(`/transactions/refresh?${params}`, {
+        const response = await authFetch(`/transactions/refresh/start?${params}`, {
             method: 'POST'
         });
-
-        // Check if response is JSON
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-            console.error('Non-JSON response received:', response.status, response.statusText);
-            showStatus('Server error: Invalid response format', 'error');
-            return;
-        }
 
         const data = await response.json();
 
         if (data.success) {
-            const totalFetched = data.total_fetched || 0;
-            showStatus(`Fetched ${totalFetched} transactions`, 'success');
-
-            // Reload the table
-            await loadTransactions();
+            showFetchIndicator('Fetching transactions...', 'running');
+            startStatusPolling();
         } else {
-            showStatus(data.message || 'Error refreshing transactions', 'error');
+            showStatus(data.message || 'Error starting fetch', 'error');
         }
     } catch (error) {
-        console.error('Error refreshing transactions:', error);
-        showStatus('Failed to refresh transactions', 'error');
-    } finally {
-        showProcessingModal(false);
+        console.error('Error starting transaction fetch:', error);
+        showStatus('Failed to start transaction fetch', 'error');
+    }
+}
+
+/**
+ * Check fetch status (on page load)
+ */
+async function checkFetchStatus() {
+    try {
+        const response = await authFetch('/transactions/refresh/status');
+        const data = await response.json();
+
+        if (data.success && data.status === 'running') {
+            showFetchIndicator('Fetching transactions...', 'running');
+            startStatusPolling();
+        }
+    } catch (error) {
+        // Silently fail - probably no task running
+    }
+}
+
+/**
+ * Start polling for fetch status
+ */
+function startStatusPolling() {
+    if (fetchStatusPoll) {
+        clearInterval(fetchStatusPoll);
+    }
+
+    fetchStatusPoll = setInterval(async () => {
+        try {
+            const response = await authFetch('/transactions/refresh/status');
+            const data = await response.json();
+
+            if (data.success) {
+                if (data.status === 'running') {
+                    showFetchIndicator(data.message || 'Fetching transactions...', 'running');
+                } else if (data.status === 'completed') {
+                    const total = data.total_fetched || 0;
+                    showFetchIndicator(`Fetched ${total} transactions`, 'completed');
+                    stopStatusPolling();
+
+                    // Reload transactions after 2 seconds
+                    setTimeout(async () => {
+                        hideFetchIndicator();
+                        await loadTransactions();
+                        showStatus(`Loaded ${total} new transactions`, 'success');
+                    }, 2000);
+                } else if (data.status === 'failed') {
+                    showFetchIndicator('Fetch failed', 'failed');
+                    stopStatusPolling();
+                    setTimeout(hideFetchIndicator, 3000);
+                }
+            }
+        } catch (error) {
+            console.error('Error polling fetch status:', error);
+            stopStatusPolling();
+        }
+    }, 2000); // Poll every 2 seconds
+}
+
+/**
+ * Stop status polling
+ */
+function stopStatusPolling() {
+    if (fetchStatusPoll) {
+        clearInterval(fetchStatusPoll);
+        fetchStatusPoll = null;
+    }
+}
+
+/**
+ * Show fetch indicator
+ */
+function showFetchIndicator(message, status) {
+    let indicator = document.getElementById('fetchIndicator');
+
+    if (!indicator) {
+        // Create indicator if it doesn't exist
+        indicator = document.createElement('div');
+        indicator.id = 'fetchIndicator';
+        indicator.className = 'fetch-indicator';
+        document.body.appendChild(indicator);
+    }
+
+    indicator.className = `fetch-indicator ${status}`;
+    indicator.innerHTML = `
+        <div class="fetch-content">
+            ${status === 'running' ? '<div class="fetch-spinner"></div>' : ''}
+            <span class="fetch-message">${message}</span>
+        </div>
+    `;
+    indicator.style.display = 'flex';
+}
+
+/**
+ * Hide fetch indicator
+ */
+function hideFetchIndicator() {
+    const indicator = document.getElementById('fetchIndicator');
+    if (indicator) {
+        indicator.style.display = 'none';
     }
 }
 

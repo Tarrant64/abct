@@ -827,7 +827,7 @@ class TransactionHistoryService:
             for tx in transactions:
                 try:
                     await db.execute("""
-                        INSERT OR REPLACE INTO transaction_history
+                        INSERT OR IGNORE INTO transaction_history
                         (user_id, wallet_id, blockchain, tx_hash, tx_time, direction,
                          amount, token_symbol, token_name, from_address, to_address,
                          fee, status, metadata, fetched_at)
