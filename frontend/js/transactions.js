@@ -139,11 +139,17 @@ function renderTransactions(transactions) {
                     <div class="detail-grid">
                         <div class="detail-item">
                             <strong>From:</strong>
-                            <span class="address">${formatAddress(tx.from_address)}</span>
+                            <div class="detail-content">
+                                <span class="address">${formatAddress(tx.from_address)}</span>
+                                ${tx.from_address ? `<button class="btn-copy" onclick="copyToClipboard('${tx.from_address}', event)" title="Copy address">&#128203;</button>` : ''}
+                            </div>
                         </div>
                         <div class="detail-item">
                             <strong>To:</strong>
-                            <span class="address">${formatAddress(tx.to_address)}</span>
+                            <div class="detail-content">
+                                <span class="address">${formatAddress(tx.to_address)}</span>
+                                ${tx.to_address ? `<button class="btn-copy" onclick="copyToClipboard('${tx.to_address}', event)" title="Copy address">&#128203;</button>` : ''}
+                            </div>
                         </div>
                         <div class="detail-item">
                             <strong>Fee:</strong>
@@ -153,14 +159,16 @@ function renderTransactions(transactions) {
                             <strong>Status:</strong>
                             <span class="status-${tx.status}">${tx.status}</span>
                         </div>
-                        <div class="detail-item detail-full">
-                            <strong>Full Hash:</strong>
-                            <span class="hash-full">${tx.tx_hash}</span>
-                            <button class="btn-copy" onclick="copyToClipboard('${tx.tx_hash}', event)" title="Copy hash">&#128203;</button>
-                        </div>
-                        <div class="detail-item detail-full">
+                        <div class="detail-item">
                             <strong>Wallet:</strong>
                             <span>${tx.wallet_name || tx.wallet_address || 'Unknown'}</span>
+                        </div>
+                        <div class="detail-item detail-full">
+                            <strong>Full Hash:</strong>
+                            <div class="detail-content">
+                                <span class="hash-full">${tx.tx_hash}</span>
+                                <button class="btn-copy" onclick="copyToClipboard('${tx.tx_hash}', event)" title="Copy hash">&#128203;</button>
+                            </div>
                         </div>
                     </div>
                 </div>
