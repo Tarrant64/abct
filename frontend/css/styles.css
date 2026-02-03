@@ -6933,3 +6933,490 @@ body.privacy-mode .section-title {
     padding: 16px 20px;
     box-shadow: 0 0 15px rgba(0, 210, 106, 0.2), 0 2px 4px rgba(0, 0, 0, 0.3);
 }
+
+/*===============================================================================
+  TRANSACTION HISTORY PAGE
+===============================================================================*/
+
+/* Filter section */
+.filter-section {
+    margin-bottom: 30px;
+}
+
+.filter-bar {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 20px;
+    background: var(--bg-card);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.filter-group label {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.filter-group select,
+.filter-group input[type="search"] {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    min-width: 140px;
+}
+
+.filter-group input[type="search"] {
+    min-width: 200px;
+}
+
+/* Transaction list container */
+.transaction-list {
+    background: var(--bg-card);
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+
+/* Transaction table - Wireshark style */
+#txTable {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+#txTable thead {
+    background: var(--bg-secondary);
+    border-bottom: 2px solid var(--border-color);
+}
+
+#txTable thead th {
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+#txTable tbody tr {
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* Main transaction row */
+.tx-row {
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.tx-row:hover {
+    background: var(--bg-secondary);
+}
+
+.tx-row td {
+    padding: 12px 16px;
+    vertical-align: middle;
+}
+
+/* Expand/collapse cell */
+.expand-cell {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    width: 40px;
+}
+
+/* Amount cell */
+.amount-cell {
+    font-family: 'Courier New', monospace;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+/* Hash cell with link */
+.hash-cell {
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+}
+
+.hash-link {
+    color: var(--accent-primary);
+    text-decoration: none;
+}
+
+.hash-link:hover {
+    text-decoration: underline;
+}
+
+/* Chain badges for transaction table */
+.chain-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+.chain-badge.chain-cardano {
+    background: rgba(0, 51, 173, 0.2);
+    color: #0033ad;
+}
+
+.chain-badge.chain-ethereum {
+    background: rgba(98, 126, 234, 0.2);
+    color: #627eea;
+}
+
+.chain-badge.chain-bitcoin {
+    background: rgba(247, 147, 26, 0.2);
+    color: #f7931a;
+}
+
+.chain-badge.chain-solana {
+    background: rgba(20, 241, 149, 0.2);
+    color: #14F195;
+}
+
+.chain-badge.chain-polygon {
+    background: rgba(130, 71, 229, 0.2);
+    color: #8247E5;
+}
+
+.chain-badge.chain-base {
+    background: rgba(0, 82, 255, 0.2);
+    color: #0052ff;
+}
+
+/* Direction badges */
+.direction-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+.direction-badge.direction-sent {
+    background: rgba(214, 48, 49, 0.2);
+    color: #d63031;
+}
+
+.direction-badge.direction-received {
+    background: rgba(0, 184, 148, 0.2);
+    color: #00b894;
+}
+
+/* Transaction details row */
+.tx-details-row {
+    background: var(--bg-secondary);
+}
+
+.tx-details {
+    padding: 20px;
+    border-top: 1px solid var(--border-color);
+}
+
+.detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+}
+
+.detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.detail-item strong {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.detail-item span {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+.detail-full {
+    grid-column: 1 / -1;
+}
+
+.address,
+.hash-full {
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    word-break: break-all;
+}
+
+/* Status badges */
+.status-confirmed {
+    color: #00b894;
+}
+
+.status-pending {
+    color: #fdcb6e;
+}
+
+.status-failed {
+    color: #d63031;
+}
+
+/* Copy button */
+.btn-copy {
+    background: transparent;
+    border: none;
+    color: var(--accent-primary);
+    cursor: pointer;
+    padding: 4px 8px;
+    margin-left: 8px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.btn-copy:hover {
+    background: var(--bg-hover);
+}
+
+/* Loading indicator */
+.loading-indicator {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.loading-indicator .spinner {
+    display: inline-block;
+    width: 40px;
+    height: 40px;
+    border: 4px solid var(--border-color);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.loading-indicator p {
+    margin-top: 20px;
+    color: var(--text-secondary);
+}
+
+/* Empty state */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.empty-state p {
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+    font-size: 1.1rem;
+}
+
+/* Stats section */
+.stats-section {
+    margin-bottom: 30px;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    padding: 20px;
+    background: var(--bg-card);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
+
+.stat-item {
+    text-align: center;
+}
+
+.stat-item .stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--accent-primary);
+    margin-bottom: 5px;
+}
+
+.stat-item .stat-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Processing modal */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal.active {
+    display: flex;
+}
+
+.modal-content {
+    background: var(--bg-card);
+    padding: 40px;
+    border-radius: 16px;
+    text-align: center;
+    max-width: 400px;
+    border: 1px solid var(--border-color);
+}
+
+.modal-content h2 {
+    margin-bottom: 30px;
+    color: var(--text-primary);
+}
+
+.modal-content .spinner {
+    display: inline-block;
+    width: 50px;
+    height: 50px;
+    border: 4px solid var(--border-color);
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 20px;
+}
+
+.modal-content p {
+    color: var(--text-secondary);
+}
+
+/* Transaction count badge */
+.badge {
+    display: inline-block;
+    background: var(--accent-primary);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-left: 10px;
+}
+
+/* Light theme overrides for transactions */
+[data-theme="light"] .filter-bar,
+[data-theme="light"] .transaction-list,
+[data-theme="light"] .stats-grid {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .tx-row:hover {
+    background: #f9fafb;
+}
+
+[data-theme="light"] .tx-details-row {
+    background: #f5f7fa;
+}
+
+[data-theme="light"] .chain-badge.chain-cardano {
+    background: rgba(0, 51, 173, 0.1);
+    color: #0033ad;
+}
+
+[data-theme="light"] .chain-badge.chain-ethereum {
+    background: rgba(98, 126, 234, 0.1);
+    color: #4a5fd8;
+}
+
+[data-theme="light"] .chain-badge.chain-bitcoin {
+    background: rgba(247, 147, 26, 0.1);
+    color: #f7931a;
+}
+
+[data-theme="light"] .chain-badge.chain-solana {
+    background: rgba(20, 241, 149, 0.1);
+    color: #00bf88;
+}
+
+[data-theme="light"] .chain-badge.chain-polygon {
+    background: rgba(130, 71, 229, 0.1);
+    color: #8247E5;
+}
+
+[data-theme="light"] .chain-badge.chain-base {
+    background: rgba(0, 82, 255, 0.1);
+    color: #0052ff;
+}
+
+[data-theme="light"] .direction-badge.direction-sent {
+    background: rgba(214, 48, 49, 0.1);
+    color: #c92a2a;
+}
+
+[data-theme="light"] .direction-badge.direction-received {
+    background: rgba(0, 184, 148, 0.1);
+    color: #00a884;
+}
+
+/* Responsive design for transaction table */
+@media (max-width: 768px) {
+    .filter-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filter-group {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filter-group label {
+        margin-bottom: 5px;
+    }
+
+    .filter-group select,
+    .filter-group input[type="search"] {
+        width: 100%;
+        min-width: auto;
+    }
+
+    #txTable {
+        font-size: 0.8rem;
+    }
+
+    #txTable thead th {
+        padding: 8px 10px;
+        font-size: 0.75rem;
+    }
+
+    .tx-row td {
+        padding: 10px 8px;
+    }
+
+    .detail-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .detail-full {
+        grid-column: 1;
+    }
+}
