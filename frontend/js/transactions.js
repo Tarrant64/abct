@@ -526,6 +526,25 @@ function changeTheme(theme) {
 }
 
 /**
+ * Toggle collapsible section
+ */
+function toggleSection(headerElement) {
+    const section = headerElement.parentElement;
+    const content = section.querySelector('.section-content');
+    const icon = headerElement.querySelector('.collapse-icon');
+
+    if (content && icon) {
+        if (content.style.display === 'none') {
+            content.style.display = 'block';
+            icon.textContent = '▼';
+        } else {
+            content.style.display = 'none';
+            icon.textContent = '▶';
+        }
+    }
+}
+
+/**
  * Toggle waffle menu
  */
 function toggleWaffleMenu() {
