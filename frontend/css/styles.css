@@ -6827,6 +6827,70 @@ body.privacy-mode .section-title {
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
+/* Light theme - Collapsible sections */
+[data-theme="light"] .collapsible-section .section-header {
+    background-color: #f5f7fa;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .collapsible-section .section-header:hover {
+    background-color: #e9ecef;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Light theme - API categories and sections */
+[data-theme="light"] .api-category,
+[data-theme="light"] .api-group,
+[data-theme="light"] .api-section {
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+/* Light theme - Backup and export sections */
+[data-theme="light"] .section-card,
+[data-theme="light"] .backup-section,
+[data-theme="light"] .export-section,
+[data-theme="light"] .export-card {
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+/* Light theme - Generic cards and containers */
+[data-theme="light"] .card,
+[data-theme="light"] .info-card,
+[data-theme="light"] .stat-card {
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+/* Light theme - Filter buttons and controls */
+[data-theme="light"] .filter-btn,
+[data-theme="light"] .tab-btn {
+    background-color: #f5f7fa;
+    border: 1px solid #e5e7eb;
+    color: #1a1a2e;
+}
+
+[data-theme="light"] .filter-btn.active,
+[data-theme="light"] .tab-btn.active {
+    background-color: #667eea;
+    color: #ffffff;
+    border-color: #667eea;
+}
+
+[data-theme="light"] .filter-btn:hover,
+[data-theme="light"] .tab-btn:hover {
+    background-color: #e9ecef;
+}
+
 /*===============================================================================
   DARK MODE THEME - Specific Overrides with Glowing Borders
 ===============================================================================*/
