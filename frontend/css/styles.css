@@ -7703,6 +7703,92 @@ body.privacy-mode .section-title {
     border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
+/* Background Fetch Indicator */
+.fetch-indicator {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10000;
+    background: linear-gradient(135deg,
+        rgba(0, 210, 106, 0.15) 0%,
+        rgba(0, 150, 75, 0.1) 100%);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(0, 210, 106, 0.3);
+    border-radius: 12px;
+    padding: 12px 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    display: none;
+    animation: slideIn 0.3s ease;
+}
+
+.fetch-indicator.running {
+    background: linear-gradient(135deg,
+        rgba(59, 130, 246, 0.15) 0%,
+        rgba(37, 99, 235, 0.1) 100%);
+    border-color: rgba(59, 130, 246, 0.3);
+}
+
+.fetch-indicator.completed {
+    background: linear-gradient(135deg,
+        rgba(0, 210, 106, 0.15) 0%,
+        rgba(0, 150, 75, 0.1) 100%);
+    border-color: rgba(0, 210, 106, 0.3);
+}
+
+.fetch-indicator.failed {
+    background: linear-gradient(135deg,
+        rgba(239, 68, 68, 0.15) 0%,
+        rgba(220, 38, 38, 0.1) 100%);
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.fetch-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.fetch-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.fetch-message {
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+[data-theme="light"] .fetch-indicator {
+    background: linear-gradient(135deg,
+        rgba(59, 130, 246, 0.1) 0%,
+        rgba(37, 99, 235, 0.05) 100%);
+    border-color: rgba(59, 130, 246, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .fetch-indicator.completed {
+    background: linear-gradient(135deg,
+        rgba(16, 185, 129, 0.1) 0%,
+        rgba(5, 150, 105, 0.05) 100%);
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
 /* Responsive design for transaction table */
 @media (max-width: 768px) {
     .filter-bar {
@@ -7713,6 +7799,13 @@ body.privacy-mode .section-title {
     .filter-group {
         flex-direction: column;
         align-items: stretch;
+    }
+
+    .fetch-indicator {
+        top: 10px;
+        right: 10px;
+        left: 10px;
+        padding: 10px 16px;
     }
 
     .filter-group label {
