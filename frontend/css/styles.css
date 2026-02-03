@@ -7182,15 +7182,15 @@ body.privacy-mode .section-title {
 
 .detail-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
 }
 
 .detail-item {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 12px 16px;
+    gap: 6px;
+    padding: 10px 12px;
     background: linear-gradient(135deg,
         rgba(255, 255, 255, 0.03) 0%,
         rgba(255, 255, 255, 0.01) 100%);
@@ -7211,7 +7211,7 @@ body.privacy-mode .section-title {
 }
 
 .detail-item strong {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -7219,9 +7219,19 @@ body.privacy-mode .section-title {
 }
 
 .detail-item span {
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     color: var(--text-primary);
     word-break: break-word;
+}
+
+.detail-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.detail-content .btn-copy {
+    flex-shrink: 0;
 }
 
 .detail-full {
