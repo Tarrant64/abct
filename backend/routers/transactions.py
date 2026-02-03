@@ -55,10 +55,21 @@ async def get_transaction_history(
             user_id, days, blockchain, direction, search
         )
 
-        # Format timestamps for frontend
+        # Format timestamps for frontend (convert datetime to string for JSON)
         for tx in transactions:
             if tx.get('tx_time'):
-                tx['tx_time_formatted'] = tx['tx_time']
+                tx_time = tx['tx_time']
+                if isinstance(tx_time, str):
+                    tx['tx_time_formatted'] = tx_time
+                else:
+                    tx['tx_time_formatted'] = tx_time.isoformat() if hasattr(tx_time, 'isoformat') else str(tx_time)
+                    tx['tx_time'] = tx['tx_time_formatted']
+
+            # Convert any other datetime fields
+            if tx.get('fetched_at'):
+                fetched = tx['fetched_at']
+                if not isinstance(fetched, str):
+                    tx['fetched_at'] = fetched.isoformat() if hasattr(fetched, 'isoformat') else str(fetched)
 
         return {
             'success': True,
