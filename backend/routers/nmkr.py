@@ -6,9 +6,10 @@ Provides a backend proxy for NMKR Studio API requests to hide the API key from f
 
 import httpx
 import logging
-from fastapi import APIRouter, HTTPException, Depends
+from typing import Optional
+from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import Response
-from auth_utils import verify_session
+from auth_utils import verify_session_optional
 from services.nmkr_service import nmkr_service
 
 router = APIRouter(prefix="/nmkr", tags=["nmkr"])
@@ -21,7 +22,7 @@ NMKR_BASE_URL = "https://studio-api.nmkr.io"
 async def get_token_image_proxy(
     policy_id: str,
     token_name_hex: str,
-    user_id: int = Depends(verify_session)
+    user_id: Optional[int] = Depends(verify_session_optional)
 ):
     """
     Proxy NMKR token image requests through backend to hide API key.
@@ -29,10 +30,13 @@ async def get_token_image_proxy(
     This endpoint fetches images from NMKR Studio API with proper authentication
     and returns the image to the frontend, preventing API key exposure.
 
+    Authentication is optional - if not provided, uses default user (user_id=1).
+    This allows image tags to load without auth headers.
+
     Args:
         policy_id: Cardano policy ID (hex)
         token_name_hex: Token name in hexadecimal format
-        user_id: Authenticated user ID
+        user_id: Authenticated user ID (optional, defaults to 1)
 
     Returns:
         Image data with appropriate content type
@@ -40,6 +44,10 @@ async def get_token_image_proxy(
     Raises:
         HTTPException: If NMKR not configured, image not found, or request fails
     """
+    # Use default user if not authenticated (for img tag requests)
+    if user_id is None:
+        user_id = 1
+
     # Get API key for user
     api_key = await nmkr_service.get_api_key(user_id)
     if not api_key:

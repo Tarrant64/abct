@@ -23,7 +23,7 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import ETHERSCAN_API_KEY, ETHERSCAN_BASE_URL, BASESCAN_BASE_URL, POLYGONSCAN_BASE_URL
+from services.api_key_manager import APIKeyManager, ETHERSCAN_BASE_URL, BASESCAN_BASE_URL, POLYGONSCAN_BASE_URL
 from database import get_cache, set_cache
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 ETHERSCAN_CACHE_TTL = 300  # 5 minutes for transaction data
 
 
-class EtherscanService:
+class EtherscanService(APIKeyManager):
     """Service for fetching EVM blockchain data from Etherscan-compatible APIs."""
 
     # Chain configurations
@@ -58,13 +58,14 @@ class EtherscanService:
     }
 
     def __init__(self):
-        self.api_key = ETHERSCAN_API_KEY
+        super().__init__(api_name='etherscan', env_var='ETHERSCAN_API_KEY')
         self._cache: Dict[str, dict] = {}
         self._cache_ttl = timedelta(minutes=5)
 
-    def is_configured(self) -> bool:
+    async def is_configured(self) -> bool:
         """Check if the API key is configured."""
-        return bool(self.api_key)
+        key = await self.get_api_key()
+        return bool(key)
 
     def _get_chain_config(self, chain: str) -> Optional[dict]:
         """Get configuration for a specific chain."""
@@ -81,7 +82,7 @@ class EtherscanService:
         Returns:
             API response data or None if error
         """
-        if not self.is_configured():
+        if not await self.is_configured():
             logger.warning("Etherscan API key not configured")
             return None
 
@@ -91,7 +92,7 @@ class EtherscanService:
             return None
 
         # Add API key to params
-        params['apikey'] = self.api_key
+        params['apikey'] = await self.get_api_key()
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -317,7 +318,7 @@ class EtherscanService:
         return {
             'configured': self.is_configured(),
             'supported_chains': list(self.CHAINS.keys()),
-            'api_key_set': bool(self.api_key)
+            'api_key_set': bool(await self.get_api_key())
         }
 
 

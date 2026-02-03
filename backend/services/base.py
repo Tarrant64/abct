@@ -17,7 +17,8 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import ALCHEMY_API_KEY, ALCHEMY_BASE_URL_CHAIN
+from config import ALCHEMY_BASE_URL_CHAIN
+from services.api_key_manager import APIKeyManager
 from database import get_cache, set_cache
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ BASE_NFT_CACHE_KEY = "base_nft_all_data"
 BASE_CACHE_TTL = 86400 * 30  # 30 days
 
 
-class BaseService:
+class BaseService(APIKeyManager):
     """Service for fetching Base blockchain wallet data from Alchemy API."""
 
     # Whitelist of legitimate Base NFT patterns (case-insensitive)
@@ -64,7 +65,7 @@ class BaseService:
     ]
 
     def __init__(self):
-        self.api_key = ALCHEMY_API_KEY
+        super().__init__(api_name='alchemy', env_var='ALCHEMY_API_KEY')
         self.base_url = ALCHEMY_BASE_URL_CHAIN
         self._balance_cache: Dict[str, dict] = {}
         self._nft_cache: Dict[str, dict] = {}
@@ -73,6 +74,25 @@ class BaseService:
         self._nft_cache_ttl = timedelta(hours=24)
         self.last_nft_refresh: Optional[datetime] = None
         self._db_cache_loaded = False
+
+    async def _get_v2_url(self) -> str:
+        """Get Alchemy v2 API URL with API key."""
+        api_key = await self.get_api_key()
+        if not api_key:
+            return ""
+        return f"{self.base_url}/v2/{api_key}"
+
+    async def _get_nft_url(self) -> str:
+        """Get Alchemy NFT API URL with API key."""
+        api_key = await self.get_api_key()
+        if not api_key:
+            return ""
+        return f"{self.base_url}/nft/v3/{api_key}"
+
+    async def is_configured(self) -> bool:
+        """Check if the API key is configured."""
+        key = await self.get_api_key()
+        return bool(key)
 
     def _is_allowed_nft(self, name: str, collection_name: str, description: str = '') -> bool:
         """
@@ -101,9 +121,10 @@ class BaseService:
         # By default, don't show unknown NFTs (they're likely scams on Base)
         return False
 
-    def is_configured(self) -> bool:
+    async def is_configured(self) -> bool:
         """Check if the API key is configured."""
-        return bool(self.api_key)
+        key = await self.get_api_key()
+        return bool(key)
 
     def is_base_address(self, address: str) -> bool:
         """Check if an address could be a Base address (same format as Ethereum)."""
@@ -130,7 +151,7 @@ class BaseService:
         Returns:
             ETH balance as float, or None if error
         """
-        if not self.is_configured():
+        if not await self.is_configured():
             logger.warning("Alchemy API key not configured")
             return None
 
@@ -144,7 +165,7 @@ class BaseService:
                 }
 
                 response = await client.post(
-                    f"{self.base_url}/v2/{self.api_key}",
+                    await self._get_v2_url(),
                     json=payload
                 )
 
@@ -178,7 +199,7 @@ class BaseService:
         Returns:
             List of token balances with metadata
         """
-        if not self.is_configured():
+        if not await self.is_configured():
             logger.warning("Alchemy API key not configured")
             return []
 
@@ -192,7 +213,7 @@ class BaseService:
                 }
 
                 response = await client.post(
-                    f"{self.base_url}/v2/{self.api_key}",
+                    await self._get_v2_url(),
                     json=payload
                 )
 
@@ -253,7 +274,7 @@ class BaseService:
             }
 
             response = await client.post(
-                f"{self.base_url}/v2/{self.api_key}",
+                await self._get_v2_url(),
                 json=payload
             )
 
@@ -279,7 +300,7 @@ class BaseService:
         if not self.is_base_address(address):
             return None
 
-        if not self.is_configured():
+        if not await self.is_configured():
             logger.warning("Alchemy API key not configured for Base")
             return None
 
@@ -321,7 +342,7 @@ class BaseService:
         Returns:
             Dictionary with NFTs and pagination info
         """
-        if not self.is_configured():
+        if not await self.is_configured():
             logger.warning("Alchemy API key not configured")
             return None
 
@@ -338,7 +359,7 @@ class BaseService:
                     params['pageKey'] = page_key
 
                 response = await client.get(
-                    f"{self.base_url}/nft/v3/{self.api_key}/getNFTsForOwner",
+                    f"{await self._get_nft_url()}/getNFTsForOwner",
                     params=params
                 )
 
@@ -440,7 +461,7 @@ class BaseService:
         if not force_refresh and self._is_nft_cache_valid():
             return list(self._nft_cache.values())
 
-        if not self.is_configured():
+        if not await self.is_configured():
             logger.warning("Alchemy API key not configured")
             return []
 
