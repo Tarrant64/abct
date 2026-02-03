@@ -18,8 +18,9 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import HELIUS_API_KEY, HELIUS_RPC_URL
+from config import HELIUS_RPC_URL
 from database import get_all_wallets, get_cache, set_cache
+from services.api_key_manager import APIKeyManager
 
 logger = logging.getLogger(__name__)
 
@@ -28,11 +29,11 @@ SOL_NFT_CACHE_KEY = "sol_nft_all_data"
 SOL_NFT_CACHE_TTL = 86400 * 30  # 30 days - persistent until manual refresh
 
 
-class SolanaNFTService:
+class SolanaNFTService(APIKeyManager):
     """Service for fetching Solana NFTs from Helius DAS API."""
 
     def __init__(self):
-        self.api_key = HELIUS_API_KEY
+        super().__init__(api_name='helius', env_var='HELIUS_API_KEY')
         self.rpc_url = HELIUS_RPC_URL
         self._nft_cache: Dict[str, dict] = {}
         self._collection_cache: Dict[str, dict] = {}  # collection_id -> collection data
@@ -40,9 +41,10 @@ class SolanaNFTService:
         self.last_refresh: Optional[datetime] = None
         self._db_cache_loaded = False
 
-    def is_configured(self) -> bool:
+    async def is_configured(self) -> bool:
         """Check if the API key is configured."""
-        return bool(self.api_key)
+        key = await self.get_api_key()
+        return bool(key)
 
     async def get_assets_by_owner(self, address: str, page: int = 1) -> Optional[dict]:
         """
@@ -55,10 +57,11 @@ class SolanaNFTService:
         Returns:
             Dictionary with NFT assets and pagination info
         """
-        if not self.is_configured():
+        if not await self.is_configured():
             logger.warning("Helius API key not configured")
             return None
 
+        api_key = await self.get_api_key()
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 payload = {
@@ -79,7 +82,7 @@ class SolanaNFTService:
                 }
 
                 response = await client.post(
-                    f"{self.rpc_url}/?api-key={self.api_key}",
+                    f"{self.rpc_url}/?api-key={api_key}",
                     json=payload
                 )
 
@@ -156,7 +159,7 @@ class SolanaNFTService:
         image_url = ""
 
         if files:
-            # Prefer CDN URL if available
+            # Prefer CDN URI (Helius CDN caches Shadow Drive and avoids timeouts)
             for f in files:
                 if f.get("cdn_uri"):
                     image_url = f["cdn_uri"]
@@ -268,7 +271,7 @@ class SolanaNFTService:
         if not force_refresh and self._is_cache_valid():
             return list(self._nft_cache.values())
 
-        if not self.is_configured():
+        if not await self.is_configured():
             logger.warning("Helius API key not configured")
             return []
 
@@ -401,10 +404,10 @@ class SolanaNFTService:
         self.last_refresh = None
         self._db_cache_loaded = False
 
-    def get_status(self) -> dict:
+    async def get_status(self) -> dict:
         """Get service status and configuration."""
         return {
-            'configured': self.is_configured(),
+            'configured': await self.is_configured(),
             'cached_nfts': len(self._nft_cache),
             'cached_collections': len(self._collection_cache),
             'cache_ttl_hours': self._cache_ttl.total_seconds() / 3600,
