@@ -248,7 +248,7 @@ function renderTransactions(transactions) {
             <td><span class="tx-badge time-badge">${formatTime(tx.tx_time)}</span></td>
             <td><span class="chain-badge chain-${tx.blockchain}">${formatChainName(tx.blockchain)}</span></td>
             <td><span class="direction-badge direction-${tx.direction}">${tx.direction}</span></td>
-            <td class="amount-cell"><span class="tx-badge amount-badge">${formatAmount(tx.amount)} ${tx.token_symbol}</span></td>
+            <td class="amount-cell"><span class="tx-badge amount-badge">${wrapBlurValue(formatAmount(tx.amount))} ${tx.token_symbol}</span></td>
             <td>${tokenDisplay}</td>
             <td class="hash-cell"><span class="tx-badge hash-badge">${formatHash(tx.tx_hash, tx.blockchain)}</span></td>
         `;
@@ -267,7 +267,7 @@ function renderTransactions(transactions) {
                         <div class="detail-item">
                             <strong>From:</strong>
                             <div class="detail-content">
-                                <span class="address">${formatAddress(tx.from_address)}</span>
+                                <span class="address">${wrapBlurValue(formatAddress(tx.from_address))}</span>
                                 ${tx.from_address ? `<button class="copy-address-btn" onclick="copyToClipboard('${tx.from_address}', this); event.stopPropagation();" title="Copy address">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -279,7 +279,7 @@ function renderTransactions(transactions) {
                         <div class="detail-item">
                             <strong>To:</strong>
                             <div class="detail-content">
-                                <span class="address">${formatAddress(tx.to_address)}</span>
+                                <span class="address">${wrapBlurValue(formatAddress(tx.to_address))}</span>
                                 ${tx.to_address ? `<button class="copy-address-btn" onclick="copyToClipboard('${tx.to_address}', this); event.stopPropagation();" title="Copy address">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -298,12 +298,12 @@ function renderTransactions(transactions) {
                         </div>
                         <div class="detail-item">
                             <strong>Wallet:</strong>
-                            <span>${tx.wallet_name || tx.wallet_address || 'Unknown'}</span>
+                            <span>${wrapBlurValue(tx.wallet_name || tx.wallet_address || 'Unknown')}</span>
                         </div>
                         <div class="detail-item detail-full">
                             <strong>Full Hash:</strong>
                             <div class="detail-content">
-                                <span class="hash-full">${tx.tx_hash}</span>
+                                <span class="hash-full">${wrapBlurValue(tx.tx_hash)}</span>
                                 <button class="copy-address-btn" onclick="copyToClipboard('${tx.tx_hash}', this); event.stopPropagation();" title="Copy hash">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -412,13 +412,14 @@ function formatHash(hash, blockchain) {
     if (!hash) return 'N/A';
 
     const truncated = truncateHash(hash);
+    const blurredHash = wrapBlurValue(truncated);
     const explorerUrl = getExplorerUrl(hash, blockchain);
 
     if (explorerUrl) {
-        return `<a href="${explorerUrl}" target="_blank" class="hash-link" onclick="event.stopPropagation()">${truncated}</a>`;
+        return `<a href="${explorerUrl}" target="_blank" class="hash-link" onclick="event.stopPropagation()">${blurredHash}</a>`;
     }
 
-    return truncated;
+    return blurredHash;
 }
 
 /**
@@ -454,13 +455,21 @@ function formatAddress(address) {
 }
 
 /**
+ * Wrap value in blur-value span for privacy mode
+ */
+function wrapBlurValue(value) {
+    if (!value || value === 'N/A') return value;
+    return `<span class="blur-value">${value}</span>`;
+}
+
+/**
  * Format fee
  */
 function formatFee(fee, blockchain) {
-    if (!fee) return '0';
+    if (!fee) return wrapBlurValue('0');
 
     const num = parseFloat(fee);
-    if (isNaN(num)) return fee;
+    if (isNaN(num)) return wrapBlurValue(fee);
 
     const symbols = {
         'cardano': 'ADA',
@@ -472,7 +481,7 @@ function formatFee(fee, blockchain) {
     };
 
     const symbol = symbols[blockchain] || '';
-    return `${num.toFixed(6)} ${symbol}`;
+    return `${wrapBlurValue(num.toFixed(6))} ${symbol}`;
 }
 
 /**
@@ -480,7 +489,20 @@ function formatFee(fee, blockchain) {
  */
 async function copyToClipboard(text, button) {
     try {
-        await navigator.clipboard.writeText(text);
+        // Try modern clipboard API first (requires HTTPS)
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+        } else {
+            // Fallback for HTTP (Docker deployments)
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+        }
 
         // Add visual feedback
         if (button) {
@@ -595,14 +617,17 @@ function isPrivacyMode() {
  */
 function togglePrivacyMode() {
     const privacyBtn = document.getElementById('privacyBtn');
+    const body = document.body;
     const currentMode = localStorage.getItem('privacyMode');
 
     if (currentMode === 'enabled') {
         localStorage.setItem('privacyMode', 'disabled');
         privacyBtn.classList.remove('active');
+        body.classList.remove('privacy-mode');
     } else {
         localStorage.setItem('privacyMode', 'enabled');
         privacyBtn.classList.add('active');
+        body.classList.add('privacy-mode');
     }
 
     // Re-render to apply privacy mode
@@ -623,8 +648,11 @@ function loadSavedTheme() {
 
     // Load privacy mode state
     const privacyBtn = document.getElementById('privacyBtn');
-    if (isPrivacyMode() && privacyBtn) {
-        privacyBtn.classList.add('active');
+    if (isPrivacyMode()) {
+        if (privacyBtn) {
+            privacyBtn.classList.add('active');
+        }
+        document.body.classList.add('privacy-mode');
     }
 }
 
