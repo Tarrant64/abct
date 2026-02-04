@@ -3,7 +3,7 @@
 A self-hosted cryptocurrency portfolio tracker that aggregates data from multiple blockchains, exchanges, and DeFi protocols.  
 
 ![Version](https://img.shields.io/badge/version-1.0.1-brightgreen.svg)
-![Build](https://img.shields.io/badge/build-1770000515-blue.svg)
+![Build](https://img.shields.io/badge/build-1770166262-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.109-teal.svg)
@@ -49,10 +49,11 @@ For a detailed overview of the system architecture, authentication flow, and dat
 ## ✨ Features
 
 ### Portfolio Tracking
-- **Multi-Blockchain Support**: Track wallets on Cardano, Bitcoin, Ethereum, Solana, Polygon, and Base
+- **Multi-Blockchain Support**: Track wallets on Cardano, Bitcoin, Ethereum, Solana, Polygon, Base, and Algorand
 - **Multi-Exchange Integration**: Connect to 7 major exchanges (Coinbase, Binance, Binance.US, OKX, Bitget, Gate.io, KuCoin)
 - **DeFi Monitoring**: View Cardano staking positions with APY and rewards
 - **NFT Collection**: Browse your NFTs with floor price valuations
+- **Transaction History**: Complete transaction tracking across all blockchains with analytics
 - **Portfolio History**: Interactive charts showing value over time (7d, 4w, 3m)
 - **Privacy Mode**: Hide sensitive financial data with one click
 
@@ -64,7 +65,23 @@ For a detailed overview of the system architecture, authentication flow, and dat
 
 ## 📦 What's New
 
-### v1.0.1 - UI & Theme System Overhaul (February 2026) ✨
+### v1.0.1 - UI, Themes, & Multi-Chain Expansion (February 2026) ✨
+- **🔗 Algorand Support**: Full blockchain integration for Algorand network
+  - Pera Wallet API integration (primary source)
+  - Tatum API fallback support
+  - Native ALGO tracking and ASA (Algorand Standard Assets)
+  - ARC-3 and ARC-69 NFT support
+  - Transaction history integration
+- **📊 Transaction History System**: Complete multi-chain transaction tracking
+  - Unified transaction view across all 7 blockchains
+  - Transaction analytics with visual charts
+  - 1,500+ demo transactions for testing
+  - Chain filtering and search capabilities
+- **🖼️ Enhanced Demo Mode**: Massive expansion of sample data
+  - 91 tokens across all blockchains
+  - 76 NFTs across 7 collections
+  - 1,500 transactions over 1 year of history
+  - More realistic portfolio simulation
 - **🎨 Complete Theme Redesign**: Reimagined theme system with enhanced visual polish
   - Renamed "Default" theme to "Dark Mode" for clarity
   - **New Light Theme**: Clean, modern white theme with refined UI elements
@@ -92,7 +109,7 @@ For a detailed overview of the system architecture, authentication flow, and dat
   - Cleaner header design
   - Theme selection with all navigation in one place
 - **🔧 Cache Busting**: Build version system for immediate CSS/JS updates
-  - Version 1770000515
+  - Version 1770166262
   - No more browser cache issues after updates
 
 ### v1.0.0 - Production Ready Release (January 2026) 🎉
@@ -161,10 +178,12 @@ For a detailed overview of the system architecture, authentication flow, and dat
   - Per-user wallet, NFT, and DeFi data isolation
   - Password change functionality built-in
 - **🎨 Demo Mode**: Try ABCT without connecting wallets
-  - Pre-loaded with realistic demo data
-  - 55 anime-themed NFT placeholders across 4 collections
+  - Pre-loaded with extensive realistic demo data
+  - 91 tokens across all 7 supported blockchains
+  - 76 NFTs across 7 collections (Cardano, Ethereum, Solana, Polygon, Base, Algorand)
+  - 1,500 transactions spanning 1 year of history
   - Demo DeFi positions and exchange balances
-  - Multi-chain NFT wall (Cardano, Ethereum, Solana)
+  - Multi-chain NFT wall with blockchain filtering
   - Login with username: `demo` / password: `demo`
 - **🖼️ Multi-Chain NFT Wall**: Enhanced NFT visualization
   - Support for Cardano, Ethereum, Solana NFTs
@@ -208,7 +227,11 @@ ABCT includes a login page to protect your portfolio data. Use these credentials
 - **Demo Account** (New in v0.12.0):
   - Username: `demo`
   - Password: `demo`
-  - Pre-loaded with sample data, NFTs, and DeFi positions
+  - Pre-loaded with extensive sample data:
+    - 91 tokens across all 7 blockchains
+    - 76 NFTs across 7 collections
+    - 1,500 transactions over 1 year
+    - DeFi positions and exchange balances
   - Try ABCT without connecting your wallets!
 
 **⚠️ IMPORTANT**: Change the default admin password after first login! See [Password Reset Guide](docs/guides/PASSWORD_RESET_GUIDE.md) for instructions.
@@ -325,8 +348,10 @@ ABCT/
 │   │   ├── cardano.py         # Cardano blockchain service
 │   │   ├── bitcoin.py         # Bitcoin blockchain service
 │   │   ├── ethereum.py        # Ethereum/EVM blockchain service
+│   │   ├── algorand.py        # Algorand blockchain service (v1.0.1+)
 │   │   ├── pricing.py         # Price aggregation
 │   │   ├── defi.py            # DeFi/staking service
+│   │   ├── transaction_history.py  # Multi-chain transaction service (v1.0.1+)
 │   │   ├── coinbase.py        # Coinbase exchange service (v1.0.0+)
 │   │   ├── binance_service.py       # Binance.com exchange (v1.0.0+)
 │   │   ├── binance_us_service.py    # Binance.US exchange (v1.0.0+)
@@ -337,7 +362,10 @@ ABCT/
 │   │   ├── nft.py             # NFT service
 │   │   ├── nft_scheduler.py   # NFT background scheduler
 │   │   ├── snapshot.py        # Portfolio snapshot service
-│   │   ├── demo_nft_service.py      # Demo NFTs (v0.12.0+)
+│   │   ├── logostream.py      # Token logo API service (v1.0.1+)
+│   │   ├── demo_wallet_service.py   # Demo wallets & tokens (91 tokens, v1.0.1+)
+│   │   ├── demo_nft_service.py      # Demo NFTs (76 NFTs across 7 chains, v1.0.1+)
+│   │   ├── demo_transaction_service.py  # Demo transactions (1,500 txns, v1.0.1+)
 │   │   ├── demo_defi_service.py     # Demo DeFi data (v0.12.0+)
 │   │   └── demo_exchange_service.py # Demo exchange data (v0.12.0+)
 │   ├── middleware/            # Security middleware
@@ -348,6 +376,7 @@ ABCT/
 ├── frontend/                  # HTML/CSS/JS frontend
 │   ├── index.html             # Main dashboard
 │   ├── wallets.html           # Wallet manager (v1.0.0: includes exchange management)
+│   ├── transactions.html      # Transaction history & analytics (v1.0.1+)
 │   ├── services.html          # Services monitor (NFT scheduler)
 │   ├── backup.html            # Backup & restore (v0.10.0+)
 │   ├── login.html             # Login page (v0.12.0+)
@@ -589,11 +618,19 @@ Built with amazing open-source tools and data from leading blockchain API provid
 #### Bitcoin Network
 - [Blockstream](https://blockstream.info/) - Bitcoin blockchain data (free, no API key required)
 
+#### Algorand Network
+- [Pera Wallet](https://developer.perawallet.app/) - Algorand blockchain API (primary)
+- [Tatum](https://tatum.io/) - Algorand blockchain data (fallback)
+
 #### Pricing & Market Data
 - [CoinGecko](https://www.coingecko.com/) - Cryptocurrency price aggregation and market data
 - [CoinMarketCap](https://coinmarketcap.com/) - Alternative cryptocurrency price data
 - [Coinbase](https://www.coinbase.com/) - Spot price data (public API)
 - [DefiLlama](https://defillama.com/) - Universal price fallback for all chains
+
+#### Visual Assets & Branding
+- [LogoKit](https://logokit.com/) - Blockchain and cryptocurrency logos
+- [Logostream](https://logostream.io/) - Token logo API for multi-chain assets
 
 #### Exchange Integration
 - [Coinbase CDP](https://www.coinbase.com/cloud) - Exchange API for portfolio balances (JWT authentication)
@@ -621,6 +658,6 @@ For detailed API information including rate limits and pricing, see [API Provide
 
 ---
 
-**Current Version:** v1.0.1 (BUILD 1770000515)
-**Last Updated:** February 1, 2026
+**Current Version:** v1.0.1 (BUILD 1770166262)
+**Last Updated:** February 3, 2026
 **Release Date:** February 1, 2026
