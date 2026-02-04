@@ -638,19 +638,50 @@ function formatAddressDisplay(address, blockchain) {
 }
 
 function copyToClipboard(text, button) {
-    navigator.clipboard.writeText(text).then(() => {
-        const originalHTML = button.innerHTML;
-        button.innerHTML = `
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
-                <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
-        `;
-        setTimeout(() => {
-            button.innerHTML = originalHTML;
-        }, 1500);
-    }).catch(err => {
-        console.error('Failed to copy:', err);
-    });
+    // Try modern clipboard API first (requires HTTPS)
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(() => {
+            showCopySuccess(button);
+        }).catch(err => {
+            console.error('Failed to copy:', err);
+            fallbackCopy(text, button);
+        });
+    } else {
+        // Fallback for HTTP (Docker deployments)
+        fallbackCopy(text, button);
+    }
+}
+
+function fallbackCopy(text, button) {
+    // Create temporary textarea for copying
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    try {
+        document.execCommand('copy');
+        showCopySuccess(button);
+    } catch (err) {
+        console.error('Fallback copy failed:', err);
+        alert('Copied to clipboard: ' + text);
+    } finally {
+        document.body.removeChild(textarea);
+    }
+}
+
+function showCopySuccess(button) {
+    const originalHTML = button.innerHTML;
+    button.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+    `;
+    setTimeout(() => {
+        button.innerHTML = originalHTML;
+    }, 1500);
 }
 
 // Load portfolio summary
@@ -702,13 +733,13 @@ async function loadPortfolioSummary() {
         walletTotals.MATIC = data.polygon?.total_matic || 0;
         walletTotals.ETH_BASE = data.base?.total_eth || 0;
 
-        // Calculate USD values
-        const adaUsd = data.cardano.total_ada * (prices.ADA || 0);
-        const btcUsd = data.bitcoin.total_btc * (prices.BTC || 0);
-        const ethUsd = (data.ethereum?.total_eth || 0) * (prices.ETH || 0);
-        const solUsd = (data.solana?.total_sol || 0) * (prices.SOL || 0);
-        const maticUsd = (data.polygon?.total_matic || 0) * (prices.MATIC || 0);
-        const baseEthUsd = (data.base?.total_eth || 0) * (prices.ETH || 0);
+        // Calculate USD values (native coin + tokens)
+        const adaUsd = data.cardano.total_ada * (prices.ADA || 0) + (data.cardano.native_assets_value_usd || 0);
+        const btcUsd = data.bitcoin.total_btc * (prices.BTC || 0) + (data.bitcoin.native_assets_value_usd || 0);
+        const ethUsd = (data.ethereum?.total_eth || 0) * (prices.ETH || 0) + (data.ethereum?.native_assets_value_usd || 0);
+        const solUsd = (data.solana?.total_sol || 0) * (prices.SOL || 0) + (data.solana?.native_assets_value_usd || 0);
+        const maticUsd = (data.polygon?.total_matic || 0) * (prices.MATIC || 0) + (data.polygon?.native_assets_value_usd || 0);
+        const baseEthUsd = (data.base?.total_eth || 0) * (prices.ETH || 0) + (data.base?.native_assets_value_usd || 0);
 
         // Update Cardano summary
         if (adaBalance) {
@@ -3702,10 +3733,10 @@ async function refreshWallets() {
         walletTotals.BTC = data.bitcoin.total_btc;
         walletTotals.ETH = data.ethereum?.total_eth || 0;
 
-        // Update summary cards
-        const adaUsd = data.cardano.total_ada * (prices.ADA || 0);
-        const btcUsd = data.bitcoin.total_btc * (prices.BTC || 0);
-        const ethUsd = (data.ethereum?.total_eth || 0) * (prices.ETH || 0);
+        // Update summary cards (native coin + tokens)
+        const adaUsd = data.cardano.total_ada * (prices.ADA || 0) + (data.cardano.native_assets_value_usd || 0);
+        const btcUsd = data.bitcoin.total_btc * (prices.BTC || 0) + (data.bitcoin.native_assets_value_usd || 0);
+        const ethUsd = (data.ethereum?.total_eth || 0) * (prices.ETH || 0) + (data.ethereum?.native_assets_value_usd || 0);
 
         adaBalance.textContent = `${data.cardano.total_ada.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 6})} ADA`;
         const adaBalanceUsd = document.getElementById('adaBalanceUsd');
@@ -4807,6 +4838,9 @@ async function loadAllNftSummaries() {
                     setSafeHTML(ethereumStats, `${data.chains.ethereum.total_count || 0} · ${formatUSDBlur(data.chains.ethereum.total_value_usd || 0)}`);
                 }
             } else {
+                // Explicitly set to 0 for unconfigured chains
+                nftTotals.ethereum = 0;
+                nftCounts.ethereum = 0;
                 const ethereumStats = document.getElementById('ethereumNftStats');
                 if (ethereumStats) {
                     ethereumStats.textContent = 'Not configured';
@@ -4820,6 +4854,9 @@ async function loadAllNftSummaries() {
                     setSafeHTML(solanaStats, `${data.chains.solana.total_count || 0} · ${formatUSDBlur(data.chains.solana.total_value_usd || 0)}`);
                 }
             } else {
+                // Explicitly set to 0 for unconfigured chains
+                nftTotals.solana = 0;
+                nftCounts.solana = 0;
                 const solanaStats = document.getElementById('solanaNftStats');
                 if (solanaStats) {
                     solanaStats.textContent = 'Not configured';
@@ -4833,6 +4870,9 @@ async function loadAllNftSummaries() {
                     setSafeHTML(polygonStats, `${data.chains.polygon.total_count || 0} · ${formatUSDBlur(data.chains.polygon.total_value_usd || 0)}`);
                 }
             } else {
+                // Explicitly set to 0 for unconfigured chains
+                nftTotals.polygon = 0;
+                nftCounts.polygon = 0;
                 const polygonStats = document.getElementById('polygonNftStats');
                 if (polygonStats) {
                     polygonStats.textContent = 'Not configured';
@@ -4846,6 +4886,9 @@ async function loadAllNftSummaries() {
                     setSafeHTML(baseStats, `${data.chains.base.total_count || 0} · ${formatUSDBlur(data.chains.base.total_value_usd || 0)}`);
                 }
             } else {
+                // Explicitly set to 0 for unconfigured chains
+                nftTotals.base = 0;
+                nftCounts.base = 0;
                 const baseStats = document.getElementById('baseNftStats');
                 if (baseStats) {
                     baseStats.textContent = 'Not configured';

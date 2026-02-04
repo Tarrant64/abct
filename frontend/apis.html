@@ -6,9 +6,9 @@
     <title>ABCT - Manage APIs</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1770090982">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1770248608">
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1770090982"></script>
+    <script src="/static/js/session-auth.js?v=1770248608"></script>
     <style>
         /* API Manager Styles */
         .api-manager {
@@ -523,6 +523,11 @@
             color: white;
         }
 
+        .status-message.warning {
+            background: #f59e0b;
+            color: white;
+        }
+
         @keyframes slideIn {
             from {
                 transform: translateX(100%);
@@ -1034,6 +1039,185 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
+        /* Permission Warning Modal Styles */
+        .permission-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            padding: 20px;
+        }
+
+        .permission-modal {
+            background: #1a1a2e;
+            border: 1px solid #3a3a4e;
+            border-radius: 16px;
+            max-width: 600px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            animation: modalSlideIn 0.3s ease-out;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .permission-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px;
+            border-bottom: 1px solid #3a3a4e;
+        }
+
+        .permission-modal-header h2 {
+            margin: 0;
+            font-size: 1.5rem;
+            color: #fbbf24;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .permission-modal-close {
+            background: none;
+            border: none;
+            font-size: 2rem;
+            color: #888;
+            cursor: pointer;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .permission-modal-close:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .permission-modal-body {
+            padding: 24px;
+        }
+
+        .permission-intro {
+            color: #e0e0e0;
+            font-size: 1.05rem;
+            margin-bottom: 16px;
+        }
+
+        .permission-warnings-list {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 24px 0;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .permission-warnings-list li {
+            color: #fca5a5;
+            padding: 8px 0;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            border-bottom: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .permission-warnings-list li:last-child {
+            border-bottom: none;
+        }
+
+        .permission-recommendation {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+
+        .permission-recommendation strong {
+            color: #60a5fa;
+            display: block;
+            margin-bottom: 8px;
+            font-size: 1.05rem;
+        }
+
+        .permission-recommendation p {
+            color: #d1d5db;
+            margin: 0;
+            line-height: 1.6;
+        }
+
+        .permission-actions {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 8px;
+        }
+
+        .permission-modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            padding: 20px 24px;
+            border-top: 1px solid #3a3a4e;
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+            padding: 10px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-warning:hover {
+            background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+        }
+
+        /* Warning badge for API items */
+        .api-warning-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 0.8rem;
+            color: #fca5a5;
+            margin-left: 8px;
+        }
+
+        .api-warning-badge:hover {
+            background: rgba(239, 68, 68, 0.25);
+            cursor: help;
+        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <script>
@@ -1513,6 +1697,22 @@
                     throw new Error(error.detail || 'Failed to save API key');
                 }
 
+                const result = await response.json();
+
+                // Check for permission warnings (exchange APIs)
+                if (result.permission_check && result.permission_check.warnings && result.permission_check.warnings.length > 0) {
+                    // Store the result for later if user confirms
+                    window.pendingApiSave = {
+                        apiId: apiId,
+                        result: result,
+                        isReadOnly: result.permission_check.is_read_only
+                    };
+
+                    // Show permission warning modal
+                    showPermissionWarning(apiId, result.permission_check);
+                    return; // Don't show success yet
+                }
+
                 showApiStatus('API credentials saved successfully', 'success');
 
                 // Update the specific API item in place without reloading
@@ -1641,6 +1841,22 @@
                     throw new Error(error.detail || 'Failed to upload file');
                 }
 
+                const result = await response.json();
+
+                // Check for permission warnings (Coinbase CDP)
+                if (result.permission_check && result.permission_check.warnings && result.permission_check.warnings.length > 0) {
+                    // Store the result for later if user confirms
+                    window.pendingApiSave = {
+                        apiId: apiId,
+                        result: result,
+                        isReadOnly: result.permission_check.is_read_only
+                    };
+
+                    // Show permission warning modal
+                    showPermissionWarning(apiId, result.permission_check);
+                    return; // Don't show success yet
+                }
+
                 showApiStatus('Credentials uploaded successfully', 'success');
 
                 // Update the specific API item in place without reloading
@@ -1698,6 +1914,72 @@
             setTimeout(() => {
                 el.style.display = 'none';
             }, 3000);
+        }
+
+        // ========== Permission Warning Functions ==========
+
+        function showPermissionWarning(apiId, permissionCheck) {
+            const modal = document.getElementById('permissionWarningModal');
+            const warningsList = document.getElementById('permissionWarningsList');
+            const settingsLink = document.getElementById('exchangeSettingsLink');
+
+            // Clear previous warnings
+            warningsList.innerHTML = '';
+
+            // Add warnings to list
+            permissionCheck.warnings.forEach(warning => {
+                const li = document.createElement('li');
+                li.textContent = warning;
+                warningsList.appendChild(li);
+            });
+
+            // Set exchange settings link
+            const exchangeUrls = {
+                'binance': 'https://www.binance.com/en/my/settings/api-management',
+                'binance_us': 'https://www.binance.us/en/usercenter/settings/api-management',
+                'okx': 'https://www.okx.com/account/my-api',
+                'kucoin': 'https://www.kucoin.com/account/api',
+                'gate': 'https://www.gate.io/myaccount/apiv4keys',
+                'bitget': 'https://www.bitget.com/en/account/newapi',
+                'coinbase': 'https://portal.cdp.coinbase.com/'
+            };
+
+            if (exchangeUrls[apiId]) {
+                settingsLink.href = exchangeUrls[apiId];
+                settingsLink.style.display = 'inline-block';
+            } else {
+                settingsLink.style.display = 'none';
+            }
+
+            // Show modal
+            modal.style.display = 'flex';
+        }
+
+        function closePermissionWarning() {
+            const modal = document.getElementById('permissionWarningModal');
+            modal.style.display = 'none';
+            window.pendingApiSave = null;
+        }
+
+        async function confirmSaveWithWarnings() {
+            if (!window.pendingApiSave) return;
+
+            const { apiId, result } = window.pendingApiSave;
+
+            // Close modal
+            closePermissionWarning();
+
+            // Show success message with warning note
+            showApiStatus('API credentials saved (⚠️ security warnings detected)', 'warning');
+
+            // Update the specific API item in place without reloading
+            await updateApiItem(apiId);
+
+            // Update stats
+            await updateApiStats();
+
+            // Clear pending save
+            window.pendingApiSave = null;
         }
 
         // ========== Utilization Functions ==========
@@ -2097,6 +2379,41 @@
                 <button onclick="selectAllSpamTokens()" class="btn btn-secondary">Select All</button>
                 <button onclick="closeSpamFilterModal()" class="btn btn-secondary">Cancel</button>
                 <button onclick="hideSelectedTokens()" class="btn btn-danger" id="hideTokensBtn">Hide Selected</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Permission Warning Modal -->
+    <div id="permissionWarningModal" class="permission-modal-overlay" style="display: none;">
+        <div class="permission-modal">
+            <div class="permission-modal-header">
+                <h2>⚠️ API Key Security Warning</h2>
+                <button class="permission-modal-close" onclick="closePermissionWarning()">&times;</button>
+            </div>
+
+            <div class="permission-modal-body">
+                <div class="permission-warning-content">
+                    <p class="permission-intro">
+                        This API key has permissions beyond read-only access:
+                    </p>
+                    <ul id="permissionWarningsList" class="permission-warnings-list">
+                        <!-- Warnings will be inserted here -->
+                    </ul>
+                    <div class="permission-recommendation">
+                        <strong>🔒 Security Recommendation:</strong>
+                        <p>For maximum security, create a new API key with read-only permissions only. ABCT does not need trading or withdrawal access to track your portfolio.</p>
+                    </div>
+                    <div class="permission-actions">
+                        <a id="exchangeSettingsLink" href="#" target="_blank" class="btn btn-secondary">
+                            Go to Exchange Settings
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="permission-modal-footer">
+                <button onclick="closePermissionWarning()" class="btn btn-secondary">Cancel</button>
+                <button onclick="confirmSaveWithWarnings()" class="btn btn-warning">Save Anyway</button>
             </div>
         </div>
     </div>
