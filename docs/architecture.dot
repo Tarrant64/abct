@@ -14,7 +14,7 @@ digraph ABCT_Architecture {
 
     // Title
     labelloc="t";
-    label="ABCT Architecture - A Better Crypto Tracker\nVersion 0.8.5";
+    label="ABCT Architecture - A Better Crypto Tracker\nVersion 1.0.1 (Build 1770166262)\n7 Blockchains | 7 Exchanges | Multi-User | Demo Mode";
     fontsize=16;
 
     // ========== SUBGRAPHS ==========
@@ -26,7 +26,7 @@ digraph ABCT_Architecture {
         fillcolor="#E3F2FD";
         color="#1976D2";
 
-        browser [label="Web Browser\n(localhost:8000)", fillcolor="#BBDEFB", color="#1976D2"];
+        browser [label="Web Browser\n(localhost:8000 / Port 8080)", fillcolor="#BBDEFB", color="#1976D2"];
     }
 
     // Docker Container
@@ -45,13 +45,18 @@ digraph ABCT_Architecture {
 
             html [label="index.html\nDashboard UI", fillcolor="#CE93D8"];
             wallets_html [label="wallets.html\nWallet Manager", fillcolor="#CE93D8"];
+            transactions_html [label="transactions.html\nTransaction History", fillcolor="#CE93D8"];
+            nftwall_html [label="nft-wall.html\nNFT Gallery", fillcolor="#CE93D8"];
+            login_html [label="login.html\nAuthentication", fillcolor="#CE93D8"];
             apis_html [label="apis.html\nAPI Manager", fillcolor="#CE93D8"];
             security_html [label="security.html\nSecurity Settings", fillcolor="#CE93D8"];
             services_html [label="services.html\nHealth Status", fillcolor="#CE93D8"];
+            backup_html [label="backup.html\nBackup & Restore", fillcolor="#CE93D8"];
             logs_html [label="logs.html\nSystem Logs", fillcolor="#CE93D8"];
-            nftwall_html [label="nft-wall.html\nNFT Gallery", fillcolor="#CE93D8"];
-            css [label="styles.css\nStyling", fillcolor="#CE93D8"];
+            cache_html [label="cache.html\nCache Manager", fillcolor="#CE93D8"];
+            css [label="styles.css\nTheming (5 themes)", fillcolor="#CE93D8"];
             js [label="app.js\nClient Logic", fillcolor="#CE93D8"];
+            transactions_js [label="transactions.js\nTransaction Analytics", fillcolor="#CE93D8"];
         }
 
         // Backend
@@ -68,15 +73,15 @@ digraph ABCT_Architecture {
 
             // Middleware
             subgraph cluster_middleware {
-                label="Security Middleware";
+                label="Security & Demo Middleware";
                 style="rounded,filled";
                 fillcolor="#FFCDD2";
                 color="#C62828";
 
-                m_size [label="size_limit.py\nRequest Size (10MB)", fillcolor="#EF9A9A"];
+                m_demo [label="demo_mode.py\nDemo User Detection", fillcolor="#EF9A9A"];
+                m_auth [label="auth.py\nSession Authentication", fillcolor="#EF9A9A"];
                 m_rate [label="rate_limit.py\nRate Limiting (slowapi)", fillcolor="#EF9A9A"];
-                m_auth [label="auth.py\nHTTP Basic Auth", fillcolor="#EF9A9A"];
-                m_localhost [label="localhost.py\nLocalhost Only", fillcolor="#EF9A9A"];
+                m_size [label="size_limit.py\nRequest Size (10MB)", fillcolor="#EF9A9A"];
             }
 
             // Routers
@@ -86,16 +91,20 @@ digraph ABCT_Architecture {
                 fillcolor="#C8E6C9";
                 color="#388E3C";
 
+                r_auth [label="/auth\nLogin/Logout/Sessions", fillcolor="#81C784"];
                 r_wallets [label="/wallets\nWallet CRUD", fillcolor="#81C784"];
                 r_portfolio [label="/portfolio\nSummary & History", fillcolor="#81C784"];
-                r_prices [label="/prices\nCrypto Prices", fillcolor="#81C784"];
+                r_transactions [label="/transactions\nMulti-Chain Txn History", fillcolor="#81C784"];
                 r_nfts [label="/nfts\nNFT Collections", fillcolor="#81C784"];
+                r_prices [label="/prices\nCrypto Prices", fillcolor="#81C784"];
                 r_defi [label="/defi\nDeFi Positions", fillcolor="#81C784"];
-                r_exchanges [label="/exchanges\nExchange Sync", fillcolor="#81C784"];
+                r_exchanges [label="/exchanges\n7 Exchange APIs", fillcolor="#81C784"];
                 r_tokens [label="/custom-tokens\nToken Tracking", fillcolor="#81C784"];
                 r_settings [label="/settings\nAPI Key Management", fillcolor="#81C784"];
                 r_security [label="/security\nSSL/Certificate Mgmt", fillcolor="#81C784"];
+                r_backup [label="/backup\nExport/Import", fillcolor="#81C784"];
                 r_logs [label="/logs\nSystem Logging", fillcolor="#81C784"];
+                r_nft_scheduler [label="/nft-scheduler\nBackground NFT Updates", fillcolor="#81C784"];
             }
 
             // Services
@@ -107,17 +116,18 @@ digraph ABCT_Architecture {
 
                 // Blockchain Services
                 subgraph cluster_blockchain_svc {
-                    label="Blockchain Services";
+                    label="Blockchain Services (7 Chains)";
                     style="rounded,filled";
                     fillcolor="#FFE0B2";
                     color="#E65100";
 
-                    s_cardano [label="cardano.py\nCardano Chain", fillcolor="#FFCC80"];
-                    s_bitcoin [label="bitcoin.py\nBitcoin Chain", fillcolor="#FFCC80"];
-                    s_ethereum [label="ethereum.py\nEthereum Chain", fillcolor="#FFCC80"];
-                    s_polygon [label="polygon.py\nPolygon Chain", fillcolor="#FFCC80"];
-                    s_base [label="base.py\nBase Chain", fillcolor="#FFCC80"];
-                    s_solana [label="solana.py\nSolana Chain", fillcolor="#FFCC80"];
+                    s_cardano [label="cardano.py\nCardano (ADA)", fillcolor="#FFCC80"];
+                    s_bitcoin [label="bitcoin.py\nBitcoin (BTC)", fillcolor="#FFCC80"];
+                    s_ethereum [label="ethereum.py\nEthereum (ETH)", fillcolor="#FFCC80"];
+                    s_polygon [label="polygon.py\nPolygon (MATIC)", fillcolor="#FFCC80"];
+                    s_base [label="base.py\nBase (ETH)", fillcolor="#FFCC80"];
+                    s_solana [label="solana.py\nSolana (SOL)", fillcolor="#FFCC80"];
+                    s_algorand [label="algorand.py\nAlgorand (ALGO)", fillcolor="#FFCC80"];
                 }
 
                 // NFT Services
@@ -130,10 +140,42 @@ digraph ABCT_Architecture {
                     s_nft [label="nft.py\nCardano NFTs", fillcolor="#FFE082"];
                     s_eth_nft [label="ethereum_nft.py\nEthereum NFTs", fillcolor="#FFE082"];
                     s_sol_nft [label="solana_nft.py\nSolana NFTs", fillcolor="#FFE082"];
+                    s_algo_nft [label="algorand_nft.py\nAlgorand NFTs (ARC-3/69)", fillcolor="#FFE082"];
                     s_nft_image [label="nft_image_service.py\nImage Caching", fillcolor="#FFE082"];
+                    s_nft_scheduler [label="nft_scheduler.py\nBackground Updates", fillcolor="#FFE082"];
                 }
 
-                // Security & Support Services
+                // Exchange Services
+                subgraph cluster_exchange_svc {
+                    label="Exchange Services (7 Exchanges)";
+                    style="rounded,filled";
+                    fillcolor="#E1F5FE";
+                    color="#0277BD";
+
+                    s_coinbase [label="coinbase.py\nCoinbase CDP", fillcolor="#B3E5FC"];
+                    s_binance [label="binance_service.py\nBinance.com", fillcolor="#B3E5FC"];
+                    s_binance_us [label="binance_us_service.py\nBinance.US", fillcolor="#B3E5FC"];
+                    s_okx [label="okx_service.py\nOKX Exchange", fillcolor="#B3E5FC"];
+                    s_bitget [label="bitget_service.py\nBitget Exchange", fillcolor="#B3E5FC"];
+                    s_gate [label="gate_service.py\nGate.io", fillcolor="#B3E5FC"];
+                    s_kucoin [label="kucoin_service.py\nKuCoin", fillcolor="#B3E5FC"];
+                }
+
+                // Demo Services
+                subgraph cluster_demo_svc {
+                    label="Demo Services (Fake Data)";
+                    style="rounded,filled";
+                    fillcolor="#F3E5F5";
+                    color="#6A1B9A";
+
+                    s_demo_wallet [label="demo_wallet_service.py\n91 Tokens, 7 Chains", fillcolor="#CE93D8"];
+                    s_demo_nft [label="demo_nft_service.py\n76 NFTs, 7 Collections", fillcolor="#CE93D8"];
+                    s_demo_txn [label="demo_transaction_service.py\n1,500 Transactions", fillcolor="#CE93D8"];
+                    s_demo_defi [label="demo_defi_service.py\nStaking Positions", fillcolor="#CE93D8"];
+                    s_demo_exchange [label="demo_exchange_service.py\nExchange Balances", fillcolor="#CE93D8"];
+                }
+
+                // Support Services
                 subgraph cluster_support_svc {
                     label="Support Services";
                     style="rounded,filled";
@@ -142,10 +184,12 @@ digraph ABCT_Architecture {
 
                     s_pricing [label="pricing.py\nPrice Aggregation", fillcolor="#80DEEA"];
                     s_defi [label="defi.py\nDeFi Protocols", fillcolor="#80DEEA"];
-                    s_coinbase [label="coinbase.py\nExchange API", fillcolor="#80DEEA"];
                     s_snapshot [label="snapshot.py\nPortfolio Snapshots", fillcolor="#80DEEA"];
-                    s_etherscan [label="etherscan.py\nTransaction History", fillcolor="#80DEEA"];
-                    s_taptools [label="taptools.py\nToken Data", fillcolor="#80DEEA"];
+                    s_transaction_history [label="transaction_history.py\nMulti-Chain Txns", fillcolor="#80DEEA"];
+                    s_etherscan [label="etherscan.py\nETH Transaction History", fillcolor="#80DEEA"];
+                    s_moralis [label="moralis.py\nMulti-Chain Fallback", fillcolor="#80DEEA"];
+                    s_taptools [label="taptools.py\nCardano Token Data", fillcolor="#80DEEA"];
+                    s_logostream [label="logostream.py\nToken Logo API", fillcolor="#80DEEA"];
                     s_ssl [label="ssl_service.py\nCertificate Mgmt", fillcolor="#80DEEA"];
                     s_logging [label="logging_service.py\nCentralized Logs", fillcolor="#80DEEA"];
                 }
@@ -159,8 +203,9 @@ digraph ABCT_Architecture {
             fillcolor="#FFEBEE";
             color="#C62828";
 
-            sqlite [label="portfolio.db\nMain Database\n(wallets, balances,\nAPI keys, cache,\nsecurity settings,\nsystem logs)", shape=cylinder, fillcolor="#EF9A9A", color="#C62828"];
+            sqlite [label="portfolio.db\nMain Database\n(users, sessions, wallets,\nbalances, API keys, cache,\ntransactions, nfts,\nsecurity settings, logs)", shape=cylinder, fillcolor="#EF9A9A", color="#C62828"];
             nft_db [label="nft_images.db\nNFT Image Cache\n(thumbnails, metadata)", shape=cylinder, fillcolor="#EF9A9A", color="#C62828"];
+            demo_nfts [label="static/demo-nfts/\nDemo NFT SVGs", shape=folder, fillcolor="#EF9A9A", color="#C62828"];
             certs [label="data/certs/\nSSL Certificates\n(server.crt, server.key)", shape=folder, fillcolor="#EF9A9A", color="#C62828"];
         }
     }
@@ -174,27 +219,41 @@ digraph ABCT_Architecture {
 
         // Cardano APIs
         subgraph cluster_cardano_api {
-            label="Cardano";
+            label="Cardano Network";
             style="rounded,filled";
             fillcolor="#FFECB3";
             color="#FF8F00";
 
-            api_blockfrost [label="Blockfrost\nBlockchain Data", fillcolor="#FFE082"];
+            api_blockfrost [label="Blockfrost\nBlockchain Data (Primary)", fillcolor="#FFE082"];
+            api_maestro [label="Maestro\nBlockchain Data (Fallback)", fillcolor="#FFE082"];
             api_cexplorer [label="CExplorer\nStaking Data", fillcolor="#FFE082"];
-            api_taptools [label="TapTools\nNFT Prices", fillcolor="#FFE082"];
+            api_taptools [label="TapTools\nNFT Prices & Token Data", fillcolor="#FFE082"];
             api_koios [label="Koios\nFallback API", fillcolor="#FFE082"];
+        }
+
+        // Algorand APIs
+        subgraph cluster_algorand_api {
+            label="Algorand Network";
+            style="rounded,filled";
+            fillcolor="#E1F5FE";
+            color="#0277BD";
+
+            api_pera [label="Pera Wallet\nAlgorand Data (Primary)", fillcolor="#B3E5FC"];
+            api_tatum [label="Tatum\nAlgorand Data (Fallback)", fillcolor="#B3E5FC"];
         }
 
         // EVM APIs
         subgraph cluster_evm_api {
-            label="EVM Chains";
+            label="EVM Chains (Ethereum/Polygon/Base)";
             style="rounded,filled";
             fillcolor="#E8EAF6";
             color="#3F51B5";
 
-            api_alchemy [label="Alchemy\nETH/Polygon/Base", fillcolor="#C5CAE9"];
-            api_etherscan [label="Etherscan\nTransaction History", fillcolor="#C5CAE9"];
-            api_beaconchain [label="Beaconchain\nETH Staking Data", fillcolor="#C5CAE9"];
+            api_alchemy [label="Alchemy\nETH/Polygon/Base/Optimism", fillcolor="#C5CAE9"];
+            api_etherscan [label="Etherscan\nEthereum Transactions", fillcolor="#C5CAE9"];
+            api_polygonscan [label="Polygonscan\nPolygon Transactions", fillcolor="#C5CAE9"];
+            api_basescan [label="Basescan\nBase Transactions", fillcolor="#C5CAE9"];
+            api_moralis [label="Moralis\nMulti-Chain Fallback", fillcolor="#C5CAE9"];
         }
 
         // Other Blockchain APIs
@@ -205,7 +264,8 @@ digraph ABCT_Architecture {
             color="#00796B";
 
             api_blockstream [label="Blockstream\nBitcoin Data", fillcolor="#B2DFDB"];
-            api_helius [label="Helius\nSolana Data", fillcolor="#B2DFDB"];
+            api_mempool [label="Mempool.space\nBitcoin Fallback", fillcolor="#B2DFDB"];
+            api_helius [label="Helius\nSolana RPC & NFTs", fillcolor="#B2DFDB"];
         }
 
         // Pricing APIs
@@ -215,18 +275,37 @@ digraph ABCT_Architecture {
             fillcolor="#FCE4EC";
             color="#C2185B";
 
-            api_coingecko [label="1. CoinGecko\nPrimary", fillcolor="#F8BBD9"];
-            api_coinbase_price [label="2. Coinbase\nFallback (Free)", fillcolor="#F8BBD9"];
+            api_coingecko [label="1. CoinGecko\nPrimary Price Data", fillcolor="#F8BBD9"];
+            api_cmc [label="2. CoinMarketCap\nSecondary Prices", fillcolor="#F8BBD9"];
+            api_coinbase_price [label="3. Coinbase\nSpot Prices (Free)", fillcolor="#F8BBD9"];
+            api_defillama [label="4. DefiLlama\nUniversal Fallback", fillcolor="#F8BBD9"];
+        }
+
+        // Visual Assets APIs
+        subgraph cluster_visual_api {
+            label="Visual Assets";
+            style="rounded,filled";
+            fillcolor="#FFF3E0";
+            color="#E65100";
+
+            api_logokit [label="LogoKit\nBlockchain Logos", fillcolor="#FFE0B2"];
+            api_logostream [label="Logostream\nToken Logo API", fillcolor="#FFE0B2"];
         }
 
         // Exchange APIs
         subgraph cluster_exchange_api {
-            label="Exchanges";
+            label="Exchanges (7 Platforms)";
             style="rounded,filled";
             fillcolor="#E8F5E9";
             color="#2E7D32";
 
             api_coinbase [label="Coinbase CDP\nPortfolio Sync", fillcolor="#C8E6C9"];
+            api_binance [label="Binance.com\nGlobal Exchange", fillcolor="#C8E6C9"];
+            api_binance_us [label="Binance.US\nUS Exchange", fillcolor="#C8E6C9"];
+            api_okx [label="OKX\nMulti-Asset Exchange", fillcolor="#C8E6C9"];
+            api_bitget [label="Bitget\nDerivatives Exchange", fillcolor="#C8E6C9"];
+            api_gate [label="Gate.io\nComprehensive API", fillcolor="#C8E6C9"];
+            api_kucoin [label="KuCoin\nGlobal Exchange", fillcolor="#C8E6C9"];
         }
     }
 
@@ -246,14 +325,17 @@ digraph ABCT_Architecture {
 
     // User to Frontend
     browser -> html [label="HTTP/HTTPS GET /"];
+    browser -> login_html [label="Authentication"];
 
     // Frontend to Backend
     js -> main [label="REST API\nJSON"];
+    transactions_js -> main [label="Transaction API"];
 
     // Main through Middleware
-    main -> m_size [style=dashed, label="request"];
-    main -> m_rate [style=dashed, label="request"];
-    m_size -> m_rate [style=dashed];
+    main -> m_demo [style=dashed, label="request"];
+    main -> m_auth [style=dashed, label="session check"];
+    main -> m_rate [style=dashed, label="rate limit"];
+    m_demo -> m_auth [style=dashed];
 
     // Main to Components
     main -> config [style=dashed];
@@ -261,68 +343,116 @@ digraph ABCT_Architecture {
     main -> nft_image_db [style=dashed];
 
     // Main to Routers
+    main -> r_auth [style=dashed, color="#388E3C"];
     main -> r_wallets [style=dashed, color="#388E3C"];
     main -> r_portfolio [style=dashed, color="#388E3C"];
-    main -> r_prices [style=dashed, color="#388E3C"];
+    main -> r_transactions [style=dashed, color="#388E3C"];
     main -> r_nfts [style=dashed, color="#388E3C"];
+    main -> r_prices [style=dashed, color="#388E3C"];
     main -> r_defi [style=dashed, color="#388E3C"];
     main -> r_exchanges [style=dashed, color="#388E3C"];
-    main -> r_tokens [style=dashed, color="#388E3C"];
-    main -> r_settings [style=dashed, color="#388E3C"];
-    main -> r_security [style=dashed, color="#388E3C"];
-    main -> r_logs [style=dashed, color="#388E3C"];
+    main -> r_backup [style=dashed, color="#388E3C"];
+    main -> r_nft_scheduler [style=dashed, color="#388E3C"];
 
-    // Routers to Services
+    // Middleware to Demo Services
+    m_demo -> s_demo_wallet [label="demo user"];
+    m_demo -> s_demo_nft [label="demo user"];
+    m_demo -> s_demo_txn [label="demo user"];
+    m_demo -> s_demo_defi [label="demo user"];
+    m_demo -> s_demo_exchange [label="demo user"];
+
+    // Routers to Blockchain Services
     r_wallets -> s_cardano;
     r_wallets -> s_bitcoin;
     r_wallets -> s_ethereum;
     r_wallets -> s_polygon;
     r_wallets -> s_base;
     r_wallets -> s_solana;
+    r_wallets -> s_algorand;
 
+    // Routers to NFT Services
     r_nfts -> s_nft;
     r_nfts -> s_eth_nft;
     r_nfts -> s_sol_nft;
+    r_nfts -> s_algo_nft;
     r_nfts -> s_nft_image;
+    r_nft_scheduler -> s_nft_scheduler;
 
+    // Routers to Exchange Services
+    r_exchanges -> s_coinbase;
+    r_exchanges -> s_binance;
+    r_exchanges -> s_binance_us;
+    r_exchanges -> s_okx;
+    r_exchanges -> s_bitget;
+    r_exchanges -> s_gate;
+    r_exchanges -> s_kucoin;
+
+    // Routers to Support Services
     r_portfolio -> s_snapshot;
+    r_transactions -> s_transaction_history;
     r_prices -> s_pricing;
     r_defi -> s_defi;
-    r_exchanges -> s_coinbase;
     r_security -> s_ssl;
     r_logs -> s_logging;
+
+    // Support Services to Other Services
+    s_transaction_history -> s_etherscan;
+    s_transaction_history -> s_moralis;
+    s_pricing -> s_logostream;
 
     // Services to Database
     db -> sqlite [dir=both];
     s_nft_image -> nft_db [dir=both, label="images"];
+    s_demo_nft -> demo_nfts [label="SVG files"];
     r_settings -> db [label="API keys"];
     r_security -> db [label="SSL config"];
+    r_auth -> db [label="sessions"];
     s_logging -> db [label="log entries"];
     s_ssl -> certs [label="cert files"];
 
-    // Services to External APIs
+    // Blockchain Services to External APIs
     s_cardano -> api_blockfrost [label="HTTPS", color="#FF8F00"];
+    s_cardano -> api_maestro [label="HTTPS (fallback)", color="#FF8F00"];
     s_cardano -> api_cexplorer [label="HTTPS", color="#FF8F00"];
     s_nft -> api_taptools [label="HTTPS", color="#FF8F00"];
     s_nft -> api_koios [label="HTTPS (fallback)", color="#FF8F00"];
     s_taptools -> api_taptools [label="HTTPS", color="#FF8F00"];
+
+    s_algorand -> api_pera [label="HTTPS", color="#0277BD"];
+    s_algorand -> api_tatum [label="HTTPS (fallback)", color="#0277BD"];
+    s_algo_nft -> api_pera [label="HTTPS", color="#0277BD"];
 
     s_ethereum -> api_alchemy [label="HTTPS", color="#3F51B5"];
     s_polygon -> api_alchemy [label="HTTPS", color="#3F51B5"];
     s_base -> api_alchemy [label="HTTPS", color="#3F51B5"];
     s_eth_nft -> api_alchemy [label="HTTPS", color="#3F51B5"];
     s_etherscan -> api_etherscan [label="HTTPS", color="#3F51B5"];
+    s_transaction_history -> api_polygonscan [label="HTTPS", color="#3F51B5"];
+    s_transaction_history -> api_basescan [label="HTTPS", color="#3F51B5"];
+    s_transaction_history -> api_moralis [label="HTTPS", color="#3F51B5"];
 
     s_bitcoin -> api_blockstream [label="HTTPS", color="#00796B"];
+    s_bitcoin -> api_mempool [label="HTTPS (fallback)", color="#00796B"];
     s_solana -> api_helius [label="HTTPS", color="#00796B"];
     s_sol_nft -> api_helius [label="HTTPS", color="#00796B"];
 
     // Pricing service connections (fallback chain)
     s_pricing -> api_coingecko [label="1st", color="#C2185B"];
-    s_pricing -> api_coinbase_price [label="2nd", color="#C2185B"];
+    s_pricing -> api_cmc [label="2nd", color="#C2185B"];
+    s_pricing -> api_coinbase_price [label="3rd", color="#C2185B"];
+    s_pricing -> api_defillama [label="4th", color="#C2185B"];
+
+    // Visual asset services
+    s_logostream -> api_logostream [label="HTTPS", color="#E65100"];
 
     // Exchange connections
     s_coinbase -> api_coinbase [label="HTTPS", color="#2E7D32"];
+    s_binance -> api_binance [label="HTTPS", color="#2E7D32"];
+    s_binance_us -> api_binance_us [label="HTTPS", color="#2E7D32"];
+    s_okx -> api_okx [label="HTTPS", color="#2E7D32"];
+    s_bitget -> api_bitget [label="HTTPS", color="#2E7D32"];
+    s_gate -> api_gate [label="HTTPS", color="#2E7D32"];
+    s_kucoin -> api_kucoin [label="HTTPS", color="#2E7D32"];
 
     // Security monitoring
     sec_agent -> sec_audit [label="runs"];
