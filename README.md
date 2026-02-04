@@ -607,6 +607,9 @@ Built with amazing open-source tools and data from leading blockchain API provid
 ### Privacy & Blockchain Innovation
 - [Midnight Network](https://midnight.network/) - Privacy-focused Cardano partner chain (NIGHT token support)
 
+### Blockchain Logos
+- [Logostream](https://logostream.dev) Crypto Logos provided by Logostream
+
 For detailed API information including rate limits and pricing, see [API Providers Guide](docs/API_PROVIDERS.md).
 
 ## 🔗 Links
