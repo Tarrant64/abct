@@ -6,11 +6,13 @@
     <title>Transaction History - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1770090982">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1770248608">
+    <!-- Chart.js for analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
     <!-- DOMPurify for XSS protection -->
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1770090982"></script>
+    <script src="/static/js/session-auth.js?v=1770248608"></script>
 </head>
 <body>
     <div class="container">
@@ -91,6 +93,16 @@
                 <span id="statusMessage"></span>
             </div>
 
+            <!-- Tab Navigation -->
+            <div class="tab-container">
+                <div class="tab-nav">
+                    <button class="tab-btn active" onclick="switchTab('transactions')">Transactions</button>
+                    <button class="tab-btn" onclick="switchTab('analytics')">Analytics</button>
+                </div>
+            </div>
+
+            <!-- Transactions Tab -->
+            <div id="transactionsTab" class="tab-content active">
             <!-- Filter Bar -->
             <section class="filter-section">
                 <div class="section-header-inline">
@@ -209,6 +221,55 @@
                     </div>
                 </div>
             </section>
+            </div>
+            <!-- End Transactions Tab -->
+
+            <!-- Analytics Tab -->
+            <div id="analyticsTab" class="tab-content">
+                <section class="analytics-section">
+                    <div class="section-header-inline">
+                        <h2>Transaction Activity by Blockchain</h2>
+                    </div>
+
+                    <!-- Time Period Controls -->
+                    <div class="analytics-controls">
+                        <div class="period-buttons">
+                            <button class="period-btn" onclick="changeAnalyticsPeriod(7)">1 Week</button>
+                            <button class="period-btn active" onclick="changeAnalyticsPeriod(30)">30 Days</button>
+                            <button class="period-btn" onclick="changeAnalyticsPeriod(365)">1 Year</button>
+                            <button class="period-btn" onclick="changeAnalyticsPeriod(99999)">All Time</button>
+                        </div>
+                    </div>
+
+                    <!-- Loading Indicator -->
+                    <div id="analyticsLoading" class="loading-indicator" style="display: none;">
+                        <span class="spinner"></span>
+                        <p>Loading analytics...</p>
+                    </div>
+
+                    <!-- Empty State -->
+                    <div id="analyticsEmpty" class="empty-state" style="display: none;">
+                        <p>No transaction data available for analytics.</p>
+                    </div>
+
+                    <!-- Chart Container -->
+                    <div id="analyticsChartContainer" class="analytics-chart-container" style="display: none;">
+                        <canvas id="analyticsChart"></canvas>
+                    </div>
+
+                    <!-- Chain Indicators -->
+                    <div class="chain-indicators-section">
+                        <div class="section-header-inline">
+                            <h3>Filter by Blockchain</h3>
+                            <span class="hint-text">Click to highlight/unhighlight chains</span>
+                        </div>
+                        <div id="chainIndicators" class="chain-indicators">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+                </section>
+            </div>
+            <!-- End Analytics Tab -->
 
             <!-- Processing Modal -->
             <div id="processingModal" class="modal" style="display: none;">
@@ -219,8 +280,39 @@
                 </div>
             </div>
         </main>
+
+        <footer>
+            <p>ABCT - Personal Crypto Portfolio Tracker | <span id="appVersion" style="opacity: 0.6;">v1.0.1 (BUILD 1770122462)</span></p>
+        </footer>
     </div>
 
-    <script src="/static/js/transactions.js?v=1770090982"></script>
+    <script src="/static/js/transactions.js?v=1770248608"></script>
+    <script src="/static/js/transaction-analytics.js?v=1770248608"></script>
+    <script>
+        // Tab switching function
+        function switchTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            if (tabName === 'transactions') {
+                document.getElementById('transactionsTab').classList.add('active');
+            } else if (tabName === 'analytics') {
+                document.getElementById('analyticsTab').classList.add('active');
+
+                // Initialize analytics chart if not already done
+                if (!analyticsChart) {
+                    initAnalyticsChart();
+                }
+            }
+        }
+    </script>
 </body>
 </html>
