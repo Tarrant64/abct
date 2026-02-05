@@ -537,36 +537,42 @@ async def init_db():
             ON api_call_log(api_name, timestamp)
         """)
 
+        # Migration table for permanent flags (survives cache clears)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS migrations (
+                migration_key TEXT PRIMARY KEY,
+                applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         # Migration: Clear api_call_log and start fresh (one-time cleanup)
         # Previous migration backfilled from broken api_usage table (calendar day counts)
         # This caused inflated counts (e.g., 138/100). Start fresh with rolling window.
+        # FLAG MOVED TO migrations TABLE to survive cache clears
         try:
-            # Check if we need to clear the table (only do this once)
-            cursor = await db.execute("SELECT COUNT(*) FROM api_call_log")
-            log_count = (await cursor.fetchone())[0]
+            # Check if cleanup flag exists in migrations table
+            cursor = await db.execute("""
+                SELECT migration_key FROM migrations
+                WHERE migration_key = 'api_call_log_cleanup_v1'
+            """)
+            cleanup_done = await cursor.fetchone()
 
-            # If table has entries, check if cleanup flag exists
-            if log_count > 0:
-                cursor = await db.execute("""
-                    SELECT value FROM cache
-                    WHERE user_id IS NULL AND key = 'api_call_log_cleanup_done'
-                """)
-                cleanup_done = await cursor.fetchone()
+            if not cleanup_done:
+                # Get count before clearing
+                cursor = await db.execute("SELECT COUNT(*) FROM api_call_log")
+                log_count = (await cursor.fetchone())[0]
 
-                if not cleanup_done:
+                if log_count > 0:
                     # Clear all entries and start fresh
                     await db.execute("DELETE FROM api_call_log")
-                    await db.commit()
-
-                    # Set cleanup flag so we don't repeat this
-                    expires = datetime.now() + timedelta(days=365)
-                    await db.execute("""
-                        INSERT INTO cache (user_id, key, value, expires_at)
-                        VALUES (NULL, 'api_call_log_cleanup_done', 'true', ?)
-                    """, (expires.isoformat(),))
-                    await db.commit()
-
                     print(f"[Migration] Cleared {log_count} incorrect API call log entries. Starting fresh with rolling window tracking.")
+
+                # Set migration flag in permanent migrations table
+                await db.execute("""
+                    INSERT INTO migrations (migration_key)
+                    VALUES ('api_call_log_cleanup_v1')
+                """)
+                await db.commit()
         except Exception as e:
             # Migration failed, but don't block startup
             print(f"[Migration] API call log cleanup failed: {e}")
