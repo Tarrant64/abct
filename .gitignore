@@ -173,8 +173,8 @@ stop.sh
 test_*.sh
 test_*.py
 
-# Mobile API (not in production)
-backend/routers/mobile.py
+# Mobile API - now in production
+# backend/routers/mobile.py
 
 # Development documentation (keep local only)
 docs/development/
