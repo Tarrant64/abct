@@ -6,9 +6,9 @@
     <title>ABCT - Manage APIs</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1770248608">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1770263313">
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1770248608"></script>
+    <script src="/static/js/session-auth.js?v=1770263313"></script>
     <style>
         /* API Manager Styles */
         .api-manager {
@@ -781,8 +781,19 @@
             color: #888;
         }
 
+        .utilization-left {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
         .utilization-usage {
             font-family: monospace;
+        }
+
+        .utilization-last-called {
+            font-size: 11px;
+            color: #888;
         }
 
         .utilization-reset {
@@ -2040,6 +2051,27 @@
                 ? `${api.call_count.toLocaleString()} / ${api.requests_limit.toLocaleString()}`
                 : `${api.call_count.toLocaleString()} calls (limit N/A)`;
 
+            // Format last called timestamp
+            let lastCalledDisplay = 'N/A';
+            if (api.last_called) {
+                const lastCalled = new Date(api.last_called);
+                const now = new Date();
+                const diffMs = now - lastCalled;
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffHours = Math.floor(diffMs / 3600000);
+                const diffDays = Math.floor(diffMs / 86400000);
+
+                if (diffMins < 1) {
+                    lastCalledDisplay = 'Just now';
+                } else if (diffMins < 60) {
+                    lastCalledDisplay = `${diffMins}m ago`;
+                } else if (diffHours < 24) {
+                    lastCalledDisplay = `${diffHours}h ago`;
+                } else {
+                    lastCalledDisplay = `${diffDays}d ago`;
+                }
+            }
+
             return `
                 <div class="utilization-card ${configuredClass}">
                     <div class="utilization-card-header">
@@ -2053,7 +2085,10 @@
                         <div class="utilization-bar ${utilizationClass}" style="width: ${barWidth}%"></div>
                     </div>
                     <div class="utilization-details">
-                        <span class="utilization-usage">${usageDisplay}</span>
+                        <div class="utilization-left">
+                            <span class="utilization-usage">${usageDisplay}</span>
+                            <span class="utilization-last-called">Last called: ${lastCalledDisplay}</span>
+                        </div>
                         <span class="utilization-reset">Resets in ${api.reset_in}</span>
                     </div>
                     <div class="utilization-card-actions">
@@ -2419,7 +2454,7 @@
     </div>
 
     <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
-        <p>ABCT - API Configuration | <span style="opacity: 0.6;">v1.0.1 (BUILD 1770248608)</span></p>
+        <p>ABCT - API Configuration | <span style="opacity: 0.6;">v1.0.1 (BUILD 1770263313)</span></p>
     </footer>
 </body>
 </html>
