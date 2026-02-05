@@ -477,26 +477,27 @@ class SnapshotService:
         history = []
         for s in snapshots:
             # Wallet values (already using historical prices from snapshot)
+            # Ensure all values are floats (database may return strings)
             wallet_value = (
-                s['ada_amount'] * s['ada_price'] +
-                s['btc_amount'] * s['btc_price'] +
-                s['eth_amount'] * s['eth_price'] +
-                (s.get('sol_amount', 0) or 0) * (s.get('sol_price', 0) or 0)
+                float(s['ada_amount'] or 0) * float(s['ada_price'] or 0) +
+                float(s['btc_amount'] or 0) * float(s['btc_price'] or 0) +
+                float(s['eth_amount'] or 0) * float(s['eth_price'] or 0) +
+                float(s.get('sol_amount', 0) or 0) * float(s.get('sol_price', 0) or 0)
             )
 
             # Recalculate exchange value using historical prices
-            exchange_btc = s.get('exchange_btc_amount', 0) or 0
-            exchange_eth = s.get('exchange_eth_amount', 0) or 0
-            exchange_ada = s.get('exchange_ada_amount', 0) or 0
-            exchange_sol = s.get('exchange_sol_amount', 0) or 0
-            exchange_matic = s.get('exchange_matic_amount', 0) or 0
+            exchange_btc = float(s.get('exchange_btc_amount', 0) or 0)
+            exchange_eth = float(s.get('exchange_eth_amount', 0) or 0)
+            exchange_ada = float(s.get('exchange_ada_amount', 0) or 0)
+            exchange_sol = float(s.get('exchange_sol_amount', 0) or 0)
+            exchange_matic = float(s.get('exchange_matic_amount', 0) or 0)
 
             exchange_value = (
-                exchange_btc * s['btc_price'] +
-                exchange_eth * s['eth_price'] +
-                exchange_ada * s['ada_price'] +
-                exchange_sol * (s.get('sol_price', 0) or 0) +
-                exchange_matic * (s.get('matic_price', 0) or 0)
+                exchange_btc * float(s['btc_price'] or 0) +
+                exchange_eth * float(s['eth_price'] or 0) +
+                exchange_ada * float(s['ada_price'] or 0) +
+                exchange_sol * float(s.get('sol_price', 0) or 0) +
+                exchange_matic * float(s.get('matic_price', 0) or 0)
             )
 
             # Parse exchange other currencies JSON if present
@@ -514,9 +515,9 @@ class SnapshotService:
                 # For now we only have major coin historical prices
                 # Tracked tokens would need their own historical price data
                 # Use stored value as fallback
-                tracked_tokens_value = s.get('tracked_tokens_value_usd', 0) or 0
+                tracked_tokens_value = float(s.get('tracked_tokens_value_usd', 0) or 0)
             except:
-                tracked_tokens_value = s.get('tracked_tokens_value_usd', 0) or 0
+                tracked_tokens_value = float(s.get('tracked_tokens_value_usd', 0) or 0)
 
             # Calculate total with recalculated values
             total_value = (
