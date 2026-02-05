@@ -1045,7 +1045,7 @@ function renderWalletsGrouped(cardanoStakeGroups, bitcoinWallets, ethereumWallet
                 <div class="wallet-group cardano collapsed ${walletCount === 1 ? 'single-wallet' : ''}" data-stake="${group.stake_address || 'none'}">
                     <div class="wallet-group-header">
                         <div class="group-info">
-                            <span class="group-label">Stake Key: ${group.stake_address_short || 'No Stake Key'}</span>
+                            <span class="group-label">Stake Key: <span class="blur-sensitive">${group.stake_address_short || 'No Stake Key'}</span></span>
                             <span class="group-wallet-count">${walletCount} address${walletCount !== 1 ? 'es' : ''}</span>
                         </div>
                         <div class="group-balance">
@@ -1650,8 +1650,8 @@ async function loadStakeKeyGovernanceInfo(stakeGroups) {
                         <span class="gov-icon">&#127944;</span>
                         <span class="gov-label">Pool:</span>
                         ${poolLink
-                            ? `<a href="${poolLink}" target="_blank" rel="noopener" class="gov-link">${poolDisplay}</a>`
-                            : `<span class="gov-value">${poolDisplay}</span>`
+                            ? `<a href="${poolLink}" target="_blank" rel="noopener" class="gov-link blur-sensitive">${poolDisplay}</a>`
+                            : `<span class="gov-value blur-sensitive">${poolDisplay}</span>`
                         }
                     </div>
                 `;
@@ -1678,8 +1678,8 @@ async function loadStakeKeyGovernanceInfo(stakeGroups) {
                         <span class="gov-icon">&#128499;</span>
                         <span class="gov-label">DRep:</span>
                         ${drepLink
-                            ? `<a href="${drepLink}" target="_blank" rel="noopener" class="gov-link">${drepDisplay}</a>`
-                            : `<span class="gov-value">${drepDisplay}</span>`
+                            ? `<a href="${drepLink}" target="_blank" rel="noopener" class="gov-link blur-sensitive">${drepDisplay}</a>`
+                            : `<span class="gov-value blur-sensitive">${drepDisplay}</span>`
                         }
                     </div>
                 `;
