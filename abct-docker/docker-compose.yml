@@ -12,6 +12,12 @@ services:
     volumes:
       # Persist SQLite database
       - abct-data:/app/data
+    labels:
+      - "org.opencontainers.image.title=ABCT - A Better Crypto Tracker"
+      - "org.opencontainers.image.description=Multi-chain cryptocurrency portfolio tracker"
+      - "org.opencontainers.image.url=https://github.com/Tarrant64/abct"
+      - "org.opencontainers.image.source=https://github.com/Tarrant64/abct"
+      - "org.opencontainers.image.documentation=https://github.com/Tarrant64/abct/blob/main/README.md"
     environment:
       # Required API keys
       - BLOCKFROST_API_KEY=${BLOCKFROST_API_KEY:-}
