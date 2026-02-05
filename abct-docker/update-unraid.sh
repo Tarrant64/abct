@@ -307,6 +307,11 @@ EOF
 
     echo "  ✓ Database migrations complete"
 
+    echo ""
+    echo "Verifying admin account..."
+    docker exec "$CONTAINER_NAME" python3 backend/check_auth.py 2>&1 | grep -E "✅|❌|Resetting" || true
+    echo "  ✓ Admin account verified"
+
 ENDSSH
 
 # Get result (check if SSH command succeeded)

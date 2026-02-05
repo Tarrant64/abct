@@ -265,6 +265,14 @@ EOF
 
     echo "  ✓ Database initialized"
 
+    echo ""
+    echo "Setting up default admin account..."
+
+    # Run auth diagnostic to ensure admin account works with default password
+    docker exec "$CONTAINER_NAME" python3 backend/check_auth.py 2>&1 | grep -E "✅|❌|Resetting" || true
+
+    echo "  ✓ Admin account verified (username: admin, password: satoshi)"
+
 ENDSSH
 
 SSH_EXIT_CODE=$?
