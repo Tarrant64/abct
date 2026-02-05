@@ -13,6 +13,7 @@ from typing import AsyncGenerator
 import json
 import asyncio
 import logging
+import aiosqlite
 
 from auth_utils import verify_session
 from middleware.demo_mode import is_demo_user
@@ -21,9 +22,27 @@ from services.demo_populator import (
     is_demo_populated,
     populate_demo_on_first_login
 )
+from config import DATABASE_PATH
 
 router = APIRouter(prefix="/api/demo", tags=["demo"])
 logger = logging.getLogger(__name__)
+
+
+async def is_demo_user_by_id(user_id: int) -> bool:
+    """Check if user_id belongs to demo account."""
+    try:
+        async with aiosqlite.connect(DATABASE_PATH) as conn:
+            cursor = await conn.execute(
+                "SELECT username FROM users WHERE id = ?",
+                (user_id,)
+            )
+            row = await cursor.fetchone()
+            if row:
+                return await is_demo_user(row[0])
+            return False
+    except Exception as e:
+        logger.error(f"Error checking demo user by ID: {e}")
+        return False
 
 
 @router.get("/status")
@@ -34,7 +53,7 @@ async def get_demo_status(user_id: int = Depends(verify_session)):
     Returns:
         Dict with populated status
     """
-    if not is_demo_user(user_id):
+    if not await is_demo_user_by_id(user_id):
         raise HTTPException(status_code=403, detail="Not a demo account")
 
     populated = await is_demo_populated(user_id)
@@ -56,7 +75,7 @@ async def populate_demo(user_id: int = Depends(verify_session)):
     Returns:
         Dict with status
     """
-    if not is_demo_user(user_id):
+    if not await is_demo_user_by_id(user_id):
         raise HTTPException(status_code=403, detail="Not a demo account")
 
     # Check if already populated
@@ -83,7 +102,7 @@ async def get_population_progress(user_id: int = Depends(verify_session)):
     Returns:
         Dict with progress percentage and current step
     """
-    if not is_demo_user(user_id):
+    if not await is_demo_user_by_id(user_id):
         raise HTTPException(status_code=403, detail="Not a demo account")
 
     progress = demo_populator.get_progress()
@@ -102,7 +121,7 @@ async def populate_demo_stream(user_id: int = Depends(verify_session)):
 
     Returns Server-Sent Events (SSE) stream with progress updates.
     """
-    if not is_demo_user(user_id):
+    if not await is_demo_user_by_id(user_id):
         raise HTTPException(status_code=403, detail="Not a demo account")
 
     # Check if already populated
@@ -173,7 +192,7 @@ async def reset_demo_data(user_id: int = Depends(verify_session)):
     Allows re-population of demo data.
     This doesn't delete existing data, just clears the flag.
     """
-    if not is_demo_user(user_id):
+    if not await is_demo_user_by_id(user_id):
         raise HTTPException(status_code=403, detail="Not a demo account")
 
     import aiosqlite
