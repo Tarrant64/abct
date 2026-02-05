@@ -6,9 +6,9 @@
     <title>ABCT - Manage APIs</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1770292969">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1770293712">
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1770292969"></script>
+    <script src="/static/js/session-auth.js?v=1770293712"></script>
     <style>
         /* API Manager Styles */
         .api-manager {
@@ -1740,13 +1740,25 @@
             // Update a single API item in place after save/toggle
             try {
                 const response = await authFetch(`/settings/apis/${apiId}`);
-                if (!response.ok) return;
+                if (!response.ok) {
+                    console.error(`Failed to fetch API ${apiId}:`, response.status);
+                    throw new Error(`Failed to fetch API info (${response.status})`);
+                }
 
                 const apiInfo = await response.json();
 
                 // Find the API item element
                 const apiItem = document.querySelector(`[data-api-id="${apiId}"]`);
-                if (!apiItem) return;
+                if (!apiItem) {
+                    console.warn(`API item element not found for ${apiId}`);
+                    return;
+                }
+
+                // Check if apiData is loaded
+                if (!apiData || !apiData.categories) {
+                    console.error('apiData not loaded, reloading full page');
+                    throw new Error('API data not loaded');
+                }
 
                 // Get the current category
                 let currentCategory = null;
@@ -1755,6 +1767,11 @@
                         currentCategory = catId;
                         break;
                     }
+                }
+
+                if (!currentCategory) {
+                    console.warn(`Could not find category for API ${apiId}`);
+                    return;
                 }
 
                 // Update the cached API data
@@ -1779,6 +1796,8 @@
                 }
             } catch (error) {
                 console.error('Error updating API item:', error);
+                // Re-throw so caller can handle
+                throw error;
             }
         }
 
@@ -1980,17 +1999,24 @@
             // Close modal
             closePermissionWarning();
 
-            // Show success message with warning note
-            showApiStatus('API credentials saved (⚠️ security warnings detected)', 'warning');
+            try {
+                // Show success message with warning note
+                showApiStatus('API credentials saved (⚠️ security warnings detected)', 'warning');
 
-            // Update the specific API item in place without reloading
-            await updateApiItem(apiId);
+                // Update the specific API item in place without reloading
+                await updateApiItem(apiId);
 
-            // Update stats
-            await updateApiStats();
-
-            // Clear pending save
-            window.pendingApiSave = null;
+                // Update stats
+                await updateApiStats();
+            } catch (error) {
+                console.error('Error updating UI after save:', error);
+                // If update fails, do a full page reload as fallback
+                showApiStatus('Credentials saved. Reloading page...', 'success');
+                setTimeout(() => window.location.reload(), 1000);
+            } finally {
+                // Clear pending save
+                window.pendingApiSave = null;
+            }
         }
 
         // ========== Utilization Functions ==========
