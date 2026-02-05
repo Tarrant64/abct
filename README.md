@@ -1,9 +1,9 @@
-# ABCT - A Better Crypto Tracker
+# A Better Crypto Tracker (ABCT)
 
-A self-hosted cryptocurrency portfolio tracker that aggregates data from multiple blockchains, exchanges, and DeFi protocols.  
+Personal multi-chain portfolio tracker built Cardano-first.
 
 ![Version](https://img.shields.io/badge/version-1.0.1-brightgreen.svg)
-![Build](https://img.shields.io/badge/build-1770166262-blue.svg)
+![Build](https://img.shields.io/badge/build-1770248608-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.109-teal.svg)
@@ -11,6 +11,29 @@ A self-hosted cryptocurrency portfolio tracker that aggregates data from multipl
 ![Docker](https://img.shields.io/badge/docker-ready-blue.svg)
 ![Exchanges](https://img.shields.io/badge/exchanges-7-purple.svg)
 ![Themes](https://img.shields.io/badge/themes-5-purple.svg)
+
+## Why
+
+Existing multi-chain wallets treat Cardano as an afterthought — basic balance tracking with no stake pool info, broken native assets, and zero governance integration. This project flips that: deep Cardano ecosystem support first, then proper multi-chain coverage.
+
+## Features
+**Cardano** (Primary):
+- Stake pool tracking, rewards, governance
+- Native assets with metadata and decimals
+- DeFi protocol integration (Minswap, SundaeSwap, etc.)
+- NFT collections with floor prices
+- Stake key wallet grouping
+
+**Other Chains**:
+Bitcoin, Ethereum, Solana, Polygon, Base
+
+**Tools**:
+Privacy-focused (self-hosted), transaction analytics, custom tokens, portfolio snapshots
+
+## Project
+Personal side project built with AI assistance. Goal: Create a robust tracker that doesn't compromise on Cardano while supporting major chains. Community contributions welcome.
+
+**Current Build**: v1.0.1 (BUILD 1770248608)
 
 ## ⚠️ Important: Intended Use
 
