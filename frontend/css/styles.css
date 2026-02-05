@@ -4366,6 +4366,67 @@ body.usd-primary .exchange-asset-item .balance-amount::after {
     border-top: 1px solid var(--border-color);
 }
 
+/* Demo Population Modal */
+.demo-population-modal {
+    max-width: 400px;
+    text-align: center;
+}
+
+.demo-popup-title {
+    font-size: 1.3rem;
+    margin: 0 0 12px 0;
+    color: var(--text-primary);
+}
+
+.demo-popup-desc {
+    color: var(--text-secondary);
+    margin-bottom: 30px;
+    font-size: 0.95rem;
+}
+
+.progress-circle-container {
+    position: relative;
+    display: inline-block;
+    margin: 20px 0;
+}
+
+.progress-circle {
+    transform: rotate(-90deg);
+}
+
+.progress-circle-bg {
+    fill: none;
+    stroke: var(--bg-secondary);
+    stroke-width: 8;
+}
+
+.progress-circle-fill {
+    fill: none;
+    stroke: var(--accent-success);
+    stroke-width: 8;
+    stroke-linecap: round;
+    stroke-dasharray: 339.292; /* 2 * PI * radius (54) */
+    stroke-dashoffset: 339.292;
+    transition: stroke-dashoffset 0.3s ease;
+}
+
+.progress-percentage {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.demo-status-text {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-top: 20px;
+    min-height: 24px;
+}
+
 /* Asset Breakdown Modal */
 .asset-breakdown-modal {
     width: 90%;
@@ -7031,19 +7092,17 @@ body.privacy-mode .section-title {
         rgba(255, 255, 255, 0.05) 0%,
         rgba(255, 255, 255, 0.02) 100%);
     backdrop-filter: blur(10px);
-    box-shadow:
-        0 2px 8px rgba(0, 0, 0, 0.1),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .tx-row td:first-child {
     border-radius: 16px 0 0 16px;
-    padding-left: 20px;
+    padding-left: 8px;
 }
 
 .tx-row td:last-child {
     border-radius: 0 16px 16px 0;
-    padding-right: 20px;
+    padding-right: 8px;
 }
 
 .tx-row:hover {
@@ -7053,26 +7112,17 @@ body.privacy-mode .section-title {
         rgba(255, 255, 255, 0.04) 100%);
     box-shadow:
         0 4px 16px rgba(0, 0, 0, 0.15),
-        inset 0 1px 0 rgba(255, 255, 255, 0.15),
         0 0 20px rgba(var(--accent-primary-rgb), 0.1);
 }
 
 .tx-row td {
-    padding: 16px;
+    padding: 2px 8px;
     vertical-align: middle;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-left: none;
-    border-right: none;
+    border: none;
     background: transparent;
 }
 
-.tx-row td:first-child {
-    border-left: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.tx-row td:last-child {
-    border-right: 1px solid rgba(255, 255, 255, 0.05);
-}
+/* Borders removed for cleaner look */
 
 /* Expand/collapse cell */
 .expand-cell {
@@ -7176,12 +7226,12 @@ body.privacy-mode .section-title {
 }
 
 .tx-details-row td {
-    padding: 0 20px 16px 20px !important;
+    padding: 0 20px 4px 20px !important;
     border: none !important;
 }
 
 .tx-details {
-    padding: 20px;
+    padding: 6px;
     margin: -10px 0 0 0;
     background: linear-gradient(135deg,
         rgba(0, 0, 0, 0.2) 0%,
@@ -7194,14 +7244,14 @@ body.privacy-mode .section-title {
 .detail-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
+    gap: 6px;
 }
 
 .detail-item {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 10px 12px;
+    gap: 4px;
+    padding: 3px 10px;
     background: linear-gradient(135deg,
         rgba(255, 255, 255, 0.03) 0%,
         rgba(255, 255, 255, 0.01) 100%);
@@ -7289,7 +7339,7 @@ body.privacy-mode .section-title {
 }
 
 .tx-row td:not(:first-child):not(:last-child) {
-    padding: 12px 8px !important;
+    padding: 2px 8px !important;
 }
 
 /* Time badge */
@@ -7433,6 +7483,212 @@ body.privacy-mode .section-title {
     padding: 60px 20px;
 }
 
+/*===============================================================================
+  TRANSACTION ANALYTICS - Tabbed Interface & Chart Visualization
+===============================================================================*/
+
+/* Tab Container */
+.tab-container {
+    margin-bottom: 24px;
+}
+
+.tab-nav {
+    display: flex;
+    gap: 8px;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 4px;
+}
+
+.tab-btn {
+    padding: 12px 24px;
+    background: transparent;
+    border: none;
+    border-radius: 8px 8px 0 0;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.tab-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+
+.tab-btn.active {
+    background: linear-gradient(135deg,
+        rgba(0, 210, 106, 0.15) 0%,
+        rgba(0, 210, 106, 0.05) 100%);
+    color: var(--accent);
+    border: 1px solid rgba(0, 210, 106, 0.3);
+    border-bottom: none;
+}
+
+.tab-btn.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--accent);
+}
+
+/* Tab Content */
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* Analytics Section */
+.analytics-section {
+    margin-bottom: 30px;
+}
+
+.analytics-controls {
+    margin: 20px 0;
+    padding: 16px;
+    background: linear-gradient(135deg,
+        rgba(255, 255, 255, 0.05) 0%,
+        rgba(255, 255, 255, 0.02) 100%);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.period-buttons {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.period-btn {
+    padding: 10px 20px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.period-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: var(--text-primary);
+}
+
+.period-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #1a1a2e;
+    box-shadow: 0 0 15px rgba(0, 210, 106, 0.3);
+}
+
+/* Analytics Chart Container */
+.analytics-chart-container {
+    padding: 24px;
+    background: linear-gradient(135deg,
+        rgba(255, 255, 255, 0.05) 0%,
+        rgba(255, 255, 255, 0.02) 100%);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    margin: 20px 0;
+    height: 450px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.analytics-chart-container canvas {
+    max-height: 100%;
+}
+
+/* Chain Indicators Section */
+.chain-indicators-section {
+    margin-top: 30px;
+}
+
+.chain-indicators-section .hint-text {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-style: italic;
+    margin-left: 12px;
+}
+
+.chain-indicators {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 20px;
+    background: linear-gradient(135deg,
+        rgba(255, 255, 255, 0.05) 0%,
+        rgba(255, 255, 255, 0.02) 100%);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.chain-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.chain-indicator:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.chain-indicator.active {
+    background: rgba(0, 210, 106, 0.15);
+    border-color: rgba(0, 210, 106, 0.4);
+    box-shadow: 0 0 12px rgba(0, 210, 106, 0.2);
+}
+
+.chain-indicator-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.chain-indicator-label {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.chain-indicator-count {
+    padding: 2px 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--accent);
+    margin-left: 4px;
+}
+
+.chain-indicator:not(.active) {
+    opacity: 0.6;
+}
+
+.chain-indicator:not(.active):hover {
+    opacity: 0.8;
+}
+
 .loading-indicator .spinner {
     display: inline-block;
     width: 40px;
@@ -7493,32 +7749,7 @@ body.privacy-mode .section-title {
     letter-spacing: 0.05em;
 }
 
-/* Processing modal */
-.modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.7);
-    z-index: 9999;
-    align-items: center;
-    justify-content: center;
-}
-
-.modal.active {
-    display: flex;
-}
-
-.modal-content {
-    background: var(--bg-card);
-    padding: 40px;
-    border-radius: 16px;
-    text-align: center;
-    max-width: 400px;
-    border: 1px solid var(--border-color);
-}
+/* Processing modal - uses existing .modal and .modal.hidden classes from line 4248 */
 
 .modal-content h2 {
     margin-bottom: 30px;
@@ -7838,4 +8069,88 @@ body.privacy-mode .section-title {
     .detail-full {
         grid-column: 1;
     }
+}
+
+/*===============================================================================
+  LIGHT THEME - Analytics Components
+===============================================================================*/
+
+[data-theme="light"] .tab-nav {
+    border-bottom-color: #e5e7eb;
+}
+
+[data-theme="light"] .tab-btn {
+    color: #6b7280;
+}
+
+[data-theme="light"] .tab-btn:hover {
+    background: #f3f4f6;
+    color: #1a1a2e;
+}
+
+[data-theme="light"] .tab-btn.active {
+    background: linear-gradient(135deg,
+        rgba(102, 126, 234, 0.1) 0%,
+        rgba(102, 126, 234, 0.05) 100%);
+    color: #667eea;
+    border-color: #667eea;
+}
+
+[data-theme="light"] .analytics-controls {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .period-btn {
+    background: #f5f7fa;
+    border-color: #e5e7eb;
+    color: #6b7280;
+}
+
+[data-theme="light"] .period-btn:hover {
+    background: #e9ecef;
+    border-color: #d1d5db;
+    color: #1a1a2e;
+}
+
+[data-theme="light"] .period-btn.active {
+    background: #667eea;
+    border-color: #667eea;
+    color: #ffffff;
+    box-shadow: 0 0 15px rgba(102, 126, 234, 0.3);
+}
+
+[data-theme="light"] .analytics-chart-container {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .chain-indicators {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .chain-indicator {
+    background: #f5f7fa;
+    border-color: #e5e7eb;
+}
+
+[data-theme="light"] .chain-indicator:hover {
+    background: #e9ecef;
+    border-color: #d1d5db;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .chain-indicator.active {
+    background: rgba(102, 126, 234, 0.1);
+    border-color: rgba(102, 126, 234, 0.4);
+    box-shadow: 0 0 12px rgba(102, 126, 234, 0.2);
+}
+
+[data-theme="light"] .chain-indicator-count {
+    background: rgba(102, 126, 234, 0.15);
+    color: #667eea;
 }

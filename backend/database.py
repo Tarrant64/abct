@@ -582,6 +582,18 @@ async def init_db():
             )
         """)
 
+        # User settings table for storing per-user configuration (demo flags, preferences, etc.)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS user_settings (
+                user_id INTEGER NOT NULL,
+                setting_key TEXT NOT NULL,
+                setting_value TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                PRIMARY KEY (user_id, setting_key),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
+
         # Security settings table for SSL/HTTPS configuration (system-wide)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS security_settings (
