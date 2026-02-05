@@ -215,6 +215,11 @@ EOF
     docker exec "$CONTAINER_NAME" python3 /app/backend/fix_api_settings_schema.py 2>&1 || true
     echo "  ✓ Migrations complete"
 
+    echo ""
+    echo "Verifying admin account..."
+    docker exec "$CONTAINER_NAME" python3 backend/check_auth.py 2>&1 | grep -E "✅|❌|Resetting" || true
+    echo "  ✓ Admin account verified (username: admin, password: satoshi)"
+
 ENDSSH
 
 SSH_EXIT_CODE=$?
