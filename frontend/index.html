@@ -6,14 +6,14 @@
     <title>A Better Crypto Tracker</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1770248608">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1770263313">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
     <!-- TradingView Lightweight Charts for price charts -->
     <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
     <!-- DOMPurify for XSS protection -->
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1770248608"></script>
+    <script src="/static/js/session-auth.js?v=1770263313"></script>
 </head>
 <body>
     <div class="container">
@@ -647,13 +647,35 @@
                 </div>
             </div>
         </div>
+
+        <!-- Demo Account Population Modal -->
+        <div id="demoPopulationModal" class="modal hidden">
+            <div class="modal-content demo-population-modal">
+                <div class="modal-body">
+                    <h3 class="demo-popup-title">🎭 Setting up your Demo Account</h3>
+                    <p class="demo-popup-desc">Please wait while we populate your demo portfolio with sample data...</p>
+
+                    <!-- Progress Circle -->
+                    <div class="progress-circle-container">
+                        <svg class="progress-circle" width="120" height="120">
+                            <circle class="progress-circle-bg" cx="60" cy="60" r="54"></circle>
+                            <circle class="progress-circle-fill" cx="60" cy="60" r="54" id="demoProgressCircle"></circle>
+                        </svg>
+                        <div class="progress-percentage" id="demoProgressPercent">0%</div>
+                    </div>
+
+                    <!-- Status Text -->
+                    <p class="demo-status-text" id="demoStatusText">Initializing...</p>
+                </div>
+            </div>
+        </div>
         </main>
 
         <footer>
-            <p>ABCT - Personal Crypto Portfolio Tracker | Phase 1 | <span id="appVersion" style="opacity: 0.6;">v1.0.1 (BUILD 1770248608)</span></p>
+            <p>ABCT - Personal Crypto Portfolio Tracker | Phase 1 | <span id="appVersion" style="opacity: 0.6;">v1.0.1 (BUILD 1770263313)</span></p>
         </footer>
     </div>
 
-    <script src="/static/js/app.js?v=1770248608"></script>
+    <script src="/static/js/app.js?v=1770263313"></script>
 </body>
 </html>

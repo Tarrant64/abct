@@ -5920,6 +5920,130 @@ async function monitorStartupStatus() {
 }
 
 // ============================================================================
+// DEMO ACCOUNT POPULATION
+// ============================================================================
+
+/**
+ * Check if this is a demo account and if it needs population.
+ * Shows modal with progress if population needed.
+ */
+async function checkDemoPopulation() {
+    try {
+        // Check demo status
+        const response = await authFetch('/api/demo/status');
+        if (!response.ok) {
+            // Not a demo account or error - just return
+            return;
+        }
+
+        const data = await response.json();
+
+        if (data.is_populated) {
+            // Already populated, nothing to do
+            console.log('[Demo] Account already populated');
+            return;
+        }
+
+        // Show population modal and start streaming progress
+        console.log('[Demo] Starting population...');
+        await showDemoPopulationModal();
+
+    } catch (error) {
+        // Silently fail - not critical for non-demo accounts
+        console.debug('[Demo] Not a demo account or error checking status:', error);
+    }
+}
+
+/**
+ * Show demo population modal and stream progress from backend.
+ */
+async function showDemoPopulationModal() {
+    const modal = document.getElementById('demoPopulationModal');
+    const progressCircle = document.getElementById('demoProgressCircle');
+    const progressPercent = document.getElementById('demoProgressPercent');
+    const statusText = document.getElementById('demoStatusText');
+
+    if (!modal) return;
+
+    // Show modal
+    modal.classList.remove('hidden');
+
+    // Connect to SSE stream
+    const eventSource = new EventSource('/api/demo/populate/stream');
+
+    eventSource.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+
+            // Update progress circle
+            updateDemoProgress(data.progress);
+
+            // Update status text
+            statusText.textContent = data.current_step || 'Processing...';
+
+            // Check if complete
+            if (data.status === 'completed' || data.progress === 100) {
+                console.log('[Demo] Population complete!');
+                eventSource.close();
+
+                // Close modal after a brief delay
+                setTimeout(() => {
+                    modal.classList.add('hidden');
+                    // Reload the page to show populated data
+                    window.location.reload();
+                }, 1500);
+            }
+
+            // Check for errors
+            if (data.status === 'error') {
+                console.error('[Demo] Population error:', data.current_step);
+                statusText.textContent = 'Error: ' + data.current_step;
+                eventSource.close();
+
+                // Close modal after delay on error
+                setTimeout(() => {
+                    modal.classList.add('hidden');
+                }, 3000);
+            }
+
+        } catch (error) {
+            console.error('[Demo] Error parsing progress:', error);
+        }
+    };
+
+    eventSource.onerror = (error) => {
+        console.error('[Demo] SSE connection error:', error);
+        eventSource.close();
+        statusText.textContent = 'Connection error. Please refresh the page.';
+
+        // Close modal after delay
+        setTimeout(() => {
+            modal.classList.add('hidden');
+        }, 3000);
+    };
+}
+
+/**
+ * Update the progress circle based on percentage.
+ * @param {number} percent - Progress percentage (0-100)
+ */
+function updateDemoProgress(percent) {
+    const progressCircle = document.getElementById('demoProgressCircle');
+    const progressPercent = document.getElementById('demoProgressPercent');
+
+    if (!progressCircle || !progressPercent) return;
+
+    // Update percentage text
+    progressPercent.textContent = Math.round(percent) + '%';
+
+    // Update circle stroke-dashoffset
+    // Circumference = 2 * PI * radius = 2 * PI * 54 = 339.292
+    const circumference = 339.292;
+    const offset = circumference - (percent / 100) * circumference;
+    progressCircle.style.strokeDashoffset = offset;
+}
+
+// ============================================================================
 // INITIALIZATION
 // ============================================================================
 
@@ -5930,6 +6054,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Initialize privacy mode from localStorage
     initializePrivacyMode();
+
+    // Check if demo account needs population (non-blocking)
+    checkDemoPopulation();
 
     // Start monitoring startup status (non-blocking)
     monitorStartupStatus();
