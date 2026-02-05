@@ -3,6 +3,20 @@
 
 FROM python:3.11-slim
 
+# Docker metadata labels (OCI standard + unRAID compatibility)
+LABEL org.opencontainers.image.title="ABCT - A Better Crypto Tracker"
+LABEL org.opencontainers.image.description="Multi-chain cryptocurrency portfolio tracker supporting Cardano, Ethereum, Bitcoin, Solana, Polygon, and Base"
+LABEL org.opencontainers.image.version="1.0.0"
+LABEL org.opencontainers.image.vendor="ABCT Project"
+LABEL org.opencontainers.image.authors="Chris Catalano"
+LABEL org.opencontainers.image.url="https://github.com/Tarrant64/abct"
+LABEL org.opencontainers.image.source="https://github.com/Tarrant64/abct"
+LABEL org.opencontainers.image.documentation="https://github.com/Tarrant64/abct/blob/main/README.md"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.base.name="python:3.11-slim"
+# Icon for unRAID and other container managers (1024x1024 PNG)
+LABEL org.opencontainers.image.icon="https://raw.githubusercontent.com/Tarrant64/abct/main/frontend/static/apple-touch-icon.png"
+
 # Install system dependencies (including Pillow requirements for image processing)
 # gcc and build-essential needed for bip_utils (Bitcoin xpub support)
 # openssl needed for auto-generating self-signed SSL certificates
