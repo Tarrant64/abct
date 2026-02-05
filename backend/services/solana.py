@@ -26,11 +26,12 @@ LAMPORTS_PER_SOL = 1_000_000_000
 
 
 class SolanaService(APIKeyManager):
-    """Service for fetching Solana wallet data from Helius API."""
+    """Service for fetching Solana wallet data from Helius API with public RPC fallback."""
 
     def __init__(self):
         super().__init__(api_name='helius', env_var='HELIUS_API_KEY')
         self.base_url = HELIUS_BASE_URL
+        self.public_rpc_url = "https://api.mainnet-beta.solana.com"
         self._balance_cache: Dict[str, dict] = {}
         self._cache_ttl = timedelta(minutes=5)
 
@@ -96,6 +97,9 @@ class SolanaService(APIKeyManager):
         """
         Get SOL balance and SPL tokens for a Solana address.
 
+        Uses Helius API for full data (SOL + SPL tokens).
+        Falls back to public RPC for native SOL balance only if Helius unavailable.
+
         Returns:
         {
             'address': '...',
@@ -104,15 +108,16 @@ class SolanaService(APIKeyManager):
             'tokens': [
                 {'mint': '...', 'symbol': 'USDC', 'balance': 100.0, 'decimals': 6}
             ],
-            'source': 'helius'
+            'source': 'helius' | 'public_rpc'
         }
         """
         if not self.is_solana_address(address):
             return None
 
+        # If Helius not configured, use public RPC fallback
         if not await self.is_configured():
-            logger.warning("Helius API key not configured")
-            return None
+            logger.warning("Helius API key not configured, using public RPC fallback")
+            return await self.get_balance_from_public_rpc(address)
 
         # Check cache
         if address in self._balance_cache:
@@ -205,7 +210,71 @@ class SolanaService(APIKeyManager):
                 return result_data
 
         except Exception as e:
-            logger.error(f"Error fetching Solana balance: {e}")
+            logger.error(f"Error fetching Solana balance from Helius: {e}")
+            logger.info("Attempting fallback to public RPC")
+            # Try public RPC as fallback
+            return await self.get_balance_from_public_rpc(address)
+
+    async def get_balance_from_public_rpc(self, address: str) -> Optional[dict]:
+        """
+        Fallback method to get SOL balance from public RPC.
+
+        Only returns native SOL balance (no SPL tokens).
+        Used when Helius API is not configured or fails.
+
+        Returns:
+            {
+                'address': '...',
+                'balance_sol': 1.234,
+                'balance_lamports': 1234000000,
+                'tokens': [],
+                'source': 'public_rpc'
+            }
+        """
+        if not self.is_solana_address(address):
+            return None
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                # Use Solana JSON-RPC to get balance
+                response = await client.post(
+                    self.public_rpc_url,
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "getBalance",
+                        "params": [address]
+                    }
+                )
+
+                if response.status_code != 200:
+                    logger.error(f"Public RPC error: {response.status_code}")
+                    return None
+
+                data = response.json()
+
+                if 'error' in data:
+                    logger.error(f"Public RPC error: {data['error']}")
+                    return None
+
+                # Get balance in lamports
+                balance_lamports = data.get('result', {}).get('value', 0)
+                balance_sol = balance_lamports / LAMPORTS_PER_SOL
+
+                result_data = {
+                    'address': address,
+                    'balance_sol': balance_sol,
+                    'balance_lamports': balance_lamports,
+                    'tokens': [],  # Public RPC doesn't provide SPL tokens
+                    'token_count': 0,
+                    'source': 'public_rpc'
+                }
+
+                logger.info(f"Fetched SOL balance from public RPC: {balance_sol} SOL")
+                return result_data
+
+        except Exception as e:
+            logger.error(f"Error fetching balance from public RPC: {e}")
             return None
 
     async def get_token_balances(self, address: str) -> List[dict]:
