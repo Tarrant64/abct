@@ -18,7 +18,7 @@ from services.ethereum import ethereum_service
 from services.solana import solana_service
 from services.polygon import polygon_service
 from services.base import base_service
-from services.algorand import algorand_service
+# from services.algorand import algorand_service  # TODO: Implement Algorand support
 from services.logging_service import get_logging_service
 from services.demo_wallet_service import demo_wallet_service
 from services.pricing import pricing_service
@@ -684,32 +684,33 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
                     'source': 'alchemy'
                 }
 
-        elif blockchain == 'algorand':
-            # Algorand works with free Pera API (no key required) or Tatum fallback
-            info = await algorand_service.get_address_info(address)
-            if info:
-                await clear_wallet_balances(wallet_id)
-                await save_balance(wallet_id, str(info['balance_algo']), 'ALGO')
-                # Save ASAs (Algorand Standard Assets) as native assets
-                algorand_assets = [
-                    {
-                        'asset_id': str(asset['asset_id']),
-                        'policy_id': str(asset['asset_id']),
-                        'asset_name': asset.get('unit_name', '') or asset.get('name', ''),
-                        'quantity': str(asset['amount']),
-                        'decimals': asset['decimals']
-                    }
-                    for asset in info.get('assets', [])
-                ]
-                await save_native_assets(wallet_id, algorand_assets)
-                return {
-                    'address': address,
-                    'success': True,
-                    'balance': info['balance_algo'],
-                    'unit': 'ALGO',
-                    'asset_count': len(info.get('assets', [])),
-                    'source': info.get('source', 'pera')
-                }
+        # TODO: Implement Algorand support
+        # elif blockchain == 'algorand':
+        #     # Algorand works with free Pera API (no key required) or Tatum fallback
+        #     info = await algorand_service.get_address_info(address)
+        #     if info:
+        #         await clear_wallet_balances(wallet_id)
+        #         await save_balance(wallet_id, str(info['balance_algo']), 'ALGO')
+        #         # Save ASAs (Algorand Standard Assets) as native assets
+        #         algorand_assets = [
+        #             {
+        #                 'asset_id': str(asset['asset_id']),
+        #                 'policy_id': str(asset['asset_id']),
+        #                 'asset_name': asset.get('unit_name', '') or asset.get('name', ''),
+        #                 'quantity': str(asset['amount']),
+        #                 'decimals': asset['decimals']
+        #             }
+        #             for asset in info.get('assets', [])
+        #         ]
+        #         await save_native_assets(wallet_id, algorand_assets)
+        #         return {
+        #             'address': address,
+        #             'success': True,
+        #             'balance': info['balance_algo'],
+        #             'unit': 'ALGO',
+        #             'asset_count': len(info.get('assets', [])),
+        #             'source': info.get('source', 'pera')
+        #         }
 
         return {
             'address': address,
