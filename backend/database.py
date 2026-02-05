@@ -2073,14 +2073,17 @@ async def get_all_api_usage(period_seconds: int = 86400) -> list:
         period_seconds: Rolling window size in seconds (default: 86400 = 24 hours)
 
     Returns:
-        List of dicts with api_name and call_count
+        List of dicts with api_name, call_count, and last_called timestamp
     """
     async with aiosqlite.connect(DATABASE_PATH) as db:
         now = datetime.now()
         window_start = now - timedelta(seconds=period_seconds)
 
         cursor = await db.execute("""
-            SELECT api_name, COUNT(*) as call_count
+            SELECT
+                api_name,
+                COUNT(*) as call_count,
+                MAX(timestamp) as last_called
             FROM api_call_log
             WHERE timestamp >= ?
             GROUP BY api_name
@@ -2091,7 +2094,8 @@ async def get_all_api_usage(period_seconds: int = 86400) -> list:
         return [
             {
                 'api_name': row[0],
-                'call_count': row[1]
+                'call_count': row[1],
+                'last_called': row[2] if row[2] else None
             }
             for row in rows
         ]
