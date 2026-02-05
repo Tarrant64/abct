@@ -39,7 +39,7 @@ async def optimize_cardano_wallets(wallets: List[Dict]) -> List[Dict]:
     """
     Optimize Cardano wallets for export by only including stake addresses.
 
-    For Cardano payment addresses (addr1...), queries the Cardano service to get
+    For Cardano payment addresses (addr1), queries the Cardano service to get
     the associated stake address and exports that instead. This reduces the number
     of wallets exported and allows the import to auto-discover payment addresses.
 

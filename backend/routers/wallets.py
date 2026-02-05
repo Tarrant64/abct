@@ -392,7 +392,7 @@ async def get_wallet(address: str, user_id: int = Depends(verify_session)):
 async def sync_wallets_from_file(user_id: int = Depends(verify_session)):
     """
     Sync wallets from the wallets.txt file.
-    Stake addresses (stake1...) are automatically expanded to their associated payment addresses.
+    Stake addresses (stake1) are automatically expanded to their associated payment addresses.
     """
     wallets = parse_wallets_file(str(WALLETS_FILE))
 
@@ -731,8 +731,8 @@ async def discover_related_wallets(data: dict, user_id: int = Depends(verify_ses
     """
     Discover all Cardano wallets related to a given address or stake key.
 
-    If a stake address (stake1...) is provided, finds all payment addresses.
-    If a payment address (addr1...) is provided, derives the stake key first.
+    If a stake address (stake1) is provided, finds all payment addresses.
+    If a payment address (addr1) is provided, derives the stake key first.
 
     Returns list of addresses with balances and whether they're already tracked.
     """
@@ -766,7 +766,7 @@ async def discover_related_wallets(data: dict, user_id: int = Depends(verify_ses
                 'already_tracked_count': 1 if await get_wallet_by_address(address, 'cardano') else 0
             }
     else:
-        raise HTTPException(status_code=400, detail="Address must be a Cardano address (addr1...) or stake key (stake1...)")
+        raise HTTPException(status_code=400, detail="Address must be a Cardano address (addr1) or stake key (stake1)")
 
     # Get all addresses under this stake key
     payment_addresses = await cardano_service.get_addresses_from_stake(stake_address)
@@ -879,9 +879,9 @@ async def discover_xpub_addresses(data: dict, user_id: int = Depends(verify_sess
     Uses gap limit approach: scans until finding N consecutive unused addresses.
 
     Supports:
-        - xpub: BIP44 Legacy addresses (1...)
-        - ypub: BIP49 Nested SegWit addresses (3...)
-        - zpub: BIP84 Native SegWit addresses (bc1...)
+        - xpub: BIP44 Legacy addresses (1)
+        - ypub: BIP49 Nested SegWit addresses (3)
+        - zpub: BIP84 Native SegWit addresses (bc1)
     """
     xpub = data.get('xpub', '').strip()
     gap_limit = data.get('gap_limit', 20)
@@ -1017,7 +1017,7 @@ async def xpub_status(user_id: int = Depends(verify_session)):
 async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session)):
     """
     Add a new wallet to track.
-    Stake addresses (stake1...) are automatically expanded to their associated payment addresses.
+    Stake addresses (stake1) are automatically expanded to their associated payment addresses.
     Extended public keys (xpub/ypub/zpub) are expanded to their derived addresses.
     Also appends the wallet to wallets.txt for persistence across container rebuilds.
     """
@@ -1030,7 +1030,7 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
         if not blockchain:
             raise HTTPException(
                 status_code=400,
-                detail="Could not detect blockchain. Supported: Cardano (addr1..., stake1...), Bitcoin (1.., 3.., bc1.., xpub.., ypub.., zpub..), Ethereum (0x...), Polygon (polygon:0x...), Base (base:0x...), Solana (base58)"
+                detail="Could not detect blockchain. Supported: Cardano (addr1, stake1), Bitcoin (1, 3, bc1, xpub, ypub, zpub), Ethereum (0x), Polygon (polygon:0x), Base (base:0x), Solana (base58)"
             )
 
         # Extract raw address if chain prefix was provided
