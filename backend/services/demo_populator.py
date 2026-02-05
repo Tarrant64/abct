@@ -215,13 +215,16 @@ class DemoPopulator:
                 )
                 row = await cursor.fetchone()
                 if not row:
+                    # snapshot_time should be noon on the snapshot_date
+                    snapshot_time = f"{snapshot['snapshot_date']} 12:00:00"
                     await conn.execute(
                         """INSERT INTO portfolio_snapshots
-                           (user_id, snapshot_date, total_value_usd, created_at)
-                           VALUES (?, ?, ?, ?)""",
+                           (user_id, snapshot_date, snapshot_time, total_value_usd, created_at)
+                           VALUES (?, ?, ?, ?, ?)""",
                         (
                             user_id,
                             snapshot["snapshot_date"],
+                            snapshot_time,
                             snapshot["total_value_usd"],
                             datetime.now().isoformat()
                         )
