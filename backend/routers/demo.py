@@ -176,20 +176,16 @@ async def reset_demo_data(user_id: int = Depends(verify_session)):
     if not is_demo_user(user_id):
         raise HTTPException(status_code=403, detail="Not a demo account")
 
-    import sqlite3
+    import aiosqlite
     from config import DATABASE_PATH
 
     try:
-        conn = sqlite3.connect(DATABASE_PATH)
-        cursor = conn.cursor()
-
-        cursor.execute(
-            "DELETE FROM user_settings WHERE user_id = ? AND setting_key = 'demo_data_populated'",
-            (user_id,)
-        )
-
-        conn.commit()
-        conn.close()
+        async with aiosqlite.connect(DATABASE_PATH) as conn:
+            await conn.execute(
+                "DELETE FROM user_settings WHERE user_id = ? AND setting_key = 'demo_data_populated'",
+                (user_id,)
+            )
+            await conn.commit()
 
         return {
             "reset": True,

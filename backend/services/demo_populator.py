@@ -12,7 +12,7 @@ This service populates the demo account database with:
 Used on first login to demo account or triggered manually.
 """
 
-import sqlite3
+import aiosqlite
 import asyncio
 from datetime import datetime, timedelta
 from typing import Dict, Callable
@@ -123,73 +123,69 @@ class DemoPopulator:
             ("algorand", "SWOUICD7LO3MWVKLHFKADCXLF5HZPUQQFW5OIJAFZJBG4HDQH53RTTJPFE", "Algorand Wallet")
         ]
 
-        conn = sqlite3.connect(DATABASE_PATH)
-        cursor = conn.cursor()
-
-        created = 0
-        for blockchain, address, label in demo_wallets:
-            # Check if wallet already exists
-            cursor.execute(
-                "SELECT id FROM wallets WHERE user_id = ? AND blockchain = ? AND address = ?",
-                (user_id, blockchain, address)
-            )
-            if not cursor.fetchone():
-                cursor.execute(
-                    "INSERT INTO wallets (user_id, blockchain, address, label, created_at) VALUES (?, ?, ?, ?, ?)",
-                    (user_id, blockchain, address, label, datetime.now().isoformat())
+        async with aiosqlite.connect(DATABASE_PATH) as conn:
+            created = 0
+            for blockchain, address, label in demo_wallets:
+                # Check if wallet already exists
+                cursor = await conn.execute(
+                    "SELECT id FROM wallets WHERE user_id = ? AND blockchain = ? AND address = ?",
+                    (user_id, blockchain, address)
                 )
-                created += 1
+                row = await cursor.fetchone()
+                if not row:
+                    await conn.execute(
+                        "INSERT INTO wallets (user_id, blockchain, address, label, created_at) VALUES (?, ?, ?, ?, ?)",
+                        (user_id, blockchain, address, label, datetime.now().isoformat())
+                    )
+                    created += 1
 
-        conn.commit()
-        conn.close()
+            await conn.commit()
         return created
 
     async def _add_stablecoins(self, user_id: int) -> int:
         """Add $200K in stablecoins to demo wallets."""
         stablecoins = generate_stablecoins()
 
-        conn = sqlite3.connect(DATABASE_PATH)
-        cursor = conn.cursor()
-
-        added = 0
-        for blockchain, tokens in stablecoins.items():
-            # Get wallet ID for this blockchain
-            cursor.execute(
-                "SELECT id FROM wallets WHERE user_id = ? AND blockchain = ? LIMIT 1",
-                (user_id, blockchain)
-            )
-            wallet_row = cursor.fetchone()
-            if not wallet_row:
-                continue
-
-            wallet_id = wallet_row[0]
-
-            for token in tokens:
-                # Check if token already exists
-                cursor.execute(
-                    "SELECT id FROM native_assets WHERE wallet_id = ? AND asset_name = ?",
-                    (wallet_id, token["ticker"])
+        async with aiosqlite.connect(DATABASE_PATH) as conn:
+            added = 0
+            for blockchain, tokens in stablecoins.items():
+                # Get wallet ID for this blockchain
+                cursor = await conn.execute(
+                    "SELECT id FROM wallets WHERE user_id = ? AND blockchain = ? LIMIT 1",
+                    (user_id, blockchain)
                 )
-                if not cursor.fetchone():
-                    cursor.execute(
-                        """INSERT INTO native_assets
-                           (wallet_id, user_id, asset_id, asset_name, policy_id, quantity, decimals, created_at)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                        (
-                            wallet_id,
-                            user_id,
-                            token["ticker"],
-                            token["name"],
-                            "demo_policy_" + token["ticker"],
-                            str(int(float(token["quantity"]) * (10 ** token["decimals"]))),
-                            token["decimals"],
-                            datetime.now().isoformat()
-                        )
-                    )
-                    added += 1
+                wallet_row = await cursor.fetchone()
+                if not wallet_row:
+                    continue
 
-        conn.commit()
-        conn.close()
+                wallet_id = wallet_row[0]
+
+                for token in tokens:
+                    # Check if token already exists
+                    cursor = await conn.execute(
+                        "SELECT id FROM native_assets WHERE wallet_id = ? AND asset_name = ?",
+                        (wallet_id, token["ticker"])
+                    )
+                    row = await cursor.fetchone()
+                    if not row:
+                        await conn.execute(
+                            """INSERT INTO native_assets
+                               (wallet_id, user_id, asset_id, asset_name, policy_id, quantity, decimals, created_at)
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                            (
+                                wallet_id,
+                                user_id,
+                                token["ticker"],
+                                token["name"],
+                                "demo_policy_" + token["ticker"],
+                                str(int(float(token["quantity"]) * (10 ** token["decimals"]))),
+                                token["decimals"],
+                                datetime.now().isoformat()
+                            )
+                        )
+                        added += 1
+
+            await conn.commit()
         return added
 
     async def _add_defi_positions(self, user_id: int) -> int:
@@ -209,48 +205,41 @@ class DemoPopulator:
         """Add 90 days of portfolio history snapshots."""
         history = generate_portfolio_history(90)
 
-        conn = sqlite3.connect(DATABASE_PATH)
-        cursor = conn.cursor()
-
-        created = 0
-        for snapshot in history:
-            # Check if snapshot already exists for this date
-            cursor.execute(
-                "SELECT id FROM portfolio_snapshots WHERE user_id = ? AND snapshot_date = ?",
-                (user_id, snapshot["snapshot_date"])
-            )
-            if not cursor.fetchone():
-                cursor.execute(
-                    """INSERT INTO portfolio_snapshots
-                       (user_id, snapshot_date, total_value_usd, created_at)
-                       VALUES (?, ?, ?, ?)""",
-                    (
-                        user_id,
-                        snapshot["snapshot_date"],
-                        snapshot["total_value_usd"],
-                        datetime.now().isoformat()
-                    )
+        async with aiosqlite.connect(DATABASE_PATH) as conn:
+            created = 0
+            for snapshot in history:
+                # Check if snapshot already exists for this date
+                cursor = await conn.execute(
+                    "SELECT id FROM portfolio_snapshots WHERE user_id = ? AND snapshot_date = ?",
+                    (user_id, snapshot["snapshot_date"])
                 )
-                created += 1
+                row = await cursor.fetchone()
+                if not row:
+                    await conn.execute(
+                        """INSERT INTO portfolio_snapshots
+                           (user_id, snapshot_date, total_value_usd, created_at)
+                           VALUES (?, ?, ?, ?)""",
+                        (
+                            user_id,
+                            snapshot["snapshot_date"],
+                            snapshot["total_value_usd"],
+                            datetime.now().isoformat()
+                        )
+                    )
+                    created += 1
 
-        conn.commit()
-        conn.close()
+            await conn.commit()
         return created
 
     async def _mark_demo_populated(self, user_id: int):
         """Mark demo account as populated in database."""
-        conn = sqlite3.connect(DATABASE_PATH)
-        cursor = conn.cursor()
-
-        # Add a flag to users table or user_settings
-        cursor.execute(
-            """INSERT OR REPLACE INTO user_settings (user_id, setting_key, setting_value, updated_at)
-               VALUES (?, 'demo_data_populated', 'true', ?)""",
-            (user_id, datetime.now().isoformat())
-        )
-
-        conn.commit()
-        conn.close()
+        async with aiosqlite.connect(DATABASE_PATH) as conn:
+            await conn.execute(
+                """INSERT OR REPLACE INTO user_settings (user_id, setting_key, setting_value, updated_at)
+                   VALUES (?, 'demo_data_populated', 'true', ?)""",
+                (user_id, datetime.now().isoformat())
+            )
+            await conn.commit()
 
     def get_progress(self) -> Dict:
         """Get current population progress."""
@@ -276,18 +265,15 @@ async def is_demo_populated(user_id: int) -> bool:
         True if demo data has been populated
     """
     try:
-        conn = sqlite3.connect(DATABASE_PATH)
-        cursor = conn.cursor()
+        async with aiosqlite.connect(DATABASE_PATH) as conn:
+            cursor = await conn.execute(
+                """SELECT setting_value FROM user_settings
+                   WHERE user_id = ? AND setting_key = 'demo_data_populated'""",
+                (user_id,)
+            )
+            row = await cursor.fetchone()
 
-        cursor.execute(
-            """SELECT setting_value FROM user_settings
-               WHERE user_id = ? AND setting_key = 'demo_data_populated'""",
-            (user_id,)
-        )
-        row = cursor.fetchone()
-        conn.close()
-
-        return row is not None and row[0] == 'true'
+            return row is not None and row[0] == 'true'
 
     except Exception as e:
         logger.error(f"Error checking demo population status: {e}")
