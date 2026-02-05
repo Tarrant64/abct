@@ -23,7 +23,8 @@ import traceback
 import asyncio
 import aiosqlite
 from typing import List, Dict, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from collections import deque
 from pathlib import Path
 from enum import Enum
@@ -53,7 +54,9 @@ class LogEntry:
         extra: Optional[Dict[str, Any]] = None
     ):
         self.id = None  # Set when stored in DB
-        self.timestamp = datetime.utcnow()
+        # Use Central Time (America/Chicago) for logging timestamps
+        central_tz = ZoneInfo("America/Chicago")
+        self.timestamp = datetime.now(central_tz)
         self.level = level
         self.source = source
         self.message = self._sanitize_message(message)

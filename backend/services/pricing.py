@@ -36,6 +36,7 @@ ASSET_TO_COINGECKO = {
     'BTC': 'bitcoin',
     'ETH': 'ethereum',
     'SOL': 'solana',
+    'ALGO': 'algorand',
     'MATIC': 'polygon-ecosystem-token',  # POL (ex-MATIC)
     # Stablecoins
     'USDC': 'usd-coin',
@@ -66,6 +67,7 @@ ASSET_TO_CMC = {
     'BTC': 'BTC',
     'ETH': 'ETH',
     'SOL': 'SOL',
+    'ALGO': 'ALGO',
     'MATIC': 'POL',  # Polygon rebranded to POL
     'USDC': 'USDC',
     'USDT': 'USDT',
@@ -111,10 +113,14 @@ class PricingService:
         if symbols is None:
             symbols = ['ADA', 'BTC', 'ETH']
 
-        # Check cache
+        # Check cache - but only return if all symbols have VALID (non-zero) prices
         if not force_refresh and self._is_cache_valid():
-            all_cached = all(s in self.cache for s in symbols if ASSET_TO_COINGECKO.get(s.upper()) or s.upper() in CARDANO_TOKEN_POLICIES)
-            if all_cached:
+            all_cached_and_valid = all(
+                s in self.cache and self.cache.get(s, {}).get('usd', 0) > 0
+                for s in symbols
+                if ASSET_TO_COINGECKO.get(s.upper()) or s.upper() in CARDANO_TOKEN_POLICIES
+            )
+            if all_cached_and_valid:
                 return {s: self.cache.get(s, {}).get('usd', 0) for s in symbols}
 
         # First try CoinGecko for all known symbols
@@ -155,7 +161,11 @@ class PricingService:
         if still_missing_cardano:
             await self._fetch_from_defillama(still_missing_cardano)
 
-        self.last_fetch = datetime.now()
+        # Only update last_fetch if we got at least some valid prices
+        # This prevents cache from being "valid" when all sources are failing
+        if any(self.cache.get(s.upper(), {}).get('usd', 0) > 0 for s in symbols):
+            self.last_fetch = datetime.now()
+
         return {s: self.cache.get(s, {}).get('usd', 0) for s in symbols}
 
     async def _fetch_from_coingecko(self, symbols: List[str]) -> None:
@@ -199,7 +209,7 @@ class PricingService:
                             }
                     logger.info(f"CoinGecko: fetched prices for {len(data)} tokens")
                 elif response.status_code == 429:
-                    logger.warning("CoinGecko rate limited, will try Coinbase fallback")
+                    logger.warning(f"⚠️  CoinGecko RATE LIMITED (429) - attempting fallbacks for {len(cg_ids)} symbols: {list(symbol_map.values())}")
                 else:
                     logger.warning(f"CoinGecko API error: {response.status_code}")
 
