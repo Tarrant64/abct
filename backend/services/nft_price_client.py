@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 # Import database functions
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database import get_api_key
+from services.http_client import get_client
 
 logger = logging.getLogger(__name__)
 
@@ -85,11 +86,11 @@ class NFTPriceClient:
 
         try:
             service_url = await self._get_service_url()
-            async with httpx.AsyncClient(timeout=NFT_PRICE_SERVICE_TIMEOUT) as client:
-                response = await client.get(f"{service_url}/health")
-                self._available = response.status_code == 200
-                self._last_check = now
-                return self._available
+            client = get_client("nft_price_service", timeout=10.0)
+            response = await client.get(f"{service_url}/health")
+            self._available = response.status_code == 200
+            self._last_check = now
+            return self._available
         except Exception as e:
             logger.warning(f"Cardano NFT Price Service unavailable: {e}")
             self._available = False
@@ -103,16 +104,16 @@ class NFTPriceClient:
 
         try:
             service_url = await self._get_service_url()
-            async with httpx.AsyncClient(timeout=NFT_PRICE_SERVICE_TIMEOUT) as client:
-                response = await client.get(f"{service_url}/floor/{policy_id}")
+            client = get_client("nft_price_service", timeout=10.0)
+            response = await client.get(f"{service_url}/floor/{policy_id}")
 
-                if response.status_code != 200:
-                    return None
-
-                data = response.json()
-                if data.get("found"):
-                    return data.get("floor_price")
+            if response.status_code != 200:
                 return None
+
+            data = response.json()
+            if data.get("found"):
+                return data.get("floor_price")
+            return None
 
         except Exception as e:
             logger.error(f"Error fetching floor price from service: {e}")
@@ -128,25 +129,25 @@ class NFTPriceClient:
 
         try:
             service_url = await self._get_service_url()
-            async with httpx.AsyncClient(timeout=NFT_PRICE_SERVICE_TIMEOUT) as client:
-                # Batch into chunks of 50
-                all_floors = {}
-                for i in range(0, len(policy_ids), 50):
-                    chunk = policy_ids[i:i + 50]
-                    ids_param = ",".join(chunk)
+            client = get_client("nft_price_service", timeout=10.0)
+            # Batch into chunks of 50
+            all_floors = {}
+            for i in range(0, len(policy_ids), 50):
+                chunk = policy_ids[i:i + 50]
+                ids_param = ",".join(chunk)
 
-                    response = await client.get(
-                        f"{service_url}/floors",
-                        params={"policy_ids": ids_param}
-                    )
+                response = await client.get(
+                    f"{service_url}/floors",
+                    params={"policy_ids": ids_param}
+                )
 
-                    if response.status_code == 200:
-                        data = response.json()
-                        for policy_id, info in data.get("floors", {}).items():
-                            if info.get("floor_price") is not None:
-                                all_floors[policy_id] = info["floor_price"]
+                if response.status_code == 200:
+                    data = response.json()
+                    for policy_id, info in data.get("floors", {}).items():
+                        if info.get("floor_price") is not None:
+                            all_floors[policy_id] = info["floor_price"]
 
-                return all_floors
+            return all_floors
 
         except Exception as e:
             logger.error(f"Error fetching floor prices from service: {e}")
@@ -159,12 +160,12 @@ class NFTPriceClient:
 
         try:
             service_url = await self._get_service_url()
-            async with httpx.AsyncClient(timeout=NFT_PRICE_SERVICE_TIMEOUT) as client:
-                response = await client.get(f"{service_url}/status")
+            client = get_client("nft_price_service", timeout=10.0)
+            response = await client.get(f"{service_url}/status")
 
-                if response.status_code == 200:
-                    return response.json()
-                return None
+            if response.status_code == 200:
+                return response.json()
+            return None
 
         except Exception as e:
             logger.error(f"Error getting service status: {e}")
@@ -177,16 +178,16 @@ class NFTPriceClient:
 
         try:
             service_url = await self._get_service_url()
-            async with httpx.AsyncClient(timeout=NFT_PRICE_SERVICE_TIMEOUT) as client:
-                response = await client.post(
-                    f"{service_url}/collections/register",
-                    params={
-                        "policy_id": policy_id,
-                        "name": name,
-                        "priority": priority
-                    }
-                )
-                return response.status_code == 200
+            client = get_client("nft_price_service", timeout=10.0)
+            response = await client.post(
+                f"{service_url}/collections/register",
+                params={
+                    "policy_id": policy_id,
+                    "name": name,
+                    "priority": priority
+                }
+            )
+            return response.status_code == 200
 
         except Exception as e:
             logger.error(f"Error registering collection: {e}")
@@ -199,16 +200,16 @@ class NFTPriceClient:
 
         try:
             service_url = await self._get_service_url()
-            async with httpx.AsyncClient(timeout=NFT_PRICE_SERVICE_TIMEOUT) as client:
-                response = await client.post(
-                    f"{service_url}/collections/register-batch",
-                    json=collections
-                )
+            client = get_client("nft_price_service", timeout=10.0)
+            response = await client.post(
+                f"{service_url}/collections/register-batch",
+                json=collections
+            )
 
-                if response.status_code == 200:
-                    data = response.json()
-                    return data.get("registered", 0)
-                return 0
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("registered", 0)
+            return 0
 
         except Exception as e:
             logger.error(f"Error registering collections batch: {e}")

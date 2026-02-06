@@ -15,6 +15,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import KUCOIN_API_KEY, KUCOIN_API_SECRET, KUCOIN_API_PASSPHRASE
+from services.http_client import get_client
 
 logger = logging.getLogger(__name__)
 
@@ -78,10 +79,10 @@ class KuCoinService:
 
             url = f"{KUCOIN_API_BASE}{endpoint}"
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.request(method, url, headers=headers)
-                response.raise_for_status()
-                return response.json()
+            client = get_client("kucoin", timeout=30.0)
+            response = await client.request(method, url, headers=headers)
+            response.raise_for_status()
+            return response.json()
 
         except httpx.HTTPStatusError as e:
             logger.error(f"KuCoin API HTTP error: {e.response.status_code} - {e.response.text}")

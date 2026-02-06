@@ -17,6 +17,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database import get_api_key
+from services.http_client import get_client
 
 logger = logging.getLogger(__name__)
 
@@ -147,25 +148,25 @@ class NMKRService:
         nmkr_url = f"{self.base_url}/v2/GetPreviewImageForToken/{policy_id}/{token_name_hex}"
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(
-                    nmkr_url,
-                    headers={"Authorization": api_key}
-                )
+            client = get_client("nmkr_service", timeout=10.0)
+            response = await client.get(
+                nmkr_url,
+                headers={"Authorization": api_key}
+            )
 
-                if response.status_code == 200:
-                    ipfs_url = response.text.strip()
+            if response.status_code == 200:
+                ipfs_url = response.text.strip()
 
-                    # Convert IPFS URL to HTTP gateway URL
-                    if ipfs_url.startswith("ipfs://"):
-                        ipfs_hash = ipfs_url.replace("ipfs://", "")
-                        return f"https://ipfs.io/ipfs/{ipfs_hash}"
-                    else:
-                        # Return as-is if not IPFS
-                        return ipfs_url
+                # Convert IPFS URL to HTTP gateway URL
+                if ipfs_url.startswith("ipfs://"):
+                    ipfs_hash = ipfs_url.replace("ipfs://", "")
+                    return f"https://ipfs.io/ipfs/{ipfs_hash}"
                 else:
-                    logger.debug(f"NMKR returned {response.status_code} for {policy_id}/{token_name_hex}")
-                    return None
+                    # Return as-is if not IPFS
+                    return ipfs_url
+            else:
+                logger.debug(f"NMKR returned {response.status_code} for {policy_id}/{token_name_hex}")
+                return None
 
         except Exception as e:
             logger.debug(f"Failed to fetch NMKR image URL: {e}")
@@ -289,19 +290,20 @@ class NMKRService:
                 # Registry uses GitHub raw JSON with base64-encoded logos
                 registry_url = f"https://raw.githubusercontent.com/cardano-foundation/cardano-token-registry/master/mappings/{policy_id}{token_name_hex}.json"
 
-                async with httpx.AsyncClient(timeout=5.0) as client:
-                    response = await client.get(registry_url)
-                    if response.status_code == 200:
-                        metadata = response.json()
+                client = get_client("nmkr_service", timeout=5.0)
 
-                        # Extract logo from JSON structure
-                        if 'logo' in metadata and 'value' in metadata['logo']:
-                            logo_base64 = metadata['logo']['value']
+                response = await client.get(registry_url)
+                if response.status_code == 200:
+                    metadata = response.json()
 
-                            # Return as data URL for direct browser display
-                            data_url = f"data:image/png;base64,{logo_base64}"
-                            logger.debug(f"Got logo from Cardano Token Registry for {policy_id}/{token_name_hex}")
-                            logo_url = data_url
+                    # Extract logo from JSON structure
+                    if 'logo' in metadata and 'value' in metadata['logo']:
+                        logo_base64 = metadata['logo']['value']
+
+                        # Return as data URL for direct browser display
+                        data_url = f"data:image/png;base64,{logo_base64}"
+                        logger.debug(f"Got logo from Cardano Token Registry for {policy_id}/{token_name_hex}")
+                        logo_url = data_url
             except Exception as e:
                 logger.debug(f"Cardano Token Registry check failed: {e}")
 
@@ -458,17 +460,17 @@ class NMKRService:
         url = f"{self.base_url}/v2/GetAssetMetadata/{policy_id}/{token_name_hex}"
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(
-                    url,
-                    headers={"Authorization": api_key}
-                )
+            client = get_client("nmkr_service", timeout=10.0)
+            response = await client.get(
+                url,
+                headers={"Authorization": api_key}
+            )
 
-                if response.status_code == 200:
-                    return response.json()
-                else:
-                    logger.warning(f"NMKR API returned {response.status_code} for {policy_id}/{token_name_hex}")
-                    return None
+            if response.status_code == 200:
+                return response.json()
+            else:
+                logger.warning(f"NMKR API returned {response.status_code} for {policy_id}/{token_name_hex}")
+                return None
 
         except Exception as e:
             logger.error(f"Failed to fetch NMKR metadata: {e}")

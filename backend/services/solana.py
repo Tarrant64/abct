@@ -18,6 +18,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import HELIUS_BASE_URL
 from services.api_key_manager import APIKeyManager
+from services.http_client import get_client
 
 logger = logging.getLogger(__name__)
 
@@ -126,88 +127,88 @@ class SolanaService(APIKeyManager):
                 return cached['data']
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                # Get SOL balance and token balances using the balances endpoint
-                response = await client.get(
-                    f"{self.base_url}/addresses/{address}/balances",
-                    params={"api-key": await self.get_api_key()}
-                )
+            client = get_client("helius", timeout=30.0)
+            # Get SOL balance and token balances using the balances endpoint
+            response = await client.get(
+                f"{self.base_url}/addresses/{address}/balances",
+                params={"api-key": await self.get_api_key()}
+            )
 
-                if response.status_code != 200:
-                    logger.error(f"Helius API error: {response.status_code} - {response.text}")
-                    return None
+            if response.status_code != 200:
+                logger.error(f"Helius API error: {response.status_code} - {response.text}")
+                return None
 
-                data = response.json()
+            data = response.json()
 
-                # Parse native SOL balance
-                native_balance = data.get('nativeBalance', 0)
-                balance_sol = native_balance / LAMPORTS_PER_SOL
+            # Parse native SOL balance
+            native_balance = data.get('nativeBalance', 0)
+            balance_sol = native_balance / LAMPORTS_PER_SOL
 
-                # Parse SPL tokens - first pass to get balances
-                tokens = []
-                unknown_mints = []
+            # Parse SPL tokens - first pass to get balances
+            tokens = []
+            unknown_mints = []
 
-                for token in data.get('tokens', []):
-                    try:
-                        mint = token.get('mint', '')
-                        amount = token.get('amount', 0)
-                        decimals = token.get('decimals', 0)
+            for token in data.get('tokens', []):
+                try:
+                    mint = token.get('mint', '')
+                    amount = token.get('amount', 0)
+                    decimals = token.get('decimals', 0)
 
-                        # Calculate human-readable balance
-                        balance = amount / (10 ** decimals) if decimals > 0 else amount
+                    # Calculate human-readable balance
+                    balance = amount / (10 ** decimals) if decimals > 0 else amount
 
-                        # Skip tokens with zero balance
-                        if balance <= 0:
-                            continue
-
-                        # Get token info if available
-                        token_info = token.get('tokenInfo', {})
-                        symbol = token_info.get('symbol', '')
-                        name = token_info.get('name', '')
-
-                        # Track mints that need metadata lookup
-                        if not symbol:
-                            unknown_mints.append(mint)
-
-                        tokens.append({
-                            'mint': mint,
-                            'symbol': symbol or 'UNKNOWN',
-                            'name': name,
-                            'balance': balance,
-                            'amount_raw': amount,
-                            'decimals': decimals
-                        })
-                    except Exception as e:
-                        logger.debug(f"Error parsing token: {e}")
+                    # Skip tokens with zero balance
+                    if balance <= 0:
                         continue
 
-                # Fetch metadata for tokens with unknown symbols
-                if unknown_mints:
-                    metadata = await self._fetch_token_metadata(client, unknown_mints)
+                    # Get token info if available
+                    token_info = token.get('tokenInfo', {})
+                    symbol = token_info.get('symbol', '')
+                    name = token_info.get('name', '')
 
-                    # Update tokens with fetched metadata
-                    for token in tokens:
-                        if token['symbol'] == 'UNKNOWN' and token['mint'] in metadata:
-                            meta = metadata[token['mint']]
-                            token['symbol'] = meta.get('symbol', 'UNKNOWN')
-                            token['name'] = meta.get('name', '')
+                    # Track mints that need metadata lookup
+                    if not symbol:
+                        unknown_mints.append(mint)
 
-                result_data = {
-                    'address': address,
-                    'balance_sol': balance_sol,
-                    'balance_lamports': native_balance,
-                    'tokens': tokens,
-                    'token_count': len(tokens),
-                    'source': 'helius'
-                }
+                    tokens.append({
+                        'mint': mint,
+                        'symbol': symbol or 'UNKNOWN',
+                        'name': name,
+                        'balance': balance,
+                        'amount_raw': amount,
+                        'decimals': decimals
+                    })
+                except Exception as e:
+                    logger.debug(f"Error parsing token: {e}")
+                    continue
 
-                # Cache the result
-                self._balance_cache[address] = {
-                    'data': result_data,
-                    'cached_at': datetime.now()
-                }
+            # Fetch metadata for tokens with unknown symbols
+            if unknown_mints:
+                metadata = await self._fetch_token_metadata(client, unknown_mints)
 
-                return result_data
+                # Update tokens with fetched metadata
+                for token in tokens:
+                    if token['symbol'] == 'UNKNOWN' and token['mint'] in metadata:
+                        meta = metadata[token['mint']]
+                        token['symbol'] = meta.get('symbol', 'UNKNOWN')
+                        token['name'] = meta.get('name', '')
+
+            result_data = {
+                'address': address,
+                'balance_sol': balance_sol,
+                'balance_lamports': native_balance,
+                'tokens': tokens,
+                'token_count': len(tokens),
+                'source': 'helius'
+            }
+
+            # Cache the result
+            self._balance_cache[address] = {
+                'data': result_data,
+                'cached_at': datetime.now()
+            }
+
+            return result_data
 
         except Exception as e:
             logger.error(f"Error fetching Solana balance from Helius: {e}")
@@ -235,43 +236,43 @@ class SolanaService(APIKeyManager):
             return None
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                # Use Solana JSON-RPC to get balance
-                response = await client.post(
-                    self.public_rpc_url,
-                    json={
-                        "jsonrpc": "2.0",
-                        "id": 1,
-                        "method": "getBalance",
-                        "params": [address]
-                    }
-                )
-
-                if response.status_code != 200:
-                    logger.error(f"Public RPC error: {response.status_code}")
-                    return None
-
-                data = response.json()
-
-                if 'error' in data:
-                    logger.error(f"Public RPC error: {data['error']}")
-                    return None
-
-                # Get balance in lamports
-                balance_lamports = data.get('result', {}).get('value', 0)
-                balance_sol = balance_lamports / LAMPORTS_PER_SOL
-
-                result_data = {
-                    'address': address,
-                    'balance_sol': balance_sol,
-                    'balance_lamports': balance_lamports,
-                    'tokens': [],  # Public RPC doesn't provide SPL tokens
-                    'token_count': 0,
-                    'source': 'public_rpc'
+            client = get_client("helius", timeout=30.0)
+            # Use Solana JSON-RPC to get balance
+            response = await client.post(
+                self.public_rpc_url,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "getBalance",
+                    "params": [address]
                 }
+            )
 
-                logger.info(f"Fetched SOL balance from public RPC: {balance_sol} SOL")
-                return result_data
+            if response.status_code != 200:
+                logger.error(f"Public RPC error: {response.status_code}")
+                return None
+
+            data = response.json()
+
+            if 'error' in data:
+                logger.error(f"Public RPC error: {data['error']}")
+                return None
+
+            # Get balance in lamports
+            balance_lamports = data.get('result', {}).get('value', 0)
+            balance_sol = balance_lamports / LAMPORTS_PER_SOL
+
+            result_data = {
+                'address': address,
+                'balance_sol': balance_sol,
+                'balance_lamports': balance_lamports,
+                'tokens': [],  # Public RPC doesn't provide SPL tokens
+                'token_count': 0,
+                'source': 'public_rpc'
+            }
+
+            logger.info(f"Fetched SOL balance from public RPC: {balance_sol} SOL")
+            return result_data
 
         except Exception as e:
             logger.error(f"Error fetching balance from public RPC: {e}")

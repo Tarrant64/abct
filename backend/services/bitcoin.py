@@ -6,6 +6,7 @@ import asyncio
 import sys
 sys.path.insert(0, str(__file__).rsplit('/', 2)[0])
 from config import BLOCKSTREAM_BASE_URL
+from services.http_client import get_client
 
 logger = logging.getLogger(__name__)
 
@@ -35,52 +36,52 @@ class BitcoinService:
         Uses Blockstream's free API (no authentication required).
         """
         try:
-            async with httpx.AsyncClient() as client:
-                # Get address info
-                response = await client.get(
-                    f"{self.base_url}/address/{address}",
-                    timeout=30.0
-                )
+            client = get_client("blockstream", timeout=30.0)
+            # Get address info
+            response = await client.get(
+                f"{self.base_url}/address/{address}",
+                timeout=30.0
+            )
 
-                if response.status_code == 400:
-                    logger.error(f"Invalid Bitcoin address: {address}")
-                    return None
+            if response.status_code == 400:
+                logger.error(f"Invalid Bitcoin address: {address}")
+                return None
 
-                if response.status_code != 200:
-                    logger.error(f"Blockstream error: {response.status_code} - {response.text}")
-                    return None
+            if response.status_code != 200:
+                logger.error(f"Blockstream error: {response.status_code} - {response.text}")
+                return None
 
-                data = response.json()
+            data = response.json()
 
-                # Calculate balance from chain_stats and mempool_stats
-                chain_stats = data.get('chain_stats', {})
-                mempool_stats = data.get('mempool_stats', {})
+            # Calculate balance from chain_stats and mempool_stats
+            chain_stats = data.get('chain_stats', {})
+            mempool_stats = data.get('mempool_stats', {})
 
-                # Confirmed balance
-                funded_sum = chain_stats.get('funded_txo_sum', 0)
-                spent_sum = chain_stats.get('spent_txo_sum', 0)
-                confirmed_balance = funded_sum - spent_sum
+            # Confirmed balance
+            funded_sum = chain_stats.get('funded_txo_sum', 0)
+            spent_sum = chain_stats.get('spent_txo_sum', 0)
+            confirmed_balance = funded_sum - spent_sum
 
-                # Unconfirmed (mempool) balance
-                mempool_funded = mempool_stats.get('funded_txo_sum', 0)
-                mempool_spent = mempool_stats.get('spent_txo_sum', 0)
-                unconfirmed_balance = mempool_funded - mempool_spent
+            # Unconfirmed (mempool) balance
+            mempool_funded = mempool_stats.get('funded_txo_sum', 0)
+            mempool_spent = mempool_stats.get('spent_txo_sum', 0)
+            unconfirmed_balance = mempool_funded - mempool_spent
 
-                # Total balance in satoshis
-                total_satoshis = confirmed_balance + unconfirmed_balance
+            # Total balance in satoshis
+            total_satoshis = confirmed_balance + unconfirmed_balance
 
-                # Convert to BTC (1 BTC = 100,000,000 satoshis)
-                balance_btc = total_satoshis / 100_000_000
+            # Convert to BTC (1 BTC = 100,000,000 satoshis)
+            balance_btc = total_satoshis / 100_000_000
 
-                return {
-                    'address': address,
-                    'balance_satoshis': str(total_satoshis),
-                    'balance_btc': f"{balance_btc:.8f}",
-                    'confirmed_satoshis': str(confirmed_balance),
-                    'unconfirmed_satoshis': str(unconfirmed_balance),
-                    'tx_count': chain_stats.get('tx_count', 0),
-                    'source': 'blockstream'
-                }
+            return {
+                'address': address,
+                'balance_satoshis': str(total_satoshis),
+                'balance_btc': f"{balance_btc:.8f}",
+                'confirmed_satoshis': str(confirmed_balance),
+                'unconfirmed_satoshis': str(unconfirmed_balance),
+                'tx_count': chain_stats.get('tx_count', 0),
+                'source': 'blockstream'
+            }
 
         except httpx.TimeoutException:
             logger.error(f"Blockstream timeout for address {address[:20]}...")
@@ -92,23 +93,23 @@ class BitcoinService:
     async def get_utxos(self, address: str) -> Optional[list]:
         """Get unspent transaction outputs for an address."""
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{self.base_url}/address/{address}/utxo",
-                    timeout=30.0
-                )
+            client = get_client("blockstream", timeout=30.0)
+            response = await client.get(
+                f"{self.base_url}/address/{address}/utxo",
+                timeout=30.0
+            )
 
-                if response.status_code != 200:
-                    logger.error(f"Blockstream UTXO error: {response.status_code}")
-                    return None
+            if response.status_code != 200:
+                logger.error(f"Blockstream UTXO error: {response.status_code}")
+                return None
 
-                utxos = response.json()
-                return [{
-                    'txid': utxo['txid'],
-                    'vout': utxo['vout'],
-                    'value': utxo['value'],
-                    'confirmed': utxo.get('status', {}).get('confirmed', False)
-                } for utxo in utxos]
+            utxos = response.json()
+            return [{
+                'txid': utxo['txid'],
+                'vout': utxo['vout'],
+                'value': utxo['value'],
+                'confirmed': utxo.get('status', {}).get('confirmed', False)
+            } for utxo in utxos]
 
         except Exception as e:
             logger.error(f"Error getting UTXOs: {e}")
@@ -117,24 +118,24 @@ class BitcoinService:
     async def get_transactions(self, address: str, limit: int = 25) -> Optional[list]:
         """Get recent transactions for an address."""
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{self.base_url}/address/{address}/txs",
-                    timeout=30.0
-                )
+            client = get_client("blockstream", timeout=30.0)
+            response = await client.get(
+                f"{self.base_url}/address/{address}/txs",
+                timeout=30.0
+            )
 
-                if response.status_code != 200:
-                    logger.error(f"Blockstream txs error: {response.status_code}")
-                    return None
+            if response.status_code != 200:
+                logger.error(f"Blockstream txs error: {response.status_code}")
+                return None
 
-                txs = response.json()[:limit]
-                return [{
-                    'txid': tx['txid'],
-                    'confirmed': tx.get('status', {}).get('confirmed', False),
-                    'block_height': tx.get('status', {}).get('block_height'),
-                    'fee': tx.get('fee', 0),
-                    'size': tx.get('size', 0)
-                } for tx in txs]
+            txs = response.json()[:limit]
+            return [{
+                'txid': tx['txid'],
+                'confirmed': tx.get('status', {}).get('confirmed', False),
+                'block_height': tx.get('status', {}).get('block_height'),
+                'fee': tx.get('fee', 0),
+                'size': tx.get('size', 0)
+            } for tx in txs]
 
         except Exception as e:
             logger.error(f"Error getting transactions: {e}")

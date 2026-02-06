@@ -14,6 +14,7 @@ import logging
 import sys
 sys.path.insert(0, str(__file__).rsplit('/', 2)[0])
 from config import BLOCKFROST_API_KEY, BLOCKFROST_BASE_URL
+from services.http_client import get_client
 
 # Protocol API endpoints
 INDIGO_API_BASE = "https://analytics.indigoprotocol.io"
@@ -280,116 +281,116 @@ class DeFiService:
         - Summary by protocol
         """
         try:
-            async with httpx.AsyncClient() as client:
-                # Get all UTXOs
-                response = await client.get(
-                    f"{BLOCKFROST_BASE_URL}/addresses/{address}/utxos",
-                    headers=self.headers,
-                    timeout=30.0
-                )
+            client = get_client("blockfrost", timeout=30.0)
+            # Get all UTXOs
+            response = await client.get(
+                f"{BLOCKFROST_BASE_URL}/addresses/{address}/utxos",
+                headers=self.headers,
+                timeout=30.0
+            )
 
-                if response.status_code != 200:
-                    logger.error(f"Failed to get UTXOs: {response.status_code}")
-                    return None
+            if response.status_code != 200:
+                logger.error(f"Failed to get UTXOs: {response.status_code}")
+                return None
 
-                utxos = response.json()
+            utxos = response.json()
 
-                # Analyze assets
-                defi_positions = {}
-                protocol_summary = {}
+            # Analyze assets
+            defi_positions = {}
+            protocol_summary = {}
 
-                for utxo in utxos:
-                    for amount in utxo.get('amount', []):
-                        unit = amount['unit']
-                        quantity = int(amount['quantity'])
+            for utxo in utxos:
+                for amount in utxo.get('amount', []):
+                    unit = amount['unit']
+                    quantity = int(amount['quantity'])
 
-                        if unit == 'lovelace':
-                            continue
+                    if unit == 'lovelace':
+                        continue
 
-                        policy_id = unit[:56]
-                        asset_name_hex = unit[56:]
+                    policy_id = unit[:56]
+                    asset_name_hex = unit[56:]
 
-                        # Decode asset name
-                        try:
-                            asset_name = bytes.fromhex(asset_name_hex).decode('utf-8') if asset_name_hex else ""
-                        except:
-                            asset_name = asset_name_hex
+                    # Decode asset name
+                    try:
+                        asset_name = bytes.fromhex(asset_name_hex).decode('utf-8') if asset_name_hex else ""
+                    except:
+                        asset_name = asset_name_hex
 
-                        # Check if it's a known DeFi token
-                        if policy_id in DEFI_PROTOCOLS:
-                            info = DEFI_PROTOCOLS[policy_id]
-                            protocol = info['protocol']
-                            token = info['token']
-                            token_type = info['type']
-                            decimals = info['decimals']
+                    # Check if it's a known DeFi token
+                    if policy_id in DEFI_PROTOCOLS:
+                        info = DEFI_PROTOCOLS[policy_id]
+                        protocol = info['protocol']
+                        token = info['token']
+                        token_type = info['type']
+                        decimals = info['decimals']
 
-                            # Create unique key
-                            key = f"{protocol}:{token}"
-                            if asset_name and token in ['LP', 'qToken', 'iAsset']:
-                                key = f"{protocol}:{token}:{asset_name}"
+                        # Create unique key
+                        key = f"{protocol}:{token}"
+                        if asset_name and token in ['LP', 'qToken', 'iAsset']:
+                            key = f"{protocol}:{token}:{asset_name}"
 
-                            if key not in defi_positions:
-                                defi_positions[key] = {
-                                    'protocol': protocol,
-                                    'token': token,
-                                    'asset_name': asset_name or token,
-                                    'type': token_type,
-                                    'type_label': TOKEN_CATEGORIES.get(token_type, token_type),
-                                    'quantity_raw': 0,
-                                    'decimals': decimals,
-                                    'description': info['description'],
-                                    'policy_id': policy_id
-                                }
+                        if key not in defi_positions:
+                            defi_positions[key] = {
+                                'protocol': protocol,
+                                'token': token,
+                                'asset_name': asset_name or token,
+                                'type': token_type,
+                                'type_label': TOKEN_CATEGORIES.get(token_type, token_type),
+                                'quantity_raw': 0,
+                                'decimals': decimals,
+                                'description': info['description'],
+                                'policy_id': policy_id
+                            }
 
-                            defi_positions[key]['quantity_raw'] += quantity
+                        defi_positions[key]['quantity_raw'] += quantity
 
-                            # Update protocol summary
-                            if protocol not in protocol_summary:
-                                protocol_summary[protocol] = {
-                                    'protocol': protocol,
-                                    'tokens': [],
-                                    'has_governance': False,
-                                    'has_lp': False,
-                                    'has_staking': False
-                                }
+                        # Update protocol summary
+                        if protocol not in protocol_summary:
+                            protocol_summary[protocol] = {
+                                'protocol': protocol,
+                                'tokens': [],
+                                'has_governance': False,
+                                'has_lp': False,
+                                'has_staking': False
+                            }
 
-                            if token_type == 'governance':
-                                protocol_summary[protocol]['has_governance'] = True
-                            elif token_type == 'lp':
-                                protocol_summary[protocol]['has_lp'] = True
-                            elif token_type in ['staking_receipt', 'receipt']:
-                                protocol_summary[protocol]['has_staking'] = True
+                        if token_type == 'governance':
+                            protocol_summary[protocol]['has_governance'] = True
+                        elif token_type == 'lp':
+                            protocol_summary[protocol]['has_lp'] = True
+                        elif token_type in ['staking_receipt', 'receipt']:
+                            protocol_summary[protocol]['has_staking'] = True
 
-                # Calculate formatted quantities
-                for key, pos in defi_positions.items():
-                    pos['quantity'] = pos['quantity_raw'] / (10 ** pos['decimals'])
-                    pos['quantity_formatted'] = f"{pos['quantity']:,.6f}".rstrip('0').rstrip('.')
+            # Calculate formatted quantities
+            for key, pos in defi_positions.items():
+                pos['quantity'] = pos['quantity_raw'] / (10 ** pos['decimals'])
+                pos['quantity_formatted'] = f"{pos['quantity']:,.6f}".rstrip('0').rstrip('.')
 
-                    # Add to protocol summary
-                    protocol = pos['protocol']
-                    if protocol in protocol_summary:
-                        protocol_summary[protocol]['tokens'].append({
-                            'token': pos['asset_name'],
-                            'type': pos['type_label'],
-                            'quantity': pos['quantity_formatted']
-                        })
+                # Add to protocol summary
+                protocol = pos['protocol']
+                if protocol in protocol_summary:
+                    protocol_summary[protocol]['tokens'].append({
+                        'token': pos['asset_name'],
+                        'type': pos['type_label'],
+                        'quantity': pos['quantity_formatted']
+                    })
 
-                # Categorize by type
-                by_category = {}
-                for key, pos in defi_positions.items():
-                    cat = pos['type_label']
-                    if cat not in by_category:
-                        by_category[cat] = []
-                    by_category[cat].append(pos)
+            # Categorize by type
+            by_category = {}
+            for key, pos in defi_positions.items():
+                cat = pos['type_label']
+                if cat not in by_category:
+                    by_category[cat] = []
+                by_category[cat].append(pos)
 
-                return {
-                    'address': address,
-                    'defi_positions': list(defi_positions.values()),
-                    'by_category': by_category,
-                    'protocol_summary': list(protocol_summary.values()),
-                    'total_protocols': len(protocol_summary),
-                    'total_positions': len(defi_positions)
-                }
+            return {
+                'address': address,
+                'defi_positions': list(defi_positions.values()),
+                'by_category': by_category,
+                'protocol_summary': list(protocol_summary.values()),
+                'total_protocols': len(protocol_summary),
+                'total_positions': len(defi_positions)
+            }
 
         except Exception as e:
             logger.error(f"Error analyzing DeFi positions: {e}")
@@ -432,44 +433,45 @@ class DeFiService:
             if not payment_cred:
                 return None
 
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                # Fetch all staking positions from Indigo
-                response = await client.get(
-                    f"{INDIGO_API_BASE}/api/v1/staking/positions"
-                )
+            client = get_client("blockfrost", timeout=60.0)
 
-                if response.status_code != 200:
-                    logger.error(f"Indigo API error: {response.status_code}")
-                    return None
+            # Fetch all staking positions from Indigo
+            response = await client.get(
+                f"{INDIGO_API_BASE}/api/v1/staking/positions"
+            )
 
-                positions = response.json()
+            if response.status_code != 200:
+                logger.error(f"Indigo API error: {response.status_code}")
+                return None
 
-                # Find positions matching this payment credential
-                user_positions = []
-                total_staked = 0
+            positions = response.json()
 
-                for pos in positions:
-                    if pos.get('owner') == payment_cred:
-                        staked = pos.get('stakedIndy', 0)
-                        total_staked += staked
-                        user_positions.append({
-                            'staked_indy_raw': staked,
-                            'staked_indy': staked / 1_000_000,
-                            'snapshot_ada': pos.get('snapshotAda', 0) / 1_000_000,
-                            'slot': pos.get('slot'),
-                            'output_hash': pos.get('outputHash')
-                        })
+            # Find positions matching this payment credential
+            user_positions = []
+            total_staked = 0
 
-                if not user_positions:
-                    return None
+            for pos in positions:
+                if pos.get('owner') == payment_cred:
+                    staked = pos.get('stakedIndy', 0)
+                    total_staked += staked
+                    user_positions.append({
+                        'staked_indy_raw': staked,
+                        'staked_indy': staked / 1_000_000,
+                        'snapshot_ada': pos.get('snapshotAda', 0) / 1_000_000,
+                        'slot': pos.get('slot'),
+                        'output_hash': pos.get('outputHash')
+                    })
 
-                return {
-                    'protocol': 'Indigo',
-                    'address': address,
-                    'positions': user_positions,
-                    'total_staked_indy': total_staked / 1_000_000,
-                    'position_count': len(user_positions)
-                }
+            if not user_positions:
+                return None
+
+            return {
+                'protocol': 'Indigo',
+                'address': address,
+                'positions': user_positions,
+                'total_staked_indy': total_staked / 1_000_000,
+                'position_count': len(user_positions)
+            }
 
         except Exception as e:
             logger.error(f"Error getting Indigo staking: {e}")
@@ -504,63 +506,64 @@ class DeFiService:
             if not payment_cred:
                 return None
 
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                # Query all UTxOs at the staking contract
-                # Need to page through since there may be many stakers
-                positions = []
-                total_staked = 0
-                page = 1
+            client = get_client("blockfrost", timeout=60.0)
 
-                while True:
-                    response = await client.get(
-                        f"{BLOCKFROST_BASE_URL}/addresses/{LIQWID_STAKING_ADDRESS}/utxos",
-                        headers=self.headers,
-                        params={"count": 100, "page": page}
-                    )
+            # Query all UTxOs at the staking contract
+            # Need to page through since there may be many stakers
+            positions = []
+            total_staked = 0
+            page = 1
 
-                    if response.status_code != 200:
-                        logger.error(f"Blockfrost error fetching Liqwid staking: {response.status_code}")
-                        break
+            while True:
+                response = await client.get(
+                    f"{BLOCKFROST_BASE_URL}/addresses/{LIQWID_STAKING_ADDRESS}/utxos",
+                    headers=self.headers,
+                    params={"count": 100, "page": page}
+                )
 
-                    utxos = response.json()
-                    if not utxos:
-                        break
+                if response.status_code != 200:
+                    logger.error(f"Blockfrost error fetching Liqwid staking: {response.status_code}")
+                    break
 
-                    # Search for UTxOs with user's PKH in the inline datum
-                    for utxo in utxos:
-                        inline_datum = utxo.get('inline_datum') or ''
+                utxos = response.json()
+                if not utxos:
+                    break
 
-                        # Check if user's PKH is in the datum
-                        if inline_datum and payment_cred in inline_datum:
-                            lq_amount = 0
-                            for asset in utxo.get('amount', []):
-                                if asset.get('unit') == LIQWID_LQ_TOKEN:
-                                    lq_amount = int(asset.get('quantity', 0))
+                # Search for UTxOs with user's PKH in the inline datum
+                for utxo in utxos:
+                    inline_datum = utxo.get('inline_datum') or ''
 
-                            if lq_amount > 0:
-                                total_staked += lq_amount
-                                positions.append({
-                                    'tx_hash': utxo.get('tx_hash'),
-                                    'output_index': utxo.get('output_index'),
-                                    'staked_lq_raw': lq_amount,
-                                    'staked_lq': lq_amount / 1_000_000
-                                })
+                    # Check if user's PKH is in the datum
+                    if inline_datum and payment_cred in inline_datum:
+                        lq_amount = 0
+                        for asset in utxo.get('amount', []):
+                            if asset.get('unit') == LIQWID_LQ_TOKEN:
+                                lq_amount = int(asset.get('quantity', 0))
 
-                    page += 1
-                    # Safety limit - Liqwid has many stakers
-                    if page > 50:
-                        break
+                        if lq_amount > 0:
+                            total_staked += lq_amount
+                            positions.append({
+                                'tx_hash': utxo.get('tx_hash'),
+                                'output_index': utxo.get('output_index'),
+                                'staked_lq_raw': lq_amount,
+                                'staked_lq': lq_amount / 1_000_000
+                            })
 
-                if not positions:
-                    return None
+                page += 1
+                # Safety limit - Liqwid has many stakers
+                if page > 50:
+                    break
 
-                return {
-                    'protocol': 'Liqwid',
-                    'address': address,
-                    'positions': positions,
-                    'total_staked_lq': total_staked / 1_000_000,
-                    'position_count': len(positions)
-                }
+            if not positions:
+                return None
+
+            return {
+                'protocol': 'Liqwid',
+                'address': address,
+                'positions': positions,
+                'total_staked_lq': total_staked / 1_000_000,
+                'position_count': len(positions)
+            }
 
         except Exception as e:
             logger.error(f"Error getting Liqwid staking: {e}")
@@ -577,71 +580,72 @@ class DeFiService:
             if not payment_cred:
                 return None
 
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                # Query all UTxOs at the staking contract
-                # Need to page through since there may be many stakers
-                total_staked = 0
-                positions = []
-                page = 1
+            client = get_client("blockfrost", timeout=60.0)
 
-                while True:
-                    response = await client.get(
-                        f"{BLOCKFROST_BASE_URL}/addresses/{STRIKE_STAKING_ADDRESS}/utxos",
-                        headers=self.headers,
-                        params={"count": 100, "page": page}
-                    )
+            # Query all UTxOs at the staking contract
+            # Need to page through since there may be many stakers
+            total_staked = 0
+            positions = []
+            page = 1
 
-                    if response.status_code != 200:
-                        logger.error(f"Blockfrost error fetching Strike staking: {response.status_code}")
-                        break
+            while True:
+                response = await client.get(
+                    f"{BLOCKFROST_BASE_URL}/addresses/{STRIKE_STAKING_ADDRESS}/utxos",
+                    headers=self.headers,
+                    params={"count": 100, "page": page}
+                )
 
-                    utxos = response.json()
-                    if not utxos:
-                        break
+                if response.status_code != 200:
+                    logger.error(f"Blockfrost error fetching Strike staking: {response.status_code}")
+                    break
 
-                    # Search for UTxOs with user's PKH in the staking NFT
-                    for utxo in utxos:
-                        has_user_nft = False
-                        strike_amount = 0
+                utxos = response.json()
+                if not utxos:
+                    break
 
-                        for asset in utxo.get('amount', []):
-                            unit = asset.get('unit', '')
-                            qty = int(asset.get('quantity', 0))
+                # Search for UTxOs with user's PKH in the staking NFT
+                for utxo in utxos:
+                    has_user_nft = False
+                    strike_amount = 0
 
-                            # Check if this UTxO has an NFT with user's PKH
-                            if unit.startswith(STRIKE_STAKING_NFT_POLICY):
-                                asset_name = unit[len(STRIKE_STAKING_NFT_POLICY):]
-                                if asset_name == payment_cred:
-                                    has_user_nft = True
+                    for asset in utxo.get('amount', []):
+                        unit = asset.get('unit', '')
+                        qty = int(asset.get('quantity', 0))
 
-                            # Check for STRIKE tokens
-                            if unit.startswith(STRIKE_TOKEN_POLICY):
-                                strike_amount = qty
+                        # Check if this UTxO has an NFT with user's PKH
+                        if unit.startswith(STRIKE_STAKING_NFT_POLICY):
+                            asset_name = unit[len(STRIKE_STAKING_NFT_POLICY):]
+                            if asset_name == payment_cred:
+                                has_user_nft = True
 
-                        if has_user_nft and strike_amount > 0:
-                            total_staked += strike_amount
-                            positions.append({
-                                'tx_hash': utxo.get('tx_hash'),
-                                'output_index': utxo.get('output_index'),
-                                'staked_strike_raw': strike_amount,
-                                'staked_strike': strike_amount / 1_000_000
-                            })
+                        # Check for STRIKE tokens
+                        if unit.startswith(STRIKE_TOKEN_POLICY):
+                            strike_amount = qty
 
-                    page += 1
-                    # Safety limit
-                    if page > 20:
-                        break
+                    if has_user_nft and strike_amount > 0:
+                        total_staked += strike_amount
+                        positions.append({
+                            'tx_hash': utxo.get('tx_hash'),
+                            'output_index': utxo.get('output_index'),
+                            'staked_strike_raw': strike_amount,
+                            'staked_strike': strike_amount / 1_000_000
+                        })
 
-                if not positions:
-                    return None
+                page += 1
+                # Safety limit
+                if page > 20:
+                    break
 
-                return {
-                    'protocol': 'Strike',
-                    'address': address,
-                    'positions': positions,
-                    'total_staked_strike': total_staked / 1_000_000,
-                    'position_count': len(positions)
-                }
+            if not positions:
+                return None
+
+            return {
+                'protocol': 'Strike',
+                'address': address,
+                'positions': positions,
+                'total_staked_strike': total_staked / 1_000_000,
+                'position_count': len(positions)
+            }
 
         except Exception as e:
             logger.error(f"Error getting Strike staking: {e}")
@@ -658,94 +662,94 @@ class DeFiService:
         - Net staked = Deposits - Withdrawals
         """
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                # Get all transactions for the address
-                all_txs = []
-                page = 1
+            client = get_client("blockfrost", timeout=60.0)
+            # Get all transactions for the address
+            all_txs = []
+            page = 1
 
-                while page <= 10:  # Limit to 10 pages (1000 txs)
-                    response = await client.get(
-                        f"{BLOCKFROST_BASE_URL}/addresses/{address}/transactions",
-                        headers=self.headers,
-                        params={"count": 100, "page": page, "order": "asc"}
-                    )
+            while page <= 10:  # Limit to 10 pages (1000 txs)
+                response = await client.get(
+                    f"{BLOCKFROST_BASE_URL}/addresses/{address}/transactions",
+                    headers=self.headers,
+                    params={"count": 100, "page": page, "order": "asc"}
+                )
 
-                    if response.status_code != 200:
-                        break
+                if response.status_code != 200:
+                    break
 
-                    txs = response.json()
-                    if not txs:
-                        break
+                txs = response.json()
+                if not txs:
+                    break
 
-                    all_txs.extend(txs)
-                    page += 1
+                all_txs.extend(txs)
+                page += 1
 
-                if not all_txs:
-                    return None
+            if not all_txs:
+                return None
 
-                total_deposits = 0
-                total_withdrawals = 0
+            total_deposits = 0
+            total_withdrawals = 0
 
-                for tx in all_txs:
-                    tx_hash = tx['tx_hash']
+            for tx in all_txs:
+                tx_hash = tx['tx_hash']
 
-                    # Get transaction UTxOs
-                    utxo_response = await client.get(
-                        f"{BLOCKFROST_BASE_URL}/txs/{tx_hash}/utxos",
-                        headers=self.headers
-                    )
+                # Get transaction UTxOs
+                utxo_response = await client.get(
+                    f"{BLOCKFROST_BASE_URL}/txs/{tx_hash}/utxos",
+                    headers=self.headers
+                )
 
-                    if utxo_response.status_code != 200:
-                        continue
+                if utxo_response.status_code != 200:
+                    continue
 
-                    tx_data = utxo_response.json()
+                tx_data = utxo_response.json()
 
-                    # Calculate IAG flows
-                    user_sends_iag = 0
-                    user_receives_iag = 0
-                    contract_receives_iag = 0
-                    contract_sends_iag = 0
+                # Calculate IAG flows
+                user_sends_iag = 0
+                user_receives_iag = 0
+                contract_receives_iag = 0
+                contract_sends_iag = 0
 
-                    for inp in tx_data.get('inputs', []):
-                        for amt in inp.get('amount', []):
-                            if amt['unit'] == IAGON_IAG_ASSET:
-                                qty = int(amt['quantity'])
-                                if inp['address'] == address:
-                                    user_sends_iag += qty
-                                elif inp['address'] == IAGON_OLD_STAKING_ADDRESS:
-                                    contract_sends_iag += qty
+                for inp in tx_data.get('inputs', []):
+                    for amt in inp.get('amount', []):
+                        if amt['unit'] == IAGON_IAG_ASSET:
+                            qty = int(amt['quantity'])
+                            if inp['address'] == address:
+                                user_sends_iag += qty
+                            elif inp['address'] == IAGON_OLD_STAKING_ADDRESS:
+                                contract_sends_iag += qty
 
-                    for out in tx_data.get('outputs', []):
-                        for amt in out.get('amount', []):
-                            if amt['unit'] == IAGON_IAG_ASSET:
-                                qty = int(amt['quantity'])
-                                if out['address'] == address:
-                                    user_receives_iag += qty
-                                elif out['address'] == IAGON_OLD_STAKING_ADDRESS:
-                                    contract_receives_iag += qty
+                for out in tx_data.get('outputs', []):
+                    for amt in out.get('amount', []):
+                        if amt['unit'] == IAGON_IAG_ASSET:
+                            qty = int(amt['quantity'])
+                            if out['address'] == address:
+                                user_receives_iag += qty
+                            elif out['address'] == IAGON_OLD_STAKING_ADDRESS:
+                                contract_receives_iag += qty
 
-                    # Deposit: User sends IAG and contract receives it
-                    if user_sends_iag > 0 and contract_receives_iag > 0:
-                        total_deposits += contract_receives_iag
+                # Deposit: User sends IAG and contract receives it
+                if user_sends_iag > 0 and contract_receives_iag > 0:
+                    total_deposits += contract_receives_iag
 
-                    # Withdrawal: Contract sends IAG and user receives it
-                    if contract_sends_iag > 0 and user_receives_iag > 0:
-                        total_withdrawals += user_receives_iag
+                # Withdrawal: Contract sends IAG and user receives it
+                if contract_sends_iag > 0 and user_receives_iag > 0:
+                    total_withdrawals += user_receives_iag
 
-                net_staked = total_deposits - total_withdrawals
+            net_staked = total_deposits - total_withdrawals
 
-                if net_staked <= 0:
-                    return None
+            if net_staked <= 0:
+                return None
 
-                return {
-                    'protocol': 'Iagon',
-                    'address': address,
-                    'total_staked_iag': net_staked / 1_000_000,
-                    'total_deposited': total_deposits / 1_000_000,
-                    'total_withdrawn': total_withdrawals / 1_000_000,
-                    'position_count': 1 if net_staked > 0 else 0,
-                    'contract': IAGON_OLD_STAKING_ADDRESS
-                }
+            return {
+                'protocol': 'Iagon',
+                'address': address,
+                'total_staked_iag': net_staked / 1_000_000,
+                'total_deposited': total_deposits / 1_000_000,
+                'total_withdrawn': total_withdrawals / 1_000_000,
+                'position_count': 1 if net_staked > 0 else 0,
+                'contract': IAGON_OLD_STAKING_ADDRESS
+            }
 
         except Exception as e:
             logger.error(f"Error getting Iagon staking: {e}")
@@ -765,57 +769,58 @@ class DeFiService:
             if not payment_cred:
                 return None
 
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                # Fetch staking positions which include rewards data
-                response = await client.get(
-                    f"{INDIGO_API_BASE}/api/v1/staking/positions"
-                )
+            client = get_client("blockfrost", timeout=60.0)
 
-                if response.status_code != 200:
-                    logger.warning(f"Indigo staking API returned {response.status_code}")
-                    return None
+            # Fetch staking positions which include rewards data
+            response = await client.get(
+                f"{INDIGO_API_BASE}/api/v1/staking/positions"
+            )
 
-                positions_data = response.json()
+            if response.status_code != 200:
+                logger.warning(f"Indigo staking API returned {response.status_code}")
+                return None
 
-                # Find user's positions and rewards
-                total_staked = 0
-                total_locked = 0
-                snapshot_ada = 0
+            positions_data = response.json()
 
-                for pos in positions_data:
-                    if pos.get('owner') == payment_cred:
-                        staked = pos.get('stakedIndy', 0) / 1_000_000
+            # Find user's positions and rewards
+            total_staked = 0
+            total_locked = 0
+            snapshot_ada = 0
 
-                        # lockedAmount can be a dict or int
-                        locked_raw = pos.get('lockedAmount', 0)
-                        if isinstance(locked_raw, dict):
-                            # Sum values if it's a dict of token amounts
-                            locked = sum(v for v in locked_raw.values() if isinstance(v, (int, float))) / 1_000_000
-                        else:
-                            locked = locked_raw / 1_000_000
+            for pos in positions_data:
+                if pos.get('owner') == payment_cred:
+                    staked = pos.get('stakedIndy', 0) / 1_000_000
 
-                        ada_snapshot = pos.get('snapshotAda', 0) / 1_000_000
+                    # lockedAmount can be a dict or int
+                    locked_raw = pos.get('lockedAmount', 0)
+                    if isinstance(locked_raw, dict):
+                        # Sum values if it's a dict of token amounts
+                        locked = sum(v for v in locked_raw.values() if isinstance(v, (int, float))) / 1_000_000
+                    else:
+                        locked = locked_raw / 1_000_000
 
-                        total_staked += staked
-                        total_locked += locked
-                        snapshot_ada += ada_snapshot
+                    ada_snapshot = pos.get('snapshotAda', 0) / 1_000_000
 
-                        logger.info(f"Indigo position: staked={staked:.2f}, locked={locked:.2f}, snapshotAda={ada_snapshot:.2f}")
+                    total_staked += staked
+                    total_locked += locked
+                    snapshot_ada += ada_snapshot
 
-                # snapshotAda is the ADA backing/collateral value, not pending rewards
-                # Actual pending rewards require epoch-based calculation not available via this API
-                # For now, we show the staked amount and link to the app for actual rewards
-                pending_indy = max(0, total_locked - total_staked) if total_locked > 0 else 0
+                    logger.info(f"Indigo position: staked={staked:.2f}, locked={locked:.2f}, snapshotAda={ada_snapshot:.2f}")
 
-                return {
-                    'protocol': 'Indigo',
-                    'pending_indy': pending_indy,
-                    'pending_ada': 0,  # ADA rewards need to be checked in app
-                    'total_staked': total_staked,
-                    'ada_backing': snapshot_ada,  # ADA collateral backing the position
-                    'reward_tokens': ['INDY', 'ADA'],
-                    'rewards_url': 'https://app.indigoprotocol.io/staking'
-                }
+            # snapshotAda is the ADA backing/collateral value, not pending rewards
+            # Actual pending rewards require epoch-based calculation not available via this API
+            # For now, we show the staked amount and link to the app for actual rewards
+            pending_indy = max(0, total_locked - total_staked) if total_locked > 0 else 0
+
+            return {
+                'protocol': 'Indigo',
+                'pending_indy': pending_indy,
+                'pending_ada': 0,  # ADA rewards need to be checked in app
+                'total_staked': total_staked,
+                'ada_backing': snapshot_ada,  # ADA collateral backing the position
+                'reward_tokens': ['INDY', 'ADA'],
+                'rewards_url': 'https://app.indigoprotocol.io/staking'
+            }
 
         except Exception as e:
             logger.error(f"Error fetching Indigo rewards: {e}")
@@ -847,50 +852,51 @@ class DeFiService:
             if not staking or staking['total_staked_strike'] == 0:
                 return None
 
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                # Query Strike rewards contract for pending rewards
-                # Strike uses epoch-based rewards distribution
-                pending_strike = 0
-                accumulated_rewards = 0
+            client = get_client("blockfrost", timeout=60.0)
 
-                # Check for pending rewards in the staking UTxOs datum
-                response = await client.get(
-                    f"{BLOCKFROST_BASE_URL}/addresses/{STRIKE_STAKING_ADDRESS}/utxos",
-                    headers=self.headers,
-                    params={"count": 100}
-                )
+            # Query Strike rewards contract for pending rewards
+            # Strike uses epoch-based rewards distribution
+            pending_strike = 0
+            accumulated_rewards = 0
 
-                if response.status_code == 200:
-                    utxos = response.json()
-                    for utxo in utxos:
-                        # Check if this UTxO belongs to user
-                        has_user_nft = False
+            # Check for pending rewards in the staking UTxOs datum
+            response = await client.get(
+                f"{BLOCKFROST_BASE_URL}/addresses/{STRIKE_STAKING_ADDRESS}/utxos",
+                headers=self.headers,
+                params={"count": 100}
+            )
+
+            if response.status_code == 200:
+                utxos = response.json()
+                for utxo in utxos:
+                    # Check if this UTxO belongs to user
+                    has_user_nft = False
+                    for asset in utxo.get('amount', []):
+                        unit = asset.get('unit', '')
+                        if unit.startswith(STRIKE_STAKING_NFT_POLICY):
+                            asset_name = unit[len(STRIKE_STAKING_NFT_POLICY):]
+                            if asset_name == payment_cred:
+                                has_user_nft = True
+                                break
+
+                    if has_user_nft:
+                        # Check for STRIKE tokens in the UTxO (accumulated rewards)
                         for asset in utxo.get('amount', []):
                             unit = asset.get('unit', '')
-                            if unit.startswith(STRIKE_STAKING_NFT_POLICY):
-                                asset_name = unit[len(STRIKE_STAKING_NFT_POLICY):]
-                                if asset_name == payment_cred:
-                                    has_user_nft = True
-                                    break
+                            if unit.startswith(STRIKE_TOKEN_POLICY) and unit != f"{STRIKE_TOKEN_POLICY}":
+                                # This might be accumulated rewards in the staking UTxO
+                                qty = int(asset.get('quantity', 0))
+                                if qty > 0:
+                                    accumulated_rewards += qty / 1_000_000
 
-                        if has_user_nft:
-                            # Check for STRIKE tokens in the UTxO (accumulated rewards)
-                            for asset in utxo.get('amount', []):
-                                unit = asset.get('unit', '')
-                                if unit.startswith(STRIKE_TOKEN_POLICY) and unit != f"{STRIKE_TOKEN_POLICY}":
-                                    # This might be accumulated rewards in the staking UTxO
-                                    qty = int(asset.get('quantity', 0))
-                                    if qty > 0:
-                                        accumulated_rewards += qty / 1_000_000
-
-                return {
-                    'protocol': 'Strike',
-                    'pending_rewards': pending_strike,
-                    'accumulated_rewards': accumulated_rewards,
-                    'reward_token': 'STRIKE',
-                    'staked_amount': staking['total_staked_strike'],
-                    'rewards_url': 'https://app.strike.finance/stake'
-                }
+            return {
+                'protocol': 'Strike',
+                'pending_rewards': pending_strike,
+                'accumulated_rewards': accumulated_rewards,
+                'reward_token': 'STRIKE',
+                'staked_amount': staking['total_staked_strike'],
+                'rewards_url': 'https://app.strike.finance/stake'
+            }
 
         except Exception as e:
             logger.error(f"Error fetching Strike rewards: {e}")
@@ -904,46 +910,47 @@ class DeFiService:
             # Get stake address from wallet address
             stake_address = await self._get_stake_address(address)
 
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                pending_lq = 0
-                claimed_lq = 0
-                total_earned = 0
+            client = get_client("blockfrost", timeout=60.0)
 
-                if stake_address:
-                    try:
-                        # Liqwid rewards API requires POST with stake address
-                        response = await client.post(
-                            f"{LIQWID_REWARDS_API}/rewards",
-                            json={"stakeAddress": stake_address},
-                            headers={"Content-Type": "application/json"}
-                        )
+            pending_lq = 0
+            claimed_lq = 0
+            total_earned = 0
 
-                        if response.status_code == 200:
-                            data = response.json()
-                            rewards_data = data.get('rewards', {})
-                            # Parse rewards data - structure: {epochNumber: {pending: X, claimed: Y}}
-                            for epoch, epoch_data in rewards_data.items():
-                                if isinstance(epoch_data, dict):
-                                    pending_lq += epoch_data.get('pending', 0) / 1_000_000
-                                    claimed_lq += epoch_data.get('claimed', 0) / 1_000_000
-                            total_earned = pending_lq + claimed_lq
-                            logger.info(f"Liqwid rewards for {stake_address[:20]}...: pending={pending_lq}, claimed={claimed_lq}")
-                    except Exception as e:
-                        logger.warning(f"Could not fetch from Liqwid rewards API: {e}")
+            if stake_address:
+                try:
+                    # Liqwid rewards API requires POST with stake address
+                    response = await client.post(
+                        f"{LIQWID_REWARDS_API}/rewards",
+                        json={"stakeAddress": stake_address},
+                        headers={"Content-Type": "application/json"}
+                    )
 
-                # Check on-chain staking data
-                staking = await self.get_liqwid_staking(address)
-                staked_amount = staking['total_staked_lq'] if staking else 0
+                    if response.status_code == 200:
+                        data = response.json()
+                        rewards_data = data.get('rewards', {})
+                        # Parse rewards data - structure: {epochNumber: {pending: X, claimed: Y}}
+                        for epoch, epoch_data in rewards_data.items():
+                            if isinstance(epoch_data, dict):
+                                pending_lq += epoch_data.get('pending', 0) / 1_000_000
+                                claimed_lq += epoch_data.get('claimed', 0) / 1_000_000
+                        total_earned = pending_lq + claimed_lq
+                        logger.info(f"Liqwid rewards for {stake_address[:20]}...: pending={pending_lq}, claimed={claimed_lq}")
+                except Exception as e:
+                    logger.warning(f"Could not fetch from Liqwid rewards API: {e}")
 
-                return {
-                    'protocol': 'Liqwid',
-                    'pending_rewards': pending_lq,
-                    'claimed_rewards': claimed_lq,
-                    'total_earned': total_earned,
-                    'reward_token': 'LQ',
-                    'staked_amount': staked_amount,
-                    'rewards_url': 'https://liqwid-rewards.sundaeswap.finance/'
-                }
+            # Check on-chain staking data
+            staking = await self.get_liqwid_staking(address)
+            staked_amount = staking['total_staked_lq'] if staking else 0
+
+            return {
+                'protocol': 'Liqwid',
+                'pending_rewards': pending_lq,
+                'claimed_rewards': claimed_lq,
+                'total_earned': total_earned,
+                'reward_token': 'LQ',
+                'staked_amount': staked_amount,
+                'rewards_url': 'https://liqwid-rewards.sundaeswap.finance/'
+            }
 
         except Exception as e:
             logger.error(f"Error fetching Liqwid rewards: {e}")
@@ -954,14 +961,14 @@ class DeFiService:
     async def _get_stake_address(self, address: str) -> Optional[str]:
         """Get the stake address associated with a wallet address."""
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    f"{BLOCKFROST_BASE_URL}/addresses/{address}",
-                    headers=self.headers
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    return data.get('stake_address')
+            client = get_client("blockfrost", timeout=30.0)
+            response = await client.get(
+                f"{BLOCKFROST_BASE_URL}/addresses/{address}",
+                headers=self.headers
+            )
+            if response.status_code == 200:
+                data = response.json()
+                return data.get('stake_address')
         except Exception as e:
             logger.warning(f"Could not get stake address: {e}")
         return None
@@ -975,63 +982,64 @@ class DeFiService:
             if not payment_cred:
                 return None
 
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                # Try Surf Lending API
-                try:
-                    response = await client.get(
-                        f"{SURF_LENDING_API}/api/v1/positions/{address}"
-                    )
-                    if response.status_code == 200:
-                        data = response.json()
-                        return {
-                            'protocol': 'Surf Lending',
-                            'positions': data.get('positions', []),
-                            'total_supplied': data.get('total_supplied', 0),
-                            'total_borrowed': data.get('total_borrowed', 0),
-                            'pending_rewards': data.get('pending_rewards', 0),
-                            'apy': data.get('supply_apy')
-                        }
-                except Exception as e:
-                    logger.warning(f"Surf Lending API not available: {e}")
+            client = get_client("blockfrost", timeout=60.0)
 
-                # Fallback: Query on-chain data
+            # Try Surf Lending API
+            try:
                 response = await client.get(
-                    f"{BLOCKFROST_BASE_URL}/addresses/{SURF_STAKING_ADDRESS}/utxos",
-                    headers=self.headers,
-                    params={"count": 100}
+                    f"{SURF_LENDING_API}/api/v1/positions/{address}"
                 )
-
-                if response.status_code != 200:
-                    return None
-
-                utxos = response.json()
-                positions = []
-                total_supplied = 0
-
-                for utxo in utxos:
-                    inline_datum = utxo.get('inline_datum') or ''
-                    if payment_cred in inline_datum:
-                        # Found user's position
-                        ada_amount = 0
-                        for asset in utxo.get('amount', []):
-                            if asset.get('unit') == 'lovelace':
-                                ada_amount = int(asset.get('quantity', 0)) / 1_000_000
-
-                        if ada_amount > 0:
-                            total_supplied += ada_amount
-                            positions.append({
-                                'tx_hash': utxo.get('tx_hash'),
-                                'supplied_ada': ada_amount
-                            })
-
-                if positions:
+                if response.status_code == 200:
+                    data = response.json()
                     return {
                         'protocol': 'Surf Lending',
-                        'address': address,
-                        'positions': positions,
-                        'total_supplied_ada': total_supplied,
-                        'position_count': len(positions)
+                        'positions': data.get('positions', []),
+                        'total_supplied': data.get('total_supplied', 0),
+                        'total_borrowed': data.get('total_borrowed', 0),
+                        'pending_rewards': data.get('pending_rewards', 0),
+                        'apy': data.get('supply_apy')
                     }
+            except Exception as e:
+                logger.warning(f"Surf Lending API not available: {e}")
+
+            # Fallback: Query on-chain data
+            response = await client.get(
+                f"{BLOCKFROST_BASE_URL}/addresses/{SURF_STAKING_ADDRESS}/utxos",
+                headers=self.headers,
+                params={"count": 100}
+            )
+
+            if response.status_code != 200:
+                return None
+
+            utxos = response.json()
+            positions = []
+            total_supplied = 0
+
+            for utxo in utxos:
+                inline_datum = utxo.get('inline_datum') or ''
+                if payment_cred in inline_datum:
+                    # Found user's position
+                    ada_amount = 0
+                    for asset in utxo.get('amount', []):
+                        if asset.get('unit') == 'lovelace':
+                            ada_amount = int(asset.get('quantity', 0)) / 1_000_000
+
+                    if ada_amount > 0:
+                        total_supplied += ada_amount
+                        positions.append({
+                            'tx_hash': utxo.get('tx_hash'),
+                            'supplied_ada': ada_amount
+                        })
+
+            if positions:
+                return {
+                    'protocol': 'Surf Lending',
+                    'address': address,
+                    'positions': positions,
+                    'total_supplied_ada': total_supplied,
+                    'position_count': len(positions)
+                }
 
         except Exception as e:
             logger.error(f"Error getting Surf Lending positions: {e}")

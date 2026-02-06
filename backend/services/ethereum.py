@@ -19,6 +19,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import BEACONCHAIN_BASE_URL
 from services.api_key_manager import APIKeyManager
+from services.http_client import get_client
 
 logger = logging.getLogger(__name__)
 
@@ -93,19 +94,19 @@ class EthereumService(APIKeyManager):
         headers = {"apikey": await self.get_api_key()}
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(url, headers=headers, params=params)
-                self.last_request_time = datetime.now()
-                self.request_count += 1
+            client = get_client("beaconchain", timeout=30.0)
+            response = await client.get(url, headers=headers, params=params)
+            self.last_request_time = datetime.now()
+            self.request_count += 1
 
-                if response.status_code == 200:
-                    return response.json()
-                elif response.status_code == 429:
-                    logger.warning("Rate limited by beaconcha.in API")
-                    return None
-                else:
-                    logger.error(f"Beaconcha.in API error: {response.status_code} - {response.text}")
-                    return None
+            if response.status_code == 200:
+                return response.json()
+            elif response.status_code == 429:
+                logger.warning("Rate limited by beaconcha.in API")
+                return None
+            else:
+                logger.error(f"Beaconcha.in API error: {response.status_code} - {response.text}")
+                return None
 
         except Exception as e:
             logger.error(f"Error making beaconcha.in request: {e}")
@@ -204,46 +205,46 @@ class EthereumService(APIKeyManager):
             return None
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(
-                    self.PUBLIC_RPC_URL,
-                    json={
-                        "jsonrpc": "2.0",
-                        "id": 1,
-                        "method": "eth_getBalance",
-                        "params": [address, "latest"]
-                    }
-                )
-
-                if response.status_code != 200:
-                    logger.error(f"Ethereum public RPC error: {response.status_code}")
-                    return None
-
-                data = response.json()
-
-                if 'error' in data:
-                    logger.error(f"Ethereum public RPC error: {data['error']}")
-                    return None
-
-                balance_wei = int(data.get('result', '0x0'), 16)
-                balance_eth = balance_wei / (10**18)
-
-                result_data = {
-                    'address': address,
-                    'balance_eth': balance_eth,
-                    'tokens': [],
-                    'token_count': 0,
-                    'source': 'public_rpc'
+            client = get_client("public_rpc_eth", timeout=30.0)
+            response = await client.post(
+                self.PUBLIC_RPC_URL,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "eth_getBalance",
+                    "params": [address, "latest"]
                 }
+            )
 
-                logger.info(f"Fetched ETH balance from public RPC: {balance_eth:.6f} ETH")
+            if response.status_code != 200:
+                logger.error(f"Ethereum public RPC error: {response.status_code}")
+                return None
 
-                self._balance_cache[address] = {
-                    'data': result_data,
-                    'cached_at': datetime.now()
-                }
+            data = response.json()
 
-                return result_data
+            if 'error' in data:
+                logger.error(f"Ethereum public RPC error: {data['error']}")
+                return None
+
+            balance_wei = int(data.get('result', '0x0'), 16)
+            balance_eth = balance_wei / (10**18)
+
+            result_data = {
+                'address': address,
+                'balance_eth': balance_eth,
+                'tokens': [],
+                'token_count': 0,
+                'source': 'public_rpc'
+            }
+
+            logger.info(f"Fetched ETH balance from public RPC: {balance_eth:.6f} ETH")
+
+            self._balance_cache[address] = {
+                'data': result_data,
+                'cached_at': datetime.now()
+            }
+
+            return result_data
 
         except Exception as e:
             logger.error(f"Error fetching ETH balance from public RPC: {e}")

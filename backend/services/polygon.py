@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import ALCHEMY_POLYGON_URL
 from database import get_cache, set_cache
 from services.api_key_manager import APIKeyManager
+from services.http_client import get_client
 
 logger = logging.getLogger(__name__)
 
@@ -98,34 +99,34 @@ class PolygonService(APIKeyManager):
             return None
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                payload = {
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "method": "eth_getBalance",
-                    "params": [address, "latest"]
-                }
+            client = get_client("alchemy", timeout=30.0)
+            payload = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "eth_getBalance",
+                "params": [address, "latest"]
+            }
 
-                response = await client.post(
-                    await self._get_v2_url(),
-                    json=payload
-                )
+            response = await client.post(
+                await self._get_v2_url(),
+                json=payload
+            )
 
-                if response.status_code != 200:
-                    logger.error(f"Alchemy Polygon API error: {response.status_code}")
-                    return None
+            if response.status_code != 200:
+                logger.error(f"Alchemy Polygon API error: {response.status_code}")
+                return None
 
-                data = response.json()
+            data = response.json()
 
-                if "error" in data:
-                    logger.error(f"Alchemy Polygon API error: {data['error']}")
-                    return None
+            if "error" in data:
+                logger.error(f"Alchemy Polygon API error: {data['error']}")
+                return None
 
-                # Convert hex wei to MATIC
-                balance_wei = int(data.get("result", "0x0"), 16)
-                balance_matic = balance_wei / WEI_PER_MATIC
+            # Convert hex wei to MATIC
+            balance_wei = int(data.get("result", "0x0"), 16)
+            balance_matic = balance_wei / WEI_PER_MATIC
 
-                return balance_matic
+            return balance_matic
 
         except Exception as e:
             logger.error(f"Error fetching Polygon balance: {e}")
@@ -146,60 +147,60 @@ class PolygonService(APIKeyManager):
             return []
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                payload = {
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "method": "alchemy_getTokenBalances",
-                    "params": [address, "erc20"]
-                }
+            client = get_client("alchemy", timeout=30.0)
+            payload = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "alchemy_getTokenBalances",
+                "params": [address, "erc20"]
+            }
 
-                response = await client.post(
-                    await self._get_v2_url(),
-                    json=payload
-                )
+            response = await client.post(
+                await self._get_v2_url(),
+                json=payload
+            )
 
-                if response.status_code != 200:
-                    logger.error(f"Alchemy Polygon token API error: {response.status_code}")
-                    return []
+            if response.status_code != 200:
+                logger.error(f"Alchemy Polygon token API error: {response.status_code}")
+                return []
 
-                data = response.json()
+            data = response.json()
 
-                if "error" in data:
-                    logger.error(f"Alchemy Polygon token API error: {data['error']}")
-                    return []
+            if "error" in data:
+                logger.error(f"Alchemy Polygon token API error: {data['error']}")
+                return []
 
-                result = data.get("result", {})
-                token_balances = result.get("tokenBalances", [])
+            result = data.get("result", {})
+            token_balances = result.get("tokenBalances", [])
 
-                # Filter out zero balances and fetch metadata
-                tokens = []
-                for tb in token_balances:
-                    balance_hex = tb.get("tokenBalance", "0x0")
-                    if balance_hex == "0x0" or balance_hex == "0x":
-                        continue
+            # Filter out zero balances and fetch metadata
+            tokens = []
+            for tb in token_balances:
+                balance_hex = tb.get("tokenBalance", "0x0")
+                if balance_hex == "0x0" or balance_hex == "0x":
+                    continue
 
-                    contract_address = tb.get("contractAddress", "")
-                    balance_raw = int(balance_hex, 16)
+                contract_address = tb.get("contractAddress", "")
+                balance_raw = int(balance_hex, 16)
 
-                    # Get token metadata
-                    metadata = await self._get_token_metadata(client, contract_address)
+                # Get token metadata
+                metadata = await self._get_token_metadata(client, contract_address)
 
-                    decimals = metadata.get("decimals", 18)
-                    balance = balance_raw / (10 ** decimals)
+                decimals = metadata.get("decimals", 18)
+                balance = balance_raw / (10 ** decimals)
 
-                    if balance > 0:
-                        tokens.append({
-                            "contract_address": contract_address,
-                            "symbol": metadata.get("symbol", "UNKNOWN"),
-                            "name": metadata.get("name", "Unknown Token"),
-                            "decimals": decimals,
-                            "balance": balance,
-                            "balance_raw": balance_raw,
-                            "logo": metadata.get("logo", "")
-                        })
+                if balance > 0:
+                    tokens.append({
+                        "contract_address": contract_address,
+                        "symbol": metadata.get("symbol", "UNKNOWN"),
+                        "name": metadata.get("name", "Unknown Token"),
+                        "decimals": decimals,
+                        "balance": balance,
+                        "balance_raw": balance_raw,
+                        "logo": metadata.get("logo", "")
+                    })
 
-                return tokens
+            return tokens
 
         except Exception as e:
             logger.error(f"Error fetching Polygon token balances: {e}")
@@ -289,47 +290,47 @@ class PolygonService(APIKeyManager):
             return None
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(
-                    self.PUBLIC_RPC_URL,
-                    json={
-                        "jsonrpc": "2.0",
-                        "id": 1,
-                        "method": "eth_getBalance",
-                        "params": [address, "latest"]
-                    }
-                )
-
-                if response.status_code != 200:
-                    logger.error(f"Polygon public RPC error: {response.status_code}")
-                    return None
-
-                data = response.json()
-
-                if 'error' in data:
-                    logger.error(f"Polygon public RPC error: {data['error']}")
-                    return None
-
-                balance_wei = int(data.get('result', '0x0'), 16)
-                balance_matic = balance_wei / WEI_PER_MATIC
-
-                result = {
-                    'address': address,
-                    'balance_matic': balance_matic,
-                    'tokens': [],
-                    'token_count': 0,
-                    'blockchain': 'polygon',
-                    'source': 'public_rpc'
+            client = get_client("alchemy", timeout=30.0)
+            response = await client.post(
+                self.PUBLIC_RPC_URL,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "eth_getBalance",
+                    "params": [address, "latest"]
                 }
+            )
 
-                logger.info(f"Fetched MATIC balance from public RPC: {balance_matic:.6f} MATIC")
+            if response.status_code != 200:
+                logger.error(f"Polygon public RPC error: {response.status_code}")
+                return None
 
-                self._balance_cache[address] = {
-                    'data': result,
-                    'cached_at': datetime.now()
-                }
+            data = response.json()
 
-                return result
+            if 'error' in data:
+                logger.error(f"Polygon public RPC error: {data['error']}")
+                return None
+
+            balance_wei = int(data.get('result', '0x0'), 16)
+            balance_matic = balance_wei / WEI_PER_MATIC
+
+            result = {
+                'address': address,
+                'balance_matic': balance_matic,
+                'tokens': [],
+                'token_count': 0,
+                'blockchain': 'polygon',
+                'source': 'public_rpc'
+            }
+
+            logger.info(f"Fetched MATIC balance from public RPC: {balance_matic:.6f} MATIC")
+
+            self._balance_cache[address] = {
+                'data': result,
+                'cached_at': datetime.now()
+            }
+
+            return result
 
         except Exception as e:
             logger.error(f"Error fetching Polygon balance from public RPC: {e}")
@@ -351,27 +352,27 @@ class PolygonService(APIKeyManager):
             return None
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                params = {
-                    'owner': address,
-                    'withMetadata': 'true',
-                    'excludeFilters[]': 'SPAM',
-                    'pageSize': 100
-                }
+            client = get_client("alchemy", timeout=30.0)
+            params = {
+                'owner': address,
+                'withMetadata': 'true',
+                'excludeFilters[]': 'SPAM',
+                'pageSize': 100
+            }
 
-                if page_key:
-                    params['pageKey'] = page_key
+            if page_key:
+                params['pageKey'] = page_key
 
-                response = await client.get(
-                    f"{await self._get_nft_url()}/getNFTsForOwner",
-                    params=params
-                )
+            response = await client.get(
+                f"{await self._get_nft_url()}/getNFTsForOwner",
+                params=params
+            )
 
-                if response.status_code != 200:
-                    logger.error(f"Alchemy Polygon NFT API error: {response.status_code}")
-                    return None
+            if response.status_code != 200:
+                logger.error(f"Alchemy Polygon NFT API error: {response.status_code}")
+                return None
 
-                return response.json()
+            return response.json()
 
         except Exception as e:
             logger.error(f"Error fetching Polygon NFTs: {e}")

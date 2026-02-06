@@ -18,11 +18,13 @@ class DemoNFTService:
 
     def __init__(self):
         """Initialize demo NFT service with fake collections."""
-        # Demo NFT collections - USING ACTUAL ANIME IMAGES
+        # Demo NFT collections - MULTI-CHAIN COLLECTIONS
         self.collections = [
+            # Cardano NFTs
             {
                 "policy_id": "demo_policy_001",
                 "collection_name": "Clay Nation",
+                "blockchain": "cardano",
                 "floor_price_ada": 1100.00,
                 "floor_price_usd": 1100.00 * 1.05,
                 "volume_24h": 25000,
@@ -36,6 +38,7 @@ class DemoNFTService:
             {
                 "policy_id": "demo_policy_002",
                 "collection_name": "Ape Society",
+                "blockchain": "cardano",
                 "floor_price_ada": 1850.00,
                 "floor_price_usd": 1850.00 * 1.05,
                 "volume_24h": 18500,
@@ -46,9 +49,11 @@ class DemoNFTService:
                 "verified": True,
                 "owned_count": 8  # 8 ape society images
             },
+            # Ethereum NFTs
             {
                 "policy_id": "demo_policy_003",
                 "collection_name": "Bored Ape Yacht Club",
+                "blockchain": "ethereum",
                 "floor_price_ada": 3800.00,
                 "floor_price_usd": 3800.00 * 1.05,
                 "volume_24h": 85000,
@@ -59,9 +64,11 @@ class DemoNFTService:
                 "verified": True,
                 "owned_count": 12  # 12 BAYC images
             },
+            # Solana NFTs
             {
                 "policy_id": "demo_policy_004",
                 "collection_name": "Solana Monkey Business",
+                "blockchain": "solana",
                 "floor_price_ada": 1200.00,
                 "floor_price_usd": 1200.00 * 1.05,
                 "volume_24h": 15000,
@@ -71,6 +78,51 @@ class DemoNFTService:
                 "holders": 2890,
                 "verified": True,
                 "owned_count": 20  # 20 SMB images
+            },
+            # Polygon NFTs
+            {
+                "policy_id": "demo_policy_005",
+                "collection_name": "Polygon Punks",
+                "blockchain": "polygon",
+                "floor_price_ada": 450.00,
+                "floor_price_usd": 450.00 * 1.05,
+                "volume_24h": 8500,
+                "volume_7d": 45000,
+                "listings": 52,
+                "supply": 8000,
+                "holders": 3100,
+                "verified": True,
+                "owned_count": 5
+            },
+            # Base NFTs
+            {
+                "policy_id": "demo_policy_006",
+                "collection_name": "Base Builders",
+                "blockchain": "base",
+                "floor_price_ada": 280.00,
+                "floor_price_usd": 280.00 * 1.05,
+                "volume_24h": 5200,
+                "volume_7d": 28000,
+                "listings": 38,
+                "supply": 5000,
+                "holders": 2250,
+                "verified": True,
+                "owned_count": 3
+            },
+            # Algorand NFTs
+            {
+                "policy_id": "demo_policy_007",
+                "collection_name": "AlgoRocks",
+                "blockchain": "algorand",
+                "floor_price_ada": 320.00,
+                "floor_price_usd": 320.00 * 1.05,
+                "volume_24h": 6100,
+                "volume_7d": 32000,
+                "listings": 42,
+                "supply": 4000,
+                "holders": 1850,
+                "verified": True,
+                "owned_count": 4
             }
         ]
 
@@ -84,6 +136,7 @@ class DemoNFTService:
                 "policy_id": "demo_policy_001",
                 "asset_name": f"Clay Nation #{i:04d}",
                 "collection_name": "Clay Nation",
+                "blockchain": "cardano",
                 "image": f"/static/demo-nfts/clay-nation-{i}.svg",
                 "rarity_rank": i * 50 + random.randint(1, 49),
                 "rarity_score": 90 - (i * 3) + random.uniform(-5, 5),
@@ -103,6 +156,7 @@ class DemoNFTService:
                 "policy_id": "demo_policy_002",
                 "asset_name": f"Ape Society #{1000 + i}",
                 "collection_name": "Ape Society",
+                "blockchain": "cardano",
                 "image": f"/static/demo-nfts/ape-society-{i}.svg",
                 "rarity_rank": i * 75 + random.randint(1, 74),
                 "rarity_score": 85 - (i * 4) + random.uniform(-5, 5),
@@ -122,6 +176,7 @@ class DemoNFTService:
                 "policy_id": "demo_policy_003",
                 "asset_name": f"Bored Ape #{2000 + i}",
                 "collection_name": "Bored Ape Yacht Club",
+                "blockchain": "ethereum",
                 "image": f"/static/demo-nfts/bayc-{i}.svg",
                 "rarity_rank": i * 60 + random.randint(1, 59),
                 "rarity_score": 95 - (i * 2.5) + random.uniform(-3, 3),
@@ -142,6 +197,7 @@ class DemoNFTService:
                 "policy_id": "demo_policy_004",
                 "asset_name": f"SMB #{3000 + i}",
                 "collection_name": "Solana Monkey Business",
+                "blockchain": "solana",
                 "image": f"/static/demo-nfts/smb-{i}.svg",
                 "rarity_rank": i * 40 + random.randint(1, 39),
                 "rarity_score": 80 - (i * 2) + random.uniform(-4, 4),
@@ -152,6 +208,63 @@ class DemoNFTService:
                     {"trait_type": "Background", "value": ["Blue", "Red", "Green", "Yellow", "Purple"][i % 5]},
                     {"trait_type": "Hat", "value": ["None", "Cap", "Beanie", "Crown"][i % 4]},
                     {"trait_type": "Eyes", "value": ["Normal", "Laser", "Closed", "3D"][i % 4]}
+                ]
+            })
+
+        # Polygon Punks (5 images) - Floor price: 450 ADA
+        for i in range(1, 6):
+            self.nfts.append({
+                "asset_id": f"poly_punk_{i:04d}",
+                "policy_id": "demo_policy_005",
+                "asset_name": f"Polygon Punk #{4000 + i}",
+                "collection_name": "Polygon Punks",
+                "blockchain": "polygon",
+                "image": f"/static/demo-nfts/polygon-punk-{i}.svg",
+                "rarity_rank": i * 100 + random.randint(1, 99),
+                "rarity_score": 75 - (i * 5) + random.uniform(-3, 3),
+                "price_ada": 450.00,
+                "last_sale_ada": 450.00 * random.uniform(0.9, 1.1),
+                "attributes": [
+                    {"trait_type": "Type", "value": ["Alien", "Ape", "Zombie"][i % 3]},
+                    {"trait_type": "Accessory", "value": ["None", "Glasses", "Hat"][i % 3]}
+                ]
+            })
+
+        # Base Builders (6 images) - Floor price: 320 ADA
+        for i in range(1, 7):
+            self.nfts.append({
+                "asset_id": f"base_builder_{i:04d}",
+                "policy_id": "demo_policy_006",
+                "asset_name": f"Base Builder #{5000 + i}",
+                "collection_name": "Base Builders",
+                "blockchain": "base",
+                "image": f"/static/demo-nfts/base-builder-{i}.svg",
+                "rarity_rank": i * 80 + random.randint(1, 79),
+                "rarity_score": 70 - (i * 4) + random.uniform(-3, 3),
+                "price_ada": 320.00,
+                "last_sale_ada": 320.00 * random.uniform(0.9, 1.1),
+                "attributes": [
+                    {"trait_type": "Role", "value": ["Developer", "Designer", "Builder"][i % 3]},
+                    {"trait_type": "Level", "value": ["Beginner", "Pro", "Expert"][i % 3]}
+                ]
+            })
+
+        # AlgoRocks (10 images) - Floor price: 280 ADA
+        for i in range(1, 11):
+            self.nfts.append({
+                "asset_id": f"algo_rock_{i:04d}",
+                "policy_id": "demo_policy_007",
+                "asset_name": f"AlgoRock #{6000 + i}",
+                "collection_name": "AlgoRocks",
+                "blockchain": "algorand",
+                "image": f"/static/demo-nfts/algo-rock-{i}.svg",
+                "rarity_rank": i * 60 + random.randint(1, 59),
+                "rarity_score": 68 - (i * 3) + random.uniform(-2, 2),
+                "price_ada": 280.00,
+                "last_sale_ada": 280.00 * random.uniform(0.9, 1.1),
+                "attributes": [
+                    {"trait_type": "Type", "value": ["Granite", "Marble", "Obsidian", "Quartz"][i % 4]},
+                    {"trait_type": "Color", "value": ["Gray", "White", "Black", "Pink"][i % 4]}
                 ]
             })
 
@@ -440,6 +553,102 @@ class DemoNFTService:
                     "updated_at": datetime.now().isoformat()
                 }
         return None
+
+    async def get_nfts_by_chain(self, blockchain: str) -> List[Dict]:
+        """
+        Get NFTs filtered by blockchain.
+
+        Args:
+            blockchain: Blockchain to filter by (ethereum, solana, polygon, base, algorand)
+
+        Returns:
+            List of NFTs for that blockchain
+        """
+        # Filter NFTs by blockchain
+        chain_nfts = [nft for nft in self.nfts if nft.get("blockchain") == blockchain]
+
+        # Add price calculations
+        price_multiplier = 1.05  # Mock price
+        return [
+            {
+                **nft,
+                "price_usd": nft.get("price_ada", 0) * price_multiplier,
+                "last_sale_usd": nft.get("last_sale_ada", 0) * price_multiplier,
+                "updated_at": datetime.now().isoformat()
+            }
+            for nft in chain_nfts
+        ]
+
+    async def get_chain_nft_summary(self, blockchain: str, native_price: float = 1.0) -> Dict:
+        """
+        Get NFT summary for a specific blockchain.
+
+        Args:
+            blockchain: Blockchain to get summary for
+            native_price: Price of native token in USD
+
+        Returns:
+            Summary with counts and values for that chain
+        """
+        # Get collection for this blockchain
+        chain_collections = [c for c in self.collections if c.get("blockchain") == blockchain]
+
+        if not chain_collections:
+            return {
+                "total_nfts": 0,
+                "total_value_eth": 0,  # Using eth as generic native token
+                "total_value_sol": 0,
+                "total_value_matic": 0,
+                "total_value_usd": 0,
+                "collections": []
+            }
+
+        total_count = sum(c.get("owned_count", 0) for c in chain_collections)
+        total_value_native = sum(c.get("floor_price_ada", 0) * c.get("owned_count", 0) for c in chain_collections)
+        total_value_usd = total_value_native * native_price
+
+        # Format based on expected response structure for each chain
+        if blockchain == "ethereum":
+            return {
+                "total_nfts": total_count,
+                "total_value_eth": round(total_value_native, 4),
+                "total_value_usd": round(total_value_usd, 2),
+                "collections": chain_collections
+            }
+        elif blockchain == "solana":
+            return {
+                "total_nfts": total_count,
+                "total_value_sol": round(total_value_native, 4),
+                "total_value_usd": round(total_value_usd, 2),
+                "collections": chain_collections
+            }
+        elif blockchain == "polygon":
+            return {
+                "total_nfts": total_count,
+                "total_value_matic": round(total_value_native, 4),
+                "total_value_usd": round(total_value_usd, 2),
+                "collections": chain_collections
+            }
+        elif blockchain == "base":
+            return {
+                "total_nfts": total_count,
+                "total_value_eth": round(total_value_native, 4),
+                "total_value_usd": round(total_value_usd, 2),
+                "collections": chain_collections
+            }
+        elif blockchain == "algorand":
+            return {
+                "total_nfts": total_count,
+                "total_value_algo": round(total_value_native, 4),
+                "total_value_usd": round(total_value_usd, 2),
+                "collections": chain_collections
+            }
+
+        return {
+            "total_nfts": total_count,
+            "total_value_usd": round(total_value_usd, 2),
+            "collections": chain_collections
+        }
 
 
 # Global instance

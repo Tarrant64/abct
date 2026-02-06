@@ -125,3 +125,80 @@ def demo_mode_check(func):
         return await func(*args, **kwargs)
 
     return wrapper
+
+
+async def get_demo_transactions(
+    user_id: int,
+    days: int = 7,
+    blockchain: str = None,
+    direction: str = None,
+    search: str = None
+):
+    """
+    Get demo transaction history.
+
+    Args:
+        user_id: User ID (ignored in demo mode)
+        days: Number of days to look back
+        blockchain: Filter by blockchain
+        direction: Filter by direction (sent/received)
+        search: Text search
+
+    Returns:
+        Demo transaction data
+    """
+    from services.demo_transaction_service import demo_transaction_service
+
+    transactions = await demo_transaction_service.get_transactions(
+        user_id, days, blockchain, direction, search
+    )
+
+    return {
+        'success': True,
+        'transactions': transactions,
+        'total_count': len(transactions),
+        'days': days,
+        'filters': {
+            'blockchain': blockchain,
+            'direction': direction,
+            'search': search
+        }
+    }
+
+
+async def get_demo_transaction_stats(user_id: int, days: int = 30):
+    """
+    Get demo transaction statistics.
+
+    Args:
+        user_id: User ID (ignored in demo mode)
+        days: Number of days to analyze
+
+    Returns:
+        Demo transaction statistics
+    """
+    from services.demo_transaction_service import demo_transaction_service
+
+    return {
+        'success': True,
+        **await demo_transaction_service.get_transaction_stats(user_id, days)
+    }
+
+
+async def get_demo_transaction_analytics(user_id: int, days: int = 30):
+    """
+    Get demo transaction analytics.
+
+    Args:
+        user_id: User ID (ignored in demo mode)
+        days: Time period in days
+
+    Returns:
+        Demo transaction analytics
+    """
+    from services.demo_transaction_service import demo_transaction_service
+
+    return {
+        'success': True,
+        **await demo_transaction_service.get_transaction_analytics(user_id, days)
+    }

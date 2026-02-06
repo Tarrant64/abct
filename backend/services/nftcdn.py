@@ -13,6 +13,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.api_key_manager import APIKeyManager
+from services.http_client import get_client
 
 logger = logging.getLogger(__name__)
 
@@ -55,17 +56,17 @@ class NFTCDNService(APIKeyManager):
             else:
                 url = f"{self.base_url}/policy/{policy_id}"
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(url, headers=headers)
+            client = get_client("nftcdn", timeout=30.0)
+            response = await client.get(url, headers=headers)
 
-                if response.status_code == 200:
-                    return response.json()
-                elif response.status_code == 404:
-                    logger.debug(f"NFT not found: {policy_id}")
-                    return None
-                else:
-                    logger.error(f"NFT CDN API error: {response.status_code}")
-                    return None
+            if response.status_code == 200:
+                return response.json()
+            elif response.status_code == 404:
+                logger.debug(f"NFT not found: {policy_id}")
+                return None
+            else:
+                logger.error(f"NFT CDN API error: {response.status_code}")
+                return None
 
         except Exception as e:
             logger.error(f"Error fetching NFT metadata from NFT CDN: {e}")
@@ -114,41 +115,41 @@ class NFTCDNService(APIKeyManager):
             headers = await self._get_headers()
             url = f"{self.base_url}/policy/{policy_id}"
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(url, headers=headers)
+            client = get_client("nftcdn", timeout=30.0)
+            response = await client.get(url, headers=headers)
 
-                if response.status_code == 200:
-                    data = response.json()
+            if response.status_code == 200:
+                data = response.json()
 
-                    # Extract collection info from response
-                    if isinstance(data, dict):
-                        collection_info = {
-                            'name': data.get('collection_name') or data.get('name') or data.get('projectName'),
-                            'description': data.get('description') or data.get('projectDescription'),
-                            'policy_id': policy_id,
-                            'source': 'nftcdn'
-                        }
+                # Extract collection info from response
+                if isinstance(data, dict):
+                    collection_info = {
+                        'name': data.get('collection_name') or data.get('name') or data.get('projectName'),
+                        'description': data.get('description') or data.get('projectDescription'),
+                        'policy_id': policy_id,
+                        'source': 'nftcdn'
+                    }
 
-                        # Add any additional fields that might be useful
-                        if 'supply' in data:
-                            collection_info['supply'] = data['supply']
-                        if 'website' in data:
-                            collection_info['website'] = data['website']
-                        if 'twitter' in data:
-                            collection_info['twitter'] = data['twitter']
+                    # Add any additional fields that might be useful
+                    if 'supply' in data:
+                        collection_info['supply'] = data['supply']
+                    if 'website' in data:
+                        collection_info['website'] = data['website']
+                    if 'twitter' in data:
+                        collection_info['twitter'] = data['twitter']
 
-                        # Only return if we got a collection name
-                        if collection_info['name']:
-                            logger.info(f"Found collection name '{collection_info['name']}' from NFT CDN for policy {policy_id[:16]}...")
-                            return collection_info
+                    # Only return if we got a collection name
+                    if collection_info['name']:
+                        logger.info(f"Found collection name '{collection_info['name']}' from NFT CDN for policy {policy_id[:16]}...")
+                        return collection_info
 
-                    return None
-                elif response.status_code == 404:
-                    logger.debug(f"Collection not found in NFT CDN: {policy_id[:16]}...")
-                    return None
-                else:
-                    logger.debug(f"NFT CDN API error {response.status_code} for policy: {policy_id[:16]}...")
-                    return None
+                return None
+            elif response.status_code == 404:
+                logger.debug(f"Collection not found in NFT CDN: {policy_id[:16]}...")
+                return None
+            else:
+                logger.debug(f"NFT CDN API error {response.status_code} for policy: {policy_id[:16]}...")
+                return None
 
         except Exception as e:
             logger.debug(f"Error fetching collection from NFT CDN for {policy_id[:16]}...: {e}")

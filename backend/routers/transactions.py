@@ -14,6 +14,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.transaction_history import transaction_history_service
 from auth_utils import verify_session
+from middleware.demo_mode import (
+    is_demo_user,
+    get_demo_transactions,
+    get_demo_transaction_stats,
+    get_demo_transaction_analytics
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +53,12 @@ async def get_transaction_history(
         Transaction list with filters applied
     """
     try:
+        # Check if demo user
+        from database import get_username_by_user_id
+        username = await get_username_by_user_id(user_id)
+        if await is_demo_user(username):
+            logger.info(f"Demo mode: Returning demo transactions for user {user_id}")
+            return await get_demo_transactions(user_id, days, blockchain, direction, search)
         if refresh:
             # Fetch fresh data from blockchain APIs
             logger.info(f"Refreshing transaction history for user {user_id} ({days} days)")
@@ -253,6 +265,12 @@ async def get_transaction_stats(
         Transaction statistics
     """
     try:
+        # Check if demo user
+        from database import get_username_by_user_id
+        username = await get_username_by_user_id(user_id)
+        if await is_demo_user(username):
+            logger.info(f"Demo mode: Returning demo transaction stats for user {user_id}")
+            return await get_demo_transaction_stats(user_id, days)
         transactions = await transaction_history_service.get_transactions(
             user_id, days
         )
@@ -280,4 +298,110 @@ async def get_transaction_stats(
 
     except Exception as e:
         logger.error(f"Error getting transaction stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/analytics/by-chain")
+async def get_transaction_analytics(
+    days: int = Query(30, description="Time period in days (7, 30, 365, or 99999 for all)"),
+    user_id: int = Depends(verify_session)
+):
+    """
+    Get transaction analytics grouped by blockchain and time buckets.
+
+    Args:
+        days: Time period in days (7, 30, 365, or 99999 for all)
+        user_id: Authenticated user ID (from session)
+
+    Returns:
+        Transaction counts by blockchain over time buckets
+    """
+    try:
+        # Check if demo user
+        from database import get_username_by_user_id
+        username = await get_username_by_user_id(user_id)
+        if await is_demo_user(username):
+            logger.info(f"Demo mode: Returning demo transaction analytics for user {user_id}")
+            return await get_demo_transaction_analytics(user_id, days)
+        # Get all transactions for the time period
+        transactions = await transaction_history_service.get_transactions(
+            user_id, days
+        )
+
+        if not transactions:
+            return {
+                'success': True,
+                'period': f"{days} days" if days < 99999 else "all time",
+                'buckets': [],
+                'chains': {}
+            }
+
+        # Determine bucket size based on time period
+        if days <= 30:
+            bucket_format = '%Y-%m-%d'  # Daily buckets
+            bucket_label = 'day'
+        elif days <= 365:
+            bucket_format = '%Y-W%U'  # Weekly buckets
+            bucket_label = 'week'
+        else:
+            bucket_format = '%Y-%m'  # Monthly buckets
+            bucket_label = 'month'
+
+        # Group transactions by blockchain and time bucket
+        from collections import defaultdict
+        chain_buckets = defaultdict(lambda: defaultdict(int))
+        all_buckets = set()
+
+        for tx in transactions:
+            chain = tx.get('blockchain', 'unknown')
+            tx_time = tx.get('tx_time')
+
+            if not tx_time:
+                continue
+
+            # Parse timestamp
+            if isinstance(tx_time, str):
+                tx_dt = datetime.fromisoformat(tx_time.replace('Z', '+00:00'))
+            else:
+                tx_dt = tx_time
+
+            # Create bucket key
+            bucket_key = tx_dt.strftime(bucket_format)
+            all_buckets.add(bucket_key)
+            chain_buckets[chain][bucket_key] += 1
+
+        # Sort buckets chronologically
+        sorted_buckets = sorted(list(all_buckets))
+
+        # Build response with aligned data for each chain
+        chains_data = {}
+        for chain in chain_buckets.keys():
+            chain_counts = []
+            for bucket in sorted_buckets:
+                chain_counts.append(chain_buckets[chain].get(bucket, 0))
+            chains_data[chain] = chain_counts
+
+        # Format bucket labels for display
+        display_buckets = []
+        for bucket in sorted_buckets:
+            if bucket_label == 'day':
+                display_buckets.append(bucket)
+            elif bucket_label == 'week':
+                # Convert week format to readable
+                year, week = bucket.split('-W')
+                display_buckets.append(f"{year}-W{week}")
+            else:
+                # Month format
+                display_buckets.append(bucket)
+
+        return {
+            'success': True,
+            'period': f"{days} days" if days < 99999 else "all time",
+            'bucket_type': bucket_label,
+            'buckets': display_buckets,
+            'chains': chains_data
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting transaction analytics: {e}")
         raise HTTPException(status_code=500, detail=str(e))

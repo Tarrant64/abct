@@ -22,6 +22,7 @@ from database import (
     delete_api_rate_limit, get_all_api_rate_limits
 )
 from auth_utils import verify_session
+from services.http_client import get_client
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 logger = logging.getLogger(__name__)
@@ -613,34 +614,34 @@ async def test_api(api_id: str):
     try:
         if api_id == "blockfrost":
             import httpx
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    "https://cardano-mainnet.blockfrost.io/api/v0/health",
-                    headers={"project_id": api_key},
-                    timeout=10.0
-                )
-                success = response.status_code == 200
-                error = None if success else f"Status {response.status_code}"
+            client = get_client("api_test", timeout=30.0)
+            response = await client.get(
+                "https://cardano-mainnet.blockfrost.io/api/v0/health",
+                headers={"project_id": api_key},
+                timeout=10.0
+            )
+            success = response.status_code == 200
+            error = None if success else f"Status {response.status_code}"
 
         elif api_id == "alchemy":
             import httpx
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"https://eth-mainnet.g.alchemy.com/v2/{api_key}",
-                    timeout=10.0
-                )
-                success = response.status_code == 200
-                error = None if success else f"Status {response.status_code}"
+            client = get_client("api_test", timeout=30.0)
+            response = await client.get(
+                f"https://eth-mainnet.g.alchemy.com/v2/{api_key}",
+                timeout=10.0
+            )
+            success = response.status_code == 200
+            error = None if success else f"Status {response.status_code}"
 
         elif api_id == "helius":
             import httpx
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"https://api.helius.xyz/v0/addresses/11111111111111111111111111111111/balances?api-key={api_key}",
-                    timeout=10.0
-                )
-                success = response.status_code == 200
-                error = None if success else f"Status {response.status_code}"
+            client = get_client("api_test", timeout=30.0)
+            response = await client.get(
+                f"https://api.helius.xyz/v0/addresses/11111111111111111111111111111111/balances?api-key={api_key}",
+                timeout=10.0
+            )
+            success = response.status_code == 200
+            error = None if success else f"Status {response.status_code}"
 
         else:
             # Generic - just confirm we have a key

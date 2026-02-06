@@ -108,8 +108,14 @@ CERTS_DIR = DATA_DIR / "certs"
 DEFAULT_CERT_PATH = CERTS_DIR / "server.crt"
 DEFAULT_KEY_PATH = CERTS_DIR / "server.key"
 
-# Cache settings (in seconds)
-BALANCE_CACHE_TTL = 300  # 5 minutes
+# Cache TTL Tiers (in seconds)
+CACHE_TTL_HOT = 300         # 5 minutes - prices, exchange balances, wallet balances
+CACHE_TTL_WARM = 3600       # 1 hour - portfolio analytics, charts, asset breakdowns
+CACHE_TTL_COLD = 86400      # 24 hours - NFT data, DeFi positions
+CACHE_TTL_PERSISTENT = 604800  # 7 days - portfolio summary, native assets
+
+# Legacy alias
+BALANCE_CACHE_TTL = CACHE_TTL_HOT
 
 # NFT Image Cache Settings
 NFT_IMAGE_CACHE_ENABLED = os.getenv("NFT_IMAGE_CACHE_ENABLED", "false").lower() == "true"

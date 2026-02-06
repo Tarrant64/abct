@@ -179,6 +179,10 @@ async def _migrate_add_user_id_columns(db):
 async def init_db():
     """Initialize the SQLite database with required tables."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
+        # Enable WAL mode for better concurrent read performance
+        await db.execute("PRAGMA journal_mode=WAL")
+        await db.execute("PRAGMA synchronous=NORMAL")
+
         # Users table (created by auth system, but ensure it exists)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS users (
@@ -222,6 +226,12 @@ async def init_db():
         await db.execute("""
             CREATE INDEX IF NOT EXISTS idx_wallets_user_id
             ON wallets(user_id)
+        """)
+
+        # Composite index for common wallet queries filtered by blockchain
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_wallets_user_blockchain
+            ON wallets(user_id, blockchain)
         """)
 
         # Balances table (native currency)
@@ -2246,3 +2256,18 @@ async def cleanup_expired_sessions():
         now = datetime.utcnow().isoformat()
         await db.execute("DELETE FROM sessions WHERE expires_at < ?", (now,))
         await db.commit()
+
+
+async def cleanup_expired_cache():
+    """Remove expired cache entries from the database.
+
+    Returns:
+        Number of rows deleted
+    """
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute(
+            "DELETE FROM cache WHERE expires_at < datetime('now')"
+        )
+        deleted = cursor.rowcount
+        await db.commit()
+        return deleted

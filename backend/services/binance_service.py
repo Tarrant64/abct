@@ -15,6 +15,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import BINANCE_API_KEY, BINANCE_API_SECRET
+from services.http_client import get_client
 
 logger = logging.getLogger(__name__)
 
@@ -63,10 +64,10 @@ class BinanceService:
                 "X-MBX-APIKEY": self.api_key
             }
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(url, headers=headers)
-                response.raise_for_status()
-                return response.json()
+            client = get_client("binance", timeout=30.0)
+            response = await client.get(url, headers=headers)
+            response.raise_for_status()
+            return response.json()
 
         except httpx.HTTPStatusError as e:
             logger.error(f"Binance API HTTP error: {e.response.status_code} - {e.response.text}")
