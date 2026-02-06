@@ -14,12 +14,13 @@ from services.demo_defi_service import demo_defi_service
 from database import get_all_wallets, get_cache, set_cache, get_username_by_user_id
 from middleware.demo_mode import is_demo_user
 from auth_utils import verify_session
+from config import CACHE_TTL_COLD
 
 router = APIRouter(prefix="/defi", tags=["defi"])
 
-# Cache TTL in seconds - very long to only refresh on demand
-STAKING_CACHE_TTL = 86400 * 30  # 30 days - essentially persistent until manual refresh
-DEFI_SUMMARY_CACHE_TTL = 86400 * 30  # 30 days - essentially persistent until manual refresh
+# Cache TTL in seconds - refresh daily (DeFi positions don't change that frequently)
+STAKING_CACHE_TTL = CACHE_TTL_COLD  # 24 hours
+DEFI_SUMMARY_CACHE_TTL = CACHE_TTL_COLD  # 24 hours
 
 
 @router.get("/protocols")

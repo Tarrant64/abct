@@ -19,6 +19,7 @@ from database import (
 from services.pricing import pricing_service
 from middleware.auth import verify_admin
 from auth_utils import verify_session
+from services.http_client import get_client
 
 router = APIRouter(prefix="/custom-tokens", tags=["custom-tokens"])
 
@@ -198,39 +199,40 @@ async def lookup_cardano_token(policy_id: str, asset_name: str = "") -> dict:
         # Build asset ID
         asset_id = policy_id + asset_name if asset_name else policy_id
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            # Try Blockfrost for token info
-            response = await client.get(
-                f"{BLOCKFROST_BASE_URL}/assets/{asset_id}",
-                headers={"project_id": BLOCKFROST_API_KEY}
-            )
+        client = get_client("blockfrost", timeout=30.0)
 
-            if response.status_code == 200:
-                data = response.json()
-                metadata = data.get('onchain_metadata', {})
-                token_info = {
-                    'policy_id': data.get('policy_id'),
-                    'asset_name': data.get('asset_name'),
-                    'name': metadata.get('name') or data.get('asset_name'),
-                    'ticker': metadata.get('ticker'),
-                    'decimals': metadata.get('decimals', 0),
-                    'description': metadata.get('description'),
-                }
+        # Try Blockfrost for token info
+        response = await client.get(
+            f"{BLOCKFROST_BASE_URL}/assets/{asset_id}",
+            headers={"project_id": BLOCKFROST_API_KEY}
+        )
 
-                # Try to get price from our pricing service
-                ticker = token_info.get('ticker')
-                if ticker:
-                    try:
-                        prices = await pricing_service.get_all_tracked_prices()
-                        if ticker.upper() in prices:
-                            token_info['price_usd'] = prices[ticker.upper()].get('usd', 0)
-                    except:
-                        pass
+        if response.status_code == 200:
+            data = response.json()
+            metadata = data.get('onchain_metadata', {})
+            token_info = {
+                'policy_id': data.get('policy_id'),
+                'asset_name': data.get('asset_name'),
+                'name': metadata.get('name') or data.get('asset_name'),
+                'ticker': metadata.get('ticker'),
+                'decimals': metadata.get('decimals', 0),
+                'description': metadata.get('description'),
+            }
 
-                return token_info
+            # Try to get price from our pricing service
+            ticker = token_info.get('ticker')
+            if ticker:
+                try:
+                    prices = await pricing_service.get_all_tracked_prices()
+                    if ticker.upper() in prices:
+                        token_info['price_usd'] = prices[ticker.upper()].get('usd', 0)
+                except:
+                    pass
 
-            elif response.status_code == 404:
-                return None
+            return token_info
+
+        elif response.status_code == 404:
+            return None
 
     except Exception as e:
         print(f"Error looking up Cardano token: {e}")

@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import ALCHEMY_BASE_URL
 from database import get_all_wallets, get_cache, set_cache
 from services.api_key_manager import APIKeyManager
+from services.http_client import get_client
 
 logger = logging.getLogger(__name__)
 
@@ -63,28 +64,28 @@ class EthereumNFTService(APIKeyManager):
 
         api_key = await self.get_api_key()
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                params = {
-                    'owner': address,
-                    'withMetadata': 'true',
-                    'excludeFilters[]': 'SPAM',
-                    'pageSize': 100
-                }
+            client = get_client("alchemy", timeout=30.0)
+            params = {
+                'owner': address,
+                'withMetadata': 'true',
+                'excludeFilters[]': 'SPAM',
+                'pageSize': 100
+            }
 
-                if page_key:
-                    params['pageKey'] = page_key
+            if page_key:
+                params['pageKey'] = page_key
 
-                response = await client.get(
-                    f"{self.base_url}/{api_key}/getNFTsForOwner",
-                    params=params
-                )
+            response = await client.get(
+                f"{self.base_url}/{api_key}/getNFTsForOwner",
+                params=params
+            )
 
-                if response.status_code != 200:
-                    logger.error(f"Alchemy API error: {response.status_code} - {response.text}")
-                    return None
+            if response.status_code != 200:
+                logger.error(f"Alchemy API error: {response.status_code} - {response.text}")
+                return None
 
-                data = response.json()
-                return data
+            data = response.json()
+            return data
 
         except Exception as e:
             logger.error(f"Error fetching Ethereum NFTs: {e}")

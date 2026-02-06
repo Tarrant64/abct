@@ -3,6 +3,7 @@ Exchange Router - API endpoints for cryptocurrency exchange integrations.
 """
 
 from fastapi import APIRouter, HTTPException, Query, Depends
+import asyncio
 import logging
 import sys
 import os
@@ -27,7 +28,8 @@ from auth_utils import verify_session
 router = APIRouter(prefix="/exchanges", tags=["exchanges"])
 
 # Cache TTL in seconds
-EXCHANGE_CACHE_TTL = 300  # 5 minutes for exchange data
+from config import CACHE_TTL_HOT
+EXCHANGE_CACHE_TTL = CACHE_TTL_HOT  # 5 minutes for exchange data
 
 # Minimum USD value threshold for displaying assets
 MIN_USD_VALUE = 1.00
@@ -68,7 +70,7 @@ async def get_exchange_status():
     return {
         "exchanges": {
             "coinbase": {
-                "configured": coinbase_service.is_configured(),
+                "configured": await coinbase_service.is_configured(),
                 "name": "Coinbase"
             },
             "binance": {
@@ -252,7 +254,11 @@ async def get_all_exchanges_summary(user_id: int = Depends(verify_session)):
     ]
 
     for service, name, get_func in exchanges:
-        if service.is_configured():
+        # Handle both sync and async is_configured (coinbase is async, others sync)
+        configured = service.is_configured()
+        if asyncio.iscoroutine(configured):
+            configured = await configured
+        if configured:
             try:
                 exchange_data = await get_func(user_id=user_id)
                 result["exchanges"].append({
@@ -467,7 +473,7 @@ async def get_all_exchanges(user_id: int = Depends(verify_session), refresh: boo
     total_assets = 0
 
     # Coinbase
-    if coinbase_service.is_configured():
+    if await coinbase_service.is_configured():
         try:
             data = await get_coinbase_portfolio(user_id=user_id, refresh=refresh)
             all_exchanges.append(data)

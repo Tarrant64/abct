@@ -13,6 +13,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.api_key_manager import APIKeyManager
+from services.http_client import get_client
 
 logger = logging.getLogger(__name__)
 
@@ -57,17 +58,17 @@ class NMKRService(APIKeyManager):
 
             url = f"{self.base_url}/GetNftDetails/{asset_id}"
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(url, headers=headers)
+            client = get_client("nmkr", timeout=30.0)
+            response = await client.get(url, headers=headers)
 
-                if response.status_code == 200:
-                    return response.json()
-                elif response.status_code == 404:
-                    logger.debug(f"NFT not found in NMKR: {asset_id}")
-                    return None
-                else:
-                    logger.error(f"NMKR API error: {response.status_code}")
-                    return None
+            if response.status_code == 200:
+                return response.json()
+            elif response.status_code == 404:
+                logger.debug(f"NFT not found in NMKR: {asset_id}")
+                return None
+            else:
+                logger.error(f"NMKR API error: {response.status_code}")
+                return None
 
         except Exception as e:
             logger.error(f"Error fetching NFT from NMKR: {e}")

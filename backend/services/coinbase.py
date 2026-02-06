@@ -13,6 +13,7 @@ import time
 from typing import Dict, List, Optional
 import sys
 import os
+from services.http_client import get_client
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -184,20 +185,21 @@ class CoinbaseService:
 
             logger.info(f"Coinbase CDP API request: {method} {path}")
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                url = f"{COINBASE_API_BASE}{path}"
-                if method == "GET":
-                    response = await client.get(url, headers=headers, params=params)
-                else:
-                    response = await client.request(method, url, headers=headers, params=params)
+            client = get_client("coinbase_api", timeout=30.0)
 
-                logger.info(f"Coinbase API response: {response.status_code}")
+            url = f"{COINBASE_API_BASE}{path}"
+            if method == "GET":
+                response = await client.get(url, headers=headers, params=params)
+            else:
+                response = await client.request(method, url, headers=headers, params=params)
 
-                if response.status_code == 200:
-                    return response.json()
-                else:
-                    logger.error(f"Coinbase API error: {response.status_code} - {response.text}")
-                    return None
+            logger.info(f"Coinbase API response: {response.status_code}")
+
+            if response.status_code == 200:
+                return response.json()
+            else:
+                logger.error(f"Coinbase API error: {response.status_code} - {response.text}")
+                return None
 
         except Exception as e:
             logger.error(f"Coinbase API request failed: {e}")
@@ -396,11 +398,11 @@ class CoinbaseService:
         path = f"/v2/prices/{currency_pair}/spot"
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(f"{COINBASE_API_BASE}{path}")
-                if response.status_code == 200:
-                    data = response.json()
-                    return float(data.get("data", {}).get("amount", 0))
+            client = get_client("coinbase_api", timeout=30.0)
+            response = await client.get(f"{COINBASE_API_BASE}{path}")
+            if response.status_code == 200:
+                data = response.json()
+                return float(data.get("data", {}).get("amount", 0))
         except Exception as e:
             logger.error(f"Error getting spot price for {currency_pair}: {e}")
 

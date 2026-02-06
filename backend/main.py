@@ -35,6 +35,7 @@ Usage:
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
 from datetime import datetime
 import logging
@@ -86,6 +87,17 @@ async def lifespan(app: FastAPI):
     startup_status["database"] = "ready"
     logger.info("Database initialized")
     await log_service.info("main", "Main database initialized")
+
+    # Clean up expired cache entries
+    logger.info("Cleaning up expired cache entries...")
+    try:
+        from database import cleanup_expired_cache
+        deleted_cache = await cleanup_expired_cache()
+        logger.info(f"Cleaned up {deleted_cache} expired cache entries")
+        await log_service.info("main", f"Expired cache cleanup: {deleted_cache} entries removed")
+    except Exception as e:
+        logger.warning(f"Expired cache cleanup failed: {e}")
+        await log_service.warning("main", f"Expired cache cleanup failed: {e}")
 
     # Clean up old API call logs (keep last 7 days)
     logger.info("Cleaning up old API call logs...")
@@ -161,6 +173,15 @@ async def lifespan(app: FastAPI):
                     logger.info(f"Skipping cache warm: {warm_reason}")
             except Exception as cache_error:
                 logger.warning(f"Could not warm portfolio cache: {cache_error}")
+
+            # Warm price cache for faster initial page loads
+            try:
+                from services.pricing import pricing_service
+                logger.info("Warming price cache...")
+                await pricing_service.get_prices(['ADA', 'BTC', 'ETH', 'SOL', 'MATIC'])
+                logger.info("Price cache warmed successfully")
+            except Exception as price_error:
+                logger.warning(f"Could not warm price cache: {price_error}")
 
         except Exception as e:
             startup_status["snapshot_check"] = "error"
@@ -280,6 +301,11 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down NFT scheduler...")
     await nft_scheduler.stop()
 
+    # Shutdown: Close all shared HTTP clients
+    logger.info("Closing shared HTTP clients...")
+    from services.http_client import close_all
+    await close_all()
+
 app = FastAPI(
     title="ABCT - A Better Crypto Tracker",
     description="""
@@ -342,6 +368,10 @@ if RATE_LIMITING_AVAILABLE:
     logger.info("Rate limiting enabled (in-memory storage)")
 else:
     logger.warning("Rate limiting not available - install slowapi for rate limiting")
+
+# 3. GZip compression for responses (reduces bandwidth for large JSON responses)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+logger.info("GZip compression enabled (minimum 1000 bytes)")
 
 
 # Custom exception handlers for CRIT-003

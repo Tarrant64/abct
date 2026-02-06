@@ -6076,11 +6076,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ========================================
     // INSTANT LOAD - Show cached data first
     // ========================================
-    // Load prices first for USD calculations
-    await loadPrices();
+    // Load prices and portfolio summary in parallel (both come from backend cache)
+    const [pricesResult, portfolioResult] = await Promise.allSettled([
+        loadPrices(),
+        loadPortfolioSummary()
+    ]);
 
-    // Load portfolio summary from cache (instant)
-    await loadPortfolioSummary();
+    if (pricesResult.status === 'rejected') {
+        console.error('[Dashboard] Failed to load prices:', pricesResult.reason);
+    }
+    if (portfolioResult.status === 'rejected') {
+        console.error('[Dashboard] Failed to load portfolio summary:', portfolioResult.reason);
+    }
 
     // ========================================
     // BACKGROUND UPDATES - Fetch fresh data
@@ -6102,8 +6109,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         preFetchAssetBreakdowns();
     });
 
-    // Load NFTs for the default chain (non-blocking)
-    loadNFTs();
+    // Lazy-load NFT list when section scrolls into view (saves network requests on initial load)
+    // Note: loadAllNftSummaries() above still runs eagerly to get NFT values for portfolio total
+    const nftSection = document.querySelector('.nfts-section');
+    if (nftSection) {
+        const nftObserver = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting) {
+                console.log('[Dashboard] NFT section visible - loading NFT list');
+                loadNFTs();
+                nftObserver.disconnect();
+            }
+        }, { threshold: 0.1 });
+        nftObserver.observe(nftSection);
+    }
 });
 
 // ===========================
@@ -6195,23 +6213,21 @@ async function fetchDeFiLlamaMetrics(blockchain) {
 
         let mcap = null, tvl = null, stablecoins = null, volume = null;
 
-        // First check if we already have market cap from our price data
-        const blockchainPriceMap = {
-            'cardano': 'cardano',
-            'ethereum': 'ethereum',
-            'bitcoin': 'bitcoin',
-            'solana': 'solana',
-            'polygon': 'polygon',
-            'base': 'ethereum' // Base uses ETH
+        // Use market cap from backend price data (loaded via /prices/all endpoint)
+        // priceData is keyed by symbol (ADA, BTC, ETH, etc.) and includes market_cap
+        const blockchainToSymbol = {
+            'cardano': 'ADA',
+            'ethereum': 'ETH',
+            'bitcoin': 'BTC',
+            'solana': 'SOL',
+            'polygon': 'MATIC',
+            'base': 'ETH' // Base chain uses ETH
         };
 
-        const priceKey = blockchainPriceMap[blockchain];
-        if (priceKey && window.portfolioData && window.portfolioData.prices) {
-            const priceInfo = window.portfolioData.prices[priceKey];
-            if (priceInfo && priceInfo.market_cap) {
-                mcap = priceInfo.market_cap;
-                console.log(`Using cached market cap for ${blockchain}:`, mcap);
-            }
+        const priceSymbol = blockchainToSymbol[blockchain];
+        if (priceSymbol && priceData[priceSymbol] && priceData[priceSymbol].market_cap) {
+            mcap = priceData[priceSymbol].market_cap;
+            console.log(`Using backend market cap for ${blockchain} (${priceSymbol}):`, mcap);
         }
 
         // Fetch TVL data
@@ -6262,36 +6278,13 @@ async function fetchDeFiLlamaMetrics(blockchain) {
             stablecoins = 'N/A';
         }
 
-        // Fetch market cap - Try CoinGecko first, then CMC as fallback
-        try {
-            const coinGeckoIds = {
-                'cardano': 'cardano',
-                'ethereum': 'ethereum',
-                'bitcoin': 'bitcoin',
-                'solana': 'solana',
-                'polygon': 'matic-network',
-                'base': 'ethereum' // Base chain uses ETH
-            };
-
-            const coinId = coinGeckoIds[blockchain];
-            if (coinId) {
-                // Try CoinGecko first
-                try {
-                    const cgResponse = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd&include_market_cap=true`);
-                    if (cgResponse.ok) {
-                        const cgData = await cgResponse.json();
-                        console.log('CoinGecko data:', cgData);
-                        if (cgData[coinId] && cgData[coinId].usd_market_cap) {
-                            mcap = cgData[coinId].usd_market_cap;
-                        }
-                    }
-                } catch (cgError) {
-                    console.warn('CoinGecko market cap fetch failed for', blockchain, '- using default N/A');
-                    // CMC fallback removed - endpoint not configured
-                }
-            }
-        } catch (e) {
-            console.error('Market cap fetch error:', e);
+        // Market cap: Use backend price data (already set above from priceData).
+        // No direct CoinGecko call needed - backend /prices/all already fetches market_cap
+        // from CoinGecko/CMC and caches it, avoiding frontend 429 rate limiting.
+        if (!mcap) {
+            console.log(`No market cap available from backend for ${blockchain} - will show N/A`);
+            // TODO: If market cap is consistently missing, add a dedicated backend endpoint
+            // rather than making direct CoinGecko calls from the frontend.
         }
 
         // Fetch 24h volume from DeFillama DEX aggregator

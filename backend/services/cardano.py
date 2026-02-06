@@ -11,6 +11,7 @@ from database import get_token_metadata, save_token_metadata, get_api_key
 # Import API tracker
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'middleware'))
 from api_tracker import get_blockfrost_client, get_cexplorer_client
+from services.http_client import get_client
 
 logger = logging.getLogger(__name__)
 
@@ -181,43 +182,43 @@ class CardanoService:
     async def _get_address_cexplorer(self, address: str) -> Optional[dict]:
         """Fetch address data from cexplorer.io API as fallback."""
         try:
-            async with httpx.AsyncClient() as client:
-                # cexplorer API endpoint for address info
-                response = await client.get(
-                    f"{CEXPLORER_BASE_URL}/address/{address}/balance",
-                    headers=await self._get_cexplorer_headers(),
-                    timeout=30.0
-                )
+            client = get_client("blockfrost", timeout=30.0)
+            # cexplorer API endpoint for address info
+            response = await client.get(
+                f"{CEXPLORER_BASE_URL}/address/{address}/balance",
+                headers=await self._get_cexplorer_headers(),
+                timeout=30.0
+            )
 
-                if response.status_code == 404:
-                    return {
-                        'address': address,
-                        'balance_lovelace': '0',
-                        'balance_ada': '0',
-                        'native_assets': [],
-                        'source': 'cexplorer'
-                    }
-
-                if response.status_code != 200:
-                    logger.error(f"cexplorer error: {response.status_code} - {response.text}")
-                    return None
-
-                data = response.json()
-
-                # cexplorer returns balance in lovelace
-                balance_lovelace = str(data.get('balance', 0))
-                balance_ada = str(int(balance_lovelace) / 1_000_000)
-
-                # Get native assets separately
-                native_assets = await self._get_assets_cexplorer(client, address)
-
+            if response.status_code == 404:
                 return {
                     'address': address,
-                    'balance_lovelace': balance_lovelace,
-                    'balance_ada': balance_ada,
-                    'native_assets': native_assets,
+                    'balance_lovelace': '0',
+                    'balance_ada': '0',
+                    'native_assets': [],
                     'source': 'cexplorer'
                 }
+
+            if response.status_code != 200:
+                logger.error(f"cexplorer error: {response.status_code} - {response.text}")
+                return None
+
+            data = response.json()
+
+            # cexplorer returns balance in lovelace
+            balance_lovelace = str(data.get('balance', 0))
+            balance_ada = str(int(balance_lovelace) / 1_000_000)
+
+            # Get native assets separately
+            native_assets = await self._get_assets_cexplorer(client, address)
+
+            return {
+                'address': address,
+                'balance_lovelace': balance_lovelace,
+                'balance_ada': balance_ada,
+                'native_assets': native_assets,
+                'source': 'cexplorer'
+            }
 
         except httpx.TimeoutException:
             logger.error(f"cexplorer timeout for address {address[:20]}...")
@@ -259,17 +260,17 @@ class CardanoService:
     async def get_stake_address(self, address: str) -> Optional[str]:
         """Get the stake address associated with a payment address."""
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{BLOCKFROST_BASE_URL}/addresses/{address}",
-                    headers=await self._get_blockfrost_headers(),
-                    timeout=30.0
-                )
+            client = get_client("blockfrost", timeout=30.0)
+            response = await client.get(
+                f"{BLOCKFROST_BASE_URL}/addresses/{address}",
+                headers=await self._get_blockfrost_headers(),
+                timeout=30.0
+            )
 
-                if response.status_code == 200:
-                    data = response.json()
-                    return data.get('stake_address')
-                return None
+            if response.status_code == 200:
+                data = response.json()
+                return data.get('stake_address')
+            return None
 
         except Exception as e:
             logger.error(f"Error getting stake address: {e}")
@@ -278,24 +279,24 @@ class CardanoService:
     async def get_asset_metadata(self, asset_id: str) -> Optional[dict]:
         """Get metadata for a native asset."""
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{BLOCKFROST_BASE_URL}/assets/{asset_id}",
-                    headers=await self._get_blockfrost_headers(),
-                    timeout=30.0
-                )
+            client = get_client("blockfrost", timeout=30.0)
+            response = await client.get(
+                f"{BLOCKFROST_BASE_URL}/assets/{asset_id}",
+                headers=await self._get_blockfrost_headers(),
+                timeout=30.0
+            )
 
-                if response.status_code == 200:
-                    data = response.json()
-                    return {
-                        'asset_id': asset_id,
-                        'policy_id': data.get('policy_id'),
-                        'asset_name': data.get('asset_name'),
-                        'fingerprint': data.get('fingerprint'),
-                        'quantity': data.get('quantity'),
-                        'metadata': data.get('onchain_metadata') or data.get('metadata')
-                    }
-                return None
+            if response.status_code == 200:
+                data = response.json()
+                return {
+                    'asset_id': asset_id,
+                    'policy_id': data.get('policy_id'),
+                    'asset_name': data.get('asset_name'),
+                    'fingerprint': data.get('fingerprint'),
+                    'quantity': data.get('quantity'),
+                    'metadata': data.get('onchain_metadata') or data.get('metadata')
+                }
+            return None
 
         except Exception as e:
             logger.error(f"Error getting asset metadata: {e}")
@@ -366,39 +367,39 @@ class CardanoService:
         Get account info for a stake address including rewards and pool delegation.
         """
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{BLOCKFROST_BASE_URL}/accounts/{stake_address}",
-                    headers=await self._get_blockfrost_headers(),
-                    timeout=30.0
-                )
+            client = get_client("blockfrost", timeout=30.0)
+            response = await client.get(
+                f"{BLOCKFROST_BASE_URL}/accounts/{stake_address}",
+                headers=await self._get_blockfrost_headers(),
+                timeout=30.0
+            )
 
-                if response.status_code == 404:
-                    return {
-                        'stake_address': stake_address,
-                        'active': False,
-                        'controlled_amount': '0',
-                        'rewards_sum': '0',
-                        'withdrawable_amount': '0',
-                        'pool_id': None
-                    }
-
-                if response.status_code != 200:
-                    logger.error(f"Blockfrost account error: {response.status_code} - {response.text}")
-                    return None
-
-                data = response.json()
+            if response.status_code == 404:
                 return {
                     'stake_address': stake_address,
-                    'active': data.get('active', False),
-                    'controlled_amount': data.get('controlled_amount', '0'),
-                    'controlled_ada': str(int(data.get('controlled_amount', 0)) / 1_000_000),
-                    'rewards_sum': data.get('rewards_sum', '0'),
-                    'rewards_ada': str(int(data.get('rewards_sum', 0)) / 1_000_000),
-                    'withdrawable_amount': data.get('withdrawable_amount', '0'),
-                    'withdrawable_ada': str(int(data.get('withdrawable_amount', 0)) / 1_000_000),
-                    'pool_id': data.get('pool_id')
+                    'active': False,
+                    'controlled_amount': '0',
+                    'rewards_sum': '0',
+                    'withdrawable_amount': '0',
+                    'pool_id': None
                 }
+
+            if response.status_code != 200:
+                logger.error(f"Blockfrost account error: {response.status_code} - {response.text}")
+                return None
+
+            data = response.json()
+            return {
+                'stake_address': stake_address,
+                'active': data.get('active', False),
+                'controlled_amount': data.get('controlled_amount', '0'),
+                'controlled_ada': str(int(data.get('controlled_amount', 0)) / 1_000_000),
+                'rewards_sum': data.get('rewards_sum', '0'),
+                'rewards_ada': str(int(data.get('rewards_sum', 0)) / 1_000_000),
+                'withdrawable_amount': data.get('withdrawable_amount', '0'),
+                'withdrawable_ada': str(int(data.get('withdrawable_amount', 0)) / 1_000_000),
+                'pool_id': data.get('pool_id')
+            }
 
         except Exception as e:
             logger.error(f"Error getting stake account info: {e}")
@@ -413,34 +414,35 @@ class CardanoService:
             addresses = []
             page = 1
 
-            async with httpx.AsyncClient() as client:
-                while True:
-                    response = await client.get(
-                        f"{BLOCKFROST_BASE_URL}/accounts/{stake_address}/addresses",
-                        headers=await self._get_blockfrost_headers(),
-                        params={'page': page, 'count': 100},
-                        timeout=30.0
-                    )
+            client = get_client("blockfrost", timeout=30.0)
 
-                    if response.status_code == 404:
-                        return []
+            while True:
+                response = await client.get(
+                    f"{BLOCKFROST_BASE_URL}/accounts/{stake_address}/addresses",
+                    headers=await self._get_blockfrost_headers(),
+                    params={'page': page, 'count': 100},
+                    timeout=30.0
+                )
 
-                    if response.status_code != 200:
-                        logger.error(f"Blockfrost addresses error: {response.status_code}")
-                        return None
+                if response.status_code == 404:
+                    return []
 
-                    data = response.json()
-                    if not data:
-                        break
+                if response.status_code != 200:
+                    logger.error(f"Blockfrost addresses error: {response.status_code}")
+                    return None
 
-                    for addr_info in data:
-                        addresses.append(addr_info.get('address'))
+                data = response.json()
+                if not data:
+                    break
 
-                    # If we got fewer than 100, we've reached the end
-                    if len(data) < 100:
-                        break
+                for addr_info in data:
+                    addresses.append(addr_info.get('address'))
 
-                    page += 1
+                # If we got fewer than 100, we've reached the end
+                if len(data) < 100:
+                    break
+
+                page += 1
 
             return addresses
 
@@ -510,29 +512,29 @@ class CardanoService:
             return None
 
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{BLOCKFROST_BASE_URL}/pools/{pool_id}/metadata",
-                    headers=await self._get_blockfrost_headers(),
-                    timeout=30.0
-                )
+            client = get_client("blockfrost", timeout=30.0)
+            response = await client.get(
+                f"{BLOCKFROST_BASE_URL}/pools/{pool_id}/metadata",
+                headers=await self._get_blockfrost_headers(),
+                timeout=30.0
+            )
 
-                if response.status_code == 200:
-                    data = response.json()
-                    return {
-                        'pool_id': pool_id,
-                        'name': data.get('name', 'Unknown Pool'),
-                        'ticker': data.get('ticker', ''),
-                        'description': data.get('description', ''),
-                        'homepage': data.get('homepage', '')
-                    }
-                elif response.status_code == 404:
-                    return {
-                        'pool_id': pool_id,
-                        'name': 'Unknown Pool',
-                        'ticker': pool_id[:8] + '...'
-                    }
-                return None
+            if response.status_code == 200:
+                data = response.json()
+                return {
+                    'pool_id': pool_id,
+                    'name': data.get('name', 'Unknown Pool'),
+                    'ticker': data.get('ticker', ''),
+                    'description': data.get('description', ''),
+                    'homepage': data.get('homepage', '')
+                }
+            elif response.status_code == 404:
+                return {
+                    'pool_id': pool_id,
+                    'name': 'Unknown Pool',
+                    'ticker': pool_id[:8] + '...'
+                }
+            return None
 
         except Exception as e:
             logger.error(f"Error getting pool metadata: {e}")
@@ -541,36 +543,36 @@ class CardanoService:
     async def get_drep_delegation(self, stake_address: str) -> Optional[dict]:
         """Get DRep (Delegated Representative) delegation for a stake address."""
         try:
-            async with httpx.AsyncClient() as client:
-                # Blockfrost Conway governance endpoint
-                response = await client.get(
-                    f"{BLOCKFROST_BASE_URL}/accounts/{stake_address}",
-                    headers=await self._get_blockfrost_headers(),
-                    timeout=30.0
-                )
+            client = get_client("blockfrost", timeout=30.0)
+            # Blockfrost Conway governance endpoint
+            response = await client.get(
+                f"{BLOCKFROST_BASE_URL}/accounts/{stake_address}",
+                headers=await self._get_blockfrost_headers(),
+                timeout=30.0
+            )
 
-                if response.status_code != 200:
-                    return None
+            if response.status_code != 200:
+                return None
 
-                data = response.json()
-                drep_id = data.get('drep_id')
+            data = response.json()
+            drep_id = data.get('drep_id')
 
-                if not drep_id:
-                    return {
-                        'delegated': False,
-                        'drep_id': None,
-                        'drep_name': None
-                    }
-
-                # Try to get DRep metadata
-                drep_info = await self._get_drep_info(client, drep_id)
-
+            if not drep_id:
                 return {
-                    'delegated': True,
-                    'drep_id': drep_id,
-                    'drep_name': drep_info.get('name') if drep_info else None,
-                    'drep_type': self._classify_drep(drep_id)
+                    'delegated': False,
+                    'drep_id': None,
+                    'drep_name': None
                 }
+
+            # Try to get DRep metadata
+            drep_info = await self._get_drep_info(client, drep_id)
+
+            return {
+                'delegated': True,
+                'drep_id': drep_id,
+                'drep_name': drep_info.get('name') if drep_info else None,
+                'drep_type': self._classify_drep(drep_id)
+            }
 
         except Exception as e:
             logger.error(f"Error getting DRep delegation: {e}")

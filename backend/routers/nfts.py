@@ -25,6 +25,7 @@ from database import get_all_wallets, get_username_by_user_id
 from middleware.auth import verify_admin
 from middleware.demo_mode import is_demo_user
 from auth_utils import verify_session
+from services.http_client import get_client
 
 router = APIRouter(prefix="/nfts", tags=["nfts"])
 
@@ -1854,17 +1855,17 @@ async def get_nft_wall_details(
                     try:
                         from config import BLOCKFROST_API_KEY, BLOCKFROST_BASE_URL
                         import httpx
-                        async with httpx.AsyncClient(timeout=30.0) as client:
-                            response = await client.get(
-                                f"{BLOCKFROST_BASE_URL}/assets/{asset_id}",
-                                headers={'project_id': BLOCKFROST_API_KEY}
-                            )
-                            if response.status_code == 200:
-                                blockfrost_data = response.json()
-                                metadata = blockfrost_data  # This includes onchain_metadata
-                                logger.info(f"✓ Got metadata from Blockfrost for {asset_id[:20]}...")
-                            else:
-                                logger.warning(f"Blockfrost returned {response.status_code} for {asset_id[:20]}...")
+                        client = get_client("blockfrost", timeout=30.0)
+                        response = await client.get(
+                            f"{BLOCKFROST_BASE_URL}/assets/{asset_id}",
+                            headers={'project_id': BLOCKFROST_API_KEY}
+                        )
+                        if response.status_code == 200:
+                            blockfrost_data = response.json()
+                            metadata = blockfrost_data  # This includes onchain_metadata
+                            logger.info(f"✓ Got metadata from Blockfrost for {asset_id[:20]}...")
+                        else:
+                            logger.warning(f"Blockfrost returned {response.status_code} for {asset_id[:20]}...")
                     except Exception as e:
                         logger.error(f"Error fetching from Blockfrost: {e}")
 

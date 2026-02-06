@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Query, Depends, HTTPException
 from pydantic import BaseModel
+import asyncio
 import sys
 import os
 
@@ -30,8 +31,9 @@ class TokenTrackRequest(BaseModel):
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 
 # Cache TTL in seconds (7 days for portfolio so it persists between sessions, only cleared on manual refresh)
-PORTFOLIO_CACHE_TTL = 604800  # 7 days
-STAKE_CACHE_TTL = 3600  # 1 hour for stake address lookups
+from config import CACHE_TTL_PERSISTENT, CACHE_TTL_WARM, CACHE_TTL_HOT
+PORTFOLIO_CACHE_TTL = CACHE_TTL_PERSISTENT  # 7 days
+STAKE_CACHE_TTL = CACHE_TTL_WARM  # 1 hour for stake address lookups
 
 async def calculate_wallet_native_assets_value(wallet_id: int, blockchain: str, user_id: int):
     """Calculate total USD value of non-ignored native assets for a wallet."""
@@ -67,7 +69,7 @@ async def calculate_wallet_native_assets_value(wallet_id: int, blockchain: str, 
 
     # For Cardano, try to get TapTools data
     taptools_positions = {}
-    if blockchain == 'cardano' and taptools_wallet_service.is_configured() and assets:
+    if blockchain == 'cardano' and await taptools_wallet_service.is_configured() and assets:
         try:
             wallet_address = assets[0].get('wallet_address')
             if wallet_address:
@@ -164,23 +166,70 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
             'token_count': 0,
             'native_assets_value_usd': 0.0,
             'wallets': []
+        },
+        'algorand': {
+            'wallet_count': 0,
+            'total_algo': 0.0,
+            'asset_count': 0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
         }
     }
 
     # Track stake address groupings for Cardano
     stake_groups = {}  # stake_address -> list of wallets
 
-    for wallet in wallets:
+    # Fetch all wallet data in parallel (balances, assets, native values, stake addresses)
+    async def fetch_wallet_data(wallet):
+        """Fetch balance, assets, native value, and stake address for a single wallet."""
         blockchain = wallet['blockchain']
-        balance_info = await get_wallet_balance(wallet['id'])
-        assets = await get_wallet_assets(wallet['id'])
+        wallet_id = wallet['id']
+
+        # Build parallel tasks for this wallet
+        tasks = [
+            get_wallet_balance(wallet_id),
+            get_wallet_assets(wallet_id),
+            calculate_wallet_native_assets_value(wallet_id, blockchain, user_id),
+        ]
+        # For Cardano wallets, also fetch stake address in parallel
+        if blockchain == 'cardano':
+            tasks.append(cardano_service.get_stake_address(wallet['address']))
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        balance_info = results[0] if not isinstance(results[0], Exception) else None
+        assets = results[1] if not isinstance(results[1], Exception) else []
+        native_assets_value_usd = results[2] if not isinstance(results[2], Exception) else 0.0
+        stake_address = results[3] if len(results) > 3 and not isinstance(results[3], Exception) else None
+
+        return {
+            'wallet': wallet,
+            'blockchain': blockchain,
+            'balance_info': balance_info,
+            'assets': assets,
+            'native_assets_value_usd': native_assets_value_usd,
+            'stake_address': stake_address,
+        }
+
+    # Fetch all wallet data concurrently
+    wallet_data_list = await asyncio.gather(
+        *[fetch_wallet_data(w) for w in wallets],
+        return_exceptions=True
+    )
+
+    # Aggregate results sequentially (fast in-memory operations)
+    for wallet_data in wallet_data_list:
+        if isinstance(wallet_data, Exception):
+            continue  # Skip wallets that failed entirely
+
+        wallet = wallet_data['wallet']
+        blockchain = wallet_data['blockchain']
+        balance_info = wallet_data['balance_info']
+        assets = wallet_data['assets']
+        native_assets_value_usd = wallet_data['native_assets_value_usd']
+        stake_address = wallet_data['stake_address']
 
         balance = float(balance_info['amount']) if balance_info else 0.0
-
-        # Calculate native assets value for this wallet
-        native_assets_value_usd = await calculate_wallet_native_assets_value(
-            wallet['id'], blockchain, user_id
-        )
 
         wallet_summary = {
             'id': wallet['id'],
@@ -199,8 +248,6 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
             summary['cardano']['native_assets_value_usd'] += native_assets_value_usd
             wallet_summary['native_assets_count'] = len(assets)
 
-            # Get stake address for grouping
-            stake_address = await cardano_service.get_stake_address(wallet['address'])
             wallet_summary['stake_address'] = stake_address
 
             if stake_address:
@@ -268,6 +315,14 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
             wallet_summary['token_count'] = len(assets)
             summary['base']['wallets'].append(wallet_summary)
 
+        elif blockchain == 'algorand':
+            summary['algorand']['wallet_count'] += 1
+            summary['algorand']['total_algo'] += balance
+            summary['algorand']['asset_count'] += len(assets)
+            summary['algorand']['native_assets_value_usd'] += native_assets_value_usd
+            wallet_summary['asset_count'] = len(assets)
+            summary['algorand']['wallets'].append(wallet_summary)
+
     # Convert stake groups dict to list and round totals
     summary['cardano']['stake_groups'] = [
         {**group, 'total_ada': round(group['total_ada'], 6)}
@@ -284,6 +339,7 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
     summary['solana']['total_sol'] = round(summary['solana']['total_sol'], 9)
     summary['polygon']['total_matic'] = round(summary['polygon']['total_matic'], 6)
     summary['base']['total_eth'] = round(summary['base']['total_eth'], 8)
+    summary['algorand']['total_algo'] = round(summary['algorand']['total_algo'], 6)
 
     # Cache the result with timestamp
     from datetime import datetime
@@ -294,7 +350,7 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
     return summary
 
 # Cache TTL for native assets (7 days - tokens don't change often, only cleared on manual refresh)
-NATIVE_ASSETS_CACHE_TTL = 604800
+NATIVE_ASSETS_CACHE_TTL = CACHE_TTL_PERSISTENT  # 7 days
 
 @router.get("/assets")
 async def get_all_native_assets(user_id: int = Depends(verify_session), refresh: bool = Query(False, description="Force refresh cache")):
@@ -942,7 +998,7 @@ async def get_taptools_summary(user_id: int = Depends(verify_session)):
     wallets = await get_all_wallets(user_id=user_id)
     cardano_wallets = [w for w in wallets if w['blockchain'] == 'cardano']
 
-    if not taptools_wallet_service.is_configured():
+    if not await taptools_wallet_service.is_configured():
         return {
             'configured': False,
             'message': 'TapTools API key not configured'
@@ -1176,7 +1232,7 @@ async def get_portfolio_analytics(user_id: int = Depends(verify_session)):
     }
 
     # Cache for 1 hour (3600 seconds)
-    await set_cache(cache_key, result, ttl_seconds=3600, user_id=user_id)
+    await set_cache(cache_key, result, ttl_seconds=CACHE_TTL_WARM, user_id=user_id)
 
     return result
 
@@ -1279,8 +1335,8 @@ async def get_blockchain_asset_breakdown(
             }
         }
 
-        # Cache for 5 minutes (300 seconds)
-        await set_cache(cache_key, result, ttl_seconds=300, user_id=user_id)
+        # Cache for 1 hour (asset breakdowns don't change frequently)
+        await set_cache(cache_key, result, ttl_seconds=CACHE_TTL_WARM, user_id=user_id)
 
         return result
 
@@ -1406,7 +1462,7 @@ async def get_blockchain_price_chart(
         }
 
         # Cache for 1 hour (3600 seconds)
-        await set_cache(cache_key, result, ttl_seconds=3600, user_id=user_id)
+        await set_cache(cache_key, result, ttl_seconds=CACHE_TTL_WARM, user_id=user_id)
 
         return result
 

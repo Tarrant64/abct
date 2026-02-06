@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import HELIUS_RPC_URL
 from database import get_all_wallets, get_cache, set_cache
 from services.api_key_manager import APIKeyManager
+from services.http_client import get_client
 
 logger = logging.getLogger(__name__)
 
@@ -63,40 +64,40 @@ class SolanaNFTService(APIKeyManager):
 
         api_key = await self.get_api_key()
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                payload = {
-                    "jsonrpc": "2.0",
-                    "id": f"get-assets-{address}-{page}",
-                    "method": "getAssetsByOwner",
-                    "params": {
-                        "ownerAddress": address,
-                        "page": page,
-                        "limit": 1000,
-                        "displayOptions": {
-                            "showFungible": False,
-                            "showNativeBalance": False,
-                            "showCollectionMetadata": True,
-                            "showUnverifiedCollections": True
-                        }
+            client = get_client("helius", timeout=30.0)
+            payload = {
+                "jsonrpc": "2.0",
+                "id": f"get-assets-{address}-{page}",
+                "method": "getAssetsByOwner",
+                "params": {
+                    "ownerAddress": address,
+                    "page": page,
+                    "limit": 1000,
+                    "displayOptions": {
+                        "showFungible": False,
+                        "showNativeBalance": False,
+                        "showCollectionMetadata": True,
+                        "showUnverifiedCollections": True
                     }
                 }
+            }
 
-                response = await client.post(
-                    f"{self.rpc_url}/?api-key={api_key}",
-                    json=payload
-                )
+            response = await client.post(
+                f"{self.rpc_url}/?api-key={api_key}",
+                json=payload
+            )
 
-                if response.status_code != 200:
-                    logger.error(f"Helius DAS API error: {response.status_code} - {response.text}")
-                    return None
+            if response.status_code != 200:
+                logger.error(f"Helius DAS API error: {response.status_code} - {response.text}")
+                return None
 
-                data = response.json()
+            data = response.json()
 
-                if "error" in data:
-                    logger.error(f"Helius DAS API error: {data['error']}")
-                    return None
+            if "error" in data:
+                logger.error(f"Helius DAS API error: {data['error']}")
+                return None
 
-                return data.get("result", {})
+            return data.get("result", {})
 
         except Exception as e:
             logger.error(f"Error fetching Solana NFTs: {e}")

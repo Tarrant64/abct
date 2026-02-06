@@ -35,6 +35,7 @@ from database import (
 )
 from auth_utils import verify_session
 from middleware.demo_mode import is_demo_user
+from services.http_client import get_client
 
 router = APIRouter(prefix="/api/mobile", tags=["mobile"])
 logger = logging.getLogger(__name__)
@@ -700,20 +701,20 @@ async def fetch_ohlcv_coingecko(symbol: str, days: int) -> Optional[List[List]]:
         return None
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(
-                f"https://api.coingecko.com/api/v3/coins/{coin_id}/ohlc",
-                params={
-                    "vs_currency": "usd",
-                    "days": days
-                }
-            )
+        client = get_client("coingecko", timeout=30.0)
+        response = await client.get(
+            f"https://api.coingecko.com/api/v3/coins/{coin_id}/ohlc",
+            params={
+                "vs_currency": "usd",
+                "days": days
+            }
+        )
 
-            if response.status_code == 200:
-                return response.json()
-            else:
-                logger.warning(f"CoinGecko OHLCV error {response.status_code} for {symbol}")
-                return None
+        if response.status_code == 200:
+            return response.json()
+        else:
+            logger.warning(f"CoinGecko OHLCV error {response.status_code} for {symbol}")
+            return None
     except Exception as e:
         logger.error(f"CoinGecko OHLCV fetch error for {symbol}: {e}")
         return None
@@ -734,34 +735,35 @@ async def fetch_ohlcv_binance(symbol: str, limit: int = 168) -> Optional[List[Di
         # Binance uses BTCUSDT format
         pair = f"{symbol.upper()}USDT"
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(
-                "https://api.binance.com/api/v3/klines",
-                params={
-                    "symbol": pair,
-                    "interval": "1h",
-                    "limit": limit
-                }
-            )
+        client = get_client("binance_public", timeout=30.0)
 
-            if response.status_code == 200:
-                data = response.json()
-                # Transform Binance format to our format
-                # Binance format: [timestamp, open, high, low, close, volume, ...]
-                ohlcv = []
-                for candle in data:
-                    ohlcv.append({
-                        "timestamp": int(candle[0]) // 1000,  # Convert ms to seconds
-                        "open": float(candle[1]),
-                        "high": float(candle[2]),
-                        "low": float(candle[3]),
-                        "close": float(candle[4]),
-                        "volume": float(candle[5])
-                    })
-                return ohlcv
-            else:
-                logger.warning(f"Binance OHLCV error {response.status_code} for {symbol}")
-                return None
+        response = await client.get(
+            "https://api.binance.com/api/v3/klines",
+            params={
+                "symbol": pair,
+                "interval": "1h",
+                "limit": limit
+            }
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            # Transform Binance format to our format
+            # Binance format: [timestamp, open, high, low, close, volume, ...]
+            ohlcv = []
+            for candle in data:
+                ohlcv.append({
+                    "timestamp": int(candle[0]) // 1000,  # Convert ms to seconds
+                    "open": float(candle[1]),
+                    "high": float(candle[2]),
+                    "low": float(candle[3]),
+                    "close": float(candle[4]),
+                    "volume": float(candle[5])
+                })
+            return ohlcv
+        else:
+            logger.warning(f"Binance OHLCV error {response.status_code} for {symbol}")
+            return None
     except Exception as e:
         logger.error(f"Binance OHLCV fetch error for {symbol}: {e}")
         return None
@@ -778,35 +780,35 @@ async def fetch_ohlcv_coinbase(symbol: str) -> Optional[List[Dict]]:
         List of price data points or None if failed
     """
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(
-                f"https://api.coinbase.com/v2/prices/{symbol.upper()}-USD/historic",
-                params={
-                    "period": "week"
-                }
-            )
+        client = get_client("coinbase_public", timeout=30.0)
+        response = await client.get(
+            f"https://api.coinbase.com/v2/prices/{symbol.upper()}-USD/historic",
+            params={
+                "period": "week"
+            }
+        )
 
-            if response.status_code == 200:
-                data = response.json()
-                prices = data.get('data', {}).get('prices', [])
+        if response.status_code == 200:
+            data = response.json()
+            prices = data.get('data', {}).get('prices', [])
 
-                # Transform to OHLCV format (Coinbase only has close prices)
-                ohlcv = []
-                for price_point in prices:
-                    timestamp = int(datetime.fromisoformat(price_point['time'].replace('Z', '+00:00')).timestamp())
-                    price = float(price_point['price'])
-                    ohlcv.append({
-                        "timestamp": timestamp,
-                        "open": price,
-                        "high": price,
-                        "low": price,
-                        "close": price,
-                        "volume": 0  # Not available
-                    })
-                return ohlcv
-            else:
-                logger.warning(f"Coinbase historic error {response.status_code} for {symbol}")
-                return None
+            # Transform to OHLCV format (Coinbase only has close prices)
+            ohlcv = []
+            for price_point in prices:
+                timestamp = int(datetime.fromisoformat(price_point['time'].replace('Z', '+00:00')).timestamp())
+                price = float(price_point['price'])
+                ohlcv.append({
+                    "timestamp": timestamp,
+                    "open": price,
+                    "high": price,
+                    "low": price,
+                    "close": price,
+                    "volume": 0  # Not available
+                })
+            return ohlcv
+        else:
+            logger.warning(f"Coinbase historic error {response.status_code} for {symbol}")
+            return None
     except Exception as e:
         logger.error(f"Coinbase historic fetch error for {symbol}: {e}")
         return None

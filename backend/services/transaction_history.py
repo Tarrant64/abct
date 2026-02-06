@@ -33,6 +33,7 @@ from services.solana import solana_service
 from services.polygon import polygon_service
 from services.base import base_service
 from services.coinbase import coinbase_service
+from services.http_client import get_client
 
 logger = logging.getLogger(__name__)
 
@@ -245,54 +246,55 @@ class TransactionHistoryService:
 
             headers = {"project_id": blockfrost_key}
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                # Get address transactions
-                response = await client.get(
-                    f"{BLOCKFROST_BASE_URL}/addresses/{address}/transactions",
-                    headers=headers,
-                    params={"count": limit, "order": "desc"}
+            client = get_client("blockfrost", timeout=30.0)
+
+            # Get address transactions
+            response = await client.get(
+                f"{BLOCKFROST_BASE_URL}/addresses/{address}/transactions",
+                headers=headers,
+                params={"count": limit, "order": "desc"}
+            )
+
+            if response.status_code == 404:
+                # Address has no transactions
+                return []
+
+            if response.status_code != 200:
+                logger.error(f"Blockfrost transactions error: {response.status_code}")
+                return []
+
+            tx_hashes = response.json()
+
+            # Fetch details for each transaction
+            detailed_txs = []
+            for tx_info in tx_hashes[:limit]:
+                tx_hash = tx_info.get('tx_hash')
+                if not tx_hash:
+                    continue
+
+                # Get transaction details
+                tx_response = await client.get(
+                    f"{BLOCKFROST_BASE_URL}/txs/{tx_hash}",
+                    headers=headers
                 )
 
-                if response.status_code == 404:
-                    # Address has no transactions
-                    return []
+                if tx_response.status_code == 200:
+                    tx_detail = tx_response.json()
 
-                if response.status_code != 200:
-                    logger.error(f"Blockfrost transactions error: {response.status_code}")
-                    return []
-
-                tx_hashes = response.json()
-
-                # Fetch details for each transaction
-                detailed_txs = []
-                for tx_info in tx_hashes[:limit]:
-                    tx_hash = tx_info.get('tx_hash')
-                    if not tx_hash:
-                        continue
-
-                    # Get transaction details
-                    tx_response = await client.get(
-                        f"{BLOCKFROST_BASE_URL}/txs/{tx_hash}",
+                    # Get UTXOs for the transaction
+                    utxo_response = await client.get(
+                        f"{BLOCKFROST_BASE_URL}/txs/{tx_hash}/utxos",
                         headers=headers
                     )
 
-                    if tx_response.status_code == 200:
-                        tx_detail = tx_response.json()
+                    if utxo_response.status_code == 200:
+                        utxos = utxo_response.json()
+                        tx_detail['utxos'] = utxos
 
-                        # Get UTXOs for the transaction
-                        utxo_response = await client.get(
-                            f"{BLOCKFROST_BASE_URL}/txs/{tx_hash}/utxos",
-                            headers=headers
-                        )
+                    detailed_txs.append(tx_detail)
 
-                        if utxo_response.status_code == 200:
-                            utxos = utxo_response.json()
-                            tx_detail['utxos'] = utxos
-
-                        detailed_txs.append(tx_detail)
-
-                logger.info(f"Fetched {len(detailed_txs)} Cardano transactions")
-                return detailed_txs
+            logger.info(f"Fetched {len(detailed_txs)} Cardano transactions")
+            return detailed_txs
 
         except Exception as e:
             logger.error(f"Error fetching Cardano transactions: {e}")
@@ -315,30 +317,30 @@ class TransactionHistoryService:
 
         # Try Blockstream first
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                # Get transaction list
-                response = await client.get(
-                    f"{bitcoin_service.base_url}/address/{address}/txs"
+            client = get_client("blockfrost", timeout=30.0)
+            # Get transaction list
+            response = await client.get(
+                f"{bitcoin_service.base_url}/address/{address}/txs"
+            )
+
+            if response.status_code != 200:
+                logger.warning(f"Blockstream API error: {response.status_code}, trying Mempool.space fallback")
+                # Try Mempool.space fallback
+                return await self._fetch_bitcoin_transactions_mempool(address, limit)
+
+            txs = response.json()[:limit]
+
+            # Fetch full details for each transaction to get inputs/outputs
+            detailed_txs = []
+            for tx in txs:
+                tx_response = await client.get(
+                    f"{bitcoin_service.base_url}/tx/{tx['txid']}"
                 )
+                if tx_response.status_code == 200:
+                    detailed_txs.append(tx_response.json())
 
-                if response.status_code != 200:
-                    logger.warning(f"Blockstream API error: {response.status_code}, trying Mempool.space fallback")
-                    # Try Mempool.space fallback
-                    return await self._fetch_bitcoin_transactions_mempool(address, limit)
-
-                txs = response.json()[:limit]
-
-                # Fetch full details for each transaction to get inputs/outputs
-                detailed_txs = []
-                for tx in txs:
-                    tx_response = await client.get(
-                        f"{bitcoin_service.base_url}/tx/{tx['txid']}"
-                    )
-                    if tx_response.status_code == 200:
-                        detailed_txs.append(tx_response.json())
-
-                logger.info(f"Fetched {len(detailed_txs)} Bitcoin transactions from Blockstream")
-                return detailed_txs
+            logger.info(f"Fetched {len(detailed_txs)} Bitcoin transactions from Blockstream")
+            return detailed_txs
 
         except Exception as e:
             logger.error(f"Blockstream error: {e}, trying Mempool.space fallback")
@@ -350,29 +352,29 @@ class TransactionHistoryService:
         from config import MEMPOOL_BASE_URL
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                # Mempool.space has the same API format as Blockstream
-                response = await client.get(
-                    f"{MEMPOOL_BASE_URL}/address/{address}/txs"
+            client = get_client("blockfrost", timeout=30.0)
+            # Mempool.space has the same API format as Blockstream
+            response = await client.get(
+                f"{MEMPOOL_BASE_URL}/address/{address}/txs"
+            )
+
+            if response.status_code != 200:
+                logger.error(f"Mempool.space API error: {response.status_code}")
+                return []
+
+            txs = response.json()[:limit]
+
+            # Fetch full details
+            detailed_txs = []
+            for tx in txs:
+                tx_response = await client.get(
+                    f"{MEMPOOL_BASE_URL}/tx/{tx['txid']}"
                 )
+                if tx_response.status_code == 200:
+                    detailed_txs.append(tx_response.json())
 
-                if response.status_code != 200:
-                    logger.error(f"Mempool.space API error: {response.status_code}")
-                    return []
-
-                txs = response.json()[:limit]
-
-                # Fetch full details
-                detailed_txs = []
-                for tx in txs:
-                    tx_response = await client.get(
-                        f"{MEMPOOL_BASE_URL}/tx/{tx['txid']}"
-                    )
-                    if tx_response.status_code == 200:
-                        detailed_txs.append(tx_response.json())
-
-                logger.info(f"Fetched {len(detailed_txs)} Bitcoin transactions from Mempool.space (fallback)")
-                return detailed_txs
+            logger.info(f"Fetched {len(detailed_txs)} Bitcoin transactions from Mempool.space (fallback)")
+            return detailed_txs
 
         except Exception as e:
             logger.error(f"Mempool.space error: {e}")
@@ -390,24 +392,25 @@ class TransactionHistoryService:
                 logger.warning("Helius API key not configured")
                 return []
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                # Get transaction signatures for the address
-                # Using Helius enhanced transactions endpoint
-                response = await client.get(
-                    f"{HELIUS_BASE_URL}/addresses/{address}/transactions",
-                    params={
-                        "api-key": helius_key,
-                        "limit": limit
-                    }
-                )
+            client = get_client("blockfrost", timeout=30.0)
 
-                if response.status_code != 200:
-                    logger.error(f"Helius transactions error: {response.status_code}")
-                    return []
+            # Get transaction signatures for the address
+            # Using Helius enhanced transactions endpoint
+            response = await client.get(
+                f"{HELIUS_BASE_URL}/addresses/{address}/transactions",
+                params={
+                    "api-key": helius_key,
+                    "limit": limit
+                }
+            )
 
-                transactions = response.json()
-                logger.info(f"Fetched {len(transactions)} Solana transactions")
-                return transactions
+            if response.status_code != 200:
+                logger.error(f"Helius transactions error: {response.status_code}")
+                return []
+
+            transactions = response.json()
+            logger.info(f"Fetched {len(transactions)} Solana transactions")
+            return transactions
 
         except Exception as e:
             logger.error(f"Error fetching Solana transactions: {e}")
