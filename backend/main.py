@@ -46,9 +46,9 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config import PROJECT_ROOT, DATA_DIR, CERTS_DIR, DEFAULT_CERT_PATH, DEFAULT_KEY_PATH, NFT_SCHEDULER_ENABLED
-from database import init_db
+from database import init_db, init_encryption, migrate_encrypt_api_keys
 from nft_image_database import init_nft_image_db
-from routers import wallets, portfolio, defi, prices, exchanges, nfts, custom_tokens, settings, security, logs, nft_scheduler as nft_scheduler_router, backup, auth, dashboard, mobile, nmkr, cache, spam, transactions, demo
+from routers import wallets, portfolio, defi, prices, exchanges, nfts, custom_tokens, settings, security, logs, nft_scheduler as nft_scheduler_router, backup, auth, dashboard, mobile, nmkr, cache, spam, transactions, demo, cloudflare
 
 from middleware import RequestSizeLimitMiddleware, RATE_LIMITING_AVAILABLE
 from services.logging_service import get_logging_service
@@ -87,6 +87,25 @@ async def lifespan(app: FastAPI):
     startup_status["database"] = "ready"
     logger.info("Database initialized")
     await log_service.info("main", "Main database initialized")
+
+    # Initialize API key encryption
+    logger.info("Initializing API key encryption...")
+    try:
+        init_encryption()
+        logger.info("API key encryption initialized")
+        await log_service.info("main", "API key encryption initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize encryption: {e}")
+        await log_service.error("main", f"Encryption initialization failed: {e}")
+
+    # Migrate plaintext API keys to encrypted storage
+    logger.info("Checking API key encryption migration...")
+    try:
+        await migrate_encrypt_api_keys()
+        await log_service.info("main", "API key encryption migration complete")
+    except Exception as e:
+        logger.warning(f"API key encryption migration failed: {e}")
+        await log_service.warning("main", f"API key encryption migration failed: {e}")
 
     # Clean up expired cache entries
     logger.info("Cleaning up expired cache entries...")
@@ -470,6 +489,7 @@ app.include_router(cache.router)
 app.include_router(spam.router)
 app.include_router(transactions.router)
 app.include_router(demo.router)
+app.include_router(cloudflare.router)
 
 # Mount static files (frontend)
 frontend_path = PROJECT_ROOT / "frontend"
