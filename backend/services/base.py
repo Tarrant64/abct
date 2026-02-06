@@ -33,7 +33,9 @@ BASE_CACHE_TTL = 86400 * 30  # 30 days
 
 
 class BaseService(APIKeyManager):
-    """Service for fetching Base blockchain wallet data from Alchemy API."""
+    """Service for fetching Base blockchain wallet data from Alchemy API with public RPC fallback."""
+
+    PUBLIC_RPC_URL = "https://base-rpc.publicnode.com"
 
     # Whitelist of legitimate Base NFT patterns (case-insensitive)
     # These are known legitimate NFT projects on Base
@@ -300,19 +302,24 @@ class BaseService(APIKeyManager):
         if not self.is_base_address(address):
             return None
 
-        if not await self.is_configured():
-            logger.warning("Alchemy API key not configured for Base")
-            return None
-
         # Check cache
         if address in self._balance_cache:
             cached = self._balance_cache[address]
             if datetime.now() - cached['cached_at'] < self._cache_ttl:
                 return cached['data']
 
-        # Fetch data
+        if not await self.is_configured():
+            logger.info(f"Alchemy not configured for Base, using public RPC fallback for {address[:10]}")
+            return await self.get_balance_from_public_rpc(address)
+
+        # Fetch data from Alchemy
         eth_balance = await self.get_eth_balance(address)
         tokens = await self.get_token_balances(address)
+
+        # If Alchemy failed, try public RPC for at least the native balance
+        if eth_balance is None:
+            logger.info(f"Alchemy failed for Base {address[:10]}, trying public RPC fallback")
+            return await self.get_balance_from_public_rpc(address)
 
         result = {
             'address': address,
@@ -330,6 +337,63 @@ class BaseService(APIKeyManager):
         }
 
         return result
+
+    async def get_balance_from_public_rpc(self, address: str) -> Optional[dict]:
+        """
+        Fallback method to get ETH balance on Base from public RPC.
+
+        Only returns native ETH balance (no ERC-20 tokens).
+        Used when Alchemy API is not configured or fails.
+        """
+        if not self.is_base_address(address):
+            return None
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    self.PUBLIC_RPC_URL,
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "eth_getBalance",
+                        "params": [address, "latest"]
+                    }
+                )
+
+                if response.status_code != 200:
+                    logger.error(f"Base public RPC error: {response.status_code}")
+                    return None
+
+                data = response.json()
+
+                if 'error' in data:
+                    logger.error(f"Base public RPC error: {data['error']}")
+                    return None
+
+                balance_wei = int(data.get('result', '0x0'), 16)
+                balance_eth = balance_wei / WEI_PER_ETH
+
+                result = {
+                    'address': address,
+                    'balance_eth': balance_eth,
+                    'tokens': [],
+                    'token_count': 0,
+                    'blockchain': 'base',
+                    'source': 'public_rpc'
+                }
+
+                logger.info(f"Fetched Base ETH balance from public RPC: {balance_eth:.6f} ETH")
+
+                self._balance_cache[address] = {
+                    'data': result,
+                    'cached_at': datetime.now()
+                }
+
+                return result
+
+        except Exception as e:
+            logger.error(f"Error fetching Base balance from public RPC: {e}")
+            return None
 
     async def get_nfts_for_owner(self, address: str, page_key: str = None) -> Optional[dict]:
         """
