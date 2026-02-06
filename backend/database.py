@@ -1,11 +1,134 @@
 import aiosqlite
 import logging
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
-from config import DATABASE_PATH
+from config import DATABASE_PATH, DATA_DIR
 from typing import Optional
+from cryptography.fernet import Fernet, InvalidToken
 
 logger = logging.getLogger(__name__)
+
+# ============================================================================
+# API KEY ENCRYPTION
+# ============================================================================
+
+_fernet: Optional[Fernet] = None
+ENCRYPTION_KEY_FILE = DATA_DIR / ".encryption_key"
+
+
+def init_encryption():
+    """Initialize Fernet encryption for API key storage.
+
+    Key source priority:
+    1. ABCT_ENCRYPTION_KEY environment variable
+    2. Existing key file at DATA_DIR/.encryption_key
+    3. Auto-generate new key and save to file
+    """
+    global _fernet
+
+    # Check env var first
+    env_key = os.environ.get("ABCT_ENCRYPTION_KEY")
+    if env_key:
+        _fernet = Fernet(env_key.encode() if isinstance(env_key, str) else env_key)
+        logger.info("Encryption initialized from ABCT_ENCRYPTION_KEY environment variable")
+        return
+
+    # Check for existing key file
+    if ENCRYPTION_KEY_FILE.exists():
+        key = ENCRYPTION_KEY_FILE.read_bytes().strip()
+        _fernet = Fernet(key)
+        logger.info("Encryption initialized from key file")
+        return
+
+    # Generate new key
+    key = Fernet.generate_key()
+    ENCRYPTION_KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    ENCRYPTION_KEY_FILE.write_bytes(key)
+    os.chmod(str(ENCRYPTION_KEY_FILE), 0o600)
+    _fernet = Fernet(key)
+    logger.info("Generated new encryption key and saved to %s", ENCRYPTION_KEY_FILE)
+
+
+def _encrypt_value(plaintext: Optional[str]) -> Optional[str]:
+    """Encrypt a value for database storage.
+
+    Returns None for None/empty input.
+    Returns 'enc:<fernet_token>' for valid input.
+    Falls back to plaintext if encryption not initialized.
+    """
+    if not plaintext:
+        return plaintext
+    if _fernet is None:
+        logger.warning("Encryption not initialized, storing value as plaintext")
+        return plaintext
+    token = _fernet.encrypt(plaintext.encode('utf-8'))
+    return "enc:" + token.decode('utf-8')
+
+
+def _decrypt_value(stored: Optional[str]) -> Optional[str]:
+    """Decrypt a value from database storage.
+
+    Handles both encrypted ('enc:' prefix) and plaintext values.
+    Returns None for None/empty input.
+    Falls back to returning stored value if decryption fails.
+    """
+    if not stored:
+        return stored
+    if not stored.startswith("enc:"):
+        return stored  # Plaintext (pre-migration or env var)
+    if _fernet is None:
+        logger.warning("Encryption not initialized, cannot decrypt value")
+        return stored
+    try:
+        token = stored[4:]  # Strip 'enc:' prefix
+        return _fernet.decrypt(token.encode('utf-8')).decode('utf-8')
+    except (InvalidToken, Exception) as e:
+        logger.error("Failed to decrypt value: %s", e)
+        return stored  # Return as-is rather than losing data
+
+
+async def migrate_encrypt_api_keys():
+    """One-time migration: encrypt any plaintext API keys in the database.
+
+    Scans all api_settings rows. Any value in api_key, api_secret, or
+    api_passphrase that does NOT start with 'enc:' is encrypted in-place.
+    Idempotent - safe to run multiple times.
+    """
+    if _fernet is None:
+        logger.warning("Encryption not initialized, skipping API key migration")
+        return
+
+    migrated = 0
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT id, api_key, api_secret, api_passphrase FROM api_settings")
+        rows = await cursor.fetchall()
+
+        for row in rows:
+            row_id = row['id']
+            updates = {}
+
+            for field in ('api_key', 'api_secret', 'api_passphrase'):
+                value = row[field]
+                if value and not value.startswith("enc:"):
+                    updates[field] = _encrypt_value(value)
+
+            if updates:
+                set_clause = ", ".join(f"{k} = ?" for k in updates)
+                values = list(updates.values()) + [row_id]
+                await db.execute(
+                    f"UPDATE api_settings SET {set_clause} WHERE id = ?",
+                    values
+                )
+                migrated += 1
+
+        if migrated > 0:
+            await db.commit()
+            logger.info("Encrypted API keys for %d api_settings row(s)", migrated)
+        else:
+            logger.info("API key encryption migration: no plaintext keys found (already migrated)")
+
 
 # ============================================================================
 # MULTI-USER CONTEXT
@@ -1753,7 +1876,13 @@ async def get_api_setting(api_name: str, user_id: int = None) -> dict:
                 (api_name,)
             )
         row = await cursor.fetchone()
-        return dict(row) if row else None
+        if row:
+            result = dict(row)
+            for field in ('api_key', 'api_secret', 'api_passphrase'):
+                if result.get(field):
+                    result[field] = _decrypt_value(result[field])
+            return result
+        return None
 
 
 async def get_all_api_settings(user_id: int = None) -> list:
@@ -1779,7 +1908,14 @@ async def get_all_api_settings(user_id: int = None) -> list:
             # Fallback for backward compatibility
             cursor = await db.execute("SELECT * FROM api_settings")
         rows = await cursor.fetchall()
-        return [dict(row) for row in rows]
+        results = []
+        for row in rows:
+            result = dict(row)
+            for field in ('api_key', 'api_secret', 'api_passphrase'):
+                if result.get(field):
+                    result[field] = _decrypt_value(result[field])
+            results.append(result)
+        return results
 
 
 async def save_api_setting(api_name: str, api_key: str, enabled: bool = True, user_id: int = None,
@@ -1797,6 +1933,11 @@ async def save_api_setting(api_name: str, api_key: str, enabled: bool = True, us
     if user_id is None:
         user_id = get_current_user_id()
 
+    # Encrypt sensitive fields before storage
+    enc_key = _encrypt_value(api_key)
+    enc_secret = _encrypt_value(api_secret)
+    enc_passphrase = _encrypt_value(api_passphrase)
+
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute("""
             INSERT INTO api_settings (user_id, api_name, api_key, api_secret, api_passphrase, enabled, updated_at)
@@ -1807,7 +1948,7 @@ async def save_api_setting(api_name: str, api_key: str, enabled: bool = True, us
                 api_passphrase = excluded.api_passphrase,
                 enabled = excluded.enabled,
                 updated_at = excluded.updated_at
-        """, (user_id, api_name, api_key, api_secret, api_passphrase, 1 if enabled else 0, datetime.now()))
+        """, (user_id, api_name, enc_key, enc_secret, enc_passphrase, 1 if enabled else 0, datetime.now()))
         await db.commit()
 
 

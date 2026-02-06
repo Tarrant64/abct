@@ -4,7 +4,7 @@
 
 let analyticsChart = null;
 let analyticsData = null;
-let selectedChains = new Set(['cardano', 'ethereum', 'bitcoin', 'solana', 'polygon', 'base']);
+let selectedChains = new Set();
 
 // Chain colors matching the theme colors from styles.css
 const CHAIN_COLORS = {
@@ -180,6 +180,8 @@ function renderAnalyticsChart(data) {
     const datasets = [];
 
     // Create dataset for each chain
+    const noneSelected = selectedChains.size === 0;
+
     for (const [chain, counts] of Object.entries(data.chains)) {
         const isSelected = selectedChains.has(chain);
         const colors = CHAIN_COLORS[chain] || {
@@ -188,19 +190,40 @@ function renderAnalyticsChart(data) {
             fill: 'rgba(136, 136, 136, 0.3)'
         };
 
-        // Use appropriate fill color based on selection state
-        const fillColor = isSelected ? colors.fill : 'rgba(136, 136, 136, 0.15)';
+        // When none selected: show all at moderate level
+        // When some selected: selected = bold, unselected = very faded
+        let borderColor, fillColor, borderWidth, pointRadius, pointHoverRadius;
+
+        if (noneSelected) {
+            borderColor = colors.faded;
+            fillColor = colors.fill;
+            borderWidth = 1.5;
+            pointRadius = 2;
+            pointHoverRadius = 4;
+        } else if (isSelected) {
+            borderColor = colors.normal;
+            fillColor = colors.fill;
+            borderWidth = 3;
+            pointRadius = 5;
+            pointHoverRadius = 7;
+        } else {
+            borderColor = 'rgba(136, 136, 136, 0.15)';
+            fillColor = 'rgba(136, 136, 136, 0.03)';
+            borderWidth = 1;
+            pointRadius = 0;
+            pointHoverRadius = 2;
+        }
 
         datasets.push({
             label: formatChainName(chain),
             data: counts,
-            borderColor: isSelected ? colors.normal : colors.faded,
+            borderColor: borderColor,
             backgroundColor: fillColor,
-            borderWidth: isSelected ? 2 : 1,
-            pointRadius: isSelected ? 4 : 2,
-            pointHoverRadius: isSelected ? 6 : 3,
+            borderWidth: borderWidth,
+            pointRadius: pointRadius,
+            pointHoverRadius: pointHoverRadius,
             tension: 0.4,
-            fill: true, // Enable area fill
+            fill: true,
             hidden: false
         });
     }

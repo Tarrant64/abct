@@ -7550,6 +7550,13 @@ body.privacy-mode .section-title {
     margin-bottom: 30px;
 }
 
+.analytics-section > .section-header-inline {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin-bottom: 8px;
+}
+
 .analytics-controls {
     margin: 20px 0;
     padding: 16px;
@@ -7599,7 +7606,7 @@ body.privacy-mode .section-title {
         rgba(255, 255, 255, 0.02) 100%);
     border-radius: 16px;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    margin: 20px 0;
+    margin: 12px 0;
     height: 450px;
     backdrop-filter: blur(10px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
@@ -7611,7 +7618,14 @@ body.privacy-mode .section-title {
 
 /* Chain Indicators Section */
 .chain-indicators-section {
-    margin-top: 30px;
+    margin-top: 12px;
+}
+
+.chain-indicators-section .section-header-inline {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin-bottom: 8px;
 }
 
 .chain-indicators-section .hint-text {
@@ -7624,13 +7638,11 @@ body.privacy-mode .section-title {
 .chain-indicators {
     display: flex;
     flex-wrap: wrap;
-    gap: 12px;
-    padding: 20px;
-    background: linear-gradient(135deg,
-        rgba(255, 255, 255, 0.05) 0%,
-        rgba(255, 255, 255, 0.02) 100%);
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    gap: 10px;
+    padding: 0;
+    background: none;
+    border-radius: 0;
+    border: none;
 }
 
 .chain-indicator {
@@ -8128,9 +8140,9 @@ body.privacy-mode .section-title {
 }
 
 [data-theme="light"] .chain-indicators {
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+    background: none;
+    border: none;
+    box-shadow: none;
 }
 
 [data-theme="light"] .chain-indicator {
