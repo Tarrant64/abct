@@ -28,7 +28,9 @@ MONTHLY_LIMIT = 1000
 
 
 class EthereumService(APIKeyManager):
-    """Service for fetching Ethereum wallet data from beaconcha.in."""
+    """Service for fetching Ethereum wallet data from beaconcha.in with public RPC fallback."""
+
+    PUBLIC_RPC_URL = "https://ethereum-rpc.publicnode.com"
 
     def __init__(self):
         super().__init__(api_name='beaconchain', env_var='BEACONCHAIN_API_KEY')
@@ -138,7 +140,9 @@ class EthereumService(APIKeyManager):
         result = await self._make_request(f"/execution/address/{address}")
 
         if not result or 'data' not in result:
-            return None
+            # Fallback to public RPC for native ETH balance
+            logger.info(f"Beaconcha.in unavailable for {address[:10]}, trying public RPC fallback")
+            return await self.get_balance_from_public_rpc(address)
 
         data = result['data']
 
@@ -188,6 +192,62 @@ class EthereumService(APIKeyManager):
         }
 
         return result_data
+
+    async def get_balance_from_public_rpc(self, address: str) -> Optional[dict]:
+        """
+        Fallback method to get ETH balance from public RPC.
+
+        Only returns native ETH balance (no ERC-20 tokens).
+        Used when beaconcha.in API is not configured or fails.
+        """
+        if not self.is_ethereum_address(address):
+            return None
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    self.PUBLIC_RPC_URL,
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "eth_getBalance",
+                        "params": [address, "latest"]
+                    }
+                )
+
+                if response.status_code != 200:
+                    logger.error(f"Ethereum public RPC error: {response.status_code}")
+                    return None
+
+                data = response.json()
+
+                if 'error' in data:
+                    logger.error(f"Ethereum public RPC error: {data['error']}")
+                    return None
+
+                balance_wei = int(data.get('result', '0x0'), 16)
+                balance_eth = balance_wei / (10**18)
+
+                result_data = {
+                    'address': address,
+                    'balance_eth': balance_eth,
+                    'tokens': [],
+                    'token_count': 0,
+                    'source': 'public_rpc'
+                }
+
+                logger.info(f"Fetched ETH balance from public RPC: {balance_eth:.6f} ETH")
+
+                self._balance_cache[address] = {
+                    'data': result_data,
+                    'cached_at': datetime.now()
+                }
+
+                return result_data
+
+        except Exception as e:
+            logger.error(f"Error fetching ETH balance from public RPC: {e}")
+            return None
 
     async def resolve_ens(self, name_or_address: str) -> Optional[dict]:
         """Resolve ENS name to address or vice versa."""
