@@ -4,6 +4,9 @@ Cloudflare Tunnel management router.
 Provides endpoints to install, configure, start, stop, and remove
 cloudflared tunnel service via supervisor (for Docker environments).
 Token is stored encrypted in the database.
+
+Install runs as a background task to avoid HTTP timeouts. The frontend
+polls GET /cloudflare/status for progress updates.
 """
 
 import asyncio
@@ -23,9 +26,25 @@ router = APIRouter(prefix="/cloudflare", tags=["cloudflare"])
 
 SUPERVISOR_CONF = "/etc/supervisor/conf.d/cloudflared.conf"
 
+# Module-level install progress (shared across requests)
+_install_progress = {
+    "active": False,
+    "step": "",
+    "error": None,
+}
+
 
 class SetupRequest(BaseModel):
     token: str
+
+
+def _set_progress(step: str, error: str = None):
+    """Update the install progress state."""
+    _install_progress["step"] = step
+    _install_progress["error"] = error
+    if error:
+        _install_progress["active"] = False
+    logger.info(f"Cloudflare install: {step}" + (f" ERROR: {error}" if error else ""))
 
 
 async def _run_cmd(cmd: list[str], ignore_errors: bool = False) -> tuple[int, str, str]:
@@ -54,9 +73,117 @@ async def _get_service_state() -> str:
     return ""
 
 
+async def _install_cloudflared_background(token: str, user_id: int):
+    """Background task: install cloudflared and start via supervisor."""
+    try:
+        _install_progress["active"] = True
+
+        # Step 1: Save token
+        _set_progress("Saving tunnel token...")
+        await save_api_setting("cloudflare_tunnel", token, enabled=True, user_id=user_id)
+
+        # Step 2: Check if already installed
+        if shutil.which("cloudflared") or os.path.exists("/usr/bin/cloudflared"):
+            _set_progress("cloudflared already installed, configuring...")
+        else:
+            # Step 3: Add GPG key
+            _set_progress("Adding Cloudflare GPG key...")
+            rc, _, err = await _run_cmd(["mkdir", "-p", "--mode=0755", "/usr/share/keyrings"])
+            if rc != 0:
+                _set_progress("Failed", error=f"Could not create keyrings dir: {err}")
+                return
+
+            proc = await asyncio.create_subprocess_shell(
+                "curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg "
+                "> /usr/share/keyrings/cloudflare-main.gpg",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, err_bytes = await proc.communicate()
+            if proc.returncode != 0:
+                _set_progress("Failed", error=f"Could not download GPG key: {err_bytes.decode()}")
+                return
+
+            # Step 4: Add apt repository
+            _set_progress("Adding Cloudflare apt repository...")
+            repo_line = (
+                "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] "
+                "https://pkg.cloudflare.com/cloudflared any main"
+            )
+            try:
+                with open("/etc/apt/sources.list.d/cloudflared.list", "w") as f:
+                    f.write(repo_line + "\n")
+            except OSError as e:
+                _set_progress("Failed", error=f"Could not write apt source: {e}")
+                return
+
+            # Step 5: apt-get update (only cloudflared repo for speed)
+            _set_progress("Updating package lists...")
+            rc, _, err = await _run_cmd([
+                "apt-get", "update",
+                "-o", "Dir::Etc::sourcelist=sources.list.d/cloudflared.list",
+                "-o", "Dir::Etc::sourceparts=-",
+                "-o", "APT::Get::List-Cleanup=0",
+                "-qq",
+            ])
+            if rc != 0:
+                # Fallback to full update if targeted update fails
+                _set_progress("Updating all package lists (fallback)...")
+                rc, _, err = await _run_cmd(["apt-get", "update", "-qq"])
+                if rc != 0:
+                    _set_progress("Failed", error=f"apt-get update failed: {err}")
+                    return
+
+            # Step 6: Install
+            _set_progress("Installing cloudflared package...")
+            rc, _, err = await _run_cmd(["apt-get", "install", "-y", "-qq", "cloudflared"])
+            if rc != 0:
+                _set_progress("Failed", error=f"apt-get install failed: {err}")
+                return
+
+        # Step 7: Write supervisor config
+        _set_progress("Writing supervisor configuration...")
+        supervisor_conf = (
+            "[program:cloudflared]\n"
+            f"command=/usr/bin/cloudflared tunnel run --token {token}\n"
+            "autostart=true\n"
+            "autorestart=true\n"
+            "priority=30\n"
+            "stdout_logfile=/dev/stdout\n"
+            "stdout_logfile_maxbytes=0\n"
+            "stderr_logfile=/dev/stderr\n"
+            "stderr_logfile_maxbytes=0\n"
+        )
+        try:
+            with open(SUPERVISOR_CONF, "w") as f:
+                f.write(supervisor_conf)
+        except OSError as e:
+            _set_progress("Failed", error=f"Could not write supervisor config: {e}")
+            return
+
+        # Step 8: Start service
+        _set_progress("Starting Cloudflare tunnel...")
+        await _run_cmd(["supervisorctl", "reread"], ignore_errors=True)
+        await _run_cmd(["supervisorctl", "update"], ignore_errors=True)
+
+        # Wait a moment for the service to come up
+        await asyncio.sleep(3)
+        state = await _get_service_state()
+
+        if state == "RUNNING":
+            _set_progress("Tunnel is running")
+        else:
+            _set_progress(f"Tunnel started (state: {state or 'unknown'})")
+
+    except Exception as e:
+        _set_progress("Failed", error=str(e))
+    finally:
+        _install_progress["active"] = False
+
+
 @router.get("/status")
 async def cloudflare_status(user_id: int = Depends(verify_session)):
-    """Return installed/running/token-saved status for cloudflared."""
+    """Return installed/running/token-saved status and install progress."""
     installed = shutil.which("cloudflared") is not None or os.path.exists("/usr/bin/cloudflared")
 
     state = ""
@@ -68,106 +195,51 @@ async def cloudflare_status(user_id: int = Depends(verify_session)):
     setting = await get_api_setting("cloudflare_tunnel", user_id=user_id)
     token_saved = bool(setting and setting.get("api_key"))
 
-    return {
+    result = {
         "installed": installed,
         "running": running,
         "token_saved": token_saved,
         "service_state": state or None,
     }
 
+    # Include install progress if active or recently completed
+    if _install_progress["active"] or _install_progress["step"]:
+        result["install_progress"] = {
+            "active": _install_progress["active"],
+            "step": _install_progress["step"],
+            "error": _install_progress["error"],
+        }
+
+    return result
+
 
 @router.post("/setup")
 async def cloudflare_setup(req: SetupRequest, user_id: int = Depends(verify_session)):
-    """Save token, install cloudflared, and start via supervisor."""
+    """Save token and kick off background install. Returns immediately."""
     token = req.token.strip()
     if not token:
         raise HTTPException(status_code=400, detail="Token is required")
 
-    # Save token to DB (encrypted)
-    await save_api_setting("cloudflare_tunnel", token, enabled=True, user_id=user_id)
-    logger.info("Cloudflare tunnel token saved")
+    if _install_progress["active"]:
+        raise HTTPException(status_code=409, detail="Installation already in progress")
 
-    # Install cloudflared if not present
-    if not (shutil.which("cloudflared") or os.path.exists("/usr/bin/cloudflared")):
-        logger.info("Installing cloudflared...")
+    # Reset progress and start background task
+    _install_progress["step"] = ""
+    _install_progress["error"] = None
+    _install_progress["active"] = True
 
-        # Create keyrings directory
-        rc, _, err = await _run_cmd(["mkdir", "-p", "--mode=0755", "/usr/share/keyrings"])
-        if rc != 0:
-            raise HTTPException(status_code=500, detail=f"Failed to create keyrings dir: {err}")
+    asyncio.create_task(_install_cloudflared_background(token, user_id))
 
-        # Download GPG key
-        proc = await asyncio.create_subprocess_shell(
-            "curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg "
-            "> /usr/share/keyrings/cloudflare-main.gpg",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        _, err_bytes = await proc.communicate()
-        if proc.returncode != 0:
-            raise HTTPException(status_code=500, detail=f"Failed to download GPG key: {err_bytes.decode()}")
-
-        # Add apt repository
-        repo_line = (
-            "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] "
-            "https://pkg.cloudflare.com/cloudflared any main"
-        )
-        try:
-            with open("/etc/apt/sources.list.d/cloudflared.list", "w") as f:
-                f.write(repo_line + "\n")
-        except OSError as e:
-            raise HTTPException(status_code=500, detail=f"Failed to write apt source: {e}")
-
-        # Install
-        rc, _, err = await _run_cmd(["apt-get", "update", "-qq"])
-        if rc != 0:
-            raise HTTPException(status_code=500, detail=f"apt-get update failed: {err}")
-
-        rc, _, err = await _run_cmd(["apt-get", "install", "-y", "-qq", "cloudflared"])
-        if rc != 0:
-            raise HTTPException(status_code=500, detail=f"apt-get install cloudflared failed: {err}")
-
-        logger.info("cloudflared installed successfully")
-
-    # Write supervisor config
-    supervisor_conf = (
-        "[program:cloudflared]\n"
-        f"command=/usr/bin/cloudflared tunnel run --token {token}\n"
-        "autostart=true\n"
-        "autorestart=true\n"
-        "priority=30\n"
-        "stdout_logfile=/dev/stdout\n"
-        "stdout_logfile_maxbytes=0\n"
-        "stderr_logfile=/dev/stderr\n"
-        "stderr_logfile_maxbytes=0\n"
-    )
-    try:
-        with open(SUPERVISOR_CONF, "w") as f:
-            f.write(supervisor_conf)
-    except OSError as e:
-        raise HTTPException(status_code=500, detail=f"Failed to write supervisor config: {e}")
-
-    # Start via supervisor
-    await _run_cmd(["supervisorctl", "reread"], ignore_errors=True)
-    await _run_cmd(["supervisorctl", "update"], ignore_errors=True)
-
-    # Brief pause then check status
-    await asyncio.sleep(2)
-    state = await _get_service_state()
-
-    logger.info(f"cloudflared service state: {state}")
     return {
         "success": True,
-        "message": "Cloudflare tunnel installed and started",
-        "running": state == "RUNNING",
-        "service_state": state or None,
+        "message": "Installation started. Poll /cloudflare/status for progress.",
     }
 
 
 @router.post("/stop")
 async def cloudflare_stop(user_id: int = Depends(verify_session)):
     """Stop cloudflared service."""
-    rc, _, err = await _run_cmd(["supervisorctl", "stop", "cloudflared"], ignore_errors=True)
+    await _run_cmd(["supervisorctl", "stop", "cloudflared"], ignore_errors=True)
     state = await _get_service_state()
 
     return {
@@ -221,6 +293,11 @@ async def cloudflare_remove(user_id: int = Depends(verify_session)):
 
     # Delete token from DB
     await delete_api_setting("cloudflare_tunnel", user_id=user_id)
+
+    # Clear any leftover progress
+    _install_progress["active"] = False
+    _install_progress["step"] = ""
+    _install_progress["error"] = None
 
     logger.info("Cloudflare tunnel fully removed")
     return {
