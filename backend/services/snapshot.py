@@ -676,7 +676,7 @@ class SnapshotService:
 
         # Get pricing service and fetch historical prices
         pricing = await self._get_pricing_service()
-        historical_prices = await pricing.get_historical_prices(days)
+        historical_prices = await pricing.get_historical_prices(days=days)
 
         if not historical_prices:
             logger.error("Could not fetch historical prices from CoinGecko")
@@ -704,22 +704,26 @@ class SnapshotService:
 
         logger.info(f"Current holdings - ADA: {ada_amount:.2f}, BTC: {btc_amount:.8f}, ETH: {eth_amount:.8f}, SOL: {sol_amount:.8f}")
 
-        # Build a date -> prices lookup
+        # Build a date -> prices lookup (use daily granularity only)
+        # CoinGecko returns hourly data for 2-90 days, so extract just YYYY-MM-DD
         price_by_date = {}
         for symbol, prices_list in historical_prices.items():
             for entry in prices_list:
-                date = entry['date']
-                if date not in price_by_date:
-                    price_by_date[date] = {}
-                price_by_date[date][symbol] = entry['price']
+                # Extract just the date portion (YYYY-MM-DD) from possibly hourly timestamps
+                date_key = entry['date'][:10]
+                if date_key not in price_by_date:
+                    price_by_date[date_key] = {}
+                # Last price of the day wins (overwrites earlier hours)
+                price_by_date[date_key][symbol] = entry['price']
 
         # Generate snapshots for each date
         snapshots_created = 0
         now_ct = datetime.now(CT_TIMEZONE)
+        today_str = str(now_ct.date())
 
         for date_str, prices in sorted(price_by_date.items()):
             # Skip today (we want historical data, not duplicate of today)
-            if date_str == str(now_ct.date()):
+            if date_str == today_str:
                 continue
 
             ada_price = prices.get('ADA', 0)
