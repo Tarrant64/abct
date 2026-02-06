@@ -58,6 +58,14 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     exit 0
 fi
 
+echo ""
+read -p "Reset admin password to default? (y/N) " -n 1 -r
+echo
+RESET_PASSWORD="no"
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    RESET_PASSWORD="yes"
+fi
+
 # SSH connection multiplexing
 SSH_CONTROL_PATH="/tmp/ssh-abct-git-%r@%h:%p"
 SSH_OPTS="-o ControlMaster=auto -o ControlPath=$SSH_CONTROL_PATH -o ControlPersist=60"
@@ -65,13 +73,14 @@ SSH_OPTS="-o ControlMaster=auto -o ControlPath=$SSH_CONTROL_PATH -o ControlPersi
 echo ""
 echo -e "${YELLOW}[1/4] Cloning repository on Unraid...${NC}"
 
-ssh $SSH_OPTS "${SSH_USER}@${UNRAID_HOST}" bash -s "$CONTAINER_NAME" "$REMOTE_PATH" "$DATA_DIR" "$PORT" "$GIT_REPO" "$BRANCH" << 'ENDSSH'
+ssh $SSH_OPTS "${SSH_USER}@${UNRAID_HOST}" bash -s "$CONTAINER_NAME" "$REMOTE_PATH" "$DATA_DIR" "$PORT" "$GIT_REPO" "$BRANCH" "$RESET_PASSWORD" << 'ENDSSH'
     CONTAINER_NAME="$1"
     REMOTE_PATH="$2"
     DATA_DIR="$3"
     PORT="$4"
     GIT_REPO="$5"
     BRANCH="$6"
+    RESET_PASSWORD="$7"
     CONFIG_FILE="${DATA_DIR}/.env"
 
     set -e
@@ -217,8 +226,13 @@ EOF
 
     echo ""
     echo "Verifying admin account..."
-    docker exec "$CONTAINER_NAME" python3 backend/check_auth.py 2>&1 | grep -E "✅|❌|Resetting" || true
-    echo "  ✓ Admin account verified (username: admin, password: satoshi)"
+    if [ "$RESET_PASSWORD" = "yes" ]; then
+        docker exec "$CONTAINER_NAME" python3 backend/check_auth.py --reset 2>&1 | grep -E "CREATED|RESET|OK|WARNING" || true
+        echo "  ✓ Admin password reset (username: admin, password: satoshi)"
+    else
+        docker exec "$CONTAINER_NAME" python3 backend/check_auth.py 2>&1 | grep -E "CREATED|RESET|OK|WARNING" || true
+        echo "  ✓ Admin account preserved (existing password kept)"
+    fi
 
 ENDSSH
 

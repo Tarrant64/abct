@@ -6,9 +6,9 @@
     <title>ABCT - Security Settings</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1770345770">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1770394739">
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1770345770"></script>
+    <script src="/static/js/session-auth.js?v=1770394739"></script>
     <style>
         /* Security Settings Styles */
         .security-manager {
@@ -464,6 +464,105 @@
             }
         }
 
+        /* Remote App Services */
+        .remote-services-section {
+            margin-top: 25px;
+        }
+
+        .remote-services-section h2 {
+            color: #e0e0e0;
+            font-size: 18px;
+            margin: 0 0 15px 0;
+        }
+
+        .service-card {
+            background: linear-gradient(135deg, #1a1a2e 0%, #2a2a3e 100%);
+            border-radius: 12px;
+            padding: 25px;
+        }
+
+        .service-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+        }
+
+        .service-info h3 {
+            color: #e0e0e0;
+            font-size: 16px;
+            margin: 0 0 6px 0;
+        }
+
+        .service-description {
+            color: #888;
+            font-size: 13px;
+        }
+
+        .service-setup {
+            display: flex;
+            align-items: flex-end;
+            gap: 12px;
+        }
+
+        .service-setup .input-group {
+            flex: 1;
+        }
+
+        .service-setup .input-group label {
+            display: block;
+            color: #888;
+            font-size: 12px;
+            margin-bottom: 8px;
+        }
+
+        .service-setup .input-group input {
+            width: 100%;
+            padding: 10px 14px;
+            background: #2a2a3e;
+            border: 1px solid #3a3a4e;
+            border-radius: 8px;
+            color: #e0e0e0;
+            font-size: 13px;
+            box-sizing: border-box;
+        }
+
+        .service-setup .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .service-status {
+            padding-top: 5px;
+        }
+
+        .service-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .service-progress {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 15px 0 5px;
+            color: #888;
+            font-size: 13px;
+        }
+
+        .cf-spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid #3a3a4e;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: cfSpin 0.8s linear infinite;
+        }
+
+        @keyframes cfSpin {
+            to { transform: rotate(360deg); }
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             .file-input-wrapper {
@@ -473,6 +572,16 @@
             .restart-banner {
                 flex-direction: column;
                 text-align: center;
+            }
+
+            .service-setup {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .service-header {
+                flex-direction: column;
+                gap: 10px;
             }
         }
     </style>
@@ -708,6 +817,44 @@
                 These warnings are expected for self-signed certificates and don't indicate a security problem for local development.
             </p>
         </div>
+
+        <!-- Remote App Services -->
+        <div class="remote-services-section">
+            <h2>Remote App Services</h2>
+
+            <!-- Cloudflare Tunnel -->
+            <div class="service-card" id="cloudflareCard">
+                <div class="service-header">
+                    <div class="service-info">
+                        <h3>Cloudflare Tunnel</h3>
+                        <span class="service-description">Expose ABCT securely via Cloudflare's network without port forwarding</span>
+                    </div>
+                    <span id="cfStatusBadge" class="status-badge http">Not Configured</span>
+                </div>
+
+                <!-- Token Input (shown when not configured) -->
+                <div id="cfSetupForm" class="service-setup">
+                    <div class="input-group">
+                        <label for="cfToken">Tunnel Token</label>
+                        <input type="password" id="cfToken" placeholder="Paste your Cloudflare tunnel token">
+                    </div>
+                    <button class="btn btn-primary" onclick="setupCloudflare()">Install &amp; Enable</button>
+                </div>
+
+                <!-- Status (shown when configured) -->
+                <div id="cfStatus" class="service-status" style="display: none;">
+                    <div class="service-actions">
+                        <button class="btn btn-danger btn-small" onclick="removeCloudflare()">Disable &amp; Remove</button>
+                    </div>
+                </div>
+
+                <!-- Progress (shown during install) -->
+                <div id="cfProgress" class="service-progress" style="display: none;">
+                    <span class="cf-spinner"></span>
+                    <span id="cfProgressText">Installing cloudflared...</span>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div id="statusMessage" class="status-message" style="display: none;"></div>
@@ -717,6 +864,7 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             loadSettings();
+            loadCloudflareStatus();
 
             // Add click handlers for mode options
             document.querySelectorAll('.mode-option').forEach(option => {
@@ -978,6 +1126,116 @@
             }, 3000);
         }
 
+        // --- Cloudflare Tunnel ---
+
+        async function loadCloudflareStatus() {
+            try {
+                const response = await fetch('/cloudflare/status');
+                if (!response.ok) return;
+                const data = await response.json();
+                renderCloudflareStatus(data);
+            } catch (error) {
+                console.error('Error loading Cloudflare status:', error);
+            }
+        }
+
+        function renderCloudflareStatus(data) {
+            const badge = document.getElementById('cfStatusBadge');
+            const setupForm = document.getElementById('cfSetupForm');
+            const statusDiv = document.getElementById('cfStatus');
+            const progressDiv = document.getElementById('cfProgress');
+
+            progressDiv.style.display = 'none';
+
+            if (data.running) {
+                badge.textContent = 'Running';
+                badge.className = 'status-badge https';
+                setupForm.style.display = 'none';
+                statusDiv.style.display = 'block';
+            } else if (data.token_saved && data.installed) {
+                badge.textContent = 'Stopped';
+                badge.className = 'status-badge http';
+                setupForm.style.display = 'none';
+                statusDiv.style.display = 'block';
+            } else {
+                badge.textContent = 'Not Configured';
+                badge.className = 'status-badge http';
+                setupForm.style.display = 'block';
+                statusDiv.style.display = 'none';
+            }
+        }
+
+        async function setupCloudflare() {
+            const tokenInput = document.getElementById('cfToken');
+            const token = tokenInput.value.trim();
+            if (!token) {
+                showStatus('Please enter a tunnel token', 'error');
+                return;
+            }
+
+            const setupForm = document.getElementById('cfSetupForm');
+            const progressDiv = document.getElementById('cfProgress');
+            const progressText = document.getElementById('cfProgressText');
+
+            setupForm.style.display = 'none';
+            progressDiv.style.display = 'flex';
+            progressText.textContent = 'Installing cloudflared...';
+
+            try {
+                const response = await fetch('/cloudflare/setup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.detail || 'Setup failed');
+                }
+
+                showStatus('Cloudflare tunnel installed and started', 'success');
+                tokenInput.value = '';
+                await loadCloudflareStatus();
+            } catch (error) {
+                showStatus(error.message, 'error');
+                progressDiv.style.display = 'none';
+                setupForm.style.display = 'block';
+            }
+        }
+
+        async function removeCloudflare() {
+            if (!confirm('Disable Cloudflare Tunnel? This will stop the service, uninstall cloudflared, and delete the saved token.')) {
+                return;
+            }
+
+            const statusDiv = document.getElementById('cfStatus');
+            const progressDiv = document.getElementById('cfProgress');
+            const progressText = document.getElementById('cfProgressText');
+
+            statusDiv.style.display = 'none';
+            progressDiv.style.display = 'flex';
+            progressText.textContent = 'Removing cloudflared...';
+
+            try {
+                const response = await fetch('/cloudflare/remove', {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.detail || 'Remove failed');
+                }
+
+                showStatus('Cloudflare tunnel removed', 'success');
+                await loadCloudflareStatus();
+            } catch (error) {
+                showStatus(error.message, 'error');
+                await loadCloudflareStatus();
+            }
+        }
+
     </script>
 
     <script src="/static/js/app.js"></script>
@@ -995,7 +1253,7 @@
     </script>
 
     <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
-        <p>ABCT - Security Settings | <span style="opacity: 0.6;">v1.0.1 (BUILD 1770345770)</span></p>
+        <p>ABCT - Security Settings | <span style="opacity: 0.6;">v1.0.1 (BUILD 1770394739)</span></p>
     </footer>
 </body>
 </html>

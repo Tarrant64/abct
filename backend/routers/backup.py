@@ -23,7 +23,7 @@ import os
 import logging
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from database import get_db, save_api_setting
+from database import get_db, save_api_setting, _decrypt_value
 from auth_utils import verify_session
 from services.cardano import cardano_service, is_stake_address
 
@@ -212,6 +212,13 @@ async def export_backup(options: BackupOptions):
             if rows:
                 columns = [description[0] for description in cursor.description]
                 all_rows = [dict(zip(columns, row)) for row in rows]
+
+                # Decrypt api_settings values for export (stored encrypted at rest)
+                if table_name == "api_settings":
+                    for row in all_rows:
+                        for field in ('api_key', 'api_secret', 'api_passphrase'):
+                            if row.get(field):
+                                row[field] = _decrypt_value(row[field])
 
                 # Special handling for wallets table with Cardano optimization
                 if table_name == "wallets" and options.optimize_cardano:
