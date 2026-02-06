@@ -7,11 +7,17 @@ Token is stored encrypted in the database.
 
 Install runs as a background task to avoid HTTP timeouts. The frontend
 polls GET /cloudflare/status for progress updates.
+
+Supervisor integration:
+  The container's supervisord.conf may not include [unix_http_server],
+  [supervisorctl], or [include] sections. We patch it at runtime so
+  supervisorctl can manage the cloudflared program.
 """
 
 import asyncio
 import logging
 import os
+import signal
 import shutil
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -24,7 +30,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/cloudflare", tags=["cloudflare"])
 
-SUPERVISOR_CONF = "/etc/supervisor/conf.d/cloudflared.conf"
+SUPERVISORD_CONF = "/etc/supervisor/conf.d/supervisord.conf"
+CLOUDFLARED_CONF = "/etc/supervisor/conf.d/cloudflared.conf"
+SUPERVISOR_SOCK = "/var/run/supervisor.sock"
 
 # Module-level install progress (shared across requests)
 _install_progress = {
@@ -62,14 +70,82 @@ async def _run_cmd(cmd: list[str], ignore_errors: bool = False) -> tuple[int, st
     return proc.returncode, out, err
 
 
+def _ensure_supervisor_ctl():
+    """Patch supervisord.conf to enable supervisorctl and include extra configs.
+
+    Adds [unix_http_server], [supervisorctl], and [include] sections if missing,
+    then sends SIGHUP to PID 1 (supervisord) to reload.
+    """
+    if not os.path.exists(SUPERVISORD_CONF):
+        logger.warning(f"supervisord.conf not found at {SUPERVISORD_CONF}")
+        return False
+
+    try:
+        with open(SUPERVISORD_CONF, "r") as f:
+            content = f.read()
+    except OSError:
+        return False
+
+    modified = False
+
+    if "[unix_http_server]" not in content:
+        content += (
+            "\n[unix_http_server]\n"
+            f"file={SUPERVISOR_SOCK}\n"
+        )
+        modified = True
+
+    if "[supervisorctl]" not in content:
+        content += (
+            "\n[supervisorctl]\n"
+            f"serverurl=unix://{SUPERVISOR_SOCK}\n"
+        )
+        modified = True
+
+    if "[include]" not in content:
+        # Include only cloudflared*.conf to avoid re-including supervisord.conf
+        content += (
+            "\n[include]\n"
+            "files = /etc/supervisor/conf.d/cloudflared*.conf\n"
+        )
+        modified = True
+
+    if modified:
+        try:
+            with open(SUPERVISORD_CONF, "w") as f:
+                f.write(content)
+            logger.info("Patched supervisord.conf with ctl/include sections")
+        except OSError as e:
+            logger.error(f"Failed to patch supervisord.conf: {e}")
+            return False
+
+        # SIGHUP tells supervisord to reload its config
+        try:
+            os.kill(1, signal.SIGHUP)
+            logger.info("Sent SIGHUP to supervisord (PID 1) to reload config")
+        except OSError as e:
+            logger.error(f"Failed to send SIGHUP to PID 1: {e}")
+            return False
+
+    return True
+
+
 async def _get_service_state() -> str:
     """Get cloudflared supervisor state. Returns RUNNING, STOPPED, etc. or empty string."""
     rc, out, _ = await _run_cmd(["supervisorctl", "status", "cloudflared"], ignore_errors=True)
     # Output format: "cloudflared                      RUNNING   pid 123, uptime 0:01:00"
-    if out:
-        parts = out.split()
-        if len(parts) >= 2:
-            return parts[1]
+    # Error format:  "unix:///var/run/supervisor.sock no such file"
+    # Error format:  "cloudflared: ERROR (no such process)"
+    if out and "RUNNING" in out:
+        return "RUNNING"
+    if out and "STOPPED" in out:
+        return "STOPPED"
+    if out and "STARTING" in out:
+        return "STARTING"
+    if out and "FATAL" in out:
+        return "FATAL"
+    if out and "ERROR" in out:
+        return "ERROR"
     return ""
 
 
@@ -141,9 +217,15 @@ async def _install_cloudflared_background(token: str, user_id: int):
                 _set_progress("Failed", error=f"apt-get install failed: {err}")
                 return
 
-        # Step 7: Write supervisor config
+        # Step 7: Ensure supervisord supports supervisorctl
+        _set_progress("Configuring process manager...")
+        _ensure_supervisor_ctl()
+        # Give supervisord a moment to reload after SIGHUP
+        await asyncio.sleep(2)
+
+        # Step 8: Write cloudflared supervisor config
         _set_progress("Writing supervisor configuration...")
-        supervisor_conf = (
+        cf_conf = (
             "[program:cloudflared]\n"
             f"command=/usr/bin/cloudflared tunnel run --token {token}\n"
             "autostart=true\n"
@@ -155,25 +237,30 @@ async def _install_cloudflared_background(token: str, user_id: int):
             "stderr_logfile_maxbytes=0\n"
         )
         try:
-            with open(SUPERVISOR_CONF, "w") as f:
-                f.write(supervisor_conf)
+            with open(CLOUDFLARED_CONF, "w") as f:
+                f.write(cf_conf)
         except OSError as e:
             _set_progress("Failed", error=f"Could not write supervisor config: {e}")
             return
 
-        # Step 8: Start service
+        # Step 9: Tell supervisor to pick up the new program
         _set_progress("Starting Cloudflare tunnel...")
         await _run_cmd(["supervisorctl", "reread"], ignore_errors=True)
         await _run_cmd(["supervisorctl", "update"], ignore_errors=True)
 
-        # Wait a moment for the service to come up
+        # Wait for the service to come up
         await asyncio.sleep(3)
         state = await _get_service_state()
 
         if state == "RUNNING":
             _set_progress("Tunnel is running")
+        elif state == "STARTING":
+            # Give it a few more seconds
+            await asyncio.sleep(5)
+            state = await _get_service_state()
+            _set_progress("Tunnel is running" if state == "RUNNING" else f"Service state: {state or 'unknown'}")
         else:
-            _set_progress(f"Tunnel started (state: {state or 'unknown'})")
+            _set_progress(f"Service state: {state or 'unknown'}")
 
     except Exception as e:
         _set_progress("Failed", error=str(e))
@@ -239,6 +326,7 @@ async def cloudflare_setup(req: SetupRequest, user_id: int = Depends(verify_sess
 @router.post("/stop")
 async def cloudflare_stop(user_id: int = Depends(verify_session)):
     """Stop cloudflared service."""
+    _ensure_supervisor_ctl()
     await _run_cmd(["supervisorctl", "stop", "cloudflared"], ignore_errors=True)
     state = await _get_service_state()
 
@@ -256,9 +344,10 @@ async def cloudflare_start(user_id: int = Depends(verify_session)):
     if not (shutil.which("cloudflared") or os.path.exists("/usr/bin/cloudflared")):
         raise HTTPException(status_code=400, detail="cloudflared is not installed. Run setup first.")
 
-    if not os.path.exists(SUPERVISOR_CONF):
+    if not os.path.exists(CLOUDFLARED_CONF):
         raise HTTPException(status_code=400, detail="Supervisor config missing. Run setup first.")
 
+    _ensure_supervisor_ctl()
     await _run_cmd(["supervisorctl", "start", "cloudflared"], ignore_errors=True)
     await asyncio.sleep(1)
     state = await _get_service_state()
@@ -274,13 +363,15 @@ async def cloudflare_start(user_id: int = Depends(verify_session)):
 @router.delete("/remove")
 async def cloudflare_remove(user_id: int = Depends(verify_session)):
     """Stop, uninstall cloudflared, remove config, and delete token."""
+    _ensure_supervisor_ctl()
+
     # Stop service
     await _run_cmd(["supervisorctl", "stop", "cloudflared"], ignore_errors=True)
 
-    # Remove supervisor config
+    # Remove cloudflared supervisor config
     try:
-        if os.path.exists(SUPERVISOR_CONF):
-            os.remove(SUPERVISOR_CONF)
+        if os.path.exists(CLOUDFLARED_CONF):
+            os.remove(CLOUDFLARED_CONF)
     except OSError:
         pass
 
