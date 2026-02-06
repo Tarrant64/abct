@@ -1,12 +1,12 @@
 """
-Portfolio Snapshot Service - Captures portfolio value every 4 hours.
+Portfolio Snapshot Service - Captures portfolio value every 2 hours.
 
 Strategy for local development app:
 1. Check on app startup if today's snapshot exists and is recent
-2. Create/update snapshot if none exists or if older than 4 hours
+2. Create/update snapshot if none exists or if older than 2 hours
 3. Also provide an API endpoint for manual snapshot creation
 
-Snapshots are stored per-day (one per day) but updated every 4 hours
+Snapshots are stored per-day (one per day) but updated every 2 hours
 to keep values current throughout the day.
 """
 
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 # Central Time zone (handles CST/CDT automatically)
 CT_TIMEZONE = ZoneInfo("America/Chicago")
-SNAPSHOT_INTERVAL_HOURS = 4  # Update snapshot every 4 hours
+SNAPSHOT_INTERVAL_HOURS = 2  # Update snapshot every 2 hours
 
 
 class SnapshotService:
@@ -454,7 +454,7 @@ class SnapshotService:
         except Exception as e:
             logger.error(f"Failed to check/create snapshots: {e}")
         else:
-            logger.info("Portfolio snapshot is up to date (less than 4 hours old)")
+            logger.info("Portfolio snapshot is up to date (less than 2 hours old)")
 
     async def get_history(self, days: int = 7, user_id: int = None) -> list:
         """
@@ -651,7 +651,7 @@ class SnapshotService:
             logger.error(f"Error calculating current portfolio value: {e}")
             return None
 
-    async def generate_historical_data(self, days: int = 30) -> dict:
+    async def generate_historical_data(self, days: int = 30, user_id: int = None) -> dict:
         """
         Generate historical portfolio data for the past N days.
 
@@ -665,13 +665,14 @@ class SnapshotService:
 
         Args:
             days: Number of days of history to generate (default 30)
+            user_id: User ID to generate history for
 
         Returns:
             dict with status and count of generated snapshots
         """
         from datetime import timedelta
 
-        logger.info(f"Generating {days} days of historical portfolio data...")
+        logger.info(f"Generating {days} days of historical portfolio data for user {user_id}...")
 
         # Get pricing service and fetch historical prices
         pricing = await self._get_pricing_service()
@@ -682,10 +683,11 @@ class SnapshotService:
             return {"status": "error", "message": "Could not fetch historical prices"}
 
         # Get current wallet balances (assumes constant holdings for historical calculation)
-        wallets = await get_all_wallets()
+        wallets = await get_all_wallets(user_id=user_id)
         ada_amount = 0.0
         btc_amount = 0.0
         eth_amount = 0.0
+        sol_amount = 0.0
 
         for wallet in wallets:
             balance = await get_wallet_balance(wallet['id'])
@@ -697,8 +699,10 @@ class SnapshotService:
                     btc_amount += amount
                 elif wallet['blockchain'] == 'ethereum':
                     eth_amount += amount
+                elif wallet['blockchain'] == 'solana':
+                    sol_amount += amount
 
-        logger.info(f"Current holdings - ADA: {ada_amount:.2f}, BTC: {btc_amount:.8f}, ETH: {eth_amount:.8f}")
+        logger.info(f"Current holdings - ADA: {ada_amount:.2f}, BTC: {btc_amount:.8f}, ETH: {eth_amount:.8f}, SOL: {sol_amount:.8f}")
 
         # Build a date -> prices lookup
         price_by_date = {}
@@ -721,16 +725,18 @@ class SnapshotService:
             ada_price = prices.get('ADA', 0)
             btc_price = prices.get('BTC', 0)
             eth_price = prices.get('ETH', 0)
+            sol_price = prices.get('SOL', 0)
 
             # Skip if we don't have prices for major assets
-            if ada_price == 0 and btc_price == 0 and eth_price == 0:
+            if ada_price == 0 and btc_price == 0 and eth_price == 0 and sol_price == 0:
                 continue
 
             # Calculate wallet value at historical prices
             wallet_value_usd = (
                 ada_amount * ada_price +
                 btc_amount * btc_price +
-                eth_amount * eth_price
+                eth_amount * eth_price +
+                sol_amount * sol_price
             )
 
             # For historical data, we don't have historical staking/defi/exchange/nft data
@@ -752,6 +758,8 @@ class SnapshotService:
                 'btc_price': btc_price,
                 'eth_amount': eth_amount,
                 'eth_price': eth_price,
+                'sol_amount': sol_amount,
+                'sol_price': sol_price,
                 'staking_value_usd': 0,  # Historical staking data not available
                 'defi_value_usd': 0,     # Historical DeFi data not available
                 'exchange_value_usd': 0, # Historical exchange data not available
@@ -759,11 +767,11 @@ class SnapshotService:
             }
 
             # Save snapshot (will update if exists due to UNIQUE constraint)
-            await save_portfolio_snapshot(snapshot_data)
+            await save_portfolio_snapshot(snapshot_data, user_id=user_id)
             snapshots_created += 1
             logger.debug(f"Created snapshot for {date_str}: ${total_value_usd:,.2f}")
 
-        logger.info(f"Generated {snapshots_created} historical snapshots")
+        logger.info(f"Generated {snapshots_created} historical snapshots for user {user_id}")
 
         return {
             "status": "success",
@@ -772,7 +780,8 @@ class SnapshotService:
             "holdings_used": {
                 "ada": ada_amount,
                 "btc": btc_amount,
-                "eth": eth_amount
+                "eth": eth_amount,
+                "sol": sol_amount
             },
             "note": "Historical data uses current holdings with historical prices. For accurate historical balances, transaction history reconstruction would be needed."
         }
