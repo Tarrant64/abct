@@ -1128,6 +1128,8 @@
 
         // --- Cloudflare Tunnel ---
 
+        let cfPollTimer = null;
+
         async function loadCloudflareStatus() {
             try {
                 const response = await fetch('/cloudflare/status');
@@ -1144,7 +1146,36 @@
             const setupForm = document.getElementById('cfSetupForm');
             const statusDiv = document.getElementById('cfStatus');
             const progressDiv = document.getElementById('cfProgress');
+            const progressText = document.getElementById('cfProgressText');
 
+            const progress = data.install_progress;
+
+            // If install is actively running, show progress and keep polling
+            if (progress && progress.active) {
+                setupForm.style.display = 'none';
+                statusDiv.style.display = 'none';
+                progressDiv.style.display = 'flex';
+                progressText.textContent = progress.step || 'Working...';
+                badge.textContent = 'Installing';
+                badge.className = 'status-badge http';
+                startCfPolling();
+                return;
+            }
+
+            // If install just finished with an error
+            if (progress && progress.error) {
+                stopCfPolling();
+                progressDiv.style.display = 'none';
+                setupForm.style.display = 'block';
+                statusDiv.style.display = 'none';
+                badge.textContent = 'Failed';
+                badge.className = 'status-badge http';
+                showStatus('Install failed: ' + progress.error, 'error');
+                return;
+            }
+
+            // Normal states (no active install)
+            stopCfPolling();
             progressDiv.style.display = 'none';
 
             if (data.running) {
@@ -1165,6 +1196,18 @@
             }
         }
 
+        function startCfPolling() {
+            if (cfPollTimer) return;
+            cfPollTimer = setInterval(loadCloudflareStatus, 2000);
+        }
+
+        function stopCfPolling() {
+            if (cfPollTimer) {
+                clearInterval(cfPollTimer);
+                cfPollTimer = null;
+            }
+        }
+
         async function setupCloudflare() {
             const tokenInput = document.getElementById('cfToken');
             const token = tokenInput.value.trim();
@@ -1179,7 +1222,7 @@
 
             setupForm.style.display = 'none';
             progressDiv.style.display = 'flex';
-            progressText.textContent = 'Installing cloudflared...';
+            progressText.textContent = 'Starting installation...';
 
             try {
                 const response = await fetch('/cloudflare/setup', {
@@ -1194,9 +1237,9 @@
                     throw new Error(result.detail || 'Setup failed');
                 }
 
-                showStatus('Cloudflare tunnel installed and started', 'success');
+                // Setup returned immediately - start polling for progress
                 tokenInput.value = '';
-                await loadCloudflareStatus();
+                startCfPolling();
             } catch (error) {
                 showStatus(error.message, 'error');
                 progressDiv.style.display = 'none';
