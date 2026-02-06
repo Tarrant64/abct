@@ -24,6 +24,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import TAPTOOLS_API_KEY, CEXPLORER_API_KEY, TAPTOOLS_BASE_URL, CEXPLORER_BASE_URL, CMC_API_KEY, CMC_BASE_URL
+from services.http_client import get_client, fetch_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +105,10 @@ class PricingService:
         self.cache: Dict[str, dict] = {}
         self.cache_duration = timedelta(minutes=5)
         self.last_fetch: Optional[datetime] = None
+        # CoinGecko cooldown: skip CoinGecko for 60s after a 429
+        self._coingecko_cooldown_until: Optional[datetime] = None
+        # Stale cache: backup of last known good prices for graceful degradation
+        self._stale_cache: Dict[str, dict] = {}
 
     async def get_prices(self, symbols: list = None, force_refresh: bool = False) -> Dict[str, float]:
         """
@@ -123,8 +128,11 @@ class PricingService:
             if all_cached_and_valid:
                 return {s: self.cache.get(s, {}).get('usd', 0) for s in symbols}
 
-        # First try CoinGecko for all known symbols
-        await self._fetch_from_coingecko(symbols)
+        # First try CoinGecko for all known symbols (skip if in cooldown from recent 429)
+        if self._coingecko_cooldown_until and datetime.now() < self._coingecko_cooldown_until:
+            logger.info(f"Skipping CoinGecko (cooldown until {self._coingecko_cooldown_until.strftime('%H:%M:%S')}), going straight to fallbacks")
+        else:
+            await self._fetch_from_coingecko(symbols)
 
         # Check for missing symbols and try CoinMarketCap as fallback
         missing_for_cmc = [s for s in symbols if self.cache.get(s, {}).get('usd', 0) == 0
@@ -163,10 +171,27 @@ class PricingService:
 
         # Only update last_fetch if we got at least some valid prices
         # This prevents cache from being "valid" when all sources are failing
-        if any(self.cache.get(s.upper(), {}).get('usd', 0) > 0 for s in symbols):
+        has_valid_prices = any(self.cache.get(s.upper(), {}).get('usd', 0) > 0 for s in symbols)
+        if has_valid_prices:
             self.last_fetch = datetime.now()
+            # Save good prices to stale cache as backup
+            for s in symbols:
+                price_data = self.cache.get(s.upper())
+                if price_data and price_data.get('usd', 0) > 0:
+                    self._stale_cache[s.upper()] = price_data.copy()
 
-        return {s: self.cache.get(s, {}).get('usd', 0) for s in symbols}
+        # Build result, falling back to stale cache for any symbols still at 0
+        result = {}
+        for s in symbols:
+            price = self.cache.get(s, {}).get('usd', 0)
+            if price == 0 and s.upper() in self._stale_cache:
+                stale_price = self._stale_cache[s.upper()].get('usd', 0)
+                if stale_price > 0:
+                    logger.info(f"Using stale cached price for {s}: ${stale_price}")
+                    price = stale_price
+            result[s] = price
+
+        return result
 
     async def _fetch_from_coingecko(self, symbols: List[str]) -> None:
         """Fetch prices from CoinGecko using /coins/markets for 1hr change and market cap."""
@@ -182,36 +207,39 @@ class PricingService:
             return
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                # Use /coins/markets endpoint which provides 1hr change and market cap
-                response = await client.get(
-                    f"{COINGECKO_BASE_URL}/coins/markets",
-                    params={
-                        'ids': ','.join(cg_ids),
-                        'vs_currency': 'usd',
-                        'price_change_percentage': '1h,24h'
-                    }
-                )
+            client = get_client("coingecko", timeout=30.0)
+            # Use /coins/markets endpoint which provides 1hr change and market cap
+            response = await fetch_with_retry(
+                client, "GET",
+                f"{COINGECKO_BASE_URL}/coins/markets",
+                params={
+                    'ids': ','.join(cg_ids),
+                    'vs_currency': 'usd',
+                    'price_change_percentage': '1h,24h'
+                }
+            )
 
-                if response.status_code == 200:
-                    data = response.json()
-                    for coin in data:
-                        cg_id = coin.get('id')
-                        symbol = symbol_map.get(cg_id)
-                        if symbol and coin.get('current_price'):
-                            self.cache[symbol] = {
-                                'usd': coin.get('current_price', 0),
-                                'usd_1h_change': coin.get('price_change_percentage_1h_in_currency', 0) or 0,
-                                'usd_24h_change': coin.get('price_change_percentage_24h', 0) or 0,
-                                'market_cap': coin.get('market_cap', 0) or 0,
-                                'source': 'CoinGecko',
-                                'updated_at': datetime.now().isoformat()
-                            }
-                    logger.info(f"CoinGecko: fetched prices for {len(data)} tokens")
-                elif response.status_code == 429:
-                    logger.warning(f"⚠️  CoinGecko RATE LIMITED (429) - attempting fallbacks for {len(cg_ids)} symbols: {list(symbol_map.values())}")
-                else:
-                    logger.warning(f"CoinGecko API error: {response.status_code}")
+            if response.status_code == 200:
+                data = response.json()
+                for coin in data:
+                    cg_id = coin.get('id')
+                    symbol = symbol_map.get(cg_id)
+                    if symbol and coin.get('current_price'):
+                        self.cache[symbol] = {
+                            'usd': coin.get('current_price', 0),
+                            'usd_1h_change': coin.get('price_change_percentage_1h_in_currency', 0) or 0,
+                            'usd_24h_change': coin.get('price_change_percentage_24h', 0) or 0,
+                            'market_cap': coin.get('market_cap', 0) or 0,
+                            'source': 'CoinGecko',
+                            'updated_at': datetime.now().isoformat()
+                        }
+                logger.info(f"CoinGecko: fetched prices for {len(data)} tokens")
+            elif response.status_code == 429:
+                # Set cooldown to skip CoinGecko for 60 seconds
+                self._coingecko_cooldown_until = datetime.now() + timedelta(seconds=60)
+                logger.warning(f"CoinGecko RATE LIMITED (429) - cooldown 60s, attempting fallbacks for {len(cg_ids)} symbols: {list(symbol_map.values())}")
+            else:
+                logger.warning(f"CoinGecko API error: {response.status_code}")
 
         except Exception as e:
             logger.error(f"CoinGecko fetch error: {e}")
@@ -239,47 +267,47 @@ class PricingService:
             return
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    f"{CMC_BASE_URL}/cryptocurrency/quotes/latest",
-                    params={'symbol': ','.join(cmc_symbols), 'convert': 'USD'},
-                    headers={
-                        'X-CMC_PRO_API_KEY': CMC_API_KEY,
-                        'Accept': 'application/json'
-                    }
-                )
+            client = get_client("coinmarketcap", timeout=30.0)
+            response = await client.get(
+                f"{CMC_BASE_URL}/cryptocurrency/quotes/latest",
+                params={'symbol': ','.join(cmc_symbols), 'convert': 'USD'},
+                headers={
+                    'X-CMC_PRO_API_KEY': CMC_API_KEY,
+                    'Accept': 'application/json'
+                }
+            )
 
-                if response.status_code == 200:
-                    data = response.json()
-                    coins = data.get('data', {})
-                    fetched_count = 0
+            if response.status_code == 200:
+                data = response.json()
+                coins = data.get('data', {})
+                fetched_count = 0
 
-                    for cmc_symbol, coin_data in coins.items():
-                        our_symbol = symbol_map.get(cmc_symbol)
-                        if not our_symbol:
-                            continue
+                for cmc_symbol, coin_data in coins.items():
+                    our_symbol = symbol_map.get(cmc_symbol)
+                    if not our_symbol:
+                        continue
 
-                        quote = coin_data.get('quote', {}).get('USD', {})
-                        price = quote.get('price', 0)
+                    quote = coin_data.get('quote', {}).get('USD', {})
+                    price = quote.get('price', 0)
 
-                        if price and price > 0:
-                            self.cache[our_symbol] = {
-                                'usd': price,
-                                'usd_1h_change': quote.get('percent_change_1h', 0) or 0,
-                                'usd_24h_change': quote.get('percent_change_24h', 0) or 0,
-                                'market_cap': quote.get('market_cap', 0) or 0,
-                                'volume_24h': quote.get('volume_24h', 0) or 0,
-                                'source': 'CoinMarketCap',
-                                'updated_at': datetime.now().isoformat()
-                            }
-                            fetched_count += 1
+                    if price and price > 0:
+                        self.cache[our_symbol] = {
+                            'usd': price,
+                            'usd_1h_change': quote.get('percent_change_1h', 0) or 0,
+                            'usd_24h_change': quote.get('percent_change_24h', 0) or 0,
+                            'market_cap': quote.get('market_cap', 0) or 0,
+                            'volume_24h': quote.get('volume_24h', 0) or 0,
+                            'source': 'CoinMarketCap',
+                            'updated_at': datetime.now().isoformat()
+                        }
+                        fetched_count += 1
 
-                    if fetched_count > 0:
-                        logger.info(f"CoinMarketCap: fetched prices for {fetched_count} tokens")
-                elif response.status_code == 429:
-                    logger.warning("CoinMarketCap rate limited")
-                else:
-                    logger.warning(f"CoinMarketCap API error: {response.status_code}")
+                if fetched_count > 0:
+                    logger.info(f"CoinMarketCap: fetched prices for {fetched_count} tokens")
+            elif response.status_code == 429:
+                logger.warning("CoinMarketCap rate limited")
+            else:
+                logger.warning(f"CoinMarketCap API error: {response.status_code}")
 
         except Exception as e:
             logger.error(f"CoinMarketCap fetch error: {e}")
@@ -290,37 +318,37 @@ class PricingService:
         coinbase_symbols = {'ADA', 'BTC', 'ETH', 'SOL', 'MATIC', 'USDC', 'USDT', 'DAI'}
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                for symbol in symbols:
-                    if symbol.upper() not in coinbase_symbols:
-                        continue
+            client = get_client("coinbase_public", timeout=30.0)
+            for symbol in symbols:
+                if symbol.upper() not in coinbase_symbols:
+                    continue
 
-                    # Skip if already have a price from CoinGecko
-                    if self.cache.get(symbol.upper(), {}).get('usd', 0) > 0:
-                        continue
+                # Skip if already have a price from CoinGecko
+                if self.cache.get(symbol.upper(), {}).get('usd', 0) > 0:
+                    continue
 
-                    # Coinbase uses POL for MATIC now
-                    cb_symbol = 'POL' if symbol.upper() == 'MATIC' else symbol.upper()
+                # Coinbase uses POL for MATIC now
+                cb_symbol = 'POL' if symbol.upper() == 'MATIC' else symbol.upper()
 
-                    response = await client.get(
-                        f"{COINBASE_BASE_URL}/prices/{cb_symbol}-USD/spot"
-                    )
+                response = await client.get(
+                    f"{COINBASE_BASE_URL}/prices/{cb_symbol}-USD/spot"
+                )
 
-                    if response.status_code == 200:
-                        data = response.json()
-                        price = float(data.get('data', {}).get('amount', 0))
-                        if price > 0:
-                            self.cache[symbol.upper()] = {
-                                'usd': price,
-                                'usd_1h_change': 0,  # Coinbase spot doesn't provide change data
-                                'usd_24h_change': 0,
-                                'market_cap': 0,
-                                'source': 'Coinbase',
-                                'updated_at': datetime.now().isoformat()
-                            }
-                            logger.info(f"Coinbase: got price for {symbol}: ${price}")
-                    else:
-                        logger.debug(f"Coinbase API error for {symbol}: {response.status_code}")
+                if response.status_code == 200:
+                    data = response.json()
+                    price = float(data.get('data', {}).get('amount', 0))
+                    if price > 0:
+                        self.cache[symbol.upper()] = {
+                            'usd': price,
+                            'usd_1h_change': 0,  # Coinbase spot doesn't provide change data
+                            'usd_24h_change': 0,
+                            'market_cap': 0,
+                            'source': 'Coinbase',
+                            'updated_at': datetime.now().isoformat()
+                        }
+                        logger.info(f"Coinbase: got price for {symbol}: ${price}")
+                else:
+                    logger.debug(f"Coinbase API error for {symbol}: {response.status_code}")
 
         except Exception as e:
             logger.error(f"Coinbase fetch error: {e}")
@@ -328,37 +356,37 @@ class PricingService:
     async def _fetch_from_taptools(self, symbols: List[str]) -> None:
         """Fetch prices from TapTools API for Cardano tokens."""
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                for symbol in symbols:
-                    policy_info = CARDANO_TOKEN_POLICIES.get(symbol.upper())
-                    if not policy_info:
-                        continue
+            client = get_client("taptools", timeout=30.0)
+            for symbol in symbols:
+                policy_info = CARDANO_TOKEN_POLICIES.get(symbol.upper())
+                if not policy_info:
+                    continue
 
-                    policy_id, asset_name = policy_info
-                    unit = f"{policy_id}{asset_name}"
+                policy_id, asset_name = policy_info
+                unit = f"{policy_id}{asset_name}"
 
-                    response = await client.get(
-                        f"{TAPTOOLS_BASE_URL}/token/prices",
-                        params={'unit': unit},
-                        headers={'x-api-key': TAPTOOLS_API_KEY}
-                    )
+                response = await client.get(
+                    f"{TAPTOOLS_BASE_URL}/token/prices",
+                    params={'unit': unit},
+                    headers={'x-api-key': TAPTOOLS_API_KEY}
+                )
 
-                    if response.status_code == 200:
-                        data = response.json()
-                        if data and isinstance(data, list) and len(data) > 0:
-                            price = data[0].get('price', 0)
-                            if price > 0:
-                                self.cache[symbol.upper()] = {
-                                    'usd': price,
-                                    'usd_1h_change': data[0].get('priceChange1h', 0) or 0,
-                                    'usd_24h_change': data[0].get('priceChange24h', 0) or 0,
-                                    'market_cap': data[0].get('mcap', 0) or 0,
-                                    'source': 'TapTools',
-                                    'updated_at': datetime.now().isoformat()
-                                }
-                                logger.info(f"TapTools: got price for {symbol}: ${price}")
-                    else:
-                        logger.warning(f"TapTools API error for {symbol}: {response.status_code}")
+                if response.status_code == 200:
+                    data = response.json()
+                    if data and isinstance(data, list) and len(data) > 0:
+                        price = data[0].get('price', 0)
+                        if price > 0:
+                            self.cache[symbol.upper()] = {
+                                'usd': price,
+                                'usd_1h_change': data[0].get('priceChange1h', 0) or 0,
+                                'usd_24h_change': data[0].get('priceChange24h', 0) or 0,
+                                'market_cap': data[0].get('mcap', 0) or 0,
+                                'source': 'TapTools',
+                                'updated_at': datetime.now().isoformat()
+                            }
+                            logger.info(f"TapTools: got price for {symbol}: ${price}")
+                else:
+                    logger.warning(f"TapTools API error for {symbol}: {response.status_code}")
 
         except Exception as e:
             logger.error(f"TapTools fetch error: {e}")
@@ -377,60 +405,60 @@ class PricingService:
             include_major: If True, also fetch major coins (BTC, ETH, etc.)
         """
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                units = []
-                symbol_to_unit = {}
+            client = get_client("defilama", timeout=30.0)
+            units = []
+            symbol_to_unit = {}
 
-                for symbol in symbols:
-                    upper_symbol = symbol.upper()
+            for symbol in symbols:
+                upper_symbol = symbol.upper()
 
-                    # Skip if already have a valid price
-                    if self.cache.get(upper_symbol, {}).get('usd', 0) > 0:
-                        continue
+                # Skip if already have a valid price
+                if self.cache.get(upper_symbol, {}).get('usd', 0) > 0:
+                    continue
 
-                    # Major coins - use coingecko: prefix
-                    if include_major and upper_symbol in ASSET_TO_COINGECKO:
-                        cg_id = ASSET_TO_COINGECKO[upper_symbol]
-                        unit = f"coingecko:{cg_id}"
-                        units.append(unit)
-                        symbol_to_unit[unit] = upper_symbol
+                # Major coins - use coingecko: prefix
+                if include_major and upper_symbol in ASSET_TO_COINGECKO:
+                    cg_id = ASSET_TO_COINGECKO[upper_symbol]
+                    unit = f"coingecko:{cg_id}"
+                    units.append(unit)
+                    symbol_to_unit[unit] = upper_symbol
 
-                    # Cardano tokens - use cardano: prefix with policy ID
-                    elif upper_symbol in CARDANO_TOKEN_POLICIES:
-                        policy_id, asset_name = CARDANO_TOKEN_POLICIES[upper_symbol]
-                        unit = f"cardano:{policy_id}{asset_name}"
-                        units.append(unit)
-                        symbol_to_unit[unit] = upper_symbol
+                # Cardano tokens - use cardano: prefix with policy ID
+                elif upper_symbol in CARDANO_TOKEN_POLICIES:
+                    policy_id, asset_name = CARDANO_TOKEN_POLICIES[upper_symbol]
+                    unit = f"cardano:{policy_id}{asset_name}"
+                    units.append(unit)
+                    symbol_to_unit[unit] = upper_symbol
 
-                if not units:
-                    return
+            if not units:
+                return
 
-                # DefiLlama accepts comma-separated list (batch request)
-                response = await client.get(
-                    f"https://coins.llama.fi/prices/current/{','.join(units)}"
-                )
+            # DefiLlama accepts comma-separated list (batch request)
+            response = await client.get(
+                f"https://coins.llama.fi/prices/current/{','.join(units)}"
+            )
 
-                if response.status_code == 200:
-                    data = response.json()
-                    coins = data.get('coins', {})
-                    fetched_count = 0
-                    for unit, price_data in coins.items():
-                        symbol = symbol_to_unit.get(unit)
-                        if symbol and price_data.get('price'):
-                            self.cache[symbol] = {
-                                'usd': price_data.get('price', 0),
-                                'usd_1h_change': 0,
-                                'usd_24h_change': 0,
-                                'market_cap': 0,
-                                'confidence': price_data.get('confidence', 0),
-                                'source': 'DefiLlama',
-                                'updated_at': datetime.now().isoformat()
-                            }
-                            fetched_count += 1
-                    if fetched_count > 0:
-                        logger.info(f"DefiLlama: fetched prices for {fetched_count} tokens")
-                else:
-                    logger.warning(f"DefiLlama API error: {response.status_code}")
+            if response.status_code == 200:
+                data = response.json()
+                coins = data.get('coins', {})
+                fetched_count = 0
+                for unit, price_data in coins.items():
+                    symbol = symbol_to_unit.get(unit)
+                    if symbol and price_data.get('price'):
+                        self.cache[symbol] = {
+                            'usd': price_data.get('price', 0),
+                            'usd_1h_change': 0,
+                            'usd_24h_change': 0,
+                            'market_cap': 0,
+                            'confidence': price_data.get('confidence', 0),
+                            'source': 'DefiLlama',
+                            'updated_at': datetime.now().isoformat()
+                        }
+                        fetched_count += 1
+                if fetched_count > 0:
+                    logger.info(f"DefiLlama: fetched prices for {fetched_count} tokens")
+            else:
+                logger.warning(f"DefiLlama API error: {response.status_code}")
 
         except Exception as e:
             logger.error(f"DefiLlama fetch error: {e}")
@@ -479,60 +507,61 @@ class PricingService:
         historical_data = {}
 
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                for symbol in symbols:
-                    cg_id = ASSET_TO_COINGECKO.get(symbol)
-                    if not cg_id:
-                        continue
+            client = get_client("coingecko_historical", timeout=60.0)
+            for symbol in symbols:
+                cg_id = ASSET_TO_COINGECKO.get(symbol)
+                if not cg_id:
+                    continue
 
-                    # CoinGecko market_chart endpoint - auto granularity based on days
-                    response = await client.get(
-                        f"{COINGECKO_BASE_URL}/coins/{cg_id}/market_chart",
-                        params={
-                            'vs_currency': 'usd',
-                            'days': days
-                        }
-                    )
+                # CoinGecko market_chart endpoint - auto granularity based on days
+                response = await fetch_with_retry(
+                    client, "GET",
+                    f"{COINGECKO_BASE_URL}/coins/{cg_id}/market_chart",
+                    params={
+                        'vs_currency': 'usd',
+                        'days': days
+                    }
+                )
 
-                    if response.status_code == 200:
-                        data = response.json()
-                        prices = data.get('prices', [])
+                if response.status_code == 200:
+                    data = response.json()
+                    prices = data.get('prices', [])
 
-                        # Convert to {date, price, time} format
-                        # 'time' field is for TradingView lightweight-charts compatibility
-                        # TradingView expects: Unix timestamp (seconds) for intraday, YYYY-MM-DD for daily
-                        historical_data[symbol] = []
-                        for timestamp_ms, price in prices:
-                            timestamp_sec = int(timestamp_ms / 1000)
-                            dt = datetime.fromtimestamp(timestamp_sec)
+                    # Convert to {date, price, time} format
+                    # 'time' field is for TradingView lightweight-charts compatibility
+                    # TradingView expects: Unix timestamp (seconds) for intraday, YYYY-MM-DD for daily
+                    historical_data[symbol] = []
+                    for timestamp_ms, price in prices:
+                        timestamp_sec = int(timestamp_ms / 1000)
+                        dt = datetime.fromtimestamp(timestamp_sec)
 
-                            # Format based on granularity
-                            if days <= 90:
-                                # Intraday/hourly: use Unix timestamp in seconds
-                                time_value = timestamp_sec
-                                date_str = dt.strftime('%Y-%m-%d %H:%M')
-                            else:
-                                # Daily intervals: use YYYY-MM-DD string
-                                time_value = dt.strftime('%Y-%m-%d')
-                                date_str = dt.strftime('%Y-%m-%d')
+                        # Format based on granularity
+                        if days <= 90:
+                            # Intraday/hourly: use Unix timestamp in seconds
+                            time_value = timestamp_sec
+                            date_str = dt.strftime('%Y-%m-%d %H:%M')
+                        else:
+                            # Daily intervals: use YYYY-MM-DD string
+                            time_value = dt.strftime('%Y-%m-%d')
+                            date_str = dt.strftime('%Y-%m-%d')
 
-                            historical_data[symbol].append({
-                                'date': date_str,
-                                'price': price,
-                                'time': time_value  # Unix timestamp (int) or date string
-                            })
+                        historical_data[symbol].append({
+                            'date': date_str,
+                            'price': price,
+                            'time': time_value  # Unix timestamp (int) or date string
+                        })
 
-                        logger.info(f"CoinGecko: fetched {len(prices)} historical prices for {symbol} (days={days})")
-                    elif response.status_code == 429:
-                        logger.warning(f"CoinGecko rate limited for {symbol}, waiting...")
-                        import asyncio
-                        await asyncio.sleep(60)  # Wait 60 seconds for rate limit
-                    else:
-                        logger.warning(f"CoinGecko historical API error for {symbol}: {response.status_code}")
-
-                    # Small delay between requests to avoid rate limiting
+                    logger.info(f"CoinGecko: fetched {len(prices)} historical prices for {symbol} (days={days})")
+                elif response.status_code == 429:
+                    logger.warning(f"CoinGecko rate limited for {symbol}, waiting...")
                     import asyncio
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(60)  # Wait 60 seconds for rate limit
+                else:
+                    logger.warning(f"CoinGecko historical API error for {symbol}: {response.status_code}")
+
+                # Small delay between requests to avoid rate limiting
+                import asyncio
+                await asyncio.sleep(1)
 
         except Exception as e:
             logger.error(f"Error fetching historical prices: {e}")

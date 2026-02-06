@@ -25,6 +25,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.api_key_manager import APIKeyManager
 from database import get_cache, set_cache
+from services.http_client import get_client
 
 logger = logging.getLogger(__name__)
 
@@ -100,34 +101,37 @@ class EtherscanService(APIKeyManager):
         params['apikey'] = await self.get_api_key()
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    chain_config['base_url'],
-                    params=params
-                )
+            client = get_client("etherscan", timeout=30.0)
+            response = await client.get(
+                chain_config['base_url'],
+                params=params
+            )
 
-                if response.status_code != 200:
-                    logger.error(f"{chain_config['explorer_name']} API error: {response.status_code}")
-                    return None
+            if response.status_code != 200:
+                logger.error(f"{chain_config['explorer_name']} API error: {response.status_code}")
+                return None
 
-                data = response.json()
+            data = response.json()
 
-                if data.get('status') == '0':
-                    message = data.get('message', 'Unknown error')
-                    result = data.get('result', '')
-                    # "No transactions found" is not an error
-                    if 'No transactions found' in str(result):
-                        return {'result': []}
-                    # Deprecation warnings still contain valid data
-                    if message == 'NOTOK' and 'deprecated' in str(result).lower():
-                        logger.warning(f"{chain_config['explorer_name']} API: {message} - {result}")
-                        # Still return data if it exists
-                        if isinstance(result, list):
-                            return data
+            if data.get('status') == '0':
+                message = data.get('message', 'Unknown error')
+                result = data.get('result', '')
+                # "No transactions found" is not an error
+                if 'No transactions found' in str(result):
+                    return {'result': []}
+                # Deprecation warnings - log but don't treat as error if data is empty
+                if message == 'NOTOK' and 'deprecated' in str(result).lower():
                     logger.warning(f"{chain_config['explorer_name']} API: {message} - {result}")
-                    return None
+                    # If result is empty list, treat as "no data" not "error"
+                    if isinstance(result, list) and len(result) == 0:
+                        return {'result': []}
+                    # Still return data if it exists
+                    if isinstance(result, list):
+                        return data
+                logger.warning(f"{chain_config['explorer_name']} API: {message} - {result}")
+                return None
 
-                return data
+            return data
 
         except Exception as e:
             logger.error(f"Error making {chain_config['explorer_name']} request: {e}")
@@ -173,6 +177,9 @@ class EtherscanService(APIKeyManager):
         Returns:
             List of transactions
         """
+        chain_config = self._get_chain_config(chain)
+        logger.info(f"Fetching {chain} transactions for {address[:10]}... (using {chain_config['explorer_name']})")
+
         params = {
             'module': 'account',
             'action': 'txlist',
@@ -186,12 +193,15 @@ class EtherscanService(APIKeyManager):
 
         data = await self._make_request(chain, params)
         if not data:
+            logger.warning(f"No data returned from {chain_config['explorer_name']} for {address[:10]}")
             return []
 
         transactions = data.get('result', [])
         if not isinstance(transactions, list):
+            logger.warning(f"Invalid result format from {chain_config['explorer_name']}: {type(transactions)}")
             return []
 
+        logger.info(f"Successfully fetched {len(transactions)} transactions from {chain_config['explorer_name']}")
         return [self._parse_transaction(tx, chain) for tx in transactions]
 
     def _parse_transaction(self, tx: dict, chain: str) -> dict:
@@ -228,6 +238,9 @@ class EtherscanService(APIKeyManager):
         Returns:
             List of token transfers
         """
+        chain_config = self._get_chain_config(chain)
+        logger.info(f"Fetching {chain} token transfers for {address[:10]}... (using {chain_config['explorer_name']})")
+
         params = {
             'module': 'account',
             'action': 'tokentx',
@@ -241,12 +254,15 @@ class EtherscanService(APIKeyManager):
 
         data = await self._make_request(chain, params)
         if not data:
+            logger.warning(f"No data returned from {chain_config['explorer_name']} token transfers for {address[:10]}")
             return []
 
         transfers = data.get('result', [])
         if not isinstance(transfers, list):
+            logger.warning(f"Invalid token transfer result format from {chain_config['explorer_name']}: {type(transfers)}")
             return []
 
+        logger.info(f"Successfully fetched {len(transfers)} token transfers from {chain_config['explorer_name']}")
         return [self._parse_token_transfer(tx, chain) for tx in transfers]
 
     def _parse_token_transfer(self, tx: dict, chain: str) -> dict:

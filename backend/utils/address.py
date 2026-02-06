@@ -6,7 +6,7 @@ def detect_blockchain(address: str) -> Optional[str]:
     Detect the blockchain based on address format.
 
     Returns:
-        'cardano', 'bitcoin', 'ethereum', 'polygon', 'base', 'solana', or None if unknown
+        'cardano', 'bitcoin', 'ethereum', 'polygon', 'base', 'solana', 'algorand', or None if unknown
     """
     address = address.strip()
 
@@ -14,13 +14,15 @@ def detect_blockchain(address: str) -> Optional[str]:
     if ':' in address:
         prefix, addr = address.split(':', 1)
         prefix = prefix.lower()
-        if prefix in ('cardano', 'bitcoin', 'ethereum', 'eth', 'polygon', 'matic', 'base', 'solana', 'sol'):
+        if prefix in ('cardano', 'bitcoin', 'ethereum', 'eth', 'polygon', 'matic', 'base', 'solana', 'sol', 'algorand', 'algo'):
             if prefix == 'eth':
                 return 'ethereum'
             elif prefix == 'sol':
                 return 'solana'
             elif prefix == 'matic':
                 return 'polygon'
+            elif prefix == 'algo':
+                return 'algorand'
             return prefix
         return None
 
@@ -31,6 +33,12 @@ def detect_blockchain(address: str) -> Optional[str]:
     # Cardano stake addresses start with stake1
     if address.startswith('stake1'):
         return 'cardano'
+
+    # Algorand addresses - 58 characters, base32 (uppercase A-Z and 2-7)
+    if len(address) == 58:
+        base32_chars = set('ABCDEFGHIJKLMNOPQRSTUVWXYZ234567')
+        if all(c in base32_chars for c in address.upper()):
+            return 'algorand'
 
     # Ethereum addresses - start with 0x and are 42 characters
     if address.lower().startswith('0x') and len(address) == 42:
@@ -152,8 +160,10 @@ def parse_address(line: str) -> Optional[Tuple[str, str]]:
             blockchain = 'solana'
         elif blockchain == 'matic':
             blockchain = 'polygon'
+        elif blockchain == 'algo':
+            blockchain = 'algorand'
 
-        if blockchain in ('cardano', 'bitcoin', 'ethereum', 'polygon', 'base', 'solana'):
+        if blockchain in ('cardano', 'bitcoin', 'ethereum', 'polygon', 'base', 'solana', 'algorand'):
             return (blockchain, address)
         return None
 

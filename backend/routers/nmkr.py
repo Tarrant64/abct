@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import Response
 from auth_utils import verify_session_optional
 from services.nmkr_service import nmkr_service
+from services.http_client import get_client
 
 router = APIRouter(prefix="/nmkr", tags=["nmkr"])
 logger = logging.getLogger(__name__)
@@ -61,48 +62,48 @@ async def get_token_image_proxy(
 
     try:
         # Fetch image from NMKR with authentication
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.get(
-                nmkr_url,
-                headers={"Authorization": api_key}
-            )
+        client = get_client("nmkr_service", timeout=15.0)
+        response = await client.get(
+            nmkr_url,
+            headers={"Authorization": api_key}
+        )
 
-            if response.status_code == 200:
-                # NMKR returns IPFS URLs (e.g., ipfs://Qm...), not actual images
-                ipfs_url = response.text.strip()
+        if response.status_code == 200:
+            # NMKR returns IPFS URLs (e.g., ipfs://Qm...), not actual images
+            ipfs_url = response.text.strip()
 
-                # Convert IPFS URL to HTTP gateway URL for browser display
-                if ipfs_url.startswith("ipfs://"):
-                    ipfs_hash = ipfs_url.replace("ipfs://", "")
-                    # Use public IPFS gateway
-                    http_url = f"https://ipfs.io/ipfs/{ipfs_hash}"
-                    return Response(
-                        content=http_url,
-                        media_type="text/plain",
-                        headers={
-                            "Cache-Control": "public, max-age=86400",  # Cache for 24 hours
-                            "X-NMKR-Proxy": "true",
-                            "X-IPFS-Original": ipfs_url
-                        }
-                    )
-                else:
-                    # If not IPFS, return as-is (might be direct image URL)
-                    return Response(
-                        content=ipfs_url,
-                        media_type="text/plain",
-                        headers={
-                            "Cache-Control": "public, max-age=86400",
-                            "X-NMKR-Proxy": "true"
-                        }
-                    )
-            elif response.status_code == 404:
-                raise HTTPException(status_code=404, detail="Token image not found in NMKR")
-            else:
-                logger.warning(f"NMKR returned {response.status_code} for {policy_id}/{token_name_hex}")
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail=f"NMKR API error: {response.text}"
+            # Convert IPFS URL to HTTP gateway URL for browser display
+            if ipfs_url.startswith("ipfs://"):
+                ipfs_hash = ipfs_url.replace("ipfs://", "")
+                # Use public IPFS gateway
+                http_url = f"https://ipfs.io/ipfs/{ipfs_hash}"
+                return Response(
+                    content=http_url,
+                    media_type="text/plain",
+                    headers={
+                        "Cache-Control": "public, max-age=86400",  # Cache for 24 hours
+                        "X-NMKR-Proxy": "true",
+                        "X-IPFS-Original": ipfs_url
+                    }
                 )
+            else:
+                # If not IPFS, return as-is (might be direct image URL)
+                return Response(
+                    content=ipfs_url,
+                    media_type="text/plain",
+                    headers={
+                        "Cache-Control": "public, max-age=86400",
+                        "X-NMKR-Proxy": "true"
+                    }
+                )
+        elif response.status_code == 404:
+            raise HTTPException(status_code=404, detail="Token image not found in NMKR")
+        else:
+            logger.warning(f"NMKR returned {response.status_code} for {policy_id}/{token_name_hex}")
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"NMKR API error: {response.text}"
+            )
 
     except httpx.TimeoutException:
         logger.error(f"NMKR request timeout for {policy_id}/{token_name_hex}")

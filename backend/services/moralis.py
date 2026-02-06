@@ -7,6 +7,7 @@ Provides spam token detection for EVM and Solana chains.
 import httpx
 import logging
 from typing import List, Dict, Optional
+from services.http_client import get_client
 
 logger = logging.getLogger(__name__)
 
@@ -59,29 +60,29 @@ class MoralisService:
         }
 
         try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                response = await client.get(
-                    f"{MORALIS_API_BASE}/erc20/metadata",
-                    params={
-                        "chain": chain,
-                        "addresses": [token_address]
-                    },
-                    headers=headers
-                )
+            client = get_client("moralis", timeout=15.0)
+            response = await client.get(
+                f"{MORALIS_API_BASE}/erc20/metadata",
+                params={
+                    "chain": chain,
+                    "addresses": [token_address]
+                },
+                headers=headers
+            )
 
-                if response.status_code == 200:
-                    data = response.json()
-                    if data and len(data) > 0:
-                        token_data = data[0]
-                        return {
-                            "address": token_address,
-                            "is_spam": token_data.get("possible_spam", False),
-                            "name": token_data.get("name"),
-                            "symbol": token_data.get("symbol"),
-                            "decimals": token_data.get("decimals")
-                        }
+            if response.status_code == 200:
+                data = response.json()
+                if data and len(data) > 0:
+                    token_data = data[0]
+                    return {
+                        "address": token_address,
+                        "is_spam": token_data.get("possible_spam", False),
+                        "name": token_data.get("name"),
+                        "symbol": token_data.get("symbol"),
+                        "decimals": token_data.get("decimals")
+                    }
 
-                return {"error": f"HTTP {response.status_code}"}
+            return {"error": f"HTTP {response.status_code}"}
 
         except Exception as e:
             logger.error(f"Error checking token spam for {token_address}: {e}")
@@ -108,32 +109,32 @@ class MoralisService:
         }
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    f"{MORALIS_API_BASE}/{wallet_address}/erc20",
-                    params={"chain": chain},
-                    headers=headers
-                )
+            client = get_client("moralis", timeout=30.0)
+            response = await client.get(
+                f"{MORALIS_API_BASE}/{wallet_address}/erc20",
+                params={"chain": chain},
+                headers=headers
+            )
 
-                if response.status_code == 200:
-                    tokens = response.json()
-                    spam_tokens = []
+            if response.status_code == 200:
+                tokens = response.json()
+                spam_tokens = []
 
-                    for token in tokens:
-                        if token.get("possible_spam", False):
-                            spam_tokens.append({
-                                "address": token.get("token_address"),
-                                "name": token.get("name"),
-                                "symbol": token.get("symbol"),
-                                "balance": token.get("balance"),
-                                "decimals": token.get("decimals"),
-                                "chain": chain
-                            })
+                for token in tokens:
+                    if token.get("possible_spam", False):
+                        spam_tokens.append({
+                            "address": token.get("token_address"),
+                            "name": token.get("name"),
+                            "symbol": token.get("symbol"),
+                            "balance": token.get("balance"),
+                            "decimals": token.get("decimals"),
+                            "chain": chain
+                        })
 
-                    return spam_tokens
+                return spam_tokens
 
-                logger.error(f"Moralis API error: {response.status_code}")
-                return []
+            logger.error(f"Moralis API error: {response.status_code}")
+            return []
 
         except Exception as e:
             logger.error(f"Error scanning wallet {wallet_address}: {e}")
@@ -159,32 +160,32 @@ class MoralisService:
         }
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    f"{MORALIS_API_BASE}/solana/account/{wallet_address}/tokens",
-                    headers=headers
-                )
+            client = get_client("moralis", timeout=30.0)
+            response = await client.get(
+                f"{MORALIS_API_BASE}/solana/account/{wallet_address}/tokens",
+                headers=headers
+            )
 
-                if response.status_code == 200:
-                    data = response.json()
-                    tokens = data.get("tokens", [])
-                    spam_tokens = []
+            if response.status_code == 200:
+                data = response.json()
+                tokens = data.get("tokens", [])
+                spam_tokens = []
 
-                    for token in tokens:
-                        if token.get("possible_spam", False):
-                            spam_tokens.append({
-                                "address": token.get("mint"),
-                                "name": token.get("name"),
-                                "symbol": token.get("symbol"),
-                                "balance": token.get("amount"),
-                                "decimals": token.get("decimals"),
-                                "chain": "solana"
-                            })
+                for token in tokens:
+                    if token.get("possible_spam", False):
+                        spam_tokens.append({
+                            "address": token.get("mint"),
+                            "name": token.get("name"),
+                            "symbol": token.get("symbol"),
+                            "balance": token.get("amount"),
+                            "decimals": token.get("decimals"),
+                            "chain": "solana"
+                        })
 
-                    return spam_tokens
+                return spam_tokens
 
-                logger.error(f"Moralis Solana API error: {response.status_code}")
-                return []
+            logger.error(f"Moralis Solana API error: {response.status_code}")
+            return []
 
         except Exception as e:
             logger.error(f"Error scanning Solana wallet {wallet_address}: {e}")
