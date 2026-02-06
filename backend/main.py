@@ -7,7 +7,7 @@ background tasks for portfolio snapshots and NFT price collection.
 
 Startup Sequence:
     1. Initialize SQLite database schema
-    2. Launch background task for portfolio snapshot (12 PM CT daily)
+    2. Launch background task for portfolio snapshot (every 2 hours)
     3. Launch background task for incremental NFT floor price collection
     4. Register all API routers
     5. Mount static files for frontend
@@ -155,6 +155,21 @@ async def lifespan(app: FastAPI):
             # Mark task as run
             await rate_limit_tracker.mark_task_run('portfolio_snapshot', 'portfolio', 'auto')
 
+            # Auto-generate historical data if no snapshots exist for any user
+            try:
+                from database import get_all_users, get_portfolio_history
+                users = await get_all_users()
+                non_demo_users = [u for u in users if not u.get('is_demo', False)]
+                for user in non_demo_users:
+                    uid = user['id']
+                    existing = await get_portfolio_history(days=30, user_id=uid)
+                    if not existing or len(existing) < 2:
+                        logger.info(f"No historical snapshots for user {uid}, auto-generating 30 days...")
+                        await snapshot_service.generate_historical_data(days=30, user_id=uid)
+                        logger.info(f"Historical data generated for user {uid}")
+            except Exception as hist_error:
+                logger.warning(f"Could not auto-generate historical data: {hist_error}")
+
             # Warm the portfolio cache for faster page loads (separate cooldown check)
             try:
                 should_warm, warm_reason = await rate_limit_tracker.should_run_task(
@@ -246,16 +261,16 @@ async def lifespan(app: FastAPI):
             # Mark overall ready once NFT prices are done (last task)
             startup_status["ready"] = True
 
-    # Periodic snapshot task - runs every 4 hours to create snapshots
+    # Periodic snapshot task - runs every 2 hours to create snapshots
     async def periodic_snapshot_task():
-        """Background task that creates portfolio snapshots every 4 hours."""
+        """Background task that creates portfolio snapshots every 2 hours."""
         import asyncio
         from services.snapshot import snapshot_service
 
         while True:
             try:
-                # Wait 4 hours between snapshots
-                await asyncio.sleep(4 * 3600)
+                # Wait 2 hours between snapshots
+                await asyncio.sleep(2 * 3600)
 
                 logger.info("Periodic snapshot task: Creating portfolio snapshots...")
                 await log_service.info("main", "Periodic snapshot task: Creating portfolio snapshots")

@@ -3,7 +3,7 @@
 Personal multi-chain portfolio tracker built Cardano-first.
 
 ![Version](https://img.shields.io/badge/version-1.0.1-brightgreen.svg)
-![Build](https://img.shields.io/badge/build-1770248608-blue.svg)
+![Build](https://img.shields.io/badge/build-1770345770-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.109-teal.svg)
@@ -33,7 +33,7 @@ Privacy-focused (self-hosted), transaction analytics, custom tokens, portfolio s
 ## Project
 Personal side project built with AI assistance. Goal: Create a robust tracker that doesn't compromise on Cardano while supporting major chains. Community contributions welcome.
 
-**Current Build**: v1.0.1 (BUILD 1770248608)
+**Current Build**: v1.0.1 (BUILD 1770345770)
 
 ## ⚠️ Important: Intended Use
 
@@ -89,6 +89,16 @@ For a detailed overview of the system architecture, authentication flow, and dat
 ## 📦 What's New
 
 ### v1.0.1 - UI, Themes, & Multi-Chain Expansion (February 2026) ✨
+- **🔑 .env Import/Export Fix**: Complete API key migration workflow
+  - Fixed .env export crash (missing `Path` import)
+  - New .env import: upload a `.env` file to import API keys directly into the database
+  - Supports all 17 API services including exchange key+secret+passphrase grouping
+  - File upload UI with drag-and-drop on the Backup & Restore page
+- **📈 Portfolio History Improvements**: Better snapshot frequency and backfill
+  - Snapshot interval reduced from 4 hours to 2 hours for more granular history
+  - Auto-generate 30 days of historical data for new users on startup
+  - "Generate 30-Day History" button on dashboard when no data exists
+  - Added Solana (SOL) to historical price tracking
 - **🔗 Algorand Support**: Full blockchain integration for Algorand network
   - Pera Wallet API integration (primary source)
   - Tatum API fallback support
@@ -473,6 +483,8 @@ ABCT/
 - `POST /backup/export` - Export configuration to JSON
 - `POST /backup/preview` - Preview backup file (dry-run)
 - `POST /backup/import` - Import configuration from backup
+- `GET /backup/export-env` - Export API keys as .env file
+- `POST /backup/import-env` - Import API keys from .env file into database
 
 ## ⚙️ Configuration
 
@@ -681,6 +693,6 @@ For detailed API information including rate limits and pricing, see [API Provide
 
 ---
 
-**Current Version:** v1.0.1 (BUILD 1770166262)
-**Last Updated:** February 3, 2026
+**Current Version:** v1.0.1 (BUILD 1770345770)
+**Last Updated:** February 5, 2026
 **Release Date:** February 1, 2026

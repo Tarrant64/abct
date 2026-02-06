@@ -5189,6 +5189,40 @@ async function loadPortfolioHistory(range = '7d') {
     }
 }
 
+// Generate portfolio history data (backfill 30 days)
+async function generatePortfolioHistory() {
+    const btn = document.getElementById('generateHistoryBtn');
+    const emptyState = document.getElementById('chartEmptyState');
+
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Generating...';
+    }
+
+    try {
+        const response = await authFetch(`${API_BASE}/portfolio/history/generate?days=30`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            // Reload the chart with the newly generated data
+            const activeRangeBtn = document.querySelector('.range-btn.active');
+            const currentRange = activeRangeBtn ? activeRangeBtn.dataset.range : '7d';
+            await loadPortfolioHistory(currentRange);
+        } else {
+            if (emptyState) {
+                setSafeHTML(emptyState, '<p>Failed to generate history. Check API keys and try again.</p><button class="btn btn-primary" onclick="generatePortfolioHistory()" id="generateHistoryBtn">Retry</button>');
+            }
+        }
+    } catch (error) {
+        console.error('Error generating portfolio history:', error);
+        if (emptyState) {
+            setSafeHTML(emptyState, '<p>Error generating history data.</p><button class="btn btn-primary" onclick="generatePortfolioHistory()" id="generateHistoryBtn">Retry</button>');
+        }
+    }
+}
+
 // Get theme colors for chart
 function getChartColors() {
     const style = getComputedStyle(document.documentElement);

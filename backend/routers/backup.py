@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
+from pathlib import Path
 from datetime import datetime
 import json
 import sys
@@ -22,7 +23,7 @@ import os
 import logging
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from database import get_db
+from database import get_db, save_api_setting
 from auth_utils import verify_session
 from services.cardano import cardano_service, is_stake_address
 
@@ -749,69 +750,119 @@ async def export_env_file():
         raise HTTPException(status_code=500, detail=f"Failed to export .env file: {str(e)}")
 
 
-@router.post("/import-env", dependencies=[Depends(verify_session)])
-async def import_env_file(env_content: str):
+@router.post("/import-env")
+async def import_env_file(env_content: str, user_id: int = Depends(verify_session)):
     """
-    Import .env file contents (preview only - doesn't write to disk).
+    Import API keys from .env file content into the database.
 
-    For security, this endpoint only validates and previews the .env content.
-    To actually use these keys, you must:
-    1. Manually copy the .env file to the server
-    2. Restart the application to load new environment variables
+    Parses KEY=VALUE pairs, maps recognized environment variable names
+    to api_name values used by APIKeyManager, and saves them via
+    save_api_setting(). Exchange APIs group key + secret + passphrase.
 
-    Returns: Preview of what would be imported and instructions.
+    Returns: Summary of what was imported.
     """
+    # Mapping from env var prefix to (api_name, role)
+    # role is 'key', 'secret', or 'passphrase'
+    ENV_VAR_MAP = {
+        'BLOCKFROST_API_KEY': ('blockfrost', 'key'),
+        'CEXPLORER_API_KEY': ('cexplorer', 'key'),
+        'TAPTOOLS_API_KEY': ('taptools', 'key'),
+        'ALCHEMY_API_KEY': ('alchemy', 'key'),
+        'HELIUS_API_KEY': ('helius', 'key'),
+        'MORALIS_API_KEY': ('moralis', 'key'),
+        'ETHERSCAN_API_KEY': ('etherscan', 'key'),
+        'CMC_API_KEY': ('coinmarketcap', 'key'),
+        'GRAPH_API_KEY': ('graph', 'key'),
+        'BEACONCHAIN_API_KEY': ('beaconchain', 'key'),
+        'MAESTRO_API_KEY': ('maestro', 'key'),
+        # Exchange keys
+        'BINANCE_API_KEY': ('binance', 'key'),
+        'BINANCE_API_SECRET': ('binance', 'secret'),
+        'BINANCE_US_API_KEY': ('binance_us', 'key'),
+        'BINANCE_US_API_SECRET': ('binance_us', 'secret'),
+        'OKX_API_KEY': ('okx', 'key'),
+        'OKX_API_SECRET': ('okx', 'secret'),
+        'OKX_API_PASSPHRASE': ('okx', 'passphrase'),
+        'BITGET_API_KEY': ('bitget', 'key'),
+        'BITGET_API_SECRET': ('bitget', 'secret'),
+        'BITGET_API_PASSPHRASE': ('bitget', 'passphrase'),
+        'GATE_API_KEY': ('gate', 'key'),
+        'GATE_API_SECRET': ('gate', 'secret'),
+        'KUCOIN_API_KEY': ('kucoin', 'key'),
+        'KUCOIN_API_SECRET': ('kucoin', 'secret'),
+        'KUCOIN_API_PASSPHRASE': ('kucoin', 'passphrase'),
+    }
+
     try:
-        # Parse .env content
+        # Parse all KEY=VALUE pairs from the content
         lines = env_content.strip().split('\n')
-        api_keys = {}
+        parsed_vars = {}
 
         for line in lines:
             line = line.strip()
-            # Skip comments and empty lines
             if not line or line.startswith('#'):
                 continue
-
-            # Parse KEY=VALUE
             if '=' in line:
                 key, value = line.split('=', 1)
                 key = key.strip()
                 value = value.strip().strip('"').strip("'")
+                if value:
+                    parsed_vars[key] = value
 
-                # Only track API key variables
-                if 'API_KEY' in key or 'COINBASE' in key or 'NFT' in key or 'ABCT' in key:
-                    # Mask the value for preview
-                    if value:
-                        masked_value = value[:8] + '...' + value[-4:] if len(value) > 12 else '***'
-                        api_keys[key] = {
-                            'has_value': bool(value),
-                            'preview': masked_value,
-                            'length': len(value)
-                        }
-                    else:
-                        api_keys[key] = {
-                            'has_value': False,
-                            'preview': '(empty)',
-                            'length': 0
-                        }
+        # Group by api_name
+        # Each entry: {api_name: {'key': ..., 'secret': ..., 'passphrase': ...}}
+        grouped = {}
+        for env_var, value in parsed_vars.items():
+            if env_var in ENV_VAR_MAP:
+                api_name, role = ENV_VAR_MAP[env_var]
+                if api_name not in grouped:
+                    grouped[api_name] = {}
+                grouped[api_name][role] = value
+
+        if not grouped:
+            return {
+                "success": False,
+                "imported": 0,
+                "skipped": 0,
+                "errors": [],
+                "message": "No recognized API keys found in the .env content."
+            }
+
+        # Save each API to the database
+        imported = []
+        skipped = []
+        errors = []
+
+        for api_name, parts in grouped.items():
+            try:
+                api_key = parts.get('key', '')
+                if not api_key:
+                    skipped.append(f"{api_name}: no key value found (only secret/passphrase)")
+                    continue
+
+                await save_api_setting(
+                    api_name=api_name,
+                    api_key=api_key,
+                    enabled=True,
+                    user_id=user_id,
+                    api_secret=parts.get('secret'),
+                    api_passphrase=parts.get('passphrase')
+                )
+                imported.append(api_name)
+                logger.info(f"Imported API key for {api_name} from .env import")
+
+            except Exception as e:
+                errors.append(f"{api_name}: {str(e)}")
+                logger.error(f"Failed to import API key for {api_name}: {e}")
 
         return {
-            "valid": True,
-            "api_keys_found": len(api_keys),
-            "preview": api_keys,
-            "instructions": [
-                "This is a preview only - keys are NOT imported yet.",
-                "To use these API keys:",
-                "1. Save the .env file to your server (project root directory)",
-                "2. For Docker: Pass keys as environment variables when starting container",
-                "3. For local: Restart the backend server to load new .env file",
-                "4. Verify keys are loaded: Check /settings/api-status endpoint"
-            ],
-            "warnings": [
-                "Never store .env files in version control",
-                "Delete the .env backup file after importing",
-                "API keys in environment variables override .env file"
-            ]
+            "success": True,
+            "imported": len(imported),
+            "skipped": len(skipped),
+            "errors": errors,
+            "imported_apis": imported,
+            "skipped_apis": skipped,
+            "message": f"Successfully imported {len(imported)} API key(s) into the database."
         }
 
     except Exception as e:
