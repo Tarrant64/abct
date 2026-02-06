@@ -6,10 +6,10 @@
     <title>ABCT - Backup & Restore</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1770344689">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1770345770">
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1770344689"></script>
+    <script src="/static/js/session-auth.js?v=1770345770"></script>
     <style>
         /* Backup Manager Styles */
         .backup-manager {
@@ -716,6 +716,33 @@
                     <span>Export API Keys (.env)</span>
                 </button>
             </div>
+
+            <!-- .env Import Sub-Section -->
+            <div style="border-top: 1px solid #3a3a4e; margin-top: 25px; padding-top: 20px;">
+                <h3 style="color: #e0e0e0; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+                    <span>📤</span> Import API Keys from .env File
+                </h3>
+                <p style="color: #888; font-size: 13px; margin-bottom: 15px;">
+                    Upload a previously exported .env file to import API keys directly into the database. This is the easiest way to migrate keys to a new server.
+                </p>
+
+                <div id="envUploadArea" class="upload-area" onclick="document.getElementById('envFileInput').click()" style="margin-bottom: 15px;">
+                    <div class="upload-icon">🔑</div>
+                    <div class="upload-text">Click to select .env file or drag and drop</div>
+                    <div class="upload-hint">Accepts .env or .txt files</div>
+                </div>
+                <input type="file" id="envFileInput" accept=".env,.txt" style="display: none;" onchange="handleEnvFileSelect(event)">
+
+                <!-- Import result area -->
+                <div id="envImportResult" class="hidden"></div>
+
+                <div class="action-buttons">
+                    <button id="importEnvBtn" class="btn btn-success" onclick="importEnvFile()" disabled>
+                        <span>📤</span>
+                        <span>Import API Keys</span>
+                    </button>
+                </div>
+            </div>
         </div>
 
         <!-- Import Section -->
@@ -842,6 +869,7 @@
         window.addEventListener('DOMContentLoaded', () => {
             loadBackupInfo();
             setupDragAndDrop();
+            setupEnvDragAndDrop();
             setupModeSelection();
             updateExportWarning();
 
@@ -1374,6 +1402,136 @@
                 btn.disabled = false;
                 btn.innerHTML = '<span>📤</span> <span>Import Configuration</span>';
             }
+        }
+
+        // === .env Import Functions ===
+        let envFileContent = null;
+
+        function handleEnvFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                handleEnvFile(file);
+            }
+        }
+
+        async function handleEnvFile(file) {
+            try {
+                const text = await file.text();
+                envFileContent = text;
+
+                // Update upload area to show selected file
+                const uploadArea = document.getElementById('envUploadArea');
+                uploadArea.innerHTML = `
+                    <div class="upload-icon">✅</div>
+                    <div class="upload-text">${file.name}</div>
+                    <div class="upload-hint">File loaded — click "Import API Keys" to proceed</div>
+                `;
+
+                document.getElementById('importEnvBtn').disabled = false;
+                document.getElementById('envImportResult').classList.add('hidden');
+                showStatus('success', '.env file loaded. Click "Import API Keys" to import.');
+
+            } catch (error) {
+                console.error('Failed to read .env file:', error);
+                showStatus('error', `Failed to read file: ${error.message}`);
+            }
+        }
+
+        async function importEnvFile() {
+            if (!envFileContent) {
+                showStatus('error', 'Please select a .env file first');
+                return;
+            }
+
+            if (!confirm('Import API keys from this .env file into the database?\n\nExisting keys with the same name will be overwritten.')) {
+                return;
+            }
+
+            const btn = document.getElementById('importEnvBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> <span>Importing...</span>';
+
+            try {
+                const token = localStorage.getItem('abct_token');
+                const response = await fetch('/backup/import-env', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(envFileContent)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+                    throw new Error(errorData.detail || `Import failed (${response.status})`);
+                }
+
+                const result = await response.json();
+                const resultDiv = document.getElementById('envImportResult');
+                resultDiv.classList.remove('hidden');
+
+                if (result.success && result.imported > 0) {
+                    let html = `
+                        <div class="alert alert-success">
+                            <div class="alert-icon">✅</div>
+                            <div class="alert-content">
+                                <h4>${result.message}</h4>
+                                <p>Imported: ${result.imported_apis.join(', ')}</p>
+                    `;
+                    if (result.skipped_apis && result.skipped_apis.length > 0) {
+                        html += `<p style="margin-top: 5px;">Skipped: ${result.skipped_apis.join(', ')}</p>`;
+                    }
+                    if (result.errors && result.errors.length > 0) {
+                        html += `<p style="margin-top: 5px; color: #f87171;">Errors: ${result.errors.join('; ')}</p>`;
+                    }
+                    html += `</div></div>`;
+                    resultDiv.innerHTML = html;
+                    showStatus('success', `Imported ${result.imported} API key(s) successfully!`);
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="alert alert-warning">
+                            <div class="alert-icon">⚠️</div>
+                            <div class="alert-content">
+                                <h4>${result.message || 'No keys imported'}</h4>
+                                ${result.errors && result.errors.length > 0 ? '<p>Errors: ' + result.errors.join('; ') + '</p>' : ''}
+                            </div>
+                        </div>
+                    `;
+                    showStatus('warning', result.message || 'No recognized API keys found in file.');
+                }
+
+            } catch (error) {
+                console.error('Env import failed:', error);
+                showStatus('error', `Import failed: ${error.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>📤</span> <span>Import API Keys</span>';
+            }
+        }
+
+        // Set up drag and drop for .env upload area
+        function setupEnvDragAndDrop() {
+            const uploadArea = document.getElementById('envUploadArea');
+            if (!uploadArea) return;
+
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('drag-over');
+            });
+
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('drag-over');
+            });
+
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('drag-over');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleEnvFile(files[0]);
+                }
+            });
         }
 
         function showStatus(type, message) {
