@@ -545,18 +545,12 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
                 }
 
         elif blockchain == 'ethereum':
-            if not ethereum_service.is_configured():
-                return {
-                    'address': address,
-                    'success': False,
-                    'error': 'Beaconcha.in API key not configured'
-                }
-
+            # Service handles fallback to public RPC internally
             info = await ethereum_service.get_address_balance(address)
             if info:
                 await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_eth']), 'ETH')
-                # Save ERC-20 tokens as native assets
+                # Save ERC-20 tokens as native assets (empty if using public RPC fallback)
                 erc20_assets = [
                     {
                         'asset_id': token['contract_address'],
@@ -574,22 +568,16 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
                     'balance': info['balance_eth'],
                     'unit': 'ETH',
                     'token_count': info.get('token_count', 0),
-                    'source': 'beaconcha.in'
+                    'source': info.get('source', 'beaconcha.in')
                 }
 
         elif blockchain == 'solana':
-            if not await solana_service.is_configured():
-                return {
-                    'address': address,
-                    'success': False,
-                    'error': 'Helius API key not configured'
-                }
-
+            # Service handles fallback to public RPC internally
             info = await solana_service.get_address_info(address)
             if info:
                 await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_sol']), 'SOL')
-                # Save SPL tokens as native assets
+                # Save SPL tokens as native assets (empty if using public RPC fallback)
                 spl_assets = [
                     {
                         'asset_id': token['mint'],
@@ -607,30 +595,23 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
                     'balance': info['balance_sol'],
                     'unit': 'SOL',
                     'token_count': len(info.get('tokens', [])),
-                    'source': 'helius'
+                    'source': info.get('source', 'helius')
                 }
             else:
-                # API call failed - return error instead of silently failing
-                logger.error(f"Helius API failed to fetch balance for {address}")
+                logger.error(f"All sources failed to fetch balance for Solana {address}")
                 return {
                     'address': address,
                     'success': False,
-                    'error': 'Failed to fetch balance from Helius API. Check API key and network connectivity.'
+                    'error': 'Failed to fetch balance from all sources (Helius + public RPC)'
                 }
 
         elif blockchain == 'polygon':
-            if not polygon_service.is_configured():
-                return {
-                    'address': address,
-                    'success': False,
-                    'error': 'Alchemy API key not configured for Polygon'
-                }
-
+            # Service handles fallback to public RPC internally
             info = await polygon_service.get_address_info(address)
             if info:
                 await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_matic']), 'MATIC')
-                # Save ERC-20 tokens as native assets
+                # Save ERC-20 tokens as native assets (empty if using public RPC fallback)
                 polygon_assets = [
                     {
                         'asset_id': token['contract_address'],
@@ -648,22 +629,16 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
                     'balance': info['balance_matic'],
                     'unit': 'MATIC',
                     'token_count': info.get('token_count', 0),
-                    'source': 'alchemy'
+                    'source': info.get('source', 'alchemy')
                 }
 
         elif blockchain == 'base':
-            if not base_service.is_configured():
-                return {
-                    'address': address,
-                    'success': False,
-                    'error': 'Alchemy API key not configured for Base'
-                }
-
+            # Service handles fallback to public RPC internally
             info = await base_service.get_address_info(address)
             if info:
                 await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_eth']), 'ETH_BASE')
-                # Save ERC-20 tokens as native assets
+                # Save ERC-20 tokens as native assets (empty if using public RPC fallback)
                 base_assets = [
                     {
                         'asset_id': token['contract_address'],
@@ -681,7 +656,7 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
                     'balance': info['balance_eth'],
                     'unit': 'ETH',
                     'token_count': info.get('token_count', 0),
-                    'source': 'alchemy'
+                    'source': info.get('source', 'alchemy')
                 }
 
         # TODO: Implement Algorand support
