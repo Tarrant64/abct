@@ -95,6 +95,13 @@ def _ensure_supervisor_ctl():
         )
         modified = True
 
+    if "[rpcinterface:supervisor]" not in content:
+        content += (
+            "\n[rpcinterface:supervisor]\n"
+            "supervisor.rpcinterface_factory = supervisor.rpcinterface:make_main_rpcinterface\n"
+        )
+        modified = True
+
     if "[supervisorctl]" not in content:
         content += (
             "\n[supervisorctl]\n"
