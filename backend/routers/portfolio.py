@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Query, Depends, HTTPException
 from pydantic import BaseModel
 import asyncio
+import logging
 import sys
 import os
 
@@ -18,7 +19,10 @@ from services.defi import DEFI_PROTOCOLS
 from services.taptools import taptools_wallet_service
 from services.logokit_service import logokit_service
 from services.nmkr_service import nmkr_service
+from services.demo_wallet_service import demo_wallet_service
 from auth_utils import verify_session
+from database import get_username_by_user_id
+from middleware.demo_mode import is_demo_user
 
 
 class TokenTrackRequest(BaseModel):
@@ -29,6 +33,10 @@ class TokenTrackRequest(BaseModel):
     decimals: int = None
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
+logger = logging.getLogger(__name__)
+
+# Background history generation tracking: user_id -> {status, progress, step, error, result}
+_generation_tasks = {}
 
 # Cache TTL in seconds (7 days for portfolio so it persists between sessions, only cleared on manual refresh)
 from config import CACHE_TTL_PERSISTENT, CACHE_TTL_WARM, CACHE_TTL_HOT
@@ -113,6 +121,11 @@ async def calculate_wallet_native_assets_value(wallet_id: int, blockchain: str, 
 @router.get("/summary")
 async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh: bool = Query(False, description="Force refresh cache")):
     """Get a summary of the entire portfolio grouped by blockchain."""
+    # Demo mode: return fake portfolio data
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        return await _get_demo_portfolio_summary()
+
     cache_key = f"portfolio_summary_{user_id}"
 
     # Check cache first (unless refresh requested)
@@ -359,6 +372,11 @@ async def get_all_native_assets(user_id: int = Depends(verify_session), refresh:
     Returns aggregated quantities, proper decimal conversion, and USD values.
     Uses caching for faster loads - pass refresh=true to force update.
     """
+    # Demo mode: return fake token data
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        return await _get_demo_native_assets()
+
     cache_key = f"native_assets_all"
 
     # Check cache first (unless refresh requested)
@@ -608,6 +626,12 @@ async def get_portfolio_history(
 
     Returns hourly snapshots for 1d range, daily snapshots for longer ranges.
     """
+    # Demo mode: return pre-generated fake history directly
+    # (DB snapshots lack component fields so get_history recalculates to $0)
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        return await _get_demo_portfolio_history(range)
+
     # Map range to days
     days_map = {"1d": 1, "7d": 7, "4w": 28, "3m": 90}
     days = days_map.get(range, 7)
@@ -640,14 +664,162 @@ async def generate_historical_data(user_id: int = Depends(verify_session), days:
     """
     Generate historical portfolio data for the past N days.
 
-    Uses CoinGecko's free API to fetch historical prices, then calculates
-    portfolio values based on current holdings × historical prices.
-
-    Note: This assumes holdings have been constant. For accurate historical
-    balances, transaction history reconstruction would be needed.
+    Launches generation as a background task and returns immediately.
+    Poll GET /portfolio/history/generate/status for progress updates.
     """
-    result = await snapshot_service.generate_historical_data(user_id=user_id, days=days)
-    return result
+    # Demo users don't need to generate
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        return {"status": "success", "message": "Demo account has pre-generated history"}
+
+    # Check if already running for this user
+    if user_id in _generation_tasks and _generation_tasks[user_id].get('status') == 'running':
+        return {"status": "already_running", **_generation_tasks[user_id]}
+
+    # Initialize progress tracking
+    _generation_tasks[user_id] = {
+        'status': 'running',
+        'progress': 0,
+        'step': 'Starting history generation...',
+        'error': None,
+        'result': None
+    }
+
+    # Launch background task
+    asyncio.create_task(_run_history_generation(user_id, days))
+
+    return {"status": "started", "message": f"Generating {days} days of history in background"}
+
+
+@router.get("/history/generate/status")
+async def get_generation_status(user_id: int = Depends(verify_session)):
+    """
+    Get the current status of background history generation.
+
+    Returns progress percentage, current step description, and completion status.
+    """
+    if user_id not in _generation_tasks:
+        return {"status": "idle", "progress": 0, "step": "No generation in progress"}
+    return _generation_tasks[user_id]
+
+
+async def _run_history_generation(user_id: int, days: int):
+    """Background worker that generates historical portfolio data with progress tracking."""
+    task = _generation_tasks[user_id]
+    try:
+        task['step'] = 'Fetching historical prices from CoinGecko...'
+        task['progress'] = 10
+
+        pricing = await snapshot_service._get_pricing_service()
+        historical_prices = await pricing.get_historical_prices(days=days)
+
+        if not historical_prices:
+            task['status'] = 'error'
+            task['error'] = 'Could not fetch historical prices. Check that CoinGecko API is accessible.'
+            task['step'] = 'Failed to fetch prices'
+            return
+
+        task['step'] = 'Loading current wallet balances...'
+        task['progress'] = 25
+
+        wallets = await get_all_wallets(user_id=user_id)
+        ada_amount = btc_amount = eth_amount = sol_amount = 0.0
+
+        for wallet in wallets:
+            balance = await get_wallet_balance(wallet['id'])
+            if balance:
+                amount = float(balance['amount'])
+                if wallet['blockchain'] == 'cardano':
+                    ada_amount += amount
+                elif wallet['blockchain'] == 'bitcoin':
+                    btc_amount += amount
+                elif wallet['blockchain'] == 'ethereum':
+                    eth_amount += amount
+                elif wallet['blockchain'] == 'solana':
+                    sol_amount += amount
+
+        task['step'] = 'Building price history...'
+        task['progress'] = 35
+
+        # Build date -> prices lookup
+        price_by_date = {}
+        for symbol, prices_list in historical_prices.items():
+            for entry in prices_list:
+                date_key = entry['date'][:10]
+                if date_key not in price_by_date:
+                    price_by_date[date_key] = {}
+                price_by_date[date_key][symbol] = entry['price']
+
+        task['step'] = 'Creating historical snapshots...'
+        task['progress'] = 40
+
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        from database import save_portfolio_snapshot
+        CT = ZoneInfo("America/Chicago")
+        today_str = str(datetime.now(CT).date())
+
+        sorted_dates = sorted(d for d in price_by_date.keys() if d != today_str)
+        total_dates = len(sorted_dates)
+        created = 0
+
+        for i, date_str in enumerate(sorted_dates):
+            prices = price_by_date[date_str]
+            ada_price = prices.get('ADA', 0)
+            btc_price = prices.get('BTC', 0)
+            eth_price = prices.get('ETH', 0)
+            sol_price = prices.get('SOL', 0)
+
+            if ada_price == 0 and btc_price == 0 and eth_price == 0 and sol_price == 0:
+                continue
+
+            wallet_value_usd = (
+                ada_amount * ada_price +
+                btc_amount * btc_price +
+                eth_amount * eth_price +
+                sol_amount * sol_price
+            )
+
+            snapshot_date = datetime.strptime(date_str, '%Y-%m-%d')
+            snapshot_time = snapshot_date.replace(hour=12, minute=0, second=0)
+
+            snapshot_data = {
+                'snapshot_date': date_str,
+                'snapshot_time': snapshot_time.isoformat(),
+                'total_value_usd': wallet_value_usd,
+                'ada_amount': ada_amount,
+                'ada_price': ada_price,
+                'btc_amount': btc_amount,
+                'btc_price': btc_price,
+                'eth_amount': eth_amount,
+                'eth_price': eth_price,
+                'sol_amount': sol_amount,
+                'sol_price': sol_price,
+                'staking_value_usd': 0,
+                'defi_value_usd': 0,
+                'exchange_value_usd': 0,
+                'nft_value_usd': 0
+            }
+
+            await save_portfolio_snapshot(snapshot_data, user_id=user_id)
+            created += 1
+
+            # Update progress (40% to 95%)
+            pct = 40 + int((i + 1) / max(total_dates, 1) * 55)
+            task['progress'] = min(pct, 95)
+            task['step'] = f'Processing day {i + 1} of {total_dates}...'
+
+        task['status'] = 'completed'
+        task['progress'] = 100
+        task['step'] = f'Generated {created} snapshots successfully'
+        task['result'] = {'snapshots_created': created, 'days_requested': days}
+        logger.info(f"Background history generation completed for user {user_id}: {created} snapshots")
+
+    except Exception as e:
+        logger.error(f"Background history generation failed for user {user_id}: {e}")
+        task['status'] = 'error'
+        task['error'] = str(e)
+        task['step'] = 'Generation failed'
 
 
 @router.post("/history/backfill")
@@ -1095,6 +1267,11 @@ async def get_portfolio_analytics(user_id: int = Depends(verify_session)):
     Returns:
         dict with coin_allocation and category_allocation data, cached for 1 hour
     """
+    # Demo mode: return fake analytics from demo wallet service
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        return await _get_demo_portfolio_analytics()
+
     from datetime import datetime, timedelta
 
     # Check cache (1 hour TTL)
@@ -1243,6 +1420,11 @@ async def get_blockchain_asset_breakdown(
     user_id: int = Depends(verify_session)
 ):
     """Get asset breakdown for a specific blockchain for doughnut chart display."""
+    # Demo mode: return fake breakdown from demo wallet service
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        return await _get_demo_blockchain_breakdown(blockchain)
+
     try:
         # Validate blockchain
         valid_chains = ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base']
@@ -1473,3 +1655,265 @@ async def get_blockchain_price_chart(
         logger.error(f"Error fetching price chart for {blockchain}: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(500, f"Error fetching price chart: {str(e)}")
+
+
+# ── Demo mode helper functions ──────────────────────────────────────────────
+
+async def _get_demo_portfolio_history(range_str: str) -> dict:
+    """Return pre-generated demo portfolio history for charting."""
+    from services.demo_data_generator import generate_portfolio_history
+
+    days_map = {"1d": 1, "7d": 7, "4w": 28, "3m": 90}
+    days = days_map.get(range_str, 7)
+
+    # Generate 90 days and slice to requested range
+    all_history = generate_portfolio_history(90)
+    filtered = all_history[-days:] if days < len(all_history) else all_history
+
+    data = []
+    for s in filtered:
+        data.append({
+            'date': s['snapshot_date'],
+            'value': s['total_value_usd'],
+            'breakdown': {
+                'wallets': s.get('self_custody_value_usd', 0),
+                'staking': 0,
+                'defi': s.get('defi_value_usd', 0),
+                'exchange': s.get('exchange_value_usd', 0),
+                'nfts': s.get('nft_value_usd', 0),
+                'tracked_tokens': 0
+            }
+        })
+
+    return {
+        "range": range_str,
+        "days": days,
+        "data": data,
+        "data_points": len(data),
+        "latest_snapshot": filtered[-1]['snapshot_date'] if filtered else None,
+        "demo_mode": True
+    }
+
+
+async def _get_demo_portfolio_summary() -> dict:
+    """Build a portfolio summary from demo_wallet_service data."""
+    from datetime import datetime
+
+    total_info = await demo_wallet_service.get_total_balance_usd()
+    wallets = await demo_wallet_service.get_all_wallets()
+
+    # Group wallets by blockchain
+    summary = {}
+    symbol_map = {
+        'cardano': ('ADA', 'total_ada'),
+        'bitcoin': ('BTC', 'total_btc'),
+        'ethereum': ('ETH', 'total_eth'),
+        'solana': ('SOL', 'total_sol'),
+        'polygon': ('POL', 'total_matic'),
+        'base': ('ETH', 'total_eth'),
+        'algorand': ('ALGO', 'total_algo'),
+    }
+
+    for wallet in wallets:
+        bc = wallet['blockchain']
+        if bc not in summary:
+            symbol, amount_key = symbol_map.get(bc, ('UNKNOWN', 'total_unknown'))
+            summary[bc] = {
+                'wallet_count': 0,
+                amount_key: 0.0,
+                'native_assets_count': 0,
+                'native_assets_value_usd': 0.0,
+                'wallets': [],
+            }
+        chain = summary[bc]
+        chain['wallet_count'] += 1
+        _, amount_key = symbol_map.get(bc, ('UNKNOWN', 'total_unknown'))
+        chain[amount_key] = chain.get(amount_key, 0) + float(wallet.get('balance', 0))
+
+        # Add token value
+        tokens = await demo_wallet_service.get_wallet_tokens(wallet['address'], bc)
+        token_value = sum(t.get('value_usd', 0) for t in tokens)
+        chain['native_assets_count'] += len(tokens)
+        chain['native_assets_value_usd'] += token_value
+
+        chain['wallets'].append({
+            'id': wallet['id'],
+            'address': wallet['address'],
+            'label': wallet.get('label'),
+            'blockchain': bc,
+            'balance': wallet.get('balance'),
+            'balance_usd': wallet.get('balance_usd', 0),
+        })
+
+    summary['from_cache'] = False
+    summary['last_updated'] = datetime.utcnow().isoformat()
+    summary['demo_mode'] = True
+    return summary
+
+
+async def _get_demo_native_assets() -> dict:
+    """Build native assets list from demo_wallet_service data."""
+    from datetime import datetime
+
+    all_assets = []
+    total_value = 0.0
+
+    for blockchain, tokens in demo_wallet_service.demo_tokens.items():
+        for token in tokens:
+            value = token.get('value_usd', 0)
+            total_value += value
+            all_assets.append({
+                'asset_id': token.get('ticker', 'UNKNOWN'),
+                'asset_name': token.get('name', 'Unknown'),
+                'ticker': token.get('ticker', 'UNKNOWN'),
+                'blockchain': blockchain,
+                'quantity': token.get('quantity', 0),
+                'decimals': token.get('decimals', 0),
+                'actual_quantity': float(token.get('quantity', 0)),
+                'price_usd': token.get('price_usd', 0),
+                'total_value_usd': round(value, 2),
+                'logo_url': token.get('logo', ''),
+                'ignored': False,
+                'tracked': True,
+            })
+
+    # Sort by value descending
+    all_assets.sort(key=lambda x: x['total_value_usd'], reverse=True)
+
+    return {
+        'assets': all_assets,
+        'total_unique_assets': len(all_assets),
+        'total_value_usd': round(total_value, 2),
+        'tracked_value_usd': round(total_value, 2),
+        'demo_mode': True,
+    }
+
+
+async def _get_demo_portfolio_analytics() -> dict:
+    """Build portfolio analytics from demo_wallet_service data."""
+    from datetime import datetime
+
+    total_info = await demo_wallet_service.get_total_balance_usd()
+    total_usd = total_info['total_usd']
+
+    # Build coin allocation from wallet balances + tokens
+    coin_allocation = []
+
+    # Add native coins
+    native_symbols = {
+        'cardano': ('ADA', 'Layer 1 (L1)'),
+        'bitcoin': ('BTC', 'Layer 1 (L1)'),
+        'ethereum': ('ETH', 'Layer 1 (L1)'),
+        'solana': ('SOL', 'Layer 1 (L1)'),
+        'polygon': ('POL', 'Layer 2 (L2)'),
+        'base': ('ETH', 'Layer 2 (L2)'),
+        'algorand': ('ALGO', 'Layer 1 (L1)'),
+    }
+
+    for bc, wallets in demo_wallet_service.demo_wallets.items():
+        symbol, category = native_symbols.get(bc, ('UNKNOWN', 'Other'))
+        for w in wallets:
+            value = w.get('balance_usd', 0)
+            coin_allocation.append({
+                'symbol': symbol,
+                'name': bc.title(),
+                'quantity': float(w.get('balance', 0)),
+                'value_usd': round(value, 2),
+                'percentage': round((value / total_usd * 100) if total_usd > 0 else 0, 1),
+                'category': category,
+                'logo_url': f'https://logostream.dev/api/logo?symbol={symbol}',
+            })
+
+    # Add tokens
+    for bc, tokens in demo_wallet_service.demo_tokens.items():
+        for t in tokens:
+            value = t.get('value_usd', 0)
+            if value > 0:
+                coin_allocation.append({
+                    'symbol': t.get('ticker', 'UNKNOWN'),
+                    'name': t.get('name', 'Unknown'),
+                    'quantity': float(t.get('quantity', 0)),
+                    'value_usd': round(value, 2),
+                    'percentage': round((value / total_usd * 100) if total_usd > 0 else 0, 1),
+                    'category': 'DeFi Token',
+                    'logo_url': t.get('logo', ''),
+                })
+
+    coin_allocation.sort(key=lambda x: x['value_usd'], reverse=True)
+
+    # Build category allocation
+    categories = {}
+    for coin in coin_allocation:
+        cat = coin['category']
+        if cat not in categories:
+            categories[cat] = {'category': cat, 'value_usd': 0, 'token_count': 0, 'tokens': []}
+        categories[cat]['value_usd'] += coin['value_usd']
+        categories[cat]['token_count'] += 1
+        categories[cat]['tokens'].append(coin['symbol'])
+
+    category_allocation = list(categories.values())
+    for cat in category_allocation:
+        cat['value_usd'] = round(cat['value_usd'], 2)
+        cat['percentage'] = round((cat['value_usd'] / total_usd * 100) if total_usd > 0 else 0, 1)
+    category_allocation.sort(key=lambda x: x['value_usd'], reverse=True)
+
+    return {
+        'total_value_usd': round(total_usd, 2),
+        'coin_allocation': coin_allocation,
+        'category_allocation': category_allocation,
+        'generated_at': datetime.utcnow().isoformat(),
+        'demo_mode': True,
+    }
+
+
+async def _get_demo_blockchain_breakdown(blockchain: str) -> dict:
+    """Build asset breakdown for a specific blockchain from demo data."""
+    valid_chains = ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base', 'algorand']
+    if blockchain not in valid_chains:
+        raise HTTPException(400, f"Invalid blockchain: {blockchain}")
+
+    symbol_map = {
+        'cardano': 'ADA', 'bitcoin': 'BTC', 'ethereum': 'ETH',
+        'solana': 'SOL', 'polygon': 'POL', 'base': 'ETH', 'algorand': 'ALGO',
+    }
+    symbol = symbol_map.get(blockchain, 'UNKNOWN')
+
+    # Get native coin value
+    wallets = demo_wallet_service.demo_wallets.get(blockchain, [])
+    native_value = sum(w.get('balance_usd', 0) for w in wallets)
+    native_qty = sum(float(w.get('balance', 0)) for w in wallets)
+
+    # Get tokens
+    tokens_raw = demo_wallet_service.demo_tokens.get(blockchain, [])
+    token_total = sum(t.get('value_usd', 0) for t in tokens_raw)
+    total_value = native_value + token_total
+
+    tokens = []
+    for t in tokens_raw:
+        v = t.get('value_usd', 0)
+        tokens.append({
+            'symbol': t.get('ticker', 'UNKNOWN'),
+            'name': t.get('name', 'Unknown'),
+            'quantity': float(t.get('quantity', 0)),
+            'value_usd': round(v, 2),
+            'percentage': round((v / total_value * 100) if total_value > 0 else 0, 1),
+            'logo_url': t.get('logo', ''),
+        })
+    tokens.sort(key=lambda x: x['value_usd'], reverse=True)
+
+    return {
+        'blockchain': blockchain,
+        'symbol': symbol,
+        'logo_url': f'https://logostream.dev/api/logo?symbol={symbol}',
+        'total_value_usd': round(total_value, 2),
+        'native_coin': {
+            'symbol': symbol,
+            'quantity': round(native_qty, 8),
+            'value_usd': round(native_value, 2),
+            'percentage': round((native_value / total_value * 100) if total_value > 0 else 0, 1),
+            'logo_url': f'https://logostream.dev/api/logo?symbol={symbol}',
+        },
+        'tokens': tokens,
+        'nfts': {'count': 0, 'value_usd': 0, 'percentage': 0},
+        'demo_mode': True,
+    }
