@@ -5163,9 +5163,12 @@ async function loadPortfolioHistory(range = '7d') {
             chartContainer.style.display = 'block';
             renderPortfolioChart(historyData, range);
         } else {
-            // Show empty state, hide chart
+            // Show empty state, hide chart - reset to original content
             portfolioHistoryData = null;
-            if (emptyState) emptyState.style.display = 'flex';
+            if (emptyState) {
+                emptyState.style.display = 'flex';
+                setSafeHTML(emptyState, '<p>No historical data yet.</p><p class="chart-empty-hint">Portfolio snapshots are captured every 2 hours.</p><button class="btn btn-primary" onclick="generatePortfolioHistory()" id="generateHistoryBtn">Generate 30-Day History</button>');
+            }
             chartContainer.style.display = 'none';
             if (portfolioChart) {
                 portfolioChart.destroy();
@@ -5237,7 +5240,7 @@ async function _pollGenerationProgress() {
             if (pctEl) pctEl.textContent = (data.progress || 0) + '%';
 
             if (data.status === 'completed') {
-                if (stepEl) stepEl.textContent = data.step || 'Complete!';
+                if (stepEl) stepEl.textContent = 'Complete! Loading chart...';
                 if (barEl) barEl.style.width = '100%';
                 if (pctEl) pctEl.textContent = '100%';
                 // Brief pause to show completion, then reload chart
@@ -5245,7 +5248,7 @@ async function _pollGenerationProgress() {
                     const activeRangeBtn = document.querySelector('.range-btn.active');
                     const currentRange = activeRangeBtn ? activeRangeBtn.dataset.range : '7d';
                     await loadPortfolioHistory(currentRange);
-                }, 800);
+                }, 1500);
                 return; // Stop polling
             } else if (data.status === 'error') {
                 _showGenerationError(data.error || 'Generation failed.');
