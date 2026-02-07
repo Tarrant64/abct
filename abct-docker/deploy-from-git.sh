@@ -4,7 +4,11 @@
 # Pulls latest code directly from repository
 #
 # Usage:
-#   ./abct-docker/deploy-from-git.sh <unraid-ip> [port] [branch]
+#   ./abct-docker/deploy-from-git.sh <unraid-ip> [port] [branch] [--fresh]
+#
+# Options:
+#   --fresh    Force a full rebuild with no Docker layer cache
+#              (use when requirements.txt or system dependencies change)
 #
 
 set -e
@@ -27,8 +31,19 @@ REMOTE_PATH="/mnt/user/appdata/ABCT"
 DATA_DIR="/mnt/user/appdata/abct-dashboard"
 GIT_REPO="https://github.com/Tarrant64/abct.git"
 
+# Parse arguments - separate --fresh flag from positional args
+FRESH_BUILD=false
+POSITIONAL_ARGS=()
+for arg in "$@"; do
+    if [ "$arg" = "--fresh" ]; then
+        FRESH_BUILD=true
+    else
+        POSITIONAL_ARGS+=("$arg")
+    fi
+done
+
 # Get Unraid host
-UNRAID_HOST="${1:-}"
+UNRAID_HOST="${POSITIONAL_ARGS[0]:-}"
 if [ -z "$UNRAID_HOST" ]; then
     read -p "Unraid IP or hostname: " UNRAID_HOST
     if [ -z "$UNRAID_HOST" ]; then
@@ -37,11 +52,9 @@ if [ -z "$UNRAID_HOST" ]; then
     fi
 fi
 
-# Get port
-PORT="${2:-8081}"
-
-# Get branch
-BRANCH="${3:-main}"
+# Get port and branch from positional args
+PORT="${POSITIONAL_ARGS[1]:-8081}"
+BRANCH="${POSITIONAL_ARGS[2]:-main}"
 
 SSH_USER="root"
 
@@ -50,6 +63,11 @@ echo "  Git Repo:   $GIT_REPO"
 echo "  Branch:     $BRANCH"
 echo "  Unraid:     $SSH_USER@$UNRAID_HOST"
 echo "  Port:       $PORT"
+if [ "$FRESH_BUILD" = true ]; then
+    echo -e "  Build:      ${RED}--fresh (no cache)${NC}"
+else
+    echo "  Build:      cached (use --fresh to force full rebuild)"
+fi
 echo ""
 
 read -p "Proceed? (y/n) " -n 1 -r
@@ -74,7 +92,7 @@ echo ""
 echo -e "${YELLOW}[1/4] Cloning repository on Unraid...${NC}"
 
 DEPLOY_START=$(date +%s)
-ssh $SSH_OPTS "${SSH_USER}@${UNRAID_HOST}" bash -s "$CONTAINER_NAME" "$REMOTE_PATH" "$DATA_DIR" "$PORT" "$GIT_REPO" "$BRANCH" "$RESET_PASSWORD" << 'ENDSSH'
+ssh $SSH_OPTS "${SSH_USER}@${UNRAID_HOST}" bash -s "$CONTAINER_NAME" "$REMOTE_PATH" "$DATA_DIR" "$PORT" "$GIT_REPO" "$BRANCH" "$RESET_PASSWORD" "$FRESH_BUILD" << 'ENDSSH'
     CONTAINER_NAME="$1"
     REMOTE_PATH="$2"
     DATA_DIR="$3"
@@ -82,6 +100,7 @@ ssh $SSH_OPTS "${SSH_USER}@${UNRAID_HOST}" bash -s "$CONTAINER_NAME" "$REMOTE_PA
     GIT_REPO="$5"
     BRANCH="$6"
     RESET_PASSWORD="$7"
+    FRESH_BUILD="$8"
     CONFIG_FILE="${DATA_DIR}/.env"
 
     set -e
@@ -159,7 +178,14 @@ EOF
     cd "$REMOTE_PATH"
 
     BUILD_START=$(date +%s)
-    docker build --no-cache --progress=plain -t "$CONTAINER_NAME:latest" -f abct-docker/Dockerfile . 2>&1 | {
+    CACHE_FLAG=""
+    if [ "$FRESH_BUILD" = "true" ]; then
+        CACHE_FLAG="--no-cache"
+        echo "  (fresh build - no layer cache)"
+    else
+        echo "  (cached build - reusing unchanged layers)"
+    fi
+    docker build $CACHE_FLAG --progress=plain -t "$CONTAINER_NAME:latest" -f abct-docker/Dockerfile . 2>&1 | {
         CURRENT_STEP=""
         STEP_START=$(date +%s)
         LAST_SUB_TIME=0

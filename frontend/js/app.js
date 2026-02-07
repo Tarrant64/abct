@@ -2590,6 +2590,7 @@ async function loadDefiGovernance() {
         if (progressBar) progressBar.style.width = '20%';
 
         const allStaking = {};
+        const adaDelegation = { totalAda: 0, stakedAda: 0, pools: [] };
         const totalWallets = cardanoWallets.length;
         let processedWallets = 0;
 
@@ -2598,9 +2599,41 @@ async function loadDefiGovernance() {
             if (progressBar) progressBar.style.width = `${percent}%`;
             if (progressText) progressText.textContent = `Checking wallet ${processedWallets + 1} of ${totalWallets}...`;
 
+            // Always accumulate wallet balance for ADA delegation (outside try block)
+            const walletBalance = parseFloat(wallet.balance) || 0;
+            adaDelegation.totalAda += walletBalance;
+
+            // Fetch governance + staking in parallel, handle each independently
+            const [govResult, stakingResult] = await Promise.allSettled([
+                authFetch(`${API_BASE}/wallets/${wallet.address}/governance`),
+                authFetch(`${API_BASE}/defi/staking/${wallet.address}`)
+            ]);
+
+            // Process governance result
+            if (govResult.status === 'fulfilled' && govResult.value.ok) {
+                try {
+                    const govData = await govResult.value.json();
+                    console.log(`[DeFi] Governance ${wallet.address.slice(0,15)}... balance=${walletBalance} pool=${govData.pool?.pool_id || 'none'}`);
+                    if (govData.pool && govData.pool.pool_id) {
+                        adaDelegation.stakedAda += walletBalance;
+                        const existingPool = adaDelegation.pools.find(p => p.pool_id === govData.pool.pool_id);
+                        if (!existingPool) {
+                            adaDelegation.pools.push({
+                                pool_id: govData.pool.pool_id,
+                                name: govData.pool.name || 'Unknown Pool',
+                                ticker: govData.pool.ticker || ''
+                            });
+                        }
+                    }
+                } catch (e) {
+                    console.error(`[DeFi] Governance parse error for ${wallet.address.slice(0,15)}:`, e);
+                }
+            }
+
+            // Process staking result
             try {
-                const stakingResponse = await authFetch(`${API_BASE}/defi/staking/${wallet.address}`);
-                const stakingData = await stakingResponse.json();
+                if (stakingResult.status !== 'fulfilled') throw new Error('Staking fetch failed');
+                const stakingData = await stakingResult.value.json();
 
                 for (const [protocol, data] of Object.entries(stakingData.protocols || {})) {
                     if (!allStaking[protocol]) {
@@ -2652,6 +2685,8 @@ async function loadDefiGovernance() {
             }
             processedWallets++;
         }
+
+        console.log('[DeFi] ADA delegation final:', JSON.stringify(adaDelegation));
 
         if (progressBar) progressBar.style.width = '90%';
         if (progressText) progressText.textContent = 'Rendering...';
@@ -2713,7 +2748,7 @@ async function loadDefiGovernance() {
         await new Promise(resolve => setTimeout(resolve, 200));
 
         // Render the consolidated view
-        renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeStablecoins);
+        renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeStablecoins, adaDelegation);
 
         document.body.classList.remove('staking-loading');
         document.body.classList.remove('defi-loading');
@@ -2729,7 +2764,7 @@ async function loadDefiGovernance() {
 }
 
 // Render consolidated DeFi & Governance section
-function renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeStablecoins = []) {
+function renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeStablecoins = [], adaDelegation = null) {
     const content = document.getElementById('defiGovernanceContent');
     const summary = document.getElementById('defiGovernanceSummary');
 
@@ -2746,8 +2781,20 @@ function renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeS
     // SECTION 1: STAKED POSITIONS
     // ========================================
     const protocols = Object.keys(allStaking);
+    const liquidStakingPositions = defiData.positions_by_category?.['Liquid Staking'] || [];
+    const hasAdaDelegation = adaDelegation && adaDelegation.totalAda > 0;
+    const hasStakedSection = protocols.length > 0 || hasAdaDelegation || liquidStakingPositions.length > 0;
 
-    if (protocols.length > 0) {
+    console.log('[DeFi] Staked section debug:', {
+        protocols: protocols.length,
+        hasAdaDelegation,
+        adaDelegation,
+        liquidStakingCount: liquidStakingPositions.length,
+        liquidStakingPositions,
+        defiCategories: Object.keys(defiData.positions_by_category || {})
+    });
+
+    if (hasStakedSection) {
         html += `<div class="defi-gov-subsection">
             <div class="defi-gov-subsection-header">
                 <span class="subsection-icon">🔒</span>
@@ -2755,6 +2802,38 @@ function renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeS
             </div>
             <div class="defi-gov-cards">`;
 
+        // --- ADA Delegation Card (pinned first) ---
+        if (hasAdaDelegation) {
+            const adaPrice = prices['ADA'] || 0;
+            const stakedUsd = adaDelegation.stakedAda * adaPrice;
+            totalStakedValue += stakedUsd;
+            if (adaDelegation.stakedAda > 0) stakedCount++;
+
+            const stakedFormatted = adaDelegation.stakedAda.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0});
+            const totalFormatted = adaDelegation.totalAda.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0});
+
+            let poolInfoHtml = '';
+            if (adaDelegation.pools.length > 0) {
+                const escHtml = (s) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+                const poolLabels = adaDelegation.pools.map(p => p.ticker ? `[${escHtml(p.ticker)}] ${escHtml(p.name)}` : escHtml(p.name));
+                poolInfoHtml = `<div class="pool-info">\u2192 ${poolLabels.join(', ')}</div>`;
+            }
+
+            html += `
+                <div class="defi-gov-card staked">
+                    <div class="card-header">
+                        <img src="https://img.logokit.com/crypto/ADA?token=LOGOKIT_KEY_REMOVED&size=32" alt="ADA" class="token-logo-staking" onerror="this.style.display='none'">
+                        <span class="protocol-name"><span class="chain-badge cardano" title="Cardano">ADA</span> ADA Delegation</span>
+                        <span class="staked-badge">Staked</span>
+                    </div>
+                    <div class="ada-delegation-detail">${blurValue(stakedFormatted)} of ${blurValue(totalFormatted)} ADA staked</div>
+                    <div class="card-value">${formatUSDBlur(stakedUsd)}</div>
+                    ${poolInfoHtml}
+                </div>
+            `;
+        }
+
+        // --- Protocol Staking Cards ---
         for (const protocol of protocols) {
             const protocolData = allStaking[protocol];
             const stakes = protocolData.staked;
@@ -2823,6 +2902,31 @@ function renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeS
                     </div>
                 `;
             }
+        }
+
+        // --- Liquid Staking Cards ---
+        for (const pos of liquidStakingPositions) {
+            const displayName = pos.token || pos.asset_name;
+            const tokenPrice = prices[displayName] || prices[pos.asset_name] || prices[pos.token] || 0;
+            const usdValue = (pos.quantity || 0) * tokenPrice;
+            totalStakedValue += usdValue;
+            stakedCount++;
+
+            const tokenLogoUrl = `https://img.logokit.com/crypto/${displayName}?token=LOGOKIT_KEY_REMOVED&size=32`;
+            const chainBadge = '<span class="chain-badge cardano" title="Cardano">ADA</span>';
+            const formattedQty = (pos.quantity || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4});
+
+            html += `
+                <div class="defi-gov-card staked">
+                    <div class="card-header">
+                        <img src="${tokenLogoUrl}" alt="${displayName}" class="token-logo-staking" onerror="this.style.display='none'">
+                        <span class="protocol-name">${chainBadge} ${pos.protocol}</span>
+                        <span class="liquid-badge">\uD83D\uDCA7 Liquid</span>
+                    </div>
+                    <div class="card-amount">${formatCryptoBlur(formattedQty, displayName)}</div>
+                    <div class="card-value">${usdValue > 0 ? formatUSDBlur(usdValue) : '--'}</div>
+                </div>
+            `;
         }
 
         html += `</div></div>`;
@@ -3054,7 +3158,7 @@ function renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeS
     // ========================================
     // SECTION 4: OTHER DEFI TOKENS
     // ========================================
-    const otherCategories = ['Liquidity Pool Tokens', 'Staking Receipts', 'Protocol Receipts', 'Synthetic Assets', 'Reserve Tokens', 'Liquid Staking'];
+    const otherCategories = ['Liquidity Pool Tokens', 'Staking Receipts', 'Protocol Receipts', 'Synthetic Assets', 'Reserve Tokens'];
 
     for (const category of otherCategories) {
         const positions = defiData.positions_by_category?.[category] || [];
@@ -3065,8 +3169,7 @@ function renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeS
             'Staking Receipts': '📄',
             'Protocol Receipts': '📃',
             'Synthetic Assets': '💵',
-            'Reserve Tokens': '🏦',
-            'Liquid Staking': '💧'
+            'Reserve Tokens': '🏦'
         };
 
         html += `<div class="defi-gov-subsection">
@@ -3094,7 +3197,29 @@ function renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeS
         html = '<p class="empty-state">No DeFi positions or governance tokens found.</p>';
     }
 
+    // DEBUG: Diagnose missing sections
+    console.log('[DeFi] Render diagnostics:', {
+        htmlLength: html.length,
+        sections: {
+            staked: html.includes('Staked Positions'),
+            governance: html.includes('Governance Tokens (Unstaked)'),
+            stablecoins: html.includes('Stablecoins'),
+            otherDefi: html.includes('defi-gov-tokens')
+        },
+        categories: Object.keys(defiData?.positions_by_category || {}),
+        govCount: (defiData?.positions_by_category?.['Governance Tokens'] || []).length,
+        liquidCount: (defiData?.positions_by_category?.['Liquid Staking'] || []).length
+    });
+
     setSafeHTML(content, html);
+
+    // DEBUG: Check if DOMPurify stripped content
+    console.log('[DeFi] Post-DOMPurify:', {
+        preLen: html.length,
+        postLen: content.innerHTML.length,
+        subsections: content.querySelectorAll('.defi-gov-subsection').length,
+        stripped: html.length - content.innerHTML.length
+    });
 
     // Update summary
     if (summary) {
@@ -6188,17 +6313,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ========================================
     // INSTANT LOAD - Show cached data first
     // ========================================
-    // Load prices and portfolio summary in parallel (both come from backend cache)
-    const [pricesResult, portfolioResult] = await Promise.allSettled([
-        loadPrices(),
-        loadPortfolioSummary()
-    ]);
-
-    if (pricesResult.status === 'rejected') {
-        console.error('[Dashboard] Failed to load prices:', pricesResult.reason);
+    // Load prices FIRST, then portfolio summary (which needs prices for USD values)
+    try {
+        await loadPrices();
+    } catch (e) {
+        console.error('[Dashboard] Failed to load prices:', e);
     }
-    if (portfolioResult.status === 'rejected') {
-        console.error('[Dashboard] Failed to load portfolio summary:', portfolioResult.reason);
+    try {
+        await loadPortfolioSummary();
+    } catch (e) {
+        console.error('[Dashboard] Failed to load portfolio summary:', e);
     }
 
     // ========================================
@@ -6210,7 +6334,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadExchangeData(),
         loadDefiGovernance(),  // Slow - runs in background now
         loadCustomTokens(),
-        loadAllNftSummaries()
+        loadAllNftSummaries(),
+        loadAnalyticsData(true)  // Preload analytics for instant chart slides
     ]).then(() => {
         console.log('[Dashboard] Background data loading complete');
         // Update portfolio total one final time with all fresh data
@@ -6780,20 +6905,83 @@ let currentAnalyticsSlide = 0;
 let coinAllocationChart = null;
 let categoryAllocationChart = null;
 let analyticsData = null;
+let analyticsLoading = false;
 let selectedCoinIndex = null;
 let selectedCategoryIndex = null;
 
-async function loadAnalyticsData() {
+const ANALYTICS_CACHE_KEY = 'abct_analytics_cache';
+const ANALYTICS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function getCachedAnalytics() {
     try {
-        const response = await authFetch(`${API_BASE}/portfolio/analytics`);
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+        const raw = sessionStorage.getItem(ANALYTICS_CACHE_KEY);
+        if (!raw) return null;
+        const cached = JSON.parse(raw);
+        if (Date.now() - cached.timestamp > ANALYTICS_CACHE_TTL) {
+            sessionStorage.removeItem(ANALYTICS_CACHE_KEY);
+            return null;
         }
-        analyticsData = await response.json();
+        return cached.data;
+    } catch { return null; }
+}
+
+function setCachedAnalytics(data) {
+    try {
+        sessionStorage.setItem(ANALYTICS_CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
+    } catch { /* sessionStorage full or unavailable */ }
+}
+
+function setRefreshIndicators(state) {
+    const coin = document.getElementById('coinRefreshIndicator');
+    const cat = document.getElementById('categoryRefreshIndicator');
+    if (state === 'loading') {
+        if (coin) { coin.classList.add('active'); coin.classList.remove('done'); }
+        if (cat) { cat.classList.add('active'); cat.classList.remove('done'); }
+    } else if (state === 'done') {
+        if (coin) { coin.classList.remove('active'); coin.classList.add('done'); }
+        if (cat) { cat.classList.remove('active'); cat.classList.add('done'); }
+        setTimeout(() => {
+            if (coin) { coin.classList.remove('done'); }
+            if (cat) { cat.classList.remove('done'); }
+        }, 2000);
+    } else {
+        if (coin) { coin.classList.remove('active', 'done'); }
+        if (cat) { cat.classList.remove('active', 'done'); }
+    }
+}
+
+async function loadAnalyticsData(background = false) {
+    if (analyticsLoading) return;
+    analyticsLoading = true;
+
+    // Show cached data instantly if available
+    const cached = getCachedAnalytics();
+    if (cached && !analyticsData) {
+        analyticsData = cached;
         renderCoinAllocationChart();
         renderCategoryAllocationChart();
+    }
+
+    // Show refresh indicator if we already have data (refreshing) or if loading fresh
+    if (analyticsData) {
+        setRefreshIndicators('loading');
+    }
+
+    try {
+        const response = await authFetch(`${API_BASE}/portfolio/analytics`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const freshData = await response.json();
+
+        setCachedAnalytics(freshData);
+        analyticsData = freshData;
+        renderCoinAllocationChart();
+        renderCategoryAllocationChart();
+        setRefreshIndicators('done');
     } catch (error) {
         console.error('Error loading analytics data:', error);
+        setRefreshIndicators('hide');
+    } finally {
+        analyticsLoading = false;
     }
 }
 
@@ -6835,9 +7023,11 @@ function updateAnalyticsSlide() {
 
     slider.style.transform = `translateX(-${currentAnalyticsSlide * 100}%)`;
 
-    // Load analytics data when switching to chart slides
-    if (currentAnalyticsSlide > 0 && !analyticsData) {
-        loadAnalyticsData();
+    // Load/refresh analytics data when switching to chart slides
+    if (currentAnalyticsSlide > 0 && currentAnalyticsSlide < 3) {
+        if (!analyticsData) {
+            loadAnalyticsData();
+        }
     }
 }
 
