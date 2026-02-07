@@ -6,9 +6,9 @@
     <title>NFT Wall - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1770482021">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1770495647">
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1770482021"></script>
+    <script src="/static/js/session-auth.js?v=1770495647"></script>
     <style>
         /* NFT Wall Specific Styles */
         .wall-container {
@@ -564,17 +564,21 @@
             grid-template-columns: 1fr 1fr;
             gap: 30px;
             padding: 30px;
+            overflow: hidden;
         }
 
         .modal-image-section {
             display: flex;
             flex-direction: column;
             gap: 15px;
+            min-width: 0;
         }
 
         .modal-main-image {
+            position: relative;
             width: 100%;
             aspect-ratio: 1;
+            min-height: 300px;
             border-radius: 12px;
             overflow: hidden;
             background: var(--bg-tertiary);
@@ -586,7 +590,7 @@
         .modal-main-image img {
             width: 100%;
             height: 100%;
-            object-fit: cover;
+            object-fit: contain;
         }
 
         .modal-image-badge {
@@ -626,6 +630,8 @@
             display: flex;
             flex-direction: column;
             gap: 20px;
+            min-width: 0;
+            overflow: hidden;
         }
 
         .modal-title {
@@ -633,6 +639,8 @@
             font-weight: 700;
             color: var(--text-primary);
             margin: 0;
+            overflow-wrap: break-word;
+            word-break: break-word;
         }
 
         .modal-collection-name {
@@ -673,6 +681,9 @@
         .modal-stat-value {
             font-size: 1.2rem;
             font-weight: 700;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
             color: var(--text-primary);
         }
 
@@ -931,6 +942,8 @@
                                 <option value="cypherpunk1">Cypherpunk 1</option>
                                 <option value="ocean-depths">Ocean Depths</option>
                                 <option value="sunset-horizon">Sunset Horizon</option>
+                                <option value="cypher">Cypher</option>
+                                <option value="cypher2">Cypher2</option>
                             </select>
                         </div>
                     </div>
@@ -1471,7 +1484,7 @@
             const html = `
                 <div class="modal-header">
                     <div class="modal-image-section">
-                        <div class="modal-main-image" style="position: relative;">
+                        <div class="modal-main-image">
                             <span class="modal-image-badge ${nft.blockchain}">${nft.blockchain}</span>
                             ${editionHTML}
                             <img src="${nft.image_url}" alt="${escapeHtml(nft.name)}"
@@ -1498,11 +1511,11 @@
                             </div>
                             <div class="modal-stat">
                                 <div class="modal-stat-label">Wallet</div>
-                                <div class="modal-stat-value" style="font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(nft.wallet.name)}</div>
+                                <div class="modal-stat-value">${escapeHtml(nft.wallet.name)}</div>
                             </div>
                             <div class="modal-stat">
                                 <div class="modal-stat-label">Blockchain</div>
-                                <div class="modal-stat-value" style="text-transform: capitalize;">${escapeHtml(nft.blockchain)}</div>
+                                <div class="modal-stat-value">${escapeHtml(nft.blockchain.charAt(0).toUpperCase() + nft.blockchain.slice(1))}</div>
                             </div>
                         </div>
                         <div class="modal-links">
