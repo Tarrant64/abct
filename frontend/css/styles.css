@@ -344,6 +344,439 @@
 }
 
 /*===============================================================================
+  CYPHER THEME - Minimal pure black aesthetic
+===============================================================================*/
+
+/* Cypher Theme Variables */
+[data-theme="cypher"] {
+    --bg-primary: #000000;
+    --bg-secondary: #0a0a0a;
+    --bg-card: #141414;
+    --bg-hover: #1a1a1a;
+    --text-primary: #ffffff;
+    --text-secondary: #a0a0a0;
+    --text-muted: #666666;
+    --accent-cardano: #3b82f6;
+    --accent-bitcoin: #f7931a;
+    --accent-ethereum: #627eea;
+    --accent-success: #00d26a;
+    --accent-error: #ef4444;
+    --border-color: #2a2a2a;
+    --chart-line: #a855f7;
+    --chart-fill: rgba(168, 85, 247, 0.05);
+    --gradient-card: linear-gradient(135deg, #141414 0%, #0a0a0a 100%);
+    --gradient-header: linear-gradient(135deg, #0a0a0a 0%, #141414 100%);
+}
+
+/* Cypher - Header */
+[data-theme="cypher"] header {
+    background: #141414;
+    border: 1px solid #2a2a2a;
+    border-radius: 16px;
+}
+
+[data-theme="cypher"] header h1 {
+    color: #ffffff;
+}
+
+/* Cypher - Total Portfolio Card */
+[data-theme="cypher"] .total-portfolio-card {
+    background: #141414;
+    border: 1px solid #2a2a2a;
+}
+
+[data-theme="cypher"] .total-value {
+    color: #ffffff;
+}
+
+/* Cypher - Summary Cards */
+[data-theme="cypher"] .summary-card {
+    background: #141414;
+    border: 1px solid #2a2a2a;
+}
+
+[data-theme="cypher"] .summary-card:hover {
+    background: #1a1a1a;
+}
+
+/* Cypher - Section Headers */
+[data-theme="cypher"] .collapsible-section .section-header {
+    background: #141414;
+    border: 1px solid #2a2a2a;
+}
+
+[data-theme="cypher"] .collapsible-section .section-header:hover {
+    background: #1a1a1a;
+}
+
+/* Cypher - Wallet Groups */
+[data-theme="cypher"] .wallet-group {
+    background: #141414;
+    border: 1px solid #2a2a2a;
+}
+
+[data-theme="cypher"] .wallet-group-header {
+    background: #0a0a0a;
+}
+
+[data-theme="cypher"] .wallet-group-header:hover {
+    background: #1a1a1a;
+}
+
+/* Cypher - Wallet Items */
+[data-theme="cypher"] .wallet-item {
+    background: #0a0a0a;
+}
+
+/* Cypher - Staking Cards */
+[data-theme="cypher"] .staking-card {
+    background: #141414;
+    border: 1px solid #2a2a2a;
+}
+
+/* Cypher - Exchange Section */
+[data-theme="cypher"] .exchange-section {
+    background: #141414;
+    border: 1px solid #2a2a2a;
+}
+
+/* Cypher - DeFi Cards */
+[data-theme="cypher"] .defi-protocol {
+    background: #141414;
+    border: 1px solid #2a2a2a;
+}
+
+/* Cypher - NFT Collections */
+[data-theme="cypher"] .nft-collection {
+    background: #141414;
+    border: 1px solid #2a2a2a;
+}
+
+/* Cypher - Token Cards */
+[data-theme="cypher"] .token-card,
+[data-theme="cypher"] .asset-item {
+    background: #0a0a0a;
+    border: 1px solid #2a2a2a;
+}
+
+/* Cypher - Chart Container */
+[data-theme="cypher"] .history-chart-container {
+    background: #0a0a0a;
+    border: 1px solid #2a2a2a;
+}
+
+/* Cypher - Buttons */
+[data-theme="cypher"] .btn-primary {
+    background: #ffffff;
+    color: #000000;
+    border: none;
+}
+
+[data-theme="cypher"] .btn-primary:hover {
+    background: #e0e0e0;
+}
+
+[data-theme="cypher"] .btn-privacy.active {
+    background: #ffffff;
+    color: #000000;
+    border-color: #ffffff;
+}
+
+/* Cypher - Range/Toggle Buttons */
+[data-theme="cypher"] .toggle-option.active {
+    background-color: #ffffff;
+    color: #000000;
+}
+
+[data-theme="cypher"] .range-btn.active {
+    background-color: #ffffff;
+    color: #000000;
+    border-color: #ffffff;
+}
+
+/* Cypher - Modals */
+[data-theme="cypher"] .modal-content {
+    background: #141414;
+    border: 1px solid #2a2a2a;
+}
+
+/* Cypher - Tables */
+[data-theme="cypher"] table {
+    background: #141414;
+}
+
+[data-theme="cypher"] table tr:nth-child(even) {
+    background: #0a0a0a;
+}
+
+[data-theme="cypher"] table tr:nth-child(odd) {
+    background: #141414;
+}
+
+[data-theme="cypher"] table th {
+    background: #0a0a0a;
+    border-bottom: 1px solid #2a2a2a;
+}
+
+/* Cypher - Inputs */
+[data-theme="cypher"] input,
+[data-theme="cypher"] select,
+[data-theme="cypher"] textarea {
+    background: #0a0a0a;
+    border: 1px solid #2a2a2a;
+    color: #ffffff;
+}
+
+/* Cypher - Footer */
+[data-theme="cypher"] footer {
+    border-top: 1px solid #2a2a2a;
+}
+
+/* Cypher - Chain Count Badges */
+[data-theme="cypher"] .chain-count {
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+}
+
+/* Cypher - Metric Cards */
+[data-theme="cypher"] .metric-card {
+    background: #0a0a0a;
+    border: 1px solid #2a2a2a;
+}
+
+/* Cypher - Breakdown Stats */
+[data-theme="cypher"] .breakdown-stats .stat {
+    background: #0a0a0a;
+    border: 1px solid #2a2a2a;
+}
+
+/*===============================================================================
+  CYPHER2 THEME - Black + subtle gloss/translucency
+===============================================================================*/
+
+[data-theme="cypher2"] {
+    --bg-primary: #000000;
+    --bg-secondary: #0a0a0a;
+    --bg-card: #141414;
+    --bg-hover: #1a1a1a;
+    --text-primary: #ffffff;
+    --text-secondary: #a0a0a0;
+    --text-muted: #666666;
+    --accent-cardano: #3b82f6;
+    --accent-bitcoin: #f7931a;
+    --accent-ethereum: #627eea;
+    --accent-success: #00d26a;
+    --accent-error: #ef4444;
+    --border-color: #2a2a2a;
+    --chart-line: #a855f7;
+    --chart-fill: rgba(168, 85, 247, 0.05);
+    --gradient-card: linear-gradient(135deg, rgba(20,20,20,0.9) 0%, rgba(10,10,10,0.95) 100%);
+    --gradient-header: linear-gradient(135deg, rgba(10,10,10,0.9) 0%, rgba(20,20,20,0.95) 100%);
+}
+
+[data-theme="cypher2"] header {
+    background: rgba(20, 20, 20, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 16px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="cypher2"] header h1 {
+    color: #ffffff;
+}
+
+[data-theme="cypher2"] .total-portfolio-card {
+    background: rgba(20, 20, 20, 0.7);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="cypher2"] .total-value {
+    color: #ffffff;
+}
+
+[data-theme="cypher2"] .summary-card {
+    background: rgba(20, 20, 20, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="cypher2"] .summary-card:hover {
+    background: rgba(30, 30, 30, 0.75);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="cypher2"] .collapsible-section .section-header {
+    background: rgba(20, 20, 20, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="cypher2"] .collapsible-section .section-header:hover {
+    background: rgba(30, 30, 30, 0.75);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="cypher2"] .wallet-group {
+    background: rgba(20, 20, 20, 0.65);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="cypher2"] .wallet-group-header {
+    background: rgba(10, 10, 10, 0.6);
+}
+
+[data-theme="cypher2"] .wallet-group-header:hover {
+    background: rgba(30, 30, 30, 0.7);
+}
+
+[data-theme="cypher2"] .wallet-item {
+    background: rgba(10, 10, 10, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+[data-theme="cypher2"] .staking-card {
+    background: rgba(20, 20, 20, 0.65);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="cypher2"] .exchange-section {
+    background: rgba(20, 20, 20, 0.65);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="cypher2"] .defi-protocol {
+    background: rgba(20, 20, 20, 0.65);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="cypher2"] .nft-collection {
+    background: rgba(20, 20, 20, 0.65);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="cypher2"] .token-card,
+[data-theme="cypher2"] .asset-item {
+    background: rgba(10, 10, 10, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="cypher2"] .history-chart-container {
+    background: rgba(10, 10, 10, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="cypher2"] .btn-primary {
+    background: #ffffff;
+    color: #000000;
+    border: none;
+}
+
+[data-theme="cypher2"] .btn-primary:hover {
+    background: #e0e0e0;
+}
+
+[data-theme="cypher2"] .btn-privacy.active {
+    background: #ffffff;
+    color: #000000;
+    border-color: #ffffff;
+}
+
+[data-theme="cypher2"] .toggle-option.active {
+    background-color: #ffffff;
+    color: #000000;
+}
+
+[data-theme="cypher2"] .range-btn.active {
+    background-color: #ffffff;
+    color: #000000;
+    border-color: #ffffff;
+}
+
+[data-theme="cypher2"] .modal-content {
+    background: rgba(20, 20, 20, 0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="cypher2"] table {
+    background: rgba(20, 20, 20, 0.6);
+}
+
+[data-theme="cypher2"] table tr:nth-child(even) {
+    background: rgba(10, 10, 10, 0.5);
+}
+
+[data-theme="cypher2"] table tr:nth-child(odd) {
+    background: rgba(20, 20, 20, 0.5);
+}
+
+[data-theme="cypher2"] table th {
+    background: rgba(10, 10, 10, 0.7);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="cypher2"] input,
+[data-theme="cypher2"] select,
+[data-theme="cypher2"] textarea {
+    background: rgba(10, 10, 10, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    color: #ffffff;
+}
+
+[data-theme="cypher2"] footer {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="cypher2"] .chain-count {
+    background: rgba(26, 26, 26, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="cypher2"] .metric-card {
+    background: rgba(10, 10, 10, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="cypher2"] .breakdown-stats .stat {
+    background: rgba(10, 10, 10, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/*===============================================================================
   GREEN TERMINAL THEME - Specific Overrides
 ===============================================================================*/
 
@@ -610,6 +1043,8 @@ header {
     padding: 20px 0;
     border-bottom: 1px solid var(--border-color);
     margin-bottom: 30px;
+    position: relative;
+    z-index: 100;
 }
 
 header h1 {
@@ -732,6 +1167,7 @@ header h1 {
 /* Waffle Menu */
 .waffle-menu-container {
     position: relative;
+    z-index: 1001;
 }
 
 .waffle-menu-btn {
@@ -2275,6 +2711,76 @@ body.usd-primary .card-body .details {
 .collapsible-section .chain-count.base {
     background-color: rgba(0, 82, 255, 0.2);
     color: #0052FF;
+}
+
+/* Chain Icons Stack (overlapping circular icons in wallet header) */
+.chain-icons-stack {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+}
+
+.chain-icon-circle {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid var(--bg-card, #0f3460);
+    margin-left: -8px;
+    object-fit: cover;
+    background: var(--bg-secondary, #16213e);
+}
+
+.chain-icon-circle:first-child {
+    margin-left: 0;
+}
+
+.chain-icon-overflow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid var(--bg-card, #0f3460);
+    margin-left: -8px;
+    background: var(--bg-hover, #1a1a2e);
+    color: var(--text-secondary, #a0a0a0);
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+/* Supply Metrics Row in Asset Breakdown Modal */
+.supply-metrics-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+
+.supply-metrics-row .metric-card {
+    flex: 1;
+    min-width: 100px;
+    text-align: center;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: var(--bg-secondary, #16213e);
+    border: 1px solid var(--border-color, #2a2a4a);
+}
+
+.supply-metrics-row .metric-label {
+    display: block;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary, #a0a0a0);
+    margin-bottom: 4px;
+}
+
+.supply-metrics-row .metric-value {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary, #eaeaea);
 }
 
 /* Section Refresh Button */

@@ -32,8 +32,8 @@ services:
       # Database path (inside container)
       - DATABASE_PATH=/app/data/portfolio.db
 
-      # Authentication (optional - set to false for local Docker)
-      - ABCT_REQUIRE_AUTH=${ABCT_REQUIRE_AUTH:-false}
+      # Authentication (set to false to disable login requirement)
+      - ABCT_REQUIRE_AUTH=${ABCT_REQUIRE_AUTH:-true}
       - ABCT_ADMIN_USER=${ABCT_ADMIN_USER:-}
       - ABCT_ADMIN_PASSWORD=${ABCT_ADMIN_PASSWORD:-}
 
