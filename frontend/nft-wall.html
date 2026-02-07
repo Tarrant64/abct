@@ -6,9 +6,9 @@
     <title>NFT Wall - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1770495647">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1770503664">
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1770495647"></script>
+    <script src="/static/js/session-auth.js?v=1770503664"></script>
     <style>
         /* NFT Wall Specific Styles */
         .wall-container {
@@ -499,8 +499,59 @@
             user-select: none;
         }
 
-        body.privacy-mode .modal-overlay {
-            filter: blur(15px);
+        /* NFT Detail Modal - Selective privacy blur */
+        /* NFT image: show with vignette effect */
+        body.privacy-mode .modal-main-image {
+            position: relative;
+        }
+        body.privacy-mode .modal-main-image::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(
+                ellipse 65% 65% at center,
+                transparent 30%,
+                rgba(0, 0, 0, 0.4) 70%,
+                rgba(0, 0, 0, 0.85) 100%
+            );
+            pointer-events: none;
+            border-radius: inherit;
+            z-index: 1;
+        }
+        /* Chain badge stays visible above vignette */
+        body.privacy-mode .modal-image-badge {
+            z-index: 2;
+            position: relative;
+        }
+        body.privacy-mode .modal-edition-badge {
+            z-index: 2;
+            position: relative;
+        }
+        /* Blur identifying text: NFT name, collection name, wallet */
+        body.privacy-mode .modal-title,
+        body.privacy-mode .modal-collection-name,
+        body.privacy-mode .modal-creator {
+            filter: blur(8px);
+            user-select: none;
+        }
+        /* Blur wallet stat value only, keep label */
+        body.privacy-mode .modal-stat:nth-child(3) .modal-stat-value {
+            filter: blur(8px);
+            user-select: none;
+        }
+        /* Keep floor price, USD value, blockchain visible */
+        /* Blur sibling names but keep images and prices visible */
+        body.privacy-mode .sibling-name {
+            filter: blur(8px);
+            user-select: none;
+        }
+        /* Blur attributes (may contain identifying info) */
+        body.privacy-mode .attribute-value {
+            filter: blur(6px);
+            user-select: none;
         }
 
         /* Enhanced NFT Detail Modal */

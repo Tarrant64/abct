@@ -3626,6 +3626,8 @@ body.usd-primary .wallet-item .wallet-balance .assets {
     display: flex;
     flex-direction: column;
     gap: 4px;
+    flex: 1;
+    min-width: 0;
 }
 
 .wallet-group-header .group-label {
@@ -3698,9 +3700,22 @@ body.usd-primary .wallet-group-header .group-balance .amount::after {
 
 .wallet-group-header .collapse-icon {
     color: var(--text-secondary);
-    font-size: 0.8rem;
-    transition: transform 0.2s ease;
+    font-size: 0.6rem;
+    transition: transform 0.2s ease, border-color 0.2s ease;
     margin-left: 12px;
+    border: 1.5px solid var(--border-color);
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.wallet-group-header:hover .collapse-icon {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
 }
 
 .wallet-group.collapsed .collapse-icon {
@@ -3745,6 +3760,8 @@ body.usd-primary .wallet-group-header .group-balance .amount::after {
     display: flex;
     flex-direction: column;
     gap: 4px;
+    flex: 1;
+    min-width: 0;
 }
 
 .blockchain-section-header .blockchain-name {
@@ -3777,9 +3794,22 @@ body.usd-primary .wallet-group-header .group-balance .amount::after {
 
 .blockchain-section-header .collapse-icon {
     color: var(--text-secondary);
-    font-size: 0.9rem;
-    transition: transform 0.2s ease;
+    font-size: 0.65rem;
+    transition: transform 0.2s ease, border-color 0.2s ease;
     margin-left: 16px;
+    border: 1.5px solid var(--border-color);
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.blockchain-section-header:hover .collapse-icon {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
 }
 
 .blockchain-section.collapsed .collapse-icon {
@@ -7125,6 +7155,25 @@ body.privacy-mode table th {
 body.privacy-mode table thead th {
     filter: none;
     user-select: auto;
+}
+
+/* Asset Breakdown Modal - Blur legend items and values */
+body.privacy-mode .breakdown-legend-value,
+body.privacy-mode .breakdown-legend-percentage,
+body.privacy-mode .breakdown-legend-symbol {
+    filter: blur(10px);
+    user-select: none;
+}
+
+body.privacy-mode #breakdownTotalValue,
+body.privacy-mode #breakdownAssetCount {
+    filter: blur(10px);
+    user-select: none;
+}
+
+body.privacy-mode .breakdown-selection-info {
+    filter: blur(10px);
+    user-select: none;
 }
 
 /* Form Labels - Keep visible */
