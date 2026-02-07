@@ -719,8 +719,8 @@ async def _run_history_generation(user_id: int, days: int):
             task['step'] = 'Failed to fetch prices'
             return
 
-        task['step'] = 'Loading current wallet balances...'
-        task['progress'] = 25
+        task['step'] = 'Loading current wallet balances and component values...'
+        task['progress'] = 20
 
         wallets = await get_all_wallets(user_id=user_id)
         ada_amount = btc_amount = eth_amount = sol_amount = 0.0
@@ -737,6 +737,60 @@ async def _run_history_generation(user_id: int, days: int):
                     eth_amount += amount
                 elif wallet['blockchain'] == 'solana':
                     sol_amount += amount
+
+        task['step'] = 'Loading staking, exchange, DeFi & NFT values...'
+        task['progress'] = 28
+
+        import json as json_mod
+
+        # Get current component values from the LATEST existing snapshot.
+        # We use stored AGGREGATE USD values (not per-asset quantities) because:
+        # 1. Cache-dependent helpers may return 0 if caches aren't populated
+        # 2. Per-asset exchange quantities may be unreliable or cause price explosion
+        # 3. For generated history, constant component values are acceptable
+        #    (only wallet values change based on historical prices)
+        from database import get_portfolio_history as get_snapshots_db
+        recent_snapshots = await get_snapshots_db(30, user_id=user_id, hourly=True)
+
+        staking_value = 0.0
+        defi_value = 0.0
+        exchange_value = 0.0
+        nft_value = 0.0
+        tracked_tokens_value = 0.0
+
+        if recent_snapshots:
+            # Find the most recent snapshot with meaningful component values
+            for snap in reversed(recent_snapshots):
+                components_sum = (
+                    float(snap.get('staking_value_usd') or 0) +
+                    float(snap.get('defi_value_usd') or 0) +
+                    float(snap.get('exchange_value_usd') or 0) +
+                    float(snap.get('nft_value_usd') or 0) +
+                    float(snap.get('tracked_tokens_value_usd') or 0)
+                )
+                if components_sum > 0:
+                    staking_value = float(snap.get('staking_value_usd') or 0)
+                    defi_value = float(snap.get('defi_value_usd') or 0)
+                    exchange_value = float(snap.get('exchange_value_usd') or 0)
+                    nft_value = float(snap.get('nft_value_usd') or 0)
+                    tracked_tokens_value = float(snap.get('tracked_tokens_value_usd') or 0)
+                    logger.info(f"Using component values from snapshot {snap.get('snapshot_date')} "
+                               f"({snap.get('snapshot_time', 'unknown')})")
+                    break
+
+        # If no snapshot had values, try cache-based helpers as fallback
+        if staking_value == 0 and defi_value == 0 and exchange_value == 0 and nft_value == 0:
+            logger.info("No existing snapshots with component values, trying cache...")
+            current_prices = await pricing.get_all_tracked_prices()
+            ada_current_price = current_prices.get('ADA', {}).get('usd', 0)
+            staking_value = await snapshot_service._get_staking_value(current_prices, user_id=user_id)
+            defi_value = await snapshot_service._get_defi_value(current_prices, user_id=user_id)
+            exchange_value = await snapshot_service._get_exchange_value(current_prices, user_id=user_id)
+            nft_value = await snapshot_service._get_nft_value(ada_current_price, user_id=user_id)
+            tracked_tokens_value = await snapshot_service._get_tracked_tokens_value(current_prices, user_id=user_id)
+
+        logger.info(f"Component values for history gen: staking=${staking_value:.2f}, defi=${defi_value:.2f}, "
+                   f"exchange=${exchange_value:.2f}, nfts=${nft_value:.2f}, tokens=${tracked_tokens_value:.2f}")
 
         task['step'] = 'Building price history...'
         task['progress'] = 35
@@ -780,13 +834,21 @@ async def _run_history_generation(user_id: int, days: int):
                 sol_amount * sol_price
             )
 
+            # Use stored aggregate USD values for non-wallet components.
+            # Only wallet values change with historical prices (amounts × historical price).
+            # Exchange/staking/DeFi/NFT use current values as constants.
+            total_value_usd = (
+                wallet_value_usd + staking_value + defi_value +
+                exchange_value + nft_value + tracked_tokens_value
+            )
+
             snapshot_date = datetime.strptime(date_str, '%Y-%m-%d')
             snapshot_time = snapshot_date.replace(hour=12, minute=0, second=0)
 
             snapshot_data = {
                 'snapshot_date': date_str,
                 'snapshot_time': snapshot_time.isoformat(),
-                'total_value_usd': wallet_value_usd,
+                'total_value_usd': total_value_usd,
                 'ada_amount': ada_amount,
                 'ada_price': ada_price,
                 'btc_amount': btc_amount,
@@ -795,10 +857,11 @@ async def _run_history_generation(user_id: int, days: int):
                 'eth_price': eth_price,
                 'sol_amount': sol_amount,
                 'sol_price': sol_price,
-                'staking_value_usd': 0,
-                'defi_value_usd': 0,
-                'exchange_value_usd': 0,
-                'nft_value_usd': 0
+                'staking_value_usd': staking_value,
+                'defi_value_usd': defi_value,
+                'exchange_value_usd': exchange_value,
+                'nft_value_usd': nft_value,
+                'tracked_tokens_value_usd': tracked_tokens_value,
             }
 
             await save_portfolio_snapshot(snapshot_data, user_id=user_id)
@@ -809,19 +872,9 @@ async def _run_history_generation(user_id: int, days: int):
             task['progress'] = min(pct, 95)
             task['step'] = f'Processing day {i + 1} of {total_dates}...'
 
-        # Backfill staking/defi/exchange/NFT values onto generated snapshots
-        task['step'] = 'Adding staking, DeFi, exchange & NFT values...'
-        task['progress'] = 96
-        try:
-            backfill_result = await snapshot_service.backfill_component_values(user_id=user_id)
-            backfilled = backfill_result.get('snapshots_updated', 0)
-            logger.info(f"Backfilled {backfilled} snapshots with component values")
-        except Exception as bf_err:
-            logger.warning(f"Backfill failed (non-fatal): {bf_err}")
-
         task['status'] = 'completed'
         task['progress'] = 100
-        task['step'] = f'Generated {created} snapshots successfully'
+        task['step'] = f'Generated {created} snapshots with all components'
         task['result'] = {'snapshots_created': created, 'days_requested': days}
         logger.info(f"Background history generation completed for user {user_id}: {created} snapshots")
 
@@ -1506,6 +1559,16 @@ async def get_blockchain_asset_breakdown(
         # Sort tokens by value descending
         token_list.sort(key=lambda x: x['value_usd'], reverse=True)
 
+        # Get supply data from price cache
+        native_price_data = all_prices.get(native_symbol, {})
+        supply_data = {}
+        if native_price_data.get('circulating_supply'):
+            supply_data['circulating_supply'] = native_price_data['circulating_supply']
+        if native_price_data.get('total_supply'):
+            supply_data['total_supply'] = native_price_data['total_supply']
+        if native_price_data.get('max_supply'):
+            supply_data['max_supply'] = native_price_data['max_supply']
+
         # Build response
         result = {
             'blockchain': blockchain,
@@ -1524,7 +1587,8 @@ async def get_blockchain_asset_breakdown(
                 'count': nft_count,
                 'value_usd': nft_value,
                 'percentage': nft_pct
-            }
+            },
+            'supply': supply_data
         }
 
         # Cache for 1 hour (asset breakdowns don't change frequently)

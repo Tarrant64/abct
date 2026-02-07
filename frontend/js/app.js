@@ -848,7 +848,7 @@ async function loadPortfolioSummary() {
             baseTokens.textContent = `${data.base?.token_count || 0} token${(data.base?.token_count || 0) !== 1 ? 's' : ''}`;
         }
 
-        // Update wallets section summary - show stake groups count for Cardano
+        // Update wallets section summary - overlapping chain icons
         const stakeGroupCount = data.cardano.stake_groups?.length || 0;
         const ethWalletCount = data.ethereum?.wallet_count || 0;
         const solWalletCount = data.solana?.wallet_count || 0;
@@ -856,22 +856,28 @@ async function loadPortfolioSummary() {
         const baseWalletCount = data.base?.wallet_count || 0;
         const walletsSummary = document.getElementById('walletsSummary');
         if (walletsSummary) {
-            let summaryHtml = `
-                <span class="chain-count cardano">${stakeGroupCount} Cardano stake key${stakeGroupCount !== 1 ? 's' : ''}</span>
-                <span class="chain-count bitcoin">${data.bitcoin.wallet_count} Bitcoin</span>
-            `;
-            if (ethWalletCount > 0) {
-                summaryHtml += `<span class="chain-count ethereum">${ethWalletCount} Ethereum</span>`;
+            const chainIconMap = {
+                'Cardano': 'ADA', 'Bitcoin': 'BTC', 'Ethereum': 'ETH',
+                'Solana': 'SOL', 'Polygon': 'POL', 'Base': 'BASE'
+            };
+            const chains = [];
+            if (stakeGroupCount > 0) chains.push({ name: 'Cardano', count: stakeGroupCount, label: `${stakeGroupCount} stake key${stakeGroupCount !== 1 ? 's' : ''}` });
+            if (data.bitcoin.wallet_count > 0) chains.push({ name: 'Bitcoin', count: data.bitcoin.wallet_count, label: `${data.bitcoin.wallet_count} wallet${data.bitcoin.wallet_count !== 1 ? 's' : ''}` });
+            if (ethWalletCount > 0) chains.push({ name: 'Ethereum', count: ethWalletCount, label: `${ethWalletCount} wallet${ethWalletCount !== 1 ? 's' : ''}` });
+            if (solWalletCount > 0) chains.push({ name: 'Solana', count: solWalletCount, label: `${solWalletCount} wallet${solWalletCount !== 1 ? 's' : ''}` });
+            if (polygonWalletCount > 0) chains.push({ name: 'Polygon', count: polygonWalletCount, label: `${polygonWalletCount} wallet${polygonWalletCount !== 1 ? 's' : ''}` });
+            if (baseWalletCount > 0) chains.push({ name: 'Base', count: baseWalletCount, label: `${baseWalletCount} wallet${baseWalletCount !== 1 ? 's' : ''}` });
+
+            const maxVisible = 4;
+            let summaryHtml = '<span class="chain-icons-stack">';
+            chains.slice(0, maxVisible).forEach(chain => {
+                const symbol = chainIconMap[chain.name] || chain.name;
+                summaryHtml += `<img src="${getLogoKitUrl(symbol, 28)}" alt="${chain.name}" title="${chain.name}: ${chain.label}" class="chain-icon-circle" onerror="this.style.display='none'">`;
+            });
+            if (chains.length > maxVisible) {
+                summaryHtml += `<span class="chain-icon-overflow" title="${chains.slice(maxVisible).map(c => c.name).join(', ')}">+${chains.length - maxVisible}</span>`;
             }
-            if (solWalletCount > 0) {
-                summaryHtml += `<span class="chain-count solana">${solWalletCount} Solana</span>`;
-            }
-            if (polygonWalletCount > 0) {
-                summaryHtml += `<span class="chain-count polygon">${polygonWalletCount} Polygon</span>`;
-            }
-            if (baseWalletCount > 0) {
-                summaryHtml += `<span class="chain-count base">${baseWalletCount} Base</span>`;
-            }
+            summaryHtml += '</span>';
             setSafeHTML(walletsSummary, summaryHtml);
         }
 
@@ -2613,7 +2619,6 @@ async function loadDefiGovernance() {
             if (govResult.status === 'fulfilled' && govResult.value.ok) {
                 try {
                     const govData = await govResult.value.json();
-                    console.log(`[DeFi] Governance ${wallet.address.slice(0,15)}... balance=${walletBalance} pool=${govData.pool?.pool_id || 'none'}`);
                     if (govData.pool && govData.pool.pool_id) {
                         adaDelegation.stakedAda += walletBalance;
                         const existingPool = adaDelegation.pools.find(p => p.pool_id === govData.pool.pool_id);
@@ -2685,8 +2690,6 @@ async function loadDefiGovernance() {
             }
             processedWallets++;
         }
-
-        console.log('[DeFi] ADA delegation final:', JSON.stringify(adaDelegation));
 
         if (progressBar) progressBar.style.width = '90%';
         if (progressText) progressText.textContent = 'Rendering...';
@@ -2784,15 +2787,6 @@ function renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeS
     const liquidStakingPositions = defiData.positions_by_category?.['Liquid Staking'] || [];
     const hasAdaDelegation = adaDelegation && adaDelegation.totalAda > 0;
     const hasStakedSection = protocols.length > 0 || hasAdaDelegation || liquidStakingPositions.length > 0;
-
-    console.log('[DeFi] Staked section debug:', {
-        protocols: protocols.length,
-        hasAdaDelegation,
-        adaDelegation,
-        liquidStakingCount: liquidStakingPositions.length,
-        liquidStakingPositions,
-        defiCategories: Object.keys(defiData.positions_by_category || {})
-    });
 
     if (hasStakedSection) {
         html += `<div class="defi-gov-subsection">
@@ -3197,29 +3191,7 @@ function renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeS
         html = '<p class="empty-state">No DeFi positions or governance tokens found.</p>';
     }
 
-    // DEBUG: Diagnose missing sections
-    console.log('[DeFi] Render diagnostics:', {
-        htmlLength: html.length,
-        sections: {
-            staked: html.includes('Staked Positions'),
-            governance: html.includes('Governance Tokens (Unstaked)'),
-            stablecoins: html.includes('Stablecoins'),
-            otherDefi: html.includes('defi-gov-tokens')
-        },
-        categories: Object.keys(defiData?.positions_by_category || {}),
-        govCount: (defiData?.positions_by_category?.['Governance Tokens'] || []).length,
-        liquidCount: (defiData?.positions_by_category?.['Liquid Staking'] || []).length
-    });
-
     setSafeHTML(content, html);
-
-    // DEBUG: Check if DOMPurify stripped content
-    console.log('[DeFi] Post-DOMPurify:', {
-        preLen: html.length,
-        postLen: content.innerHTML.length,
-        subsections: content.querySelectorAll('.defi-gov-subsection').length,
-        stripped: html.length - content.innerHTML.length
-    });
 
     // Update summary
     if (summary) {
@@ -5431,8 +5403,11 @@ function getChartColors() {
     const style = getComputedStyle(document.documentElement);
     const theme = document.documentElement.getAttribute('data-theme') || 'dark-mode';
 
+    // All themes share: gradient line, no point dots, crosshair hover
+    const shared = { useGradientLine: true, hidePoints: true };
+
     if (theme === 'light') {
-        return {
+        return { ...shared,
             lineColor: '#00b894',
             fillColor: 'rgba(0, 184, 148, 0.1)',
             pointColor: '#00b894',
@@ -5442,12 +5417,14 @@ function getChartColors() {
             tooltipBg: '#ffffff',
             tooltipTitle: '#1a1a2e',
             tooltipBody: '#00b894',
-            tooltipBorder: '#e5e7eb'
+            tooltipBorder: '#e5e7eb',
+            crosshairColor: 'rgba(107, 114, 128, 0.4)',
+            gradientStops: ['#00b894', '#10b981', '#059669']
         };
     }
 
     if (theme === 'cypherpunk1') {
-        return {
+        return { ...shared,
             lineColor: '#ea00d9',
             fillColor: 'rgba(234, 0, 217, 0.15)',
             pointColor: '#ea00d9',
@@ -5457,12 +5434,14 @@ function getChartColors() {
             tooltipBg: '#12122a',
             tooltipTitle: '#e0f7fa',
             tooltipBody: '#0abdc6',
-            tooltipBorder: '#711c91'
+            tooltipBorder: '#711c91',
+            crosshairColor: 'rgba(113, 28, 145, 0.5)',
+            gradientStops: ['#ea00d9', '#0abdc6', '#ea00d9']
         };
     }
 
     if (theme === 'ocean-depths') {
-        return {
+        return { ...shared,
             lineColor: '#00b4d8',
             fillColor: 'rgba(0, 180, 216, 0.15)',
             pointColor: '#00b4d8',
@@ -5472,12 +5451,14 @@ function getChartColors() {
             tooltipBg: '#0d2137',
             tooltipTitle: '#e0f4ff',
             tooltipBody: '#00b4d8',
-            tooltipBorder: '#1a4a6e'
+            tooltipBorder: '#1a4a6e',
+            crosshairColor: 'rgba(0, 180, 216, 0.3)',
+            gradientStops: ['#0077b6', '#00b4d8', '#48cae4']
         };
     }
 
     if (theme === 'sunset-horizon') {
-        return {
+        return { ...shared,
             lineColor: '#ff6b35',
             fillColor: 'rgba(255, 107, 53, 0.15)',
             pointColor: '#ff6b35',
@@ -5487,12 +5468,31 @@ function getChartColors() {
             tooltipBg: '#2d1233',
             tooltipTitle: '#ffe4e1',
             tooltipBody: '#ff6b35',
-            tooltipBorder: '#5c2a5c'
+            tooltipBorder: '#5c2a5c',
+            crosshairColor: 'rgba(255, 107, 53, 0.3)',
+            gradientStops: ['#ff3366', '#ff6b35', '#ffc145']
         };
     }
 
-    // Default theme colors
-    return {
+    if (theme === 'cypher' || theme === 'cypher2') {
+        return { ...shared,
+            lineColor: '#a855f7',
+            fillColor: 'rgba(168, 85, 247, 0.05)',
+            pointColor: '#a855f7',
+            pointBorderColor: '#000000',
+            gridColor: '#1a1a1a',
+            tickColor: '#666666',
+            tooltipBg: '#141414',
+            tooltipTitle: '#ffffff',
+            tooltipBody: '#a855f7',
+            tooltipBorder: '#2a2a2a',
+            crosshairColor: '#444444',
+            gradientStops: ['#a855f7', '#ec4899', '#f97316']
+        };
+    }
+
+    // Default (dark-mode) theme colors
+    return { ...shared,
         lineColor: '#00d26a',
         fillColor: 'rgba(0, 210, 106, 0.1)',
         pointColor: '#00d26a',
@@ -5502,7 +5502,9 @@ function getChartColors() {
         tooltipBg: '#0f3460',
         tooltipTitle: '#eaeaea',
         tooltipBody: '#00d26a',
-        tooltipBorder: '#2a2a4a'
+        tooltipBorder: '#2a2a4a',
+        crosshairColor: 'rgba(0, 210, 106, 0.3)',
+        gradientStops: ['#00d26a', '#00b894', '#10b981']
     };
 }
 
@@ -5538,6 +5540,41 @@ function renderPortfolioChart(historyData, range) {
     const maxValue = Math.max(...values);
     const padding = (maxValue - minValue) * 0.1 || maxValue * 0.1;
 
+    // Build gradient line color using theme-specific gradient stops
+    let borderColor = colors.lineColor;
+    if (colors.useGradientLine && colors.gradientStops) {
+        const gradCtx = (ctx.getContext ? ctx : document.getElementById('portfolioHistoryChart')).getContext('2d');
+        const gradient = gradCtx.createLinearGradient(0, 0, gradCtx.canvas.width, 0);
+        const stops = colors.gradientStops;
+        for (let i = 0; i < stops.length; i++) {
+            gradient.addColorStop(i / (stops.length - 1), stops[i]);
+        }
+        borderColor = gradient;
+    }
+
+    // Crosshair plugin for Cypher theme
+    const crosshairPlugin = {
+        id: 'crosshairLine',
+        afterDraw: (chart) => {
+            if (!colors.crosshairColor) return;
+            const activeElements = chart.tooltip?.getActiveElements();
+            if (activeElements && activeElements.length > 0) {
+                const x = activeElements[0].element.x;
+                const yAxis = chart.scales.y;
+                const drawCtx = chart.ctx;
+                drawCtx.save();
+                drawCtx.beginPath();
+                drawCtx.setLineDash([4, 4]);
+                drawCtx.strokeStyle = colors.crosshairColor;
+                drawCtx.lineWidth = 1;
+                drawCtx.moveTo(x, yAxis.top);
+                drawCtx.lineTo(x, yAxis.bottom);
+                drawCtx.stroke();
+                drawCtx.restore();
+            }
+        }
+    };
+
     portfolioChart = new Chart(ctx, {
         type: 'line',
         data: {
@@ -5545,13 +5582,13 @@ function renderPortfolioChart(historyData, range) {
             datasets: [{
                 label: 'Portfolio Value',
                 data: values,
-                borderColor: colors.lineColor,
+                borderColor: borderColor,
                 backgroundColor: colors.fillColor,
                 fill: true,
                 tension: 0.3,
                 borderWidth: 3,
-                pointRadius: 5,
-                pointHoverRadius: 10,
+                pointRadius: colors.hidePoints ? 0 : 5,
+                pointHoverRadius: colors.hidePoints ? 0 : 10,
                 pointBackgroundColor: colors.pointColor,
                 pointBorderColor: colors.pointBorderColor,
                 pointBorderWidth: 2,
@@ -5560,6 +5597,7 @@ function renderPortfolioChart(historyData, range) {
                 pointHoverBorderWidth: 2
             }]
         },
+        plugins: [crosshairPlugin],
         options: {
             responsive: true,
             maintainAspectRatio: false,
@@ -5581,9 +5619,15 @@ function renderPortfolioChart(historyData, range) {
                     displayColors: false,
                     callbacks: {
                         title: function(context) {
-                            // Show full date in tooltip
+                            // Show formatted date in tooltip
                             const dataIndex = context[0].dataIndex;
-                            return historyData[dataIndex].date;
+                            const dateStr = historyData[dataIndex].date;
+                            if (range === '1d') {
+                                const d = new Date(dateStr);
+                                return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+                            }
+                            const d = new Date(dateStr + 'T12:00:00');
+                            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                         },
                         label: function(context) {
                             // Total value (large/primary text)
@@ -6205,8 +6249,10 @@ async function showDemoPopulationModal() {
     // Show modal
     modal.classList.remove('hidden');
 
-    // Connect to SSE stream
-    const eventSource = new EventSource('/api/demo/populate/stream');
+    // Connect to SSE stream (EventSource can't send headers, pass token as query param)
+    const token = localStorage.getItem('abct_token');
+    const sseUrl = '/api/demo/populate/stream' + (token ? '?token=' + encodeURIComponent(token) : '');
+    const eventSource = new EventSource(sseUrl);
 
     eventSource.onmessage = (event) => {
         try {
@@ -6414,7 +6460,6 @@ async function preFetchAssetBreakdowns() {
             const metrics = await fetchDeFiLlamaMetrics(blockchain);
             if (metrics) {
                 assetBreakdownCache.set(blockchain, metrics, 'defiLlama');
-                console.log(`✓ Cached DeFillama metrics for ${blockchain}`);
             }
         } catch (error) {
             console.warn(`Failed to pre-fetch ${blockchain}:`, error);
@@ -6431,7 +6476,6 @@ async function fetchDeFiLlamaMetrics(blockchain) {
         // Check cache first
         const cached = assetBreakdownCache.get(blockchain, 'defiLlama');
         if (cached && !assetBreakdownCache.isStale(blockchain, 'defiLlama')) {
-            console.log(`Using cached DeFillama metrics for ${blockchain}`);
             return cached;
         }
 
@@ -6447,8 +6491,6 @@ async function fetchDeFiLlamaMetrics(blockchain) {
 
         const defiLlamaChain = chainMap[blockchain];
         if (!defiLlamaChain) return null;
-
-        console.log(`Fetching fresh DeFillama metrics for ${defiLlamaChain}...`);
 
         let mcap = null, tvl = null, stablecoins = null, volume = null;
 
@@ -6475,7 +6517,6 @@ async function fetchDeFiLlamaMetrics(blockchain) {
             if (chainsResponse.ok) {
                 const chainsData = await chainsResponse.json();
                 const chainData = chainsData.find(c => c.name === defiLlamaChain || c.gecko_id === blockchain);
-                console.log('Chain data from DeFillama:', chainData);
                 if (chainData) {
                     tvl = chainData.tvl;
                 }
@@ -6531,7 +6572,6 @@ async function fetchDeFiLlamaMetrics(blockchain) {
             const volumeResponse = await fetch(`https://api.llama.fi/overview/dexs/${defiLlamaChain}?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true&dataType=dailyVolume`);
             if (volumeResponse.ok) {
                 const volumeData = await volumeResponse.json();
-                console.log('Volume data from DeFillama:', volumeData);
                 // Get the most recent day's total volume
                 if (volumeData.totalDataChart && volumeData.totalDataChart.length > 0) {
                     volume = volumeData.totalDataChart[volumeData.totalDataChart.length - 1][1];
@@ -6543,7 +6583,6 @@ async function fetchDeFiLlamaMetrics(blockchain) {
             console.error('Volume fetch error:', e);
         }
 
-        console.log('Final metrics:', { mcap, tvl, stablecoins, volume });
         return { mcap, tvl, stablecoins, volume };
     } catch (error) {
         console.error('Error fetching DeFillama metrics:', error);
@@ -6589,6 +6628,17 @@ function formatCompactUSD(value) {
     } else {
         return formatUSD(numValue);
     }
+}
+
+function formatLargeNumber(value) {
+    if (!value || value === 0) return '-';
+    const num = parseFloat(value);
+    if (isNaN(num)) return '-';
+    if (num >= 1e12) return (num / 1e12).toFixed(2) + 'T';
+    if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
+    if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+    if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K';
+    return num.toLocaleString();
 }
 
 // Helper function to render breakdown data (used for both cached and fresh data)
@@ -6656,6 +6706,17 @@ function renderBreakdownData(data) {
 
     renderAssetBreakdownChart(labels, values, colors);
     renderBreakdownLegend(legendItems);
+
+    // Populate supply metrics if available
+    const supplyRow = document.getElementById('supplyMetricsRow');
+    if (supplyRow && data.supply && (data.supply.circulating_supply || data.supply.total_supply || data.supply.max_supply)) {
+        document.getElementById('supplyCirculating').textContent = formatLargeNumber(data.supply.circulating_supply);
+        document.getElementById('supplyTotal').textContent = formatLargeNumber(data.supply.total_supply);
+        document.getElementById('supplyMax').textContent = data.supply.max_supply ? formatLargeNumber(data.supply.max_supply) : 'No Cap';
+        supplyRow.classList.remove('hidden');
+    } else if (supplyRow) {
+        supplyRow.classList.add('hidden');
+    }
 }
 
 async function openAssetBreakdown(blockchain) {
@@ -6682,8 +6743,6 @@ async function openAssetBreakdown(blockchain) {
         const hasCache = cachedData && !assetBreakdownCache.isStale(blockchain, 'data');
 
         if (hasCache) {
-            // Show cached data instantly!
-            console.log(`Showing cached breakdown for ${blockchain}`);
             renderBreakdownData(cachedData);
 
             // Show cached DeFillama metrics if available

@@ -6,7 +6,7 @@
     <title>A Better Crypto Tracker</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1770482021">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1770495647">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preconnect" href="https://unpkg.com" crossorigin>
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
@@ -15,7 +15,7 @@
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1770482021"></script>
+    <script src="/static/js/session-auth.js?v=1770495647"></script>
 </head>
 <body>
     <div class="container">
@@ -87,6 +87,8 @@
                                 <option value="cypherpunk1">Cypherpunk 1</option>
                                 <option value="ocean-depths">Ocean Depths</option>
                                 <option value="sunset-horizon">Sunset Horizon</option>
+                                <option value="cypher">Cypher</option>
+                                <option value="cypher2">Cypher2</option>
                             </select>
                         </div>
                     </div>
@@ -637,6 +639,22 @@
                         </div>
                     </div>
 
+                    <!-- Supply Metrics (hidden by default, shown when data available) -->
+                    <div class="supply-metrics-row hidden" id="supplyMetricsRow">
+                        <div class="metric-card">
+                            <span class="metric-label">Circulating Supply</span>
+                            <span class="metric-value" id="supplyCirculating">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">Total Supply</span>
+                            <span class="metric-value" id="supplyTotal">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">Max Supply</span>
+                            <span class="metric-value" id="supplyMax">-</span>
+                        </div>
+                    </div>
+
                     <!-- Chart with matching styling -->
                     <div class="breakdown-content">
                         <div class="breakdown-chart-wrapper">
@@ -679,6 +697,6 @@
         </footer>
     </div>
 
-    <script src="/static/js/app.js?v=1770482021"></script>
+    <script src="/static/js/app.js?v=1770495647"></script>
 </body>
 </html>

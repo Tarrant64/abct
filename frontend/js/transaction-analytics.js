@@ -52,7 +52,7 @@ function initAnalyticsChart() {
 
     const ctx = canvas.getContext('2d');
 
-    // Get theme for styling
+    // Get theme for styling (use getChartColors if available, otherwise fallback)
     const theme = document.documentElement.getAttribute('data-theme') || 'dark-mode';
     const isDarkTheme = theme !== 'light';
 
@@ -60,6 +60,29 @@ function initAnalyticsChart() {
     const tickColor = isDarkTheme ? '#94a3b8' : '#6b7280';
     const tooltipBg = isDarkTheme ? '#1e293b' : '#ffffff';
     const tooltipBorder = isDarkTheme ? '#334155' : '#e5e7eb';
+    const crosshairColor = isDarkTheme ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.15)';
+
+    // Crosshair plugin for hover
+    const crosshairPlugin = {
+        id: 'analyticsCrosshair',
+        afterDraw: (chart) => {
+            const activeElements = chart.tooltip?.getActiveElements();
+            if (activeElements && activeElements.length > 0) {
+                const x = activeElements[0].element.x;
+                const yAxis = chart.scales.y;
+                const drawCtx = chart.ctx;
+                drawCtx.save();
+                drawCtx.beginPath();
+                drawCtx.setLineDash([4, 4]);
+                drawCtx.strokeStyle = crosshairColor;
+                drawCtx.lineWidth = 1;
+                drawCtx.moveTo(x, yAxis.top);
+                drawCtx.lineTo(x, yAxis.bottom);
+                drawCtx.stroke();
+                drawCtx.restore();
+            }
+        }
+    };
 
     analyticsChart = new Chart(ctx, {
         type: 'line',
@@ -67,6 +90,7 @@ function initAnalyticsChart() {
             labels: [],
             datasets: []
         },
+        plugins: [crosshairPlugin],
         options: {
             responsive: true,
             maintainAspectRatio: false,
@@ -197,21 +221,21 @@ function renderAnalyticsChart(data) {
         if (noneSelected) {
             borderColor = colors.faded;
             fillColor = colors.fill;
-            borderWidth = 1.5;
-            pointRadius = 2;
-            pointHoverRadius = 4;
+            borderWidth = 2;
+            pointRadius = 0;
+            pointHoverRadius = 0;
         } else if (isSelected) {
             borderColor = colors.normal;
             fillColor = colors.fill;
             borderWidth = 3;
-            pointRadius = 5;
-            pointHoverRadius = 7;
+            pointRadius = 0;
+            pointHoverRadius = 0;
         } else {
             borderColor = 'rgba(136, 136, 136, 0.15)';
             fillColor = 'rgba(136, 136, 136, 0.03)';
             borderWidth = 1;
             pointRadius = 0;
-            pointHoverRadius = 2;
+            pointHoverRadius = 0;
         }
 
         datasets.push({

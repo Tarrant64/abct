@@ -102,11 +102,10 @@ async def migrate_encrypt_api_keys():
     migrated = 0
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
-        cursor = await db.execute("SELECT id, api_key, api_secret, api_passphrase FROM api_settings")
+        cursor = await db.execute("SELECT user_id, api_name, api_key, api_secret, api_passphrase FROM api_settings")
         rows = await cursor.fetchall()
 
         for row in rows:
-            row_id = row['id']
             updates = {}
 
             for field in ('api_key', 'api_secret', 'api_passphrase'):
@@ -116,9 +115,9 @@ async def migrate_encrypt_api_keys():
 
             if updates:
                 set_clause = ", ".join(f"{k} = ?" for k in updates)
-                values = list(updates.values()) + [row_id]
+                values = list(updates.values()) + [row['user_id'], row['api_name']]
                 await db.execute(
-                    f"UPDATE api_settings SET {set_clause} WHERE id = ?",
+                    f"UPDATE api_settings SET {set_clause} WHERE user_id = ? AND api_name = ?",
                     values
                 )
                 migrated += 1
@@ -1235,10 +1234,13 @@ async def save_portfolio_snapshot(snapshot_data: dict, user_id: int = None):
             INSERT INTO portfolio_snapshots (
                 user_id, snapshot_date, snapshot_time, total_value_usd,
                 ada_amount, ada_price, btc_amount, btc_price, eth_amount, eth_price,
-                sol_amount, sol_price,
+                sol_amount, sol_price, matic_price,
                 staking_value_usd, defi_value_usd, exchange_value_usd, nft_value_usd,
-                tracked_tokens_value_usd
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                tracked_tokens_value_usd,
+                exchange_btc_amount, exchange_eth_amount, exchange_ada_amount,
+                exchange_sol_amount, exchange_matic_amount,
+                exchange_other_json, tracked_tokens_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id, snapshot_time) DO UPDATE SET
                 total_value_usd = excluded.total_value_usd,
                 ada_amount = excluded.ada_amount,
@@ -1249,11 +1251,19 @@ async def save_portfolio_snapshot(snapshot_data: dict, user_id: int = None):
                 eth_price = excluded.eth_price,
                 sol_amount = excluded.sol_amount,
                 sol_price = excluded.sol_price,
+                matic_price = excluded.matic_price,
                 staking_value_usd = excluded.staking_value_usd,
                 defi_value_usd = excluded.defi_value_usd,
                 exchange_value_usd = excluded.exchange_value_usd,
                 nft_value_usd = excluded.nft_value_usd,
-                tracked_tokens_value_usd = excluded.tracked_tokens_value_usd
+                tracked_tokens_value_usd = excluded.tracked_tokens_value_usd,
+                exchange_btc_amount = excluded.exchange_btc_amount,
+                exchange_eth_amount = excluded.exchange_eth_amount,
+                exchange_ada_amount = excluded.exchange_ada_amount,
+                exchange_sol_amount = excluded.exchange_sol_amount,
+                exchange_matic_amount = excluded.exchange_matic_amount,
+                exchange_other_json = excluded.exchange_other_json,
+                tracked_tokens_json = excluded.tracked_tokens_json
         """, (
             user_id,
             snapshot_data['snapshot_date'],
@@ -1267,11 +1277,19 @@ async def save_portfolio_snapshot(snapshot_data: dict, user_id: int = None):
             snapshot_data.get('eth_price', 0),
             snapshot_data.get('sol_amount', 0),
             snapshot_data.get('sol_price', 0),
+            snapshot_data.get('matic_price', 0),
             snapshot_data.get('staking_value_usd', 0),
             snapshot_data.get('defi_value_usd', 0),
             snapshot_data.get('exchange_value_usd', 0),
             snapshot_data.get('nft_value_usd', 0),
-            snapshot_data.get('tracked_tokens_value_usd', 0)
+            snapshot_data.get('tracked_tokens_value_usd', 0),
+            snapshot_data.get('exchange_btc_amount', 0),
+            snapshot_data.get('exchange_eth_amount', 0),
+            snapshot_data.get('exchange_ada_amount', 0),
+            snapshot_data.get('exchange_sol_amount', 0),
+            snapshot_data.get('exchange_matic_amount', 0),
+            snapshot_data.get('exchange_other_json', '{}'),
+            snapshot_data.get('tracked_tokens_json', '{}')
         ))
         await db.commit()
 
@@ -1299,9 +1317,16 @@ async def get_portfolio_history(days: int = 7, user_id: int = None, hourly: bool
                 cursor = await db.execute("""
                     SELECT snapshot_date, total_value_usd, snapshot_time,
                            ada_amount, ada_price, btc_amount, btc_price, eth_amount, eth_price,
-                           sol_amount, sol_price,
+                           sol_amount, sol_price, COALESCE(matic_price, 0) as matic_price,
                            staking_value_usd, defi_value_usd, exchange_value_usd, nft_value_usd,
-                           COALESCE(tracked_tokens_value_usd, 0) as tracked_tokens_value_usd
+                           COALESCE(tracked_tokens_value_usd, 0) as tracked_tokens_value_usd,
+                           COALESCE(exchange_btc_amount, 0) as exchange_btc_amount,
+                           COALESCE(exchange_eth_amount, 0) as exchange_eth_amount,
+                           COALESCE(exchange_ada_amount, 0) as exchange_ada_amount,
+                           COALESCE(exchange_sol_amount, 0) as exchange_sol_amount,
+                           COALESCE(exchange_matic_amount, 0) as exchange_matic_amount,
+                           COALESCE(exchange_other_json, '{}') as exchange_other_json,
+                           COALESCE(tracked_tokens_json, '{}') as tracked_tokens_json
                     FROM portfolio_snapshots
                     WHERE user_id = ? AND snapshot_time >= datetime('now', ?)
                     ORDER BY snapshot_time ASC
@@ -1310,9 +1335,16 @@ async def get_portfolio_history(days: int = 7, user_id: int = None, hourly: bool
                 cursor = await db.execute("""
                     SELECT snapshot_date, total_value_usd, snapshot_time,
                            ada_amount, ada_price, btc_amount, btc_price, eth_amount, eth_price,
-                           sol_amount, sol_price,
+                           sol_amount, sol_price, COALESCE(matic_price, 0) as matic_price,
                            staking_value_usd, defi_value_usd, exchange_value_usd, nft_value_usd,
-                           COALESCE(tracked_tokens_value_usd, 0) as tracked_tokens_value_usd
+                           COALESCE(tracked_tokens_value_usd, 0) as tracked_tokens_value_usd,
+                           COALESCE(exchange_btc_amount, 0) as exchange_btc_amount,
+                           COALESCE(exchange_eth_amount, 0) as exchange_eth_amount,
+                           COALESCE(exchange_ada_amount, 0) as exchange_ada_amount,
+                           COALESCE(exchange_sol_amount, 0) as exchange_sol_amount,
+                           COALESCE(exchange_matic_amount, 0) as exchange_matic_amount,
+                           COALESCE(exchange_other_json, '{}') as exchange_other_json,
+                           COALESCE(tracked_tokens_json, '{}') as tracked_tokens_json
                     FROM portfolio_snapshots
                     WHERE snapshot_time >= datetime('now', ?)
                     ORDER BY snapshot_time ASC
@@ -1323,9 +1355,16 @@ async def get_portfolio_history(days: int = 7, user_id: int = None, hourly: bool
                 cursor = await db.execute("""
                     SELECT snapshot_date, total_value_usd, snapshot_time,
                            ada_amount, ada_price, btc_amount, btc_price, eth_amount, eth_price,
-                           sol_amount, sol_price,
+                           sol_amount, sol_price, COALESCE(matic_price, 0) as matic_price,
                            staking_value_usd, defi_value_usd, exchange_value_usd, nft_value_usd,
-                           COALESCE(tracked_tokens_value_usd, 0) as tracked_tokens_value_usd
+                           COALESCE(tracked_tokens_value_usd, 0) as tracked_tokens_value_usd,
+                           COALESCE(exchange_btc_amount, 0) as exchange_btc_amount,
+                           COALESCE(exchange_eth_amount, 0) as exchange_eth_amount,
+                           COALESCE(exchange_ada_amount, 0) as exchange_ada_amount,
+                           COALESCE(exchange_sol_amount, 0) as exchange_sol_amount,
+                           COALESCE(exchange_matic_amount, 0) as exchange_matic_amount,
+                           COALESCE(exchange_other_json, '{}') as exchange_other_json,
+                           COALESCE(tracked_tokens_json, '{}') as tracked_tokens_json
                     FROM portfolio_snapshots
                     WHERE user_id = ? AND snapshot_date >= date('now', ?)
                     AND id IN (
@@ -1341,9 +1380,16 @@ async def get_portfolio_history(days: int = 7, user_id: int = None, hourly: bool
                 cursor = await db.execute("""
                     SELECT snapshot_date, total_value_usd, snapshot_time,
                            ada_amount, ada_price, btc_amount, btc_price, eth_amount, eth_price,
-                           sol_amount, sol_price,
+                           sol_amount, sol_price, COALESCE(matic_price, 0) as matic_price,
                            staking_value_usd, defi_value_usd, exchange_value_usd, nft_value_usd,
-                           COALESCE(tracked_tokens_value_usd, 0) as tracked_tokens_value_usd
+                           COALESCE(tracked_tokens_value_usd, 0) as tracked_tokens_value_usd,
+                           COALESCE(exchange_btc_amount, 0) as exchange_btc_amount,
+                           COALESCE(exchange_eth_amount, 0) as exchange_eth_amount,
+                           COALESCE(exchange_ada_amount, 0) as exchange_ada_amount,
+                           COALESCE(exchange_sol_amount, 0) as exchange_sol_amount,
+                           COALESCE(exchange_matic_amount, 0) as exchange_matic_amount,
+                           COALESCE(exchange_other_json, '{}') as exchange_other_json,
+                           COALESCE(tracked_tokens_json, '{}') as tracked_tokens_json
                     FROM portfolio_snapshots
                     WHERE snapshot_date >= date('now', ?)
                     AND id IN (
