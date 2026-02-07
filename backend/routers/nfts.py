@@ -711,7 +711,7 @@ async def get_all_chains_nft_summary(user_id: int = Depends(verify_session)):
         'chain': 'ethereum',
         'total_count': 0,
         'total_value_usd': 0,
-        'configured': ethereum_nft_service.is_configured()
+        'configured': await ethereum_nft_service.is_configured()
     }
     if ethereum_data['configured']:
         try:
