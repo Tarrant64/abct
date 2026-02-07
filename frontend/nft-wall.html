@@ -6,9 +6,9 @@
     <title>NFT Wall - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1770503664">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1770504681">
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1770503664"></script>
+    <script src="/static/js/session-auth.js?v=1770504681"></script>
     <style>
         /* NFT Wall Specific Styles */
         .wall-container {
@@ -500,35 +500,21 @@
         }
 
         /* NFT Detail Modal - Selective privacy blur */
-        /* NFT image: show with vignette effect */
-        body.privacy-mode .modal-main-image {
-            position: relative;
+        /* Blur the NFT image but keep chain badge visible on top */
+        body.privacy-mode .modal-main-image img {
+            filter: blur(12px);
+            user-select: none;
         }
-        body.privacy-mode .modal-main-image::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: radial-gradient(
-                ellipse 65% 65% at center,
-                transparent 30%,
-                rgba(0, 0, 0, 0.4) 70%,
-                rgba(0, 0, 0, 0.85) 100%
-            );
-            pointer-events: none;
-            border-radius: inherit;
-            z-index: 1;
-        }
-        /* Chain badge stays visible above vignette */
+        /* Chain badge floats above blurred image */
         body.privacy-mode .modal-image-badge {
             z-index: 2;
             position: relative;
+            filter: none;
         }
         body.privacy-mode .modal-edition-badge {
             z-index: 2;
             position: relative;
+            filter: none;
         }
         /* Blur identifying text: NFT name, collection name, wallet */
         body.privacy-mode .modal-title,

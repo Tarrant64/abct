@@ -6,9 +6,9 @@
     <title>ABCT - Manage Wallets</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1770503664">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1770504681">
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1770503664"></script>
+    <script src="/static/js/session-auth.js?v=1770504681"></script>
     <style>
         /* Wallet Manager Styles */
         .wallet-manager {
@@ -823,6 +823,28 @@
                 width: 100%;
                 justify-content: flex-end;
             }
+        }
+
+        /* Privacy Mode - Manage Wallets page */
+        body.privacy-mode .wallet-address {
+            filter: blur(8px);
+            user-select: none;
+        }
+        body.privacy-mode .label-text {
+            filter: blur(8px);
+            user-select: none;
+        }
+        body.privacy-mode .wallet-balance .amount {
+            filter: blur(10px);
+            user-select: none;
+        }
+        body.privacy-mode .wallet-balance .unit {
+            filter: blur(10px);
+            user-select: none;
+        }
+        body.privacy-mode .token-count {
+            filter: blur(6px);
+            user-select: none;
         }
     </style>
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
