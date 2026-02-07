@@ -473,31 +473,38 @@ class SnapshotService:
 
         snapshots = await get_portfolio_history(days, user_id=user_id, hourly=(days == 1))
 
+        # Safe float conversion - handles corrupted DB values like '{}'
+        def sf(val, default=0.0):
+            try:
+                return float(val) if val is not None else default
+            except (ValueError, TypeError):
+                return default
+
         # Convert snapshots to history format with recalculated values
         history = []
         for s in snapshots:
             # Wallet values (already using historical prices from snapshot)
-            # Ensure all values are floats (database may return strings)
+            # Ensure all values are floats (database may return strings or corrupted data)
             wallet_value = (
-                float(s['ada_amount'] or 0) * float(s['ada_price'] or 0) +
-                float(s['btc_amount'] or 0) * float(s['btc_price'] or 0) +
-                float(s['eth_amount'] or 0) * float(s['eth_price'] or 0) +
-                float(s.get('sol_amount', 0) or 0) * float(s.get('sol_price', 0) or 0)
+                sf(s['ada_amount']) * sf(s['ada_price']) +
+                sf(s['btc_amount']) * sf(s['btc_price']) +
+                sf(s['eth_amount']) * sf(s['eth_price']) +
+                sf(s.get('sol_amount')) * sf(s.get('sol_price'))
             )
 
             # Recalculate exchange value using historical prices
-            exchange_btc = float(s.get('exchange_btc_amount', 0) or 0)
-            exchange_eth = float(s.get('exchange_eth_amount', 0) or 0)
-            exchange_ada = float(s.get('exchange_ada_amount', 0) or 0)
-            exchange_sol = float(s.get('exchange_sol_amount', 0) or 0)
-            exchange_matic = float(s.get('exchange_matic_amount', 0) or 0)
+            exchange_btc = sf(s.get('exchange_btc_amount'))
+            exchange_eth = sf(s.get('exchange_eth_amount'))
+            exchange_ada = sf(s.get('exchange_ada_amount'))
+            exchange_sol = sf(s.get('exchange_sol_amount'))
+            exchange_matic = sf(s.get('exchange_matic_amount'))
 
             exchange_value = (
-                exchange_btc * float(s['btc_price'] or 0) +
-                exchange_eth * float(s['eth_price'] or 0) +
-                exchange_ada * float(s['ada_price'] or 0) +
-                exchange_sol * float(s.get('sol_price', 0) or 0) +
-                exchange_matic * float(s.get('matic_price', 0) or 0)
+                exchange_btc * sf(s['btc_price']) +
+                exchange_eth * sf(s['eth_price']) +
+                exchange_ada * sf(s['ada_price']) +
+                exchange_sol * sf(s.get('sol_price')) +
+                exchange_matic * sf(s.get('matic_price'))
             )
 
             # Parse exchange other currencies JSON if present
@@ -515,17 +522,20 @@ class SnapshotService:
                 # For now we only have major coin historical prices
                 # Tracked tokens would need their own historical price data
                 # Use stored value as fallback
-                tracked_tokens_value = float(s.get('tracked_tokens_value_usd', 0) or 0)
+                tracked_tokens_value = sf(s.get('tracked_tokens_value_usd'))
             except:
-                tracked_tokens_value = float(s.get('tracked_tokens_value_usd', 0) or 0)
+                tracked_tokens_value = sf(s.get('tracked_tokens_value_usd'))
 
             # Calculate total with recalculated values
+            staking_usd = sf(s.get('staking_value_usd'))
+            defi_usd = sf(s.get('defi_value_usd'))
+            nft_usd = sf(s.get('nft_value_usd'))
             total_value = (
                 wallet_value +
-                (s.get('staking_value_usd', 0) or 0) +
-                (s.get('defi_value_usd', 0) or 0) +
+                staking_usd +
+                defi_usd +
                 exchange_value +
-                (s.get('nft_value_usd', 0) or 0) +
+                nft_usd +
                 tracked_tokens_value
             )
 
@@ -545,10 +555,10 @@ class SnapshotService:
                 'value': total_value,
                 'breakdown': {
                     'wallets': wallet_value,
-                    'staking': s.get('staking_value_usd', 0) or 0,
-                    'defi': s.get('defi_value_usd', 0) or 0,
+                    'staking': staking_usd,
+                    'defi': defi_usd,
                     'exchange': exchange_value,
-                    'nfts': s.get('nft_value_usd', 0) or 0,
+                    'nfts': nft_usd,
                     'tracked_tokens': tracked_tokens_value
                 }
             })
