@@ -35,8 +35,17 @@ async def verify_session(authorization: Optional[str] = Header(None)) -> int:
     Raises:
         HTTPException: 401 if token is missing or invalid (when auth required)
     """
-    # If auth not required, allow access as admin user
+    # If auth not required, still check for a valid session token
+    # so demo users get demo data instead of admin data
     if not is_auth_required():
+        if authorization and authorization.startswith("Bearer "):
+            try:
+                from database import get_session
+                session_data = await get_session(authorization[7:])
+                if session_data:
+                    return session_data['user_id']
+            except Exception:
+                pass
         return 1  # Default to admin user ID
 
     # Auth is required - check for token
