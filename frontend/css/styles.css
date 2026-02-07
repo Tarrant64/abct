@@ -1335,9 +1335,15 @@ header h1 {
 
 /* Privacy Mode - Blur only numeric values, keep labels visible */
 body.privacy-mode .blur-value {
-    filter: blur(20px);
+    filter: blur(10px);
     user-select: none;
     display: inline-block;
+}
+
+/* Blur-sensitive elements (stake keys, pool names, DRep names) */
+body.privacy-mode .blur-sensitive {
+    filter: blur(8px);
+    user-select: none;
 }
 
 /* Buttons - Standardized sizing and styling */
@@ -7087,7 +7093,7 @@ body.privacy-mode .wall-stat .value {
     user-select: none;
 }
 
-/* Staking Positions */
+/* Staking Positions & Governance */
 body.privacy-mode .stake-pool,
 body.privacy-mode .pool-name,
 body.privacy-mode .pool-ticker,
@@ -7097,11 +7103,28 @@ body.privacy-mode .delegated-amount {
     user-select: none;
 }
 
-/* Exchange Balances */
+body.privacy-mode .gov-link,
+body.privacy-mode .gov-value {
+    filter: blur(8px);
+    user-select: none;
+}
+
+/* Exchange Section - Header total and individual balances */
+body.privacy-mode .exchange-total {
+    filter: blur(10px);
+    user-select: none;
+}
+
 body.privacy-mode .exchange-account,
 body.privacy-mode .account-balance,
 body.privacy-mode .asset-list {
     filter: blur(10px);
+    user-select: none;
+}
+
+/* Manage Wallets Page - Addresses, labels, balances */
+body.privacy-mode .label-text {
+    filter: blur(8px);
     user-select: none;
 }
 
@@ -7144,10 +7167,9 @@ body.privacy-mode .percentage-value {
     user-select: none;
 }
 
-/* Table Data */
-body.privacy-mode table td,
-body.privacy-mode table th {
-    filter: blur(8px);
+/* Table Data - Light blur to preserve structure visibility */
+body.privacy-mode table td {
+    filter: blur(4px);
     user-select: none;
 }
 
