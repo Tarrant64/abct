@@ -157,7 +157,7 @@ EOF
     echo "[3/4] Building Docker image..."
     cd "$REMOTE_PATH"
 
-    docker build --progress=plain -t "$CONTAINER_NAME:latest" -f abct-docker/Dockerfile . 2>&1 | {
+    docker build --no-cache --progress=plain -t "$CONTAINER_NAME:latest" -f abct-docker/Dockerfile . 2>&1 | {
         while IFS= read -r line; do
             if echo "$line" | grep -qE "^#[0-9]+ \[[0-9]+/[0-9]+\]"; then
                 STEP_INFO=$(echo "$line" | grep -oE "\[[0-9]+/[0-9]+\]" | head -1)
