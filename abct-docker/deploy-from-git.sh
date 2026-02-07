@@ -73,6 +73,7 @@ SSH_OPTS="-o ControlMaster=auto -o ControlPath=$SSH_CONTROL_PATH -o ControlPersi
 echo ""
 echo -e "${YELLOW}[1/4] Cloning repository on Unraid...${NC}"
 
+DEPLOY_START=$(date +%s)
 ssh $SSH_OPTS "${SSH_USER}@${UNRAID_HOST}" bash -s "$CONTAINER_NAME" "$REMOTE_PATH" "$DATA_DIR" "$PORT" "$GIT_REPO" "$BRANCH" "$RESET_PASSWORD" << 'ENDSSH'
     CONTAINER_NAME="$1"
     REMOTE_PATH="$2"
@@ -157,9 +158,25 @@ EOF
     echo "[3/4] Building Docker image..."
     cd "$REMOTE_PATH"
 
+    BUILD_START=$(date +%s)
     docker build --no-cache --progress=plain -t "$CONTAINER_NAME:latest" -f abct-docker/Dockerfile . 2>&1 | {
+        CURRENT_STEP=""
+        STEP_START=$(date +%s)
+        LAST_SUB_TIME=0
+
         while IFS= read -r line; do
+            NOW=$(date +%s)
+
+            # New build step started
             if echo "$line" | grep -qE "^#[0-9]+ \[[0-9]+/[0-9]+\]"; then
+                # Print completion of previous step if it took >2s
+                if [ -n "$CURRENT_STEP" ]; then
+                    STEP_TIME=$((NOW - STEP_START))
+                    if [ $STEP_TIME -gt 2 ]; then
+                        printf "\r\033[K  \033[0;32m✓\033[0m %s done (%ds)\n" "$CURRENT_STEP" "$STEP_TIME"
+                    fi
+                fi
+
                 STEP_INFO=$(echo "$line" | grep -oE "\[[0-9]+/[0-9]+\]" | head -1)
                 CURRENT=$(echo "$STEP_INFO" | sed 's/\[//;s/\/.*//')
                 TOTAL=$(echo "$STEP_INFO" | sed 's/.*\///;s/\]//')
@@ -167,11 +184,49 @@ EOF
                 FILLED=$((PERCENT / 5))
                 EMPTY=$((20 - FILLED))
                 BAR=$(printf '%*s' "$FILLED" | tr ' ' '#')$(printf '%*s' "$EMPTY" | tr ' ' '-')
-                DESC=$(echo "$line" | sed 's/^#[0-9]* \[[0-9]*\/[0-9]*\] //' | cut -c1-50)
-                printf "\r  \033[K[%s] %3d%%  Step %s - %s" "$BAR" "$PERCENT" "$STEP_INFO" "$DESC"
+                DESC=$(echo "$line" | sed 's/^#[0-9]* \[[0-9]*\/[0-9]*\] //' | cut -c1-55)
+                CURRENT_STEP="$STEP_INFO"
+                STEP_START=$NOW
+                LAST_SUB_TIME=0
+
+                # Print on own line so SSH flushes immediately
+                printf "  [%s] %3d%%  %s %s\n" "$BAR" "$PERCENT" "$STEP_INFO" "$DESC"
+
+            # Sub-progress: apt-get operations (slow step)
+            elif echo "$line" | grep -qiE "^#[0-9]+ [0-9.]+ (Setting up |Unpacking |Get:[0-9])"; then
+                STEP_ELAPSED=$((NOW - STEP_START))
+                if [ $((STEP_ELAPSED - LAST_SUB_TIME)) -ge 3 ]; then
+                    LAST_SUB_TIME=$STEP_ELAPSED
+                    SUB=$(echo "$line" | sed 's/^#[0-9]* [0-9.]* //' | cut -c1-55)
+                    printf "\r\033[K       \033[2m↳ (%ds) %s\033[0m" "$STEP_ELAPSED" "$SUB"
+                fi
+
+            # Sub-progress: pip operations (slow step)
+            elif echo "$line" | grep -qiE "^#[0-9]+ [0-9.]+ (Collecting |Downloading |Installing |Building wheel)"; then
+                STEP_ELAPSED=$((NOW - STEP_START))
+                if [ $((STEP_ELAPSED - LAST_SUB_TIME)) -ge 2 ]; then
+                    LAST_SUB_TIME=$STEP_ELAPSED
+                    SUB=$(echo "$line" | sed 's/^#[0-9]* [0-9.]* //' | cut -c1-55)
+                    printf "\r\033[K       \033[2m↳ (%ds) %s\033[0m" "$STEP_ELAPSED" "$SUB"
+                fi
             fi
         done
-        echo ""
+
+        # Final step completion
+        if [ -n "$CURRENT_STEP" ]; then
+            NOW=$(date +%s)
+            STEP_TIME=$((NOW - STEP_START))
+            if [ $STEP_TIME -gt 2 ]; then
+                printf "\r\033[K  \033[0;32m✓\033[0m %s done (%ds)\n" "$CURRENT_STEP" "$STEP_TIME"
+            else
+                printf "\r\033[K\n"
+            fi
+        fi
+
+        BUILD_TIME=$(( $(date +%s) - BUILD_START ))
+        MINS=$((BUILD_TIME / 60))
+        SECS=$((BUILD_TIME % 60))
+        printf "  Build completed in %dm %ds\n" "$MINS" "$SECS"
     }
 
     echo "  ✓ Image built"
@@ -243,6 +298,9 @@ echo ""
 DEPLOYED_VERSION=$(ssh $SSH_OPTS "${SSH_USER}@${UNRAID_HOST}" "docker exec $CONTAINER_NAME grep -o 'v[0-9.]*\s*(BUILD\s*[0-9]*)' /app/frontend/index.html 2>/dev/null | head -1" || echo "")
 
 if [ $SSH_EXIT_CODE -eq 0 ]; then
+    DEPLOY_TIME=$(( $(date +%s) - DEPLOY_START ))
+    DEPLOY_MINS=$((DEPLOY_TIME / 60))
+    DEPLOY_SECS=$((DEPLOY_TIME % 60))
     echo ""
     echo -e "${GREEN}========================================"
     echo "  Deployment from Git Complete!"
@@ -252,6 +310,7 @@ if [ $SSH_EXIT_CODE -eq 0 ]; then
     if [ -n "$DEPLOYED_VERSION" ]; then
         echo "Version:   ${DEPLOYED_VERSION}"
     fi
+    echo "Deploy:    ${DEPLOY_MINS}m ${DEPLOY_SECS}s"
     echo ""
 else
     echo -e "${RED}Deployment failed.${NC}"
