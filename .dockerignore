@@ -1,0 +1,49 @@
+# Git
+.git
+.gitignore
+
+# Development & IDE
+.claude
+.vscode
+.idea
+*.swp
+*.tmp
+*.log
+.DS_Store
+
+# Documentation & planning
+docs/
+EXCLUDE/
+*.md
+!README.md
+
+# Archives
+archive/
+
+# Local data & credentials
+data/
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.local
+cdp_api_key*.json
+*_credentials.json
+.encryption_key
+
+# Python artifacts
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+venv/
+.venv/
+
+# Deployment scripts (not needed inside container)
+deploy.sh
+abct-docker/deploy-from-git.sh
+
+# Test & verification scripts
+check_demo.py
+verify_imports.py
+backend/requirements-security.txt

@@ -1586,6 +1586,37 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     margin-bottom: 20px;
     font-size: 1.5rem;
     color: var(--text-primary);
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    gap: 8px;
+}
+
+.analytics-refresh-indicator {
+    display: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent-success, #00d26a);
+    opacity: 0.4;
+    animation: analytics-pulse 1.2s ease-in-out infinite;
+}
+
+.analytics-refresh-indicator.active {
+    display: inline-block;
+}
+
+.analytics-refresh-indicator.done {
+    display: inline-block;
+    opacity: 1;
+    animation: none;
+}
+
+@keyframes analytics-pulse {
+    0%, 100% { opacity: 0.3; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1.1); }
 }
 
 .analytics-content {
@@ -5366,6 +5397,29 @@ body.usd-primary .exchange-asset-item .balance-amount::after {
     padding: 2px 8px;
     border-radius: 10px;
     text-transform: uppercase;
+}
+
+.defi-gov-card .liquid-badge {
+    background-color: #06b6d4;
+    color: #000;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+}
+
+.defi-gov-card .ada-delegation-detail {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.defi-gov-card .pool-info {
+    font-size: 0.8rem;
+    color: var(--accent-cardano, #0033ad);
+    opacity: 0.8;
+    margin-top: 4px;
 }
 
 .defi-gov-card .card-amount {
