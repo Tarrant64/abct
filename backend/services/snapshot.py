@@ -257,7 +257,7 @@ class SnapshotService:
                         for pos in cached['positions']:
                             amount = float(pos.get('staked_amount', 0))
                             token = pos.get('token', 'ADA')
-                            price = prices.get(token, {}).get('price', 0)
+                            price = prices.get(token, {}).get('usd', 0)
                             total_usd += amount * price
 
             return total_usd

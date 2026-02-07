@@ -809,6 +809,16 @@ async def _run_history_generation(user_id: int, days: int):
             task['progress'] = min(pct, 95)
             task['step'] = f'Processing day {i + 1} of {total_dates}...'
 
+        # Backfill staking/defi/exchange/NFT values onto generated snapshots
+        task['step'] = 'Adding staking, DeFi, exchange & NFT values...'
+        task['progress'] = 96
+        try:
+            backfill_result = await snapshot_service.backfill_component_values(user_id=user_id)
+            backfilled = backfill_result.get('snapshots_updated', 0)
+            logger.info(f"Backfilled {backfilled} snapshots with component values")
+        except Exception as bf_err:
+            logger.warning(f"Backfill failed (non-fatal): {bf_err}")
+
         task['status'] = 'completed'
         task['progress'] = 100
         task['step'] = f'Generated {created} snapshots successfully'
