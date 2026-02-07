@@ -246,6 +246,44 @@ async def get_mobile_wallets(
     Returns wallets with basic info and balance summaries.
     Does not include full token/NFT lists (use wallet detail endpoint for that).
     """
+    # Demo mode: return fake wallets from demo_wallet_service
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        from services.demo_wallet_service import demo_wallet_service
+        demo_wallets = await demo_wallet_service.get_all_wallets()
+        mobile_wallets = []
+        total_value = 0.0
+        for w in demo_wallets:
+            bc = w['blockchain']
+            if blockchain and bc != blockchain:
+                continue
+            tokens = await demo_wallet_service.get_wallet_tokens(w['address'], bc)
+            usd_val = w.get('balance_usd', 0)
+            total_value += usd_val
+            wallet_data = {
+                "id": w['id'],
+                "blockchain": bc,
+                "address": w['address'],
+                "label": w.get('label'),
+                "created_at": w.get('created_at'),
+            }
+            if include_balances:
+                wallet_data['balance'] = {
+                    "native": round(float(w.get('balance', 0)), 8),
+                    "native_symbol": demo_wallet_service._get_native_unit(bc),
+                    "usd_value": round(usd_val, 2),
+                    "last_updated": datetime.utcnow().isoformat() + "Z",
+                }
+                wallet_data['token_count'] = len(tokens)
+                wallet_data['nft_count'] = 0
+            mobile_wallets.append(wallet_data)
+        return {
+            "total_wallets": len(mobile_wallets),
+            "wallets": mobile_wallets,
+            "total_value_usd": round(total_value, 2),
+            "last_updated": datetime.utcnow().isoformat() + "Z",
+        }
+
     all_wallets = await get_all_wallets(user_id=user_id)
 
     # Get prices for value calculations
@@ -325,6 +363,42 @@ async def get_mobile_wallet_detail(
 
     Mobile-optimized format with all data needed for wallet detail view.
     """
+    # Demo mode: return fake wallet detail
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        from services.demo_wallet_service import demo_wallet_service
+        demo_wallets = await demo_wallet_service.get_all_wallets()
+        wallet = next((w for w in demo_wallets if w['id'] == wallet_id), None)
+        if not wallet:
+            raise HTTPException(status_code=404, detail="Wallet not found")
+        bc = wallet['blockchain']
+        tokens_raw = await demo_wallet_service.get_wallet_tokens(wallet['address'], bc)
+        tokens = []
+        for t in tokens_raw:
+            if t.get('value_usd', 0) > 0:
+                tokens.append({
+                    "symbol": t.get('ticker', 'UNKNOWN')[:10],
+                    "name": t.get('name', 'Unknown'),
+                    "quantity": round(float(t.get('quantity', 0)), 6),
+                    "price_usd": round(t.get('price_usd', 0), 6),
+                    "value_usd": round(t.get('value_usd', 0), 2),
+                    "logo_url": t.get('logo', ''),
+                })
+        return {
+            "id": wallet_id,
+            "blockchain": bc,
+            "address": wallet['address'],
+            "label": wallet.get('label'),
+            "balance": {
+                "native": round(float(wallet.get('balance', 0)), 8),
+                "native_symbol": demo_wallet_service._get_native_unit(bc),
+                "usd_value": round(wallet.get('balance_usd', 0), 2),
+            },
+            "tokens": tokens,
+            "nfts": [],
+            "last_updated": datetime.utcnow().isoformat() + "Z",
+        }
+
     # Get wallet assets (includes pricing info)
     assets_data = await wallets.get_wallet_assets_by_id(wallet_id, user_id=user_id)
 

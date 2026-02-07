@@ -30,6 +30,7 @@ from utils.address import parse_wallets_file, detect_blockchain, is_bitcoin_xpub
 from config import WALLETS_FILE, DATA_DIR
 from middleware.demo_mode import is_demo_user
 from auth_utils import verify_session
+from database import get_username_by_user_id
 
 
 def append_to_wallets_file(address: str, label: Optional[str] = None) -> bool:
@@ -102,6 +103,27 @@ class WalletResponse(BaseModel):
 @router.get("")
 async def list_wallets(user_id: int = Depends(verify_session)):
     """List all tracked wallets with their current balances and stake keys."""
+    # Demo mode: return fake wallet data
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        demo_wallets = await demo_wallet_service.get_all_wallets()
+        result = []
+        for w in demo_wallets:
+            bc = w['blockchain']
+            tokens = await demo_wallet_service.get_wallet_tokens(w['address'], bc)
+            result.append({
+                'id': w['id'],
+                'address': w['address'],
+                'blockchain': bc,
+                'label': w.get('label'),
+                'balance': w.get('balance'),
+                'balance_unit': demo_wallet_service._get_native_unit(bc),
+                'native_assets_count': len(tokens),
+                'user_id': user_id,
+                'created_at': w.get('created_at'),
+            })
+        return {"wallets": result, "total": len(result), "demo_mode": True}
+
     log_service = get_logging_service()
 
     try:
@@ -143,6 +165,40 @@ async def list_wallets(user_id: int = Depends(verify_session)):
 @router.get("/id/{wallet_id}/assets")
 async def get_wallet_assets_by_id(wallet_id: int, user_id: int = Depends(verify_session)):
     """Get native assets for a specific wallet by ID with pricing information."""
+    # Demo mode: return fake token data for the requested wallet
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        demo_wallets = await demo_wallet_service.get_all_wallets()
+        wallet = next((w for w in demo_wallets if w['id'] == wallet_id), None)
+        if not wallet:
+            raise HTTPException(status_code=404, detail="Wallet not found")
+        tokens = await demo_wallet_service.get_wallet_tokens(wallet['address'], wallet['blockchain'])
+        assets = []
+        for t in tokens:
+            assets.append({
+                'id': 0,
+                'asset_id': t.get('ticker', 'UNKNOWN'),
+                'asset_name': t.get('name', 'Unknown'),
+                'ticker': t.get('ticker', 'UNKNOWN'),
+                'quantity': str(t.get('quantity', 0)),
+                'decimals': t.get('decimals', 0),
+                'actual_quantity': float(t.get('quantity', 0)),
+                'price_usd': t.get('price_usd', 0),
+                'total_value_usd': round(t.get('value_usd', 0), 2),
+                'logo_url': t.get('logo', ''),
+                'ignored': False,
+            })
+        assets.sort(key=lambda x: x['total_value_usd'], reverse=True)
+        return {
+            'wallet_id': wallet_id,
+            'blockchain': wallet['blockchain'],
+            'address': wallet['address'],
+            'assets': assets,
+            'total_assets': len(assets),
+            'total_value_usd': round(sum(a['total_value_usd'] for a in assets), 2),
+            'demo_mode': True,
+        }
+
     import aiosqlite
     from config import DATABASE_PATH
 
@@ -394,6 +450,11 @@ async def sync_wallets_from_file(user_id: int = Depends(verify_session)):
     Sync wallets from the wallets.txt file.
     Stake addresses (stake1) are automatically expanded to their associated payment addresses.
     """
+    # Demo mode: block write operations
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        return {"message": "Demo mode: Wallet sync disabled", "synced": 0, "demo_mode": True}
+
     wallets = parse_wallets_file(str(WALLETS_FILE))
 
     if not wallets:
@@ -454,6 +515,17 @@ async def sync_wallets_from_file(user_id: int = Depends(verify_session)):
 @router.post("/refresh")
 async def refresh_all_balances(user_id: int = Depends(verify_session)):
     """Refresh balances for all tracked wallets in parallel."""
+    # Demo mode: return fake refresh result
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        demo_wallets = await demo_wallet_service.get_all_wallets()
+        return {
+            "message": f"Demo mode: Simulated refresh of {len(demo_wallets)} wallets",
+            "refreshed": len(demo_wallets),
+            "results": [{"address": w['address'], "success": True} for w in demo_wallets],
+            "demo_mode": True,
+        }
+
     wallets = await get_all_wallets(user_id=user_id)
 
     if not wallets:
@@ -996,6 +1068,11 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
     Extended public keys (xpub/ypub/zpub) are expanded to their derived addresses.
     Also appends the wallet to wallets.txt for persistence across container rebuilds.
     """
+    # Demo mode: block wallet creation
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        return await demo_wallet_service.add_wallet(wallet.address, "demo", wallet.label)
+
     import traceback
 
     try:
@@ -1194,6 +1271,11 @@ def remove_from_wallets_file(address: str) -> bool:
 @router.delete("/{address:path}")
 async def delete_wallet(address: str, user_id: int = Depends(verify_session)):
     """Delete a wallet and all its associated data, including from wallets.txt."""
+    # Demo mode: block deletion
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        return {"message": "Demo mode: Wallet not actually deleted", "address": address, "demo_mode": True}
+
     from database import delete_wallet as db_delete_wallet
 
     # Parse chain:address format if present

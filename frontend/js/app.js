@@ -5189,14 +5189,13 @@ async function loadPortfolioHistory(range = '7d') {
     }
 }
 
-// Generate portfolio history data (backfill 30 days)
+// Generate portfolio history data (backfill 30 days) - background task with progress polling
 async function generatePortfolioHistory() {
-    const btn = document.getElementById('generateHistoryBtn');
     const emptyState = document.getElementById('chartEmptyState');
 
-    if (btn) {
-        btn.disabled = true;
-        btn.textContent = 'Generating...';
+    // Show progress UI
+    if (emptyState) {
+        setSafeHTML(emptyState, '<div class="generation-progress"><p id="genProgressStep">Starting history generation...</p><div class="progress-bar-container"><div class="progress-bar-fill" id="genProgressBar" style="width: 0%"></div></div><p class="chart-empty-hint" id="genProgressPct">0%</p></div>');
     }
 
     try {
@@ -5205,21 +5204,97 @@ async function generatePortfolioHistory() {
         });
         const data = await response.json();
 
-        if (data.status === 'success') {
-            // Reload the chart with the newly generated data
+        if (data.status === 'started' || data.status === 'already_running') {
+            // Poll for progress
+            _pollGenerationProgress();
+        } else if (data.status === 'success') {
+            // Demo account or instant success
             const activeRangeBtn = document.querySelector('.range-btn.active');
             const currentRange = activeRangeBtn ? activeRangeBtn.dataset.range : '7d';
             await loadPortfolioHistory(currentRange);
         } else {
-            if (emptyState) {
-                setSafeHTML(emptyState, '<p>Failed to generate history. Check API keys and try again.</p><button class="btn btn-primary" onclick="generatePortfolioHistory()" id="generateHistoryBtn">Retry</button>');
+            _showGenerationError(data.message || 'Failed to start generation.');
+        }
+    } catch (error) {
+        console.error('Error starting portfolio history generation:', error);
+        _showGenerationError('Error starting history generation. Check your connection.');
+    }
+}
+
+// Poll the generation status endpoint
+async function _pollGenerationProgress() {
+    const stepEl = document.getElementById('genProgressStep');
+    const barEl = document.getElementById('genProgressBar');
+    const pctEl = document.getElementById('genProgressPct');
+
+    const poll = async () => {
+        try {
+            const response = await authFetch(`${API_BASE}/portfolio/history/generate/status`);
+            const data = await response.json();
+
+            if (stepEl) stepEl.textContent = data.step || 'Working...';
+            if (barEl) barEl.style.width = (data.progress || 0) + '%';
+            if (pctEl) pctEl.textContent = (data.progress || 0) + '%';
+
+            if (data.status === 'completed') {
+                if (stepEl) stepEl.textContent = data.step || 'Complete!';
+                if (barEl) barEl.style.width = '100%';
+                if (pctEl) pctEl.textContent = '100%';
+                // Brief pause to show completion, then reload chart
+                setTimeout(async () => {
+                    const activeRangeBtn = document.querySelector('.range-btn.active');
+                    const currentRange = activeRangeBtn ? activeRangeBtn.dataset.range : '7d';
+                    await loadPortfolioHistory(currentRange);
+                }, 800);
+                return; // Stop polling
+            } else if (data.status === 'error') {
+                _showGenerationError(data.error || 'Generation failed.');
+                return; // Stop polling
+            } else if (data.status === 'idle') {
+                // Not running - might have completed before we started polling
+                const activeRangeBtn = document.querySelector('.range-btn.active');
+                const currentRange = activeRangeBtn ? activeRangeBtn.dataset.range : '7d';
+                await loadPortfolioHistory(currentRange);
+                return;
+            }
+
+            // Continue polling every 2 seconds
+            setTimeout(poll, 2000);
+        } catch (error) {
+            console.error('Error polling generation status:', error);
+            setTimeout(poll, 3000); // Retry with longer delay on error
+        }
+    };
+
+    poll();
+}
+
+// Show generation error with retry button
+function _showGenerationError(message) {
+    const emptyState = document.getElementById('chartEmptyState');
+    if (emptyState) {
+        setSafeHTML(emptyState, '<p>' + (message || 'Error generating history data.') + '</p><button class="btn btn-primary" onclick="generatePortfolioHistory()" id="generateHistoryBtn">Retry</button>');
+    }
+}
+
+// Check if history generation is already running (survives page navigation)
+async function checkRunningHistoryGeneration() {
+    try {
+        const response = await authFetch(`${API_BASE}/portfolio/history/generate/status`);
+        const data = await response.json();
+
+        if (data.status === 'running') {
+            const emptyState = document.getElementById('chartEmptyState');
+            const chartContainer = document.getElementById('portfolioHistoryChart');
+            if (emptyState && chartContainer) {
+                emptyState.style.display = 'flex';
+                chartContainer.style.display = 'none';
+                setSafeHTML(emptyState, '<div class="generation-progress"><p id="genProgressStep">' + (data.step || 'Generation in progress...') + '</p><div class="progress-bar-container"><div class="progress-bar-fill" id="genProgressBar" style="width: ' + (data.progress || 0) + '%"></div></div><p class="chart-empty-hint" id="genProgressPct">' + (data.progress || 0) + '%</p></div>');
+                _pollGenerationProgress();
             }
         }
     } catch (error) {
-        console.error('Error generating portfolio history:', error);
-        if (emptyState) {
-            setSafeHTML(emptyState, '<p>Error generating history data.</p><button class="btn btn-primary" onclick="generatePortfolioHistory()" id="generateHistoryBtn">Retry</button>');
-        }
+        // Silently ignore - this is a background check
     }
 }
 
@@ -6139,6 +6214,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateTotalPortfolioValue();
         // Load portfolio history chart NOW that all data is ready (shows correct current value)
         loadPortfolioHistory('7d');
+        // Check if background generation is already running (survives page navigation)
+        checkRunningHistoryGeneration();
         // Pre-fetch asset breakdowns for instant modal opening
         preFetchAssetBreakdowns();
     });
