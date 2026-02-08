@@ -613,10 +613,8 @@ async def get_startup_status():
 @app.get("/api/status")
 async def api_status():
     """Get API status and configuration."""
-    from config import (
-        BLOCKFROST_API_KEY, CEXPLORER_API_KEY, COINBASE_API_KEY_NAME,
-        ALCHEMY_API_KEY, HELIUS_API_KEY, NFT_IMAGE_DB_PATH
-    )
+    from config import NFT_IMAGE_DB_PATH
+    from routers.settings import get_effective_api_key
     from services.nft_image_service import nft_image_service
 
     # Check NFT image cache status
@@ -626,18 +624,25 @@ async def api_status():
     except Exception:
         pass
 
+    # Check API keys from both database and env vars
+    blockfrost_key = await get_effective_api_key("blockfrost")
+    cexplorer_key = await get_effective_api_key("cexplorer")
+    coinbase_key = await get_effective_api_key("coinbase")
+    alchemy_key = await get_effective_api_key("alchemy")
+    helius_key = await get_effective_api_key("helius")
+
     return {
         "status": "running",
         "apis": {
-            "blockfrost": "configured" if BLOCKFROST_API_KEY else "missing",
-            "cexplorer": "configured" if CEXPLORER_API_KEY else "missing",
+            "blockfrost": "configured" if blockfrost_key else "missing",
+            "cexplorer": "configured" if cexplorer_key else "missing",
             "blockstream": "available",  # No key required
-            "coinbase": "configured" if COINBASE_API_KEY_NAME else "missing",
-            "alchemy": "configured" if ALCHEMY_API_KEY else "missing",
-            "helius": "configured" if HELIUS_API_KEY else "missing"
+            "coinbase": "configured" if coinbase_key else "missing",
+            "alchemy": "configured" if alchemy_key else "missing",
+            "helius": "configured" if helius_key else "missing"
         },
         "supported_blockchains": ["cardano", "bitcoin", "ethereum", "solana", "polygon", "base"],
-        "supported_exchanges": ["coinbase"] if COINBASE_API_KEY_NAME else [],
+        "supported_exchanges": ["coinbase"] if coinbase_key else [],
         "features": {
             "nft_image_cache": {
                 "enabled": image_cache_enabled,
