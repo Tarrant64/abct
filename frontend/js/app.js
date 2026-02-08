@@ -244,7 +244,11 @@ function changeTheme(themeName) {
     }
 
     // Re-render portfolio history chart with new theme colors
-    if (portfolioChart) {
+    if (currentChartSource === 'v2' && v2Chart) {
+        const activeBtn = document.querySelector('.v2-range.active');
+        const range = activeBtn ? activeBtn.dataset.range : '1y';
+        loadV2BalanceHistory(range);
+    } else if (portfolioChart) {
         const activeRangeBtn = document.querySelector('.range-btn.active');
         const currentRange = activeRangeBtn ? activeRangeBtn.dataset.range : '7d';
         loadPortfolioHistory(currentRange);
@@ -4202,10 +4206,7 @@ async function switchNFTChain(chain) {
         tab.classList.toggle('active', tab.dataset.chain === chain);
     });
 
-    // First ensure all chain stats are loaded/updated
-    await loadAllNftSummaries();
-
-    // Then load NFTs for the selected chain
+    // Load NFTs for the selected chain (summaries already loaded at startup)
     if (chain === 'cardano') {
         loadNFTs();
     } else if (chain === 'ethereum') {
@@ -5788,7 +5789,7 @@ function formatChartDate(dateStr, range) {
 // V2 ON-CHAIN BALANCE HISTORY
 // ============================================================================
 
-let currentChartSource = 'v1';
+let currentChartSource = 'v2';
 let v2Chart = null;
 let v2PollInterval = null;
 
@@ -5834,6 +5835,10 @@ async function loadV2BalanceHistory(range) {
 
     try {
         const response = await authFetch(`${API_BASE}/balance-history/data?range=${range}`);
+        if (!response.ok) {
+            console.error('V2 balance history API returned', response.status);
+            throw new Error(`API error ${response.status}`);
+        }
         const result = await response.json();
 
         if (result.data && result.data.length > 0) {
@@ -5987,6 +5992,10 @@ async function startBalanceCollection() {
         const response = await authFetch(`${API_BASE}/balance-history/collect`, {
             method: 'POST'
         });
+        if (!response.ok) {
+            console.error('V2 collect API returned', response.status);
+            throw new Error(`API error ${response.status}`);
+        }
         const data = await response.json();
 
         if (data.status === 'started') {
@@ -6749,8 +6758,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         ]).then(() => {
             console.log('[Overview] Background data loading complete');
             updateTotalPortfolioValue();
-            loadPortfolioHistory('7d');
-            checkRunningHistoryGeneration();
+            // V2 on-chain history is now the default
+            loadV2BalanceHistory('1y');
+            checkV2CollectionStatus();
+            loadV2Schedule();
             preFetchAssetBreakdowns();
         });
     } else if (isAssetsPage) {
@@ -6774,18 +6785,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.log('[Assets] Data loading complete');
         });
     } else if (isNftsPage) {
-        // NFTS PAGE: Load prices, NFT summaries, NFT list
-        try {
-            await loadPrices();
-        } catch (e) {
-            console.error('[NFTs] Failed to load prices:', e);
-        }
-        try {
-            await loadAllNftSummaries();
-        } catch (e) {
-            console.error('[NFTs] Failed to load NFT summaries:', e);
-        }
-        loadNFTs();
+        // NFTS PAGE: Load prices, NFT summaries, and NFT list in parallel
+        await Promise.allSettled([
+            loadPrices(),
+            loadAllNftSummaries(),
+            loadNFTs()
+        ]);
     }
 });
 

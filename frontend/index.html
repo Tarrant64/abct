@@ -6,7 +6,7 @@
     <title>A Better Crypto Tracker</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1770525466">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1770556281">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preconnect" href="https://unpkg.com" crossorigin>
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
@@ -15,7 +15,7 @@
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1770525466"></script>
+    <script src="/static/js/session-auth.js?v=1770556281"></script>
 </head>
 <body>
     <div class="container">
@@ -98,21 +98,22 @@
                 <div class="section-header-inline">
                     <h2>Portfolio Value History</h2>
                     <div class="history-source-tabs">
-                        <button class="source-tab active" onclick="switchChartSource('v1')">Estimated (v1)</button>
-                        <button class="source-tab" onclick="switchChartSource('v2')">On-Chain (v2)</button>
+                        <!-- V1 hidden during V2 development -->
+                        <!-- <button class="source-tab" onclick="switchChartSource('v1')">Estimated (v1)</button> -->
+                        <button class="source-tab active" onclick="switchChartSource('v2')">On-Chain Balance History</button>
                     </div>
                 </div>
 
-                <!-- V1 controls -->
-                <div class="history-range-selector" id="v1RangeSelector">
+                <!-- V1 controls (hidden during V2 development) -->
+                <div class="history-range-selector" id="v1RangeSelector" style="display: none;">
                     <button class="range-btn" data-range="1d">1 Day</button>
                     <button class="range-btn active" data-range="7d">7 Days</button>
                     <button class="range-btn" data-range="4w">4 Weeks</button>
                     <button class="range-btn" data-range="3m">3 Months</button>
                 </div>
 
-                <!-- V2 controls (hidden by default) -->
-                <div class="history-range-selector" id="v2RangeSelector" style="display: none;">
+                <!-- V2 controls (shown by default) -->
+                <div class="history-range-selector" id="v2RangeSelector">
                     <button class="range-btn v2-range" data-range="24h" onclick="loadV2BalanceHistory('24h')">24H</button>
                     <button class="range-btn v2-range" data-range="1w" onclick="loadV2BalanceHistory('1w')">1W</button>
                     <button class="range-btn v2-range" data-range="1m" onclick="loadV2BalanceHistory('1m')">1M</button>
@@ -122,8 +123,8 @@
                     <button class="range-btn v2-range" data-range="all" onclick="loadV2BalanceHistory('all')">All</button>
                 </div>
 
-                <!-- V1 chart -->
-                <div id="v1ChartWrapper">
+                <!-- V1 chart (hidden during V2 development) -->
+                <div id="v1ChartWrapper" style="display: none;">
                     <div class="history-chart-container">
                         <canvas id="portfolioHistoryChart"></canvas>
                         <div class="chart-empty-state" id="chartEmptyState">
@@ -164,8 +165,8 @@
                     </div>
                 </div>
 
-                <!-- V2 chart (hidden by default) -->
-                <div id="v2ChartWrapper" style="display: none;">
+                <!-- V2 chart (shown by default) -->
+                <div id="v2ChartWrapper">
                     <div class="history-chart-container">
                         <canvas id="v2HistoryChart"></canvas>
                         <div class="chart-empty-state" id="v2ChartEmptyState">
@@ -551,6 +552,6 @@
         </footer>
     </div>
 
-    <script src="/static/js/app.js?v=1770525466"></script>
+    <script src="/static/js/app.js?v=1770556281"></script>
 </body>
 </html>
