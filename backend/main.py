@@ -174,20 +174,8 @@ async def lifespan(app: FastAPI):
             # Mark task as run
             await rate_limit_tracker.mark_task_run('portfolio_snapshot', 'portfolio', 'auto')
 
-            # Auto-generate historical data if no snapshots exist for any user
-            try:
-                from database import get_all_users, get_portfolio_history
-                users = await get_all_users()
-                non_demo_users = [u for u in users if not u.get('is_demo', False)]
-                for user in non_demo_users:
-                    uid = user['id']
-                    existing = await get_portfolio_history(days=30, user_id=uid)
-                    if not existing or len(existing) < 2:
-                        logger.info(f"No historical snapshots for user {uid}, auto-generating 30 days...")
-                        await snapshot_service.generate_historical_data(days=30, user_id=uid)
-                        logger.info(f"Historical data generated for user {uid}")
-            except Exception as hist_error:
-                logger.warning(f"Could not auto-generate historical data: {hist_error}")
+            # V1 auto-generate historical data disabled (V2 on-chain history in development)
+            logger.info("V1 auto-generate historical data disabled (V2 development mode)")
 
             # Warm the portfolio cache for faster page loads (separate cooldown check)
             try:
@@ -307,7 +295,9 @@ async def lifespan(app: FastAPI):
     # Start background tasks (non-blocking)
     asyncio.create_task(create_snapshot_background())
     asyncio.create_task(collect_nft_prices_background())
-    asyncio.create_task(periodic_snapshot_task())
+    # V1 periodic snapshot task disabled (V2 on-chain history in development)
+    logger.info("Periodic snapshot task disabled (V2 development mode)")
+    # asyncio.create_task(periodic_snapshot_task())
 
     # Initialize and optionally start NFT background scheduler
     startup_status["nft_scheduler"] = "initializing"
@@ -329,7 +319,34 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Could not initialize NFT scheduler: {e}")
         await log_service.warning("main", f"NFT scheduler initialization failed: {e}")
 
+    # Start balance history schedulers for users that have them enabled
+    try:
+        from database import get_all_users, get_user_setting
+        from services.balance_history import balance_history_service
+
+        users = await get_all_users()
+        for user in users:
+            uid = user['id']
+            enabled = await get_user_setting(uid, 'balance_history_schedule_enabled', '0')
+            interval = await get_user_setting(uid, 'balance_history_schedule_hours', '0')
+            if enabled == '1' and int(interval) > 0:
+                await balance_history_service.start_scheduler(uid, int(interval))
+                logger.info(f"Balance history scheduler started for user {uid}, interval={interval}h")
+                await log_service.info("main", f"Balance history scheduler started for user {uid}, interval={interval}h")
+    except Exception as e:
+        logger.warning(f"Could not start balance history schedulers: {e}")
+        await log_service.warning("main", f"Balance history scheduler startup failed: {e}")
+
     yield
+
+    # Shutdown: Stop balance history schedulers
+    try:
+        from services.balance_history import balance_history_service as bhs
+        for uid in list(bhs._scheduler_tasks.keys()):
+            await bhs.stop_scheduler(uid)
+        logger.info("Balance history schedulers stopped")
+    except Exception as e:
+        logger.warning(f"Error stopping balance history schedulers: {e}")
 
     # Shutdown: Stop NFT scheduler
     logger.info("Shutting down NFT scheduler...")

@@ -667,28 +667,8 @@ async def generate_historical_data(user_id: int = Depends(verify_session), days:
     Launches generation as a background task and returns immediately.
     Poll GET /portfolio/history/generate/status for progress updates.
     """
-    # Demo users don't need to generate
-    username = await get_username_by_user_id(user_id)
-    if username and await is_demo_user(username):
-        return {"status": "success", "message": "Demo account has pre-generated history"}
-
-    # Check if already running for this user
-    if user_id in _generation_tasks and _generation_tasks[user_id].get('status') == 'running':
-        return {"status": "already_running", **_generation_tasks[user_id]}
-
-    # Initialize progress tracking
-    _generation_tasks[user_id] = {
-        'status': 'running',
-        'progress': 0,
-        'step': 'Starting history generation...',
-        'error': None,
-        'result': None
-    }
-
-    # Launch background task
-    asyncio.create_task(_run_history_generation(user_id, days))
-
-    return {"status": "started", "message": f"Generating {days} days of history in background"}
+    # V1 history generation disabled while V2 on-chain history is being developed
+    return {"status": "disabled", "message": "V1 history generation is disabled while V2 is being developed. Use the On-Chain (v2) tab instead."}
 
 
 @router.get("/history/generate/status")
