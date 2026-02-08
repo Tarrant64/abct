@@ -8022,6 +8022,11 @@ body.privacy-mode .section-title {
     user-select: auto !important;
 }
 
+/* Ensure stripped privacy links still look clickable */
+body.privacy-mode a[data-href] {
+    cursor: pointer;
+}
+
 /* Copy Address Button */
 .copy-address-btn {
     background: transparent;
