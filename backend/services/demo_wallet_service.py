@@ -20,61 +20,86 @@ class DemoWalletService:
     def __init__(self):
         """Initialize demo wallet service with fake data."""
         # Demo wallet addresses (fake but realistic-looking)
+        # Bloated balances to target ~$1M+ total portfolio
         self.demo_wallets = {
             "cardano": [
                 {
                     "address": "addr1qx2kd3efdwy98fwejfkw9fj2kjdl3kjf9wejf9wejf9wejf9wejf9wejf9wejf9wejf9wejf9wejf9wejf9wejf9wejf",
-                    "label": "Demo Main Wallet",
-                    "balance": "42500.50",  # ADA
-                    "balance_usd": 42500.50 * 1.05,  # Assume $1.05 ADA
+                    "label": "Cardano Main",
+                    "balance": "100000.00",  # ADA
+                    "balance_usd": 100000.00 * 1.05,  # ~$105K
+                },
+                {
+                    "address": "addr1qy8kd4efdxy99gwfjfkw0gj3ljdm4ljg0xfjg0xfjg0xfjg0xfjg0xfjg0xfjg0xfjg0xfjg0xfjg0xfjg0xfjg0xfjg",
+                    "label": "Cardano Staking",
+                    "balance": "50000.00",  # ADA
+                    "balance_usd": 50000.00 * 1.05,  # ~$52.5K
                 }
             ],
             "bitcoin": [
                 {
                     "address": "bc1qxy2kd3efdwy98fwejfkw9fj2kjdl3kjf9wejf9we",
-                    "label": "Demo BTC Wallet",
-                    "balance": "0.25",  # BTC
-                    "balance_usd": 0.25 * 98000,  # Assume $98k BTC
+                    "label": "BTC Cold Storage",
+                    "balance": "2.10",  # BTC
+                    "balance_usd": 2.10 * 98000,  # ~$205K
+                },
+                {
+                    "address": "bc1q9h5yjdkwef7a3xmn2p4qrs6tv8u0ckjf3wejf7a",
+                    "label": "BTC Hot Wallet",
+                    "balance": "0.70",  # BTC
+                    "balance_usd": 0.70 * 98000,  # ~$68.6K
                 }
             ],
             "ethereum": [
                 {
                     "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb8",
-                    "label": "Demo ETH Wallet",
-                    "balance": "5.75",  # ETH
-                    "balance_usd": 5.75 * 3500,  # Assume $3500 ETH
+                    "label": "ETH Main",
+                    "balance": "15.00",  # ETH
+                    "balance_usd": 15.00 * 3500,  # ~$52.5K
+                },
+                {
+                    "address": "0x8Ba1f109551bD432803012645Ac136ddd64DBa72",
+                    "label": "ETH DeFi Wallet",
+                    "balance": "7.00",  # ETH
+                    "balance_usd": 7.00 * 3500,  # ~$24.5K
                 }
             ],
             "solana": [
                 {
                     "address": "DemoSo1anaWa11etAddress123456789ABC",
-                    "label": "Demo SOL Wallet",
-                    "balance": "125.50",  # SOL
-                    "balance_usd": 125.50 * 180,  # Assume $180 SOL
+                    "label": "SOL Main",
+                    "balance": "500.00",  # SOL
+                    "balance_usd": 500.00 * 180,  # ~$90K
+                },
+                {
+                    "address": "Demo2So1anaStakingAddr987654321XYZ",
+                    "label": "SOL Staking",
+                    "balance": "300.00",  # SOL
+                    "balance_usd": 300.00 * 180,  # ~$54K
                 }
             ],
             "polygon": [
                 {
                     "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb9",
-                    "label": "Demo Polygon Wallet",
-                    "balance": "500.25",  # MATIC/POL
-                    "balance_usd": 500.25 * 0.90,  # Assume $0.90 POL
+                    "label": "Polygon Main",
+                    "balance": "40000.00",  # POL
+                    "balance_usd": 40000.00 * 0.90,  # ~$36K
                 }
             ],
             "base": [
                 {
                     "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEc0",
-                    "label": "Demo Base Wallet",
-                    "balance": "2.50",  # ETH on Base
-                    "balance_usd": 2.50 * 3500,  # Assume $3500 ETH
+                    "label": "Base Wallet",
+                    "balance": "8.00",  # ETH on Base
+                    "balance_usd": 8.00 * 3500,  # ~$28K
                 }
             ],
             "algorand": [
                 {
                     "address": "SWOUICD7LO3MWVKLHFKADCXLF5HZPUQQFW5OIJAFZJBG4HDQH53RTTJPFE",
-                    "label": "Demo Algorand Wallet",
-                    "balance": "8500.00",  # ALGO
-                    "balance_usd": 8500.00 * 0.35,  # Assume $0.35 ALGO
+                    "label": "Algorand Main",
+                    "balance": "25000.00",  # ALGO
+                    "balance_usd": 25000.00 * 0.35,  # ~$8.75K
                 }
             ]
         }
@@ -975,7 +1000,8 @@ class DemoWalletService:
         if not wallets:
             return None
 
-        wallet = wallets[0]  # Return first demo wallet for blockchain
+        # Try to find matching wallet by address, fallback to first
+        wallet = next((w for w in wallets if w["address"] == address), wallets[0])
 
         return {
             "address": address,

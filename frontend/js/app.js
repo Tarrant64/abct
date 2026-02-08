@@ -2684,7 +2684,8 @@ async function loadDefiGovernance() {
                             apy: data.apy || null,
                             claimed_rewards: data.claimed_rewards || 0,
                             total_earned: data.total_earned || 0,
-                            rewards_url: data.rewards_url || null
+                            rewards_url: data.rewards_url || null,
+                            blockchain: data.blockchain || 'cardano'
                         };
                     }
 
@@ -2812,6 +2813,16 @@ function renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeS
     let stakedCount = 0;
     let governanceTokenCount = 0;
 
+    // Chain badge helper (shared across all sections)
+    const getGovChainBadge = (chain) => {
+        const badges = {
+            'cardano': '<span class="chain-badge cardano" title="Cardano">ADA</span>',
+            'ethereum': '<span class="chain-badge ethereum" title="Ethereum">ETH</span>',
+            'solana': '<span class="chain-badge solana" title="Solana">SOL</span>'
+        };
+        return badges[chain] || badges['cardano'];
+    };
+
     // ========================================
     // SECTION 1: STAKED POSITIONS
     // ========================================
@@ -2905,8 +2916,9 @@ function renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeS
                     }
                 }
 
-                // Chain badge for staked position (default to cardano for now)
-                const chainBadge = '<span class="chain-badge cardano" title="Cardano">ADA</span>';
+                // Chain badge for staked position (read from protocol data, fallback to cardano)
+                const stakingChain = protocolData.blockchain || 'cardano';
+                const chainBadge = getGovChainBadge(stakingChain);
 
                 // Use backend logo URL or fallback to LogoKit
                 const tokenLogoUrl = data.logo_url || `https://img.logokit.com/crypto/${token}?token=pk_fr08287a4c625f400f32a9&size=32`;
@@ -2939,7 +2951,8 @@ function renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeS
             stakedCount++;
 
             const tokenLogoUrl = `https://img.logokit.com/crypto/${displayName}?token=pk_fr08287a4c625f400f32a9&size=32`;
-            const chainBadge = '<span class="chain-badge cardano" title="Cardano">ADA</span>';
+            const lsChain = pos.blockchain || 'cardano';
+            const chainBadge = getGovChainBadge(lsChain);
             const formattedQty = (pos.quantity || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4});
 
             html += `
@@ -2962,16 +2975,6 @@ function renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeS
     // SECTION 2: GOVERNANCE TOKENS (Unstaked)
     // ========================================
     const governancePositions = defiData.positions_by_category?.['Governance Tokens'] || [];
-
-    // Chain badge helper for governance tokens
-    const getGovChainBadge = (chain) => {
-        const badges = {
-            'cardano': '<span class="chain-badge cardano" title="Cardano">ADA</span>',
-            'ethereum': '<span class="chain-badge ethereum" title="Ethereum">ETH</span>',
-            'solana': '<span class="chain-badge solana" title="Solana">SOL</span>'
-        };
-        return badges[chain] || badges['cardano'];
-    };
 
     if (governancePositions.length > 0) {
         html += `<div class="defi-gov-subsection">
@@ -5426,7 +5429,7 @@ function getChartColors() {
     if (theme === 'light') {
         return { ...shared,
             lineColor: '#00b894',
-            fillColor: 'rgba(0, 184, 148, 0.1)',
+            fillColor: 'rgba(0, 184, 148, 0.08)',
             pointColor: '#00b894',
             pointBorderColor: '#ffffff',
             gridColor: 'rgba(229, 231, 235, 0.8)',
@@ -5436,14 +5439,14 @@ function getChartColors() {
             tooltipBody: '#00b894',
             tooltipBorder: '#e5e7eb',
             crosshairColor: 'rgba(107, 114, 128, 0.4)',
-            gradientStops: ['#00b894', '#10b981', '#059669']
+            gradientStops: ['#6366f1', '#06b6d4', '#10b981', '#22c55e']
         };
     }
 
     if (theme === 'cypherpunk1') {
         return { ...shared,
             lineColor: '#ea00d9',
-            fillColor: 'rgba(234, 0, 217, 0.15)',
+            fillColor: 'rgba(234, 0, 217, 0.12)',
             pointColor: '#ea00d9',
             pointBorderColor: '#050510',
             gridColor: 'rgba(113, 28, 145, 0.3)',
@@ -5453,14 +5456,14 @@ function getChartColors() {
             tooltipBody: '#0abdc6',
             tooltipBorder: '#711c91',
             crosshairColor: 'rgba(113, 28, 145, 0.5)',
-            gradientStops: ['#ea00d9', '#0abdc6', '#ea00d9']
+            gradientStops: ['#ff00ff', '#ea00d9', '#0abdc6', '#00ff9f']
         };
     }
 
     if (theme === 'ocean-depths') {
         return { ...shared,
             lineColor: '#00b4d8',
-            fillColor: 'rgba(0, 180, 216, 0.15)',
+            fillColor: 'rgba(0, 180, 216, 0.12)',
             pointColor: '#00b4d8',
             pointBorderColor: '#0a1628',
             gridColor: 'rgba(26, 74, 110, 0.3)',
@@ -5470,14 +5473,14 @@ function getChartColors() {
             tooltipBody: '#00b4d8',
             tooltipBorder: '#1a4a6e',
             crosshairColor: 'rgba(0, 180, 216, 0.3)',
-            gradientStops: ['#0077b6', '#00b4d8', '#48cae4']
+            gradientStops: ['#7c3aed', '#0077b6', '#00b4d8', '#48cae4']
         };
     }
 
     if (theme === 'sunset-horizon') {
         return { ...shared,
             lineColor: '#ff6b35',
-            fillColor: 'rgba(255, 107, 53, 0.15)',
+            fillColor: 'rgba(255, 107, 53, 0.12)',
             pointColor: '#ff6b35',
             pointBorderColor: '#1a0a1a',
             gridColor: 'rgba(92, 42, 92, 0.3)',
@@ -5487,7 +5490,7 @@ function getChartColors() {
             tooltipBody: '#ff6b35',
             tooltipBorder: '#5c2a5c',
             crosshairColor: 'rgba(255, 107, 53, 0.3)',
-            gradientStops: ['#ff3366', '#ff6b35', '#ffc145']
+            gradientStops: ['#a855f7', '#ff3366', '#ff6b35', '#ffc145']
         };
     }
 
@@ -5504,7 +5507,7 @@ function getChartColors() {
             tooltipBody: '#4ade80',
             tooltipBorder: 'rgba(100, 100, 200, 0.15)',
             crosshairColor: 'rgba(124, 58, 237, 0.3)',
-            gradientStops: ['#7c3aed', '#4ade80', '#7c3aed']
+            gradientStops: ['#a855f7', '#ec4899', '#4ade80', '#22d3ee']
         };
     }
 
@@ -5521,14 +5524,14 @@ function getChartColors() {
             tooltipBody: '#a855f7',
             tooltipBorder: '#2a2a2a',
             crosshairColor: '#444444',
-            gradientStops: ['#a855f7', '#ec4899', '#f97316']
+            gradientStops: ['#a855f7', '#ec4899', '#f97316', '#facc15']
         };
     }
 
     // Default (dark-mode) theme colors
     return { ...shared,
         lineColor: '#00d26a',
-        fillColor: 'rgba(0, 210, 106, 0.1)',
+        fillColor: 'rgba(0, 210, 106, 0.08)',
         pointColor: '#00d26a',
         pointBorderColor: '#1a1a2e',
         gridColor: 'rgba(42, 42, 74, 0.5)',
@@ -5538,7 +5541,7 @@ function getChartColors() {
         tooltipBody: '#00d26a',
         tooltipBorder: '#2a2a4a',
         crosshairColor: 'rgba(0, 210, 106, 0.3)',
-        gradientStops: ['#00d26a', '#00b894', '#10b981']
+        gradientStops: ['#a855f7', '#ec4899', '#f97316', '#00d26a']
     };
 }
 
@@ -5574,19 +5577,32 @@ function renderPortfolioChart(historyData, range) {
     const maxValue = Math.max(...values);
     const padding = (maxValue - minValue) * 0.1 || maxValue * 0.1;
 
-    // Build gradient line color using theme-specific gradient stops
-    let borderColor = colors.lineColor;
-    if (colors.useGradientLine && colors.gradientStops) {
-        const gradCtx = (ctx.getContext ? ctx : document.getElementById('portfolioHistoryChart')).getContext('2d');
-        const gradient = gradCtx.createLinearGradient(0, 0, gradCtx.canvas.width, 0);
-        const stops = colors.gradientStops;
-        for (let i = 0; i < stops.length; i++) {
-            gradient.addColorStop(i / (stops.length - 1), stops[i]);
+    // Plugin: rebuild gradient using actual chart area dimensions after layout
+    // (canvas.width before Chart.js init is CSS width, but Chart.js may resize
+    //  for devicePixelRatio, making pre-built gradients cover only a fraction)
+    const gradientPlugin = {
+        id: 'dynamicGradient',
+        afterLayout: (chart) => {
+            if (!colors.useGradientLine || !colors.gradientStops) return;
+            const area = chart.chartArea;
+            if (!area) return;
+            const drawCtx = chart.ctx;
+            // Horizontal gradient spanning the full chart area
+            const lineGrad = drawCtx.createLinearGradient(area.left, 0, area.right, 0);
+            const stops = colors.gradientStops;
+            for (let i = 0; i < stops.length; i++) {
+                lineGrad.addColorStop(i / (stops.length - 1), stops[i]);
+            }
+            chart.data.datasets[0].borderColor = lineGrad;
+            // Vertical fill gradient (top fade to transparent)
+            const fillGrad = drawCtx.createLinearGradient(0, area.top, 0, area.bottom);
+            fillGrad.addColorStop(0, colors.fillColor);
+            fillGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            chart.data.datasets[0].backgroundColor = fillGrad;
         }
-        borderColor = gradient;
-    }
+    };
 
-    // Crosshair plugin for Cypher theme
+    // Crosshair plugin
     const crosshairPlugin = {
         id: 'crosshairLine',
         afterDraw: (chart) => {
@@ -5616,7 +5632,7 @@ function renderPortfolioChart(historyData, range) {
             datasets: [{
                 label: 'Portfolio Value',
                 data: values,
-                borderColor: borderColor,
+                borderColor: colors.lineColor,
                 backgroundColor: colors.fillColor,
                 fill: true,
                 tension: 0.3,
@@ -5631,7 +5647,7 @@ function renderPortfolioChart(historyData, range) {
                 pointHoverBorderWidth: 2
             }]
         },
-        plugins: [crosshairPlugin],
+        plugins: [gradientPlugin, crosshairPlugin],
         options: {
             responsive: true,
             maintainAspectRatio: false,
@@ -5896,21 +5912,37 @@ function renderV2Chart(data, range) {
     const valueRange = maxValue - minValue || 1;
     const padding = valueRange * 0.1;
 
-    // Gradient fill
-    const chartCtx = ctx.getContext('2d');
-    const gradient = chartCtx.createLinearGradient(0, 0, 0, ctx.height || 300);
-    gradient.addColorStop(0, colors.fillColor);
-    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    // Plugin: rebuild gradient using actual chart area after layout
+    const v2GradientPlugin = {
+        id: 'v2DynamicGradient',
+        afterLayout: (chart) => {
+            if (!colors.useGradientLine || !colors.gradientStops) return;
+            const area = chart.chartArea;
+            if (!area) return;
+            const drawCtx = chart.ctx;
+            const lineGrad = drawCtx.createLinearGradient(area.left, 0, area.right, 0);
+            const stops = colors.gradientStops;
+            for (let i = 0; i < stops.length; i++) {
+                lineGrad.addColorStop(i / (stops.length - 1), stops[i]);
+            }
+            chart.data.datasets[0].borderColor = lineGrad;
+            const fillGrad = drawCtx.createLinearGradient(0, area.top, 0, area.bottom);
+            fillGrad.addColorStop(0, colors.fillColor);
+            fillGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            chart.data.datasets[0].backgroundColor = fillGrad;
+        }
+    };
 
     v2Chart = new Chart(ctx, {
         type: 'line',
+        plugins: [v2GradientPlugin],
         data: {
             labels: labels,
             datasets: [{
                 label: 'Portfolio Value (On-Chain)',
                 data: values,
                 borderColor: colors.lineColor,
-                backgroundColor: gradient,
+                backgroundColor: colors.fillColor,
                 fill: true,
                 tension: 0.3,
                 pointRadius: 0,
@@ -5918,7 +5950,7 @@ function renderV2Chart(data, range) {
                 pointHoverBackgroundColor: colors.pointColor,
                 pointHoverBorderColor: colors.pointBorderColor,
                 pointHoverBorderWidth: 2,
-                borderWidth: 2,
+                borderWidth: 3,
             }]
         },
         options: {

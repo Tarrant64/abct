@@ -21,6 +21,7 @@ from services.base import base_service
 # from services.algorand import algorand_service  # TODO: Implement Algorand support
 from services.logging_service import get_logging_service
 from services.demo_wallet_service import demo_wallet_service
+from services.demo_defi_service import demo_defi_service
 from services.pricing import pricing_service
 from services.taptools import taptools_wallet_service
 from services.graph import graph_service
@@ -1357,6 +1358,11 @@ async def get_wallet_governance(address: str, user_id: int = Depends(verify_sess
     Get governance and staking info for a Cardano wallet.
     Includes staking pool, DRep delegation, and pending rewards.
     """
+    # Demo user intercept
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        return demo_defi_service.get_governance_info(address)
+
     if not address.startswith('addr1'):
         raise HTTPException(
             status_code=400,
