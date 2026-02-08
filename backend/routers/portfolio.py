@@ -648,6 +648,47 @@ async def get_portfolio_history(
     }
 
 
+@router.get("/totals")
+async def get_portfolio_totals(user_id: int = Depends(verify_session)):
+    """
+    Get portfolio value breakdown from the latest snapshot.
+
+    Returns component totals (staking, defi, exchange, NFTs, tracked tokens)
+    without making any external API calls - uses cached snapshot data only.
+    """
+    import aiosqlite
+    from config import DATABASE_PATH
+
+    # Get the most recent snapshot with component values
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """SELECT staking_value_usd, defi_value_usd, exchange_value_usd,
+                      nft_value_usd, tracked_tokens_value_usd, snapshot_time
+               FROM portfolio_snapshots
+               WHERE user_id = ?
+               ORDER BY snapshot_date DESC, snapshot_time DESC
+               LIMIT 1""",
+            (user_id,)
+        )
+        row = await cursor.fetchone()
+
+    if not row:
+        return {
+            "staking_usd": 0, "defi_usd": 0, "exchange_usd": 0,
+            "nft_usd": 0, "tracked_tokens_usd": 0, "snapshot_time": None
+        }
+
+    return {
+        "staking_usd": float(row["staking_value_usd"] or 0),
+        "defi_usd": float(row["defi_value_usd"] or 0),
+        "exchange_usd": float(row["exchange_value_usd"] or 0),
+        "nft_usd": float(row["nft_value_usd"] or 0),
+        "tracked_tokens_usd": float(row["tracked_tokens_value_usd"] or 0),
+        "snapshot_time": row["snapshot_time"]
+    }
+
+
 @router.post("/snapshot")
 async def create_portfolio_snapshot(user_id: int = Depends(verify_session), force: bool = Query(False, description="Force create even if exists")):
     """

@@ -41,6 +41,7 @@ let walletTotals = { ADA: 0, BTC: 0, ETH: 0, SOL: 0, MATIC: 0, ETH_BASE: 0 };
 let stakingTotals = {}; // { 'INDY': 1234.56, 'STRIKE': 789.01, etc. }
 let defiTotals = {}; // DeFi tokens held in wallets (governance tokens, stablecoins, etc.)
 let exchangeTotals = { usd: 0 }; // Total USD value from exchanges
+let snapshotTotals = { staking: 0, defi: 0, trackedTokens: 0 }; // From latest snapshot (dashboard only)
 let nftTotals = { cardano: 0, ethereum: 0, solana: 0, polygon: 0, base: 0 }; // NFT values by chain
 let nftCounts = { cardano: 0, ethereum: 0, solana: 0, polygon: 0, base: 0 }; // NFT counts by chain
 
@@ -370,7 +371,6 @@ function updatePriceDisplay() {
 // Update total portfolio value display
 function updateTotalPortfolioValue() {
     const totalValueEl = document.getElementById('totalPortfolioValue');
-    const totalBreakdownEl = document.getElementById('totalBreakdown');
 
     if (!totalValueEl) return;
 
@@ -383,18 +383,26 @@ function updateTotalPortfolioValue() {
     const baseEthWalletValue = walletTotals.ETH_BASE * (prices.ETH || 0);  // Base uses ETH
     const walletsTotal = adaWalletValue + btcWalletValue + ethWalletValue + solWalletValue + maticWalletValue + baseEthWalletValue;
 
-    // Calculate staking value
+    // Calculate staking value — use per-token totals if loaded (assets page), else snapshot USD
     let stakingTotal = 0;
-    for (const [token, amount] of Object.entries(stakingTotals)) {
-        const price = prices[token] || 0;
-        stakingTotal += amount * price;
+    if (Object.keys(stakingTotals).length > 0) {
+        for (const [token, amount] of Object.entries(stakingTotals)) {
+            const price = prices[token] || 0;
+            stakingTotal += amount * price;
+        }
+    } else {
+        stakingTotal = snapshotTotals.staking || 0;
     }
 
-    // Calculate DeFi tokens value (governance tokens, stablecoins, LP tokens in wallet)
+    // Calculate DeFi tokens value — same fallback pattern
     let defiTotal = 0;
-    for (const [token, amount] of Object.entries(defiTotals)) {
-        const price = prices[token] || 0;
-        defiTotal += amount * price;
+    if (Object.keys(defiTotals).length > 0) {
+        for (const [token, amount] of Object.entries(defiTotals)) {
+            const price = prices[token] || 0;
+            defiTotal += amount * price;
+        }
+    } else {
+        defiTotal = snapshotTotals.defi || 0;
     }
 
     // Exchange value (already in USD)
@@ -403,56 +411,20 @@ function updateTotalPortfolioValue() {
     // NFT value (already in USD) - sum of all chains
     const nftsTotal = getNftTotalUsd();
 
-    // Tracked native tokens value (from toggle selections)
-    const trackedTokensTotal = trackedTokensValue || 0;
+    // Tracked native tokens value (from toggle selections, or snapshot fallback)
+    const trackedTokensTotal = trackedTokensValue || snapshotTotals.trackedTokens || 0;
 
     // Custom tokens value (from toggle selections)
     const customTokensTotal = customTokensValue || 0;
 
-    // Total portfolio value (include tracked native tokens and custom tokens)
+    // Total portfolio value
     const totalValue = walletsTotal + exchangesTotal + stakingTotal + defiTotal + nftsTotal + trackedTokensTotal + customTokensTotal;
 
-    // Check loading state
-    const isLoading = document.body.classList.contains('staking-loading') || document.body.classList.contains('nft-loading') || document.body.classList.contains('defi-loading');
+    // Update total display
+    setSafeHTML(totalValueEl, formatUSDBlur(totalValue));
 
-    // Update total display — keep cached total visible while data is still loading
-    if (_cachedPortfolioTotal && isLoading) {
-        // Show cached total (avoids jarring drop from cached $20K → partial $16K)
-        setSafeHTML(totalValueEl, formatUSDBlur(_cachedPortfolioTotal));
-    } else {
-        // Show live calculated total (loading complete or no cache)
-        setSafeHTML(totalValueEl, formatUSDBlur(totalValue));
-        _cachedPortfolioTotal = null; // Clear cache flag once live total is shown
-    }
-
-    if (totalBreakdownEl) {
-        const stakingLoading = document.body.classList.contains('staking-loading');
-        const defiLoading = document.body.classList.contains('defi-loading');
-        const nftLoading = document.body.classList.contains('nft-loading');
-        setSafeHTML(totalBreakdownEl, `
-            <span class="breakdown-item">Self-Custody: ${formatUSDBlur(walletsTotal)}</span>
-            <span class="breakdown-item">Exchanges: ${formatUSDBlur(exchangesTotal)}</span>
-            <span class="breakdown-item">Staking: ${formatUSDBlur(stakingTotal)}${stakingLoading ? ' <span class="staking-spinner"></span>' : ''}</span>
-            ${defiTotal > 0 || defiLoading ? `<span class="breakdown-item">DeFi Tokens: ${formatUSDBlur(defiTotal)}${defiLoading ? ' <span class="staking-spinner"></span>' : ''}</span>` : ''}
-            <span class="breakdown-item">NFTs: ${formatUSDBlur(nftsTotal)}${nftLoading ? ' <span class="staking-spinner"></span>' : ''}</span>
-            ${trackedTokensTotal > 0 ? `<span class="breakdown-item">Native Tokens: ${formatUSDBlur(trackedTokensTotal)}</span>` : ''}
-            ${customTokensTotal > 0 ? `<span class="breakdown-item">Custom Tokens: ${formatUSDBlur(customTokensTotal)}</span>` : ''}
-        `);
-    }
-
-    // Update loading indicator on total value
-    const spinner = totalValueEl.parentElement.querySelector('.total-loading-spinner');
-    if (isLoading && !spinner) {
-        const spinnerEl = document.createElement('div');
-        spinnerEl.className = 'total-loading-spinner';
-        spinnerEl.title = 'Loading...';
-        totalValueEl.parentElement.appendChild(spinnerEl);
-    } else if (!isLoading && spinner) {
-        spinner.remove();
-    }
-
-    // Cache for instant load on next visit (only when all data is loaded)
-    if (!isLoading && totalValue > 0) {
+    // Cache for instant load on next visit
+    if (totalValue > 0) {
         try {
             localStorage.setItem('cachedPortfolioTotal', JSON.stringify({
                 total: totalValue,
@@ -462,9 +434,7 @@ function updateTotalPortfolioValue() {
     }
 }
 
-// Restore cached portfolio total for instant display on page load
-// Only shows the total value (not breakdown) — breakdown fills in naturally as data loads
-let _cachedPortfolioTotal = null;
+// Restore cached portfolio total for instant display on page load (before API calls complete)
 function restoreCachedPortfolioTotal() {
     try {
         const cached = JSON.parse(localStorage.getItem('cachedPortfolioTotal'));
@@ -473,9 +443,27 @@ function restoreCachedPortfolioTotal() {
         if (Date.now() - cached.timestamp > 86400000) return;
         const totalValueEl = document.getElementById('totalPortfolioValue');
         if (totalValueEl) setSafeHTML(totalValueEl, formatUSDBlur(cached.total));
-        // Store cached total so updateTotalPortfolioValue() can hold it during loading
-        _cachedPortfolioTotal = cached.total;
     } catch (e) { /* parse error or missing */ }
+}
+
+// Load portfolio component totals from latest snapshot (lightweight, no external API calls)
+async function loadPortfolioTotals() {
+    try {
+        const response = await authFetch(`${API_BASE}/portfolio/totals`);
+        if (!response.ok) return;
+        const data = await response.json();
+
+        // Populate staking/defi totals as USD values for portfolio calculation
+        // Store as special keys that updateTotalPortfolioValue can use
+        snapshotTotals.staking = data.staking_usd || 0;
+        snapshotTotals.defi = data.defi_usd || 0;
+        snapshotTotals.trackedTokens = data.tracked_tokens_usd || 0;
+
+        console.log(`[Overview] Snapshot totals: staking=$${data.staking_usd?.toFixed(2)}, defi=$${data.defi_usd?.toFixed(2)}, exchange=$${data.exchange_usd?.toFixed(2)}, nft=$${data.nft_usd?.toFixed(2)}`);
+        updateTotalPortfolioValue();
+    } catch (e) {
+        console.error('[Overview] Failed to load portfolio totals:', e);
+    }
 }
 
 // DOM Elements
@@ -3292,17 +3280,19 @@ async function loadExchangeData() {
     const exchangesList = document.getElementById('exchangesList');
     const exchangesSummary = document.getElementById('exchangesSummary');
 
-    if (!exchangesList) return;
-
-    setSafeHTML(exchangesList, '<p class="loading-state">Loading exchange data...</p>');
+    if (exchangesList) {
+        setSafeHTML(exchangesList, '<p class="loading-state">Loading exchange data...</p>');
+    }
 
     try {
         // Fetch all exchanges at once
         const response = await authFetch(`${API_BASE}/exchanges/all`);
 
         if (!response.ok) {
-            const error = await response.json();
-            setSafeHTML(exchangesList, `<p class="empty-state error">Error: ${error.detail || 'Failed to load exchange data'}</p>`);
+            if (exchangesList) {
+                const error = await response.json();
+                setSafeHTML(exchangesList, `<p class="empty-state error">Error: ${error.detail || 'Failed to load exchange data'}</p>`);
+            }
             return;
         }
 
@@ -3310,7 +3300,9 @@ async function loadExchangeData() {
 
         // Check if any exchanges are configured
         if (!data.exchanges || data.exchanges.length === 0) {
-            setSafeHTML(exchangesList, '<p class="empty-state">No exchanges configured. Add API keys to .env file.</p>');
+            if (exchangesList) {
+                setSafeHTML(exchangesList, '<p class="empty-state">No exchanges configured. Add API keys to .env file.</p>');
+            }
             if (exchangesSummary) {
                 setSafeHTML(exchangesSummary, '<span class="exchange-status not-configured">Not configured</span>');
             }
@@ -3328,15 +3320,19 @@ async function loadExchangeData() {
             `);
         }
 
-        // Render all exchanges
-        renderAllExchanges(data.exchanges);
+        // Render all exchanges (only if DOM exists on this page)
+        if (exchangesList) {
+            renderAllExchanges(data.exchanges);
+        }
 
         // Update total portfolio value
         updateTotalPortfolioValue();
 
     } catch (error) {
         console.error('Error loading exchange data:', error);
-        setSafeHTML(exchangesList, '<p class="empty-state error">Failed to load exchange data.</p>');
+        if (exchangesList) {
+            setSafeHTML(exchangesList, '<p class="empty-state error">Failed to load exchange data.</p>');
+        }
         if (exchangesSummary) {
             setSafeHTML(exchangesSummary, '<span class="exchange-status error">Error</span>');
         }
@@ -5087,9 +5083,13 @@ async function globalRefreshAll() {
 
         // Reload all UI components (force refresh for global refresh)
         await loadPortfolioSummary();
-        // await loadNativeAssets(true); // Now in Self-Custody Wallets
         await loadExchangeData();
-        await loadDefiGovernance();
+        // On assets page, load full DeFi UI; on dashboard, just load totals
+        if (document.getElementById('defiGovernanceContent')) {
+            await loadDefiGovernance();
+        } else {
+            await loadPortfolioTotals();
+        }
 
         // Load NFT summaries for all chains, then load current chain's list
         await loadAllNftSummaries();
@@ -6748,10 +6748,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error('[Overview] Failed to load portfolio summary:', e);
         }
 
-        // Background updates - still load exchange/DeFi/NFT/token data for totals
+        // Background updates - load exchange data + snapshot totals for staking/defi
         Promise.allSettled([
             loadExchangeData(),
-            loadDefiGovernance(),
+            loadPortfolioTotals(),
             loadCustomTokens(),
             loadAllNftSummaries(),
             loadAnalyticsData(true)
