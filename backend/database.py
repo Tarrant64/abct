@@ -587,10 +587,20 @@ async def init_db():
                     )
                 """)
 
-                # Copy existing data
+                # Copy existing data using explicit column names (SELECT * would
+                # corrupt data if old table has different column order from migrations)
                 await db.execute("""
-                    INSERT INTO portfolio_snapshots_new
-                    SELECT * FROM portfolio_snapshots
+                    INSERT INTO portfolio_snapshots_new (
+                        id, user_id, snapshot_date, snapshot_time, total_value_usd,
+                        ada_amount, ada_price, btc_amount, btc_price,
+                        eth_amount, eth_price, staking_value_usd, defi_value_usd,
+                        exchange_value_usd, nft_value_usd, created_at
+                    )
+                    SELECT id, user_id, snapshot_date, snapshot_time, total_value_usd,
+                           ada_amount, ada_price, btc_amount, btc_price,
+                           eth_amount, eth_price, staking_value_usd, defi_value_usd,
+                           exchange_value_usd, nft_value_usd, created_at
+                    FROM portfolio_snapshots
                 """)
 
                 # Drop old table and rename new one
@@ -2437,12 +2447,27 @@ async def delete_session(token: str):
         await db.commit()
 
 
+_last_session_cleanup = 0  # timestamp of last cleanup
+
 async def cleanup_expired_sessions():
-    """Remove expired sessions from the database."""
-    async with aiosqlite.connect(DATABASE_PATH) as db:
-        now = datetime.utcnow().isoformat()
-        await db.execute("DELETE FROM sessions WHERE expires_at < ?", (now,))
-        await db.commit()
+    """Remove expired sessions from the database.
+
+    Rate-limited to run at most once per 5 minutes to avoid opening
+    excessive DB connections (this is called on every authenticated request).
+    """
+    global _last_session_cleanup
+    import time
+    now_ts = time.time()
+    if now_ts - _last_session_cleanup < 300:  # 5 minutes
+        return
+    _last_session_cleanup = now_ts
+    try:
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            now = datetime.utcnow().isoformat()
+            await db.execute("DELETE FROM sessions WHERE expires_at < ?", (now,))
+            await db.commit()
+    except Exception as e:
+        logger.warning(f"Session cleanup failed: {e}")
 
 
 async def cleanup_expired_cache():
@@ -2458,3 +2483,219 @@ async def cleanup_expired_cache():
         deleted = cursor.rowcount
         await db.commit()
         return deleted
+
+
+# ============================================================================
+# BALANCE HISTORY (V2 On-Chain History)
+# ============================================================================
+
+async def save_balance_history_batch(points: list, user_id: int):
+    """Bulk upsert balance history data points.
+
+    Args:
+        points: List of dicts with keys: wallet_id, blockchain, balance_date,
+                native_amount, native_symbol, native_price_usd, native_value_usd,
+                token_value_usd, total_value_usd, data_source, metadata
+        user_id: User ID
+    """
+    if not points:
+        return
+
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        for p in points:
+            await db.execute("""
+                INSERT INTO balance_history (
+                    user_id, wallet_id, blockchain, balance_date,
+                    native_amount, native_symbol, native_price_usd,
+                    native_value_usd, token_value_usd, total_value_usd,
+                    data_source, metadata, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(user_id, wallet_id, balance_date) DO UPDATE SET
+                    native_amount = excluded.native_amount,
+                    native_symbol = excluded.native_symbol,
+                    native_price_usd = excluded.native_price_usd,
+                    native_value_usd = excluded.native_value_usd,
+                    token_value_usd = excluded.token_value_usd,
+                    total_value_usd = excluded.total_value_usd,
+                    data_source = excluded.data_source,
+                    metadata = excluded.metadata,
+                    updated_at = CURRENT_TIMESTAMP
+            """, (
+                user_id, p['wallet_id'], p['blockchain'], p['balance_date'],
+                p.get('native_amount', 0), p['native_symbol'],
+                p.get('native_price_usd', 0), p.get('native_value_usd', 0),
+                p.get('token_value_usd', 0), p.get('total_value_usd', 0),
+                p.get('data_source', 'chain'), p.get('metadata', '{}')
+            ))
+        await db.commit()
+
+
+async def get_balance_history_aggregated(user_id: int, start_date: str = None, end_date: str = None, days: int = None):
+    """Get aggregated balance history across all wallets.
+
+    Returns daily totals with per-chain breakdown.
+
+    Args:
+        user_id: User ID
+        start_date: Optional start date (YYYY-MM-DD)
+        end_date: Optional end date (YYYY-MM-DD)
+        days: Optional number of days back from today
+    """
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+
+        conditions = ["user_id = ?"]
+        params = [user_id]
+
+        if days:
+            conditions.append("balance_date >= date('now', ?)")
+            params.append(f'-{days} days')
+        if start_date:
+            conditions.append("balance_date >= ?")
+            params.append(start_date)
+        if end_date:
+            conditions.append("balance_date <= ?")
+            params.append(end_date)
+
+        where_clause = " AND ".join(conditions)
+
+        # Get daily totals
+        cursor = await db.execute(f"""
+            SELECT balance_date, SUM(total_value_usd) as total_value,
+                   blockchain, SUM(total_value_usd) as chain_value
+            FROM balance_history
+            WHERE {where_clause}
+            GROUP BY balance_date, blockchain
+            ORDER BY balance_date ASC
+        """, params)
+
+        rows = await cursor.fetchall()
+
+        # Aggregate into {date: {total, chains: {chain: value}}}
+        date_map = {}
+        for row in rows:
+            date = row['balance_date']
+            if date not in date_map:
+                date_map[date] = {'date': date, 'value': 0, 'chains': {}}
+            date_map[date]['chains'][row['blockchain']] = row['chain_value']
+            date_map[date]['value'] += row['chain_value']
+
+        return list(date_map.values())
+
+
+async def get_balance_history_range(user_id: int):
+    """Get coverage info for balance history.
+
+    Returns:
+        Dict with oldest_date, newest_date, total_days, total_points
+    """
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("""
+            SELECT MIN(balance_date) as oldest_date,
+                   MAX(balance_date) as newest_date,
+                   COUNT(DISTINCT balance_date) as total_days,
+                   COUNT(*) as total_points
+            FROM balance_history
+            WHERE user_id = ?
+        """, (user_id,))
+        row = await cursor.fetchone()
+        if row and row['oldest_date']:
+            return dict(row)
+        return {'oldest_date': None, 'newest_date': None, 'total_days': 0, 'total_points': 0}
+
+
+async def get_balance_history_coverage(user_id: int):
+    """Get per-wallet coverage info for balance history.
+
+    Returns:
+        List of dicts with wallet_id, blockchain, oldest_date, newest_date, data_points
+    """
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("""
+            SELECT bh.wallet_id, bh.blockchain,
+                   MIN(bh.balance_date) as oldest_date,
+                   MAX(bh.balance_date) as newest_date,
+                   COUNT(*) as data_points,
+                   w.label, w.address
+            FROM balance_history bh
+            LEFT JOIN wallets w ON bh.wallet_id = w.id
+            WHERE bh.user_id = ?
+            GROUP BY bh.wallet_id, bh.blockchain
+            ORDER BY bh.blockchain, bh.wallet_id
+        """, (user_id,))
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+
+async def get_balance_history_latest_date(user_id: int, wallet_id: int):
+    """Get the most recent balance_date for a specific wallet.
+
+    Used for incremental collection - only fetch transactions after this date.
+    """
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute("""
+            SELECT MAX(balance_date) as latest_date
+            FROM balance_history
+            WHERE user_id = ? AND wallet_id = ?
+        """, (user_id, wallet_id))
+        row = await cursor.fetchone()
+        return row[0] if row and row[0] else None
+
+
+async def create_balance_history_job(user_id: int, wallet_id: int = None, blockchain: str = None):
+    """Create a new balance history collection job.
+
+    Returns:
+        Job ID
+    """
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute("""
+            INSERT INTO balance_history_jobs (user_id, wallet_id, blockchain, status, started_at)
+            VALUES (?, ?, ?, 'running', CURRENT_TIMESTAMP)
+        """, (user_id, wallet_id, blockchain))
+        await db.commit()
+        return cursor.lastrowid
+
+
+async def update_balance_history_job(job_id: int, **kwargs):
+    """Update a balance history job's status/progress.
+
+    Accepts keyword args: status, progress, step, total_items, processed_items, error_message
+    """
+    allowed = {'status', 'progress', 'step', 'total_items', 'processed_items', 'error_message'}
+    updates = {k: v for k, v in kwargs.items() if k in allowed}
+    if not updates:
+        return
+
+    set_clauses = [f"{k} = ?" for k in updates]
+    values = list(updates.values())
+
+    if updates.get('status') in ('completed', 'error', 'cancelled'):
+        set_clauses.append("completed_at = CURRENT_TIMESTAMP")
+
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute(
+            f"UPDATE balance_history_jobs SET {', '.join(set_clauses)} WHERE id = ?",
+            values + [job_id]
+        )
+        await db.commit()
+
+
+async def get_latest_balance_history_job(user_id: int):
+    """Get the most recent balance history job for a user.
+
+    Returns:
+        Dict with job details or None
+    """
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("""
+            SELECT * FROM balance_history_jobs
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, (user_id,))
+        row = await cursor.fetchone()
+        return dict(row) if row else None
