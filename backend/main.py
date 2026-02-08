@@ -49,6 +49,7 @@ from config import PROJECT_ROOT, DATA_DIR, CERTS_DIR, DEFAULT_CERT_PATH, DEFAULT
 from database import init_db, init_encryption, migrate_encrypt_api_keys
 from nft_image_database import init_nft_image_db
 from routers import wallets, portfolio, defi, prices, exchanges, nfts, custom_tokens, settings, security, logs, nft_scheduler as nft_scheduler_router, backup, auth, dashboard, mobile, nmkr, cache, spam, transactions, demo, cloudflare, system, balance_history
+from routers import engine as engine_router
 
 from middleware import RequestSizeLimitMiddleware, RATE_LIMITING_AVAILABLE
 from services.logging_service import get_logging_service
@@ -87,6 +88,17 @@ async def lifespan(app: FastAPI):
     startup_status["database"] = "ready"
     logger.info("Database initialized")
     await log_service.info("main", "Main database initialized")
+
+    # Initialize V2 engine tables
+    logger.info("Initializing V2 engine tables...")
+    try:
+        from engine.db import init_engine_tables
+        await init_engine_tables()
+        logger.info("V2 engine tables initialized")
+        await log_service.info("main", "V2 engine tables initialized")
+    except Exception as e:
+        logger.warning(f"V2 engine table init failed: {e}")
+        await log_service.warning("main", f"V2 engine table init failed: {e}")
 
     # Initialize API key encryption
     logger.info("Initializing API key encryption...")
@@ -337,6 +349,16 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Could not start balance history schedulers: {e}")
         await log_service.warning("main", f"Balance history scheduler startup failed: {e}")
 
+    # Initialize V2 engine orchestrator
+    try:
+        from engine.orchestrator import backfill_orchestrator
+        await backfill_orchestrator.initialize()
+        logger.info("V2 engine orchestrator initialized")
+        await log_service.info("main", "V2 engine orchestrator initialized")
+    except Exception as e:
+        logger.warning(f"V2 engine orchestrator init failed: {e}")
+        await log_service.warning("main", f"V2 engine orchestrator init failed: {e}")
+
     yield
 
     # Shutdown: Stop balance history schedulers
@@ -509,6 +531,7 @@ app.include_router(demo.router)
 app.include_router(cloudflare.router)
 app.include_router(system.router)
 app.include_router(balance_history.router)
+app.include_router(engine_router.router)
 
 # Mount static files (frontend)
 frontend_path = PROJECT_ROOT / "frontend"
