@@ -14,10 +14,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database import (
     add_custom_token, get_all_custom_tokens, get_custom_token_by_id,
-    get_custom_token_by_policy, update_custom_token, delete_custom_token
+    get_custom_token_by_policy, update_custom_token, delete_custom_token,
+    get_username_by_user_id
 )
 from services.pricing import pricing_service
 from middleware.auth import verify_admin
+from middleware.demo_mode import is_demo_user
 from auth_utils import verify_session
 from services.http_client import get_client
 
@@ -48,6 +50,11 @@ async def list_custom_tokens(user_id: int = Depends(verify_session)):
     Get all custom tokens being tracked.
     Returns tokens with current price data if available.
     """
+    # Demo user intercept - return hardcoded stock-market themed tokens
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        return _get_demo_custom_tokens()
+
     tokens = await get_all_custom_tokens(user_id=user_id)
 
     # Get current prices
@@ -312,4 +319,122 @@ async def toggle_token_inclusion(token_id: int, user_id: int = Depends(verify_se
     return {
         'message': 'Token inclusion updated',
         'include_in_total': request.include_in_total
+    }
+
+
+def _get_demo_custom_tokens() -> dict:
+    """Return hardcoded stock-market themed custom tokens for demo users."""
+    demo_tokens = [
+        {
+            "id": 901,
+            "policy_id": "0xD3m0T51a0000000000000000000000000000001",
+            "asset_name": "wTSLA",
+            "ticker": "wTSLA",
+            "blockchain": "ethereum",
+            "quantity": 50.0,
+            "decimals": 18,
+            "label": "Wrapped Tesla",
+            "current_price": 248.00,
+            "value_usd": 50.0 * 248.00,
+            "include_in_total": 1,
+        },
+        {
+            "id": 902,
+            "policy_id": "0xD3m0AaP10000000000000000000000000000002",
+            "asset_name": "wAAPL",
+            "ticker": "wAAPL",
+            "blockchain": "ethereum",
+            "quantity": 100.0,
+            "decimals": 18,
+            "label": "Wrapped Apple",
+            "current_price": 185.00,
+            "value_usd": 100.0 * 185.00,
+            "include_in_total": 1,
+        },
+        {
+            "id": 903,
+            "policy_id": "0xD3m0NvDa0000000000000000000000000000003",
+            "asset_name": "wNVDA",
+            "ticker": "wNVDA",
+            "blockchain": "ethereum",
+            "quantity": 30.0,
+            "decimals": 18,
+            "label": "Wrapped Nvidia",
+            "current_price": 720.00,
+            "value_usd": 30.0 * 720.00,
+            "include_in_total": 1,
+        },
+        {
+            "id": 904,
+            "policy_id": "0xD3m0AmZn0000000000000000000000000000004",
+            "asset_name": "wAMZN",
+            "ticker": "wAMZN",
+            "blockchain": "ethereum",
+            "quantity": 80.0,
+            "decimals": 18,
+            "label": "Wrapped Amazon",
+            "current_price": 178.00,
+            "value_usd": 80.0 * 178.00,
+            "include_in_total": 1,
+        },
+        {
+            "id": 905,
+            "policy_id": "0xD3m0G00g0000000000000000000000000000005",
+            "asset_name": "wGOOGL",
+            "ticker": "wGOOGL",
+            "blockchain": "ethereum",
+            "quantity": 60.0,
+            "decimals": 18,
+            "label": "Wrapped Alphabet",
+            "current_price": 155.00,
+            "value_usd": 60.0 * 155.00,
+            "include_in_total": 1,
+        },
+        {
+            "id": 906,
+            "policy_id": "0xD3m0M5f70000000000000000000000000000006",
+            "asset_name": "wMSFT",
+            "ticker": "wMSFT",
+            "blockchain": "ethereum",
+            "quantity": 40.0,
+            "decimals": 18,
+            "label": "Wrapped Microsoft",
+            "current_price": 410.00,
+            "value_usd": 40.0 * 410.00,
+            "include_in_total": 1,
+        },
+        {
+            "id": 907,
+            "policy_id": "0xD3m0M3Ta0000000000000000000000000000007",
+            "asset_name": "wMETA",
+            "ticker": "wMETA",
+            "blockchain": "ethereum",
+            "quantity": 25.0,
+            "decimals": 18,
+            "label": "Wrapped Meta",
+            "current_price": 490.00,
+            "value_usd": 25.0 * 490.00,
+            "include_in_total": 1,
+        },
+        {
+            "id": 908,
+            "policy_id": "0xD3m05Py00000000000000000000000000000008",
+            "asset_name": "wSPY",
+            "ticker": "wSPY",
+            "blockchain": "ethereum",
+            "quantity": 15.0,
+            "decimals": 18,
+            "label": "Wrapped S&P 500 ETF",
+            "current_price": 520.00,
+            "value_usd": 15.0 * 520.00,
+            "include_in_total": 1,
+        },
+    ]
+
+    total_value = sum(t["value_usd"] for t in demo_tokens)
+    return {
+        "tokens": demo_tokens,
+        "count": len(demo_tokens),
+        "total_value_usd": total_value,
+        "tracked_total_usd": total_value,
     }

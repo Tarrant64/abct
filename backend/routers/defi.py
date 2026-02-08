@@ -73,6 +73,11 @@ async def get_staking_positions(address: str, refresh: bool = False, user_id: in
 
     Returns tokens that are actively staked in protocol smart contracts.
     """
+    # Demo user intercept
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        return await demo_defi_service.get_staking_data(address)
+
     cache_key = f"staking_positions_{address}"
 
     if not refresh:
