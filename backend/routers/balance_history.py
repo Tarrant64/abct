@@ -147,6 +147,23 @@ async def get_history_data(
     return result
 
 
+@router.post("/backfill-prices")
+async def backfill_prices(user_id: int = Depends(verify_session)):
+    """Re-fetch CoinGecko prices for records missing price data.
+
+    Finds all balance_history records with native_price_usd = 0 and
+    fetches historical prices in 90-day chunks from CoinGecko.
+    """
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        return {"status": "completed", "updated": 0}
+
+    logger.info(f"Price backfill requested: user={user_id}")
+    await log_service.info("balance_history", f"Price backfill requested: user={user_id}")
+    result = await balance_history_service.backfill_prices(user_id)
+    return result
+
+
 @router.get("/coverage")
 async def get_coverage(user_id: int = Depends(verify_session)):
     """Get per-wallet collection coverage info."""

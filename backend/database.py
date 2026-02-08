@@ -2610,10 +2610,19 @@ async def save_balance_history_batch(points: list, user_id: int):
                 ON CONFLICT(user_id, wallet_id, balance_date) DO UPDATE SET
                     native_amount = excluded.native_amount,
                     native_symbol = excluded.native_symbol,
-                    native_price_usd = excluded.native_price_usd,
-                    native_value_usd = excluded.native_value_usd,
+                    native_price_usd = CASE
+                        WHEN excluded.native_price_usd > 0 THEN excluded.native_price_usd
+                        ELSE balance_history.native_price_usd
+                    END,
+                    native_value_usd = CASE
+                        WHEN excluded.native_price_usd > 0 THEN excluded.native_value_usd
+                        ELSE excluded.native_amount * balance_history.native_price_usd
+                    END,
                     token_value_usd = excluded.token_value_usd,
-                    total_value_usd = excluded.total_value_usd,
+                    total_value_usd = CASE
+                        WHEN excluded.native_price_usd > 0 THEN excluded.total_value_usd
+                        ELSE excluded.native_amount * balance_history.native_price_usd
+                    END,
                     data_source = excluded.data_source,
                     metadata = excluded.metadata,
                     updated_at = CURRENT_TIMESTAMP
@@ -2796,3 +2805,58 @@ async def get_latest_balance_history_job(user_id: int):
         """, (user_id,))
         row = await cursor.fetchone()
         return dict(row) if row else None
+
+
+async def get_unpriced_date_ranges(user_id: int):
+    """Get date ranges where native_price_usd = 0 grouped by symbol.
+
+    Returns:
+        List of dicts: symbol, blockchain, min_date, max_date, count
+    """
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("""
+            SELECT native_symbol as symbol, blockchain,
+                   MIN(balance_date) as min_date,
+                   MAX(balance_date) as max_date,
+                   COUNT(*) as count
+            FROM balance_history
+            WHERE user_id = ? AND native_price_usd = 0 AND native_amount > 0
+            GROUP BY native_symbol, blockchain
+            ORDER BY count DESC
+        """, (user_id,))
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+
+async def update_balance_history_prices(user_id: int, symbol: str, price_map: dict):
+    """Bulk update prices for unpriced records matching user+symbol+dates.
+
+    Args:
+        user_id: User ID
+        symbol: Native symbol (e.g. 'ADA', 'BTC')
+        price_map: Dict mapping date strings (YYYY-MM-DD) to USD price
+
+    Returns:
+        Number of records updated
+    """
+    if not price_map:
+        return 0
+
+    updated = 0
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        for date_str, price in price_map.items():
+            if price <= 0:
+                continue
+            cursor = await db.execute("""
+                UPDATE balance_history
+                SET native_price_usd = ?,
+                    native_value_usd = native_amount * ?,
+                    total_value_usd = native_amount * ? + token_value_usd,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE user_id = ? AND native_symbol = ? AND balance_date = ?
+                    AND native_price_usd = 0
+            """, (price, price, price, user_id, symbol, date_str))
+            updated += cursor.rowcount
+        await db.commit()
+    return updated
