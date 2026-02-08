@@ -1809,6 +1809,12 @@ main {
     background: rgba(0, 210, 106, 0.08);
 }
 
+.user-menu-subitem {
+    padding-left: 28px;
+    font-size: 0.85rem;
+    color: #6b7280;
+}
+
 .user-menu-logout {
     color: #ff6b6b;
 }

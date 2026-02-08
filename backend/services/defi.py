@@ -7,6 +7,7 @@ Tracks staked positions, pending rewards, and APY/APR via protocol APIs.
 
 import httpx
 import bech32
+import traceback
 from typing import Optional, List, Dict
 from datetime import datetime, timedelta
 import logging
@@ -283,6 +284,7 @@ class DeFiService:
         try:
             client = get_client("blockfrost", timeout=30.0)
             # Get all UTXOs
+            logger.info(f"[DeFi] Fetching UTXOs for {address[:20]}... API key present: {bool(self.headers.get('project_id'))}")
             response = await client.get(
                 f"{BLOCKFROST_BASE_URL}/addresses/{address}/utxos",
                 headers=self.headers,
@@ -290,10 +292,11 @@ class DeFiService:
             )
 
             if response.status_code != 200:
-                logger.error(f"Failed to get UTXOs: {response.status_code}")
+                logger.error(f"[DeFi] Failed to get UTXOs for {address[:20]}...: HTTP {response.status_code} - {response.text[:200]}")
                 return None
 
             utxos = response.json()
+            logger.info(f"[DeFi] Got {len(utxos)} UTXOs for {address[:20]}...")
 
             # Analyze assets
             defi_positions = {}
@@ -383,6 +386,8 @@ class DeFiService:
                     by_category[cat] = []
                 by_category[cat].append(pos)
 
+            logger.info(f"[DeFi] Found {len(defi_positions)} DeFi positions in {address[:20]}... Categories: {list(by_category.keys())}")
+
             return {
                 'address': address,
                 'defi_positions': list(defi_positions.values()),
@@ -393,7 +398,7 @@ class DeFiService:
             }
 
         except Exception as e:
-            logger.error(f"Error analyzing DeFi positions: {e}")
+            logger.error(f"[DeFi] Error analyzing DeFi for {address[:20]}...: {e}\n{traceback.format_exc()}")
             return None
 
     async def get_protocol_info(self, protocol_name: str) -> Dict:
