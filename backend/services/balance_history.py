@@ -30,9 +30,11 @@ from database import (
 )
 from services.cardano import cardano_service
 from services.http_client import get_client, fetch_with_retry
+from services.logging_service import get_logging_service
 from services.pricing import pricing_service, COINGECKO_BASE_URL, ASSET_TO_COINGECKO
 
 logger = logging.getLogger(__name__)
+log_service = get_logging_service()
 
 # Chains supported by the balance history collector
 SUPPORTED_CHAINS = {'cardano', 'bitcoin'}
@@ -60,6 +62,7 @@ class BalanceHistoryService:
     def __init__(self):
         self._running_tasks: Dict[int, asyncio.Task] = {}  # user_id -> Task
         self._cancel_flags: Dict[int, bool] = {}
+        self._scheduler_tasks: Dict[int, asyncio.Task] = {}  # user_id -> scheduler Task
 
     # ------------------------------------------------------------------
     # Public API
@@ -131,6 +134,7 @@ class BalanceHistoryService:
             ]
 
             if not target_wallets:
+                await log_service.info("balance_history", f"No supported wallets found for user {user_id}")
                 await update_balance_history_job(
                     job_id, status='completed', progress=100,
                     step='No supported wallets found'
@@ -138,6 +142,7 @@ class BalanceHistoryService:
                 return
 
             total = len(target_wallets)
+            await log_service.info("balance_history", f"Balance history: Starting collection for user {user_id}, {total} wallets")
             await update_balance_history_job(
                 job_id, total_items=total, step=f'Collecting history for {total} wallet(s)'
             )
@@ -150,6 +155,7 @@ class BalanceHistoryService:
                 label = wallet.get('label') or wallet.get('address', '')[:12]
                 pct = int((idx / total) * 100)
 
+                await log_service.info("balance_history", f"Balance history: Collecting {chain} wallet {label} ({idx+1}/{total})")
                 await update_balance_history_job(
                     job_id, progress=pct, processed_items=idx,
                     step=f'Processing {chain} wallet: {label}'
@@ -159,16 +165,20 @@ class BalanceHistoryService:
                     await self._collect_wallet(user_id, wallet, max_days_back, job_id)
                 except Exception as e:
                     logger.error(f"Error collecting {chain} wallet {wallet['id']}: {e}")
+                    await log_service.error("balance_history", f"Error collecting {chain} wallet {label}: {e}")
                     # Continue with other wallets
 
             status = 'cancelled' if self._cancel_flags.get(user_id) else 'completed'
+            await log_service.info("balance_history", f"Balance history: Collection {status} for user {user_id}, {total} wallets processed")
             await update_balance_history_job(
                 job_id, status=status, progress=100,
                 processed_items=total, step='Collection complete'
             )
 
         except Exception as e:
+            import traceback
             logger.error(f"Balance history collection failed for user {user_id}: {e}")
+            await log_service.error("balance_history", f"Balance history collection failed for user {user_id}: {e}\n{traceback.format_exc()}")
             await update_balance_history_job(
                 job_id, status='error', error_message=str(e)[:500],
                 step='Collection failed'
@@ -198,11 +208,13 @@ class BalanceHistoryService:
 
         if not daily_balances:
             logger.info(f"No new balance data for {chain} wallet {wallet_id}")
+            await log_service.info("balance_history", f"No new balance data for {chain} wallet {wallet_id}")
             return
 
         # Fetch historical prices for the date range
         symbol = CHAIN_SYMBOL[chain]
         dates = sorted(daily_balances.keys())
+        await log_service.info("balance_history", f"Fetching historical prices for {symbol}, {len(dates)} dates ({dates[0]} to {dates[-1]})")
         prices = await self._fetch_historical_prices(symbol, dates[0], dates[-1])
 
         # Build data points
@@ -232,6 +244,7 @@ class BalanceHistoryService:
             await save_balance_history_batch(batch, user_id)
 
         logger.info(f"Saved {len(points)} balance history points for {chain} wallet {wallet_id}")
+        await log_service.info("balance_history", f"Balance history: Saved {len(points)} data points for {chain} wallet {wallet_id}")
 
     # ------------------------------------------------------------------
     # Chain Collectors
@@ -250,6 +263,7 @@ class BalanceHistoryService:
         blockfrost_key = await cardano_service._get_blockfrost_key()
         if not blockfrost_key:
             logger.warning("Blockfrost API key not configured, skipping Cardano history")
+            await log_service.warning("balance_history", "Blockfrost API key not configured, skipping Cardano history")
             return {}
 
         headers = {"project_id": blockfrost_key}
@@ -289,9 +303,11 @@ class BalanceHistoryService:
                 break
 
         if not all_txs:
+            await log_service.info("balance_history", f"No Cardano transactions found for {address[:20]}...")
             return {}
 
         logger.info(f"Fetched {len(all_txs)} Cardano transactions for {address}")
+        await log_service.info("balance_history", f"Blockfrost: Fetched {len(all_txs)} Cardano transactions for {address[:20]}...")
 
         # Build running balance by replaying UTxOs
         running_balance_lovelace = 0
@@ -394,6 +410,7 @@ class BalanceHistoryService:
                 break
 
         if not all_txs:
+            await log_service.info("balance_history", f"No Bitcoin transactions found for {address[:12]}...")
             return {}
 
         # Sort by block time ascending (oldest first)
@@ -405,6 +422,7 @@ class BalanceHistoryService:
         confirmed_txs.sort(key=lambda tx: tx['status'].get('block_time', 0))
 
         logger.info(f"Fetched {len(confirmed_txs)} confirmed Bitcoin transactions for {address}")
+        await log_service.info("balance_history", f"Blockstream: Fetched {len(confirmed_txs)} confirmed Bitcoin txs for {address[:12]}...")
 
         # Build running balance
         running_balance_sats = 0
@@ -510,15 +528,55 @@ class BalanceHistoryService:
                     prices[date_str] = price
 
                 logger.info(f"Fetched {len(prices)} historical prices for {symbol}")
+                await log_service.info("balance_history", f"CoinGecko: Fetched {len(prices)} historical prices for {symbol}")
             elif response.status_code == 429:
                 logger.warning("CoinGecko rate limited during historical price fetch")
+                await log_service.warning("balance_history", f"CoinGecko rate limited (429) during historical price fetch for {symbol}")
                 await asyncio.sleep(60)
             else:
                 logger.warning(f"CoinGecko historical range error: {response.status_code}")
+                await log_service.warning("balance_history", f"CoinGecko historical range error: {response.status_code} for {symbol}")
         except Exception as e:
             logger.error(f"Error fetching historical prices for {symbol}: {e}")
+            await log_service.error("balance_history", f"Error fetching historical prices for {symbol}: {e}")
 
         return prices
+
+    # ------------------------------------------------------------------
+    # Scheduler
+    # ------------------------------------------------------------------
+
+    async def start_scheduler(self, user_id: int, interval_hours: int):
+        """Start (or restart) the periodic collection scheduler for a user."""
+        # Stop existing scheduler first
+        await self.stop_scheduler(user_id)
+
+        async def _scheduler_loop():
+            while True:
+                try:
+                    await asyncio.sleep(interval_hours * 3600)
+                    logger.info(f"Scheduler: Starting auto-collection for user {user_id}")
+                    await log_service.info("balance_history", f"Scheduler: Starting auto-collection for user {user_id} (every {interval_hours}h)")
+                    await self.collect_history(user_id=user_id)
+                except asyncio.CancelledError:
+                    logger.info(f"Scheduler cancelled for user {user_id}")
+                    break
+                except Exception as e:
+                    logger.error(f"Scheduler error for user {user_id}: {e}")
+                    await log_service.error("balance_history", f"Scheduler error for user {user_id}: {e}")
+                    # Wait 1 hour before retrying on error
+                    await asyncio.sleep(3600)
+
+        task = asyncio.create_task(_scheduler_loop())
+        self._scheduler_tasks[user_id] = task
+        logger.info(f"Balance history scheduler started for user {user_id}, interval={interval_hours}h")
+
+    async def stop_scheduler(self, user_id: int):
+        """Stop the periodic collection scheduler for a user."""
+        task = self._scheduler_tasks.pop(user_id, None)
+        if task and not task.done():
+            task.cancel()
+            logger.info(f"Balance history scheduler stopped for user {user_id}")
 
 
 # Singleton

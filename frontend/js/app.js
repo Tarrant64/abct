@@ -5328,35 +5328,13 @@ async function loadPortfolioHistory(range = '7d') {
     }
 }
 
-// Generate portfolio history data (backfill 30 days) - background task with progress polling
+// Generate portfolio history data (backfill 30 days) - V1 DISABLED
 async function generatePortfolioHistory() {
     const emptyState = document.getElementById('chartEmptyState');
 
-    // Show progress UI
+    // V1 history generation is disabled — direct users to V2
     if (emptyState) {
-        setSafeHTML(emptyState, '<div class="generation-progress"><p id="genProgressStep">Starting history generation...</p><div class="progress-bar-container"><div class="progress-bar-fill" id="genProgressBar" style="width: 0%"></div></div><p class="chart-empty-hint" id="genProgressPct">0%</p></div>');
-    }
-
-    try {
-        const response = await authFetch(`${API_BASE}/portfolio/history/generate?days=30`, {
-            method: 'POST'
-        });
-        const data = await response.json();
-
-        if (data.status === 'started' || data.status === 'already_running') {
-            // Poll for progress
-            _pollGenerationProgress();
-        } else if (data.status === 'success') {
-            // Demo account or instant success
-            const activeRangeBtn = document.querySelector('.range-btn.active');
-            const currentRange = activeRangeBtn ? activeRangeBtn.dataset.range : '7d';
-            await loadPortfolioHistory(currentRange);
-        } else {
-            _showGenerationError(data.message || 'Failed to start generation.');
-        }
-    } catch (error) {
-        console.error('Error starting portfolio history generation:', error);
-        _showGenerationError('Error starting history generation. Check your connection.');
+        setSafeHTML(emptyState, '<p>V1 history generation paused.</p><p class="chart-empty-hint">Switch to the <strong>On-Chain (v2)</strong> tab for real blockchain-based history.</p><button class="btn btn-primary" onclick="switchChartSource(\'v2\')">Switch to On-Chain (v2)</button>');
     }
 }
 
@@ -5840,6 +5818,7 @@ function switchChartSource(source) {
         // Load v2 data
         loadV2BalanceHistory('1y');
         checkV2CollectionStatus();
+        loadV2Schedule();
     }
 }
 
@@ -6088,6 +6067,48 @@ async function checkV2CollectionStatus() {
         }
     } catch (error) {
         // Silently ignore
+    }
+}
+
+// V2 Balance History Scheduler Config
+async function loadV2Schedule() {
+    try {
+        const response = await authFetch(`${API_BASE}/balance-history/schedule`);
+        const data = await response.json();
+        const select = document.getElementById('v2ScheduleSelect');
+        if (select) {
+            select.value = data.enabled ? String(data.interval_hours) : '0';
+        }
+    } catch (error) {
+        console.error('Error loading v2 schedule:', error);
+    }
+}
+
+async function saveV2Schedule() {
+    const select = document.getElementById('v2ScheduleSelect');
+    const statusEl = document.getElementById('v2ScheduleStatus');
+    if (!select) return;
+
+    const hours = parseInt(select.value, 10);
+    const enabled = hours > 0;
+
+    try {
+        const response = await authFetch(`${API_BASE}/balance-history/schedule`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled, interval_hours: hours }),
+        });
+        const data = await response.json();
+        if (statusEl) {
+            statusEl.textContent = enabled ? `Saved — collecting every ${hours}h` : 'Saved — auto-collect off';
+            setTimeout(() => { statusEl.textContent = ''; }, 3000);
+        }
+    } catch (error) {
+        console.error('Error saving v2 schedule:', error);
+        if (statusEl) {
+            statusEl.textContent = 'Error saving schedule';
+            setTimeout(() => { statusEl.textContent = ''; }, 3000);
+        }
     }
 }
 
