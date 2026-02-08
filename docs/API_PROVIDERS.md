@@ -583,7 +583,7 @@ Each provider has their own support channels:
 This document is maintained alongside ABCT releases. Check [CHANGELOG.md](CHANGELOG.md) for API-related changes.
 
 **Last Updated:** January 2026
-**ABCT Version:** v0.10.0
+**ABCT Version:** v1.5.0
 
 ---
 
