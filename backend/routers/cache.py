@@ -187,7 +187,7 @@ async def clear_portfolio_snapshots_cache(user_id: int = Depends(verify_session)
             await db.execute("""
                 DELETE FROM portfolio_snapshots
                 WHERE user_id = ?
-                AND date < date('now', '-7 days')
+                AND snapshot_date < date('now', '-7 days')
             """, (user_id,))
             await db.commit()
 
