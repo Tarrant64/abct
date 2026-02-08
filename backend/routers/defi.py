@@ -5,6 +5,7 @@ Provides endpoints for analyzing Cardano DeFi positions.
 """
 
 from fastapi import APIRouter, HTTPException, Query, Depends
+import logging
 import sys
 import os
 
@@ -15,6 +16,8 @@ from database import get_all_wallets, get_cache, set_cache, get_username_by_user
 from middleware.demo_mode import is_demo_user
 from auth_utils import verify_session
 from config import CACHE_TTL_COLD
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/defi", tags=["defi"])
 
@@ -296,8 +299,11 @@ async def get_defi_summary(user_id: int = Depends(verify_session), refresh: bool
     protocol_totals = {}
     wallets_with_defi = 0
 
-    for wallet in cardano_wallets:
+    logger.info(f"[DeFi Summary] Analyzing {len(cardano_wallets)} Cardano wallets for user {user_id}")
+
+    for i, wallet in enumerate(cardano_wallets):
         result = await defi_service.analyze_wallet_defi(wallet['address'])
+        logger.info(f"[DeFi Summary] Wallet {i+1}/{len(cardano_wallets)} ({wallet['address'][:20]}...): result={'has data' if result and result.get('defi_positions') else 'None/empty'}")
 
         if result and result['defi_positions']:
             wallets_with_defi += 1
@@ -362,5 +368,17 @@ async def get_defi_summary(user_id: int = Depends(verify_session), refresh: bool
         "from_cache": False
     }
 
-    await set_cache(cache_key, result, DEFI_SUMMARY_CACHE_TTL)
+    # Only cache if we got meaningful results (avoid caching failed/empty scans)
+    if wallets_with_defi > 0 or len(all_positions) > 0:
+        await set_cache(cache_key, result, DEFI_SUMMARY_CACHE_TTL)
+    else:
+        logger.warning(f"[DeFi Summary] Empty result for {len(cardano_wallets)} wallets - NOT caching (possible API failure)")
+        # Try to return stale cache if available
+        stale = await get_cache(cache_key)
+        if stale and stale.get('wallets_with_defi', 0) > 0:
+            logger.info("[DeFi Summary] Returning stale cache instead of empty result")
+            stale['from_cache'] = True
+            stale['stale_fallback'] = True
+            return stale
+
     return result
