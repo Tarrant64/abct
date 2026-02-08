@@ -5988,7 +5988,7 @@ async function startBalanceCollection() {
     if (progress) progress.style.display = 'block';
 
     try {
-        const response = await authFetch(`${API_BASE}/balance-history/collect`, {
+        const response = await authFetch(`${API_BASE}/balance-history/collect?force=true`, {
             method: 'POST'
         });
         if (!response.ok) {

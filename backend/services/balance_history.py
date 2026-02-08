@@ -73,6 +73,7 @@ class BalanceHistoryService:
         user_id: int,
         blockchain: str = None,
         max_days_back: int = 730,
+        force: bool = False,
     ) -> int:
         """Start background collection for a user's wallets.
 
@@ -80,6 +81,7 @@ class BalanceHistoryService:
             user_id: User ID
             blockchain: Optional chain filter (e.g. 'cardano')
             max_days_back: Maximum days to look back (default 2 years)
+            force: If True, ignore existing data and re-collect from scratch
 
         Returns:
             Job ID
@@ -95,7 +97,7 @@ class BalanceHistoryService:
         self._cancel_flags[user_id] = False
 
         task = asyncio.create_task(
-            self._run_collection(user_id, job_id, blockchain, max_days_back)
+            self._run_collection(user_id, job_id, blockchain, max_days_back, force)
         )
         self._running_tasks[user_id] = task
         return job_id
@@ -122,7 +124,7 @@ class BalanceHistoryService:
     # ------------------------------------------------------------------
 
     async def _run_collection(self, user_id: int, job_id: int,
-                              blockchain: str, max_days_back: int):
+                              blockchain: str, max_days_back: int, force: bool = False):
         """Main collection loop — runs as a background task."""
         try:
             wallets = await get_all_wallets(user_id)
@@ -162,7 +164,7 @@ class BalanceHistoryService:
                 )
 
                 try:
-                    await self._collect_wallet(user_id, wallet, max_days_back, job_id)
+                    await self._collect_wallet(user_id, wallet, max_days_back, job_id, force)
                 except Exception as e:
                     logger.error(f"Error collecting {chain} wallet {wallet['id']}: {e}")
                     await log_service.error("balance_history", f"Error collecting {chain} wallet {label}: {e}")
@@ -188,14 +190,14 @@ class BalanceHistoryService:
             self._cancel_flags.pop(user_id, None)
 
     async def _collect_wallet(self, user_id: int, wallet: dict,
-                              max_days_back: int, job_id: int):
+                              max_days_back: int, job_id: int, force: bool = False):
         """Collect balance history for a single wallet."""
         chain = wallet['blockchain']
         wallet_id = wallet['id']
         address = wallet['address']
 
-        # Check existing coverage for incremental updates
-        latest_date = await get_balance_history_latest_date(user_id, wallet_id)
+        # Check existing coverage for incremental updates (skip if force)
+        latest_date = None if force else await get_balance_history_latest_date(user_id, wallet_id)
         cutoff = (datetime.utcnow() - timedelta(days=max_days_back)).strftime('%Y-%m-%d')
 
         if chain == 'cardano':
@@ -252,10 +254,11 @@ class BalanceHistoryService:
 
     async def _collect_cardano(self, address: str, latest_date: str,
                                cutoff: str) -> Dict[str, float]:
-        """Collect Cardano balance history by replaying UTxO transactions.
+        """Collect Cardano balance history by anchoring to current on-chain balance.
 
-        Fetches all transactions for the address from Blockfrost, replays them
-        chronologically to build a running ADA balance, and returns daily snapshots.
+        Strategy: Fetch current balance from Blockfrost, then replay only recent
+        transactions to reconstruct historical daily balances. This avoids needing
+        UTxO lookups for old transactions before the cutoff date.
 
         Returns:
             Dict mapping date strings (YYYY-MM-DD) to ADA balance on that date.
@@ -269,7 +272,35 @@ class BalanceHistoryService:
         headers = {"project_id": blockfrost_key}
         client = get_client("blockfrost", timeout=30.0)
 
-        # Fetch all transactions (paginated, oldest first)
+        # Step 1: Get current on-chain balance (anchor point)
+        try:
+            addr_response = await client.get(
+                f"{BLOCKFROST_BASE_URL}/addresses/{address}",
+                headers=headers
+            )
+            if addr_response.status_code == 404:
+                await log_service.info("balance_history", f"Cardano address not found: {address[:20]}...")
+                return {}
+            if addr_response.status_code != 200:
+                logger.error(f"Blockfrost address lookup error: {addr_response.status_code}")
+                await log_service.error("balance_history", f"Blockfrost address lookup error for {address[:20]}...: {addr_response.status_code}")
+                return {}
+
+            addr_data = addr_response.json()
+            current_lovelace = 0
+            for amount in addr_data.get('amount', []):
+                if amount.get('unit') == 'lovelace':
+                    current_lovelace = int(amount.get('quantity', 0))
+                    break
+
+            current_ada = current_lovelace / CHAIN_DIVISOR['cardano']
+            await log_service.info("balance_history", f"Current balance for {address[:20]}...: {current_ada:.2f} ADA")
+        except Exception as e:
+            logger.error(f"Error fetching Cardano address balance: {e}")
+            await log_service.error("balance_history", f"Error fetching Cardano address balance: {e}")
+            return {}
+
+        # Step 2: Fetch all transactions (paginated, oldest first)
         all_txs = []
         page = 1
         while True:
@@ -302,43 +333,59 @@ class BalanceHistoryService:
                 logger.error(f"Error fetching Cardano txs page {page}: {e}")
                 break
 
+        today = datetime.utcnow().strftime('%Y-%m-%d')
+
         if not all_txs:
-            await log_service.info("balance_history", f"No Cardano transactions found for {address[:20]}...")
+            # No transactions but wallet may have balance (e.g. from staking rewards)
+            if current_lovelace > 0:
+                await log_service.info("balance_history", f"No txs for {address[:20]}... but has {current_ada:.2f} ADA, recording today's balance")
+                return {today: current_ada}
             return {}
 
         logger.info(f"Fetched {len(all_txs)} Cardano transactions for {address}")
         await log_service.info("balance_history", f"Blockfrost: Fetched {len(all_txs)} Cardano transactions for {address[:20]}...")
 
-        # Build running balance by replaying UTxOs
-        running_balance_lovelace = 0
-        daily_balances = {}
+        # Step 3: Determine effective start date for UTxO processing
+        effective_start = latest_date if latest_date else cutoff
 
+        # Step 4: Filter to only transactions within the date range
+        # Only these need expensive UTxO lookups
+        recent_txs = []
         for tx_info in all_txs:
-            tx_hash = tx_info.get('tx_hash')
             block_time = tx_info.get('block_time', 0)
             tx_date = datetime.utcfromtimestamp(block_time).strftime('%Y-%m-%d')
+            tx_info['_date'] = tx_date
+            if tx_date >= effective_start:
+                recent_txs.append(tx_info)
 
-            # Skip if before cutoff or already collected
-            if tx_date < cutoff:
-                continue
-            if latest_date and tx_date <= latest_date:
-                # For incremental: we need to know the balance at latest_date to continue
-                # So we still process these to build running_balance, but don't save
-                pass
+        await log_service.info("balance_history",
+            f"Processing {len(recent_txs)} of {len(all_txs)} txs for {address[:20]}... (from {effective_start})")
 
-            # Fetch UTxOs for this transaction
+        # Step 5: Fetch UTxOs for recent transactions and calculate net changes
+        net_change_lovelace = 0
+        tx_changes = []  # list of (date, change_lovelace)
+
+        for tx_info in recent_txs:
+            tx_hash = tx_info.get('tx_hash')
+            tx_date = tx_info['_date']
+
             try:
                 utxo_response = await client.get(
                     f"{BLOCKFROST_BASE_URL}/txs/{tx_hash}/utxos",
                     headers=headers
                 )
+                if utxo_response.status_code == 429:
+                    await asyncio.sleep(10)
+                    utxo_response = await client.get(
+                        f"{BLOCKFROST_BASE_URL}/txs/{tx_hash}/utxos",
+                        headers=headers
+                    )
                 if utxo_response.status_code != 200:
                     await asyncio.sleep(0.3)
                     continue
 
                 utxos = utxo_response.json()
 
-                # Calculate balance change: sum outputs to this address minus inputs from this address
                 input_lovelace = 0
                 output_lovelace = 0
 
@@ -354,18 +401,41 @@ class BalanceHistoryService:
                             if amount.get('unit') == 'lovelace':
                                 output_lovelace += int(amount.get('quantity', 0))
 
-                running_balance_lovelace += (output_lovelace - input_lovelace)
-
-                # Record daily balance (last tx of the day wins)
-                if not latest_date or tx_date > latest_date:
-                    daily_balances[tx_date] = running_balance_lovelace / CHAIN_DIVISOR['cardano']
+                change = output_lovelace - input_lovelace
+                net_change_lovelace += change
+                tx_changes.append((tx_date, change))
 
                 await asyncio.sleep(0.3)  # Rate limit
             except Exception as e:
                 logger.error(f"Error processing Cardano tx {tx_hash}: {e}")
                 continue
 
-        # Fill in gaps: for dates between transactions, balance stays the same
+        # Step 6: Calculate starting balance using current balance as anchor
+        # current_balance = starting_balance + net_change_from_recent_txs
+        # Therefore: starting_balance = current_balance - net_change
+        starting_balance_lovelace = current_lovelace - net_change_lovelace
+        starting_ada = starting_balance_lovelace / CHAIN_DIVISOR['cardano']
+
+        await log_service.info("balance_history",
+            f"Balance for {address[:20]}...: current={current_ada:.2f} ADA, "
+            f"net_change={net_change_lovelace / CHAIN_DIVISOR['cardano']:.2f} ADA, "
+            f"starting={starting_ada:.2f} ADA ({len(tx_changes)} txs)")
+
+        # Step 7: Replay transactions forward from starting balance
+        running_balance_lovelace = starting_balance_lovelace
+        daily_balances = {}
+
+        for tx_date, change in tx_changes:
+            running_balance_lovelace += change
+            # Only save dates after latest_date (for incremental)
+            if not latest_date or tx_date > latest_date:
+                daily_balances[tx_date] = running_balance_lovelace / CHAIN_DIVISOR['cardano']
+
+        # Ensure today's balance is recorded using the known current on-chain balance
+        if not latest_date or today > (latest_date or ''):
+            daily_balances[today] = current_ada
+
+        # Fill in gaps: for dates between transactions, carry forward previous balance
         if daily_balances:
             daily_balances = self._fill_daily_gaps(daily_balances)
 
@@ -424,7 +494,8 @@ class BalanceHistoryService:
         logger.info(f"Fetched {len(confirmed_txs)} confirmed Bitcoin transactions for {address}")
         await log_service.info("balance_history", f"Blockstream: Fetched {len(confirmed_txs)} confirmed Bitcoin txs for {address[:12]}...")
 
-        # Build running balance
+        # Build running balance by replaying ALL transactions (including pre-cutoff)
+        # to ensure correct starting balance for the date range
         running_balance_sats = 0
         daily_balances = {}
 
@@ -432,10 +503,7 @@ class BalanceHistoryService:
             block_time = tx['status'].get('block_time', 0)
             tx_date = datetime.utcfromtimestamp(block_time).strftime('%Y-%m-%d')
 
-            if tx_date < cutoff:
-                continue
-
-            # Calculate balance change
+            # Calculate balance change for ALL transactions (no extra API calls needed)
             input_sats = 0
             output_sats = 0
 
@@ -450,8 +518,18 @@ class BalanceHistoryService:
 
             running_balance_sats += (output_sats - input_sats)
 
-            if not latest_date or tx_date > latest_date:
+            # Only record daily balance for dates within range
+            if tx_date >= cutoff and (not latest_date or tx_date > latest_date):
                 daily_balances[tx_date] = running_balance_sats / CHAIN_DIVISOR['bitcoin']
+
+        # Record today's balance as the final running balance
+        today = datetime.utcnow().strftime('%Y-%m-%d')
+        if running_balance_sats > 0 and (not latest_date or today > (latest_date or '')):
+            daily_balances[today] = running_balance_sats / CHAIN_DIVISOR['bitcoin']
+
+        final_btc = running_balance_sats / CHAIN_DIVISOR['bitcoin']
+        await log_service.info("balance_history",
+            f"Bitcoin balance for {address[:12]}...: {final_btc:.8f} BTC, {len(daily_balances)} daily entries")
 
         # Fill in gaps
         if daily_balances:
