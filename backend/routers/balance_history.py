@@ -32,17 +32,19 @@ async def start_collection(
     user_id: int = Depends(verify_session),
     blockchain: str = Query(None, description="Optional chain filter"),
     max_days: int = Query(730, description="Max days back to collect"),
+    force: bool = Query(False, description="Force full re-collection, ignoring existing data"),
 ):
     """Start background balance history collection.
 
     Returns a job_id that can be polled for progress.
     """
-    logger.info(f"Balance history collect requested: user={user_id}, chain={blockchain}, max_days={max_days}")
-    await log_service.info("balance_history", f"Collection requested: user={user_id}, chain={blockchain or 'all'}, max_days={max_days}")
+    logger.info(f"Balance history collect requested: user={user_id}, chain={blockchain}, max_days={max_days}, force={force}")
+    await log_service.info("balance_history", f"Collection requested: user={user_id}, chain={blockchain or 'all'}, max_days={max_days}, force={force}")
     job_id = await balance_history_service.collect_history(
         user_id=user_id,
         blockchain=blockchain,
         max_days_back=max_days,
+        force=force,
     )
     return {"status": "started", "job_id": job_id}
 
