@@ -18,8 +18,11 @@ from database import (
     get_balance_history_coverage,
     get_user_setting,
     set_user_setting,
+    get_username_by_user_id,
 )
+from middleware.demo_mode import is_demo_user
 from services.balance_history import balance_history_service
+from services.demo_data_generator import generate_portfolio_history
 from services.logging_service import get_logging_service
 
 router = APIRouter(prefix="/balance-history", tags=["balance-history"])
@@ -38,6 +41,11 @@ async def start_collection(
 
     Returns a job_id that can be polled for progress.
     """
+    # Demo users get fake data — no real collection
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        return {"status": "completed", "job_id": -1}
+
     logger.info(f"Balance history collect requested: user={user_id}, chain={blockchain}, max_days={max_days}, force={force}")
     await log_service.info("balance_history", f"Collection requested: user={user_id}, chain={blockchain or 'all'}, max_days={max_days}, force={force}")
     job_id = await balance_history_service.collect_history(
@@ -52,6 +60,10 @@ async def start_collection(
 @router.get("/collect/status")
 async def collection_status(user_id: int = Depends(verify_session)):
     """Poll the current balance history collection job status."""
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        return {"status": "completed", "progress": 100, "step": "Demo data loaded"}
+
     job = await get_latest_balance_history_job(user_id)
     if not job:
         return {"status": "idle", "progress": 0, "step": "No collection started"}
@@ -87,6 +99,33 @@ async def get_history_data(
 
     Returns daily total values with per-chain breakdown.
     """
+    # Demo users get pre-generated fake history
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        range_to_days_demo = {
+            '24h': 1, '1w': 7, '1m': 30, '3m': 90,
+            '6m': 180, '1y': 365, '2y': 730,
+        }
+        days_back = range_to_days_demo.get(range, 90)
+        history = generate_portfolio_history(days=days_back)
+        data = []
+        for snap in history:
+            data.append({
+                'date': snap['snapshot_date'],
+                'value': snap['total_value_usd'],
+                'chains': snap.get('blockchain_breakdown', {}),
+            })
+        oldest = data[0]['date'] if data else None
+        newest = data[-1]['date'] if data else None
+        return {
+            'data': data,
+            'coverage': {
+                'oldest_date': oldest,
+                'newest_date': newest,
+                'total_days': len(data),
+            },
+        }
+
     logger.info(f"Balance history data requested: user={user_id}, range={range}")
     range_to_days = {
         '24h': 1,
