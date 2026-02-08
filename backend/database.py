@@ -1903,6 +1903,48 @@ async def update_native_asset_decimals(asset_id: str, decimals: int):
         await db.commit()
 
 
+# ============ User Settings Functions ============
+
+async def get_user_setting(user_id: int, key: str, default: str = None) -> Optional[str]:
+    """Get a user setting value by key.
+
+    Args:
+        user_id: User ID
+        key: Setting key
+        default: Default value if not found
+
+    Returns:
+        Setting value as string, or default
+    """
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute(
+            "SELECT setting_value FROM user_settings WHERE user_id = ? AND setting_key = ?",
+            (user_id, key)
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else default
+
+
+async def set_user_setting(user_id: int, key: str, value: str):
+    """Set a user setting value (upsert).
+
+    Args:
+        user_id: User ID
+        key: Setting key
+        value: Setting value as string
+    """
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute(
+            """INSERT INTO user_settings (user_id, setting_key, setting_value, updated_at)
+               VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+               ON CONFLICT(user_id, setting_key) DO UPDATE SET
+                   setting_value = excluded.setting_value,
+                   updated_at = CURRENT_TIMESTAMP""",
+            (user_id, key, value)
+        )
+        await db.commit()
+
+
 # ============ API Settings Functions ============
 
 async def get_api_setting(api_name: str, user_id: int = None) -> dict:
