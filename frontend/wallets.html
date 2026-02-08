@@ -1,14 +1,19 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark-mode">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ABCT - Manage Wallets</title>
+    <title>Wallets & Transactions - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1770504681">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1770523133">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <!-- Chart.js for analytics -->
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+    <!-- DOMPurify for XSS protection -->
+    <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1770504681"></script>
+    <script src="/static/js/session-auth.js?v=1770523133"></script>
     <style>
         /* Wallet Manager Styles */
         .wallet-manager {
@@ -50,101 +55,7 @@
             color: #e0e0e0;
         }
 
-        /* Waffle Menu Styles */
-        .waffle-menu-container {
-            position: relative;
-        }
-
-        .waffle-menu-btn {
-            width: 40px;
-            height: 40px;
-            background: rgba(102, 126, 234, 0.1);
-            border: 1px solid rgba(102, 126, 234, 0.3);
-            border-radius: 8px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-        }
-
-        .waffle-menu-btn:hover {
-            background: rgba(102, 126, 234, 0.2);
-            border-color: rgba(102, 126, 234, 0.5);
-        }
-
-        .waffle-icon {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 3px;
-            width: 18px;
-            height: 18px;
-        }
-
-        .waffle-icon span {
-            width: 4px;
-            height: 4px;
-            background: #667eea;
-            border-radius: 1px;
-        }
-
-        .waffle-menu-dropdown {
-            position: absolute;
-            top: calc(100% + 8px);
-            right: 0;
-            background: #1a1a2e;
-            border: 1px solid #3a3a4e;
-            border-radius: 12px;
-            min-width: 220px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-            opacity: 0;
-            visibility: hidden;
-            transform: translateY(-10px);
-            transition: all 0.3s ease;
-            z-index: 1000;
-            overflow: hidden;
-        }
-
-        .waffle-menu-dropdown.active {
-            opacity: 1;
-            visibility: visible;
-            transform: translateY(0);
-        }
-
-        .waffle-menu-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 16px;
-            color: #e0e0e0;
-            text-decoration: none;
-            transition: all 0.2s;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .waffle-menu-item:last-child {
-            border-bottom: none;
-        }
-
-        .waffle-menu-item:hover {
-            background: rgba(102, 126, 234, 0.1);
-        }
-
-        .waffle-menu-item.active {
-            background: rgba(102, 126, 234, 0.15);
-            border-left: 3px solid #667eea;
-        }
-
-        .waffle-item-icon {
-            font-size: 18px;
-            width: 24px;
-            text-align: center;
-        }
-
-        .waffle-item-label {
-            font-size: 14px;
-            font-weight: 500;
-        }
+        /* Waffle menu styles are in styles.css */
 
         .wallet-header {
             display: flex;
@@ -846,8 +757,47 @@
             filter: blur(6px);
             user-select: none;
         }
+
+        /* Main Tab Navigation */
+        .main-tab-nav {
+            display: flex;
+            gap: 0;
+            margin-bottom: 24px;
+            background: #1a1a2e;
+            padding: 4px;
+            border-radius: 12px;
+            width: fit-content;
+        }
+
+        .main-tab-btn {
+            padding: 12px 28px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            background: transparent;
+            color: #888;
+            transition: all 0.2s;
+        }
+
+        .main-tab-btn:hover {
+            color: #e0e0e0;
+        }
+
+        .main-tab-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .main-tab-content {
+            display: none;
+        }
+
+        .main-tab-content.active {
+            display: block;
+        }
     </style>
-    <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <script>
         // XSS Protection - Safe HTML rendering
         function setSafeHTML(element, html) {
@@ -864,66 +814,30 @@
 <body>
     <div class="wallet-manager">
         <header>
-            <h1><a href="/" style="color: inherit; text-decoration: none;">A Better Crypto Tracker</a></h1>
-            <div class="header-actions">
-                <button id="privacyBtn" class="btn btn-privacy" onclick="togglePrivacyMode()" title="Toggle privacy mode">
-                    Privacy Mode
-                </button>
-                <button id="sectionsToggleBtn" class="btn btn-sections" onclick="toggleAllSections()" title="Expand/Collapse all sections">
-                    Expand All
-                </button>
-                <div class="waffle-menu-container">
-                    <button class="waffle-menu-btn" onclick="toggleWaffleMenu()" title="Menu">
-                        <span class="waffle-icon">
-                            <span></span><span></span><span></span>
-                            <span></span><span></span><span></span>
-                            <span></span><span></span><span></span>
-                        </span>
+            <nav class="main-nav">
+                <a href="/" class="nav-item">Overview</a>
+                <a href="/assets.html" class="nav-item">Assets</a>
+                <a href="/nfts.html" class="nav-item">NFTs</a>
+            </nav>
+            <div class="header-right-controls">
+                <div class="user-avatar-container">
+                    <button class="user-avatar-btn" onclick="toggleUserMenu()">
+                        <div class="avatar-circle" id="userAvatar">?</div>
                     </button>
-                    <div class="waffle-menu-dropdown" id="waffleMenu">
-                        <a href="/" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128200;</span>
-                            <span class="waffle-item-label">Dashboard</span>
-                        </a>
-                        <a href="/wallets.html" class="waffle-menu-item active">
-                            <span class="waffle-item-icon">&#128176;</span>
-                            <span class="waffle-item-label">Manage Wallets</span>
-                        </a>
-                        <a href="/transactions.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128260;</span>
-                            <span class="waffle-item-label">Transactions</span>
-                        </a>
-                        <a href="/apis.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128273;</span>
-                            <span class="waffle-item-label">APIs</span>
-                        </a>
-                        <a href="/services.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#9881;</span>
-                            <span class="waffle-item-label">Services</span>
-                        </a>
-                        <a href="/security.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128274;</span>
-                            <span class="waffle-item-label">Security</span>
-                        </a>
-                        <a href="/backup.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128230;</span>
-                            <span class="waffle-item-label">Backup & Restore</span>
-                        </a>
-                        <a href="/cache.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128452;</span>
-                            <span class="waffle-item-label">Cache Management</span>
-                        </a>
-                        <a href="/nft-wall.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128444;</span>
-                            <span class="waffle-item-label">NFT Wall</span>
-                        </a>
-                        <a href="/logs.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128221;</span>
-                            <span class="waffle-item-label">System Logs</span>
-                        </a>
-                        <div class="waffle-menu-divider"></div>
-                        <div class="waffle-menu-theme">
-                            <span class="waffle-item-icon">&#127912;</span>
+                    <div class="user-menu-dropdown" id="userMenu">
+                        <div class="user-menu-header">
+                            <span id="userMenuName">User</span>
+                        </div>
+                        <div class="user-menu-divider"></div>
+                        <a href="/wallets.html" class="user-menu-item">Manage Wallets</a>
+                        <a href="/settings.html" class="user-menu-item">Settings</a>
+                        <a href="/system.html" class="user-menu-item">System</a>
+                        <div class="user-menu-divider"></div>
+                        <button class="user-menu-item" onclick="togglePrivacyMode()">
+                            Privacy Mode <span class="privacy-indicator" id="privacyIndicator">OFF</span>
+                        </button>
+                        <div class="user-menu-theme-row">
+                            <span>Theme</span>
                             <select id="themeSelect" onchange="changeTheme(this.value)" title="Select theme">
                                 <option value="dark-mode">Dark Mode</option>
                                 <option value="light">Light</option>
@@ -932,8 +846,12 @@
                                 <option value="sunset-horizon">Sunset Horizon</option>
                                 <option value="cypher">Cypher</option>
                                 <option value="cypher2">Cypher2</option>
+                                <option value="cypher3">Cypher3</option>
                             </select>
                         </div>
+                        <div class="user-menu-divider"></div>
+                        <button class="user-menu-item" id="changePasswordMenuItem" onclick="showChangePasswordModal()">Change Password</button>
+                        <button class="user-menu-item user-menu-logout" onclick="logout()">Logout</button>
                     </div>
                 </div>
             </div>
@@ -944,101 +862,296 @@
             <span id="statusMessage"></span>
         </div>
 
-        <div class="wallet-header">
-            <h1>Manage Wallets</h1>
-            <div class="header-actions" id="walletHeaderActions">
-                <button class="btn btn-secondary" onclick="openImportModal()">
-                    Import from File
+        <!-- Main Tab Navigation -->
+        <div class="main-tab-nav">
+            <button class="main-tab-btn active" onclick="switchMainTab('wallets')">Wallets</button>
+            <button class="main-tab-btn" onclick="switchMainTab('transactions')">Transactions</button>
+            <button class="main-tab-btn" onclick="switchMainTab('analytics')">Analytics</button>
+        </div>
+
+        <!-- ===================== -->
+        <!-- WALLETS TAB           -->
+        <!-- ===================== -->
+        <div id="walletsTab" class="main-tab-content active">
+            <div class="wallet-header">
+                <h1>Manage Wallets</h1>
+                <div class="header-actions" id="walletHeaderActions">
+                    <button class="btn btn-secondary" onclick="openImportModal()">
+                        Import from File
+                    </button>
+                    <button class="btn btn-secondary" onclick="exportWallets()">
+                        Export to File
+                    </button>
+                    <button class="btn btn-primary" onclick="openAddModal()">
+                        + Add Wallet
+                    </button>
+                </div>
+                <div class="header-actions" id="tokenHeaderActions" style="display: none;">
+                    <button class="btn btn-primary" onclick="openAddTokenModal()">
+                        + Add Token
+                    </button>
+                </div>
+            </div>
+
+            <!-- Asset Type Tabs -->
+            <div class="asset-type-tabs">
+                <button class="asset-tab active" data-type="wallets" onclick="switchAssetTab('wallets')">
+                    Self-Custody Wallets
                 </button>
-                <button class="btn btn-secondary" onclick="exportWallets()">
-                    Export to File
+                <button class="asset-tab" data-type="exchanges" onclick="switchAssetTab('exchanges')">
+                    Exchanges
                 </button>
-                <button class="btn btn-primary" onclick="openAddModal()">
-                    + Add Wallet
+                <button class="asset-tab" data-type="tokens" onclick="switchAssetTab('tokens')">
+                    Manual Tokens
                 </button>
             </div>
-            <div class="header-actions" id="tokenHeaderActions" style="display: none;">
-                <button class="btn btn-primary" onclick="openAddTokenModal()">
-                    + Add Token
+
+            <div id="statusMessage" class="status-message"></div>
+
+            <!-- Wallets Section -->
+            <div id="walletsSection">
+                <div class="chain-tabs">
+                <button class="chain-tab active" data-chain="all" onclick="filterByChain('all')">
+                    All <span class="count" id="count-all">0</span>
+                </button>
+                <button class="chain-tab" data-chain="cardano" onclick="filterByChain('cardano')">
+                    Cardano <span class="count" id="count-cardano">0</span>
+                </button>
+                <button class="chain-tab" data-chain="bitcoin" onclick="filterByChain('bitcoin')">
+                    Bitcoin <span class="count" id="count-bitcoin">0</span>
+                </button>
+                <button class="chain-tab" data-chain="ethereum" onclick="filterByChain('ethereum')">
+                    Ethereum <span class="count" id="count-ethereum">0</span>
+                </button>
+                <button class="chain-tab" data-chain="solana" onclick="filterByChain('solana')">
+                    Solana <span class="count" id="count-solana">0</span>
+                </button>
+                <button class="chain-tab" data-chain="polygon" onclick="filterByChain('polygon')">
+                    Polygon <span class="count" id="count-polygon">0</span>
+                </button>
+                <button class="chain-tab" data-chain="base" onclick="filterByChain('base')">
+                    Base <span class="count" id="count-base">0</span>
                 </button>
             </div>
-        </div>
 
-        <!-- Asset Type Tabs -->
-        <div class="asset-type-tabs">
-            <button class="asset-tab active" data-type="wallets" onclick="switchAssetTab('wallets')">
-                Self-Custody Wallets
-            </button>
-            <button class="asset-tab" data-type="exchanges" onclick="switchAssetTab('exchanges')">
-                Exchanges
-            </button>
-            <button class="asset-tab" data-type="tokens" onclick="switchAssetTab('tokens')">
-                Manual Tokens
-            </button>
-        </div>
+                <div class="wallet-list" id="walletList">
+                    <div class="empty-state">
+                        <div class="loading"></div>
+                        <p>Loading wallets...</p>
+                    </div>
+                </div>
+            </div>
 
-        <div id="statusMessage" class="status-message"></div>
+            <!-- Exchanges Section -->
+            <div id="exchangesSection" style="display: none;">
+                <div class="exchange-info-box">
+                    <h3>Exchange API Configuration</h3>
+                    <p style="font-size: 16px; line-height: 1.6;">
+                        Exchange API configuration has been moved to the <strong>Manage APIs</strong> page for easier management.
+                    </p>
+                    <div style="margin-top: 20px;">
+                        <a href="/apis.html" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none;">
+                            <span>Go to Manage APIs</span>
+                        </a>
+                    </div>
+                    <p style="margin-top: 20px; font-size: 14px; color: #888;">
+                        You can configure API keys for Coinbase, Binance.com, Binance.US, OKX, Bitget, Gate.io, and KuCoin directly from the web interface.
+                    </p>
+                </div>
+            </div>
 
-        <!-- Wallets Section -->
-        <div id="walletsSection">
-            <div class="chain-tabs">
-            <button class="chain-tab active" data-chain="all" onclick="filterByChain('all')">
-                All <span class="count" id="count-all">0</span>
-            </button>
-            <button class="chain-tab" data-chain="cardano" onclick="filterByChain('cardano')">
-                Cardano <span class="count" id="count-cardano">0</span>
-            </button>
-            <button class="chain-tab" data-chain="bitcoin" onclick="filterByChain('bitcoin')">
-                Bitcoin <span class="count" id="count-bitcoin">0</span>
-            </button>
-            <button class="chain-tab" data-chain="ethereum" onclick="filterByChain('ethereum')">
-                Ethereum <span class="count" id="count-ethereum">0</span>
-            </button>
-            <button class="chain-tab" data-chain="solana" onclick="filterByChain('solana')">
-                Solana <span class="count" id="count-solana">0</span>
-            </button>
-            <button class="chain-tab" data-chain="polygon" onclick="filterByChain('polygon')">
-                Polygon <span class="count" id="count-polygon">0</span>
-            </button>
-            <button class="chain-tab" data-chain="base" onclick="filterByChain('base')">
-                Base <span class="count" id="count-base">0</span>
-            </button>
-        </div>
-
-            <div class="wallet-list" id="walletList">
-                <div class="empty-state">
-                    <div class="loading"></div>
-                    <p>Loading wallets...</p>
+            <!-- Manual Tokens Section -->
+            <div id="tokensSection" style="display: none;">
+                <div class="token-list" id="tokenList">
+                    <div class="empty-state">
+                        <h3>No manual tokens</h3>
+                        <p>Add tokens manually to track holdings not in your wallets.</p>
+                    </div>
                 </div>
             </div>
         </div>
+        <!-- End Wallets Tab -->
 
-        <!-- Exchanges Section -->
-        <div id="exchangesSection" style="display: none;">
-            <div class="exchange-info-box">
-                <h3>🏦 Exchange API Configuration</h3>
-                <p style="font-size: 16px; line-height: 1.6;">
-                    Exchange API configuration has been moved to the <strong>Manage APIs</strong> page for easier management.
-                </p>
-                <div style="margin-top: 20px;">
-                    <a href="/apis.html" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none;">
-                        <span>⚙️</span>
-                        <span>Go to Manage APIs</span>
-                    </a>
+        <!-- ===================== -->
+        <!-- TRANSACTIONS TAB      -->
+        <!-- ===================== -->
+        <div id="transactionsTab" class="main-tab-content">
+            <!-- Filter Bar -->
+            <section class="filter-section">
+                <div class="section-header-inline">
+                    <h2>Filters</h2>
                 </div>
-                <p style="margin-top: 20px; font-size: 14px; color: #888;">
-                    You can configure API keys for Coinbase, Binance.com, Binance.US, OKX, Bitget, Gate.io, and KuCoin directly from the web interface.
-                </p>
-            </div>
+                <div class="filter-bar">
+                    <div class="filter-group">
+                        <label for="daysFilter">Time Period:</label>
+                        <select id="daysFilter" onchange="loadTransactions()">
+                            <option value="7">Last 7 days</option>
+                            <option value="30">Last 30 days</option>
+                            <option value="90" selected>Last 90 days</option>
+                            <option value="365">Last year</option>
+                            <option value="99999">All time</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="blockchainFilter">Blockchain:</label>
+                        <select id="blockchainFilter" onchange="loadTransactions()">
+                            <option value="">All Chains</option>
+                            <option value="cardano">Cardano</option>
+                            <option value="ethereum">Ethereum</option>
+                            <option value="bitcoin">Bitcoin</option>
+                            <option value="solana">Solana</option>
+                            <option value="polygon">Polygon</option>
+                            <option value="base">Base</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="directionFilter">Direction:</label>
+                        <select id="directionFilter" onchange="loadTransactions()">
+                            <option value="">All Directions</option>
+                            <option value="received">Received</option>
+                            <option value="sent">Sent</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="searchBox">Search:</label>
+                        <input type="search" id="searchBox" placeholder="Hash, address, token..." onkeyup="handleSearchKeyup(event)">
+                    </div>
+
+                    <button class="btn btn-primary" onclick="refreshTransactions()" title="Fetch latest transactions from blockchains">
+                        &#128260; Refresh
+                    </button>
+                </div>
+            </section>
+
+            <!-- Transaction Stats -->
+            <section class="stats-section" id="statsSection" style="display: none;">
+                <div class="section-header-inline">
+                    <h2>Statistics</h2>
+                </div>
+                <div class="stats-grid" id="statsGrid">
+                    <!-- Stats populated by JS -->
+                </div>
+            </section>
+
+            <!-- Transaction Table (Wireshark-style) -->
+            <section class="transactions-section">
+                <div class="section-header-inline">
+                    <h2>Transactions</h2>
+                    <span id="txCount" class="badge">0</span>
+                </div>
+                <div class="transaction-list">
+                    <div id="loadingIndicator" class="loading-indicator" style="display: none;">
+                        <span class="spinner"></span>
+                        <p>Loading transactions...</p>
+                    </div>
+
+                    <div id="emptyState" class="empty-state" style="display: none;">
+                        <p>No transactions found for the selected filters.</p>
+                        <button class="btn btn-primary" onclick="refreshTransactions()">Fetch Transactions</button>
+                    </div>
+
+                    <table id="txTable" style="display: none;">
+                        <thead>
+                            <tr>
+                                <th width="5%"></th>
+                                <th width="15%">Time</th>
+                                <th width="10%">Chain</th>
+                                <th width="10%">Direction</th>
+                                <th width="15%">Amount</th>
+                                <th width="10%">Token</th>
+                                <th width="35%">Hash</th>
+                            </tr>
+                        </thead>
+                        <tbody id="txTableBody">
+                            <!-- Rows populated by JS -->
+                        </tbody>
+                    </table>
+
+                    <!-- Pagination Controls -->
+                    <div id="paginationControls" class="pagination-controls" style="display: none;">
+                        <div class="pagination-info">
+                            <span>Showing <span id="pageStart">0</span>-<span id="pageEnd">0</span> of <span id="totalTransactions">0</span></span>
+                        </div>
+                        <div class="pagination-buttons">
+                            <button class="btn btn-secondary" onclick="goToFirstPage()" id="firstPageBtn" disabled>First</button>
+                            <button class="btn btn-secondary" onclick="previousPage()" id="prevPageBtn" disabled>Previous</button>
+                            <span class="page-indicator">Page <span id="currentPage">1</span> of <span id="totalPages">1</span></span>
+                            <button class="btn btn-secondary" onclick="nextPage()" id="nextPageBtn" disabled>Next</button>
+                            <button class="btn btn-secondary" onclick="goToLastPage()" id="lastPageBtn" disabled>Last</button>
+                        </div>
+                        <div class="pagination-size">
+                            <label for="pageSizeSelect">Per page:</label>
+                            <select id="pageSizeSelect" onchange="changePageSize()">
+                                <option value="10">10</option>
+                                <option value="20" selected>20</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </section>
         </div>
+        <!-- End Transactions Tab -->
 
-        <!-- Manual Tokens Section -->
-        <div id="tokensSection" style="display: none;">
-            <div class="token-list" id="tokenList">
-                <div class="empty-state">
-                    <h3>No manual tokens</h3>
-                    <p>Add tokens manually to track holdings not in your wallets.</p>
+        <!-- ===================== -->
+        <!-- ANALYTICS TAB         -->
+        <!-- ===================== -->
+        <div id="analyticsTab" class="main-tab-content">
+            <section class="analytics-section">
+                <div class="section-header-inline">
+                    <h2>Transaction Activity by Blockchain</h2>
                 </div>
+
+                <!-- Time Period Controls -->
+                <div class="analytics-controls">
+                    <div class="period-buttons">
+                        <button class="period-btn" onclick="changeAnalyticsPeriod(7)">1 Week</button>
+                        <button class="period-btn active" onclick="changeAnalyticsPeriod(30)">30 Days</button>
+                        <button class="period-btn" onclick="changeAnalyticsPeriod(365)">1 Year</button>
+                        <button class="period-btn" onclick="changeAnalyticsPeriod(99999)">All Time</button>
+                    </div>
+                </div>
+
+                <!-- Loading Indicator -->
+                <div id="analyticsLoading" class="loading-indicator" style="display: none;">
+                    <span class="spinner"></span>
+                    <p>Loading analytics...</p>
+                </div>
+
+                <!-- Empty State -->
+                <div id="analyticsEmpty" class="empty-state" style="display: none;">
+                    <p>No transaction data available for analytics.</p>
+                </div>
+
+                <!-- Chart Container -->
+                <div id="analyticsChartContainer" class="analytics-chart-container" style="display: none;">
+                    <canvas id="analyticsChart"></canvas>
+                </div>
+
+                <!-- Chain Indicators -->
+                <div class="chain-indicators-section">
+                    <div class="section-header-inline">
+                        <h3>Filter by Blockchain</h3>
+                        <span class="hint-text">Click to highlight/unhighlight chains</span>
+                    </div>
+                    <div id="chainIndicators" class="chain-indicators">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </section>
+        </div>
+        <!-- End Analytics Tab -->
+
+        <!-- Processing Modal (used during transaction refresh) -->
+        <div id="processingModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h2>Fetching Transactions...</h2>
+                <div class="spinner"></div>
+                <p id="processingStatus">Loading transactions from blockchains...</p>
             </div>
         </div>
     </div>
@@ -2631,7 +2744,7 @@ base:0x789..." oninput="previewImport()"></textarea>
                         <div class="exchange-status-info">
                             <h4>${exchange.name}</h4>
                             <span class="exchange-status-badge ${isConfigured ? 'configured' : 'not-configured'}">
-                                ${isConfigured ? '✓ Configured' : '○ Not Configured'}
+                                ${isConfigured ? 'Configured' : 'Not Configured'}
                             </span>
                         </div>
                     </div>
@@ -2776,7 +2889,43 @@ base:0x789..." oninput="previewImport()"></textarea>
         // Waffle menu toggle
     </script>
 
-    <script src="/static/js/app.js"></script>
+    <script src="/static/js/app.js?v=1770523133"></script>
+
+    <!-- Transaction scripts -->
+    <script src="/static/js/transactions.js?v=1770523133"></script>
+    <script src="/static/js/transaction-analytics.js?v=1770523133"></script>
+
+    <script>
+        // Main tab switching function
+        function switchMainTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.main-tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.textContent.toLowerCase().replace(/\s+/g, '') === tabName.toLowerCase()) {
+                    btn.classList.add('active');
+                }
+            });
+            if (event && event.target) event.target.classList.add('active');
+
+            // Update tab content
+            document.querySelectorAll('.main-tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            document.getElementById(tabName + 'Tab').classList.add('active');
+
+            // Initialize analytics chart when switching to analytics tab
+            if (tabName === 'analytics' && typeof initAnalyticsChart === 'function' && !analyticsChart) {
+                initAnalyticsChart();
+            }
+
+            // Update URL hash
+            if (history.replaceState) {
+                history.replaceState(null, null, '#' + tabName);
+            }
+        }
+
+    </script>
 
     <script>
         // Initialize privacy mode and theme on page load
@@ -2787,11 +2936,17 @@ base:0x789..." oninput="previewImport()"></textarea>
             if (typeof loadSavedTheme === 'function') {
                 loadSavedTheme();
             }
+
+            // Handle hash-based tab navigation (from redirects like /transactions.html -> /wallets.html#transactions)
+            const hash = window.location.hash.replace('#', '');
+            if (hash && document.getElementById(hash + 'Tab')) {
+                switchMainTab(hash);
+            }
         });
     </script>
 
     <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
-        <p>ABCT - Wallet Management | <span style="opacity: 0.6;">v1.0.1 (BUILD 1770394739)</span></p>
+        <p>ABCT - Wallet Management | <span style="opacity: 0.6;">v1.0.1 (BUILD 1770519801)</span></p>
     </footer>
 </body>
 </html>
