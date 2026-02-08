@@ -6,12 +6,12 @@
     <title>NFTs - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1770525466">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1770556281">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1770525466"></script>
+    <script src="/static/js/session-auth.js?v=1770556281"></script>
     <style>
         .nfts-page {
             max-width: 1600px;
@@ -690,16 +690,16 @@
                 <button class="wall-chain-tab" data-chain="cardano" onclick="NFTWall.switchChain('cardano')">
                     Cardano <span class="count" id="wallCountCardano">0</span>
                 </button>
-                <button class="wall-chain-tab" data-chain="ethereum" onclick="NFTWall.switchChain('ethereum')">
+                <button class="wall-chain-tab" data-chain="ethereum" onclick="NFTWall.switchChain('ethereum')" style="display: none;">
                     Ethereum <span class="count" id="wallCountEthereum">0</span>
                 </button>
-                <button class="wall-chain-tab" data-chain="solana" onclick="NFTWall.switchChain('solana')">
+                <button class="wall-chain-tab" data-chain="solana" onclick="NFTWall.switchChain('solana')" style="display: none;">
                     Solana <span class="count" id="wallCountSolana">0</span>
                 </button>
-                <button class="wall-chain-tab" data-chain="polygon" onclick="NFTWall.switchChain('polygon')">
+                <button class="wall-chain-tab" data-chain="polygon" onclick="NFTWall.switchChain('polygon')" style="display: none;">
                     Polygon <span class="count" id="wallCountPolygon">0</span>
                 </button>
-                <button class="wall-chain-tab" data-chain="base" onclick="NFTWall.switchChain('base')">
+                <button class="wall-chain-tab" data-chain="base" onclick="NFTWall.switchChain('base')" style="display: none;">
                     Base <span class="count" id="wallCountBase">0</span>
                 </button>
                 <div class="chain-tab-value">
@@ -734,7 +734,7 @@
         <p>ABCT - NFTs | <span style="opacity: 0.6;">v1.0.1 (BUILD 1770519801)</span></p>
     </footer>
 
-    <script src="/static/js/app.js?v=1770525466"></script>
+    <script src="/static/js/app.js?v=1770556281"></script>
     <script>
         // NFT Wall namespace (IIFE to avoid conflicts with app.js)
         const NFTWall = (function() {
@@ -1059,8 +1059,8 @@
             function init() {
                 if (initialized) return;
                 initialized = true;
-                loadWallStatus();
-                loadNfts();
+                // Load status and NFTs in parallel for faster page load
+                Promise.all([loadWallStatus(), loadNfts()]);
             }
 
             // Keyboard support
