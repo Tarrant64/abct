@@ -622,37 +622,30 @@ class BackfillOrchestrator:
         """
         Generate history data in the same format as /balance-history/data.
 
-        This is the backward-compatible endpoint for the frontend chart.
+        Replays all events from genesis to compute accurate running balances,
+        fills daily gaps, and prices each day using cached engine_price_history.
         """
         from datetime import timedelta
 
-        # Parse range
         range_map = {
-            '1w': 7, '2w': 14, '1m': 30, '3m': 90,
+            '24h': 1, '1w': 7, '2w': 14, '1m': 30, '3m': 90,
             '6m': 180, '1y': 365, '2y': 730, 'all': 3650,
         }
         days = range_map.get(range_str, 365)
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=days)
-
-        start_ts = int(start_date.timestamp())
         end_ts = int(end_date.timestamp())
+        start_date_str = start_date.strftime('%Y-%m-%d')
 
-        events = await engine_db.get_events(
-            user_id, min_time=start_ts, max_time=end_ts, limit=100000
-        )
-
-        if not events:
-            return {'data': [], 'coverage': {'oldest_date': None, 'newest_date': None, 'total_days': 0}}
-
-        # Group events by date and compute daily balances
-        # This is a simplified approach — replay from genesis to get running balance
+        # Replay ALL events from genesis for accurate running balances
         all_events = await engine_db.get_events(user_id, max_time=end_ts, limit=500000)
 
-        # Compute running balance per (chain, asset_id)
-        daily_balances: Dict[str, Dict[str, int]] = {}  # {date: {chain: balance_in_native_units}}
+        if not all_events:
+            return {'data': [], 'coverage': {'oldest_date': None, 'newest_date': None, 'total_days': 0}}
 
+        # Build running balance per (chain, asset_id), snapshot at date boundaries
         balances: Dict[tuple, int] = {}
+        daily_snapshots: Dict[str, Dict[tuple, int]] = {}
         current_date = None
 
         for evt in all_events:
@@ -660,26 +653,43 @@ class BackfillOrchestrator:
                 continue
 
             evt_date = datetime.utcfromtimestamp(evt['block_time']).strftime('%Y-%m-%d')
+
+            # When date changes, record end-of-previous-day snapshot
+            if evt_date != current_date:
+                if current_date is not None and current_date >= start_date_str:
+                    daily_snapshots[current_date] = dict(balances)
+                current_date = evt_date
+
             amount = int(evt['amount'])
             key = (evt['chain'], evt['asset_id'])
-
             if evt['direction'] == 'in':
                 balances[key] = balances.get(key, 0) + amount
             elif evt['direction'] == 'out':
                 balances[key] = balances.get(key, 0) - amount
 
-            # Record snapshot at each date boundary
-            if evt_date != current_date:
-                current_date = evt_date
-                if evt_date >= start_date.strftime('%Y-%m-%d'):
-                    chain_totals = {}
-                    for (chain, asset_id), bal in balances.items():
-                        if asset_id == "native" and bal > 0:
-                            chain_totals[chain] = bal
-                    daily_balances[evt_date] = chain_totals
+        # Record final date's snapshot
+        if current_date and current_date >= start_date_str:
+            daily_snapshots[current_date] = dict(balances)
 
-        # Convert to output format with prices
-        data = []
+        if not daily_snapshots:
+            return {'data': [], 'coverage': {'oldest_date': None, 'newest_date': None, 'total_days': 0}}
+
+        # Fill daily gaps: carry forward balances for days without transactions
+        sorted_dates = sorted(daily_snapshots.keys())
+        first_date = datetime.strptime(max(sorted_dates[0], start_date_str), '%Y-%m-%d')
+        last_date = min(datetime.strptime(sorted_dates[-1], '%Y-%m-%d'), end_date)
+
+        filled: Dict[str, Dict[tuple, int]] = {}
+        current = first_date
+        last_snapshot: Dict[tuple, int] = {}
+        while current <= last_date:
+            d = current.strftime('%Y-%m-%d')
+            if d in daily_snapshots:
+                last_snapshot = daily_snapshots[d]
+            filled[d] = last_snapshot
+            current += timedelta(days=1)
+
+        # Pre-load all prices by chain (6 queries max, not 730)
         divisors = {
             "cardano": 1_000_000,
             "bitcoin": 100_000_000,
@@ -688,18 +698,36 @@ class BackfillOrchestrator:
             "polygon": 10**18,
             "base": 10**18,
         }
+        chains_in_data = set()
+        for snapshot in filled.values():
+            for (chain, asset_id) in snapshot.keys():
+                if asset_id == "native":
+                    chains_in_data.add(chain)
 
-        for date_str in sorted(daily_balances.keys()):
-            chain_totals = daily_balances[date_str]
-            price_map = await engine_db.get_prices_for_date(date_str)
+        price_cache: Dict[str, Dict[str, float]] = {}  # {date: {price_key: price}}
+        for chain in chains_in_data:
+            price_key = f"{chain}:native"
+            prices = await engine_db.get_prices(price_key)
+            for p in prices:
+                if p['date'] not in price_cache:
+                    price_cache[p['date']] = {}
+                price_cache[p['date']][price_key] = p['price_usd']
+
+        # Build output
+        data = []
+        for date_str in sorted(filled.keys()):
+            snapshot = filled[date_str]
+            date_prices = price_cache.get(date_str, {})
 
             total_value = 0.0
             chain_values = {}
-            for chain, raw_balance in chain_totals.items():
+            for (chain, asset_id), raw_balance in snapshot.items():
+                if raw_balance <= 0 or asset_id != "native":
+                    continue
                 divisor = divisors.get(chain, 1)
                 human_balance = raw_balance / divisor
-                price_key = f"{chain}:native"
-                price = price_map.get(price_key, 0.0)
+                price_key = f"{chain}:{asset_id}"
+                price = date_prices.get(price_key, 0.0)
                 value = human_balance * price
                 total_value += value
                 chain_values[chain] = round(value, 2)

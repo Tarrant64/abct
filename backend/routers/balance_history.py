@@ -2,6 +2,8 @@
 Balance History Router — V2 On-Chain History API
 
 Endpoints for collecting, querying, and managing real on-chain balance history.
+Uses the V2 engine pipeline (expand -> index -> hydrate -> normalize -> enrich)
+as the primary data source, with V1 balance_history table as fallback.
 """
 
 import logging
@@ -37,33 +39,92 @@ async def start_collection(
     max_days: int = Query(730, description="Max days back to collect"),
     force: bool = Query(False, description="Force full re-collection, ignoring existing data"),
 ):
-    """Start background balance history collection.
+    """Start background balance history collection via the V2 engine pipeline.
 
-    Returns a job_id that can be polled for progress.
+    Triggers a full engine backfill: expand -> index -> hydrate -> normalize -> enrich.
+    Falls back to V1 collection if the engine fails to start.
     """
-    # Demo users get fake data — no real collection
     username = await get_username_by_user_id(user_id)
     if username and await is_demo_user(username):
         return {"status": "completed", "job_id": -1}
 
     logger.info(f"Balance history collect requested: user={user_id}, chain={blockchain}, max_days={max_days}, force={force}")
-    await log_service.info("balance_history", f"Collection requested: user={user_id}, chain={blockchain or 'all'}, max_days={max_days}, force={force}")
-    job_id = await balance_history_service.collect_history(
-        user_id=user_id,
-        blockchain=blockchain,
-        max_days_back=max_days,
-        force=force,
-    )
-    return {"status": "started", "job_id": job_id}
+    await log_service.info("balance_history", f"Collection requested via engine: user={user_id}, chain={blockchain or 'all'}, max_days={max_days}")
+
+    # Try V2 engine backfill
+    try:
+        from engine.orchestrator import backfill_orchestrator
+        from engine.models import BackfillRequest, ChainId, WorkDomain
+
+        if blockchain:
+            chains = [ChainId(blockchain)]
+        else:
+            chains = list(ChainId)
+
+        request = BackfillRequest(
+            chains=chains,
+            domains=[WorkDomain.INDEX, WorkDomain.HYDRATE, WorkDomain.NORMALIZE, WorkDomain.ENRICH_PRICE],
+        )
+
+        backfill_id = await backfill_orchestrator.plan_backfill(user_id, request)
+        await backfill_orchestrator.run_backfill(backfill_id)
+
+        await log_service.info("balance_history", f"Engine backfill started: id={backfill_id}")
+        return {"status": "started", "job_id": backfill_id}
+
+    except Exception as e:
+        logger.warning(f"Engine backfill failed, falling back to V1: {e}")
+        await log_service.warning("balance_history", f"Engine backfill failed ({e}), using V1 collector")
+
+        # V1 fallback
+        job_id = await balance_history_service.collect_history(
+            user_id=user_id,
+            blockchain=blockchain,
+            max_days_back=max_days,
+            force=force,
+        )
+        return {"status": "started", "job_id": job_id}
 
 
 @router.get("/collect/status")
 async def collection_status(user_id: int = Depends(verify_session)):
-    """Poll the current balance history collection job status."""
+    """Poll the current balance history collection job status.
+
+    Checks engine backfill status first, falls back to V1 job status.
+    """
     username = await get_username_by_user_id(user_id)
     if username and await is_demo_user(username):
         return {"status": "completed", "progress": 100, "step": "Demo data loaded"}
 
+    # Try engine backfill status first
+    try:
+        from engine import db as engine_db
+        backfills = await engine_db.get_user_backfills(user_id)
+        if backfills:
+            latest = backfills[0]  # Sorted by created_at DESC
+            status = latest['status']
+
+            step_map = {
+                'planning': 'Planning backfill...',
+                'running': 'Processing transactions...',
+                'completed': 'Collection complete',
+                'failed': 'Collection failed',
+                'cancelled': 'Cancelled',
+            }
+
+            return {
+                "job_id": latest['id'],
+                "status": status,
+                "progress": latest.get('progress_pct', 0),
+                "step": step_map.get(status, status),
+                "total_items": latest.get('total_work_units', 0),
+                "processed_items": latest.get('completed_work_units', 0),
+                "error_message": latest.get('error_message'),
+            }
+    except Exception as e:
+        logger.debug(f"Engine status check failed: {e}")
+
+    # V1 fallback
     job = await get_latest_balance_history_job(user_id)
     if not job:
         return {"status": "idle", "progress": 0, "step": "No collection started"}
@@ -84,6 +145,20 @@ async def cancel_collection(user_id: int = Depends(verify_session)):
     """Cancel a running balance history collection."""
     logger.info(f"Balance history collection cancel requested: user={user_id}")
     await log_service.info("balance_history", f"Collection cancel requested: user={user_id}")
+
+    # Try cancelling engine backfill
+    try:
+        from engine import db as engine_db
+        from engine.orchestrator import backfill_orchestrator
+        backfills = await engine_db.get_user_backfills(user_id)
+        for bf in backfills:
+            if bf['status'] in ('planning', 'running'):
+                await backfill_orchestrator.cancel_backfill(bf['id'])
+                return {"status": "cancelled"}
+    except Exception as e:
+        logger.debug(f"Engine cancel failed: {e}")
+
+    # V1 fallback
     await balance_history_service.cancel_collection(user_id)
     return {"status": "cancelled"}
 
@@ -91,13 +166,14 @@ async def cancel_collection(user_id: int = Depends(verify_session)):
 @router.get("/data")
 async def get_history_data(
     user_id: int = Depends(verify_session),
-    range: str = Query("1y", description="Time range: 3m, 1y, 2y, all, custom"),
+    range: str = Query("1y", description="Time range: 24h, 1w, 1m, 3m, 6m, 1y, 2y, all"),
     start_date: str = Query(None, description="Start date for custom range (YYYY-MM-DD)"),
     end_date: str = Query(None, description="End date for custom range (YYYY-MM-DD)"),
 ):
     """Get aggregated balance history data for chart rendering.
 
-    Returns daily total values with per-chain breakdown.
+    Uses the V2 engine (canonical events + price history) as primary source.
+    Falls back to V1 balance_history table if engine has no data.
     """
     # Demo users get pre-generated fake history
     username = await get_username_by_user_id(user_id)
@@ -127,14 +203,25 @@ async def get_history_data(
         }
 
     logger.info(f"Balance history data requested: user={user_id}, range={range}")
+
+    # Try V2 engine first
+    try:
+        from engine import db as engine_db
+        from engine.orchestrator import backfill_orchestrator
+
+        event_count = await engine_db.get_event_count(user_id)
+        if event_count > 0:
+            result = await backfill_orchestrator.get_history_data(user_id, range)
+            if result.get('data'):
+                logger.info(f"Serving history from engine: {len(result['data'])} data points")
+                return result
+    except Exception as e:
+        logger.warning(f"Engine history failed, falling back to V1: {e}")
+
+    # V1 fallback
     range_to_days = {
-        '24h': 1,
-        '1w': 7,
-        '1m': 30,
-        '3m': 90,
-        '6m': 180,
-        '1y': 365,
-        '2y': 730,
+        '24h': 1, '1w': 7, '1m': 30, '3m': 90,
+        '6m': 180, '1y': 365, '2y': 730,
     }
     days = range_to_days.get(range)  # None for 'all' and 'custom'
 
@@ -149,10 +236,10 @@ async def get_history_data(
 
 @router.post("/backfill-prices")
 async def backfill_prices(user_id: int = Depends(verify_session)):
-    """Re-fetch CoinGecko prices for records missing price data.
+    """Re-fetch prices for records missing price data.
 
-    Finds all balance_history records with native_price_usd = 0 and
-    fetches historical prices in 90-day chunks from CoinGecko.
+    Uses DefiLlama (free) -> CoinGecko fallback via the engine's price enricher.
+    Also backfills prices in V1 balance_history table.
     """
     username = await get_username_by_user_id(user_id)
     if username and await is_demo_user(username):
@@ -160,7 +247,44 @@ async def backfill_prices(user_id: int = Depends(verify_session)):
 
     logger.info(f"Price backfill requested: user={user_id}")
     await log_service.info("balance_history", f"Price backfill requested: user={user_id}")
+
+    # Engine price enrichment for engine_events
+    engine_enriched = 0
+    try:
+        from engine import db as engine_db
+        from engine.enrichment.price_enricher import price_enricher
+
+        event_count = await engine_db.get_event_count(user_id)
+        if event_count > 0:
+            # Find dates with events but no prices
+            events = await engine_db.get_events(user_id, limit=500000)
+            dates_by_chain = {}
+            for evt in events:
+                if evt.get('block_time') and evt.get('asset_id') == 'native':
+                    from datetime import datetime
+                    dt = datetime.utcfromtimestamp(evt['block_time'])
+                    date_str = dt.strftime('%Y-%m-%d')
+                    chain = evt['chain']
+                    if chain not in dates_by_chain:
+                        dates_by_chain[chain] = set()
+                    dates_by_chain[chain].add(date_str)
+
+            chain_to_symbol = {
+                'cardano': 'ADA', 'bitcoin': 'BTC', 'ethereum': 'ETH',
+                'solana': 'SOL', 'polygon': 'MATIC', 'base': 'ETH',
+            }
+            for chain, dates in dates_by_chain.items():
+                symbol = chain_to_symbol.get(chain)
+                if symbol:
+                    prices = await price_enricher.fetch_historical_prices_batch(symbol, sorted(dates))
+                    engine_enriched += len(prices)
+                    logger.info(f"Engine: enriched {len(prices)} {symbol} prices")
+    except Exception as e:
+        logger.warning(f"Engine price enrichment failed: {e}")
+
+    # Also backfill V1 balance_history prices
     result = await balance_history_service.backfill_prices(user_id)
+    result['engine_enriched'] = engine_enriched
     return result
 
 
@@ -168,8 +292,20 @@ async def backfill_prices(user_id: int = Depends(verify_session)):
 async def get_coverage(user_id: int = Depends(verify_session)):
     """Get per-wallet collection coverage info."""
     logger.info(f"Balance history coverage requested: user={user_id}")
+
+    # Include engine coverage info
+    engine_info = {}
+    try:
+        from engine import db as engine_db
+        event_count = await engine_db.get_event_count(user_id)
+        engine_info['engine_events'] = event_count
+        subjects = await engine_db.get_account_subjects(user_id)
+        engine_info['engine_accounts'] = len(subjects)
+    except Exception:
+        pass
+
     wallets = await get_balance_history_coverage(user_id)
-    return {"wallets": wallets}
+    return {"wallets": wallets, "engine": engine_info}
 
 
 # ------------------------------------------------------------------
@@ -197,10 +333,7 @@ async def set_schedule(
     body: ScheduleRequest,
     user_id: int = Depends(verify_session),
 ):
-    """Set the balance history auto-collection schedule.
-
-    Starts or stops the scheduler task accordingly.
-    """
+    """Set the balance history auto-collection schedule."""
     await set_user_setting(user_id, 'balance_history_schedule_enabled', '1' if body.enabled else '0')
     await set_user_setting(user_id, 'balance_history_schedule_hours', str(body.interval_hours))
 
