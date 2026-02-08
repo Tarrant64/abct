@@ -1036,6 +1036,8 @@ function renderWallets(wallets) {
 
 // Render wallets grouped by stake key (Cardano) and individual (Bitcoin, Ethereum, Solana, Polygon, Base)
 function renderWalletsGrouped(cardanoStakeGroups, bitcoinWallets, ethereumWallets = [], solanaWallets = [], polygonWallets = [], baseWallets = []) {
+    if (!walletsList) return;
+
     const allEmpty = cardanoStakeGroups.length === 0 && bitcoinWallets.length === 0 && ethereumWallets.length === 0 && solanaWallets.length === 0 && polygonWallets.length === 0 && baseWallets.length === 0;
 
     if (allEmpty) {
