@@ -245,19 +245,25 @@ class SnapshotService:
         """Get total staking value from cached data."""
         try:
             from database import get_cache
-            # Try to get cached staking data
             wallets = await get_all_wallets(user_id=user_id)
             total_usd = 0.0
 
             for wallet in wallets:
                 if wallet['blockchain'] == 'cardano':
                     cache_key = f"staking_positions_{wallet['address']}"
+                    # Staking endpoint caches without user_id, try both
                     cached = await get_cache(cache_key, user_id=user_id)
-                    if cached and 'positions' in cached:
-                        for pos in cached['positions']:
-                            amount = float(pos.get('staked_amount', 0))
-                            token = pos.get('token', 'ADA')
-                            price = prices.get(token, {}).get('usd', 0)
+                    if not cached:
+                        cached = await get_cache(cache_key)
+                    if not cached:
+                        continue
+                    # Cache structure: {protocols: {ProtocolName: {staked: [{token, amount}]}}}
+                    for protocol_name, protocol_data in (cached.get('protocols') or {}).items():
+                        for stake in (protocol_data.get('staked') or []):
+                            amount = float(stake.get('amount', 0))
+                            token = stake.get('token', 'ADA')
+                            price_data = prices.get(token, {})
+                            price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
                             total_usd += amount * price
 
             return total_usd
@@ -270,9 +276,22 @@ class SnapshotService:
         try:
             from database import get_cache
             cached = await get_cache("defi_summary", user_id=user_id)
-            if cached and 'total_value_usd' in cached:
+            if not cached:
+                return 0.0
+            # Use pre-calculated total if available
+            if 'total_value_usd' in cached:
                 return float(cached['total_value_usd'])
-            return 0.0
+            # Calculate from positions using prices (defi/summary doesn't store total_value_usd)
+            total = 0.0
+            positions_by_category = cached.get('positions_by_category', {})
+            for category, positions in positions_by_category.items():
+                for pos in positions:
+                    token = pos.get('token') or pos.get('asset_name', '')
+                    quantity = float(pos.get('quantity', 0))
+                    price_data = prices.get(token, {})
+                    price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
+                    total += quantity * price
+            return total
         except Exception as e:
             logger.debug(f"Could not get DeFi value: {e}")
             return 0.0
@@ -492,34 +511,26 @@ class SnapshotService:
                 sf(s.get('sol_amount')) * sf(s.get('sol_price'))
             )
 
-            # Recalculate exchange value using historical prices
-            exchange_btc = sf(s.get('exchange_btc_amount'))
-            exchange_eth = sf(s.get('exchange_eth_amount'))
-            exchange_ada = sf(s.get('exchange_ada_amount'))
-            exchange_sol = sf(s.get('exchange_sol_amount'))
-            exchange_matic = sf(s.get('exchange_matic_amount'))
-
-            exchange_value = (
-                exchange_btc * sf(s['btc_price']) +
-                exchange_eth * sf(s['eth_price']) +
-                exchange_ada * sf(s['ada_price']) +
-                exchange_sol * sf(s.get('sol_price')) +
-                exchange_matic * sf(s.get('matic_price'))
-            )
-
-            # Parse exchange other currencies JSON if present
-            try:
-                exchange_other = json.loads(s.get('exchange_other_json', '{}'))
-                # For "other" currencies we don't have historical prices, use stored USD value
-                # This is a limitation but better than nothing
-            except:
-                exchange_other = {}
-
-            # Fall back to stored exchange_value_usd if recalculated is 0
-            # (generated/backfilled snapshots may have aggregate value but not per-asset amounts)
+            # Exchange value: prefer stored aggregate (per-asset amounts may be corrupted
+            # by migration 005 column reorder). Only recalculate if no stored value.
             stored_exchange_usd = sf(s.get('exchange_value_usd'))
-            if exchange_value == 0 and stored_exchange_usd > 0:
+            if stored_exchange_usd > 0:
                 exchange_value = stored_exchange_usd
+            else:
+                # Fallback: recalculate from per-asset amounts (only for snapshots without aggregate)
+                exchange_btc = sf(s.get('exchange_btc_amount'))
+                exchange_eth = sf(s.get('exchange_eth_amount'))
+                exchange_ada = sf(s.get('exchange_ada_amount'))
+                exchange_sol = sf(s.get('exchange_sol_amount'))
+                exchange_matic = sf(s.get('exchange_matic_amount'))
+
+                exchange_value = (
+                    exchange_btc * sf(s['btc_price']) +
+                    exchange_eth * sf(s['eth_price']) +
+                    exchange_ada * sf(s['ada_price']) +
+                    exchange_sol * sf(s.get('sol_price')) +
+                    exchange_matic * sf(s.get('matic_price'))
+                )
 
             # Recalculate tracked tokens value using historical prices
             tracked_tokens_value = 0
@@ -536,7 +547,7 @@ class SnapshotService:
             staking_usd = sf(s.get('staking_value_usd'))
             defi_usd = sf(s.get('defi_value_usd'))
             nft_usd = sf(s.get('nft_value_usd'))
-            total_value = (
+            recalculated_total = (
                 wallet_value +
                 staking_usd +
                 defi_usd +
@@ -544,6 +555,20 @@ class SnapshotService:
                 nft_usd +
                 tracked_tokens_value
             )
+
+            # Sanity check: migration 005 may have corrupted per-column data via
+            # SELECT * with mismatched column order. If recalculated total is wildly
+            # different from stored total, prefer the stored value (calculated at
+            # snapshot time before any migration corruption).
+            stored_total = sf(s.get('total_value_usd'))
+            if stored_total > 0 and recalculated_total > stored_total * 5:
+                # Recalculated is 5x+ higher than stored — likely corrupted columns
+                total_value = stored_total
+            elif stored_total > 0 and recalculated_total < stored_total * 0.1:
+                # Recalculated is less than 10% of stored — likely missing components
+                total_value = stored_total
+            else:
+                total_value = recalculated_total
 
             # For hourly data (days=1), use snapshot_time for labels
             # For daily data (days>1), use snapshot_date
@@ -822,36 +847,17 @@ class SnapshotService:
         """
         logger.info(f"Backfilling historical snapshots with component values for user {user_id}...")
 
-        # Get all existing snapshots for this user
-        snapshots = await get_portfolio_history(365, user_id=user_id)  # Get up to a year
+        # Get ALL existing snapshots (hourly) for this user, not just one per day
+        snapshots = await get_portfolio_history(365, user_id=user_id, hourly=True)
 
-        # Find component values from the most recent snapshot that has them,
-        # rather than relying on cache-based helpers which may return 0
+        # Get current component values from cache (live data)
         staking_value = 0.0
         defi_value = 0.0
         exchange_value = 0.0
         nft_value = 0.0
         tracked_tokens_value = 0.0
 
-        for snap in reversed(snapshots):
-            components_sum = (
-                (snap.get('staking_value_usd') or 0) +
-                (snap.get('defi_value_usd') or 0) +
-                (snap.get('exchange_value_usd') or 0) +
-                (snap.get('nft_value_usd') or 0)
-            )
-            if components_sum > 100:  # Has meaningful component values
-                staking_value = float(snap.get('staking_value_usd') or 0)
-                defi_value = float(snap.get('defi_value_usd') or 0)
-                exchange_value = float(snap.get('exchange_value_usd') or 0)
-                nft_value = float(snap.get('nft_value_usd') or 0)
-                tracked_tokens_value = float(snap.get('tracked_tokens_value_usd') or 0)
-                logger.info(f"Using component values from snapshot {snap.get('snapshot_date')}")
-                break
-
-        # Fallback to cache-based helpers if no snapshot had values
-        if staking_value == 0 and defi_value == 0 and exchange_value == 0 and nft_value == 0:
-            logger.info("No snapshots with component values, trying cache...")
+        try:
             pricing = await self._get_pricing_service()
             prices = await pricing.get_all_tracked_prices()
             ada_price = prices.get('ADA', {}).get('usd', 0)
@@ -860,6 +866,36 @@ class SnapshotService:
             exchange_value = await self._get_exchange_value(prices, user_id=user_id)
             nft_value = await self._get_nft_value(ada_price, user_id=user_id)
             tracked_tokens_value = await self._get_tracked_tokens_value(prices, user_id=user_id)
+            logger.info(f"Cache values: staking=${staking_value:.2f}, defi=${defi_value:.2f}, "
+                       f"exchange=${exchange_value:.2f}, nfts=${nft_value:.2f}")
+        except Exception as e:
+            logger.warning(f"Cache-based helpers failed: {e}")
+
+        # For any component still at 0, scan snapshots (newest first) for a non-zero value
+        for snap in reversed(snapshots):
+            if staking_value < 1:
+                v = float(snap.get('staking_value_usd') or 0)
+                if v >= 1:
+                    staking_value = v
+            if defi_value < 1:
+                v = float(snap.get('defi_value_usd') or 0)
+                if v >= 1:
+                    defi_value = v
+            if exchange_value < 1:
+                v = float(snap.get('exchange_value_usd') or 0)
+                if v >= 1:
+                    exchange_value = v
+            if nft_value < 1:
+                v = float(snap.get('nft_value_usd') or 0)
+                if v >= 1:
+                    nft_value = v
+            if tracked_tokens_value < 1:
+                v = float(snap.get('tracked_tokens_value_usd') or 0)
+                if v >= 1:
+                    tracked_tokens_value = v
+            # Stop once we have all components
+            if all(v >= 1 for v in [staking_value, defi_value, exchange_value, nft_value]):
+                break
 
         total_components = staking_value + defi_value + exchange_value + nft_value + tracked_tokens_value
 
@@ -870,16 +906,24 @@ class SnapshotService:
         for snapshot in snapshots:
             date_str = snapshot['snapshot_date']
 
-            # Skip if already has component values (sum of components > 0)
-            existing_components = (
-                snapshot.get('staking_value_usd', 0) +
-                snapshot.get('defi_value_usd', 0) +
-                snapshot.get('exchange_value_usd', 0) +
-                snapshot.get('nft_value_usd', 0) +
-                (snapshot.get('tracked_tokens_value_usd', 0) or 0)
-            )
+            # Check each component individually — update any that are missing/zero
+            snap_staking = float(snapshot.get('staking_value_usd') or 0)
+            snap_defi = float(snapshot.get('defi_value_usd') or 0)
+            snap_exchange = float(snapshot.get('exchange_value_usd') or 0)
+            snap_nft = float(snapshot.get('nft_value_usd') or 0)
+            snap_tokens = float(snapshot.get('tracked_tokens_value_usd') or 0)
 
-            if existing_components > 100:  # Already has meaningful component values
+            # Determine which components need filling
+            new_staking = staking_value if snap_staking < 1 and staking_value > 0 else snap_staking
+            new_defi = defi_value if snap_defi < 1 and defi_value > 0 else snap_defi
+            new_exchange = exchange_value if snap_exchange < 1 and exchange_value > 0 else snap_exchange
+            new_nft = nft_value if snap_nft < 1 and nft_value > 0 else snap_nft
+            new_tokens = tracked_tokens_value if snap_tokens < 1 and tracked_tokens_value > 0 else snap_tokens
+
+            # Skip if nothing changed
+            if (new_staking == snap_staking and new_defi == snap_defi and
+                new_exchange == snap_exchange and new_nft == snap_nft and
+                new_tokens == snap_tokens):
                 continue
 
             # Use aggregate USD values for non-wallet components (no per-asset recalculation).
@@ -890,7 +934,7 @@ class SnapshotService:
                 (snapshot['eth_amount'] or 0) * (snapshot['eth_price'] or 0) +
                 (snapshot.get('sol_amount', 0) or 0) * (snapshot.get('sol_price', 0) or 0)
             )
-            new_total = wallet_value + staking_value + defi_value + exchange_value + nft_value + tracked_tokens_value
+            new_total = wallet_value + new_staking + new_defi + new_exchange + new_nft + new_tokens
 
             # Update the snapshot
             snapshot_data = {
@@ -905,11 +949,11 @@ class SnapshotService:
                 'eth_price': snapshot['eth_price'],
                 'sol_amount': snapshot.get('sol_amount', 0) or 0,
                 'sol_price': snapshot.get('sol_price', 0) or 0,
-                'staking_value_usd': staking_value,
-                'defi_value_usd': defi_value,
-                'exchange_value_usd': exchange_value,
-                'nft_value_usd': nft_value,
-                'tracked_tokens_value_usd': tracked_tokens_value,
+                'staking_value_usd': new_staking,
+                'defi_value_usd': new_defi,
+                'exchange_value_usd': new_exchange,
+                'nft_value_usd': new_nft,
+                'tracked_tokens_value_usd': new_tokens,
             }
 
             await save_portfolio_snapshot(snapshot_data, user_id=user_id)

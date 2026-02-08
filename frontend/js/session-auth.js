@@ -139,146 +139,73 @@ function isDemoMode() {
 }
 
 /**
- * Add admin dropdown menu to navigation
- * Call this after page loads to add admin dropdown to existing nav
+ * Initialize user avatar in the new nav header.
+ * Populates avatar letter, username, hides change-password in demo mode.
  */
-function addLogoutButton() {
+function initUserAvatar() {
     const username = getCurrentUsername();
     if (!username) return;
 
-    // Find the header actions container
-    const headerActions = document.querySelector('.header-actions');
-    if (!headerActions) return;
-
-    // Check if admin menu already exists
-    if (document.getElementById('adminMenu')) return;
-
-    // Create admin dropdown container
-    const adminContainer = document.createElement('div');
-    adminContainer.className = 'admin-menu-container';
-    adminContainer.style.cssText = 'position: relative; display: inline-block;';
-
-    // Create admin button
-    const adminBtn = document.createElement('button');
-    adminBtn.id = 'adminMenuBtn';
-    adminBtn.className = 'btn btn-secondary';
-    adminBtn.textContent = `${username} ▼`;
-    adminBtn.title = 'Admin menu';
-    adminBtn.onclick = (e) => {
-        e.stopPropagation();
-        toggleAdminMenu();
-    };
-
-    // Create dropdown menu
-    const dropdown = document.createElement('div');
-    dropdown.id = 'adminMenu';
-    dropdown.className = 'admin-dropdown';
-    dropdown.style.cssText = `
-        display: none;
-        position: absolute;
-        right: 0;
-        top: 100%;
-        margin-top: 5px;
-        background: var(--bg-card);
-        border: 1px solid var(--border-color);
-        border-radius: 6px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        min-width: 180px;
-        z-index: 1000;
-    `;
-
-    // Change Password option (hide for demo mode)
-    const changePasswordBtn = document.createElement('button');
-    changePasswordBtn.className = 'admin-menu-item';
-    changePasswordBtn.textContent = 'Change Password';
-    changePasswordBtn.style.cssText = `
-        width: 100%;
-        padding: 10px 16px;
-        text-align: left;
-        background: none;
-        border: none;
-        color: var(--text-primary);
-        cursor: pointer;
-        font-size: 14px;
-        transition: background 0.2s;
-    `;
-    changePasswordBtn.onmouseover = () => changePasswordBtn.style.background = 'rgba(255,255,255,0.05)';
-    changePasswordBtn.onmouseout = () => changePasswordBtn.style.background = 'none';
-    changePasswordBtn.onclick = () => {
-        toggleAdminMenu();
-        if (isDemoMode()) {
-            alert('Cannot change password in demo mode');
-            return;
-        }
-        showChangePasswordModal();
-    };
-
-    // Logout option
-    const logoutBtn = document.createElement('button');
-    logoutBtn.className = 'admin-menu-item';
-    logoutBtn.textContent = 'Logout';
-    logoutBtn.style.cssText = `
-        width: 100%;
-        padding: 10px 16px;
-        text-align: left;
-        background: none;
-        border: none;
-        color: var(--text-primary);
-        cursor: pointer;
-        font-size: 14px;
-        border-top: 1px solid var(--border-color);
-        transition: background 0.2s;
-    `;
-    logoutBtn.onmouseover = () => logoutBtn.style.background = 'rgba(255,255,255,0.05)';
-    logoutBtn.onmouseout = () => logoutBtn.style.background = 'none';
-    logoutBtn.onclick = () => {
-        toggleAdminMenu();
-        logout();
-    };
-
-    // Only add change password button if not in demo mode
-    if (!isDemoMode()) {
-        dropdown.appendChild(changePasswordBtn);
-    }
-    dropdown.appendChild(logoutBtn);
-    adminContainer.appendChild(adminBtn);
-    adminContainer.appendChild(dropdown);
-
-    // Add to header (before waffle menu)
-    const waffleContainer = headerActions.querySelector('.waffle-menu-container');
-    if (waffleContainer) {
-        headerActions.insertBefore(adminContainer, waffleContainer);
-    } else {
-        headerActions.appendChild(adminContainer);
+    // Set avatar letter
+    const avatar = document.getElementById('userAvatar');
+    if (avatar) {
+        avatar.textContent = username.charAt(0).toUpperCase();
     }
 
-    // Close dropdown when clicking outside
-    document.addEventListener('click', (e) => {
-        if (!adminContainer.contains(e.target)) {
-            closeAdminMenu();
-        }
-    });
+    // Set username in dropdown
+    const menuName = document.getElementById('userMenuName');
+    if (menuName) {
+        menuName.textContent = username;
+    }
+
+    // Hide change password in demo mode
+    if (isDemoMode()) {
+        const cpItem = document.getElementById('changePasswordMenuItem');
+        if (cpItem) cpItem.style.display = 'none';
+    }
+
+    // Sync privacy mode indicator
+    syncPrivacyIndicator();
 }
 
 /**
- * Toggle admin dropdown menu
+ * Toggle user avatar dropdown menu
  */
-function toggleAdminMenu() {
-    const menu = document.getElementById('adminMenu');
+function toggleUserMenu() {
+    const menu = document.getElementById('userMenu');
     if (menu) {
-        menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+        menu.classList.toggle('active');
     }
 }
 
 /**
- * Close admin dropdown menu
+ * Close user avatar dropdown menu
  */
-function closeAdminMenu() {
-    const menu = document.getElementById('adminMenu');
+function closeUserMenu() {
+    const menu = document.getElementById('userMenu');
     if (menu) {
-        menu.style.display = 'none';
+        menu.classList.remove('active');
     }
 }
+
+/**
+ * Sync privacy mode indicator text in avatar dropdown
+ */
+function syncPrivacyIndicator() {
+    const indicator = document.getElementById('privacyIndicator');
+    if (indicator) {
+        const isEnabled = document.body.classList.contains('privacy-mode');
+        indicator.textContent = isEnabled ? 'ON' : 'OFF';
+    }
+}
+
+// Close user menu when clicking outside
+document.addEventListener('click', function(event) {
+    const container = document.querySelector('.user-avatar-container');
+    if (container && !container.contains(event.target)) {
+        closeUserMenu();
+    }
+});
 
 /**
  * Initialize authentication on page load
@@ -308,8 +235,8 @@ async function initAuth() {
     const isAuthenticated = await checkAuth();
 
     if (isAuthenticated) {
-        // Add admin dropdown to navigation
-        addLogoutButton();
+        // Initialize user avatar in nav header
+        initUserAvatar();
 
         // Add demo mode banner if in demo mode
         if (isDemoMode()) {
@@ -513,21 +440,17 @@ function addDemoBanner() {
         top: 0;
         left: 0;
         right: 0;
-        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-        color: #000;
-        padding: 12px 20px;
+        background: rgba(217, 119, 6, 0.15);
+        color: #d97706;
+        padding: 4px 16px;
         text-align: center;
-        font-weight: 600;
-        font-size: 14px;
-        z-index: 9999;
-        box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
-        border-bottom: 2px solid #b45309;
+        font-weight: 500;
+        font-size: 11px;
+        z-index: 999;
+        letter-spacing: 0.5px;
+        border-bottom: 1px solid rgba(217, 119, 6, 0.2);
     `;
-    banner.innerHTML = `
-        <span style="font-size: 18px; margin-right: 8px;">🎭</span>
-        DEMO MODE - All data is simulated for demonstration purposes
-        <span style="font-size: 18px; margin-left: 8px;">🎭</span>
-    `;
+    banner.innerHTML = `DEMO MODE - Simulated data`;
 
     // Insert at the very top of the body
     document.body.insertBefore(banner, document.body.firstChild);
@@ -710,7 +633,10 @@ window.checkAuth = checkAuth;
 window.logout = logout;
 window.getCurrentUsername = getCurrentUsername;
 window.isDemoMode = isDemoMode;
-window.addLogoutButton = addLogoutButton;
+window.initUserAvatar = initUserAvatar;
+window.toggleUserMenu = toggleUserMenu;
+window.closeUserMenu = closeUserMenu;
+window.syncPrivacyIndicator = syncPrivacyIndicator;
 window.initAuth = initAuth;
 window.showChangePasswordModal = showChangePasswordModal;
 window.closeChangePasswordModal = closeChangePasswordModal;
