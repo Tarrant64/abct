@@ -896,6 +896,61 @@ async def init_db():
             ON service_rate_limits(rate_limited_until)
         """)
 
+        # V2 balance history — daily on-chain balance snapshots
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS balance_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                wallet_id INTEGER NOT NULL,
+                blockchain TEXT NOT NULL,
+                balance_date TEXT NOT NULL,
+                native_amount REAL DEFAULT 0,
+                native_symbol TEXT,
+                native_price_usd REAL DEFAULT 0,
+                native_value_usd REAL DEFAULT 0,
+                token_value_usd REAL DEFAULT 0,
+                total_value_usd REAL DEFAULT 0,
+                data_source TEXT,
+                metadata TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, wallet_id, balance_date)
+            )
+        """)
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_balance_history_user_date
+            ON balance_history(user_id, balance_date)
+        """)
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_balance_history_wallet
+            ON balance_history(user_id, wallet_id, balance_date)
+        """)
+
+        # V2 balance history collection jobs
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS balance_history_jobs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                wallet_id INTEGER,
+                blockchain TEXT,
+                status TEXT DEFAULT 'running',
+                progress INTEGER DEFAULT 0,
+                step TEXT,
+                total_items INTEGER DEFAULT 0,
+                processed_items INTEGER DEFAULT 0,
+                error_message TEXT,
+                started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                completed_at TIMESTAMP
+            )
+        """)
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_balance_history_jobs_user
+            ON balance_history_jobs(user_id, started_at DESC)
+        """)
+
         await db.commit()
 
 async def get_db():

@@ -1289,8 +1289,123 @@
 }
 
 html {
-    scrollbar-gutter: stable;
+    /* Force scrollbar always visible so the fixed nav doesn't shift
+       when scrollbar appears/disappears between pages */
+    overflow-y: scroll;
 }
+
+/* ---- Custom Scrollbar ---- */
+/* Selectors must attach directly to html (no space before ::) since
+   the page scrollbar belongs to the <html> element itself. */
+
+/* WebKit base (Chrome, Safari, Edge) — Dark Mode default */
+html::-webkit-scrollbar {
+    width: 10px;
+}
+html::-webkit-scrollbar-track {
+    background: #1a1a2e;
+}
+html::-webkit-scrollbar-thumb {
+    border-radius: 6px;
+    border: 2px solid #1a1a2e;
+    background: linear-gradient(180deg, #00d26a 0%, #2a2a4a 50%, #00d26a 100%);
+}
+html::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #00d26a 0%, #3a4a6a 50%, #00d26a 100%);
+}
+html::-webkit-scrollbar-thumb:active {
+    background: #00d26a;
+}
+
+/* Firefox */
+html {
+    scrollbar-width: thin;
+    scrollbar-color: #2a2a4a #1a1a2e;
+}
+
+/* Light */
+html[data-theme="light"]::-webkit-scrollbar-track { background: #f5f7fa; }
+html[data-theme="light"]::-webkit-scrollbar-thumb {
+    border-color: #f5f7fa;
+    background: linear-gradient(180deg, #00b894 0%, #d1d5db 50%, #00b894 100%);
+}
+html[data-theme="light"]::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #00b894 0%, #a0c4b8 50%, #00b894 100%);
+}
+html[data-theme="light"]::-webkit-scrollbar-thumb:active { background: #00b894; }
+html[data-theme="light"] { scrollbar-color: #d1d5db #f5f7fa; }
+
+/* Ocean Depths */
+html[data-theme="ocean-depths"]::-webkit-scrollbar-track { background: #0a1628; }
+html[data-theme="ocean-depths"]::-webkit-scrollbar-thumb {
+    border-color: #0a1628;
+    background: linear-gradient(180deg, #00b4d8 0%, #1a4a6e 50%, #06d6a0 100%);
+}
+html[data-theme="ocean-depths"]::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #00b4d8 0%, #2a6a8e 50%, #06d6a0 100%);
+}
+html[data-theme="ocean-depths"]::-webkit-scrollbar-thumb:active { background: #00b4d8; }
+html[data-theme="ocean-depths"] { scrollbar-color: #1a4a6e #0a1628; }
+
+/* Sunset Horizon */
+html[data-theme="sunset-horizon"]::-webkit-scrollbar-track { background: #1a0a1a; }
+html[data-theme="sunset-horizon"]::-webkit-scrollbar-thumb {
+    border-color: #1a0a1a;
+    background: linear-gradient(180deg, #ff6b35 0%, #5c2a5c 50%, #06d6a0 100%);
+}
+html[data-theme="sunset-horizon"]::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #ff6b35 0%, #7c3a7c 50%, #06d6a0 100%);
+}
+html[data-theme="sunset-horizon"]::-webkit-scrollbar-thumb:active { background: #ff6b35; }
+html[data-theme="sunset-horizon"] { scrollbar-color: #5c2a5c #1a0a1a; }
+
+/* Cypherpunk 1 */
+html[data-theme="cypherpunk1"]::-webkit-scrollbar-track { background: #050510; }
+html[data-theme="cypherpunk1"]::-webkit-scrollbar-thumb {
+    border-color: #050510;
+    background: linear-gradient(180deg, #ea00d9 0%, #711c91 50%, #0abdc6 100%);
+}
+html[data-theme="cypherpunk1"]::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #ea00d9 0%, #9a2cc1 50%, #0abdc6 100%);
+}
+html[data-theme="cypherpunk1"]::-webkit-scrollbar-thumb:active { background: #ea00d9; }
+html[data-theme="cypherpunk1"] { scrollbar-color: #711c91 #050510; }
+
+/* Cypher */
+html[data-theme="cypher"]::-webkit-scrollbar-track { background: #000000; }
+html[data-theme="cypher"]::-webkit-scrollbar-thumb {
+    border-color: #000000;
+    background: linear-gradient(180deg, #a855f7 0%, #2a2a2a 50%, #00d26a 100%);
+}
+html[data-theme="cypher"]::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #a855f7 0%, #3a3a3a 50%, #00d26a 100%);
+}
+html[data-theme="cypher"]::-webkit-scrollbar-thumb:active { background: #a855f7; }
+html[data-theme="cypher"] { scrollbar-color: #2a2a2a #000000; }
+
+/* Cypher2 */
+html[data-theme="cypher2"]::-webkit-scrollbar-track { background: #000000; }
+html[data-theme="cypher2"]::-webkit-scrollbar-thumb {
+    border-color: #000000;
+    background: linear-gradient(180deg, #00d26a 0%, #2a2a2a 50%, #a855f7 100%);
+}
+html[data-theme="cypher2"]::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #00d26a 0%, #3a3a3a 50%, #a855f7 100%);
+}
+html[data-theme="cypher2"]::-webkit-scrollbar-thumb:active { background: #00d26a; }
+html[data-theme="cypher2"] { scrollbar-color: #2a2a2a #000000; }
+
+/* Cypher3 */
+html[data-theme="cypher3"]::-webkit-scrollbar-track { background: #000000; }
+html[data-theme="cypher3"]::-webkit-scrollbar-thumb {
+    border-color: #000000;
+    background: linear-gradient(180deg, #ffffff 0%, #2a2a2a 50%, #ffffff 100%);
+}
+html[data-theme="cypher3"]::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #ffffff 0%, #4a4a4a 50%, #ffffff 100%);
+}
+html[data-theme="cypher3"]::-webkit-scrollbar-thumb:active { background: #ffffff; }
+html[data-theme="cypher3"] { scrollbar-color: #2a2a2a #000000; }
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
