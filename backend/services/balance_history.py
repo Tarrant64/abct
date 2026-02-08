@@ -29,6 +29,8 @@ from database import (
     create_balance_history_job,
     update_balance_history_job,
     get_latest_balance_history_job,
+    get_unpriced_date_ranges,
+    update_balance_history_prices,
 )
 from services.api_key_manager import APIKeyManager
 from services.cardano import cardano_service
@@ -1109,6 +1111,8 @@ class BalanceHistoryService:
                                        start_date: str, end_date: str) -> Dict[str, float]:
         """Fetch daily historical prices from CoinGecko for a date range.
 
+        Splits ranges >90 days into 90-day chunks to avoid CoinGecko rate limits.
+
         Returns:
             Dict mapping date strings (YYYY-MM-DD) to USD price.
         """
@@ -1118,47 +1122,94 @@ class BalanceHistoryService:
 
         start_dt = datetime.strptime(start_date, '%Y-%m-%d')
         end_dt = datetime.strptime(end_date, '%Y-%m-%d')
-        # Add 1 day buffer to end
         end_dt = min(end_dt + timedelta(days=1), datetime.utcnow())
 
-        from_ts = int(start_dt.timestamp())
-        to_ts = int(end_dt.timestamp())
+        all_prices = {}
+        chunk_size = timedelta(days=90)
+        chunk_start = start_dt
+        chunk_num = 0
+        total_chunks = max(1, int((end_dt - start_dt).days / 90) + 1)
 
-        prices = {}
-        try:
-            client = get_client("coingecko_historical", timeout=60.0)
-            response = await fetch_with_retry(
-                client, "GET",
-                f"{COINGECKO_BASE_URL}/coins/{cg_id}/market_chart/range",
-                params={
-                    'vs_currency': 'usd',
-                    'from': from_ts,
-                    'to': to_ts,
-                }
-            )
+        while chunk_start < end_dt:
+            chunk_end = min(chunk_start + chunk_size, end_dt)
+            from_ts = int(chunk_start.timestamp())
+            to_ts = int(chunk_end.timestamp())
+            chunk_num += 1
 
-            if response.status_code == 200:
-                data = response.json()
-                for timestamp_ms, price in data.get('prices', []):
-                    dt = datetime.utcfromtimestamp(timestamp_ms / 1000)
-                    date_str = dt.strftime('%Y-%m-%d')
-                    # Keep the last price for each day (end-of-day)
-                    prices[date_str] = price
+            try:
+                client = get_client("coingecko_historical", timeout=60.0)
+                response = await fetch_with_retry(
+                    client, "GET",
+                    f"{COINGECKO_BASE_URL}/coins/{cg_id}/market_chart/range",
+                    params={
+                        'vs_currency': 'usd',
+                        'from': from_ts,
+                        'to': to_ts,
+                    }
+                )
 
-                logger.info(f"Fetched {len(prices)} historical prices for {symbol}")
-                await log_service.info("balance_history", f"CoinGecko: Fetched {len(prices)} historical prices for {symbol}")
-            elif response.status_code == 429:
-                logger.warning("CoinGecko rate limited during historical price fetch")
-                await log_service.warning("balance_history", f"CoinGecko rate limited (429) during historical price fetch for {symbol}")
-                await asyncio.sleep(60)
+                if response.status_code == 200:
+                    data = response.json()
+                    for timestamp_ms, price in data.get('prices', []):
+                        dt = datetime.utcfromtimestamp(timestamp_ms / 1000)
+                        all_prices[dt.strftime('%Y-%m-%d')] = price
+                    logger.info(f"Fetched {symbol} prices chunk {chunk_num}/{total_chunks} ({chunk_start.strftime('%Y-%m-%d')} to {chunk_end.strftime('%Y-%m-%d')})")
+                elif response.status_code == 429:
+                    logger.warning(f"CoinGecko rate limited on {symbol} chunk {chunk_num}/{total_chunks}, waiting 65s")
+                    await log_service.warning("balance_history", f"CoinGecko rate limited (429) on {symbol} chunk {chunk_num}, waiting 65s")
+                    await asyncio.sleep(65)
+                    continue  # Retry same chunk
+                else:
+                    logger.warning(f"CoinGecko historical range error: {response.status_code} for {symbol} chunk {chunk_num}")
+                    await log_service.warning("balance_history", f"CoinGecko error {response.status_code} for {symbol} chunk {chunk_num}/{total_chunks}")
+            except Exception as e:
+                logger.error(f"Error fetching historical prices for {symbol} chunk {chunk_num}: {e}")
+                await log_service.error("balance_history", f"Error fetching historical prices for {symbol} chunk {chunk_num}: {e}")
+
+            chunk_start = chunk_end
+            if chunk_start < end_dt:
+                await asyncio.sleep(2)  # Rate limit courtesy between chunks
+
+        logger.info(f"Fetched {len(all_prices)} total historical prices for {symbol}")
+        await log_service.info("balance_history", f"CoinGecko: Fetched {len(all_prices)} historical prices for {symbol} across {chunk_num} chunks")
+        return all_prices
+
+    # ------------------------------------------------------------------
+    # Price backfill
+    # ------------------------------------------------------------------
+
+    async def backfill_prices(self, user_id: int) -> dict:
+        """Re-fetch CoinGecko prices for all records with native_price_usd = 0.
+
+        Queries unpriced records grouped by symbol, fetches historical prices
+        in 90-day chunks, and bulk-updates the database.
+
+        Returns:
+            Dict with status and count of updated records.
+        """
+        unpriced = await get_unpriced_date_ranges(user_id)
+        if not unpriced:
+            logger.info(f"No unpriced records found for user {user_id}")
+            return {'status': 'nothing_to_backfill', 'updated': 0}
+
+        total_updated = 0
+        for group in unpriced:
+            symbol = group['symbol']
+            count = group['count']
+            logger.info(f"Backfilling {count} {symbol} records ({group['min_date']} to {group['max_date']})")
+            await log_service.info("balance_history", f"Backfilling {count} {symbol} records ({group['min_date']} to {group['max_date']})")
+
+            prices = await self._fetch_historical_prices(symbol, group['min_date'], group['max_date'])
+            if prices:
+                updated = await update_balance_history_prices(user_id, symbol, prices)
+                total_updated += updated
+                logger.info(f"Backfilled {updated}/{count} {symbol} prices")
+                await log_service.info("balance_history", f"Backfilled {updated}/{count} {symbol} prices")
             else:
-                logger.warning(f"CoinGecko historical range error: {response.status_code}")
-                await log_service.warning("balance_history", f"CoinGecko historical range error: {response.status_code} for {symbol}")
-        except Exception as e:
-            logger.error(f"Error fetching historical prices for {symbol}: {e}")
-            await log_service.error("balance_history", f"Error fetching historical prices for {symbol}: {e}")
+                logger.warning(f"No prices fetched for {symbol}, skipping backfill")
+                await log_service.warning("balance_history", f"No prices fetched for {symbol} during backfill")
 
-        return prices
+        return {'status': 'completed', 'updated': total_updated}
 
     # ------------------------------------------------------------------
     # Scheduler
