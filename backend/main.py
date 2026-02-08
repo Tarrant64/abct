@@ -614,7 +614,8 @@ async def get_startup_status():
 async def api_status():
     """Get API status and configuration."""
     from config import NFT_IMAGE_DB_PATH
-    from routers.settings import get_effective_api_key
+    from database import get_all_api_settings
+    from routers.settings import API_REGISTRY
     from services.nft_image_service import nft_image_service
 
     # Check NFT image cache status
@@ -625,24 +626,26 @@ async def api_status():
         pass
 
     # Check API keys from both database and env vars
-    blockfrost_key = await get_effective_api_key("blockfrost")
-    cexplorer_key = await get_effective_api_key("cexplorer")
-    coinbase_key = await get_effective_api_key("coinbase")
-    alchemy_key = await get_effective_api_key("alchemy")
-    helius_key = await get_effective_api_key("helius")
+    # Same pattern as the working /api/apis endpoint
+    saved_settings = await get_all_api_settings()
+    saved_map = {s['api_name']: s for s in saved_settings}
+
+    status_apis = {}
+    check_apis = ['blockfrost', 'cexplorer', 'blockstream', 'coinbase', 'alchemy', 'helius']
+    for api_id in check_apis:
+        if api_id == 'blockstream':
+            status_apis[api_id] = 'available'  # No key required
+            continue
+        saved = saved_map.get(api_id)
+        has_db_key = bool(saved and saved.get('api_key'))
+        has_env_key = bool(os.getenv(API_REGISTRY.get(api_id, {}).get('env_var', ''), '')) if api_id in API_REGISTRY else False
+        status_apis[api_id] = 'configured' if (has_db_key or has_env_key) else 'missing'
 
     return {
         "status": "running",
-        "apis": {
-            "blockfrost": "configured" if blockfrost_key else "missing",
-            "cexplorer": "configured" if cexplorer_key else "missing",
-            "blockstream": "available",  # No key required
-            "coinbase": "configured" if coinbase_key else "missing",
-            "alchemy": "configured" if alchemy_key else "missing",
-            "helius": "configured" if helius_key else "missing"
-        },
+        "apis": status_apis,
         "supported_blockchains": ["cardano", "bitcoin", "ethereum", "solana", "polygon", "base"],
-        "supported_exchanges": ["coinbase"] if coinbase_key else [],
+        "supported_exchanges": ["coinbase"] if status_apis.get('coinbase') == 'configured' else [],
         "features": {
             "nft_image_cache": {
                 "enabled": image_cache_enabled,
