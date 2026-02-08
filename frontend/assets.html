@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assets - ABCT</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1770523133">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <!-- DOMPurify for XSS protection -->
+    <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+    <!-- Session-based authentication -->
+    <script src="/static/js/session-auth.js?v=1770523133"></script>
+    <style>
+        .assets-page {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .assets-tab-nav {
+            display: flex;
+            gap: 4px;
+            border-bottom: 2px solid var(--border-color, #30363d);
+            margin-bottom: 20px;
+        }
+
+        .assets-tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary, #888);
+            padding: 12px 24px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s ease;
+        }
+
+        .assets-tab-btn:hover {
+            color: var(--text-primary, #e0e0e0);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .assets-tab-btn.active {
+            color: var(--accent-success, #00d26a);
+            border-bottom-color: var(--accent-success, #00d26a);
+            font-weight: 600;
+        }
+
+        .assets-tab-content {
+            display: none;
+        }
+
+        .assets-tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="assets-page">
+        <header>
+            <nav class="main-nav">
+                <a href="/" class="nav-item">Overview</a>
+                <a href="/assets.html" class="nav-item active">Assets</a>
+                <a href="/nfts.html" class="nav-item">NFTs</a>
+            </nav>
+            <div class="header-right-controls">
+                <div class="user-avatar-container">
+                    <button class="user-avatar-btn" onclick="toggleUserMenu()">
+                        <div class="avatar-circle" id="userAvatar">?</div>
+                    </button>
+                    <div class="user-menu-dropdown" id="userMenu">
+                        <div class="user-menu-header">
+                            <span id="userMenuName">User</span>
+                        </div>
+                        <div class="user-menu-divider"></div>
+                        <a href="/wallets.html" class="user-menu-item">Manage Wallets</a>
+                        <a href="/settings.html" class="user-menu-item">Settings</a>
+                        <a href="/system.html" class="user-menu-item">System</a>
+                        <div class="user-menu-divider"></div>
+                        <button class="user-menu-item" onclick="togglePrivacyMode()">
+                            Privacy Mode <span class="privacy-indicator" id="privacyIndicator">OFF</span>
+                        </button>
+                        <div class="user-menu-theme-row">
+                            <span>Theme</span>
+                            <select id="themeSelect" onchange="changeTheme(this.value)" title="Select theme">
+                                <option value="dark-mode">Dark Mode</option>
+                                <option value="light">Light</option>
+                                <option value="cypherpunk1">Cypherpunk 1</option>
+                                <option value="ocean-depths">Ocean Depths</option>
+                                <option value="sunset-horizon">Sunset Horizon</option>
+                                <option value="cypher">Cypher</option>
+                                <option value="cypher2">Cypher2</option>
+                                <option value="cypher3">Cypher3</option>
+                            </select>
+                        </div>
+                        <div class="user-menu-divider"></div>
+                        <button class="user-menu-item" id="changePasswordMenuItem" onclick="showChangePasswordModal()">Change Password</button>
+                        <button class="user-menu-item user-menu-logout" onclick="logout()">Logout</button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Status Bar -->
+        <div id="statusBar" class="status-bar hidden">
+            <span id="statusMessage"></span>
+        </div>
+
+        <!-- Display Mode Toggle -->
+        <div class="display-toggle-container" style="text-align: center; margin: 20px 0;">
+            <div class="display-toggle display-toggle-compact" style="display: inline-block;">
+                <button id="displayToggle" class="toggle-btn toggle-btn-compact" onclick="toggleDisplayMode()">
+                    <span class="toggle-option active" data-mode="crypto">Crypto</span>
+                    <span class="toggle-option" data-mode="usd">USD</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="assets-tab-nav">
+            <button class="assets-tab-btn active" data-tab="wallets" onclick="switchAssetsTab('wallets')">Self-Custody Wallets</button>
+            <button class="assets-tab-btn" data-tab="exchanges" onclick="switchAssetsTab('exchanges')">Exchanges</button>
+            <button class="assets-tab-btn" data-tab="defi" onclick="switchAssetsTab('defi')">DeFi & Governance</button>
+            <button class="assets-tab-btn" data-tab="tokens" onclick="switchAssetsTab('tokens')">Custom Tokens</button>
+        </div>
+
+        <!-- Self-Custody Wallets Tab -->
+        <div id="walletsTab" class="assets-tab-content active">
+            <section class="wallets-section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h2>Self-Custody Wallets</h2>
+                    <div class="section-summary" id="walletsSummary">
+                        <span class="chain-count cardano">0 Cardano</span>
+                        <span class="chain-count bitcoin">0 Bitcoin</span>
+                        <span class="chain-count ethereum">0 Ethereum</span>
+                        <span class="chain-count solana">0 Solana</span>
+                        <span class="chain-count polygon">0 Polygon</span>
+                        <span class="chain-count base">0 Base</span>
+                    </div>
+                    <button class="section-refresh-btn" onclick="event.stopPropagation(); refreshWallets();" title="Refresh wallets">&#10227;</button>
+                    <span class="collapse-icon">&#9660;</span>
+                </div>
+                <div id="walletsList" class="wallets-list section-content">
+                    <p class="empty-state">No wallets found. Click "Manage Wallets" to add your wallet addresses.</p>
+                </div>
+            </section>
+        </div>
+
+        <!-- Exchange Wallets Tab -->
+        <div id="exchangesTab" class="assets-tab-content">
+            <section class="exchanges-section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h2>Exchange Wallets</h2>
+                    <div class="section-summary" id="exchangesSummary">
+                        <span class="exchange-status">Loading...</span>
+                    </div>
+                    <button class="section-refresh-btn" onclick="event.stopPropagation(); refreshExchanges();" title="Refresh exchanges">&#10227;</button>
+                    <span class="collapse-icon">&#9660;</span>
+                </div>
+                <div id="exchangesList" class="exchanges-list section-content">
+                    <p class="empty-state">Loading exchange data...</p>
+                </div>
+            </section>
+        </div>
+
+        <!-- DeFi & Governance Tab -->
+        <div id="defiTab" class="assets-tab-content">
+            <section class="defi-governance-section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h2>DeFi & Governance</h2>
+                    <div class="section-summary" id="defiGovernanceSummary">
+                        <span class="defi-gov-status">Loading...</span>
+                    </div>
+                    <button class="section-refresh-btn" onclick="event.stopPropagation(); refreshDefiGovernance();" title="Refresh DeFi & Governance">&#10227;</button>
+                    <span class="collapse-icon">&#9660;</span>
+                </div>
+                <div class="defi-governance-content section-content" id="defiGovernanceContent">
+                    <p class="empty-state">Loading DeFi & Governance data...</p>
+                </div>
+            </section>
+        </div>
+
+        <!-- Custom Tokens Tab -->
+        <div id="tokensTab" class="assets-tab-content">
+            <section class="custom-tokens-section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h2>Custom Tokens</h2>
+                    <div class="section-summary" id="customTokensSummary">
+                        <span>0 tokens</span>
+                    </div>
+                    <button class="section-refresh-btn" onclick="event.stopPropagation(); loadCustomTokens();" title="Refresh custom tokens">&#10227;</button>
+                    <span class="collapse-icon">&#9660;</span>
+                </div>
+                <div id="customTokensList" class="custom-tokens-list section-content">
+                    <p class="empty-state">No custom tokens added. Use "Add Token" below to track tokens manually.</p>
+                </div>
+            </section>
+        </div>
+
+        <!-- Token Policy ID Modal -->
+        <div id="tokenPolicyModal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Manual Token Tracking</h3>
+                    <button class="modal-close" onclick="closeTokenModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="modal-notice">Only <strong>Cardano</strong>, <strong>Ethereum</strong>, <strong>Bitcoin</strong>, and <strong>Solana</strong> chains are supported for manual token tracking.</p>
+                    <div class="form-group">
+                        <label for="modalChainSelect">Select Chain:</label>
+                        <select id="modalChainSelect">
+                            <option value="cardano">Cardano</option>
+                            <option value="ethereum">Ethereum</option>
+                            <option value="bitcoin">Bitcoin</option>
+                            <option value="solana">Solana</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="modalPolicyId">Policy ID / Contract Address:</label>
+                        <input type="text" id="modalPolicyId" placeholder="Enter policy ID (Cardano) or contract address">
+                    </div>
+                    <div class="form-group">
+                        <label for="modalQuantity">Quantity:</label>
+                        <input type="text" id="modalQuantity" placeholder="Enter quantity">
+                    </div>
+                    <div class="form-group">
+                        <label for="modalLabel">Label (optional):</label>
+                        <input type="text" id="modalLabel" placeholder="e.g., My INDY Holdings">
+                    </div>
+                    <div id="tokenLookupResult" class="token-lookup-result hidden"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeTokenModal()">Cancel</button>
+                    <button class="btn btn-primary" onclick="submitManualToken()">Add Token</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>ABCT - Assets | <span id="appVersion" style="opacity: 0.6;">v1.0.1 (BUILD 1770519801)</span></p>
+    </footer>
+
+    <script src="/static/js/app.js?v=1770523133"></script>
+    <script>
+        // Assets page tab switching
+        function switchAssetsTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.assets-tab-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.tab === tabName);
+            });
+            // Update tab content
+            document.getElementById('walletsTab').classList.toggle('active', tabName === 'wallets');
+            document.getElementById('exchangesTab').classList.toggle('active', tabName === 'exchanges');
+            document.getElementById('defiTab').classList.toggle('active', tabName === 'defi');
+            document.getElementById('tokensTab').classList.toggle('active', tabName === 'tokens');
+            // Update URL hash
+            window.location.hash = tabName;
+        }
+
+        // Handle hash-based tab switching on load
+        document.addEventListener('DOMContentLoaded', () => {
+            const hash = window.location.hash.replace('#', '');
+            if (['wallets', 'exchanges', 'defi', 'tokens'].includes(hash)) {
+                switchAssetsTab(hash);
+            }
+        });
+    </script>
+</body>
+</html>
