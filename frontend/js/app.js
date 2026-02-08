@@ -565,6 +565,74 @@ function collapseAllSections() {
     if (btn) btn.textContent = 'Expand All';
 }
 
+// Privacy mode link protection - prevents browser status bar from showing sensitive URLs
+const PRIVACY_LINK_SELECTOR = [
+    'a.explorer-link',
+    'a.gov-link',
+    'a.nft-link',
+    'a.hash-link',
+    'a.defi-gov-link',
+    'a.gov-vote-link',
+    'a.action-link',
+    'a.rewards-page-link'
+].join(', ');
+
+let privacyObserver = null;
+
+function stripPrivacyLinks(root = document) {
+    root.querySelectorAll(PRIVACY_LINK_SELECTOR).forEach(link => {
+        if (link.getAttribute('href') && link.getAttribute('href') !== '#' && !link.hasAttribute('data-href')) {
+            link.setAttribute('data-href', link.getAttribute('href'));
+            link.removeAttribute('href');
+        }
+    });
+}
+
+function restorePrivacyLinks() {
+    document.querySelectorAll('a[data-href]').forEach(link => {
+        link.setAttribute('href', link.getAttribute('data-href'));
+        link.removeAttribute('data-href');
+    });
+}
+
+function startPrivacyObserver() {
+    if (privacyObserver) return;
+    privacyObserver = new MutationObserver(mutations => {
+        for (const mutation of mutations) {
+            for (const node of mutation.addedNodes) {
+                if (node.nodeType === 1) {
+                    if (node.matches && node.matches(PRIVACY_LINK_SELECTOR)) {
+                        if (node.getAttribute('href') && node.getAttribute('href') !== '#' && !node.hasAttribute('data-href')) {
+                            node.setAttribute('data-href', node.getAttribute('href'));
+                            node.removeAttribute('href');
+                        }
+                    }
+                    if (node.querySelectorAll) {
+                        stripPrivacyLinks(node);
+                    }
+                }
+            }
+        }
+    });
+    privacyObserver.observe(document.body, { childList: true, subtree: true });
+}
+
+function stopPrivacyObserver() {
+    if (privacyObserver) {
+        privacyObserver.disconnect();
+        privacyObserver = null;
+    }
+}
+
+// Delegated click handler for privacy-stripped links
+document.addEventListener('click', (e) => {
+    const link = e.target.closest('a[data-href]');
+    if (link) {
+        e.preventDefault();
+        window.open(link.getAttribute('data-href'), '_blank', 'noopener');
+    }
+});
+
 // Initialize privacy mode from localStorage
 function initializePrivacyMode() {
     const privacyEnabled = localStorage.getItem('privacyMode') === 'true';
@@ -572,6 +640,11 @@ function initializePrivacyMode() {
         document.body.classList.add('privacy-mode');
         const btn = document.getElementById('privacyBtn');
         if (btn) btn.classList.add('active');
+        // Defer link stripping to after initial render
+        requestAnimationFrame(() => {
+            stripPrivacyLinks();
+            startPrivacyObserver();
+        });
     }
 }
 
@@ -594,6 +667,15 @@ function togglePrivacyMode() {
         closeUserMenu();
     }
 
+    // Strip or restore link hrefs to prevent status bar URL preview
+    if (isEnabled) {
+        stripPrivacyLinks();
+        startPrivacyObserver();
+    } else {
+        stopPrivacyObserver();
+        restorePrivacyLinks();
+    }
+
     // Save to localStorage
     localStorage.setItem('privacyMode', isEnabled);
 }
@@ -605,6 +687,15 @@ window.addEventListener('storage', (e) => {
         document.body.classList.toggle('privacy-mode', privacyEnabled);
         const btn = document.getElementById('privacyBtn');
         if (btn) btn.classList.toggle('active', privacyEnabled);
+
+        // Sync link stripping across tabs
+        if (privacyEnabled) {
+            stripPrivacyLinks();
+            startPrivacyObserver();
+        } else {
+            stopPrivacyObserver();
+            restorePrivacyLinks();
+        }
     }
 });
 
