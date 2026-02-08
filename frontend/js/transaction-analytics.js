@@ -3,7 +3,7 @@
  */
 
 let analyticsChart = null;
-let analyticsData = null;
+var analyticsData = null;  // var to allow redeclaration when loaded alongside app.js
 let selectedChains = new Set();
 
 // Chain colors matching the theme colors from styles.css

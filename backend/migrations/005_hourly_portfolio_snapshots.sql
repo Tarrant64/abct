@@ -45,9 +45,18 @@ CREATE TABLE portfolio_snapshots_new (
     UNIQUE(user_id, snapshot_time)
 );
 
--- Copy ALL data from old table (column order matches exactly)
-INSERT OR IGNORE INTO portfolio_snapshots_new
-SELECT * FROM portfolio_snapshots;
+-- Copy data using explicit column names (SELECT * corrupts data if column order differs)
+INSERT OR IGNORE INTO portfolio_snapshots_new (
+    id, user_id, snapshot_date, snapshot_time, total_value_usd,
+    ada_amount, ada_price, btc_amount, btc_price, eth_amount, eth_price,
+    staking_value_usd, defi_value_usd, exchange_value_usd, nft_value_usd,
+    created_at
+)
+SELECT id, user_id, snapshot_date, snapshot_time, total_value_usd,
+       ada_amount, ada_price, btc_amount, btc_price, eth_amount, eth_price,
+       staking_value_usd, defi_value_usd, exchange_value_usd, nft_value_usd,
+       created_at
+FROM portfolio_snapshots;
 
 -- Drop old table
 DROP TABLE portfolio_snapshots;
