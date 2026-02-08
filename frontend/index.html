@@ -6,7 +6,7 @@
     <title>A Better Crypto Tracker</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1770583499">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1770585231">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preconnect" href="https://unpkg.com" crossorigin>
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
@@ -15,7 +15,7 @@
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1770583499"></script>
+    <script src="/static/js/session-auth.js?v=1770585231"></script>
 </head>
 <body>
     <div class="container">
@@ -84,8 +84,25 @@
                             <span class="refresh-icon">↻</span>
                         </button>
                     </div>
-                    <div class="total-value" id="totalPortfolioValue">$0.00</div>
-                    <div class="last-updated" id="lastUpdated" style="font-size: 0.75rem; color: #888; text-align: center; margin-top: 5px;"></div>
+                    <div class="portfolio-card-body">
+                        <div class="portfolio-card-left">
+                            <div class="total-value" id="totalPortfolioValue">$0.00</div>
+                            <div class="last-updated" id="lastUpdated" style="font-size: 0.75rem; color: #888; margin-top: 5px;"></div>
+                            <div class="top-holdings" id="topHoldings"></div>
+                        </div>
+                        <div class="portfolio-card-right">
+                            <div class="portfolio-stat">
+                                <div class="stat-label">7-Day Change</div>
+                                <div class="stat-value" id="change7dValue">--</div>
+                                <div class="stat-sub" id="change7dPercent"></div>
+                            </div>
+                            <div class="portfolio-divider"></div>
+                            <div class="portfolio-stat">
+                                <div class="stat-label">Transactions (7d)</div>
+                                <div class="stat-value" id="txCount7dValue">--</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
             <!-- Portfolio Value History Chart -->
@@ -547,6 +564,6 @@
         </footer>
     </div>
 
-    <script src="/static/js/app.js?v=1770583499"></script>
+    <script src="/static/js/app.js?v=1770585231"></script>
 </body>
 </html>

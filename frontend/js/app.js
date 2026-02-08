@@ -432,6 +432,9 @@ function updateTotalPortfolioValue() {
             }));
         } catch (e) { /* localStorage full or unavailable */ }
     }
+
+    // Update top holdings pills
+    renderTopHoldings();
 }
 
 // Restore cached portfolio total for instant display on page load (before API calls complete)
@@ -444,6 +447,133 @@ function restoreCachedPortfolioTotal() {
         const totalValueEl = document.getElementById('totalPortfolioValue');
         if (totalValueEl) setSafeHTML(totalValueEl, formatUSDBlur(cached.total));
     } catch (e) { /* parse error or missing */ }
+}
+
+// Get top N holdings by USD value from wallet/staking/defi data
+function getTopHoldings(count = 3) {
+    const holdings = {};
+
+    // Wallet holdings
+    for (const [symbol, amount] of Object.entries(walletTotals)) {
+        const priceKey = symbol === 'ETH_BASE' ? 'ETH' : symbol;
+        const price = prices[priceKey] || 0;
+        const usdValue = amount * price;
+        if (usdValue > 0) {
+            const key = priceKey; // Merge ETH_BASE into ETH
+            holdings[key] = (holdings[key] || 0) + usdValue;
+        }
+    }
+
+    // Staking holdings
+    for (const [token, amount] of Object.entries(stakingTotals)) {
+        const price = prices[token] || 0;
+        const usdValue = amount * price;
+        if (usdValue > 0) {
+            holdings[token] = (holdings[token] || 0) + usdValue;
+        }
+    }
+
+    // DeFi holdings
+    for (const [token, amount] of Object.entries(defiTotals)) {
+        const price = prices[token] || 0;
+        const usdValue = amount * price;
+        if (usdValue > 0) {
+            holdings[token] = (holdings[token] || 0) + usdValue;
+        }
+    }
+
+    // Sort by USD value descending, take top N
+    return Object.entries(holdings)
+        .map(([symbol, usdValue]) => ({
+            symbol,
+            usdValue,
+            price: prices[symbol] || 0,
+            change24h: priceData[symbol]?.usd_24h_change || 0
+        }))
+        .sort((a, b) => b.usdValue - a.usdValue)
+        .slice(0, count);
+}
+
+// Render top holdings pills into the portfolio card
+function renderTopHoldings() {
+    const container = document.getElementById('topHoldings');
+    if (!container) return;
+
+    const top = getTopHoldings(3);
+    if (top.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    const pills = top.map(h => {
+        const priceStr = h.price >= 1000 ? '$' + h.price.toLocaleString(undefined, { maximumFractionDigits: 0 })
+            : h.price >= 1 ? '$' + h.price.toFixed(2)
+            : '$' + h.price.toFixed(4);
+        const changeStr = (h.change24h >= 0 ? '+' : '') + h.change24h.toFixed(1) + '%';
+        const changeClass = h.change24h >= 0 ? 'positive' : 'negative';
+        return `<span class="top-holding-item">` +
+            `<span class="holding-symbol">${h.symbol}</span> ` +
+            `<span class="holding-price blur-value">${priceStr}</span> ` +
+            `<span class="holding-change ${changeClass} blur-value">${changeStr}</span>` +
+            `</span>`;
+    }).join('');
+
+    setSafeHTML(container, pills);
+}
+
+// Load 7-day portfolio change from balance history
+async function load7DayPortfolioChange() {
+    const valueEl = document.getElementById('change7dValue');
+    const pctEl = document.getElementById('change7dPercent');
+    if (!valueEl) return;
+
+    try {
+        const response = await authFetch(`${API_BASE}/balance-history/data?range=1w`);
+        if (!response.ok) throw new Error('API error');
+        const result = await response.json();
+
+        if (!result.data || result.data.length < 2) {
+            valueEl.textContent = '--';
+            if (pctEl) pctEl.textContent = '';
+            return;
+        }
+
+        const firstValue = result.data[0].value;
+        const lastValue = result.data[result.data.length - 1].value;
+        const dollarChange = lastValue - firstValue;
+        const pctChange = firstValue > 0 ? (dollarChange / firstValue) * 100 : 0;
+        const isPositive = dollarChange >= 0;
+        const sign = isPositive ? '+' : '';
+
+        valueEl.textContent = (isPositive ? '+' : '-') + formatUSD(Math.abs(dollarChange));
+        valueEl.className = 'stat-value ' + (isPositive ? 'positive' : 'negative');
+
+        if (pctEl) {
+            pctEl.textContent = sign + pctChange.toFixed(1) + '%';
+            pctEl.className = 'stat-sub ' + (isPositive ? 'positive' : 'negative');
+        }
+    } catch (e) {
+        console.error('[Portfolio] Failed to load 7-day change:', e);
+        valueEl.textContent = '--';
+        valueEl.className = 'stat-value';
+        if (pctEl) { pctEl.textContent = ''; pctEl.className = 'stat-sub'; }
+    }
+}
+
+// Load 7-day transaction count
+async function load7DayTransactionCount() {
+    const el = document.getElementById('txCount7dValue');
+    if (!el) return;
+
+    try {
+        const response = await authFetch(`${API_BASE}/transactions/stats?days=7`);
+        if (!response.ok) throw new Error('API error');
+        const data = await response.json();
+        el.textContent = (data.total_transactions || 0).toLocaleString();
+    } catch (e) {
+        console.error('[Portfolio] Failed to load 7-day tx count:', e);
+        el.textContent = '--';
+    }
 }
 
 // Load portfolio component totals from latest snapshot (lightweight, no external API calls)
@@ -5198,6 +5328,10 @@ async function globalRefreshAll() {
             loadBaseNFTs();
         }
 
+        // Refresh portfolio card stats (fire-and-forget)
+        load7DayPortfolioChange();
+        load7DayTransactionCount();
+
         showStatus('All data refreshed successfully');
     } catch (error) {
         console.error('Error during global refresh:', error);
@@ -6878,7 +7012,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             loadPortfolioTotals(),
             loadCustomTokens(),
             loadAllNftSummaries(),
-            loadAnalyticsData(true)
+            loadAnalyticsData(true),
+            load7DayPortfolioChange(),
+            load7DayTransactionCount()
         ]).then(() => {
             console.log('[Overview] Background data loading complete');
             updateTotalPortfolioValue();
