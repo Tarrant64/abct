@@ -4394,19 +4394,16 @@ function updateNftSectionSummary() {
 
 // Initialize the image cache toggle from server state
 async function initImageCacheToggle() {
+    // Only fetch config if the toggle exists on this page (NFTs page)
+    const toggle = document.getElementById('imageCacheToggle');
+    if (!toggle) return;
+
     try {
         const response = await authFetch(`${API_BASE}/nfts/images/config`);
         const config = await response.json();
 
         imageCacheEnabled = config.enabled || false;
-
-        // Update the toggle checkbox
-        const toggle = document.getElementById('imageCacheToggle');
-        if (toggle) {
-            toggle.checked = imageCacheEnabled;
-        }
-
-        console.log('Image cache initialized:', imageCacheEnabled ? 'enabled' : 'disabled');
+        toggle.checked = imageCacheEnabled;
     } catch (error) {
         console.error('Error initializing image cache toggle:', error);
     }
@@ -6580,8 +6577,10 @@ async function monitorStartupStatus() {
  * Shows modal with progress if population needed.
  */
 async function checkDemoPopulation() {
+    // Skip API call for non-demo users
+    if (localStorage.getItem('is_demo') !== 'true') return;
+
     try {
-        // Check demo status
         const response = await authFetch('/api/demo/status');
         if (!response.ok) {
             // Not a demo account or error - just return
@@ -6718,8 +6717,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Start monitoring startup status (non-blocking)
     monitorStartupStatus();
 
-    // Initialize NFT image cache toggle state
-    await initImageCacheToggle();
+    // Initialize NFT image cache toggle state (non-blocking — can be slow)
+    initImageCacheToggle();
 
     // Initialize portfolio history chart range buttons
     initHistoryRangeButtons();
