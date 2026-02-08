@@ -2,8 +2,8 @@
 
 Personal multi-chain portfolio tracker built Cardano-first.
 
-![Version](https://img.shields.io/badge/version-1.0.1-brightgreen.svg)
-![Build](https://img.shields.io/badge/build-1770345770-blue.svg)
+![Version](https://img.shields.io/badge/version-1.5.0-brightgreen.svg)
+![Build](https://img.shields.io/badge/build-1770563676-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.109-teal.svg)
@@ -33,7 +33,7 @@ Privacy-focused (self-hosted), transaction analytics, custom tokens, portfolio s
 ## Project
 Personal side project built with AI assistance. Goal: Create a robust tracker that doesn't compromise on Cardano while supporting major chains. Community contributions welcome.
 
-**Current Build**: v1.0.1 (BUILD 1770345770)
+**Current Build**: v1.5.0 (BUILD 1770563676)
 
 ## ⚠️ Important: Intended Use
 
@@ -72,7 +72,7 @@ For a detailed overview of the system architecture, authentication flow, and dat
 ## ✨ Features
 
 ### Portfolio Tracking
-- **Multi-Blockchain Support**: Track wallets on Cardano, Bitcoin, Ethereum, Solana, Polygon, Base, and Algorand
+- **Multi-Blockchain Support**: Track wallets on Cardano, Bitcoin, Ethereum, Solana, Polygon, Base, and Algorand (7 chains)
 - **Multi-Exchange Integration**: Connect to 7 major exchanges (Coinbase, Binance, Binance.US, OKX, Bitget, Gate.io, KuCoin)
 - **DeFi Monitoring**: View Cardano staking positions with APY and rewards
 - **NFT Collection**: Browse your NFTs with floor price valuations
@@ -87,6 +87,32 @@ For a detailed overview of the system architecture, authentication flow, and dat
 - **Secure Logging**: Audit trails with sensitive data redaction
 
 ## 📦 What's New
+
+### v1.5.0 - V2 Ingestion Engine (February 2026)
+- **V2 Ingestion Engine**: Complete rebuild of the data pipeline architecture
+  - 6-stage pipeline: Expand → Index → Hydrate → Normalize → Enrich → Positions
+  - Provider-agnostic work units — if one API rate-limits, work reassigns to another
+  - 14 registered data providers across all chains
+  - Circuit breaker pattern with automatic recovery (CLOSED → OPEN → HALF_OPEN)
+  - Token bucket rate limiting per provider
+  - Bulkhead concurrency control via asyncio.Semaphore
+  - Idempotent event dedup (safe to re-run backfills)
+- **Multi-Chain Coverage**: Full pipeline support for Cardano, Bitcoin, Ethereum, Solana, Polygon, Base
+  - Chain-specific expanders, indexers, hydrators, and normalizers
+  - CoinStats integration for non-Cardano chains (Bitcoin, Ethereum, Solana, Polygon, Base)
+  - CoinStats Cardano exclusion enforced at registry, indexer, and hydrator levels
+- **Provider Registry**: Priority-based scoring with health/quota/latency factors
+  - Automatic failover when providers go down
+  - Per-provider health tracking persisted to database
+  - Circuit breakers with 5-failure threshold and 5-minute recovery
+- **Backfill Orchestration**: Plan, execute, and monitor backfills via API
+  - `POST /engine/backfill` — start a new backfill job
+  - `GET /engine/backfill/{id}/status` — real-time progress
+  - Background execution with domain pipeline ordering
+- **8 New Database Tables**: `engine_backfills`, `engine_account_subjects`, `engine_tx_index`, `engine_tx_raw`, `engine_events`, `engine_work_units`, `engine_provider_health`, `engine_price_history`
+- **11 New API Endpoints**: Backfill management, provider health, event queries, portfolio snapshots
+- **Balance History Improvements**: Anchor to current on-chain balance, nginx proxy passthrough
+- **Performance**: Fixed 7s page load delay from NFT image config, improved Assets UX
 
 ### v1.0.1 - UI, Themes, & Multi-Chain Expansion (February 2026) ✨
 - **🔑 .env Import/Export Fix**: Complete API key migration workflow
@@ -366,77 +392,149 @@ ABCT/
 │   ├── main.py                # Application entry point
 │   ├── config.py              # Configuration management
 │   ├── database.py            # SQLite database layer
-│   ├── routers/               # API endpoint handlers
-│   │   ├── wallets.py         # Wallet CRUD operations
+│   ├── auth_utils.py          # Session auth utilities
+│   ├── routers/               # API endpoint handlers (26 routers)
+│   │   ├── auth.py            # Authentication (login/logout/password)
 │   │   ├── portfolio.py       # Portfolio summary & history
+│   │   ├── wallets.py         # Wallet CRUD operations
 │   │   ├── prices.py          # Cryptocurrency prices
 │   │   ├── defi.py            # Staking positions
 │   │   ├── exchanges.py       # Exchange balances
 │   │   ├── nfts.py            # NFT collection
-│   │   ├── nft_scheduler.py   # NFT scheduler API (v0.9.0+)
-│   │   ├── backup.py          # Backup & restore API (v0.10.0+)
+│   │   ├── nft_scheduler.py   # NFT scheduler API
+│   │   ├── transactions.py    # Transaction history & analytics
+│   │   ├── balance_history.py # Balance history charts
+│   │   ├── engine.py          # V2 Ingestion Engine API (v1.5.0+)
+│   │   ├── backup.py          # Backup & restore
+│   │   ├── cache.py           # Cache management
+│   │   ├── custom_tokens.py   # Custom token management
+│   │   ├── dashboard.py       # Dashboard data
+│   │   ├── demo.py            # Demo mode management
+│   │   ├── spam.py            # Spam token filtering
+│   │   ├── nmkr.py            # NMKR NFT minting
+│   │   ├── cloudflare.py      # Cloudflare tunnel management
+│   │   ├── mobile.py          # Mobile API endpoints
+│   │   ├── system.py          # System info & health
+│   │   ├── settings.py        # Application settings
 │   │   ├── security.py        # Security settings
-│   │   └── settings.py        # Application settings
-│   ├── services/              # Business logic layer
-│   │   ├── cardano.py         # Cardano blockchain service
-│   │   ├── bitcoin.py         # Bitcoin blockchain service
-│   │   ├── ethereum.py        # Ethereum/EVM blockchain service
-│   │   ├── algorand.py        # Algorand blockchain service (v1.0.1+)
-│   │   ├── pricing.py         # Price aggregation
+│   │   └── logs.py            # Log viewer
+│   ├── engine/                # V2 Ingestion Engine (v1.5.0+)
+│   │   ├── models.py          # Pydantic models (ChainId, WorkUnit, CanonicalEvent)
+│   │   ├── db.py              # 8 engine_* tables with CRUD
+│   │   ├── orchestrator.py    # Backfill orchestration & pipeline coordination
+│   │   ├── expansion/         # Stage A: wallet → account subjects
+│   │   │   ├── cardano_expander.py   # Stake key → payment addresses
+│   │   │   ├── bitcoin_expander.py   # Address passthrough
+│   │   │   ├── evm_expander.py       # Normalize to lowercase
+│   │   │   └── solana_expander.py    # SPL token account enumeration
+│   │   ├── indexing/          # Stage B: collect tx IDs (cheap)
+│   │   │   ├── cardano_indexer.py    # Blockfrost pagination
+│   │   │   ├── bitcoin_indexer.py    # Blockstream pagination
+│   │   │   ├── evm_indexer.py        # Etherscan txlist+internal+token
+│   │   │   ├── solana_indexer.py     # Helius getSignatures
+│   │   │   └── coinstats_indexer.py  # CoinStats (NOT Cardano)
+│   │   ├── hydration/         # Stage C: full tx detail (expensive)
+│   │   │   ├── cardano_hydrator.py   # Blockfrost UTXOs
+│   │   │   ├── bitcoin_hydrator.py   # Blockstream /tx/
+│   │   │   ├── evm_hydrator.py       # Alchemy RPC
+│   │   │   ├── solana_hydrator.py    # Helius enhanced tx
+│   │   │   └── coinstats_hydrator.py # CoinStats (NOT Cardano)
+│   │   ├── normalization/     # Stage D: raw tx → canonical events
+│   │   │   ├── cardano_normalizer.py # UTxO in/out → events
+│   │   │   ├── bitcoin_normalizer.py # vin/vout → events
+│   │   │   ├── evm_normalizer.py     # logs → events
+│   │   │   └── solana_normalizer.py  # instructions → events
+│   │   ├── enrichment/        # Stage E: prices & metadata
+│   │   │   ├── price_enricher.py         # Historical price lookup
+│   │   │   ├── token_metadata_enricher.py # Token name/decimals
+│   │   │   └── nft_metadata_enricher.py   # NFT metadata (stub)
+│   │   ├── positions/         # Stage F: DeFi inference (stubs)
+│   │   │   ├── cardano_defi.py  # Cardano DeFi positions
+│   │   │   └── evm_defi.py     # EVM DeFi positions
+│   │   ├── providers/         # Provider registry & scoring
+│   │   │   ├── provider.py    # Provider dataclass
+│   │   │   └── registry.py    # 14 providers with health-aware selection
+│   │   └── scheduler/         # Rate limiting & circuit breaking
+│   │       ├── scheduler.py       # Work unit scheduler
+│   │       ├── token_bucket.py    # Per-provider rate limiter
+│   │       └── circuit_breaker.py # Health tracking & auto-pause
+│   ├── services/              # Business logic layer (50+ services)
+│   │   ├── cardano.py         # Cardano blockchain
+│   │   ├── bitcoin.py         # Bitcoin blockchain
+│   │   ├── ethereum.py        # Ethereum blockchain
+│   │   ├── solana.py          # Solana blockchain
+│   │   ├── polygon.py         # Polygon blockchain
+│   │   ├── base.py            # Base blockchain
+│   │   ├── algorand.py        # Algorand blockchain
+│   │   ├── etherscan.py       # Etherscan multi-chain API
+│   │   ├── pricing.py         # Price aggregation (5-source fallback)
 │   │   ├── defi.py            # DeFi/staking service
-│   │   ├── transaction_history.py  # Multi-chain transaction service (v1.0.1+)
-│   │   ├── coinbase.py        # Coinbase exchange service (v1.0.0+)
-│   │   ├── binance_service.py       # Binance.com exchange (v1.0.0+)
-│   │   ├── binance_us_service.py    # Binance.US exchange (v1.0.0+)
-│   │   ├── okx_service.py           # OKX exchange (v1.0.0+)
-│   │   ├── bitget_service.py        # Bitget exchange (v1.0.0+)
-│   │   ├── gate_service.py          # Gate.io exchange (v1.0.0+)
-│   │   ├── kucoin_service.py        # KuCoin exchange (v1.0.0+)
+│   │   ├── balance_history.py # V1 balance history
+│   │   ├── transaction_history.py  # Multi-chain transactions
+│   │   ├── http_client.py     # Shared HTTP client pool (30+ named pools)
+│   │   ├── api_key_manager.py # Dynamic API key management
+│   │   ├── coinbase.py        # Coinbase exchange
+│   │   ├── binance_service.py # Binance.com exchange
+│   │   ├── binance_us_service.py # Binance.US exchange
+│   │   ├── okx_service.py     # OKX exchange
+│   │   ├── bitget_service.py  # Bitget exchange
+│   │   ├── gate_service.py    # Gate.io exchange
+│   │   ├── kucoin_service.py  # KuCoin exchange
 │   │   ├── nft.py             # NFT service
 │   │   ├── nft_scheduler.py   # NFT background scheduler
-│   │   ├── snapshot.py        # Portfolio snapshot service
-│   │   ├── logostream.py      # Token logo API service (v1.0.1+)
-│   │   ├── demo_wallet_service.py   # Demo wallets & tokens (91 tokens, v1.0.1+)
-│   │   ├── demo_nft_service.py      # Demo NFTs (76 NFTs across 7 chains, v1.0.1+)
-│   │   ├── demo_transaction_service.py  # Demo transactions (1,500 txns, v1.0.1+)
-│   │   ├── demo_defi_service.py     # Demo DeFi data (v0.12.0+)
-│   │   └── demo_exchange_service.py # Demo exchange data (v0.12.0+)
-│   ├── middleware/            # Security middleware
-│   │   ├── auth.py            # Session-based authentication
-│   │   ├── demo_mode.py       # Demo mode detection (v0.12.0+)
-│   │   └── rate_limit.py      # Rate limiting
-│   └── utils/                 # Utility functions
+│   │   ├── nft_price_client.py # NFT price aggregation
+│   │   ├── nft_image_service.py # NFT image caching
+│   │   ├── ethereum_nft.py    # Ethereum NFT service
+│   │   ├── solana_nft.py      # Solana NFT service
+│   │   ├── algorand_nft.py    # Algorand NFT service
+│   │   ├── snapshot.py        # Portfolio snapshots
+│   │   ├── logostream.py      # Token logo API
+│   │   ├── logging_service.py # Structured logging
+│   │   ├── taptools.py        # TapTools Cardano data
+│   │   ├── moralis.py         # Moralis NFT service
+│   │   ├── nmkr.py            # NMKR minting service
+│   │   ├── nmkr_service.py    # NMKR business logic
+│   │   ├── nftcdn.py          # NFT CDN service
+│   │   ├── graph.py           # The Graph API (Uniswap pricing)
+│   │   └── demo_*.py          # Demo mode services (wallets, NFTs, transactions, etc.)
+│   └── middleware/            # Security middleware
+│       ├── demo_mode.py       # Demo mode detection
+│       └── size_limit.py      # Request size limiting
 ├── frontend/                  # HTML/CSS/JS frontend
 │   ├── index.html             # Main dashboard
-│   ├── wallets.html           # Wallet manager (v1.0.0: includes exchange management)
-│   ├── transactions.html      # Transaction history & analytics (v1.0.1+)
-│   ├── services.html          # Services monitor (NFT scheduler)
-│   ├── backup.html            # Backup & restore (v0.10.0+)
-│   ├── login.html             # Login page (v0.12.0+)
-│   ├── apis.html              # API key manager
-│   ├── security.html          # Security settings
+│   ├── wallets.html           # Wallet management
+│   ├── assets.html            # Asset breakdown & details
+│   ├── transactions.html      # Transaction history & analytics
 │   ├── nft-wall.html          # NFT gallery
-│   ├── logs.html              # System logs
-│   ├── static/demo-nfts/      # Demo NFT images (v0.12.0+)
-│   ├── css/styles.css         # Styling (v1.0.0: logo classes)
-│   └── js/app.js              # Client-side logic (v1.0.0: exchange rendering)
+│   ├── nfts.html              # NFT collection management
+│   ├── settings.html          # Consolidated settings (APIs, exchanges, security)
+│   ├── system.html            # System management (logs, cache, services, backup)
+│   ├── login.html             # Login page
+│   ├── api-help.html          # API setup guide
+│   ├── dashv2.html            # Dashboard V2 (experimental)
+│   ├── static/demo-nfts/      # Demo NFT images
+│   ├── css/styles.css         # Styling (5 themes, 7000+ lines)
+│   └── js/
+│       ├── app.js             # Main application logic
+│       └── session-auth.js    # Authentication utilities
 ├── abct-docker/               # Docker deployment
 │   ├── Dockerfile             # Container definition
 │   ├── nginx.conf             # Reverse proxy config
 │   ├── supervisord.conf       # Process manager
 │   └── update-unraid.sh       # Deployment script
 ├── data/                      # SQLite databases (auto-created)
-│   ├── portfolio.db           # Main database
+│   ├── portfolio.db           # Main database (includes engine_* tables)
 │   └── nft_images.db          # NFT image cache
 ├── docs/                      # Documentation
 │   ├── ARCHITECTURE.md        # System architecture
+│   ├── API_PROVIDERS.md       # API provider details
+│   ├── DOCKER_DEPLOYMENT.md   # Docker setup guide
 │   ├── BACKUP_RESTORE_GUIDE.md # Backup documentation
-│   ├── docs/
-│   │   └── Exchange-Integration.md  # Exchange setup guide (v1.0.0+)
-│   └── ...
+│   └── docs/Exchange-Integration.md  # Exchange setup guide
 ├── .env                       # API keys (you create this)
 ├── .env.example               # Example configuration
 ├── requirements.txt           # Python dependencies
+├── deploy.sh                  # Guided deployment script
 ├── run.sh                     # Start server (local)
 ├── stop.sh                    # Stop server (local)
 ├── CHANGELOG.md               # Version history
@@ -444,6 +542,11 @@ ABCT/
 ```
 
 ## 📡 API Endpoints
+
+### Authentication
+- `POST /auth/login` - Login with credentials
+- `POST /auth/logout` - End session
+- `POST /auth/change-password` - Change password
 
 ### Wallets
 - `GET /wallets` - List all tracked wallets
@@ -455,6 +558,9 @@ ABCT/
 - `GET /portfolio/summary` - Get portfolio overview
 - `GET /portfolio/history?range=7d|4w|3m` - Historical values
 - `POST /portfolio/snapshot` - Create manual snapshot
+
+### Dashboard
+- `GET /dashboard/data` - Aggregated dashboard data
 
 ### Prices
 - `GET /prices` - Current cryptocurrency prices
@@ -471,20 +577,57 @@ ABCT/
 - `GET /nfts/prices/status` - Price collection status
 - `POST /nfts/prices/collect` - Trigger price collection
 
-### NFT Background Scheduler (v0.9.0+)
-- `GET /nft-scheduler/status` - Get scheduler status and statistics
+### Transactions
+- `GET /transactions` - Transaction history with filtering
+- `GET /transactions/analytics` - Transaction analytics data
+
+### Balance History
+- `GET /balance-history/data` - Balance history chart data
+- `POST /balance-history/clear-cache` - Clear history cache
+
+### NFT Background Scheduler
+- `GET /nft-scheduler/status` - Scheduler status and statistics
 - `POST /nft-scheduler/enable` - Enable background updates
 - `POST /nft-scheduler/disable` - Disable background updates
 - `POST /nft-scheduler/trigger` - Manually trigger update cycle
-- `GET /nft-scheduler/collections` - List tracked NFT collections
 
-### Backup & Restore (v0.10.0+)
-- `GET /backup/info` - Get backup information and statistics
+### Custom Tokens
+- `GET /custom-tokens` - List custom tokens
+- `POST /custom-tokens` - Add a custom token
+- `DELETE /custom-tokens/{id}` - Remove a custom token
+
+### Spam Filtering
+- `GET /spam/filters` - List spam filters
+- `POST /spam/filters` - Add spam filter
+
+### Cache Management
+- `GET /cache/stats` - Cache statistics
+- `POST /cache/clear` - Clear cached data
+
+### Backup & Restore
+- `GET /backup/info` - Backup information and statistics
 - `POST /backup/export` - Export configuration to JSON
 - `POST /backup/preview` - Preview backup file (dry-run)
 - `POST /backup/import` - Import configuration from backup
 - `GET /backup/export-env` - Export API keys as .env file
-- `POST /backup/import-env` - Import API keys from .env file into database
+- `POST /backup/import-env` - Import API keys from .env file
+
+### System
+- `GET /system/info` - System information and health
+- `GET /system/logs` - View system logs
+
+### V2 Ingestion Engine (v1.5.0+)
+- `POST /engine/backfill` - Start a new backfill job
+- `GET /engine/backfill/{id}/status` - Backfill progress and status
+- `POST /engine/backfill/{id}/cancel` - Cancel a running backfill
+- `GET /engine/backfills` - List all backfills
+- `GET /engine/gaps` - Diagnose data gaps
+- `GET /engine/snapshot` - Portfolio snapshot from canonical events
+- `GET /engine/history/data` - Balance history (backward-compatible format)
+- `GET /engine/providers` - List registered providers
+- `GET /engine/providers/health` - Provider health and circuit breaker states
+- `GET /engine/events` - Query canonical events
+- `GET /engine/events/count` - Event counts by chain/type
 
 ## ⚙️ Configuration
 
@@ -689,10 +832,10 @@ For detailed API information including rate limits and pricing, see [API Provide
 - **Repository**: https://github.com/Tarrant64/abct
 - **Releases**: https://github.com/Tarrant64/abct/releases
 - **Issues**: https://github.com/Tarrant64/abct/issues
-- **Latest Release**: [v1.0.0 - Production Ready](https://github.com/Tarrant64/abct/releases/tag/v1.0.0)
+- **Latest Release**: [v1.5.0 - V2 Ingestion Engine](https://github.com/Tarrant64/abct/releases/tag/v1.5.0)
 
 ---
 
-**Current Version:** v1.0.1 (BUILD 1770345770)
-**Last Updated:** February 5, 2026
-**Release Date:** February 1, 2026
+**Current Version:** v1.5.0 (BUILD 1770563676)
+**Last Updated:** February 8, 2026
+**Release Date:** February 8, 2026
