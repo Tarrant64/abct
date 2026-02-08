@@ -221,6 +221,12 @@
     box-shadow: 0 0 10px rgba(234, 0, 217, 0.5);
 }
 
+[data-theme="cypherpunk1"] .source-tab.active {
+    background-color: #ea00d9;
+    border-color: #ea00d9;
+    box-shadow: 0 0 10px rgba(234, 0, 217, 0.5);
+}
+
 /* Glassy Staking Cards */
 [data-theme="cypherpunk1"] .staking-card {
     background: linear-gradient(135deg, rgba(10, 26, 36, 0.8) 0%, rgba(18, 18, 42, 0.75) 100%);
@@ -777,6 +783,266 @@
 }
 
 /*===============================================================================
+  CYPHER3 THEME - Indigo Protocol inspired, centered nav, dark purple
+===============================================================================*/
+
+/* Cypher3 Variables */
+[data-theme="cypher3"] {
+    --bg-primary: #0d0f1a;
+    --bg-secondary: #131525;
+    --bg-card: #1a1d2e;
+    --bg-hover: #222540;
+    --text-primary: #e8e8f0;
+    --text-secondary: #8b8fa3;
+    --text-muted: #5a5d70;
+    --accent-cardano: #7c3aed;
+    --accent-bitcoin: #f7931a;
+    --accent-ethereum: #627eea;
+    --accent-success: #4ade80;
+    --accent-error: #ef4444;
+    --border-color: rgba(100, 100, 200, 0.12);
+    --chart-line: #4ade80;
+    --chart-fill: rgba(74, 222, 128, 0.06);
+    --gradient-card: linear-gradient(135deg, #1a1d2e 0%, #161829 100%);
+    --gradient-header: linear-gradient(135deg, #131525 0%, #1a1d2e 100%);
+}
+
+/* Cypher3 - Purple aurora effect at top of page */
+[data-theme="cypher3"] body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 500px;
+    background: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(124, 58, 237, 0.12) 0%, rgba(88, 28, 200, 0.06) 40%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Cypher3 nav overrides are now handled by universal nav system above */
+
+/* Cypher3 - Portfolio Card */
+[data-theme="cypher3"] .total-portfolio-card {
+    background: #1a1d2e;
+    border: 1px solid rgba(100, 100, 200, 0.1);
+    border-radius: 16px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="cypher3"] .total-value {
+    color: #ffffff;
+    text-shadow: none;
+}
+
+/* Cypher3 - Summary Cards */
+[data-theme="cypher3"] .summary-card {
+    background: #1a1d2e;
+    border: 1px solid rgba(100, 100, 200, 0.1);
+    border-radius: 12px;
+    box-shadow: none;
+    transition: border-color 0.2s ease;
+}
+
+[data-theme="cypher3"] .summary-card:hover {
+    border-color: rgba(124, 58, 237, 0.3);
+}
+
+/* Cypher3 - Section Headers */
+[data-theme="cypher3"] .collapsible-section .section-header {
+    background: #1a1d2e;
+    border: 1px solid rgba(100, 100, 200, 0.1);
+    border-radius: 12px;
+    box-shadow: none;
+}
+
+[data-theme="cypher3"] .collapsible-section .section-header:hover {
+    border-color: rgba(124, 58, 237, 0.25);
+}
+
+/* Cypher3 - Wallet Groups */
+[data-theme="cypher3"] .wallet-group {
+    background: #1a1d2e;
+    border: 1px solid rgba(100, 100, 200, 0.1);
+    border-radius: 12px;
+}
+
+[data-theme="cypher3"] .wallet-group-header {
+    border-bottom-color: rgba(100, 100, 200, 0.08);
+}
+
+[data-theme="cypher3"] .wallet-group-header:hover {
+    background: rgba(124, 58, 237, 0.06);
+}
+
+[data-theme="cypher3"] .wallet-item {
+    background: rgba(13, 15, 26, 0.5);
+    border: 1px solid rgba(100, 100, 200, 0.06);
+    border-radius: 10px;
+}
+
+/* Cypher3 - Staking Cards */
+[data-theme="cypher3"] .staking-card {
+    background: #1a1d2e;
+    border: 1px solid rgba(100, 100, 200, 0.1);
+    border-radius: 12px;
+    box-shadow: none;
+}
+
+/* Cypher3 - Exchange Section */
+[data-theme="cypher3"] .exchange-section {
+    background: #1a1d2e;
+    border: 1px solid rgba(100, 100, 200, 0.1);
+    border-radius: 12px;
+    box-shadow: none;
+}
+
+/* Cypher3 - DeFi Protocol Cards */
+[data-theme="cypher3"] .defi-protocol {
+    background: #1a1d2e;
+    border: 1px solid rgba(100, 100, 200, 0.1);
+    border-radius: 12px;
+    box-shadow: none;
+}
+
+/* Cypher3 - NFT Collections */
+[data-theme="cypher3"] .nft-collection {
+    background: #1a1d2e;
+    border: 1px solid rgba(100, 100, 200, 0.1);
+    border-radius: 12px;
+    box-shadow: none;
+}
+
+/* Cypher3 - Token & Asset Cards */
+[data-theme="cypher3"] .token-card,
+[data-theme="cypher3"] .asset-item {
+    background: #1a1d2e;
+    border: 1px solid rgba(100, 100, 200, 0.08);
+    border-radius: 10px;
+}
+
+/* Cypher3 - Chart Container */
+[data-theme="cypher3"] .history-chart-container {
+    background: #1a1d2e;
+    border: 1px solid rgba(100, 100, 200, 0.1);
+    border-radius: 16px;
+    box-shadow: none;
+}
+
+/* Cypher3 - Buttons */
+[data-theme="cypher3"] .btn-primary {
+    background: linear-gradient(135deg, #7c3aed, #6d28d9);
+    border: none;
+    color: #ffffff;
+    border-radius: 8px;
+    font-weight: 500;
+}
+
+[data-theme="cypher3"] .btn-primary:hover {
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+}
+
+/* Cypher3 - Privacy mode active */
+[data-theme="cypher3"] .btn-privacy.active {
+    background: rgba(124, 58, 237, 0.2);
+    border-color: rgba(124, 58, 237, 0.5);
+    color: #8b5cf6;
+}
+
+/* Cypher3 - Toggle & Range buttons */
+[data-theme="cypher3"] .toggle-option.active {
+    background: rgba(124, 58, 237, 0.25);
+    border-color: rgba(124, 58, 237, 0.5);
+    color: #e8e8f0;
+}
+
+[data-theme="cypher3"] .range-btn.active {
+    background: rgba(124, 58, 237, 0.25);
+    border-color: rgba(124, 58, 237, 0.5);
+    color: #e8e8f0;
+}
+
+/* Cypher3 - Modal */
+[data-theme="cypher3"] .modal-content {
+    background: #131525;
+    border: 1px solid rgba(100, 100, 200, 0.12);
+    border-radius: 16px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+/* Cypher3 - Tables */
+[data-theme="cypher3"] table {
+    border-color: rgba(100, 100, 200, 0.08);
+}
+
+[data-theme="cypher3"] table tr:nth-child(even) {
+    background: rgba(26, 29, 46, 0.5);
+}
+
+[data-theme="cypher3"] table th {
+    background: #131525;
+    border-bottom: 1px solid rgba(100, 100, 200, 0.12);
+    color: #8b8fa3;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+}
+
+/* Cypher3 - Inputs */
+[data-theme="cypher3"] input,
+[data-theme="cypher3"] select,
+[data-theme="cypher3"] textarea {
+    background: #0d0f1a;
+    border: 1px solid rgba(100, 100, 200, 0.12);
+    color: #e8e8f0;
+    border-radius: 8px;
+}
+
+[data-theme="cypher3"] input:focus,
+[data-theme="cypher3"] select:focus,
+[data-theme="cypher3"] textarea:focus {
+    border-color: rgba(124, 58, 237, 0.5);
+    box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.1);
+}
+
+/* Cypher3 - Footer */
+[data-theme="cypher3"] footer {
+    border-top-color: rgba(100, 100, 200, 0.08);
+    color: #5a5d70;
+}
+
+/* Cypher3 - Metric Cards & Chain Counts */
+[data-theme="cypher3"] .chain-count {
+    background: rgba(124, 58, 237, 0.15);
+    color: #8b5cf6;
+}
+
+[data-theme="cypher3"] .metric-card {
+    background: #1a1d2e;
+    border: 1px solid rgba(100, 100, 200, 0.1);
+    border-radius: 12px;
+}
+
+[data-theme="cypher3"] .breakdown-stats .stat {
+    background: rgba(13, 15, 26, 0.6);
+    border: 1px solid rgba(100, 100, 200, 0.08);
+}
+
+/* Cypher3 - Scrollbar */
+[data-theme="cypher3"] ::-webkit-scrollbar-track {
+    background: #0d0f1a;
+}
+
+[data-theme="cypher3"] ::-webkit-scrollbar-thumb {
+    background: rgba(124, 58, 237, 0.3);
+    border-radius: 4px;
+}
+
+[data-theme="cypher3"] ::-webkit-scrollbar-thumb:hover {
+    background: rgba(124, 58, 237, 0.5);
+}
+
+/*===============================================================================
   GREEN TERMINAL THEME - Specific Overrides
 ===============================================================================*/
 
@@ -1040,7 +1306,7 @@ header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 20px 0;
+    padding: 20px 24px;
     border-bottom: 1px solid var(--border-color);
     margin-bottom: 30px;
     position: relative;
@@ -1246,6 +1512,368 @@ header h1 {
 .waffle-item-label {
     font-size: 0.9rem;
     font-weight: 500;
+}
+
+/*===============================================================================
+  UNIVERSAL HORIZONTAL NAV BAR
+  Replaces waffle menu with a fixed centered pill bar on all themes.
+===============================================================================*/
+
+/* Hide old waffle menu elements */
+.waffle-menu-btn { display: none; }
+.waffle-menu-dropdown { display: none !important; }
+.waffle-menu-divider { display: none; }
+.waffle-menu-theme { display: none; }
+.waffle-menu-container { display: none; }
+
+/* Hide old header elements */
+header h1 { display: none; }
+.header-actions > .btn { display: none; }
+.header-actions { display: none; }
+
+/* Header becomes a flex container for nav + avatar */
+header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    padding: 12px 24px;
+    min-height: 56px;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin-bottom: 10px;
+}
+
+/* Main navigation - centered horizontal pill bar */
+.main-nav {
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1100;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    background: rgba(19, 21, 37, 0.82);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(100, 100, 200, 0.1);
+    border-radius: 50px;
+    padding: 6px 10px;
+    gap: 4px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+.nav-item {
+    padding: 10px 24px;
+    border-radius: 50px;
+    font-size: 14px;
+    white-space: nowrap;
+    color: #8b8fa3;
+    background: transparent;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.nav-item:hover {
+    color: #e8e8f0;
+    background: rgba(0, 210, 106, 0.08);
+}
+
+.nav-item.active {
+    background: rgba(0, 210, 106, 0.2);
+    color: #e8e8f0;
+}
+
+/* Space for fixed nav bar */
+main {
+    padding-top: 30px;
+}
+
+/* Header right controls - fixed top right for avatar */
+.header-right-controls {
+    position: fixed;
+    top: 12px;
+    right: 24px;
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* User avatar */
+.user-avatar-container {
+    position: relative;
+}
+
+.user-avatar-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+}
+
+.avatar-circle {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(0, 210, 106, 0.3), rgba(0, 150, 80, 0.5));
+    border: 2px solid rgba(0, 210, 106, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 700;
+    color: #e8e8f0;
+    transition: all 0.2s ease;
+}
+
+.avatar-circle:hover {
+    border-color: rgba(0, 210, 106, 0.8);
+    box-shadow: 0 0 12px rgba(0, 210, 106, 0.3);
+}
+
+/* User menu dropdown */
+.user-menu-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: rgba(19, 21, 37, 0.95);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(100, 100, 200, 0.15);
+    border-radius: 12px;
+    padding: 8px;
+    min-width: 220px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    z-index: 1200;
+}
+
+.user-menu-dropdown.active {
+    display: block;
+}
+
+.user-menu-header {
+    padding: 10px 12px 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #e8e8f0;
+}
+
+.user-menu-divider {
+    height: 1px;
+    background: rgba(100, 100, 200, 0.12);
+    margin: 4px 0;
+}
+
+.user-menu-item {
+    display: block;
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    color: #8b8fa3;
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.2s ease;
+}
+
+.user-menu-item:hover {
+    color: #e8e8f0;
+    background: rgba(0, 210, 106, 0.08);
+}
+
+.user-menu-logout {
+    color: #ff6b6b;
+}
+
+.user-menu-logout:hover {
+    background: rgba(255, 107, 107, 0.1);
+    color: #ff6b6b;
+}
+
+.privacy-indicator {
+    font-size: 0.75rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    margin-left: 8px;
+}
+
+.user-menu-theme-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    color: #8b8fa3;
+}
+
+.user-menu-theme-row select {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(100, 100, 200, 0.15);
+    color: #e8e8f0;
+    font-size: 0.8rem;
+    padding: 4px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    outline: none;
+    max-width: 120px;
+}
+
+.user-menu-theme-row select option {
+    background: #1a1d2e;
+    color: #e8e8f0;
+}
+
+/*---------- Theme-specific nav color overrides ----------*/
+
+/* Light theme nav */
+[data-theme="light"] .main-nav {
+    background: rgba(255, 255, 255, 0.88);
+    border-color: rgba(0, 0, 0, 0.08);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="light"] .nav-item {
+    color: #6b7280;
+}
+
+[data-theme="light"] .nav-item:hover {
+    color: #1a1a2e;
+    background: rgba(0, 184, 148, 0.08);
+}
+
+[data-theme="light"] .nav-item.active {
+    background: rgba(0, 184, 148, 0.15);
+    color: #1a1a2e;
+}
+
+[data-theme="light"] .avatar-circle {
+    background: linear-gradient(135deg, rgba(0, 184, 148, 0.2), rgba(0, 140, 110, 0.3));
+    border-color: rgba(0, 184, 148, 0.4);
+    color: #1a1a2e;
+}
+
+[data-theme="light"] .user-menu-dropdown {
+    background: rgba(255, 255, 255, 0.97);
+    border-color: #e5e7eb;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .user-menu-header {
+    color: #1a1a2e;
+}
+
+[data-theme="light"] .user-menu-divider {
+    background: #e5e7eb;
+}
+
+[data-theme="light"] .user-menu-item {
+    color: #6b7280;
+}
+
+[data-theme="light"] .user-menu-item:hover {
+    color: #1a1a2e;
+    background: rgba(0, 184, 148, 0.08);
+}
+
+[data-theme="light"] .user-menu-theme-row {
+    color: #6b7280;
+}
+
+[data-theme="light"] .user-menu-theme-row select {
+    background: #f5f7fa;
+    border-color: #e5e7eb;
+    color: #1a1a2e;
+}
+
+[data-theme="light"] .user-menu-theme-row select option {
+    background: #ffffff;
+    color: #1a1a2e;
+}
+
+/* Ocean Depths nav */
+[data-theme="ocean-depths"] .main-nav {
+    background: rgba(10, 20, 50, 0.85);
+    border-color: rgba(0, 119, 182, 0.15);
+}
+
+[data-theme="ocean-depths"] .nav-item.active {
+    background: rgba(0, 180, 216, 0.2);
+}
+
+/* Sunset Horizon nav */
+[data-theme="sunset-horizon"] .main-nav {
+    background: rgba(30, 15, 35, 0.85);
+    border-color: rgba(230, 126, 34, 0.15);
+}
+
+[data-theme="sunset-horizon"] .nav-item.active {
+    background: rgba(230, 126, 34, 0.2);
+}
+
+/* Cypherpunk1 nav */
+[data-theme="cypherpunk1"] .main-nav {
+    background: rgba(10, 15, 10, 0.85);
+    border-color: rgba(0, 255, 65, 0.1);
+}
+
+[data-theme="cypherpunk1"] .nav-item.active {
+    background: rgba(0, 255, 65, 0.15);
+}
+
+/* Cypher nav */
+[data-theme="cypher"] .main-nav {
+    background: rgba(15, 15, 20, 0.85);
+    border-color: rgba(0, 210, 106, 0.1);
+}
+
+/* Cypher2 nav */
+[data-theme="cypher2"] .main-nav {
+    background: rgba(15, 15, 25, 0.85);
+    border-color: rgba(0, 170, 255, 0.1);
+}
+
+[data-theme="cypher2"] .nav-item.active {
+    background: rgba(0, 170, 255, 0.2);
+}
+
+/* Cypher3 nav - uses purple accent */
+[data-theme="cypher3"] .main-nav {
+    background: rgba(19, 21, 37, 0.82);
+    border-color: rgba(100, 100, 200, 0.1);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), 0 0 40px rgba(124, 58, 237, 0.05);
+}
+
+[data-theme="cypher3"] .nav-item:hover {
+    background: rgba(124, 58, 237, 0.12);
+}
+
+[data-theme="cypher3"] .nav-item.active {
+    background: rgba(124, 58, 237, 0.25);
+}
+
+/* Mobile responsiveness for nav */
+@media (max-width: 480px) {
+    .main-nav {
+        padding: 4px 6px;
+        gap: 2px;
+    }
+    .nav-item {
+        padding: 8px 16px;
+        font-size: 13px;
+    }
+    .header-right-controls {
+        right: 12px;
+    }
 }
 
 /* Section Controls */
@@ -1691,9 +2319,58 @@ a.btn:active {
     margin: 0;
 }
 
+/* V1/V2 source tabs */
+.history-source-tabs {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+}
+
+.source-tab {
+    padding: 5px 14px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.source-tab:hover {
+    color: var(--text-primary);
+    border-color: var(--text-secondary);
+}
+
+.source-tab.active {
+    background: var(--accent-cardano);
+    border-color: var(--accent-cardano);
+    color: white;
+}
+
+/* V2 collection progress */
+.collection-progress {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-secondary);
+}
+
+.collection-progress .progress-bar-container {
+    max-width: 400px;
+    margin: 12px auto 8px;
+}
+
+.collection-progress .btn-secondary {
+    margin-top: 12px;
+    padding: 6px 18px;
+    font-size: 0.85rem;
+}
+
 .history-range-selector {
     display: flex;
     gap: 8px;
+    margin-top: 12px;
 }
 
 .range-btn {
@@ -7331,13 +8008,11 @@ body.privacy-mode .section-title {
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
+/* Light theme header - transparent to match universal nav */
 [data-theme="light"] header {
-    background: var(--gradient-header);
-    border: 1px solid var(--border-color);
-    border-radius: 16px;
-    padding: 20px 24px !important;
-    margin-bottom: 30px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
 }
 
 [data-theme="light"] .btn {
@@ -7521,6 +8196,19 @@ body.privacy-mode .section-title {
 
 [data-theme="light"] .range-btn.active {
     box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+}
+
+[data-theme="light"] .source-tab {
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light"] .source-tab.active {
+    box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+}
+
+[data-theme="light"] .collection-progress {
+    color: #4b5563;
 }
 
 /* Light theme - Modals */

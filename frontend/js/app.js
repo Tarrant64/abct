@@ -408,8 +408,18 @@ function updateTotalPortfolioValue() {
     // Total portfolio value (include tracked native tokens and custom tokens)
     const totalValue = walletsTotal + exchangesTotal + stakingTotal + defiTotal + nftsTotal + trackedTokensTotal + customTokensTotal;
 
-    // Update display
-    setSafeHTML(totalValueEl, formatUSDBlur(totalValue));
+    // Check loading state
+    const isLoading = document.body.classList.contains('staking-loading') || document.body.classList.contains('nft-loading') || document.body.classList.contains('defi-loading');
+
+    // Update total display — keep cached total visible while data is still loading
+    if (_cachedPortfolioTotal && isLoading) {
+        // Show cached total (avoids jarring drop from cached $20K → partial $16K)
+        setSafeHTML(totalValueEl, formatUSDBlur(_cachedPortfolioTotal));
+    } else {
+        // Show live calculated total (loading complete or no cache)
+        setSafeHTML(totalValueEl, formatUSDBlur(totalValue));
+        _cachedPortfolioTotal = null; // Clear cache flag once live total is shown
+    }
 
     if (totalBreakdownEl) {
         const stakingLoading = document.body.classList.contains('staking-loading');
@@ -419,7 +429,7 @@ function updateTotalPortfolioValue() {
             <span class="breakdown-item">Self-Custody: ${formatUSDBlur(walletsTotal)}</span>
             <span class="breakdown-item">Exchanges: ${formatUSDBlur(exchangesTotal)}</span>
             <span class="breakdown-item">Staking: ${formatUSDBlur(stakingTotal)}${stakingLoading ? ' <span class="staking-spinner"></span>' : ''}</span>
-            <span class="breakdown-item">DeFi Tokens: ${formatUSDBlur(defiTotal)}${defiLoading ? ' <span class="staking-spinner"></span>' : ''}</span>
+            ${defiTotal > 0 || defiLoading ? `<span class="breakdown-item">DeFi Tokens: ${formatUSDBlur(defiTotal)}${defiLoading ? ' <span class="staking-spinner"></span>' : ''}</span>` : ''}
             <span class="breakdown-item">NFTs: ${formatUSDBlur(nftsTotal)}${nftLoading ? ' <span class="staking-spinner"></span>' : ''}</span>
             ${trackedTokensTotal > 0 ? `<span class="breakdown-item">Native Tokens: ${formatUSDBlur(trackedTokensTotal)}</span>` : ''}
             ${customTokensTotal > 0 ? `<span class="breakdown-item">Custom Tokens: ${formatUSDBlur(customTokensTotal)}</span>` : ''}
@@ -427,7 +437,6 @@ function updateTotalPortfolioValue() {
     }
 
     // Update loading indicator on total value
-    const isLoading = document.body.classList.contains('staking-loading') || document.body.classList.contains('nft-loading') || document.body.classList.contains('defi-loading');
     const spinner = totalValueEl.parentElement.querySelector('.total-loading-spinner');
     if (isLoading && !spinner) {
         const spinnerEl = document.createElement('div');
@@ -437,6 +446,32 @@ function updateTotalPortfolioValue() {
     } else if (!isLoading && spinner) {
         spinner.remove();
     }
+
+    // Cache for instant load on next visit (only when all data is loaded)
+    if (!isLoading && totalValue > 0) {
+        try {
+            localStorage.setItem('cachedPortfolioTotal', JSON.stringify({
+                total: totalValue,
+                timestamp: Date.now()
+            }));
+        } catch (e) { /* localStorage full or unavailable */ }
+    }
+}
+
+// Restore cached portfolio total for instant display on page load
+// Only shows the total value (not breakdown) — breakdown fills in naturally as data loads
+let _cachedPortfolioTotal = null;
+function restoreCachedPortfolioTotal() {
+    try {
+        const cached = JSON.parse(localStorage.getItem('cachedPortfolioTotal'));
+        if (!cached || !cached.total) return;
+        // Only use cache if less than 24 hours old
+        if (Date.now() - cached.timestamp > 86400000) return;
+        const totalValueEl = document.getElementById('totalPortfolioValue');
+        if (totalValueEl) setSafeHTML(totalValueEl, formatUSDBlur(cached.total));
+        // Store cached total so updateTotalPortfolioValue() can hold it during loading
+        _cachedPortfolioTotal = cached.total;
+    } catch (e) { /* parse error or missing */ }
 }
 
 // DOM Elements
@@ -551,9 +586,21 @@ function initializePrivacyMode() {
 // Toggle privacy mode
 function togglePrivacyMode() {
     const body = document.body;
-    const btn = document.getElementById('privacyBtn');
     const isEnabled = body.classList.toggle('privacy-mode');
-    btn.classList.toggle('active');
+
+    // Legacy button support
+    const btn = document.getElementById('privacyBtn');
+    if (btn) btn.classList.toggle('active', isEnabled);
+
+    // Sync avatar dropdown indicator
+    if (typeof syncPrivacyIndicator === 'function') {
+        syncPrivacyIndicator();
+    }
+
+    // Close user menu if open
+    if (typeof closeUserMenu === 'function') {
+        closeUserMenu();
+    }
 
     // Save to localStorage
     localStorage.setItem('privacyMode', isEnabled);
@@ -569,20 +616,10 @@ window.addEventListener('storage', (e) => {
     }
 });
 
-// Toggle waffle menu
+// Legacy waffle menu (no longer used - replaced by horizontal nav + avatar dropdown)
 function toggleWaffleMenu() {
-    const menu = document.getElementById('waffleMenu');
-    menu.classList.toggle('active');
+    // No-op for backward compatibility
 }
-
-// Close waffle menu when clicking outside
-document.addEventListener('click', function(event) {
-    const menu = document.getElementById('waffleMenu');
-    const btn = document.querySelector('.waffle-menu-btn');
-    if (menu && btn && !menu.contains(event.target) && !btn.contains(event.target)) {
-        menu.classList.remove('active');
-    }
-});
 
 // Show status message
 function showStatus(message, isError = false) {
@@ -2340,8 +2377,8 @@ async function loadDefiPositions() {
         if (data.positions_by_category) {
             for (const [category, positions] of Object.entries(data.positions_by_category)) {
                 for (const pos of positions) {
-                    // Use the token symbol as the key
-                    const token = pos.asset_name || pos.symbol;
+                    // Use token (standard symbol from DEFI_PROTOCOLS) for price lookup
+                    const token = pos.token || pos.asset_name || pos.symbol;
                     if (token && pos.quantity) {
                         if (!defiTotals[token]) {
                             defiTotals[token] = 0;
@@ -2712,7 +2749,8 @@ async function loadDefiGovernance() {
         if (defiData.positions_by_category) {
             for (const [category, positions] of Object.entries(defiData.positions_by_category)) {
                 for (const pos of positions) {
-                    const token = pos.asset_name || pos.symbol;
+                    // Use token (standard symbol from DEFI_PROTOCOLS) for price lookup
+                    const token = pos.token || pos.asset_name || pos.symbol;
                     if (token && pos.quantity) {
                         if (!defiTotals[token]) defiTotals[token] = 0;
                         defiTotals[token] += pos.quantity;
@@ -3950,7 +3988,8 @@ async function refreshDefi() {
         if (data.positions_by_category) {
             for (const [category, positions] of Object.entries(data.positions_by_category)) {
                 for (const pos of positions) {
-                    const token = pos.asset_name || pos.symbol;
+                    // Use token (standard symbol from DEFI_PROTOCOLS) for price lookup
+                    const token = pos.token || pos.asset_name || pos.symbol;
                     if (token && pos.quantity) {
                         if (!defiTotals[token]) {
                             defiTotals[token] = 0;
@@ -5474,6 +5513,23 @@ function getChartColors() {
         };
     }
 
+    if (theme === 'cypher3') {
+        return { ...shared,
+            lineColor: '#7c3aed',
+            fillColor: 'rgba(124, 58, 237, 0.06)',
+            pointColor: '#7c3aed',
+            pointBorderColor: '#0d0f1a',
+            gridColor: 'rgba(100, 100, 200, 0.08)',
+            tickColor: '#5a5d70',
+            tooltipBg: '#1a1d2e',
+            tooltipTitle: '#e8e8f0',
+            tooltipBody: '#4ade80',
+            tooltipBorder: 'rgba(100, 100, 200, 0.15)',
+            crosshairColor: 'rgba(124, 58, 237, 0.3)',
+            gradientStops: ['#7c3aed', '#4ade80', '#7c3aed']
+        };
+    }
+
     if (theme === 'cypher' || theme === 'cypher2') {
         return { ...shared,
             lineColor: '#a855f7',
@@ -5720,14 +5776,12 @@ function renderPortfolioChart(historyData, range) {
 
 // Initialize range button click handlers
 function initHistoryRangeButtons() {
-    const buttons = document.querySelectorAll('.range-btn');
+    // Only bind v1 range buttons (not v2 which use onclick)
+    const buttons = document.querySelectorAll('#v1RangeSelector .range-btn');
     buttons.forEach(btn => {
         btn.addEventListener('click', () => {
-            // Update active state
             buttons.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-
-            // Load new range
             loadPortfolioHistory(btn.dataset.range);
         });
     });
@@ -5749,6 +5803,291 @@ function formatChartDate(dateStr, range) {
         return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     } else {
         return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+}
+
+// ============================================================================
+// V2 ON-CHAIN BALANCE HISTORY
+// ============================================================================
+
+let currentChartSource = 'v1';
+let v2Chart = null;
+let v2PollInterval = null;
+
+function switchChartSource(source) {
+    currentChartSource = source;
+
+    // Update tab active states
+    document.querySelectorAll('.source-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.textContent.includes(source === 'v1' ? 'v1' : 'v2'));
+    });
+
+    const v1Wrapper = document.getElementById('v1ChartWrapper');
+    const v2Wrapper = document.getElementById('v2ChartWrapper');
+    const v1Range = document.getElementById('v1RangeSelector');
+    const v2Range = document.getElementById('v2RangeSelector');
+
+    if (source === 'v1') {
+        if (v1Wrapper) v1Wrapper.style.display = '';
+        if (v2Wrapper) v2Wrapper.style.display = 'none';
+        if (v1Range) v1Range.style.display = '';
+        if (v2Range) v2Range.style.display = 'none';
+    } else {
+        if (v1Wrapper) v1Wrapper.style.display = 'none';
+        if (v2Wrapper) v2Wrapper.style.display = '';
+        if (v1Range) v1Range.style.display = 'none';
+        if (v2Range) v2Range.style.display = '';
+        // Load v2 data
+        loadV2BalanceHistory('1y');
+        checkV2CollectionStatus();
+    }
+}
+
+async function loadV2BalanceHistory(range) {
+    // Update active v2 range button
+    document.querySelectorAll('.v2-range').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.range === range);
+    });
+
+    const chartCanvas = document.getElementById('v2HistoryChart');
+    const emptyState = document.getElementById('v2ChartEmptyState');
+    const coverageText = document.getElementById('v2CoverageText');
+
+    try {
+        const response = await authFetch(`${API_BASE}/balance-history/data?range=${range}`);
+        const result = await response.json();
+
+        if (result.data && result.data.length > 0) {
+            if (emptyState) emptyState.style.display = 'none';
+            if (chartCanvas) chartCanvas.style.display = 'block';
+            renderV2Chart(result.data, range);
+
+            // Update coverage info
+            if (coverageText && result.coverage) {
+                const c = result.coverage;
+                if (c.oldest_date && c.newest_date) {
+                    coverageText.textContent = `Coverage: ${c.oldest_date} to ${c.newest_date} (${c.total_days} days)`;
+                }
+            }
+        } else {
+            if (emptyState) emptyState.style.display = 'flex';
+            if (chartCanvas) chartCanvas.style.display = 'none';
+            if (v2Chart) {
+                v2Chart.destroy();
+                v2Chart = null;
+            }
+        }
+    } catch (error) {
+        console.error('Error loading v2 balance history:', error);
+        if (emptyState) {
+            emptyState.style.display = 'flex';
+            setSafeHTML(emptyState, '<p>Error loading on-chain history.</p><button class="btn btn-primary" onclick="startBalanceCollection()">Collect Historical Balances</button>');
+        }
+    }
+}
+
+function renderV2Chart(data, range) {
+    const ctx = document.getElementById('v2HistoryChart');
+    if (!ctx) return;
+
+    if (v2Chart) {
+        v2Chart.destroy();
+    }
+
+    const colors = getChartColors();
+    const labels = data.map(d => {
+        const date = new Date(d.date + 'T12:00:00');
+        if (range === '24h' || range === '1w') {
+            return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        }
+        if (range === '1m' || range === '3m') {
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+        return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+    });
+    const values = data.map(d => d.value);
+
+    // Calculate Y axis range with padding
+    const minValue = Math.min(...values);
+    const maxValue = Math.max(...values);
+    const valueRange = maxValue - minValue || 1;
+    const padding = valueRange * 0.1;
+
+    // Gradient fill
+    const chartCtx = ctx.getContext('2d');
+    const gradient = chartCtx.createLinearGradient(0, 0, 0, ctx.height || 300);
+    gradient.addColorStop(0, colors.fillColor);
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+    v2Chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Portfolio Value (On-Chain)',
+                data: values,
+                borderColor: colors.lineColor,
+                backgroundColor: gradient,
+                fill: true,
+                tension: 0.3,
+                pointRadius: 0,
+                pointHoverRadius: 6,
+                pointHoverBackgroundColor: colors.pointColor,
+                pointHoverBorderColor: colors.pointBorderColor,
+                pointHoverBorderWidth: 2,
+                borderWidth: 2,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: colors.tooltipBg,
+                    titleColor: colors.tooltipTitle,
+                    bodyColor: colors.tooltipBody,
+                    borderColor: colors.tooltipBorder,
+                    borderWidth: 1,
+                    padding: 12,
+                    callbacks: {
+                        label: function(context) {
+                            return formatUSD(context.parsed.y);
+                        },
+                        afterBody: function(tooltipItems) {
+                            const idx = tooltipItems[0].dataIndex;
+                            const point = data[idx];
+                            if (point && point.chains) {
+                                const lines = [];
+                                for (const [chain, val] of Object.entries(point.chains)) {
+                                    if (val > 0) {
+                                        lines.push(`  ${chain}: ${formatUSD(val)}`);
+                                    }
+                                }
+                                return lines;
+                            }
+                            return [];
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: colors.gridColor, drawBorder: false },
+                    ticks: {
+                        color: colors.tickColor,
+                        font: { size: 11 },
+                        maxRotation: 45,
+                        maxTicksLimit: 12
+                    }
+                },
+                y: {
+                    min: Math.max(0, minValue - padding),
+                    max: maxValue + padding,
+                    grid: { color: colors.gridColor, drawBorder: false },
+                    ticks: {
+                        color: colors.tickColor,
+                        font: { size: 11 },
+                        callback: function(value) { return formatUSD(value); }
+                    }
+                }
+            }
+        }
+    });
+}
+
+async function startBalanceCollection() {
+    const emptyState = document.getElementById('v2ChartEmptyState');
+    const progress = document.getElementById('v2CollectionProgress');
+
+    if (emptyState) emptyState.style.display = 'none';
+    if (progress) progress.style.display = 'block';
+
+    try {
+        const response = await authFetch(`${API_BASE}/balance-history/collect`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+
+        if (data.status === 'started') {
+            pollV2CollectionStatus();
+        }
+    } catch (error) {
+        console.error('Error starting balance collection:', error);
+        if (progress) progress.style.display = 'none';
+        if (emptyState) {
+            emptyState.style.display = 'flex';
+            setSafeHTML(emptyState, '<p>Error starting collection.</p><button class="btn btn-primary" onclick="startBalanceCollection()">Retry</button>');
+        }
+    }
+}
+
+function pollV2CollectionStatus() {
+    if (v2PollInterval) clearInterval(v2PollInterval);
+
+    v2PollInterval = setInterval(async () => {
+        try {
+            const response = await authFetch(`${API_BASE}/balance-history/collect/status`);
+            const data = await response.json();
+
+            const stepEl = document.getElementById('v2ProgressStep');
+            const barEl = document.getElementById('v2ProgressBar');
+            const pctEl = document.getElementById('v2ProgressPct');
+
+            if (stepEl) stepEl.textContent = data.step || 'Working...';
+            if (barEl) barEl.style.width = (data.progress || 0) + '%';
+            if (pctEl) pctEl.textContent = (data.progress || 0) + '%';
+
+            if (data.status === 'completed') {
+                clearInterval(v2PollInterval);
+                v2PollInterval = null;
+                const progress = document.getElementById('v2CollectionProgress');
+                if (progress) progress.style.display = 'none';
+                // Reload chart
+                const activeBtn = document.querySelector('.v2-range.active');
+                const range = activeBtn ? activeBtn.dataset.range : '1y';
+                await loadV2BalanceHistory(range);
+            } else if (data.status === 'error' || data.status === 'cancelled') {
+                clearInterval(v2PollInterval);
+                v2PollInterval = null;
+                const progress = document.getElementById('v2CollectionProgress');
+                if (progress) progress.style.display = 'none';
+                const emptyState = document.getElementById('v2ChartEmptyState');
+                if (emptyState) {
+                    emptyState.style.display = 'flex';
+                    const msg = data.status === 'cancelled' ? 'Collection cancelled.' : (data.error_message || 'Collection failed.');
+                    setSafeHTML(emptyState, '<p>' + msg + '</p><button class="btn btn-primary" onclick="startBalanceCollection()">Retry</button>');
+                }
+            }
+        } catch (error) {
+            console.error('Error polling v2 collection status:', error);
+        }
+    }, 3000);
+}
+
+async function cancelBalanceCollection() {
+    try {
+        await authFetch(`${API_BASE}/balance-history/collect/cancel`, { method: 'POST' });
+    } catch (error) {
+        console.error('Error cancelling collection:', error);
+    }
+}
+
+async function checkV2CollectionStatus() {
+    try {
+        const response = await authFetch(`${API_BASE}/balance-history/collect/status`);
+        const data = await response.json();
+
+        if (data.status === 'running') {
+            const emptyState = document.getElementById('v2ChartEmptyState');
+            const progress = document.getElementById('v2CollectionProgress');
+            if (emptyState) emptyState.style.display = 'none';
+            if (progress) progress.style.display = 'block';
+            pollV2CollectionStatus();
+        }
+    } catch (error) {
+        // Silently ignore
     }
 }
 
@@ -6338,6 +6677,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize privacy mode from localStorage
     initializePrivacyMode();
 
+    // Show last known portfolio total instantly (before any API calls)
+    restoreCachedPortfolioTotal();
+
     // Check if demo account needs population (non-blocking)
     checkDemoPopulation();
 
@@ -6357,55 +6699,72 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // ========================================
-    // INSTANT LOAD - Show cached data first
+    // PAGE-SPECIFIC DATA LOADING
     // ========================================
-    // Load prices FIRST, then portfolio summary (which needs prices for USD values)
-    try {
-        await loadPrices();
-    } catch (e) {
-        console.error('[Dashboard] Failed to load prices:', e);
-    }
-    try {
-        await loadPortfolioSummary();
-    } catch (e) {
-        console.error('[Dashboard] Failed to load portfolio summary:', e);
-    }
+    const isOverview = !!document.getElementById('totalPortfolioValue');
+    const isAssetsPage = !!document.querySelector('.assets-tab-nav');
+    const isNftsPage = !!document.querySelector('.nfts-tab-nav');
 
-    // ========================================
-    // BACKGROUND UPDATES - Fetch fresh data
-    // ========================================
-    // These run in background and update UI when complete
-    // Use Promise.allSettled to prevent one failure from blocking others
-    Promise.allSettled([
-        loadExchangeData(),
-        loadDefiGovernance(),  // Slow - runs in background now
-        loadCustomTokens(),
-        loadAllNftSummaries(),
-        loadAnalyticsData(true)  // Preload analytics for instant chart slides
-    ]).then(() => {
-        console.log('[Dashboard] Background data loading complete');
-        // Update portfolio total one final time with all fresh data
-        updateTotalPortfolioValue();
-        // Load portfolio history chart NOW that all data is ready (shows correct current value)
-        loadPortfolioHistory('7d');
-        // Check if background generation is already running (survives page navigation)
-        checkRunningHistoryGeneration();
-        // Pre-fetch asset breakdowns for instant modal opening
-        preFetchAssetBreakdowns();
-    });
+    if (isOverview) {
+        // OVERVIEW PAGE: Load prices, portfolio summary, then background data
+        try {
+            await loadPrices();
+        } catch (e) {
+            console.error('[Overview] Failed to load prices:', e);
+        }
+        try {
+            await loadPortfolioSummary();
+        } catch (e) {
+            console.error('[Overview] Failed to load portfolio summary:', e);
+        }
 
-    // Lazy-load NFT list when section scrolls into view (saves network requests on initial load)
-    // Note: loadAllNftSummaries() above still runs eagerly to get NFT values for portfolio total
-    const nftSection = document.querySelector('.nfts-section');
-    if (nftSection) {
-        const nftObserver = new IntersectionObserver((entries) => {
-            if (entries[0].isIntersecting) {
-                console.log('[Dashboard] NFT section visible - loading NFT list');
-                loadNFTs();
-                nftObserver.disconnect();
-            }
-        }, { threshold: 0.1 });
-        nftObserver.observe(nftSection);
+        // Background updates - still load exchange/DeFi/NFT/token data for totals
+        Promise.allSettled([
+            loadExchangeData(),
+            loadDefiGovernance(),
+            loadCustomTokens(),
+            loadAllNftSummaries(),
+            loadAnalyticsData(true)
+        ]).then(() => {
+            console.log('[Overview] Background data loading complete');
+            updateTotalPortfolioValue();
+            loadPortfolioHistory('7d');
+            checkRunningHistoryGeneration();
+            preFetchAssetBreakdowns();
+        });
+    } else if (isAssetsPage) {
+        // ASSETS PAGE: Load prices, portfolio summary (renders wallets), then exchanges/defi/tokens
+        try {
+            await loadPrices();
+        } catch (e) {
+            console.error('[Assets] Failed to load prices:', e);
+        }
+        try {
+            await loadPortfolioSummary();
+        } catch (e) {
+            console.error('[Assets] Failed to load portfolio summary:', e);
+        }
+
+        Promise.allSettled([
+            loadExchangeData(),
+            loadDefiGovernance(),
+            loadCustomTokens()
+        ]).then(() => {
+            console.log('[Assets] Data loading complete');
+        });
+    } else if (isNftsPage) {
+        // NFTS PAGE: Load prices, NFT summaries, NFT list
+        try {
+            await loadPrices();
+        } catch (e) {
+            console.error('[NFTs] Failed to load prices:', e);
+        }
+        try {
+            await loadAllNftSummaries();
+        } catch (e) {
+            console.error('[NFTs] Failed to load NFT summaries:', e);
+        }
+        loadNFTs();
     }
 });
 
@@ -6963,7 +7322,7 @@ function closeAssetBreakdownModal() {
 let currentAnalyticsSlide = 0;
 let coinAllocationChart = null;
 let categoryAllocationChart = null;
-let analyticsData = null;
+var analyticsData = null;  // var to allow redeclaration by transaction-analytics.js on wallets page
 let analyticsLoading = false;
 let selectedCoinIndex = null;
 let selectedCategoryIndex = null;
@@ -7120,47 +7479,44 @@ function renderCoinAllocationChart() {
     values = coins.map(c => c.value_usd);
     colors = generateChartColors(coins.length);
 
-    // Plugin to draw coin symbol in center of doughnut
+    // Store coins on window for center text plugin access
+    window._coinChartData = coins;
+
+    // Plugin to draw detailed info in center of doughnut
     const coinCenterTextPlugin = {
         id: 'coinCenterText',
         afterDraw: (chart) => {
-            if (selectedCoinIndex !== null && selectedCoinIndex !== undefined) {
-                const ctx = chart.ctx;
-                const centerX = chart.chartArea.left + (chart.chartArea.right - chart.chartArea.left) / 2;
-                const centerY = chart.chartArea.top + (chart.chartArea.bottom - chart.chartArea.top) / 2;
+            const coinData = window._coinChartData;
+            if (selectedCoinIndex === null || selectedCoinIndex === undefined || !coinData) return;
 
-                ctx.save();
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillStyle = '#ffffff';
+            const coin = coinData[selectedCoinIndex];
+            const ctx = chart.ctx;
+            const centerX = chart.chartArea.left + (chart.chartArea.right - chart.chartArea.left) / 2;
+            const centerY = chart.chartArea.top + (chart.chartArea.bottom - chart.chartArea.top) / 2;
 
-                const coinSymbol = coins[selectedCoinIndex].symbol;
+            ctx.save();
+            ctx.textAlign = 'center';
 
-                // Use consistent font size
-                const fontSize = 28;
-                ctx.font = `bold ${fontSize}px sans-serif`;
+            // Line 1: Symbol (bold, large)
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 18px sans-serif';
+            ctx.fillText(coin.symbol, centerX, centerY - 22);
 
-                // Calculate available space
-                const chartWidth = chart.chartArea.right - chart.chartArea.left;
-                const chartHeight = chart.chartArea.bottom - chart.chartArea.top;
-                const radius = Math.min(chartWidth, chartHeight) / 2;
-                const innerRadius = radius * 0.65;
-                const maxWidth = innerRadius * 1.6;
+            // Line 2: USD value (bold, larger)
+            ctx.font = 'bold 24px sans-serif';
+            ctx.fillText(formatUSD(coin.value_usd), centerX, centerY + 8);
 
-                const textWidth = ctx.measureText(coinSymbol).width;
+            // Line 3: Percentage (muted)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.font = '14px sans-serif';
+            ctx.fillText(coin.percentage.toFixed(2) + '%', centerX, centerY + 32);
 
-                // Wrap if needed (unlikely for coin symbols)
-                if (textWidth > maxWidth) {
-                    // Scale down font if symbol is too long
-                    const scaledFontSize = Math.floor(fontSize * (maxWidth / textWidth));
-                    ctx.font = `bold ${scaledFontSize}px sans-serif`;
-                }
-
-                ctx.fillText(coinSymbol, centerX, centerY);
-                ctx.restore();
-            }
+            ctx.restore();
         }
     };
+
+    // Build per-segment borders: thin dark line between segments
+    const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim() || '#1a1a2e';
 
     coinAllocationChart = new Chart(ctx, {
         type: 'doughnut',
@@ -7169,26 +7525,20 @@ function renderCoinAllocationChart() {
             datasets: [{
                 data: values,
                 backgroundColor: colors,
-                borderWidth: 0, // No border by default - seamless segments
-                borderColor: 'transparent',
-                hoverBorderWidth: 1,
-                hoverBorderColor: 'rgba(255, 255, 255, 0.6)', // Soft white glow on hover
-                shadowOffsetX: 0,
-                shadowOffsetY: 0,
-                shadowBlur: 20,
-                shadowColor: 'rgba(255, 255, 255, 0.3)',
-                borderRadius: 8
+                borderWidth: 2,
+                borderColor: bgColor,
+                hoverBorderWidth: 2,
+                hoverBorderColor: bgColor,
+                offset: new Array(coins.length).fill(0),
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: true,
-            cutout: '65%', // Thicker ring for modern look
+            cutout: '62%',
             plugins: {
                 legend: { display: false },
-                tooltip: {
-                    enabled: false // No tooltip on chart
-                }
+                tooltip: { enabled: false }
             },
             onClick: (event, elements) => {
                 if (elements.length > 0) {
@@ -7222,19 +7572,16 @@ function selectCoinSegment(index) {
         coins = topCoins;
     }
 
-    // Update chart colors for selection effect (brighten selected segment)
-    const colors = generateChartColors(coins.length);
-    colors[index] = brightenColor(colors[index], 40);
+    // Pop-out effect: offset selected segment
+    const offsets = new Array(coins.length).fill(0);
+    offsets[index] = 14;
 
-    // Create soft white glowing border for selected segment (same as hover)
-    const borderColors = new Array(coins.length).fill('transparent');
-    borderColors[index] = 'rgba(255, 255, 255, 0.6)'; // Soft white glow
-    const borderWidths = new Array(coins.length).fill(0);
-    borderWidths[index] = 5; // Glowing outline for selected
+    // Brighten selected, keep others at base
+    const colors = generateChartColors(coins.length);
+    colors[index] = brightenColor(colors[index], 30);
 
     coinAllocationChart.data.datasets[0].backgroundColor = colors;
-    coinAllocationChart.data.datasets[0].borderColor = borderColors;
-    coinAllocationChart.data.datasets[0].borderWidth = borderWidths;
+    coinAllocationChart.data.datasets[0].offset = offsets;
     coinAllocationChart.update();
 
     // Update legend selection (visual highlight)
@@ -7283,77 +7630,48 @@ function renderCategoryAllocationChart() {
     const values = categories.map(c => c.value_usd);
     const colors = generateCategoryColors(categories.length);
 
-    // Plugin to draw text in center of doughnut
+    // Store categories on window for center text plugin access
+    window._categoryChartData = categories;
+
+    // Plugin to draw detailed info in center of doughnut
     const centerTextPlugin = {
         id: 'centerText',
         afterDraw: (chart) => {
-            if (selectedCategoryIndex !== null && selectedCategoryIndex !== undefined) {
-                const ctx = chart.ctx;
-                const centerX = chart.chartArea.left + (chart.chartArea.right - chart.chartArea.left) / 2;
-                const centerY = chart.chartArea.top + (chart.chartArea.bottom - chart.chartArea.top) / 2;
+            const catData = window._categoryChartData;
+            if (selectedCategoryIndex === null || selectedCategoryIndex === undefined || !catData) return;
 
-                ctx.save();
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillStyle = '#ffffff';
+            const cat = catData[selectedCategoryIndex];
+            const ctx = chart.ctx;
+            const centerX = chart.chartArea.left + (chart.chartArea.right - chart.chartArea.left) / 2;
+            const centerY = chart.chartArea.top + (chart.chartArea.bottom - chart.chartArea.top) / 2;
 
-                let categoryName = categories[selectedCategoryIndex].category;
+            let categoryName = cat.category;
+            if (categoryName === 'Decentralized Finance') categoryName = 'DeFi';
 
-                // Shorten category names for display
-                if (categoryName === 'Decentralized Finance') {
-                    categoryName = 'DeFi';
-                }
+            ctx.save();
+            ctx.textAlign = 'center';
 
-                // Use consistent font size - just wrap if needed
-                const fontSize = 28;
-                ctx.font = `bold ${fontSize}px sans-serif`;
+            // Line 1: Category name (bold)
+            ctx.fillStyle = '#ffffff';
+            const nameSize = categoryName.length > 14 ? 15 : 18;
+            ctx.font = `bold ${nameSize}px sans-serif`;
+            ctx.fillText(categoryName, centerX, centerY - 22);
 
-                // Calculate available space
-                const chartWidth = chart.chartArea.right - chart.chartArea.left;
-                const chartHeight = chart.chartArea.bottom - chart.chartArea.top;
-                const radius = Math.min(chartWidth, chartHeight) / 2;
-                const innerRadius = radius * 0.65;
-                const maxWidth = innerRadius * 1.6;
+            // Line 2: USD value (bold, larger)
+            ctx.font = 'bold 24px sans-serif';
+            ctx.fillText(formatUSD(cat.value_usd), centerX, centerY + 8);
 
-                const textWidth = ctx.measureText(categoryName).width;
+            // Line 3: Percentage (muted)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.font = '14px sans-serif';
+            ctx.fillText(cat.percentage.toFixed(2) + '%', centerX, centerY + 32);
 
-                // If text is too long, wrap it
-                const words = categoryName.split(' ');
-                if (textWidth > maxWidth && words.length > 1) {
-                    // Multi-line text
-                    const lines = [];
-                    let currentLine = '';
-
-                    for (const word of words) {
-                        const testLine = currentLine ? `${currentLine} ${word}` : word;
-                        const testWidth = ctx.measureText(testLine).width;
-
-                        if (testWidth > maxWidth && currentLine) {
-                            lines.push(currentLine);
-                            currentLine = word;
-                        } else {
-                            currentLine = testLine;
-                        }
-                    }
-                    if (currentLine) lines.push(currentLine);
-
-                    // Draw multi-line text
-                    const lineHeight = fontSize * 1.2;
-                    const totalHeight = lines.length * lineHeight;
-                    const startY = centerY - (totalHeight / 2) + (lineHeight / 2);
-
-                    lines.forEach((line, index) => {
-                        ctx.fillText(line, centerX, startY + (index * lineHeight));
-                    });
-                } else {
-                    // Single line text
-                    ctx.fillText(categoryName, centerX, centerY);
-                }
-
-                ctx.restore();
-            }
+            ctx.restore();
         }
     };
+
+    // Build per-segment borders: thin dark line between segments
+    const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim() || '#1a1a2e';
 
     categoryAllocationChart = new Chart(ctx, {
         type: 'doughnut',
@@ -7362,26 +7680,20 @@ function renderCategoryAllocationChart() {
             datasets: [{
                 data: values,
                 backgroundColor: colors,
-                borderWidth: 0, // No border by default - seamless segments
-                borderColor: 'transparent',
-                hoverBorderWidth: 1,
-                hoverBorderColor: 'rgba(255, 255, 255, 0.6)', // Soft white glow on hover
-                shadowOffsetX: 0,
-                shadowOffsetY: 0,
-                shadowBlur: 20,
-                shadowColor: 'rgba(255, 255, 255, 0.3)',
-                borderRadius: 8
+                borderWidth: 2,
+                borderColor: bgColor,
+                hoverBorderWidth: 2,
+                hoverBorderColor: bgColor,
+                offset: new Array(categories.length).fill(0),
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: true,
-            cutout: '65%', // Thicker ring for modern look
+            cutout: '62%',
             plugins: {
                 legend: { display: false },
-                tooltip: {
-                    enabled: false // Tooltip disabled on chart - using legend hover instead
-                }
+                tooltip: { enabled: false }
             },
             onClick: (event, elements) => {
                 if (elements.length > 0) {
@@ -7398,19 +7710,18 @@ function renderCategoryAllocationChart() {
 function selectCategorySegment(index) {
     selectedCategoryIndex = index;
 
-    // Update chart colors for selection effect (brighten selected segment)
-    const colors = generateCategoryColors(analyticsData.category_allocation.length);
-    colors[index] = brightenColor(colors[index], 40);
+    const count = analyticsData.category_allocation.length;
 
-    // Create soft white glowing border for selected segment (same as hover)
-    const borderColors = new Array(analyticsData.category_allocation.length).fill('transparent');
-    borderColors[index] = 'rgba(255, 255, 255, 0.6)'; // Soft white glow
-    const borderWidths = new Array(analyticsData.category_allocation.length).fill(0);
-    borderWidths[index] = 5; // Glowing outline for selected
+    // Pop-out effect: offset selected segment
+    const offsets = new Array(count).fill(0);
+    offsets[index] = 14;
+
+    // Brighten selected, keep others at base
+    const colors = generateCategoryColors(count);
+    colors[index] = brightenColor(colors[index], 30);
 
     categoryAllocationChart.data.datasets[0].backgroundColor = colors;
-    categoryAllocationChart.data.datasets[0].borderColor = borderColors;
-    categoryAllocationChart.data.datasets[0].borderWidth = borderWidths;
+    categoryAllocationChart.data.datasets[0].offset = offsets;
     categoryAllocationChart.update();
 
     // Update legend selection (visual highlight)

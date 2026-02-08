@@ -34,7 +34,7 @@ Usage:
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -48,7 +48,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import PROJECT_ROOT, DATA_DIR, CERTS_DIR, DEFAULT_CERT_PATH, DEFAULT_KEY_PATH, NFT_SCHEDULER_ENABLED
 from database import init_db, init_encryption, migrate_encrypt_api_keys
 from nft_image_database import init_nft_image_db
-from routers import wallets, portfolio, defi, prices, exchanges, nfts, custom_tokens, settings, security, logs, nft_scheduler as nft_scheduler_router, backup, auth, dashboard, mobile, nmkr, cache, spam, transactions, demo, cloudflare
+from routers import wallets, portfolio, defi, prices, exchanges, nfts, custom_tokens, settings, security, logs, nft_scheduler as nft_scheduler_router, backup, auth, dashboard, mobile, nmkr, cache, spam, transactions, demo, cloudflare, system, balance_history
 
 from middleware import RequestSizeLimitMiddleware, RATE_LIMITING_AVAILABLE
 from services.logging_service import get_logging_service
@@ -490,6 +490,8 @@ app.include_router(spam.router)
 app.include_router(transactions.router)
 app.include_router(demo.router)
 app.include_router(cloudflare.router)
+app.include_router(system.router)
+app.include_router(balance_history.router)
 
 # Mount static files (frontend)
 frontend_path = PROJECT_ROOT / "frontend"
@@ -505,40 +507,61 @@ async def login_page():
     """Serve the login page."""
     return FileResponse(str(frontend_path / "login.html"))
 
+@app.get("/assets.html")
+async def assets_page():
+    """Serve the Assets page (Wallets, Exchanges, DeFi, Custom Tokens)."""
+    return FileResponse(str(frontend_path / "assets.html"))
+
+@app.get("/nfts.html")
+async def nfts_page():
+    """Serve the NFTs page (My NFTs + NFT Wall)."""
+    return FileResponse(str(frontend_path / "nfts.html"))
+
 @app.get("/nft-wall.html")
 async def nft_wall():
-    """Serve the NFT Wall gallery page."""
-    return FileResponse(str(frontend_path / "nft-wall.html"))
+    """Redirect NFT Wall to NFTs page (Wall tab)."""
+    return RedirectResponse(url="/nfts.html#wall", status_code=301)
 
 @app.get("/wallets.html")
 async def wallets_page():
     """Serve the Wallet Manager page."""
     return FileResponse(str(frontend_path / "wallets.html"))
 
+@app.get("/settings.html")
+async def settings_page():
+    """Serve the consolidated Settings page (APIs, Services, Security, Backup)."""
+    return FileResponse(str(frontend_path / "settings.html"))
+
+@app.get("/system.html")
+async def system_page():
+    """Serve the consolidated System page (Cache, Logs)."""
+    return FileResponse(str(frontend_path / "system.html"))
+
+# Legacy redirects — old URLs redirect to consolidated pages
 @app.get("/apis.html")
-async def apis_page():
-    """Serve the API Manager page."""
-    return FileResponse(str(frontend_path / "apis.html"))
+async def apis_redirect():
+    """Redirect to Settings page (API Keys tab)."""
+    return RedirectResponse(url="/settings.html#apis", status_code=301)
 
 @app.get("/services.html")
-async def services_page():
-    """Serve the Service Health page."""
-    return FileResponse(str(frontend_path / "services.html"))
+async def services_redirect():
+    """Redirect to System page (Services tab)."""
+    return RedirectResponse(url="/system.html#services", status_code=301)
 
 @app.get("/security.html")
-async def security_page():
-    """Serve the Security Settings page."""
-    return FileResponse(str(frontend_path / "security.html"))
-
-@app.get("/logs.html")
-async def logs_page():
-    """Serve the System Logs page."""
-    return FileResponse(str(frontend_path / "logs.html"))
+async def security_redirect():
+    """Redirect to Settings page (Security tab)."""
+    return RedirectResponse(url="/settings.html#security", status_code=301)
 
 @app.get("/backup.html")
-async def backup_page():
-    """Serve the Backup & Restore page."""
-    return FileResponse(str(frontend_path / "backup.html"))
+async def backup_redirect():
+    """Redirect to Settings page (Backup tab)."""
+    return RedirectResponse(url="/settings.html#backup", status_code=301)
+
+@app.get("/logs.html")
+async def logs_redirect():
+    """Redirect to System page (Logs tab)."""
+    return RedirectResponse(url="/system.html#logs", status_code=301)
 
 @app.get("/api-help.html")
 async def api_help_page():
@@ -551,14 +574,14 @@ async def dashv2_page():
     return FileResponse(str(frontend_path / "dashv2.html"))
 
 @app.get("/cache.html")
-async def cache_page():
-    """Serve the Cache Management page."""
-    return FileResponse(str(frontend_path / "cache.html"))
+async def cache_redirect():
+    """Redirect to System page (Cache tab)."""
+    return RedirectResponse(url="/system.html#cache", status_code=301)
 
 @app.get("/transactions.html")
-async def transactions_page():
-    """Serve the Transaction History page."""
-    return FileResponse(str(frontend_path / "transactions.html"))
+async def transactions_redirect():
+    """Redirect to Wallets page (Transactions tab)."""
+    return RedirectResponse(url="/wallets.html#transactions", status_code=301)
 
 @app.get("/health")
 async def health_check():

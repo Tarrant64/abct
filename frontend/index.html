@@ -6,7 +6,7 @@
     <title>A Better Crypto Tracker</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1770504681">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1770523133">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preconnect" href="https://unpkg.com" crossorigin>
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
@@ -15,72 +15,35 @@
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1770504681"></script>
+    <script src="/static/js/session-auth.js?v=1770523133"></script>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>A Better Crypto Tracker</h1>
-            <div class="header-actions">
-                <button id="privacyBtn" class="btn btn-privacy" onclick="togglePrivacyMode()" title="Toggle privacy mode">
-                    Privacy Mode
-                </button>
-                <button id="sectionsToggleBtn" class="btn btn-sections" onclick="toggleAllSections()" title="Expand/Collapse all sections">
-                    Expand All
-                </button>
-                <button id="refreshBtn" class="btn btn-primary" title="Sync wallet balances from blockchain">Sync Wallets</button>
-                <div class="waffle-menu-container">
-                    <button class="waffle-menu-btn" onclick="toggleWaffleMenu()" title="Menu">
-                        <span class="waffle-icon">
-                            <span></span><span></span><span></span>
-                            <span></span><span></span><span></span>
-                            <span></span><span></span><span></span>
-                        </span>
+            <nav class="main-nav">
+                <a href="/" class="nav-item active">Overview</a>
+                <a href="/assets.html" class="nav-item">Assets</a>
+                <a href="/nfts.html" class="nav-item">NFTs</a>
+            </nav>
+            <div class="header-right-controls">
+                <div class="user-avatar-container">
+                    <button class="user-avatar-btn" onclick="toggleUserMenu()">
+                        <div class="avatar-circle" id="userAvatar">?</div>
                     </button>
-                    <div class="waffle-menu-dropdown" id="waffleMenu">
-                        <a href="/" class="waffle-menu-item active">
-                            <span class="waffle-item-icon">&#128200;</span>
-                            <span class="waffle-item-label">Dashboard</span>
-                        </a>
-                        <a href="/wallets.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128176;</span>
-                            <span class="waffle-item-label">Manage Wallets</span>
-                        </a>
-                        <a href="/transactions.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128260;</span>
-                            <span class="waffle-item-label">Transactions</span>
-                        </a>
-                        <a href="/apis.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128273;</span>
-                            <span class="waffle-item-label">APIs</span>
-                        </a>
-                        <a href="/services.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#9881;</span>
-                            <span class="waffle-item-label">Services</span>
-                        </a>
-                        <a href="/security.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128274;</span>
-                            <span class="waffle-item-label">Security</span>
-                        </a>
-                        <a href="/backup.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128230;</span>
-                            <span class="waffle-item-label">Backup & Restore</span>
-                        </a>
-                        <a href="/cache.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128452;</span>
-                            <span class="waffle-item-label">Cache Management</span>
-                        </a>
-                        <a href="/nft-wall.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128444;</span>
-                            <span class="waffle-item-label">NFT Wall</span>
-                        </a>
-                        <a href="/logs.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128221;</span>
-                            <span class="waffle-item-label">System Logs</span>
-                        </a>
-                        <div class="waffle-menu-divider"></div>
-                        <div class="waffle-menu-theme">
-                            <span class="waffle-item-icon">&#127912;</span>
+                    <div class="user-menu-dropdown" id="userMenu">
+                        <div class="user-menu-header">
+                            <span id="userMenuName">User</span>
+                        </div>
+                        <div class="user-menu-divider"></div>
+                        <a href="/wallets.html" class="user-menu-item">Manage Wallets</a>
+                        <a href="/settings.html" class="user-menu-item">Settings</a>
+                        <a href="/system.html" class="user-menu-item">System</a>
+                        <div class="user-menu-divider"></div>
+                        <button class="user-menu-item" onclick="togglePrivacyMode()">
+                            Privacy Mode <span class="privacy-indicator" id="privacyIndicator">OFF</span>
+                        </button>
+                        <div class="user-menu-theme-row">
+                            <span>Theme</span>
                             <select id="themeSelect" onchange="changeTheme(this.value)" title="Select theme">
                                 <option value="dark-mode">Dark Mode</option>
                                 <option value="light">Light</option>
@@ -89,8 +52,12 @@
                                 <option value="sunset-horizon">Sunset Horizon</option>
                                 <option value="cypher">Cypher</option>
                                 <option value="cypher2">Cypher2</option>
+                                <option value="cypher3">Cypher3</option>
                             </select>
                         </div>
+                        <div class="user-menu-divider"></div>
+                        <button class="user-menu-item" id="changePasswordMenuItem" onclick="showChangePasswordModal()">Change Password</button>
+                        <button class="user-menu-item user-menu-logout" onclick="logout()">Logout</button>
                     </div>
                 </div>
             </div>
@@ -110,9 +77,6 @@
 
             <!-- Portfolio Summary -->
             <section class="summary-section">
-                <div class="section-header-inline summary-header">
-                    <h2>Portfolio Summary</h2>
-                </div>
                 <div class="total-portfolio-card">
                     <div class="total-header">
                         <div class="total-label">Total Portfolio Value</div>
@@ -133,50 +97,96 @@
             <section class="history-section">
                 <div class="section-header-inline">
                     <h2>Portfolio Value History</h2>
-                    <div class="history-range-selector">
-                        <button class="range-btn" data-range="1d">1 Day</button>
-                        <button class="range-btn active" data-range="7d">7 Days</button>
-                        <button class="range-btn" data-range="4w">4 Weeks</button>
-                        <button class="range-btn" data-range="3m">3 Months</button>
+                    <div class="history-source-tabs">
+                        <button class="source-tab active" onclick="switchChartSource('v1')">Estimated (v1)</button>
+                        <button class="source-tab" onclick="switchChartSource('v2')">On-Chain (v2)</button>
                     </div>
                 </div>
-                <div class="history-chart-container">
-                    <canvas id="portfolioHistoryChart"></canvas>
-                    <div class="chart-empty-state" id="chartEmptyState">
-                        <p>No historical data yet.</p>
-                        <p class="chart-empty-hint">Portfolio snapshots are captured every 2 hours.</p>
-                        <button class="btn btn-primary" onclick="generatePortfolioHistory()" id="generateHistoryBtn">Generate 30-Day History</button>
+
+                <!-- V1 controls -->
+                <div class="history-range-selector" id="v1RangeSelector">
+                    <button class="range-btn" data-range="1d">1 Day</button>
+                    <button class="range-btn active" data-range="7d">7 Days</button>
+                    <button class="range-btn" data-range="4w">4 Weeks</button>
+                    <button class="range-btn" data-range="3m">3 Months</button>
+                </div>
+
+                <!-- V2 controls (hidden by default) -->
+                <div class="history-range-selector" id="v2RangeSelector" style="display: none;">
+                    <button class="range-btn v2-range" data-range="24h" onclick="loadV2BalanceHistory('24h')">24H</button>
+                    <button class="range-btn v2-range" data-range="1w" onclick="loadV2BalanceHistory('1w')">1W</button>
+                    <button class="range-btn v2-range" data-range="1m" onclick="loadV2BalanceHistory('1m')">1M</button>
+                    <button class="range-btn v2-range" data-range="3m" onclick="loadV2BalanceHistory('3m')">3M</button>
+                    <button class="range-btn v2-range" data-range="6m" onclick="loadV2BalanceHistory('6m')">6M</button>
+                    <button class="range-btn v2-range active" data-range="1y" onclick="loadV2BalanceHistory('1y')">1Y</button>
+                    <button class="range-btn v2-range" data-range="all" onclick="loadV2BalanceHistory('all')">All</button>
+                </div>
+
+                <!-- V1 chart -->
+                <div id="v1ChartWrapper">
+                    <div class="history-chart-container">
+                        <canvas id="portfolioHistoryChart"></canvas>
+                        <div class="chart-empty-state" id="chartEmptyState">
+                            <p>No historical data yet.</p>
+                            <p class="chart-empty-hint">Portfolio snapshots are captured every 2 hours.</p>
+                            <button class="btn btn-primary" onclick="generatePortfolioHistory()" id="generateHistoryBtn">Generate 30-Day History</button>
+                        </div>
+                    </div>
+                    <div class="chart-category-toggles">
+                        <span class="toggle-label">Include:</span>
+                        <label class="category-toggle">
+                            <input type="checkbox" id="chartWallets" checked onchange="updateChartCategories()">
+                            <span class="category-name">Wallets</span>
+                        </label>
+                        <label class="category-toggle">
+                            <input type="checkbox" id="chartExchanges" checked onchange="updateChartCategories()">
+                            <span class="category-name">Exchanges</span>
+                        </label>
+                        <label class="category-toggle">
+                            <input type="checkbox" id="chartStaking" checked onchange="updateChartCategories()">
+                            <span class="category-name">Staking</span>
+                        </label>
+                        <label class="category-toggle">
+                            <input type="checkbox" id="chartDefi" checked onchange="updateChartCategories()">
+                            <span class="category-name">DeFi</span>
+                        </label>
+                        <label class="category-toggle">
+                            <input type="checkbox" id="chartNfts" checked onchange="updateChartCategories()">
+                            <span class="category-name">NFTs</span>
+                        </label>
+                        <label class="category-toggle">
+                            <input type="checkbox" id="chartTrackedTokens" checked onchange="updateChartCategories()">
+                            <span class="category-name">Native Tokens</span>
+                        </label>
+                    </div>
+                    <div class="history-info">
+                        <span id="historyLastUpdate">Last snapshot: --</span>
                     </div>
                 </div>
-                <div class="chart-category-toggles">
-                    <span class="toggle-label">Include:</span>
-                    <label class="category-toggle">
-                        <input type="checkbox" id="chartWallets" checked onchange="updateChartCategories()">
-                        <span class="category-name">Wallets</span>
-                    </label>
-                    <label class="category-toggle">
-                        <input type="checkbox" id="chartExchanges" checked onchange="updateChartCategories()">
-                        <span class="category-name">Exchanges</span>
-                    </label>
-                    <label class="category-toggle">
-                        <input type="checkbox" id="chartStaking" checked onchange="updateChartCategories()">
-                        <span class="category-name">Staking</span>
-                    </label>
-                    <label class="category-toggle">
-                        <input type="checkbox" id="chartDefi" checked onchange="updateChartCategories()">
-                        <span class="category-name">DeFi</span>
-                    </label>
-                    <label class="category-toggle">
-                        <input type="checkbox" id="chartNfts" checked onchange="updateChartCategories()">
-                        <span class="category-name">NFTs</span>
-                    </label>
-                    <label class="category-toggle">
-                        <input type="checkbox" id="chartTrackedTokens" checked onchange="updateChartCategories()">
-                        <span class="category-name">Native Tokens</span>
-                    </label>
-                </div>
-                <div class="history-info">
-                    <span id="historyLastUpdate">Last snapshot: --</span>
+
+                <!-- V2 chart (hidden by default) -->
+                <div id="v2ChartWrapper" style="display: none;">
+                    <div class="history-chart-container">
+                        <canvas id="v2HistoryChart"></canvas>
+                        <div class="chart-empty-state" id="v2ChartEmptyState">
+                            <p>No on-chain history collected yet.</p>
+                            <p class="chart-empty-hint">Collects real historical balances from blockchain APIs.</p>
+                            <button class="btn btn-primary" onclick="startBalanceCollection()">Collect Historical Balances</button>
+                        </div>
+                    </div>
+                    <!-- V2 collection progress (hidden by default) -->
+                    <div class="collection-progress" id="v2CollectionProgress" style="display: none;">
+                        <p id="v2ProgressStep">Starting collection...</p>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar-fill" id="v2ProgressBar" style="width: 0%"></div>
+                        </div>
+                        <p class="chart-empty-hint" id="v2ProgressPct">0%</p>
+                        <button class="btn btn-secondary" onclick="cancelBalanceCollection()">Cancel</button>
+                    </div>
+                    <!-- V2 coverage info -->
+                    <div class="history-info" id="v2CoverageInfo">
+                        <span id="v2CoverageText">Coverage: --</span>
+                    </div>
                 </div>
             </section>
 
@@ -429,175 +439,6 @@
                 </div>
             </section>
 
-            <!-- Display Mode Toggle -->
-            <div class="display-toggle-container" style="text-align: center; margin: 20px 0;">
-                <div class="display-toggle display-toggle-compact" style="display: inline-block;">
-                    <button id="displayToggle" class="toggle-btn toggle-btn-compact" onclick="toggleDisplayMode()">
-                        <span class="toggle-option active" data-mode="crypto">Crypto</span>
-                        <span class="toggle-option" data-mode="usd">USD</span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Wallets List -->
-            <section class="wallets-section collapsible-section collapsed">
-                <div class="section-header" onclick="toggleSection(this)">
-                    <h2>Self-Custody Wallets</h2>
-                    <div class="section-summary" id="walletsSummary">
-                        <span class="chain-count cardano">0 Cardano</span>
-                        <span class="chain-count bitcoin">0 Bitcoin</span>
-                        <span class="chain-count ethereum">0 Ethereum</span>
-                        <span class="chain-count solana">0 Solana</span>
-                        <span class="chain-count polygon">0 Polygon</span>
-                        <span class="chain-count base">0 Base</span>
-                    </div>
-                    <button class="section-refresh-btn" onclick="event.stopPropagation(); refreshWallets();" title="Refresh wallets">⟳</button>
-                    <span class="collapse-icon">▼</span>
-                </div>
-                <div id="walletsList" class="wallets-list section-content">
-                    <p class="empty-state">No wallets found. Click "Manage Wallets" to add your wallet addresses.</p>
-                </div>
-            </section>
-
-            <!-- Exchange Wallets -->
-            <section class="exchanges-section collapsible-section collapsed">
-                <div class="section-header" onclick="toggleSection(this)">
-                    <h2>Exchange Wallets</h2>
-                    <div class="section-summary" id="exchangesSummary">
-                        <span class="exchange-status">Loading...</span>
-                    </div>
-                    <button class="section-refresh-btn" onclick="event.stopPropagation(); refreshExchanges();" title="Refresh exchanges">⟳</button>
-                    <span class="collapse-icon">▼</span>
-                </div>
-                <div id="exchangesList" class="exchanges-list section-content">
-                    <p class="empty-state">Loading exchange data...</p>
-                </div>
-            </section>
-
-            <!-- DeFi & Governance (consolidated section) -->
-            <section class="defi-governance-section collapsible-section collapsed">
-                <div class="section-header" onclick="toggleSection(this)">
-                    <h2>DeFi & Governance</h2>
-                    <div class="section-summary" id="defiGovernanceSummary">
-                        <span class="defi-gov-status">Loading...</span>
-                    </div>
-                    <button class="section-refresh-btn" onclick="event.stopPropagation(); refreshDefiGovernance();" title="Refresh DeFi & Governance">⟳</button>
-                    <span class="collapse-icon">▼</span>
-                </div>
-                <div class="defi-governance-content section-content" id="defiGovernanceContent">
-                    <p class="empty-state">Loading DeFi & Governance data...</p>
-                </div>
-            </section>
-
-            <!-- NFTs -->
-            <section class="nfts-section collapsible-section collapsed">
-                <div class="section-header" onclick="toggleSection(this)">
-                    <h2>NFTs</h2>
-                    <div class="section-summary" id="nftsSummary">
-                        <span class="nft-count">0 NFTs</span>
-                        <span class="nft-value">$0.00</span>
-                    </div>
-                    <button class="section-refresh-btn" onclick="event.stopPropagation(); refreshNFTs();" title="Refresh NFTs">⟳</button>
-                    <span class="collapse-icon">▼</span>
-                </div>
-                <div class="nfts-content section-content">
-                    <div class="nft-controls">
-                        <div class="nft-chain-tabs">
-                            <button class="chain-tab active" data-chain="cardano" onclick="switchNFTChain('cardano')">
-                                <span class="chain-name">Cardano</span>
-                                <span class="chain-stats" id="cardanoNftStats">0 · $0</span>
-                            </button>
-                            <button class="chain-tab" data-chain="ethereum" onclick="switchNFTChain('ethereum')">
-                                <span class="chain-name">Ethereum</span>
-                                <span class="chain-stats" id="ethereumNftStats">0 · $0</span>
-                            </button>
-                            <button class="chain-tab" data-chain="solana" onclick="switchNFTChain('solana')">
-                                <span class="chain-name">Solana</span>
-                                <span class="chain-stats" id="solanaNftStats">0 · $0</span>
-                            </button>
-                            <button class="chain-tab" data-chain="polygon" onclick="switchNFTChain('polygon')">
-                                <span class="chain-name">Polygon</span>
-                                <span class="chain-stats" id="polygonNftStats">0 · $0</span>
-                            </button>
-                            <button class="chain-tab" data-chain="base" onclick="switchNFTChain('base')">
-                                <span class="chain-name">Base</span>
-                                <span class="chain-stats" id="baseNftStats">0 · $0</span>
-                            </button>
-                        </div>
-                        <div class="nft-actions">
-                            <label class="image-cache-toggle" title="Cache NFT images locally for faster loading">
-                                <input type="checkbox" id="imageCacheToggle" onchange="toggleImageCache(this.checked)">
-                                <span class="toggle-slider"></span>
-                                <span class="toggle-text">Cache Images</span>
-                            </label>
-                            <a href="/nft-wall.html" class="btn btn-nft-wall" title="View NFT image gallery">
-                                NFT Wall
-                            </a>
-                            <button class="btn btn-sync-prices" onclick="syncNFTPrices()" title="Sync Cardano floor prices from external service">
-                                Sync Prices
-                            </button>
-                        </div>
-                    </div>
-                    <div id="nftsList" class="nfts-list">
-                        <p class="empty-state">Loading NFTs...</p>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Custom Tokens (Manually Added) -->
-            <section class="custom-tokens-section collapsible-section collapsed">
-                <div class="section-header" onclick="toggleSection(this)">
-                    <h2>Custom Tokens</h2>
-                    <div class="section-summary" id="customTokensSummary">
-                        <span>0 tokens</span>
-                    </div>
-                    <button class="section-refresh-btn" onclick="event.stopPropagation(); loadCustomTokens();" title="Refresh custom tokens">⟳</button>
-                    <span class="collapse-icon">▼</span>
-                </div>
-                <div id="customTokensList" class="custom-tokens-list section-content">
-                    <p class="empty-state">No custom tokens added. Use "Add Token" below to track tokens manually.</p>
-                </div>
-            </section>
-
-            <!-- Token Policy ID Modal -->
-            <div id="tokenPolicyModal" class="modal hidden">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h3>Manual Token Tracking</h3>
-                        <button class="modal-close" onclick="closeTokenModal()">&times;</button>
-                    </div>
-                    <div class="modal-body">
-                        <p class="modal-notice">Only <strong>Cardano</strong>, <strong>Ethereum</strong>, <strong>Bitcoin</strong>, and <strong>Solana</strong> chains are supported for manual token tracking.</p>
-                        <div class="form-group">
-                            <label for="modalChainSelect">Select Chain:</label>
-                            <select id="modalChainSelect">
-                                <option value="cardano">Cardano</option>
-                                <option value="ethereum">Ethereum</option>
-                                <option value="bitcoin">Bitcoin</option>
-                                <option value="solana">Solana</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="modalPolicyId">Policy ID / Contract Address:</label>
-                            <input type="text" id="modalPolicyId" placeholder="Enter policy ID (Cardano) or contract address">
-                        </div>
-                        <div class="form-group">
-                            <label for="modalQuantity">Quantity:</label>
-                            <input type="text" id="modalQuantity" placeholder="Enter quantity">
-                        </div>
-                        <div class="form-group">
-                            <label for="modalLabel">Label (optional):</label>
-                            <input type="text" id="modalLabel" placeholder="e.g., My INDY Holdings">
-                        </div>
-                        <div id="tokenLookupResult" class="token-lookup-result hidden"></div>
-                    </div>
-                    <div class="modal-footer">
-                        <button class="btn btn-secondary" onclick="closeTokenModal()">Cancel</button>
-                        <button class="btn btn-primary" onclick="submitManualToken()">Add Token</button>
-                    </div>
-                </div>
-            </div>
-
         <!-- Blockchain Asset Breakdown Modal -->
         <div id="assetBreakdownModal" class="modal hidden">
             <div class="modal-overlay" onclick="closeAssetBreakdownModal()"></div>
@@ -693,10 +534,10 @@
         </main>
 
         <footer>
-            <p>ABCT - Personal Crypto Portfolio Tracker | Phase 1 | <span id="appVersion" style="opacity: 0.6;">v1.0.1 (BUILD 1770394739)</span></p>
+            <p>ABCT - Personal Crypto Portfolio Tracker | Phase 1 | <span id="appVersion" style="opacity: 0.6;">v1.0.1 (BUILD 1770519801)</span></p>
         </footer>
     </div>
 
-    <script src="/static/js/app.js?v=1770504681"></script>
+    <script src="/static/js/app.js?v=1770523133"></script>
 </body>
 </html>

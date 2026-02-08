@@ -6,9 +6,9 @@
     <title>NFT Wall - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1770504681">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1770523133">
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1770504681"></script>
+    <script src="/static/js/session-auth.js?v=1770523133"></script>
     <style>
         /* NFT Wall Specific Styles */
         .wall-container {
@@ -508,16 +508,17 @@
         /* Chain badge floats above blurred image */
         body.privacy-mode .modal-image-badge {
             z-index: 2;
-            position: relative;
             filter: none;
         }
         body.privacy-mode .modal-edition-badge {
             z-index: 2;
-            position: relative;
             filter: none;
         }
         /* Blur identifying text: NFT name, collection name, wallet */
-        body.privacy-mode .modal-title,
+        body.privacy-mode .modal-title {
+            filter: blur(8px) !important;
+            user-select: none;
+        }
         body.privacy-mode .modal-collection-name,
         body.privacy-mode .modal-creator {
             filter: blur(8px);
@@ -529,7 +530,11 @@
             user-select: none;
         }
         /* Keep floor price, USD value, blockchain visible */
-        /* Blur sibling names but keep images and prices visible */
+        /* Blur sibling images and names (reveals which NFTs you own) */
+        body.privacy-mode .sibling-image img {
+            filter: blur(12px);
+            user-select: none;
+        }
         body.privacy-mode .sibling-name {
             filter: blur(8px);
             user-select: none;
@@ -936,39 +941,15 @@
                         </a>
                         <a href="/wallets.html" class="waffle-menu-item">
                             <span class="waffle-item-icon">&#128176;</span>
-                            <span class="waffle-item-label">Manage Wallets</span>
+                            <span class="waffle-item-label">Wallets</span>
                         </a>
-                        <a href="/transactions.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128260;</span>
-                            <span class="waffle-item-label">Transactions</span>
-                        </a>
-                        <a href="/apis.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128273;</span>
-                            <span class="waffle-item-label">APIs</span>
-                        </a>
-                        <a href="/services.html" class="waffle-menu-item">
+                        <a href="/settings.html" class="waffle-menu-item">
                             <span class="waffle-item-icon">&#9881;</span>
-                            <span class="waffle-item-label">Services</span>
+                            <span class="waffle-item-label">Settings</span>
                         </a>
-                        <a href="/security.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128274;</span>
-                            <span class="waffle-item-label">Security</span>
-                        </a>
-                        <a href="/backup.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128230;</span>
-                            <span class="waffle-item-label">Backup & Restore</span>
-                        </a>
-                        <a href="/cache.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128452;</span>
-                            <span class="waffle-item-label">Cache Management</span>
-                        </a>
-                        <a href="/nft-wall.html" class="waffle-menu-item active">
-                            <span class="waffle-item-icon">&#128444;</span>
-                            <span class="waffle-item-label">NFT Wall</span>
-                        </a>
-                        <a href="/logs.html" class="waffle-menu-item">
+                        <a href="/system.html" class="waffle-menu-item">
                             <span class="waffle-item-icon">&#128221;</span>
-                            <span class="waffle-item-label">System Logs</span>
+                            <span class="waffle-item-label">System</span>
                         </a>
                         <div class="waffle-menu-divider"></div>
                         <div class="waffle-menu-theme">
@@ -981,6 +962,7 @@
                                 <option value="sunset-horizon">Sunset Horizon</option>
                                 <option value="cypher">Cypher</option>
                                 <option value="cypher2">Cypher2</option>
+                                <option value="cypher3">Cypher3</option>
                             </select>
                         </div>
                     </div>
@@ -1631,7 +1613,7 @@
     </script>
 
     <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
-        <p>ABCT - NFT Gallery | <span style="opacity: 0.6;">v1.0.1 (BUILD 1770394739)</span></p>
+        <p>ABCT - NFT Gallery | <span style="opacity: 0.6;">v1.0.1 (BUILD 1770519801)</span></p>
     </footer>
 </body>
 </html>
