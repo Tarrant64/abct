@@ -4688,7 +4688,7 @@ function getNftImageUrl(nft, chain) {
     return nft.image_url || nft.image || '/static/img/nft-placeholder.png';
 }
 
-// Sync Cardano NFT floor prices from the external Cardano NFT Price Service
+// Sync Cardano NFT floor prices using all available sources
 async function syncNFTPrices() {
     // Check if demo mode
     if (window.isDemoMode && window.isDemoMode()) {
@@ -4703,30 +4703,26 @@ async function syncNFTPrices() {
     }
 
     try {
-        // First check if the service is available
-        const statusResponse = await authFetch(`${API_BASE}/nfts/prices/service-status`);
-        const statusData = await statusResponse.json();
-
-        if (!statusData.configured) {
-            showStatus('Cardano NFT Price Service not configured', true);
-            return;
-        }
-
-        if (!statusData.available) {
-            showStatus('Cardano NFT Price Service is not available', true);
-            return;
-        }
-
-        // Sync prices
         const response = await authFetch(`${API_BASE}/nfts/prices/sync`, { method: 'POST' });
         const data = await response.json();
 
         if (data.success) {
-            showStatus(`Synced ${data.synced} Cardano floor prices`);
-            // Reload NFTs to show updated prices
+            // Build a user-friendly message
+            let msg = `Synced ${data.synced}/${data.total_collections} collections`;
+            if (data.failed > 0 && data.rate_limited) {
+                msg += ` \u00b7 ${data.failed} unavailable (rate limit)`;
+            } else if (data.failed > 0) {
+                msg += ` \u00b7 ${data.failed} unavailable`;
+            }
+            showStatus(msg);
+
+            // Reload NFTs and refresh coverage
             if (currentNFTChain === 'cardano') {
                 loadNFTs();
             }
+            loadNFTPriceCoverage();
+        } else if (!data.has_sources) {
+            showStatus('No pricing sources available \u2014 configure TapTools API key in Settings', true);
         } else {
             showStatus(data.message || 'Failed to sync prices', true);
         }
@@ -4738,6 +4734,32 @@ async function syncNFTPrices() {
             btn.disabled = false;
             btn.textContent = 'Sync Prices';
         }
+    }
+}
+
+// Load NFT pricing coverage stats
+async function loadNFTPriceCoverage() {
+    const coverageEl = document.getElementById('priceCoverage');
+    if (!coverageEl) return;
+
+    try {
+        const response = await authFetch(`${API_BASE}/nfts/prices/coverage`);
+        if (!response.ok) return;
+
+        const data = await response.json();
+        if (data.total_nfts === 0) {
+            coverageEl.textContent = '';
+            return;
+        }
+
+        if (data.priced_nfts === data.total_nfts) {
+            coverageEl.textContent = `All ${data.total_nfts} NFTs priced`;
+        } else {
+            coverageEl.textContent = `${data.priced_nfts}/${data.total_nfts} priced`;
+        }
+        coverageEl.title = `${data.priced_collections}/${data.total_collections} collections have floor prices`;
+    } catch (error) {
+        console.error('Error loading NFT price coverage:', error);
     }
 }
 
@@ -6072,6 +6094,7 @@ function switchChartSource(source) {
         loadV2BalanceHistory('24h');
         checkV2CollectionStatus();
         loadV2Schedule();
+        loadV2LastRun();
     }
 }
 
@@ -6306,10 +6329,11 @@ function pollV2CollectionStatus() {
                 v2PollInterval = null;
                 const progress = document.getElementById('v2CollectionProgress');
                 if (progress) progress.style.display = 'none';
-                // Reload chart
+                // Reload chart and last-run info
                 const activeBtn = document.querySelector('.v2-range.active');
                 const range = activeBtn ? activeBtn.dataset.range : '1y';
                 await loadV2BalanceHistory(range);
+                loadV2LastRun();
             } else if (data.status === 'error' || data.status === 'cancelled') {
                 clearInterval(v2PollInterval);
                 v2PollInterval = null;
@@ -6386,6 +6410,7 @@ async function saveV2Schedule() {
             statusEl.textContent = enabled ? `Saved — collecting every ${hours}h` : 'Saved — auto-collect off';
             setTimeout(() => { statusEl.textContent = ''; }, 3000);
         }
+        loadV2LastRun();
     } catch (error) {
         console.error('Error saving v2 schedule:', error);
         if (statusEl) {
@@ -6393,6 +6418,67 @@ async function saveV2Schedule() {
             setTimeout(() => { statusEl.textContent = ''; }, 3000);
         }
     }
+}
+
+// V2 Last Run / Next Run Info
+async function loadV2LastRun() {
+    const infoDiv = document.getElementById('v2LastRunInfo');
+    const lastText = document.getElementById('v2LastRunText');
+    const nextText = document.getElementById('v2NextRunText');
+    if (!infoDiv || !lastText) return;
+
+    try {
+        const response = await authFetch(`${API_BASE}/balance-history/last-run`);
+        const data = await response.json();
+
+        if (data.run) {
+            infoDiv.style.display = '';
+            const run = data.run;
+            const ago = timeAgo(run.started_at);
+            const trigger = run.trigger_type === 'scheduled' ? 'scheduled' : 'manual';
+            const status = run.status || 'unknown';
+            let detail = '';
+            if (run.total_work_units) {
+                detail = ` — ${run.completed_work_units || 0}/${run.total_work_units} work units`;
+            }
+            lastText.textContent = `Last run: ${ago} (${trigger}, ${status}${detail})`;
+        } else {
+            infoDiv.style.display = 'none';
+        }
+
+        if (nextText) {
+            if (data.next_run) {
+                const nextDt = new Date(data.next_run);
+                const now = new Date();
+                const diffMs = nextDt - now;
+                if (diffMs > 0) {
+                    const hours = Math.floor(diffMs / 3600000);
+                    const mins = Math.floor((diffMs % 3600000) / 60000);
+                    nextText.textContent = hours > 0 ? `Next run: in ${hours}h ${mins}m` : `Next run: in ${mins}m`;
+                } else {
+                    nextText.textContent = 'Next run: soon';
+                }
+            } else {
+                nextText.textContent = '';
+            }
+        }
+    } catch (error) {
+        console.error('Error loading v2 last run:', error);
+    }
+}
+
+function timeAgo(isoStr) {
+    if (!isoStr) return 'unknown';
+    const dt = new Date(isoStr);
+    const now = new Date();
+    const diffMs = now - dt;
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
 }
 
 // ============================================================================
@@ -7040,6 +7126,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             loadV2BalanceHistory('24h');
             checkV2CollectionStatus();
             loadV2Schedule();
+            loadV2LastRun();
             preFetchAssetBreakdowns();
         });
     } else if (isAssetsPage) {
@@ -7063,11 +7150,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.log('[Assets] Data loading complete');
         });
     } else if (isNftsPage) {
-        // NFTS PAGE: Load prices, NFT summaries, and NFT list in parallel
+        // NFTS PAGE: Load prices, NFT summaries, NFT list, and price coverage in parallel
         await Promise.allSettled([
             loadPrices(),
             loadAllNftSummaries(),
-            loadNFTs()
+            loadNFTs(),
+            loadNFTPriceCoverage()
         ]);
     }
 });

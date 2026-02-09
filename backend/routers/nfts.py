@@ -845,25 +845,16 @@ async def _fetch_taptools_floors(policy_ids: list, nft_svc) -> Dict[str, float]:
 @router.post("/prices/sync")
 async def sync_prices_from_service(user_id: int = Depends(verify_session)):
     """
-    Sync Cardano NFT floor prices from the external Cardano NFT Price Service.
-    Updates local price cache with data from the dedicated price service.
-    Falls back to TapTools if external service returns no/few prices.
+    Sync Cardano NFT floor prices using all available sources.
+
+    Uses 3-tier fallback:
+    1. V1 nft_floor_prices database (free, instant)
+    2. External NFT price service (if configured)
+    3. TapTools API (if configured, rate-limited)
     """
-    if not await nft_price_client.is_configured():
-        return {
-            'success': False,
-            'message': 'Cardano NFT Price Service not configured. Set NFT_PRICE_SERVICE_URL environment variable.',
-            'synced': 0
-        }
+    from database import get_latest_nft_floor_price
 
-    if not await nft_price_client.is_available():
-        return {
-            'success': False,
-            'message': 'Cardano NFT Price Service is not available',
-            'synced': 0
-        }
-
-    # Get all unique policy IDs from our NFTs
+    # Get all unique policy IDs from user's Cardano NFTs
     all_nfts = await nft_service.get_all_nfts(user_id=user_id, force_refresh=False)
     policy_ids = list(set(nft.get('policy_id') for nft in all_nfts if nft.get('policy_id')))
 
@@ -871,53 +862,160 @@ async def sync_prices_from_service(user_id: int = Depends(verify_session)):
         return {
             'success': True,
             'message': 'No NFT collections to sync',
-            'synced': 0
+            'synced': 0, 'from_cache': 0, 'from_service': 0, 'from_taptools': 0,
+            'failed': 0, 'total_collections': 0
         }
 
-    # Fetch prices from the external service
-    floor_prices = await nft_price_client.get_floor_prices(policy_ids)
-    if not floor_prices:
-        floor_prices = {}
+    from_cache = 0
+    from_service = 0
+    from_taptools = 0
+    synced_ids = set()
 
-    # Update local cache with the fetched prices
-    synced_count = 0
-    for policy_id, price in floor_prices.items():
-        if price is not None:
-            await nft_service.update_floor_price_cache(policy_id, price)
-            synced_count += 1
+    # Tier 1: Check V1 nft_floor_prices database
+    for pid in policy_ids:
+        try:
+            db_price = await get_latest_nft_floor_price(pid)
+            if db_price and db_price.get('floor_price_ada') and float(db_price['floor_price_ada']) > 0:
+                # Update in-memory cache if not already there
+                if pid not in nft_service.collection_cache or not nft_service.collection_cache[pid].get('floor_price_ada'):
+                    nft_service.collection_cache.setdefault(pid, {})
+                    nft_service.collection_cache[pid]['floor_price_ada'] = float(db_price['floor_price_ada'])
+                    nft_service.collection_cache[pid]['source'] = db_price.get('source', 'database')
+                synced_ids.add(pid)
+                from_cache += 1
+        except Exception as e:
+            logger.debug(f"V1 cache lookup error for {pid[:16]}: {e}")
 
-    # If external service returned nothing or few prices, try TapTools as fallback
-    remaining_ids = [pid for pid in policy_ids if pid not in floor_prices]
+    # Tier 2: Try external NFT price service (if configured)
+    remaining_ids = [pid for pid in policy_ids if pid not in synced_ids]
+    if remaining_ids:
+        try:
+            svc_configured = await nft_price_client.is_configured()
+            svc_available = await nft_price_client.is_available() if svc_configured else False
+            if svc_available:
+                floor_prices = await nft_price_client.get_floor_prices(remaining_ids)
+                if floor_prices:
+                    for pid, price in floor_prices.items():
+                        if price is not None and float(price) > 0:
+                            await nft_service.update_floor_price_cache(pid, float(price))
+                            synced_ids.add(pid)
+                            from_service += 1
+        except Exception as e:
+            logger.debug(f"External price service error: {e}")
+
+    # Tier 3: Try TapTools (if configured, rate-limited)
+    remaining_ids = [pid for pid in policy_ids if pid not in synced_ids]
+    rate_limited = False
     if remaining_ids and nft_service.is_taptools_configured() and not nft_service.is_rate_limited():
-        logger.info(f"External service returned {len(floor_prices)}/{len(policy_ids)} prices, trying TapTools for {len(remaining_ids)} remaining")
+        logger.info(f"Trying TapTools for {len(remaining_ids)} remaining collections")
         taptools_prices = await _fetch_taptools_floors(remaining_ids, nft_service)
-        for policy_id, price in taptools_prices.items():
-            if price is not None:
-                await nft_service.update_floor_price_cache(policy_id, price)
-                synced_count += 1
-        floor_prices.update(taptools_prices)
+        for pid, price in taptools_prices.items():
+            if price is not None and float(price) > 0:
+                await nft_service.update_floor_price_cache(pid, float(price))
+                synced_ids.add(pid)
+                from_taptools += 1
+        if nft_service.is_rate_limited():
+            rate_limited = True
+    elif remaining_ids and nft_service.is_rate_limited():
+        rate_limited = True
 
-    if synced_count == 0:
-        return {
-            'success': False,
-            'message': 'No prices returned from external service or TapTools',
-            'synced': 0
-        }
+    total_synced = from_cache + from_service + from_taptools
+    failed = len(policy_ids) - len(synced_ids)
 
-    # Clear and reload NFT data to use new prices
-    nft_service.clear_cache()
+    # Build descriptive message
+    parts = []
+    if from_cache: parts.append(f"{from_cache} cached")
+    if from_service: parts.append(f"{from_service} from service")
+    if from_taptools: parts.append(f"{from_taptools} from TapTools")
+    source_detail = f" ({', '.join(parts)})" if parts else ""
+    message = f"Synced {total_synced} of {len(policy_ids)} collections{source_detail}"
+    if rate_limited and failed > 0:
+        message += f" \u00b7 {failed} unavailable (TapTools rate limit)"
+    elif failed > 0:
+        message += f" \u00b7 {failed} unavailable"
+
+    # Clear NFT cache so next load picks up new prices
+    if total_synced > 0:
+        nft_service.clear_cache()
+
+    # Check if no sources available at all
+    has_sources = from_cache > 0 or nft_service.is_taptools_configured() or await nft_price_client.is_configured()
 
     return {
-        'success': True,
-        'message': f'Synced {synced_count} Cardano floor prices',
-        'synced': synced_count,
+        'success': total_synced > 0 or failed == 0,
+        'synced': total_synced,
+        'from_cache': from_cache,
+        'from_service': from_service,
+        'from_taptools': from_taptools,
+        'failed': failed,
         'total_collections': len(policy_ids),
+        'rate_limited': rate_limited,
+        'has_sources': has_sources,
+        'message': message
+    }
+
+
+@router.get("/prices/coverage")
+async def get_price_coverage(user_id: int = Depends(verify_session)):
+    """
+    Get NFT pricing coverage stats for the user's Cardano NFTs.
+    Shows how many NFTs/collections have prices and which sources are available.
+    """
+    from database import get_latest_nft_floor_price, get_nft_price_stats
+
+    # Get user's Cardano NFTs
+    all_nfts = await nft_service.get_all_nfts(user_id=user_id, force_refresh=False)
+    policy_ids = list(set(nft.get('policy_id') for nft in all_nfts if nft.get('policy_id')))
+
+    total_nfts = len(all_nfts)
+    total_collections = len(policy_ids)
+
+    # Count which policy_ids have floor prices
+    priced_collections = 0
+    priced_nfts = 0
+    for pid in policy_ids:
+        # Check in-memory cache first, then DB
+        has_price = False
+        if pid in nft_service.collection_cache and nft_service.collection_cache[pid].get('floor_price_ada'):
+            has_price = True
+        else:
+            db_price = await get_latest_nft_floor_price(pid)
+            if db_price and db_price.get('floor_price_ada') and float(db_price['floor_price_ada']) > 0:
+                has_price = True
+
+        if has_price:
+            priced_collections += 1
+            # Count NFTs in this collection
+            priced_nfts += sum(1 for n in all_nfts if n.get('policy_id') == pid)
+
+    # Check which sources are available
+    taptools_configured = nft_service.is_taptools_configured()
+    try:
+        nft_svc_configured = await nft_price_client.is_configured()
+    except Exception:
+        nft_svc_configured = False
+
+    # Get last sync info from DB stats
+    stats = await get_nft_price_stats()
+
+    return {
+        'total_nfts': total_nfts,
+        'priced_nfts': priced_nfts,
+        'unpriced_nfts': total_nfts - priced_nfts,
+        'total_collections': total_collections,
+        'priced_collections': priced_collections,
+        'sources': {
+            'taptools_configured': taptools_configured,
+            'taptools_rate_limited': nft_service.is_rate_limited(),
+            'nft_price_service_configured': nft_svc_configured,
+        },
+        'last_sync': stats.get('newest_fetch'),
     }
 
 
 @router.get("/prices/service-status")
 async def get_external_price_service_status():
-    """Get status of the external Cardano NFT Price Service."""
+    """Get status of the external Cardano NFT Price Service (legacy endpoint, kept for compatibility)."""
     configured = await nft_price_client.is_configured()
 
     if not configured:

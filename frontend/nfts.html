@@ -6,12 +6,12 @@
     <title>NFTs - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1770640412">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1770647025">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1770640412"></script>
+    <script src="/static/js/session-auth.js?v=1770647025"></script>
     <style>
         .nfts-page {
             max-width: 1600px;
@@ -649,7 +649,8 @@
                                 <span class="toggle-slider"></span>
                                 <span class="toggle-text">Cache Images</span>
                             </label>
-                            <button class="btn btn-sync-prices" onclick="syncNFTPrices()" title="Sync Cardano floor prices from external service">
+                            <span class="price-coverage" id="priceCoverage"></span>
+                            <button class="btn btn-sync-prices" onclick="syncNFTPrices()" title="Fetch floor prices for Cardano NFTs">
                                 Sync Prices
                             </button>
                         </div>
@@ -734,7 +735,7 @@
         <p>ABCT - NFTs | <span style="opacity: 0.6;">v1.0.1 (BUILD 1770519801)</span></p>
     </footer>
 
-    <script src="/static/js/app.js?v=1770640412"></script>
+    <script src="/static/js/app.js?v=1770647025"></script>
     <script>
         // NFT Wall namespace (IIFE to avoid conflicts with app.js)
         const NFTWall = (function() {

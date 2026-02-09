@@ -7644,6 +7644,12 @@ body.usd-primary .exchange-asset-item .balance-amount::after {
     cursor: not-allowed;
 }
 
+.price-coverage {
+    font-size: 0.8rem;
+    color: var(--text-muted, #9ca3af);
+    white-space: nowrap;
+}
+
 /* NFT Wall Button */
 .btn-nft-wall {
     padding: 8px 16px;
