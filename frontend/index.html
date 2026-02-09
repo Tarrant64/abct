@@ -6,7 +6,7 @@
     <title>A Better Crypto Tracker</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1770640412">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1770647025">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preconnect" href="https://unpkg.com" crossorigin>
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
@@ -15,7 +15,7 @@
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1770640412"></script>
+    <script src="/static/js/session-auth.js?v=1770647025"></script>
 </head>
 <body>
     <div class="container">
@@ -142,8 +142,8 @@
 
                 <!-- V2 controls (shown by default) -->
                 <div class="history-range-selector" id="v2RangeSelector">
-                    <button class="range-btn v2-range active" data-range="24h" onclick="loadV2BalanceHistory('24h')">24H</button>
-                    <button class="range-btn v2-range" data-range="1w" onclick="loadV2BalanceHistory('1w')">1W</button>
+                    <button class="range-btn v2-range" data-range="24h" onclick="loadV2BalanceHistory('24h')">24H</button>
+                    <button class="range-btn v2-range active" data-range="1w" onclick="loadV2BalanceHistory('1w')">1W</button>
                     <button class="range-btn v2-range" data-range="1m" onclick="loadV2BalanceHistory('1m')">1M</button>
                     <button class="range-btn v2-range" data-range="3m" onclick="loadV2BalanceHistory('3m')">3M</button>
                     <button class="range-btn v2-range" data-range="6m" onclick="loadV2BalanceHistory('6m')">6M</button>
@@ -228,6 +228,11 @@
                         </select>
                         <button class="btn btn-secondary" onclick="saveV2Schedule()" style="margin-left: 8px; padding: 4px 12px; font-size: 0.85em;">Save</button>
                         <span id="v2ScheduleStatus" style="margin-left: 8px; font-size: 0.85em; color: var(--text-secondary, #999);"></span>
+                    </div>
+                    <!-- V2 last run / next run info -->
+                    <div class="history-info" id="v2LastRunInfo" style="display: none; margin-top: 8px;">
+                        <span id="v2LastRunText" class="text-muted" style="font-size: 0.85em;"></span>
+                        <span id="v2NextRunText" class="text-muted" style="margin-left: 16px; font-size: 0.85em;"></span>
                     </div>
                 </div>
             </section>
@@ -580,6 +585,6 @@
         </footer>
     </div>
 
-    <script src="/static/js/app.js?v=1770640412"></script>
+    <script src="/static/js/app.js?v=1770647025"></script>
 </body>
 </html>
