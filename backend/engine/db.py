@@ -123,6 +123,20 @@ async def init_engine_tables():
         """)
 
         await db.execute("""
+            CREATE TABLE IF NOT EXISTS engine_scheduler_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                backfill_id INTEGER,
+                trigger_type TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'running',
+                started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                completed_at TIMESTAMP,
+                summary TEXT,
+                error_message TEXT
+            )
+        """)
+
+        await db.execute("""
             CREATE TABLE IF NOT EXISTS engine_provider_health (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 provider_name TEXT NOT NULL,
@@ -214,6 +228,10 @@ async def init_engine_tables():
         await db.execute("""
             CREATE INDEX IF NOT EXISTS idx_engine_token_info_chain
             ON engine_token_info(chain, asset_id)
+        """)
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_engine_scheduler_runs_user
+            ON engine_scheduler_runs(user_id, started_at DESC)
         """)
 
         await db.commit()
@@ -869,3 +887,216 @@ async def get_unique_asset_ids(user_id: int, chain: Optional[str] = None) -> Lis
             params.append(chain)
         cursor = await db.execute(query, params)
         return [dict(row) for row in await cursor.fetchall()]
+
+
+# ============================================================================
+# SCHEDULER RUNS CRUD
+# ============================================================================
+
+async def create_scheduler_run(user_id: int, backfill_id: Optional[int],
+                                trigger_type: str) -> int:
+    """Create a scheduler run record. Returns run_id."""
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        cursor = await db.execute(
+            """INSERT INTO engine_scheduler_runs (user_id, backfill_id, trigger_type)
+               VALUES (?, ?, ?)""",
+            (user_id, backfill_id, trigger_type)
+        )
+        await db.commit()
+        return cursor.lastrowid
+
+
+async def update_scheduler_run(run_id: int, status: Optional[str] = None,
+                                summary: Optional[str] = None,
+                                error_message: Optional[str] = None):
+    """Update a scheduler run. Sets completed_at when status is terminal."""
+    sets = []
+    values = []
+    if status is not None:
+        sets.append("status = ?")
+        values.append(status)
+        if status in ('completed', 'failed'):
+            sets.append("completed_at = ?")
+            values.append(datetime.utcnow().isoformat())
+    if summary is not None:
+        sets.append("summary = ?")
+        values.append(summary)
+    if error_message is not None:
+        sets.append("error_message = ?")
+        values.append(error_message[:500])
+    if not sets:
+        return
+    values.append(run_id)
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        await db.execute(
+            f"UPDATE engine_scheduler_runs SET {', '.join(sets)} WHERE id = ?",
+            values
+        )
+        await db.commit()
+
+
+async def get_latest_scheduler_run(user_id: int) -> Optional[Dict[str, Any]]:
+    """Get the most recent scheduler run for a user, with work unit summary."""
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """SELECT r.*, b.total_work_units, b.completed_work_units,
+                      b.failed_work_units, b.progress_pct
+               FROM engine_scheduler_runs r
+               LEFT JOIN engine_backfills b ON r.backfill_id = b.id
+               WHERE r.user_id = ?
+               ORDER BY r.started_at DESC LIMIT 1""",
+            (user_id,)
+        )
+        row = await cursor.fetchone()
+        if not row:
+            return None
+        result = dict(row)
+        if result.get('summary'):
+            result['summary'] = json.loads(result['summary'])
+        return result
+
+
+async def get_scheduler_runs(user_id: int, limit: int = 10) -> List[Dict[str, Any]]:
+    """Get recent scheduler runs for a user."""
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """SELECT r.*, b.total_work_units, b.completed_work_units, b.failed_work_units
+               FROM engine_scheduler_runs r
+               LEFT JOIN engine_backfills b ON r.backfill_id = b.id
+               WHERE r.user_id = ?
+               ORDER BY r.started_at DESC LIMIT ?""",
+            (user_id, limit)
+        )
+        rows = await cursor.fetchall()
+        results = []
+        for row in rows:
+            r = dict(row)
+            if r.get('summary'):
+                r['summary'] = json.loads(r['summary'])
+            results.append(r)
+        return results
+
+
+# ============================================================================
+# RESUME / CHECKPOINT QUERIES
+# ============================================================================
+
+async def get_latest_backfill_by_status(user_id: int,
+                                         statuses: List[str]) -> Optional[Dict[str, Any]]:
+    """Get the most recent backfill matching any of the given statuses."""
+    if not statuses:
+        return None
+    placeholders = ','.join('?' for _ in statuses)
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            f"""SELECT * FROM engine_backfills
+                WHERE user_id = ? AND status IN ({placeholders})
+                ORDER BY created_at DESC LIMIT 1""",
+            [user_id] + statuses
+        )
+        row = await cursor.fetchone()
+        if not row:
+            return None
+        result = dict(row)
+        result['chains'] = json.loads(result['chains'])
+        result['domains'] = json.loads(result['domains'])
+        return result
+
+
+async def get_latest_indexed_block_time(user_id: int, chain: str,
+                                         account_id: str) -> Optional[int]:
+    """Get the MAX(block_time) from engine_tx_index for incremental indexing."""
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        cursor = await db.execute(
+            """SELECT MAX(block_time) FROM engine_tx_index
+               WHERE user_id = ? AND chain = ? AND account_id = ?""",
+            (user_id, chain, account_id)
+        )
+        row = await cursor.fetchone()
+        return row[0] if row and row[0] is not None else None
+
+
+async def requeue_failed_work_units(backfill_id: int) -> int:
+    """Reset failed/retry work units to pending. Returns count requeued."""
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        cursor = await db.execute(
+            """UPDATE engine_work_units SET status = 'pending', error_message = NULL,
+                      attempt_count = 0
+               WHERE backfill_id = ? AND status IN ('failed', 'retry')""",
+            (backfill_id,)
+        )
+        await db.commit()
+        return cursor.rowcount
+
+
+async def count_pending_work_units(backfill_id: int) -> int:
+    """Count pending/retry/failed work units for a backfill."""
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        cursor = await db.execute(
+            """SELECT COUNT(*) FROM engine_work_units
+               WHERE backfill_id = ? AND status IN ('pending', 'retry', 'failed')""",
+            (backfill_id,)
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else 0
+
+
+async def get_v1_nft_policy_ids() -> set:
+    """Get all known NFT policy_ids from V1 nft_floor_prices table."""
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        cursor = await db.execute(
+            "SELECT DISTINCT policy_id FROM nft_floor_prices"
+        )
+        return {row[0] for row in await cursor.fetchall()}
+
+
+async def mark_cardano_nfts_from_v1() -> int:
+    """Mark Cardano assets as NFTs in engine_token_info by cross-referencing V1 nft_floor_prices.
+
+    Returns count of assets marked as NFT.
+    """
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        # Get all known NFT policy_ids from V1
+        cursor = await db.execute(
+            "SELECT DISTINCT policy_id FROM nft_floor_prices"
+        )
+        nft_policies = {row[0] for row in await cursor.fetchall()}
+
+        if not nft_policies:
+            return 0
+
+        # Update engine_token_info: any Cardano asset whose policy_id matches
+        count = 0
+        cursor = await db.execute(
+            "SELECT id, asset_id FROM engine_token_info WHERE chain = 'cardano' AND is_nft = 0"
+        )
+        rows = await cursor.fetchall()
+        for row_id, asset_id in rows:
+            if '.' in asset_id:
+                policy_id = asset_id.split('.')[0]
+                if policy_id in nft_policies:
+                    await db.execute(
+                        "UPDATE engine_token_info SET is_nft = 1 WHERE id = ?", (row_id,)
+                    )
+                    count += 1
+        await db.commit()
+        logger.info(f"Marked {count} Cardano assets as NFTs from V1 floor price data")
+        return count
+
+
+async def get_existing_price_keys(chain: str, dates: List[str]) -> set:
+    """Get set of (asset_id, date) pairs that already have prices.
+    Used to skip creating enrich work units for already-priced assets."""
+    if not dates:
+        return set()
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        placeholders = ','.join('?' for _ in dates)
+        cursor = await db.execute(
+            f"""SELECT asset_id, date FROM engine_price_history
+                WHERE asset_id LIKE ? AND date IN ({placeholders})""",
+            [f"{chain}:%"] + dates
+        )
+        return {(row[0], row[1]) for row in await cursor.fetchall()}

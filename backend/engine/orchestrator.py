@@ -59,6 +59,8 @@ class BackfillOrchestrator:
         self.registry: Optional[ProviderRegistry] = None
         self.scheduler: Optional[WorkUnitScheduler] = None
         self._running_backfills: Dict[int, asyncio.Task] = {}
+        self._active_run_ids: Dict[int, int] = {}  # backfill_id -> run_id
+        self._auto_collect_tasks: Dict[int, asyncio.Task] = {}  # user_id -> task
 
         # Stage instances by chain
         self._expanders = {}
@@ -121,12 +123,35 @@ class BackfillOrchestrator:
 
     async def plan_backfill(self, user_id: int, request: BackfillRequest) -> int:
         """
-        Create a backfill plan: expand wallets → generate work units.
+        Create a backfill plan with resume/checkpoint logic.
+
+        1. If a backfill is already running, return its ID.
+        2. If a failed/cancelled backfill has pending work, resume it.
+        3. Otherwise create a new (incremental) backfill.
 
         Returns the backfill_id.
         """
         chains = [c.value for c in request.chains]
         domains = [d.value for d in request.domains]
+
+        # 1. Already running? Return existing backfill ID
+        running = await engine_db.get_latest_backfill_by_status(user_id, ['planning', 'running'])
+        if running:
+            logger.info(f"Backfill {running['id']} already running for user {user_id}, reusing")
+            return running['id']
+
+        # 2. Failed/cancelled with pending work? Resume it
+        resumable = await engine_db.get_latest_backfill_by_status(user_id, ['failed', 'cancelled'])
+        if resumable:
+            pending = await engine_db.count_pending_work_units(resumable['id'])
+            if pending > 0:
+                requeued = await engine_db.requeue_failed_work_units(resumable['id'])
+                await engine_db.update_backfill(resumable['id'], status='running')
+                logger.info(f"Resuming backfill {resumable['id']}: {pending} pending, {requeued} requeued")
+                return resumable['id']
+
+        # 3. Create new backfill (incremental if prior completed backfill exists)
+        has_prior = await engine_db.get_latest_backfill_by_status(user_id, ['completed'])
 
         backfill_id = await engine_db.create_backfill(
             user_id=user_id,
@@ -137,7 +162,7 @@ class BackfillOrchestrator:
         )
 
         logger.info(f"Created backfill {backfill_id} for user {user_id}: "
-                     f"chains={chains}, domains={domains}")
+                     f"chains={chains}, domains={domains}, incremental={has_prior is not None}")
 
         # Stage A: Expand wallets into account subjects
         try:
@@ -182,13 +207,22 @@ class BackfillOrchestrator:
                 for domain in domains:
                     # Index work units are per-account
                     if domain == "index":
+                        # Incremental: use latest indexed block_time as cursor_start
+                        cursor_start = request.start_date
+                        if has_prior:
+                            latest_time = await engine_db.get_latest_indexed_block_time(
+                                user_id, subject['chain'], subject['account_id']
+                            )
+                            if latest_time:
+                                cursor_start = datetime.utcfromtimestamp(latest_time).isoformat()
+
                         work_units.append({
                             'backfill_id': backfill_id,
                             'user_id': user_id,
                             'chain': subject['chain'],
                             'account_id': subject['account_id'],
                             'domain': domain,
-                            'cursor_start': request.start_date,
+                            'cursor_start': cursor_start,
                             'cursor_end': request.end_date,
                         })
                     # Hydrate/normalize/enrich work units are generated downstream
@@ -226,6 +260,7 @@ class BackfillOrchestrator:
 
     async def _run_backfill_pipeline(self, backfill_id: int, backfill: Dict):
         """Execute the full pipeline for a backfill."""
+        run_id = self._active_run_ids.get(backfill_id)
         try:
             user_id = backfill['user_id']
             chains = backfill['chains']
@@ -269,6 +304,9 @@ class BackfillOrchestrator:
             done = sum(s.get('done', 0) for s in stats.values())
             failed = sum(s.get('failed', 0) for s in stats.values())
 
+            # Count total events for summary
+            event_count = await engine_db.get_event_count(user_id)
+
             final_status = 'completed'
             await engine_db.update_backfill(
                 backfill_id,
@@ -277,6 +315,17 @@ class BackfillOrchestrator:
                 failed_work_units=failed,
                 progress_pct=100.0 if total == 0 else round(done / total * 100, 1),
             )
+
+            # Update scheduler run record
+            if run_id:
+                summary = json.dumps({
+                    'total_work_units': total,
+                    'completed': done,
+                    'failed': failed,
+                    'events_total': event_count,
+                })
+                await engine_db.update_scheduler_run(run_id, status='completed', summary=summary)
+
             logger.info(f"Backfill {backfill_id} completed: {done}/{total} done, {failed} failed")
 
         except Exception as e:
@@ -284,8 +333,13 @@ class BackfillOrchestrator:
             await engine_db.update_backfill(
                 backfill_id, status='failed', error_message=str(e)[:500]
             )
+            if run_id:
+                await engine_db.update_scheduler_run(
+                    run_id, status='failed', error_message=str(e)[:500]
+                )
         finally:
             self._running_backfills.pop(backfill_id, None)
+            self._active_run_ids.pop(backfill_id, None)
 
     async def _generate_hydrate_work_units(self, backfill_id: int, user_id: int, chains: list):
         """Generate hydrate work units from indexed tx IDs."""
@@ -349,15 +403,26 @@ class BackfillOrchestrator:
         """Generate price enrichment work units from events.
 
         Creates one work unit per unique (chain, asset_id, date) combination.
-        For native assets, account_id='native' and cursor_end=date.
-        For tokens, account_id=asset_id and cursor_end=date.
+        Skips asset/date pairs that already have prices in engine_price_history.
+
+        For Cardano NFTs: deduplicates by policy_id since all NFTs in the same
+        collection share the same floor price, dramatically reducing API calls.
         """
+        # First, ensure Cardano NFTs are properly marked from V1 data
+        if "cardano" in chains:
+            marked = await engine_db.mark_cardano_nfts_from_v1()
+            if marked:
+                logger.info(f"Backfill {backfill_id}: marked {marked} Cardano assets as NFTs from V1 data")
+                # Clear token_info_cache so updated is_nft flags are picked up
+                price_enricher._token_info_cache.clear()
+
         units = []
         for chain in chains:
             events = await engine_db.get_events(user_id, chain=chain, limit=100000)
 
             # Collect unique (asset_id, date) combinations
             asset_dates_seen: set = set()
+            all_dates: set = set()
             for evt in events:
                 if not evt.get('block_time'):
                     continue
@@ -367,6 +432,66 @@ class BackfillOrchestrator:
                 key = (asset_id, date_str)
                 if key not in asset_dates_seen:
                     asset_dates_seen.add(key)
+                    all_dates.add(date_str)
+
+            # Bulk-check which prices already exist to skip them
+            existing_prices = await engine_db.get_existing_price_keys(
+                chain, sorted(all_dates)
+            )
+
+            # For Cardano: batch NFTs by policy_id
+            if chain == "cardano":
+                nft_policy_dates: Dict[tuple, list] = {}  # {(policy_id, date): [asset_ids]}
+
+                for asset_id, date_str in asset_dates_seen:
+                    price_key = f"{chain}:{asset_id}"
+                    if (price_key, date_str) in existing_prices:
+                        continue
+
+                    # Check if this asset is a known NFT
+                    if '.' in asset_id:
+                        token_info = await engine_db.get_token_info(chain, asset_id)
+                        if token_info and token_info.get('is_nft'):
+                            policy_id = asset_id.split('.')[0]
+                            key = (policy_id, date_str)
+                            if key not in nft_policy_dates:
+                                nft_policy_dates[key] = []
+                            nft_policy_dates[key].append(asset_id)
+                            continue
+
+                    # Non-NFT: create individual work unit
+                    units.append({
+                        'backfill_id': backfill_id,
+                        'user_id': user_id,
+                        'chain': chain,
+                        'account_id': asset_id,
+                        'domain': 'enrich_price',
+                        'cursor_start': date_str,
+                        'cursor_end': date_str,
+                    })
+
+                # Create batched NFT work units: one per (policy_id, date)
+                for (policy_id, date_str), asset_ids in nft_policy_dates.items():
+                    units.append({
+                        'backfill_id': backfill_id,
+                        'user_id': user_id,
+                        'chain': chain,
+                        'account_id': policy_id,
+                        'domain': 'enrich_price',
+                        'cursor_start': date_str,
+                        'cursor_end': json.dumps(asset_ids),
+                    })
+
+                if nft_policy_dates:
+                    nft_count = sum(len(aids) for aids in nft_policy_dates.values())
+                    logger.info(f"Backfill {backfill_id}: batched {nft_count} Cardano NFTs into "
+                               f"{len(nft_policy_dates)} policy_id work units")
+            else:
+                # Non-Cardano chains: standard per-asset work units
+                for asset_id, date_str in asset_dates_seen:
+                    price_key = f"{chain}:{asset_id}"
+                    if (price_key, date_str) in existing_prices:
+                        continue
                     units.append({
                         'backfill_id': backfill_id,
                         'user_id': user_id,
@@ -385,7 +510,7 @@ class BackfillOrchestrator:
                     backfill_id,
                     total_work_units=backfill['total_work_units'] + len(units)
                 )
-            logger.info(f"Backfill {backfill_id}: generated {len(units)} enrich work units")
+            logger.info(f"Backfill {backfill_id}: generated {len(units)} enrich work units (skipped already-priced)")
 
     # =========================================================================
     # Stage Executors (called by the scheduler)
@@ -490,17 +615,44 @@ class BackfillOrchestrator:
 
         account_id contains the asset_id (e.g. 'native', contract address, policy_id.asset_name).
         cursor_start contains the date string.
+        cursor_end contains the date string for normal assets, or a JSON array of
+        asset_ids for batched Cardano NFT work units.
         """
         chain = work_unit['chain']
         asset_id = work_unit['account_id']
         date = work_unit.get('cursor_start', '')
+        cursor_end = work_unit.get('cursor_end', '')
 
-        # Handle NFT floor prices separately
-        if price_enricher._is_nft_asset(chain, asset_id):
+        # Check for batched Cardano NFT work unit (cursor_end is JSON array of asset_ids)
+        if chain == "cardano" and cursor_end and cursor_end.startswith('['):
+            try:
+                nft_asset_ids = json.loads(cursor_end)
+            except (json.JSONDecodeError, TypeError):
+                nft_asset_ids = None
+
+            if nft_asset_ids:
+                # asset_id is the policy_id for batched NFT units
+                policy_id = asset_id
+                # Build a synthetic asset_id for fetch_nft_floor_price
+                floor_usd = await price_enricher.fetch_nft_floor_price(chain, f"{policy_id}.nft")
+                if floor_usd and floor_usd > 0:
+                    for nft_aid in nft_asset_ids:
+                        price_key = f"{chain}:{nft_aid}"
+                        await engine_db.upsert_price(price_key, date, floor_usd, "nft_floor")
+                    logger.debug(f"Priced {len(nft_asset_ids)} NFTs for policy {policy_id[:16]}... at ${floor_usd:.2f}")
+                    return True
+                return False
+
+        # Resolve token info first (populates is_nft flag in cache)
+        token_info = await price_enricher.resolve_token_info(chain, asset_id)
+
+        # Handle individual NFT floor prices
+        if token_info and token_info.get('is_nft'):
+            policy_id = asset_id.split('.')[0] if '.' in asset_id else asset_id
             floor_usd = await price_enricher.fetch_nft_floor_price(chain, asset_id)
             if floor_usd and floor_usd > 0:
                 price_key = f"{chain}:{asset_id}"
-                await engine_db.upsert_price(price_key, date, floor_usd, "nft_floor_estimate")
+                await engine_db.upsert_price(price_key, date, floor_usd, "nft_floor")
                 return True
             return False
 
@@ -530,6 +682,10 @@ class BackfillOrchestrator:
             updated_at=backfill.get('updated_at'),
         )
 
+    def set_run_id(self, backfill_id: int, run_id: int):
+        """Associate a scheduler run with a backfill for logging."""
+        self._active_run_ids[backfill_id] = run_id
+
     async def cancel_backfill(self, backfill_id: int):
         """Cancel a running backfill."""
         task = self._running_backfills.get(backfill_id)
@@ -537,9 +693,58 @@ class BackfillOrchestrator:
             task.cancel()
             self._running_backfills.pop(backfill_id, None)
 
+        # Also mark the associated run as failed
+        run_id = self._active_run_ids.pop(backfill_id, None)
+        if run_id:
+            await engine_db.update_scheduler_run(run_id, status='failed', error_message='cancelled')
+
         await engine_db.cancel_backfill_work_units(backfill_id)
         await engine_db.update_backfill(backfill_id, status='cancelled')
         logger.info(f"Backfill {backfill_id} cancelled")
+
+    # =========================================================================
+    # Auto-collect scheduler
+    # =========================================================================
+
+    async def start_auto_collect(self, user_id: int, interval_hours: int):
+        """Start (or restart) the periodic V2 engine collection for a user."""
+        await self.stop_auto_collect(user_id)
+
+        async def _auto_collect_loop():
+            while True:
+                try:
+                    await asyncio.sleep(interval_hours * 3600)
+                    logger.info(f"Auto-collect triggered for user {user_id}")
+
+                    request = BackfillRequest(
+                        chains=list(ChainId),
+                        domains=[WorkDomain.INDEX, WorkDomain.HYDRATE,
+                                 WorkDomain.NORMALIZE, WorkDomain.ENRICH_PRICE],
+                    )
+                    backfill_id = await self.plan_backfill(user_id, request)
+
+                    run_id = await engine_db.create_scheduler_run(
+                        user_id, backfill_id, 'scheduled'
+                    )
+                    self.set_run_id(backfill_id, run_id)
+
+                    await self.run_backfill(backfill_id)
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    logger.error(f"Auto-collect error for user {user_id}: {e}")
+                    await asyncio.sleep(3600)  # Wait 1h before retrying on error
+
+        task = asyncio.create_task(_auto_collect_loop())
+        self._auto_collect_tasks[user_id] = task
+        logger.info(f"V2 auto-collect started for user {user_id}, interval={interval_hours}h")
+
+    async def stop_auto_collect(self, user_id: int):
+        """Stop the periodic V2 engine collection for a user."""
+        task = self._auto_collect_tasks.pop(user_id, None)
+        if task and not task.done():
+            task.cancel()
+            logger.info(f"V2 auto-collect stopped for user {user_id}")
 
     async def get_gaps(self, user_id: int) -> List[Dict]:
         """Analyze coverage gaps in ingested data."""
