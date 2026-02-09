@@ -155,6 +155,21 @@ async def init_engine_tables():
             )
         """)
 
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS engine_token_info (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chain TEXT NOT NULL,
+                asset_id TEXT NOT NULL,
+                symbol TEXT,
+                decimals INTEGER DEFAULT 0,
+                defillama_key TEXT,
+                coingecko_id TEXT,
+                is_nft BOOLEAN DEFAULT 0,
+                discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(chain, asset_id)
+            )
+        """)
+
         # Indexes for common query patterns
         await db.execute("""
             CREATE INDEX IF NOT EXISTS idx_engine_tx_index_chain_account
@@ -179,6 +194,10 @@ async def init_engine_tables():
         await db.execute("""
             CREATE INDEX IF NOT EXISTS idx_engine_account_subjects_user
             ON engine_account_subjects(user_id, chain)
+        """)
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_engine_token_info_chain
+            ON engine_token_info(chain, asset_id)
         """)
 
         await db.commit()
@@ -727,3 +746,64 @@ async def get_prices_for_date(date: str) -> Dict[str, float]:
             (date,)
         )
         return {row[0]: row[1] for row in await cursor.fetchall()}
+
+
+# ============================================================================
+# TOKEN INFO CRUD
+# ============================================================================
+
+async def get_token_info(chain: str, asset_id: str) -> Optional[Dict[str, Any]]:
+    """Get cached token info for a specific chain+asset_id."""
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM engine_token_info WHERE chain = ? AND asset_id = ?",
+            (chain, asset_id)
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+
+async def upsert_token_info(chain: str, asset_id: str, symbol: Optional[str] = None,
+                             decimals: int = 0, defillama_key: Optional[str] = None,
+                             coingecko_id: Optional[str] = None, is_nft: bool = False):
+    """Insert or update token info."""
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        await db.execute(
+            """INSERT INTO engine_token_info (chain, asset_id, symbol, decimals, defillama_key, coingecko_id, is_nft)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(chain, asset_id) DO UPDATE SET
+                   symbol = COALESCE(excluded.symbol, engine_token_info.symbol),
+                   decimals = CASE WHEN excluded.decimals > 0 THEN excluded.decimals ELSE engine_token_info.decimals END,
+                   defillama_key = COALESCE(excluded.defillama_key, engine_token_info.defillama_key),
+                   coingecko_id = COALESCE(excluded.coingecko_id, engine_token_info.coingecko_id),
+                   is_nft = excluded.is_nft""",
+            (chain, asset_id, symbol, decimals, defillama_key, coingecko_id, int(is_nft))
+        )
+        await db.commit()
+
+
+async def get_all_token_info(chain: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Get all token info records, optionally filtered by chain."""
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        db.row_factory = aiosqlite.Row
+        if chain:
+            cursor = await db.execute(
+                "SELECT * FROM engine_token_info WHERE chain = ?", (chain,)
+            )
+        else:
+            cursor = await db.execute("SELECT * FROM engine_token_info")
+        return [dict(row) for row in await cursor.fetchall()]
+
+
+async def get_unique_asset_ids(user_id: int, chain: Optional[str] = None) -> List[Dict[str, str]]:
+    """Get unique (chain, asset_id) pairs from events for a user."""
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        db.row_factory = aiosqlite.Row
+        query = "SELECT DISTINCT chain, asset_id FROM engine_events WHERE user_id = ?"
+        params: List[Any] = [user_id]
+        if chain:
+            query += " AND chain = ?"
+            params.append(chain)
+        cursor = await db.execute(query, params)
+        return [dict(row) for row in await cursor.fetchall()]

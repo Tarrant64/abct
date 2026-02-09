@@ -346,26 +346,36 @@ class BackfillOrchestrator:
             logger.info(f"Backfill {backfill_id}: generated {len(units)} normalize work units")
 
     async def _generate_enrich_work_units(self, backfill_id: int, user_id: int, chains: list):
-        """Generate price enrichment work units from events."""
+        """Generate price enrichment work units from events.
+
+        Creates one work unit per unique (chain, asset_id, date) combination.
+        For native assets, account_id='native' and cursor_end=date.
+        For tokens, account_id=asset_id and cursor_end=date.
+        """
         units = []
         for chain in chains:
-            events = await engine_db.get_events(user_id, chain=chain, limit=10000)
-            dates_seen = set()
+            events = await engine_db.get_events(user_id, chain=chain, limit=100000)
+
+            # Collect unique (asset_id, date) combinations
+            asset_dates_seen: set = set()
             for evt in events:
-                if evt.get('block_time'):
-                    dt = datetime.utcfromtimestamp(evt['block_time'])
-                    date_str = dt.strftime('%Y-%m-%d')
-                    if date_str not in dates_seen:
-                        dates_seen.add(date_str)
-                        units.append({
-                            'backfill_id': backfill_id,
-                            'user_id': user_id,
-                            'chain': chain,
-                            'account_id': 'native',  # Price enrichment is per-asset
-                            'domain': 'enrich_price',
-                            'cursor_start': date_str,
-                            'cursor_end': date_str,
-                        })
+                if not evt.get('block_time'):
+                    continue
+                dt = datetime.utcfromtimestamp(evt['block_time'])
+                date_str = dt.strftime('%Y-%m-%d')
+                asset_id = evt['asset_id']
+                key = (asset_id, date_str)
+                if key not in asset_dates_seen:
+                    asset_dates_seen.add(key)
+                    units.append({
+                        'backfill_id': backfill_id,
+                        'user_id': user_id,
+                        'chain': chain,
+                        'account_id': asset_id,
+                        'domain': 'enrich_price',
+                        'cursor_start': date_str,
+                        'cursor_end': date_str,
+                    })
 
         if units:
             await engine_db.create_work_units_batch(units)
@@ -476,11 +486,25 @@ class BackfillOrchestrator:
         return True
 
     async def _execute_enrich_price(self, work_unit: Dict, provider: Provider) -> bool:
-        """Execute a price enrichment work unit."""
+        """Execute a price enrichment work unit.
+
+        account_id contains the asset_id (e.g. 'native', contract address, policy_id.asset_name).
+        cursor_start contains the date string.
+        """
         chain = work_unit['chain']
+        asset_id = work_unit['account_id']
         date = work_unit.get('cursor_start', '')
 
-        price = await price_enricher.enrich_date("native", chain, date)
+        # Handle NFT floor prices separately
+        if price_enricher._is_nft_asset(chain, asset_id):
+            floor_usd = await price_enricher.fetch_nft_floor_price(chain, asset_id)
+            if floor_usd and floor_usd > 0:
+                price_key = f"{chain}:{asset_id}"
+                await engine_db.upsert_price(price_key, date, floor_usd, "nft_floor_estimate")
+                return True
+            return False
+
+        price = await price_enricher.enrich_date(asset_id, chain, date)
         return price is not None
 
     # =========================================================================
@@ -581,6 +605,19 @@ class BackfillOrchestrator:
         date_str = at_time[:10] if at_time else datetime.utcnow().strftime('%Y-%m-%d')
         price_map = await engine_db.get_prices_for_date(date_str)
 
+        # Load token info for decimals
+        all_token_info = await engine_db.get_all_token_info()
+        token_info_map = {(t['chain'], t['asset_id']): t for t in all_token_info}
+
+        native_divisors = {
+            "cardano": 1_000_000,      # lovelace → ADA
+            "bitcoin": 100_000_000,     # satoshi → BTC
+            "ethereum": 10**18,         # wei → ETH
+            "solana": 1_000_000_000,    # lamports → SOL
+            "polygon": 10**18,          # wei → MATIC
+            "base": 10**18,             # wei → ETH
+        }
+
         holdings = []
         total_value = 0.0
         for (chain, asset_id), balance in balances.items():
@@ -590,16 +627,15 @@ class BackfillOrchestrator:
             price_key = f"{chain}:{asset_id}"
             price = price_map.get(price_key, 0.0)
 
-            # Apply decimals for native assets
-            divisors = {
-                "cardano": 1_000_000,      # lovelace → ADA
-                "bitcoin": 100_000_000,     # satoshi → BTC
-                "ethereum": 10**18,         # wei → ETH
-                "solana": 1_000_000_000,    # lamports → SOL
-                "polygon": 10**18,          # wei → MATIC
-                "base": 10**18,             # wei → ETH
-            }
-            divisor = divisors.get(chain, 1) if asset_id == "native" else 1
+            if asset_id == "native":
+                divisor = native_divisors.get(chain, 1)
+            else:
+                token_info = token_info_map.get((chain, asset_id))
+                if token_info:
+                    decimals = token_info.get('decimals', 0) or 0
+                    divisor = 10 ** decimals if decimals > 0 else 1
+                else:
+                    divisor = 1
             human_amount = balance / divisor
 
             value = human_amount * price
@@ -689,8 +725,8 @@ class BackfillOrchestrator:
             filled[d] = last_snapshot
             current += timedelta(days=1)
 
-        # Pre-load all prices by chain (6 queries max, not 730)
-        divisors = {
+        # Native asset divisors
+        native_divisors = {
             "cardano": 1_000_000,
             "bitcoin": 100_000_000,
             "ethereum": 10**18,
@@ -698,15 +734,20 @@ class BackfillOrchestrator:
             "polygon": 10**18,
             "base": 10**18,
         }
-        chains_in_data = set()
+
+        # Load all token info for divisor/decimals lookup
+        all_token_info = await engine_db.get_all_token_info()
+        token_info_cache = {(t['chain'], t['asset_id']): t for t in all_token_info}
+
+        # Collect all unique price keys from snapshots
+        all_price_keys = set()
         for snapshot in filled.values():
             for (chain, asset_id) in snapshot.keys():
-                if asset_id == "native":
-                    chains_in_data.add(chain)
+                all_price_keys.add(f"{chain}:{asset_id}")
 
+        # Batch-load prices for all keys
         price_cache: Dict[str, Dict[str, float]] = {}  # {date: {price_key: price}}
-        for chain in chains_in_data:
-            price_key = f"{chain}:native"
+        for price_key in all_price_keys:
             prices = await engine_db.get_prices(price_key)
             for p in prices:
                 if p['date'] not in price_cache:
@@ -722,15 +763,34 @@ class BackfillOrchestrator:
             total_value = 0.0
             chain_values = {}
             for (chain, asset_id), raw_balance in snapshot.items():
-                if raw_balance <= 0 or asset_id != "native":
+                if raw_balance <= 0:
                     continue
-                divisor = divisors.get(chain, 1)
-                human_balance = raw_balance / divisor
+
+                if asset_id == "native":
+                    divisor = native_divisors.get(chain, 1)
+                else:
+                    token_info = token_info_cache.get((chain, asset_id))
+                    if not token_info:
+                        continue  # skip unknown tokens
+                    if token_info.get('is_nft'):
+                        # NFTs: use floor price if available, count as 1 unit
+                        price_key = f"{chain}:{asset_id}"
+                        nft_price = date_prices.get(price_key, 0.0)
+                        if nft_price > 0:
+                            total_value += nft_price
+                            chain_values[chain] = chain_values.get(chain, 0) + round(nft_price, 2)
+                        continue
+                    decimals = token_info.get('decimals', 0) or 0
+                    divisor = 10 ** decimals if decimals > 0 else 1
+
+                human_balance = raw_balance / divisor if divisor > 0 else raw_balance
                 price_key = f"{chain}:{asset_id}"
                 price = date_prices.get(price_key, 0.0)
+                if price <= 0:
+                    continue  # skip tokens we couldn't price
                 value = human_balance * price
                 total_value += value
-                chain_values[chain] = round(value, 2)
+                chain_values[chain] = chain_values.get(chain, 0) + round(value, 2)
 
             data.append({
                 'date': date_str,
