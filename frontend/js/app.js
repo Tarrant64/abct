@@ -6092,7 +6092,7 @@ function switchChartSource(source) {
         if (v1Range) v1Range.style.display = 'none';
         if (v2Range) v2Range.style.display = '';
         // Load v2 data
-        loadV2BalanceHistory('24h');
+        loadV2BalanceHistory('1w');
         checkV2CollectionStatus();
         loadV2Schedule();
         loadV2LastRun();
@@ -7124,7 +7124,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.log('[Overview] Background data loading complete');
             updateTotalPortfolioValue();
             // V2 on-chain history is now the default
-            loadV2BalanceHistory('24h');
+            loadV2BalanceHistory('1w');
             checkV2CollectionStatus();
             loadV2Schedule();
             loadV2LastRun();
