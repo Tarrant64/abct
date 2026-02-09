@@ -242,6 +242,23 @@ async def get_ethereum_nfts(user_id: int = Depends(verify_session), force_refres
     Get all NFTs across all Ethereum wallets.
     Returns NFTs with collection data, floor prices, and values.
     """
+    # Check if demo user
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        demo_nfts = await demo_nft_service.get_nfts_by_chain('ethereum')
+        total_value = sum(n.get('price_usd', 0) for n in demo_nfts)
+        return {
+            'configured': True,
+            'nfts': demo_nfts,
+            'total_count': len(demo_nfts),
+            'valued_count': len(demo_nfts),
+            'total_value_usd': total_value,
+            'total_value_eth': 0,
+            'eth_price': 3200.0,
+            'last_updated': None,
+            'demo_mode': True
+        }
+
     if not await ethereum_nft_service.is_configured():
         return {
             'configured': False,
@@ -285,6 +302,15 @@ async def get_ethereum_nft_summary(user_id: int = Depends(verify_session)):
     """
     Get a summary of all Ethereum NFTs grouped by collection.
     """
+    # Check if demo user
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        summary = await demo_nft_service.get_chain_nft_summary('ethereum', 3200.0)
+        summary['configured'] = True
+        summary['eth_price'] = 3200.0
+        summary['demo_mode'] = True
+        return summary
+
     if not ethereum_nft_service.is_configured():
         return {
             'configured': False,
@@ -347,6 +373,23 @@ async def get_solana_nfts(user_id: int = Depends(verify_session), force_refresh:
     Get all NFTs across all Solana wallets.
     Returns NFTs including Helium hotspots, compressed NFTs, and standard Solana NFTs.
     """
+    # Check if demo user
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        demo_nfts = await demo_nft_service.get_nfts_by_chain('solana')
+        total_value = sum(n.get('price_usd', 0) for n in demo_nfts)
+        return {
+            'configured': True,
+            'nfts': demo_nfts,
+            'total_count': len(demo_nfts),
+            'valued_count': len(demo_nfts),
+            'total_value_usd': total_value,
+            'total_value_sol': 0,
+            'sol_price': 180.0,
+            'last_updated': None,
+            'demo_mode': True
+        }
+
     if not await solana_nft_service.is_configured():
         return {
             'configured': False,
@@ -390,6 +433,15 @@ async def get_solana_nft_summary(user_id: int = Depends(verify_session)):
     """
     Get a summary of all Solana NFTs grouped by collection.
     """
+    # Check if demo user
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        summary = await demo_nft_service.get_chain_nft_summary('solana', 180.0)
+        summary['configured'] = True
+        summary['sol_price'] = 180.0
+        summary['demo_mode'] = True
+        return summary
+
     if not await solana_nft_service.is_configured():
         return {
             'configured': False,
@@ -452,6 +504,23 @@ async def get_polygon_nfts(user_id: int = Depends(verify_session), force_refresh
     Get all NFTs across all Polygon wallets.
     Returns NFTs with collection data, floor prices, and values.
     """
+    # Check if demo user
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        demo_nfts = await demo_nft_service.get_nfts_by_chain('polygon')
+        total_value = sum(n.get('price_usd', 0) for n in demo_nfts)
+        return {
+            'configured': True,
+            'nfts': demo_nfts,
+            'total_count': len(demo_nfts),
+            'valued_count': len(demo_nfts),
+            'total_value_usd': total_value,
+            'total_value_matic': 0,
+            'matic_price': 0.40,
+            'last_updated': None,
+            'demo_mode': True
+        }
+
     if not await polygon_service.is_configured():
         return {
             'configured': False,
@@ -508,6 +577,15 @@ async def get_polygon_nft_summary(user_id: int = Depends(verify_session)):
     """
     Get a summary of all Polygon NFTs grouped by collection.
     """
+    # Check if demo user
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        summary = await demo_nft_service.get_chain_nft_summary('polygon', 0.40)
+        summary['configured'] = True
+        summary['matic_price'] = 0.40
+        summary['demo_mode'] = True
+        return summary
+
     if not await polygon_service.is_configured():
         return {
             'configured': False,
@@ -577,6 +655,21 @@ async def get_base_nfts(user_id: int = Depends(verify_session), force_refresh: b
     """
     Get all NFTs from Base wallets.
     """
+    # Check if demo user
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        demo_nfts = await demo_nft_service.get_nfts_by_chain('base')
+        total_value = sum(n.get('price_usd', 0) for n in demo_nfts)
+        return {
+            'configured': True,
+            'nfts': demo_nfts,
+            'total_count': len(demo_nfts),
+            'total_value_usd': total_value,
+            'eth_price': 3200.0,
+            'last_updated': None,
+            'demo_mode': True
+        }
+
     if not await base_service.is_configured():
         return {
             'configured': False,
@@ -624,6 +717,15 @@ async def get_base_nfts(user_id: int = Depends(verify_session), force_refresh: b
 @router.get("/base/summary")
 async def get_base_nft_summary(user_id: int = Depends(verify_session)):
     """Get Base NFT summary grouped by collection."""
+    # Check if demo user
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        summary = await demo_nft_service.get_chain_nft_summary('base', 3200.0)
+        summary['configured'] = True
+        summary['eth_price'] = 3200.0
+        summary['demo_mode'] = True
+        return summary
+
     if not await base_service.is_configured():
         return {
             'configured': False,
@@ -934,9 +1036,14 @@ async def sync_prices_from_service(user_id: int = Depends(verify_session)):
     elif failed > 0:
         message += f" \u00b7 {failed} unavailable"
 
-    # Clear NFT cache so next load picks up new prices
+    # Clear both in-memory and persistent DB cache so next load rebuilds with fresh prices
     if total_synced > 0:
         nft_service.clear_cache()
+        try:
+            from database import clear_cache as clear_db_cache
+            await clear_db_cache("nft_all_data", user_id=user_id)
+        except Exception as e:
+            logger.debug(f"Failed to clear persistent NFT cache: {e}")
 
     # Check if no sources available at all
     has_sources = from_cache > 0 or nft_service.is_taptools_configured() or await nft_price_client.is_configured()
