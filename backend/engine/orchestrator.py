@@ -663,6 +663,9 @@ class BackfillOrchestrator:
         """
         from datetime import timedelta
 
+        if range_str == '24h':
+            return await self._get_hourly_history_data(user_id)
+
         range_map = {
             '24h': 1, '1w': 7, '2w': 14, '1m': 30, '3m': 90,
             '6m': 180, '1y': 365, '2y': 730, 'all': 3650,
@@ -805,6 +808,115 @@ class BackfillOrchestrator:
                 'oldest_date': min(dates) if dates else None,
                 'newest_date': max(dates) if dates else None,
                 'total_days': len(dates),
+            }
+        }
+
+    async def _get_hourly_history_data(self, user_id: int) -> Dict:
+        """Generate hourly history data for the 24h chart view."""
+        from datetime import timedelta
+
+        end_date = datetime.utcnow()
+        end_ts = int(end_date.timestamp())
+
+        # Replay ALL events to get current balances
+        all_events = await engine_db.get_events(user_id, max_time=end_ts, limit=500000)
+        if not all_events:
+            return {'data': [], 'coverage': {'oldest_date': None, 'newest_date': None, 'total_days': 0}}
+
+        # Build current balance snapshot
+        balances: Dict[tuple, int] = {}
+        for evt in all_events:
+            if not evt.get('block_time'):
+                continue
+            amount = int(evt['amount'])
+            key = (evt['chain'], evt['asset_id'])
+            if evt['direction'] == 'in':
+                balances[key] = balances.get(key, 0) + amount
+            elif evt['direction'] == 'out':
+                balances[key] = balances.get(key, 0) - amount
+
+        native_divisors = {
+            "cardano": 1_000_000,
+            "bitcoin": 100_000_000,
+            "ethereum": 10**18,
+            "solana": 1_000_000_000,
+            "polygon": 10**18,
+            "base": 10**18,
+        }
+
+        # Load token info for non-native
+        all_token_info = await engine_db.get_all_token_info()
+        token_info_cache = {(t['chain'], t['asset_id']): t for t in all_token_info}
+
+        # Collect unique price keys from balances
+        price_keys = set()
+        for (chain, asset_id) in balances.keys():
+            if balances[(chain, asset_id)] > 0:
+                price_keys.add((chain, asset_id))
+
+        # Fetch hourly prices for each asset
+        hourly_prices: Dict[str, Dict[str, float]] = {}  # {price_key: {datetime_str: price}}
+        for chain, asset_id in price_keys:
+            price_key = f"{chain}:{asset_id}"
+            if asset_id == "native":
+                prices = await price_enricher.fetch_hourly_prices(asset_id, chain, hours=25)
+                hourly_prices[price_key] = prices
+            else:
+                token_info = token_info_cache.get((chain, asset_id))
+                if token_info and not token_info.get('is_nft') and token_info.get('defillama_key'):
+                    prices = await price_enricher.fetch_hourly_prices(asset_id, chain, hours=25)
+                    hourly_prices[price_key] = prices
+
+        # Collect all hourly timestamps across all assets
+        all_hours = set()
+        for prices in hourly_prices.values():
+            all_hours.update(prices.keys())
+
+        if not all_hours:
+            return {'data': [], 'coverage': {'oldest_date': None, 'newest_date': None, 'total_days': 0}}
+
+        # Build hourly output
+        data = []
+        for dt_str in sorted(all_hours):
+            total_value = 0.0
+            chain_values = {}
+
+            for (chain, asset_id), raw_balance in balances.items():
+                if raw_balance <= 0:
+                    continue
+
+                price_key = f"{chain}:{asset_id}"
+                price = hourly_prices.get(price_key, {}).get(dt_str, 0.0)
+                if price <= 0:
+                    continue
+
+                if asset_id == "native":
+                    divisor = native_divisors.get(chain, 1)
+                else:
+                    token_info = token_info_cache.get((chain, asset_id))
+                    if not token_info or token_info.get('is_nft'):
+                        continue
+                    decimals = token_info.get('decimals', 0) or 0
+                    divisor = 10 ** decimals if decimals > 0 else 1
+
+                human_balance = raw_balance / divisor if divisor > 0 else raw_balance
+                value = human_balance * price
+                total_value += value
+                chain_values[chain] = chain_values.get(chain, 0) + round(value, 2)
+
+            data.append({
+                'date': dt_str,
+                'value': round(total_value, 2),
+                'chains': chain_values,
+            })
+
+        dates = [d['date'] for d in data]
+        return {
+            'data': data,
+            'coverage': {
+                'oldest_date': min(dates) if dates else None,
+                'newest_date': max(dates) if dates else None,
+                'total_days': 1,
             }
         }
 

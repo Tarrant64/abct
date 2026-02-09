@@ -474,6 +474,74 @@ class PriceEnricher:
             logger.debug(f"CoinGecko historical price error for {cg_id} on {date}: {e}")
         return None
 
+    async def fetch_hourly_prices(self, asset_id: str, chain: str, hours: int = 24) -> Dict[str, float]:
+        """Fetch hourly prices for the last N hours. Returns {datetime_str: price}."""
+        from datetime import timedelta
+
+        price_key = f"{chain}:{asset_id}"
+        now = datetime.utcnow()
+
+        # Generate hourly timestamps for the last N hours
+        hourly_times = []
+        for h in range(hours, -1, -1):
+            dt = (now - timedelta(hours=h)).replace(minute=0, second=0, microsecond=0)
+            hourly_times.append(dt)
+
+        # Check cache for existing hourly prices
+        start_dt = hourly_times[0].strftime('%Y-%m-%dT%H:00')
+        end_dt = hourly_times[-1].strftime('%Y-%m-%dT%H:00')
+        cached = await engine_db.get_hourly_prices(price_key, start_datetime=start_dt, end_datetime=end_dt)
+        cached_map = {p['datetime']: p['price_usd'] for p in cached}
+
+        # Find missing hours
+        missing = []
+        for dt in hourly_times:
+            dt_str = dt.strftime('%Y-%m-%dT%H:00')
+            if dt_str not in cached_map:
+                missing.append(dt)
+
+        if not missing:
+            return cached_map
+
+        # Resolve DefiLlama key
+        if asset_id == "native":
+            symbol = NATIVE_ASSET_MAP.get(price_key) or NATIVE_ASSET_MAP.get(f"{chain}:native")
+            if not symbol:
+                return cached_map
+            cg_id = ASSET_TO_COINGECKO.get(symbol)
+            if not cg_id:
+                return cached_map
+            defillama_key = f"coingecko:{cg_id}"
+        else:
+            token_info = await self.resolve_token_info(chain, asset_id)
+            if not token_info or not token_info.get('defillama_key'):
+                return cached_map
+            defillama_key = token_info['defillama_key']
+
+        # Fetch missing hourly prices from DefiLlama
+        batch_to_store = []
+        for i, dt in enumerate(missing):
+            ts = int(dt.timestamp())
+            price = await self._fetch_defillama_by_key(defillama_key, ts)
+            if price and price > 0:
+                dt_str = dt.strftime('%Y-%m-%dT%H:00')
+                cached_map[dt_str] = price
+                batch_to_store.append({
+                    'asset_id': price_key,
+                    'datetime': dt_str,
+                    'price_usd': price,
+                    'source': 'defillama',
+                })
+
+            # Rate limit: 2 requests/sec
+            if (i + 1) % 2 == 0 and i < len(missing) - 1:
+                await asyncio.sleep(1)
+
+        if batch_to_store:
+            await engine_db.upsert_hourly_prices_batch(batch_to_store)
+
+        return cached_map
+
     async def enrich_events_batch(self, events: list, chain: str) -> Dict[str, float]:
         """Enrich a batch of events with prices."""
         dates = set()

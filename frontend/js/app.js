@@ -6069,7 +6069,7 @@ function switchChartSource(source) {
         if (v1Range) v1Range.style.display = 'none';
         if (v2Range) v2Range.style.display = '';
         // Load v2 data
-        loadV2BalanceHistory('1y');
+        loadV2BalanceHistory('24h');
         checkV2CollectionStatus();
         loadV2Schedule();
     }
@@ -6132,6 +6132,12 @@ function renderV2Chart(data, range) {
 
     const colors = getChartColors();
     const labels = data.map(d => {
+        if (d.date.includes('T')) {
+            // Hourly data: show "2:00 PM" format
+            const [datePart, timePart] = d.date.split('T');
+            const date = new Date(datePart + 'T' + timePart + ':00Z');
+            return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        }
         const date = new Date(d.date + 'T12:00:00');
         if (range === '24h' || range === '1w') {
             return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -7031,7 +7037,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.log('[Overview] Background data loading complete');
             updateTotalPortfolioValue();
             // V2 on-chain history is now the default
-            loadV2BalanceHistory('1y');
+            loadV2BalanceHistory('24h');
             checkV2CollectionStatus();
             loadV2Schedule();
             preFetchAssetBreakdowns();
