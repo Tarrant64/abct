@@ -156,6 +156,18 @@ async def init_engine_tables():
         """)
 
         await db.execute("""
+            CREATE TABLE IF NOT EXISTS engine_price_history_hourly (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                asset_id TEXT NOT NULL,
+                datetime TEXT NOT NULL,
+                price_usd REAL NOT NULL,
+                source TEXT NOT NULL,
+                fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(asset_id, datetime)
+            )
+        """)
+
+        await db.execute("""
             CREATE TABLE IF NOT EXISTS engine_token_info (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 chain TEXT NOT NULL,
@@ -190,6 +202,10 @@ async def init_engine_tables():
         await db.execute("""
             CREATE INDEX IF NOT EXISTS idx_engine_price_history_asset
             ON engine_price_history(asset_id, date)
+        """)
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_engine_price_history_hourly_asset
+            ON engine_price_history_hourly(asset_id, datetime)
         """)
         await db.execute("""
             CREATE INDEX IF NOT EXISTS idx_engine_account_subjects_user
@@ -746,6 +762,52 @@ async def get_prices_for_date(date: str) -> Dict[str, float]:
             (date,)
         )
         return {row[0]: row[1] for row in await cursor.fetchall()}
+
+
+# ============================================================================
+# HOURLY PRICE HISTORY CRUD
+# ============================================================================
+
+async def upsert_hourly_price(asset_id: str, datetime_str: str, price_usd: float, source: str):
+    """Insert or replace an hourly historical price."""
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        await db.execute(
+            """INSERT OR REPLACE INTO engine_price_history_hourly (asset_id, datetime, price_usd, source)
+               VALUES (?, ?, ?, ?)""",
+            (asset_id, datetime_str, price_usd, source)
+        )
+        await db.commit()
+
+
+async def get_hourly_prices(asset_id: str, start_datetime: Optional[str] = None,
+                             end_datetime: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Get hourly prices for an asset, optionally within a datetime range."""
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        db.row_factory = aiosqlite.Row
+        query = "SELECT * FROM engine_price_history_hourly WHERE asset_id = ?"
+        params: List[Any] = [asset_id]
+        if start_datetime:
+            query += " AND datetime >= ?"
+            params.append(start_datetime)
+        if end_datetime:
+            query += " AND datetime <= ?"
+            params.append(end_datetime)
+        query += " ORDER BY datetime ASC"
+        cursor = await db.execute(query, params)
+        return [dict(row) for row in await cursor.fetchall()]
+
+
+async def upsert_hourly_prices_batch(prices: List[Dict[str, Any]]):
+    """Batch insert hourly historical prices."""
+    if not prices:
+        return
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        await db.executemany(
+            """INSERT OR REPLACE INTO engine_price_history_hourly (asset_id, datetime, price_usd, source)
+               VALUES (:asset_id, :datetime, :price_usd, :source)""",
+            prices
+        )
+        await db.commit()
 
 
 # ============================================================================

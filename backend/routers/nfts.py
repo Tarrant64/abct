@@ -5,7 +5,7 @@ NFT Router - API endpoints for NFT data.
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import Response
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict
 import asyncio
 import sys
 import os
@@ -806,13 +806,50 @@ async def get_all_chains_nft_summary(user_id: int = Depends(verify_session)):
     }
 
 
+async def _fetch_taptools_floors(policy_ids: list, nft_svc) -> Dict[str, float]:
+    """Fetch floor prices directly from TapTools for policy IDs."""
+    from config import TAPTOOLS_API_KEY
+
+    TAPTOOLS_API_BASE = "https://openapi.taptools.io/api/v1"
+    floors = {}
+    headers = {"x-api-key": TAPTOOLS_API_KEY}
+    client = get_client("taptools_nft", timeout=15.0)
+
+    for i, pid in enumerate(policy_ids):
+        if nft_svc.is_rate_limited():
+            break
+        try:
+            response = await client.get(
+                f"{TAPTOOLS_API_BASE}/nft/collection/stats",
+                params={"policy": pid},
+                headers=headers,
+            )
+            if response.status_code == 429:
+                nft_svc.set_rate_limited()
+                break
+            if response.status_code == 200:
+                data = response.json()
+                price = data.get('price')
+                if price and float(price) > 0:
+                    floors[pid] = float(price)
+        except Exception as e:
+            logger.debug(f"TapTools floor price error for {pid[:16]}: {e}")
+
+        # Rate limit: 1 request/sec
+        if i < len(policy_ids) - 1:
+            await asyncio.sleep(1)
+
+    return floors
+
+
 @router.post("/prices/sync")
 async def sync_prices_from_service(user_id: int = Depends(verify_session)):
     """
     Sync Cardano NFT floor prices from the external Cardano NFT Price Service.
     Updates local price cache with data from the dedicated price service.
+    Falls back to TapTools if external service returns no/few prices.
     """
-    if not nft_price_client.is_configured():
+    if not await nft_price_client.is_configured():
         return {
             'success': False,
             'message': 'Cardano NFT Price Service not configured. Set NFT_PRICE_SERVICE_URL environment variable.',
@@ -839,13 +876,8 @@ async def sync_prices_from_service(user_id: int = Depends(verify_session)):
 
     # Fetch prices from the external service
     floor_prices = await nft_price_client.get_floor_prices(policy_ids)
-
     if not floor_prices:
-        return {
-            'success': False,
-            'message': 'No prices returned from service',
-            'synced': 0
-        }
+        floor_prices = {}
 
     # Update local cache with the fetched prices
     synced_count = 0
@@ -853,6 +885,24 @@ async def sync_prices_from_service(user_id: int = Depends(verify_session)):
         if price is not None:
             await nft_service.update_floor_price_cache(policy_id, price)
             synced_count += 1
+
+    # If external service returned nothing or few prices, try TapTools as fallback
+    remaining_ids = [pid for pid in policy_ids if pid not in floor_prices]
+    if remaining_ids and nft_service.is_taptools_configured() and not nft_service.is_rate_limited():
+        logger.info(f"External service returned {len(floor_prices)}/{len(policy_ids)} prices, trying TapTools for {len(remaining_ids)} remaining")
+        taptools_prices = await _fetch_taptools_floors(remaining_ids, nft_service)
+        for policy_id, price in taptools_prices.items():
+            if price is not None:
+                await nft_service.update_floor_price_cache(policy_id, price)
+                synced_count += 1
+        floor_prices.update(taptools_prices)
+
+    if synced_count == 0:
+        return {
+            'success': False,
+            'message': 'No prices returned from external service or TapTools',
+            'synced': 0
+        }
 
     # Clear and reload NFT data to use new prices
     nft_service.clear_cache()
@@ -862,7 +912,6 @@ async def sync_prices_from_service(user_id: int = Depends(verify_session)):
         'message': f'Synced {synced_count} Cardano floor prices',
         'synced': synced_count,
         'total_collections': len(policy_ids),
-        'service_url': nft_price_client.service_url
     }
 
 
