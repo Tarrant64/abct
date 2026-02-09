@@ -324,9 +324,13 @@ class NFTService:
         if not force_refresh and user_id is not None:
             cached_data = await get_cache(NFT_CACHE_KEY, user_id=user_id)
             if cached_data:
-                logger.info(f"Loaded {len(cached_data.get('nfts', []))} NFTs from user {user_id} cache")
-                # Return cached data directly without modifying instance variables
-                return cached_data.get('nfts', [])
+                nfts = cached_data.get('nfts', [])
+                logger.info(f"Loaded {len(nfts)} NFTs from user {user_id} cache")
+                # Re-apply floor prices from DB in case they were updated after cache was written
+                updated = await self._refresh_cached_prices(nfts)
+                if updated > 0:
+                    logger.info(f"Updated {updated} NFT prices from floor price DB")
+                return nfts
 
         # Always load floor prices from database first to reduce API calls
         await self.load_floor_prices_from_db()
@@ -423,6 +427,43 @@ class NFTService:
             await self._save_to_db_cache(enriched_nfts, temp_collection_cache, user_id)
 
         return enriched_nfts
+
+    async def _refresh_cached_prices(self, nfts: List[dict]) -> int:
+        """Re-apply floor prices from nft_floor_prices DB to cached NFT data.
+        Returns count of NFTs whose price was updated."""
+        updated = 0
+        # Collect unique policy_ids that have unpriced NFTs
+        policy_ids_to_check = set()
+        for nft in nfts:
+            if not nft.get('price_ada'):
+                pid = nft.get('policy_id')
+                if pid:
+                    policy_ids_to_check.add(pid)
+
+        if not policy_ids_to_check:
+            return 0
+
+        # Batch lookup floor prices from DB
+        price_map = {}
+        for pid in policy_ids_to_check:
+            db_price = await get_latest_nft_floor_price(pid)
+            if db_price and db_price.get('floor_price_ada') and float(db_price['floor_price_ada']) > 0:
+                price_map[pid] = float(db_price['floor_price_ada'])
+
+        if not price_map:
+            return 0
+
+        # Apply prices to cached NFTs
+        for nft in nfts:
+            pid = nft.get('policy_id')
+            if pid in price_map and not nft.get('price_ada'):
+                nft['price_ada'] = price_map[pid]
+                nft['price_source'] = 'floor'
+                if nft.get('collection'):
+                    nft['collection']['floor_price_ada'] = price_map[pid]
+                updated += 1
+
+        return updated
 
     async def _save_to_db_cache(self, nfts: List[dict], collections: dict, user_id: int) -> None:
         """Save NFT data to persistent database cache (user-specific)."""
