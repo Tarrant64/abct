@@ -65,8 +65,20 @@ class PriceEnricher:
             self._token_info_cache[cache_key] = info
             return info
 
-        # Determine if this is an NFT
+        # Determine if this is an NFT (EVM format-based check first)
         is_nft = self._is_nft_asset(chain, asset_id)
+
+        # For Cardano, cross-reference with V1 nft_floor_prices to detect NFTs
+        if chain == "cardano" and not is_nft and '.' in asset_id:
+            policy_id = asset_id.split('.')[0]
+            try:
+                from database import get_latest_nft_floor_price
+                v1_floor = await get_latest_nft_floor_price(policy_id)
+                if v1_floor:
+                    is_nft = True
+                    logger.debug(f"Cardano NFT detected via V1 data: {asset_id[:30]}...")
+            except Exception as e:
+                logger.debug(f"V1 NFT lookup error for {policy_id[:16]}: {e}")
 
         # Build DefiLlama key
         defillama_key = self._build_defillama_key(chain, asset_id)
@@ -92,6 +104,11 @@ class PriceEnricher:
             if discovered:
                 symbol = discovered.get('symbol')
                 decimals = discovered.get('decimals', 0)
+            elif chain == "cardano" and '.' in asset_id:
+                # DefiLlama returned nothing for this Cardano asset with decimals=0
+                # → likely an NFT, not a fungible token
+                is_nft = True
+                logger.debug(f"Cardano NFT detected via DefiLlama miss: {asset_id[:30]}...")
 
         # Store in DB
         await engine_db.upsert_token_info(
@@ -121,8 +138,11 @@ class PriceEnricher:
         # EVM NFTs use format "{contract}:{tokenId}"
         if chain in ("ethereum", "polygon", "base") and ':' in asset_id:
             return True
-        # Cardano NFTs are harder to distinguish from tokens (both use policy_id.asset_name)
-        # We'll treat them as tokens unless we can't price them
+        # Cardano: check in-memory cache (populated by resolve_token_info)
+        if chain == "cardano":
+            cached = self._token_info_cache.get((chain, asset_id))
+            if cached and cached.get('is_nft'):
+                return True
         return False
 
     def _build_defillama_key(self, chain: str, asset_id: str) -> Optional[str]:
@@ -417,20 +437,99 @@ class PriceEnricher:
         return None
 
     async def _fetch_cardano_nft_floor(self, policy_id: str) -> Optional[float]:
-        """Fetch Cardano NFT collection floor price via nft_price_client."""
+        """Fetch Cardano NFT collection floor price.
+
+        Fallback chain:
+        1. V1 nft_floor_prices table (already has data, free, instant)
+        2. nft_price_client external service (if configured)
+        3. TapTools direct API call (rate-limited, last resort)
+        """
+        # Helper to convert ADA floor to USD
+        async def _ada_to_usd(floor_ada: float) -> Optional[float]:
+            ada_price = await self.fetch_historical_price(
+                "native", "cardano", datetime.utcnow().strftime('%Y-%m-%d')
+            )
+            if ada_price:
+                return floor_ada * ada_price
+            return None
+
+        # 1. Check V1 floor price cache (main database)
+        try:
+            from database import get_latest_nft_floor_price
+            cached = await get_latest_nft_floor_price(policy_id)
+            if cached and cached.get('floor_price_ada') and cached['floor_price_ada'] > 0:
+                usd = await _ada_to_usd(cached['floor_price_ada'])
+                if usd:
+                    logger.debug(f"NFT floor from V1 cache: {policy_id[:16]}... = {cached['floor_price_ada']} ADA")
+                    return usd
+        except Exception as e:
+            logger.debug(f"V1 floor price lookup error for {policy_id[:16]}: {e}")
+
+        # 2. Try nft_price_client external service
         try:
             from services.nft_price_client import nft_price_client
             floor_ada = await nft_price_client.get_floor_price(policy_id)
             if floor_ada and floor_ada > 0:
-                # Convert ADA floor to USD
-                ada_price = await self.fetch_historical_price(
-                    "native", "cardano", datetime.utcnow().strftime('%Y-%m-%d')
-                )
-                if ada_price:
-                    return floor_ada * ada_price
+                usd = await _ada_to_usd(floor_ada)
+                if usd:
+                    # Persist back to V1 table for future lookups
+                    await self._save_floor_to_v1(policy_id, floor_ada, "nft_price_service")
+                    return usd
         except Exception as e:
-            logger.debug(f"Cardano NFT floor price error for {policy_id[:16]}: {e}")
+            logger.debug(f"nft_price_client error for {policy_id[:16]}: {e}")
+
+        # 3. Direct TapTools API call (last resort)
+        try:
+            floor_ada = await self._fetch_taptools_floor_direct(policy_id)
+            if floor_ada and floor_ada > 0:
+                usd = await _ada_to_usd(floor_ada)
+                if usd:
+                    # Persist back to V1 table for future lookups
+                    await self._save_floor_to_v1(policy_id, floor_ada, "taptools_direct")
+                    return usd
+        except Exception as e:
+            logger.debug(f"TapTools direct floor price error for {policy_id[:16]}: {e}")
+
         return None
+
+    async def _fetch_taptools_floor_direct(self, policy_id: str) -> Optional[float]:
+        """Direct TapTools floor price call as last-resort fallback."""
+        try:
+            from services.api_key_manager import APIKeyManager
+            mgr = APIKeyManager(api_name='taptools', env_var='TAPTOOLS_API_KEY')
+            api_key = await mgr.get_api_key()
+            if not api_key:
+                return None
+
+            client = get_client("taptools_nft", timeout=15.0)
+            response = await client.get(
+                "https://openapi.taptools.io/api/v1/nft/collection/stats",
+                params={"policy": policy_id},
+                headers={"x-api-key": api_key},
+            )
+            if response.status_code == 200:
+                data = response.json()
+                price = data.get('price')
+                if price and float(price) > 0:
+                    return float(price)
+            elif response.status_code == 429:
+                logger.warning("TapTools rate limit hit during NFT floor price fetch")
+        except Exception as e:
+            logger.debug(f"TapTools direct API error for {policy_id[:16]}: {e}")
+        return None
+
+    async def _save_floor_to_v1(self, policy_id: str, floor_ada: float, source: str):
+        """Persist fetched floor price back to V1 nft_floor_prices table."""
+        try:
+            from database import save_nft_floor_price
+            await save_nft_floor_price({
+                'policy_id': policy_id,
+                'floor_price_ada': floor_ada,
+                'source': source,
+                'fetched_at': datetime.utcnow().isoformat(),
+            })
+        except Exception as e:
+            logger.debug(f"Failed to save floor price to V1: {e}")
 
     async def _fetch_from_defillama(self, cg_id: str, timestamp: int) -> Optional[float]:
         """Fetch single historical price from DefiLlama using coingecko: prefix."""
