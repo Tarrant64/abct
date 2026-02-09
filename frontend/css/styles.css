@@ -2805,6 +2805,17 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     border-left: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.portfolio-card-breakdown {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-end;
+    text-align: right;
+    padding-left: 24px;
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 .portfolio-divider {
     width: 100%;
     height: 1px;
@@ -2892,6 +2903,19 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     }
 
     .portfolio-card-right {
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        text-align: center;
+        padding-left: 0;
+        border-left: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        padding-top: 16px;
+        width: 100%;
+    }
+
+    .portfolio-card-breakdown {
         flex-direction: row;
         align-items: center;
         justify-content: center;
@@ -8459,6 +8483,10 @@ body.privacy-mode a[data-href] {
     border-left-color: #e5e7eb;
 }
 
+[data-theme="light"] .portfolio-card-breakdown {
+    border-left-color: #e5e7eb;
+}
+
 [data-theme="light"] .portfolio-divider {
     background: #e5e7eb;
 }
@@ -8482,6 +8510,9 @@ body.privacy-mode a[data-href] {
 
 @media (max-width: 768px) {
     [data-theme="light"] .portfolio-card-right {
+        border-top-color: #e5e7eb;
+    }
+    [data-theme="light"] .portfolio-card-breakdown {
         border-top-color: #e5e7eb;
     }
 }
