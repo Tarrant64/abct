@@ -417,11 +417,23 @@ function updateTotalPortfolioValue() {
     // Custom tokens value (from toggle selections)
     const customTokensTotal = customTokensValue || 0;
 
-    // Total portfolio value
-    const totalValue = walletsTotal + exchangesTotal + stakingTotal + defiTotal + nftsTotal + trackedTokensTotal + customTokensTotal;
+    // Portfolio breakdown: Liquid / Staked / NFTs
+    const liquidTotal = walletsTotal + exchangesTotal + trackedTokensTotal + customTokensTotal;
+    const stakedTotal = stakingTotal + defiTotal;
+
+    // Total portfolio value = sum of breakdown categories
+    const totalValue = liquidTotal + stakedTotal + nftsTotal;
 
     // Update total display
     setSafeHTML(totalValueEl, formatUSDBlur(totalValue));
+
+    // Update breakdown section
+    const liquidEl = document.getElementById('breakdownLiquid');
+    const stakedEl = document.getElementById('breakdownStaked');
+    const nftsEl = document.getElementById('breakdownNfts');
+    if (liquidEl) liquidEl.textContent = formatUSD(liquidTotal);
+    if (stakedEl) stakedEl.textContent = formatUSD(stakedTotal);
+    if (nftsEl) nftsEl.textContent = formatUSD(nftsTotal);
 
     // Cache for instant load on next visit
     if (totalValue > 0) {
