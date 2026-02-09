@@ -3703,7 +3703,7 @@ function renderExchangeAssets(assets) {
 }
 
 // Load NFTs
-async function loadNFTs() {
+async function loadNFTs(forceRefresh = false) {
     const nftsList = document.getElementById('nftsList');
     const nftsSummary = document.getElementById('nftsSummary');
 
@@ -3716,7 +3716,8 @@ async function loadNFTs() {
     setSafeHTML(nftsList, '<p class="loading-state">Loading NFTs... (this may take a moment)</p>');
 
     try {
-        const response = await authFetch(`${API_BASE}/nfts`);
+        const url = forceRefresh ? `${API_BASE}/nfts?force_refresh=true` : `${API_BASE}/nfts`;
+        const response = await authFetch(url);
 
         if (!response.ok) {
             setSafeHTML(nftsList, '<p class="empty-state">Error loading NFTs</p>');
@@ -4716,9 +4717,9 @@ async function syncNFTPrices() {
             }
             showStatus(msg);
 
-            // Reload NFTs and refresh coverage
+            // Reload NFTs with force refresh to pick up new prices
             if (currentNFTChain === 'cardano') {
-                loadNFTs();
+                loadNFTs(true);
             }
             loadNFTPriceCoverage();
         } else if (!data.has_sources) {
