@@ -6,7 +6,7 @@
 +-----------------------------------------------------------------------------------+
 |                              ABCT System (v1.5.0)                                  |
 |                         Multi-User Portfolio Tracker                              |
-|                              BUILD 1770563676                                     |
+|                              BUILD 1770726755                                     |
 +-----------------------------------------------------------------------------------+
 
                                    +-----------------+
@@ -75,13 +75,15 @@
 |                              Services Layer                                        |
 +-----------------------------------------------------------------------------------+
 |                                                                                    |
-|  Blockchain Services:                                                             |
+|  Blockchain Services (11 Chains):                                                |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
 |  | Cardano  | | Bitcoin  | | Ethereum | | Solana   | | Polygon  | |   Base   |     |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
-|  +----------+                                                                      |
-|  | Algorand |                                                                      |
-|  +----------+                                                                      |
+|  +----------+ +----------+ +----------+ +----------+ +----------+                  |
+|  | Algorand | |   BSC    | | Arbitrum | |Avalanche | |   Tron   |                  |
+|  +----------+ +----------+ +----------+ +----------+ +----------+                  |
+|  Note: BSC, Arbitrum, and Avalanche share the generic evm_chain.py service         |
+|  Tron uses tron.py with TronGrid API (free, no key required)                       |
 |                                                                                    |
 |  Exchange Services:                                                               |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
@@ -120,12 +122,16 @@
 |  Blockchain:                                                                      |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
 |  |Blockfrost| |Blockstrm | |Etherscan | | Alchemy  | |  Helius  | | Pera API |     |
-|  |(Cardano) | |(Bitcoin) | |(EVM)     | |(EVM)     | |(Solana)  | |(Algorand)|     |
+|  |(Cardano) | |(Bitcoin) | |(EVM)     | |(EVM 6ch) | |(Solana)  | |(Algorand)|     |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
-|  +----------+ +----------+ +----------+                                            |
-|  |CExplorer | | TapTools | | Moralis  |                                            |
-|  |(Cardano) | |(Cardano) | |(NFTs)    |                                            |
-|  +----------+ +----------+ +----------+                                            |
+|  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
+|  |CExplorer | | TapTools | | Moralis  | | BscScan  | | Arbiscan | | Snowscan |     |
+|  |(Cardano) | |(Cardano) | |(NFTs)    | |(BSC)     | |(Arbitrum)| |(Avalanche)|    |
+|  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
+|  +----------+                                                                      |
+|  | TronGrid |                                                                      |
+|  |(Tron/Free)|                                                                     |
+|  +----------+                                                                      |
 |                                                                                    |
 |  Pricing:                                                                         |
 |  +----------+ +----------+ +----------+ +----------+ +----------+                  |
@@ -333,7 +339,7 @@ Events use composite unique keys to prevent duplicates on re-processing:
       |                                                   |
 ```
 
-Demo mode includes: 91 tokens across 7 blockchains, 76 NFTs across 7 collections, 1,500 transactions over 1 year of history, DeFi positions, and exchange balances.
+Demo mode includes: 91 tokens across 11 blockchains, 76 NFTs across 7 collections, 1,500 transactions over 1 year of history, DeFi positions, and exchange balances.
 
 ## Pricing Fallback Chain
 
@@ -386,14 +392,15 @@ Shared persistent `httpx.AsyncClient` instances via `get_client(name, timeout)`:
 - **TradingView Lightweight Charts**: Price chart visualization
 - **DOMPurify v3.0.8**: XSS protection on all dynamic HTML
 - **5 Themes**: Dark Mode (default), Light, Cypherpunk 1, Ocean Depths, Sunset Horizon
-- **Cache Busting**: Build version system (v=1770563676) for immediate updates
+- **Cache Busting**: Build version system (v=1770726755) for immediate updates
 
-### External Services (14 providers)
+### External Services (19 providers)
 - **Cardano**: Blockfrost, CExplorer, TapTools, Koios
 - **Bitcoin**: Blockstream
-- **EVM**: Etherscan, Alchemy, Polygonscan, Basescan
+- **EVM**: Etherscan, Alchemy, Polygonscan, Basescan, BscScan, Arbiscan, Snowscan
 - **Solana**: Helius
 - **Algorand**: Pera Wallet API, Tatum
+- **Tron**: TronGrid (free, no API key required)
 - **Pricing**: CoinGecko, CoinMarketCap, Coinbase, DefiLlama
 - **Exchanges**: Coinbase CDP, Binance, Binance.US, OKX, Bitget, Gate.io, KuCoin
 
@@ -517,6 +524,8 @@ ABCT/
 │   │   ├── polygon.py              # Polygon blockchain
 │   │   ├── base.py                 # Base blockchain
 │   │   ├── algorand.py             # Algorand blockchain
+│   │   ├── evm_chain.py           # Generic EVM (BSC, Arbitrum, Avalanche)
+│   │   ├── tron.py                # Tron blockchain (TronGrid)
 │   │   └── ...                     # Exchange, NFT, demo services
 │   └── middleware/                 # Security middleware
 ├── frontend/                      # HTML/CSS/JS (17 pages)

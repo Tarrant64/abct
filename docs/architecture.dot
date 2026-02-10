@@ -14,7 +14,7 @@ digraph ABCT_Architecture {
 
     // Title
     labelloc="t";
-    label="ABCT Architecture - A Better Crypto Tracker\nVersion 1.0.1 (Build 1770166262)\n7 Blockchains | 7 Exchanges | Multi-User | Demo Mode";
+    label="ABCT Architecture - A Better Crypto Tracker\nVersion 1.5.0 (Build 1770726755)\n11 Blockchains | 7 Exchanges | Multi-User | Demo Mode";
     fontsize=16;
 
     // ========== SUBGRAPHS ==========
@@ -116,7 +116,7 @@ digraph ABCT_Architecture {
 
                 // Blockchain Services
                 subgraph cluster_blockchain_svc {
-                    label="Blockchain Services (7 Chains)";
+                    label="Blockchain Services (11 Chains)";
                     style="rounded,filled";
                     fillcolor="#FFE0B2";
                     color="#E65100";
@@ -128,6 +128,8 @@ digraph ABCT_Architecture {
                     s_base [label="base.py\nBase (ETH)", fillcolor="#FFCC80"];
                     s_solana [label="solana.py\nSolana (SOL)", fillcolor="#FFCC80"];
                     s_algorand [label="algorand.py\nAlgorand (ALGO)", fillcolor="#FFCC80"];
+                    s_evm_chain [label="evm_chain.py\nGeneric EVM Service\n(BSC/Arbitrum/Avalanche)", fillcolor="#FFCC80"];
+                    s_tron [label="tron.py\nTron (TRX)", fillcolor="#FFCC80"];
                 }
 
                 // NFT Services
@@ -168,7 +170,7 @@ digraph ABCT_Architecture {
                     fillcolor="#F3E5F5";
                     color="#6A1B9A";
 
-                    s_demo_wallet [label="demo_wallet_service.py\n91 Tokens, 7 Chains", fillcolor="#CE93D8"];
+                    s_demo_wallet [label="demo_wallet_service.py\n91 Tokens, 11 Chains", fillcolor="#CE93D8"];
                     s_demo_nft [label="demo_nft_service.py\n76 NFTs, 7 Collections", fillcolor="#CE93D8"];
                     s_demo_txn [label="demo_transaction_service.py\n1,500 Transactions", fillcolor="#CE93D8"];
                     s_demo_defi [label="demo_defi_service.py\nStaking Positions", fillcolor="#CE93D8"];
@@ -244,16 +246,29 @@ digraph ABCT_Architecture {
 
         // EVM APIs
         subgraph cluster_evm_api {
-            label="EVM Chains (Ethereum/Polygon/Base)";
+            label="EVM Chains (Ethereum/Polygon/Base/BSC/Arbitrum/Avalanche)";
             style="rounded,filled";
             fillcolor="#E8EAF6";
             color="#3F51B5";
 
-            api_alchemy [label="Alchemy\nETH/Polygon/Base/Optimism", fillcolor="#C5CAE9"];
+            api_alchemy [label="Alchemy\nETH/Polygon/Base/BSC/\nArbitrum/Avalanche", fillcolor="#C5CAE9"];
             api_etherscan [label="Etherscan\nEthereum Transactions", fillcolor="#C5CAE9"];
             api_polygonscan [label="Polygonscan\nPolygon Transactions", fillcolor="#C5CAE9"];
             api_basescan [label="Basescan\nBase Transactions", fillcolor="#C5CAE9"];
+            api_bscscan [label="BscScan\nBSC Transactions", fillcolor="#C5CAE9"];
+            api_arbiscan [label="Arbiscan\nArbitrum Transactions", fillcolor="#C5CAE9"];
+            api_snowscan [label="Snowscan\nAvalanche Transactions", fillcolor="#C5CAE9"];
             api_moralis [label="Moralis\nMulti-Chain Fallback", fillcolor="#C5CAE9"];
+        }
+
+        // Tron APIs
+        subgraph cluster_tron_api {
+            label="Tron Network";
+            style="rounded,filled";
+            fillcolor="#FFCDD2";
+            color="#D32F2F";
+
+            api_trongrid [label="TronGrid\nTRX/TRC-20 Data (Free)", fillcolor="#EF9A9A"];
         }
 
         // Other Blockchain APIs
@@ -369,12 +384,15 @@ digraph ABCT_Architecture {
     r_wallets -> s_base;
     r_wallets -> s_solana;
     r_wallets -> s_algorand;
+    r_wallets -> s_evm_chain;
+    r_wallets -> s_tron;
 
     // Routers to NFT Services
     r_nfts -> s_nft;
     r_nfts -> s_eth_nft;
     r_nfts -> s_sol_nft;
     r_nfts -> s_algo_nft;
+    r_nfts -> s_evm_chain [label="BSC/ARB/AVAX NFTs"];
     r_nfts -> s_nft_image;
     r_nft_scheduler -> s_nft_scheduler;
 
@@ -430,6 +448,13 @@ digraph ABCT_Architecture {
     s_transaction_history -> api_polygonscan [label="HTTPS", color="#3F51B5"];
     s_transaction_history -> api_basescan [label="HTTPS", color="#3F51B5"];
     s_transaction_history -> api_moralis [label="HTTPS", color="#3F51B5"];
+
+    s_evm_chain -> api_alchemy [label="HTTPS (BSC/ARB/AVAX)", color="#3F51B5"];
+    s_etherscan -> api_bscscan [label="HTTPS", color="#3F51B5"];
+    s_etherscan -> api_arbiscan [label="HTTPS", color="#3F51B5"];
+    s_etherscan -> api_snowscan [label="HTTPS", color="#3F51B5"];
+
+    s_tron -> api_trongrid [label="HTTPS", color="#D32F2F"];
 
     s_bitcoin -> api_blockstream [label="HTTPS", color="#00796B"];
     s_bitcoin -> api_mempool [label="HTTPS (fallback)", color="#00796B"];
