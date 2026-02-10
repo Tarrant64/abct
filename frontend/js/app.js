@@ -8817,131 +8817,58 @@ function renderPortfolioHeatmap() {
         return;
     }
 
-    // Group by blockchain
-    const chainNames = {
-        cardano: 'Cardano', bitcoin: 'Bitcoin', ethereum: 'Ethereum',
-        solana: 'Solana', polygon: 'Polygon', base: 'Base', algorand: 'Algorand'
-    };
-    const groups = {};
-    let totalValue = 0;
-
+    // Flatten all tokens into a single list (no chain grouping)
+    const allTokens = [];
     for (const coin of filtered) {
-        const chain = coin.blockchain || 'cardano';
-        if (!groups[chain]) groups[chain] = { tokens: [], totalUsd: 0 };
-        // Use backend 24h change if available, else try client priceData
         let change24h = coin.price_change_24h || 0;
         if (!change24h && priceData[coin.symbol]) {
             change24h = priceData[coin.symbol].usd_24h_change || 0;
         }
-        groups[chain].tokens.push({ ...coin, change24h });
-        groups[chain].totalUsd += coin.value_usd;
-        totalValue += coin.value_usd;
+        allTokens.push({ ...coin, change24h });
     }
+    allTokens.sort((a, b) => b.value_usd - a.value_usd);
 
-    // Sort groups by total value, sort tokens within each group
-    const sortedChains = Object.entries(groups)
-        .sort((a, b) => b[1].totalUsd - a[1].totalUsd);
-
-    for (const [, group] of sortedChains) {
-        group.tokens.sort((a, b) => b.value_usd - a.value_usd);
-    }
-
-    // Calculate layout using squarified treemap
     const containerWidth = container.clientWidth || 800;
-    // Use generous height to fill the slide area
     const totalHeight = 480;
 
-    // Allocate width per chain group — ensure minimum readable width
-    const chainLayouts = [];
-    const gapSize = 3;
-    const numChains = sortedChains.length;
-    const minChainWidth = 100;
-    const availableWidth = containerWidth - (numChains - 1) * gapSize;
+    // Layout all tokens as one flat treemap
+    const tiles = layoutTreemapTiles(allTokens, containerWidth, totalHeight);
 
-    // First pass: give each chain proportional width with minimum
-    let rawWidths = sortedChains.map(([, group]) => {
-        const proportional = Math.floor(availableWidth * (group.totalUsd / totalValue));
-        return Math.max(minChainWidth, proportional);
-    });
+    let tilesHtml = '';
+    for (const tile of tiles) {
+        const bgColor = getHeatmapColor(tile.token.change24h);
+        const changeStr = (tile.token.change24h >= 0 ? '+' : '') + tile.token.change24h.toFixed(2) + '%';
+        const valueStr = formatUSD(tile.token.value_usd);
 
-    // Scale to fit if total exceeds available width
-    let rawTotal = rawWidths.reduce((s, w) => s + w, 0);
-    if (rawTotal > availableWidth) {
-        const scale = availableWidth / rawTotal;
-        rawWidths = rawWidths.map(w => Math.max(minChainWidth, Math.floor(w * scale)));
-        // If still over (due to min widths), scale down the larger ones only
-        rawTotal = rawWidths.reduce((s, w) => s + w, 0);
-        if (rawTotal > availableWidth) {
-            const excess = rawTotal - availableWidth;
-            const largeChains = rawWidths.filter(w => w > minChainWidth);
-            const largeTotal = largeChains.reduce((s, w) => s + w, 0);
-            rawWidths = rawWidths.map(w => {
-                if (w > minChainWidth) {
-                    return Math.max(minChainWidth, Math.floor(w - excess * (w / largeTotal)));
-                }
-                return w;
-            });
-        }
-    }
-
-    let xOffset = 0;
-    sortedChains.forEach(([chain, group], i) => {
-        chainLayouts.push({ chain, group, x: xOffset, width: rawWidths[i] });
-        xOffset += rawWidths[i] + gapSize;
-    });
-
-    // Build HTML
-    let html = '';
-    for (const { chain, group, x, width } of chainLayouts) {
-        const labelHeight = 18;
-        const tileAreaHeight = totalHeight - labelHeight - 3;
-        const chainLabel = chainNames[chain] || chain;
-
-        // Layout tokens within this chain group using simple row packing
-        const tiles = layoutTreemapTiles(group.tokens, width, tileAreaHeight);
-
-        let tilesHtml = '';
-        for (const tile of tiles) {
-            const bgColor = getHeatmapColor(tile.token.change24h);
-            const changeStr = (tile.token.change24h >= 0 ? '+' : '') + tile.token.change24h.toFixed(2) + '%';
-            const valueStr = formatUSD(tile.token.value_usd);
-
-            // Size text based on tile area
-            const area = tile.w * tile.h;
-            let symbolSize, changeSize, valueSize;
-            if (area > 40000) {
-                symbolSize = '1.8rem'; changeSize = '1.2rem'; valueSize = '1rem';
-            } else if (area > 20000) {
-                symbolSize = '1.4rem'; changeSize = '1rem'; valueSize = '0.85rem';
-            } else if (area > 8000) {
-                symbolSize = '1.1rem'; changeSize = '0.85rem'; valueSize = '0.75rem';
-            } else if (area > 3000) {
-                symbolSize = '0.9rem'; changeSize = '0.75rem'; valueSize = '0.65rem';
-            } else if (area > 1000) {
-                symbolSize = '0.75rem'; changeSize = '0.6rem'; valueSize = '0';
-            } else {
-                symbolSize = '0.65rem'; changeSize = '0'; valueSize = '0';
-            }
-
-            tilesHtml += `<div class="heatmap-tile" style="` +
-                `position:absolute;left:${tile.x}px;top:${tile.y}px;` +
-                `width:${tile.w}px;height:${tile.h}px;` +
-                `background:${bgColor};" ` +
-                `title="${tile.token.symbol}: ${valueStr} (${changeStr})">` +
-                `<span class="tile-symbol" style="font-size:${symbolSize}">${tile.token.symbol}</span>` +
-                (changeSize !== '0' ? `<span class="tile-change" style="font-size:${changeSize}">${changeStr}</span>` : '') +
-                (valueSize !== '0' ? `<span class="tile-value" style="font-size:${valueSize}">${valueStr}</span>` : '') +
-                `</div>`;
+        // Size text based on tile area
+        const area = tile.w * tile.h;
+        let symbolSize, changeSize, valueSize;
+        if (area > 40000) {
+            symbolSize = '1.8rem'; changeSize = '1.2rem'; valueSize = '1rem';
+        } else if (area > 20000) {
+            symbolSize = '1.4rem'; changeSize = '1rem'; valueSize = '0.85rem';
+        } else if (area > 8000) {
+            symbolSize = '1.1rem'; changeSize = '0.85rem'; valueSize = '0.75rem';
+        } else if (area > 3000) {
+            symbolSize = '0.9rem'; changeSize = '0.75rem'; valueSize = '0.65rem';
+        } else if (area > 1000) {
+            symbolSize = '0.75rem'; changeSize = '0.6rem'; valueSize = '0';
+        } else {
+            symbolSize = '0.65rem'; changeSize = '0'; valueSize = '0';
         }
 
-        html += `<div class="heatmap-chain-group" style="width:${width}px;height:${totalHeight}px;">` +
-            `<div class="heatmap-chain-label">${chainLabel}</div>` +
-            `<div style="position:relative;width:${width}px;height:${tileAreaHeight}px;">` +
-            tilesHtml +
-            `</div></div>`;
+        tilesHtml += `<div class="heatmap-tile" style="` +
+            `position:absolute;left:${tile.x}px;top:${tile.y}px;` +
+            `width:${tile.w}px;height:${tile.h}px;` +
+            `background:${bgColor};" ` +
+            `title="${tile.token.symbol}: ${valueStr} (${changeStr})">` +
+            `<span class="tile-symbol" style="font-size:${symbolSize}">${tile.token.symbol}</span>` +
+            (changeSize !== '0' ? `<span class="tile-change" style="font-size:${changeSize}">${changeStr}</span>` : '') +
+            (valueSize !== '0' ? `<span class="tile-value" style="font-size:${valueSize}">${valueStr}</span>` : '') +
+            `</div>`;
     }
 
-    container.innerHTML = html;
+    container.innerHTML = `<div style="position:relative;width:${containerWidth}px;height:${totalHeight}px;">${tilesHtml}</div>`;
 }
 
 // Squarified treemap layout algorithm
