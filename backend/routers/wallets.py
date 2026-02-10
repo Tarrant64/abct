@@ -18,7 +18,9 @@ from services.ethereum import ethereum_service
 from services.solana import solana_service
 from services.polygon import polygon_service
 from services.base import base_service
-# from services.algorand import algorand_service  # TODO: Implement Algorand support
+from services.algorand import algorand_service
+from services.evm_chain import bsc_service, arbitrum_service, avalanche_service
+from services.tron import tron_service
 from services.logging_service import get_logging_service
 from services.demo_wallet_service import demo_wallet_service
 from services.demo_defi_service import demo_defi_service
@@ -237,6 +239,9 @@ async def get_wallet_assets_by_id(wallet_id: int, user_id: int = Depends(verify_
     eth_price_usd = await pricing_service.get_price('ETH')
     sol_price_usd = await pricing_service.get_price('SOL')
     pol_price_usd = await pricing_service.get_price('MATIC')
+    bnb_price_usd = await pricing_service.get_price('BNB')
+    avax_price_usd = await pricing_service.get_price('AVAX')
+    trx_price_usd = await pricing_service.get_price('TRX')
 
     # For Cardano wallets, try to get TapTools data for ADA-denominated pricing
     taptools_positions = {}
@@ -255,7 +260,7 @@ async def get_wallet_assets_by_id(wallet_id: int, user_id: int = Depends(verify_
 
     # For Ethereum-based chains, try to get Graph/Uniswap data for native-token-denominated pricing
     graph_prices = {}
-    if wallet['blockchain'] in ['ethereum', 'polygon', 'base'] and graph_service.is_configured():
+    if wallet['blockchain'] in ['ethereum', 'polygon', 'base', 'bsc', 'arbitrum', 'avalanche'] and graph_service.is_configured():
         try:
             # Get token addresses for Graph API lookup
             token_addresses = []
@@ -310,7 +315,7 @@ async def get_wallet_assets_by_id(wallet_id: int, user_id: int = Depends(verify_
                     asset_data['price_usd'] = (total_ada * ada_price_usd) / actual_qty
 
         # For Ethereum-based chains, try Graph API (ETH-denominated)
-        elif wallet['blockchain'] in ['ethereum', 'polygon', 'base'] and asset.get('asset_id') in graph_prices:
+        elif wallet['blockchain'] in ['ethereum', 'polygon', 'base', 'bsc', 'arbitrum', 'avalanche'] and asset.get('asset_id') in graph_prices:
             price_eth = graph_prices[asset['asset_id']]
             total_eth = actual_qty * price_eth
 
@@ -398,7 +403,12 @@ async def get_wallet_assets_by_id(wallet_id: int, user_id: int = Depends(verify_
             'ethereum': {'ticker': 'ETH', 'name': 'Ethereum', 'decimals': 18, 'price_usd': eth_price_usd},
             'solana': {'ticker': 'SOL', 'name': 'Solana', 'decimals': 9, 'price_usd': sol_price_usd},
             'polygon': {'ticker': 'POL', 'name': 'Polygon', 'decimals': 18, 'price_usd': pol_price_usd},
-            'base': {'ticker': 'ETH', 'name': 'Base (ETH)', 'decimals': 18, 'price_usd': eth_price_usd}
+            'base': {'ticker': 'ETH', 'name': 'Base (ETH)', 'decimals': 18, 'price_usd': eth_price_usd},
+            'algorand': {'ticker': 'ALGO', 'name': 'Algorand', 'decimals': 6, 'price_usd': await pricing_service.get_price('ALGO')},
+            'bsc': {'ticker': 'BNB', 'name': 'BNB Smart Chain', 'decimals': 18, 'price_usd': bnb_price_usd},
+            'arbitrum': {'ticker': 'ETH', 'name': 'Arbitrum (ETH)', 'decimals': 18, 'price_usd': eth_price_usd},
+            'avalanche': {'ticker': 'AVAX', 'name': 'Avalanche', 'decimals': 18, 'price_usd': avax_price_usd},
+            'tron': {'ticker': 'TRX', 'name': 'Tron', 'decimals': 6, 'price_usd': trx_price_usd}
         }
 
         if wallet['blockchain'] in native_config:
@@ -732,33 +742,130 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
                     'source': info.get('source', 'alchemy')
                 }
 
-        # TODO: Implement Algorand support
-        # elif blockchain == 'algorand':
-        #     # Algorand works with free Pera API (no key required) or Tatum fallback
-        #     info = await algorand_service.get_address_info(address)
-        #     if info:
-        #         await clear_wallet_balances(wallet_id)
-        #         await save_balance(wallet_id, str(info['balance_algo']), 'ALGO')
-        #         # Save ASAs (Algorand Standard Assets) as native assets
-        #         algorand_assets = [
-        #             {
-        #                 'asset_id': str(asset['asset_id']),
-        #                 'policy_id': str(asset['asset_id']),
-        #                 'asset_name': asset.get('unit_name', '') or asset.get('name', ''),
-        #                 'quantity': str(asset['amount']),
-        #                 'decimals': asset['decimals']
-        #             }
-        #             for asset in info.get('assets', [])
-        #         ]
-        #         await save_native_assets(wallet_id, algorand_assets)
-        #         return {
-        #             'address': address,
-        #             'success': True,
-        #             'balance': info['balance_algo'],
-        #             'unit': 'ALGO',
-        #             'asset_count': len(info.get('assets', [])),
-        #             'source': info.get('source', 'pera')
-        #         }
+        elif blockchain == 'algorand':
+            info = await algorand_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_algo']), 'ALGO')
+                algorand_assets = [
+                    {
+                        'asset_id': str(asset['asset_id']),
+                        'policy_id': str(asset['asset_id']),
+                        'asset_name': asset.get('unit_name', '') or asset.get('name', ''),
+                        'quantity': str(asset['amount']),
+                        'decimals': asset['decimals']
+                    }
+                    for asset in info.get('assets', [])
+                ]
+                await save_native_assets(wallet_id, algorand_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_algo'],
+                    'unit': 'ALGO',
+                    'asset_count': len(info.get('assets', [])),
+                    'source': info.get('source', 'pera')
+                }
+
+        elif blockchain == 'bsc':
+            info = await bsc_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_bnb']), 'BNB')
+                bsc_assets = [
+                    {
+                        'asset_id': t['contract_address'],
+                        'policy_id': t['contract_address'],
+                        'asset_name': t['symbol'],
+                        'quantity': str(int(t['balance_raw'])),
+                        'decimals': t['decimals']
+                    }
+                    for t in info.get('tokens', [])
+                ]
+                await save_native_assets(wallet_id, bsc_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_bnb'],
+                    'unit': 'BNB',
+                    'token_count': info.get('token_count', 0),
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'arbitrum':
+            info = await arbitrum_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_eth']), 'ETH_ARB')
+                arb_assets = [
+                    {
+                        'asset_id': t['contract_address'],
+                        'policy_id': t['contract_address'],
+                        'asset_name': t['symbol'],
+                        'quantity': str(int(t['balance_raw'])),
+                        'decimals': t['decimals']
+                    }
+                    for t in info.get('tokens', [])
+                ]
+                await save_native_assets(wallet_id, arb_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_eth'],
+                    'unit': 'ETH',
+                    'token_count': info.get('token_count', 0),
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'avalanche':
+            info = await avalanche_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_avax']), 'AVAX')
+                avax_assets = [
+                    {
+                        'asset_id': t['contract_address'],
+                        'policy_id': t['contract_address'],
+                        'asset_name': t['symbol'],
+                        'quantity': str(int(t['balance_raw'])),
+                        'decimals': t['decimals']
+                    }
+                    for t in info.get('tokens', [])
+                ]
+                await save_native_assets(wallet_id, avax_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_avax'],
+                    'unit': 'AVAX',
+                    'token_count': info.get('token_count', 0),
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'tron':
+            info = await tron_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_trx']), 'TRX')
+                tron_assets = [
+                    {
+                        'asset_id': t['contract_address'],
+                        'policy_id': t['contract_address'],
+                        'asset_name': t['symbol'],
+                        'quantity': str(int(t['balance_raw'])),
+                        'decimals': t['decimals']
+                    }
+                    for t in info.get('tokens', [])
+                ]
+                await save_native_assets(wallet_id, tron_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_trx'],
+                    'unit': 'TRX',
+                    'token_count': info.get('token_count', 0),
+                    'source': info.get('source')
+                }
 
         return {
             'address': address,
@@ -1083,7 +1190,7 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
         if not blockchain:
             raise HTTPException(
                 status_code=400,
-                detail="Could not detect blockchain. Supported: Cardano (addr1, stake1), Bitcoin (1, 3, bc1, xpub, ypub, zpub), Ethereum (0x), Polygon (polygon:0x), Base (base:0x), Solana (base58)"
+                detail="Could not detect blockchain. Supported: Cardano (addr1, stake1), Bitcoin (1, 3, bc1, xpub, ypub, zpub), Ethereum (0x), Polygon (polygon:0x), Base (base:0x), Solana (base58), BNB Chain (bsc:0x), Arbitrum (arb:0x), Avalanche (avax:0x), Tron (T...)"
             )
 
         # Extract raw address if chain prefix was provided
@@ -1091,7 +1198,7 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
         if ':' in address:
             parts = address.split(':', 1)
             chain_prefix = parts[0].lower()
-            if chain_prefix in ('cardano', 'bitcoin', 'ethereum', 'eth', 'polygon', 'matic', 'base', 'solana', 'sol'):
+            if chain_prefix in ('cardano', 'bitcoin', 'ethereum', 'eth', 'polygon', 'matic', 'base', 'solana', 'sol', 'algorand', 'algo', 'bsc', 'bnb', 'arb', 'arbitrum', 'avax', 'avalanche', 'tron', 'trx'):
                 raw_address = parts[1]
         address = raw_address
 
@@ -1285,7 +1392,7 @@ async def delete_wallet(address: str, user_id: int = Depends(verify_session)):
     if ':' in address:
         parts = address.split(':', 1)
         chain_prefix = parts[0].lower()
-        if chain_prefix in ('cardano', 'bitcoin', 'ethereum', 'polygon', 'base', 'solana'):
+        if chain_prefix in ('cardano', 'bitcoin', 'ethereum', 'polygon', 'base', 'solana', 'algorand', 'bsc', 'arbitrum', 'avalanche', 'tron'):
             blockchain = chain_prefix
             raw_address = parts[1]
 

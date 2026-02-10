@@ -6,7 +6,8 @@ def detect_blockchain(address: str) -> Optional[str]:
     Detect the blockchain based on address format.
 
     Returns:
-        'cardano', 'bitcoin', 'ethereum', 'polygon', 'base', 'solana', 'algorand', or None if unknown
+        'cardano', 'bitcoin', 'ethereum', 'polygon', 'base', 'solana', 'algorand',
+        'bsc', 'arbitrum', 'avalanche', 'tron', or None if unknown
     """
     address = address.strip()
 
@@ -14,16 +15,18 @@ def detect_blockchain(address: str) -> Optional[str]:
     if ':' in address:
         prefix, addr = address.split(':', 1)
         prefix = prefix.lower()
-        if prefix in ('cardano', 'bitcoin', 'ethereum', 'eth', 'polygon', 'matic', 'base', 'solana', 'sol', 'algorand', 'algo'):
-            if prefix == 'eth':
-                return 'ethereum'
-            elif prefix == 'sol':
-                return 'solana'
-            elif prefix == 'matic':
-                return 'polygon'
-            elif prefix == 'algo':
-                return 'algorand'
-            return prefix
+        prefix_map = {
+            'cardano': 'cardano', 'bitcoin': 'bitcoin', 'ethereum': 'ethereum',
+            'eth': 'ethereum', 'polygon': 'polygon', 'matic': 'polygon',
+            'base': 'base', 'solana': 'solana', 'sol': 'solana',
+            'algorand': 'algorand', 'algo': 'algorand',
+            'bsc': 'bsc', 'bnb': 'bsc',
+            'arb': 'arbitrum', 'arbitrum': 'arbitrum',
+            'avax': 'avalanche', 'avalanche': 'avalanche',
+            'tron': 'tron', 'trx': 'tron',
+        }
+        if prefix in prefix_map:
+            return prefix_map[prefix]
         return None
 
     # Cardano mainnet addresses start with addr1
@@ -39,6 +42,12 @@ def detect_blockchain(address: str) -> Optional[str]:
         base32_chars = set('ABCDEFGHIJKLMNOPQRSTUVWXYZ234567')
         if all(c in base32_chars for c in address.upper()):
             return 'algorand'
+
+    # Tron addresses - T + 33 base58 characters
+    if address.startswith('T') and len(address) == 34:
+        base58_chars = set('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz')
+        if all(c in base58_chars for c in address):
+            return 'tron'
 
     # Ethereum addresses - start with 0x and are 42 characters
     if address.lower().startswith('0x') and len(address) == 42:
@@ -154,16 +163,17 @@ def parse_address(line: str) -> Optional[Tuple[str, str]]:
         address = parts[1].strip()
 
         # Normalize short names to full names
-        if blockchain == 'eth':
-            blockchain = 'ethereum'
-        elif blockchain == 'sol':
-            blockchain = 'solana'
-        elif blockchain == 'matic':
-            blockchain = 'polygon'
-        elif blockchain == 'algo':
-            blockchain = 'algorand'
+        prefix_map = {
+            'eth': 'ethereum', 'sol': 'solana', 'matic': 'polygon',
+            'algo': 'algorand', 'bnb': 'bsc', 'arb': 'arbitrum',
+            'avax': 'avalanche', 'trx': 'tron',
+        }
+        if blockchain in prefix_map:
+            blockchain = prefix_map[blockchain]
 
-        if blockchain in ('cardano', 'bitcoin', 'ethereum', 'polygon', 'base', 'solana', 'algorand'):
+        valid_chains = ('cardano', 'bitcoin', 'ethereum', 'polygon', 'base', 'solana',
+                        'algorand', 'bsc', 'arbitrum', 'avalanche', 'tron')
+        if blockchain in valid_chains:
             return (blockchain, address)
         return None
 

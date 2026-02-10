@@ -6579,47 +6579,6 @@ body.usd-primary .exchange-asset-item .balance-amount::after {
 }
 
 /* Selection info box matching slider 2 */
-.breakdown-selection-info {
-    margin-top: 25px;
-    padding: 20px;
-    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
-    border-radius: 12px;
-    border: 1px solid rgba(0, 210, 106, 0.2);
-    text-align: center;
-    min-height: 80px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    gap: 8px;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}
-
-.breakdown-selection-info.visible {
-    opacity: 1;
-}
-
-.breakdown-selection-info .selection-name {
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
-.breakdown-selection-info .selection-value {
-    font-size: 1.5rem;
-    font-weight: bold;
-    background: linear-gradient(135deg, #00d26a 0%, #00ff88 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-
-.breakdown-selection-info .selection-percentage {
-    font-size: 0.95rem;
-    color: var(--text-secondary);
-}
-
 /* Legacy support for old legend items */
 .legend-item {
     display: flex;
@@ -6705,10 +6664,6 @@ body.usd-primary .exchange-asset-item .balance-amount::after {
         grid-template-columns: 1fr;
     }
 
-    .breakdown-selection-info {
-        margin-top: 15px;
-        padding: 15px;
-    }
 }
 
 /* Make blockchain cards clickable */
@@ -8487,11 +8442,6 @@ body.privacy-mode .breakdown-legend-symbol {
 
 body.privacy-mode #breakdownTotalValue,
 body.privacy-mode #breakdownAssetCount {
-    filter: blur(10px);
-    user-select: none;
-}
-
-body.privacy-mode .breakdown-selection-info {
     filter: blur(10px);
     user-select: none;
 }
