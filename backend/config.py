@@ -85,13 +85,22 @@ BEACONCHAIN_BASE_URL = "https://beaconcha.in/api/v1"
 ALCHEMY_BASE_URL = "https://eth-mainnet.g.alchemy.com/nft/v3"
 ALCHEMY_POLYGON_URL = "https://polygon-mainnet.g.alchemy.com"
 ALCHEMY_BASE_URL_CHAIN = "https://base-mainnet.g.alchemy.com"
+ALCHEMY_BSC_URL = "https://bnb-mainnet.g.alchemy.com"
+ALCHEMY_ARBITRUM_URL = "https://arb-mainnet.g.alchemy.com"
+ALCHEMY_AVALANCHE_URL = "https://avax-mainnet.g.alchemy.com"
 HELIUS_BASE_URL = "https://api.helius.xyz/v0"
 HELIUS_RPC_URL = "https://mainnet.helius-rpc.com"
+
+# TronGrid API (free, no key required)
+TRONGRID_BASE_URL = "https://api.trongrid.io"
 
 # Etherscan API endpoints (same format works for Basescan, Polygonscan, etc.)
 ETHERSCAN_BASE_URL = "https://api.etherscan.io/api"
 BASESCAN_BASE_URL = "https://api.basescan.org/api"
 POLYGONSCAN_BASE_URL = "https://api.polygonscan.com/api"
+BSCSCAN_BASE_URL = "https://api.bscscan.com/api"
+ARBISCAN_BASE_URL = "https://api.arbiscan.io/api"
+SNOWSCAN_BASE_URL = "https://api.snowscan.xyz/api"
 
 # CoinMarketCap API
 CMC_BASE_URL = "https://pro-api.coinmarketcap.com/v1"

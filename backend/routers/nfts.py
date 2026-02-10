@@ -18,6 +18,8 @@ from services.ethereum_nft import ethereum_nft_service
 from services.solana_nft import solana_nft_service
 from services.polygon import polygon_service
 from services.base import base_service
+from services.algorand_nft import algorand_nft_service
+from services.evm_chain import bsc_service, arbitrum_service, avalanche_service
 from services.pricing import pricing_service
 from services.nft_price_client import nft_price_client
 from services.demo_nft_service import demo_nft_service
@@ -778,34 +780,355 @@ async def get_base_nft_status():
 
 
 # ============================================================================
+# ALGORAND NFT ENDPOINTS
+# ============================================================================
+
+@router.get("/algorand")
+async def get_algorand_nfts(user_id: int = Depends(verify_session), force_refresh: bool = False):
+    """
+    Get all NFTs from Algorand wallets.
+    Algorand NFTs use the Pera API (no API key required).
+    No floor price data available, so total_value_usd is always 0.
+    """
+    # Check if demo user
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        demo_nfts = await demo_nft_service.get_nfts_by_chain('algorand')
+        total_value = sum(n.get('price_usd', 0) for n in demo_nfts)
+        return {
+            'configured': True,
+            'nfts': demo_nfts,
+            'total_count': len(demo_nfts),
+            'total_value_usd': total_value,
+            'last_updated': None,
+            'demo_mode': True
+        }
+
+    if force_refresh:
+        algorand_nft_service.clear_cache()
+
+    # Get Algorand wallets
+    wallets = await get_all_wallets(user_id=user_id)
+    algo_wallets = [w for w in wallets if w['blockchain'] == 'algorand']
+
+    if not algo_wallets:
+        return {
+            'configured': True,
+            'nfts': [],
+            'total_count': 0,
+            'total_value_usd': 0,
+            'message': 'No Algorand wallets found'
+        }
+
+    all_nfts = []
+    for wallet in algo_wallets:
+        try:
+            nfts = await algorand_nft_service.get_nfts_for_address(wallet['address'])
+            all_nfts.extend(nfts)
+        except Exception as e:
+            logger.error(f"Error fetching Algorand NFTs for {wallet['address'][:12]}...: {e}")
+
+    return {
+        'configured': True,
+        'nfts': all_nfts,
+        'total_count': len(all_nfts),
+        'total_value_usd': 0,  # No pricing source for Algorand NFTs
+        'last_updated': None
+    }
+
+
+@router.get("/algorand/summary")
+async def get_algorand_nft_summary(user_id: int = Depends(verify_session)):
+    """Get Algorand NFT summary (count and collections)."""
+    # Check if demo user
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        summary = await demo_nft_service.get_chain_nft_summary('algorand', 0)
+        summary['configured'] = True
+        summary['demo_mode'] = True
+        return summary
+
+    summary = await algorand_nft_service.get_nft_summary(user_id=user_id)
+    summary['configured'] = True
+    summary['total_value_usd'] = 0
+
+    return summary
+
+
+# ============================================================================
+# BNB SMART CHAIN NFT ENDPOINTS
+# ============================================================================
+
+@router.get("/bsc")
+async def get_bsc_nfts(user_id: int = Depends(verify_session), force_refresh: bool = False):
+    """Get all NFTs from BNB Smart Chain wallets."""
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        demo_nfts = await demo_nft_service.get_nfts_by_chain('bsc')
+        total_value = sum(n.get('price_usd', 0) for n in demo_nfts)
+        return {
+            'configured': True, 'nfts': demo_nfts, 'total_count': len(demo_nfts),
+            'valued_count': len(demo_nfts), 'total_value_usd': total_value,
+            'total_value_bnb': 0, 'bnb_price': 600.0, 'last_updated': None, 'demo_mode': True
+        }
+
+    if not await bsc_service.is_configured():
+        return {'configured': False, 'message': 'Alchemy API key not configured', 'nfts': [], 'total_count': 0, 'total_value_usd': 0}
+
+    wallets = await get_all_wallets(user_id=user_id)
+    bsc_wallets = [w for w in wallets if w['blockchain'] == 'bsc']
+
+    if not bsc_wallets:
+        return {'configured': True, 'message': 'No BSC wallets configured', 'nfts': [], 'total_count': 0, 'total_value_usd': 0}
+
+    all_nfts = await bsc_service.get_all_nfts(bsc_wallets, force_refresh=force_refresh)
+    bnb_price = await pricing_service.get_price('BNB')
+
+    total_value_usd = 0.0
+    for nft in all_nfts:
+        floor_price_bnb = nft['collection'].get('floor_price_bnb', 0) or 0
+        usd_value = floor_price_bnb * bnb_price
+        nft['floor_price_usd'] = usd_value
+        total_value_usd += usd_value
+
+    all_nfts.sort(key=lambda x: x.get('floor_price_usd', 0), reverse=True)
+
+    return {
+        'configured': True, 'nfts': all_nfts, 'total_count': len(all_nfts),
+        'valued_count': sum(1 for n in all_nfts if n.get('floor_price_usd', 0) > 0),
+        'total_value_usd': total_value_usd,
+        'total_value_bnb': sum(n['collection'].get('floor_price_bnb', 0) or 0 for n in all_nfts),
+        'bnb_price': bnb_price,
+        'last_updated': bsc_service.last_nft_refresh.isoformat() if bsc_service.last_nft_refresh else None
+    }
+
+
+@router.get("/bsc/summary")
+async def get_bsc_nft_summary(user_id: int = Depends(verify_session)):
+    """Get BSC NFT summary grouped by collection."""
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        summary = await demo_nft_service.get_chain_nft_summary('bsc', 600.0)
+        summary['configured'] = True
+        summary['demo_mode'] = True
+        return summary
+
+    if not await bsc_service.is_configured():
+        return {'configured': False, 'message': 'Alchemy API key not configured'}
+
+    wallets = await get_all_wallets(user_id=user_id)
+    bsc_wallets = [w for w in wallets if w['blockchain'] == 'bsc']
+    summary = await bsc_service.get_nft_summary(bsc_wallets)
+
+    bnb_price = await pricing_service.get_price('BNB')
+    summary['total_value_usd'] = summary.get('total_value_bnb', 0) * bnb_price
+    summary['bnb_price'] = bnb_price
+    summary['configured'] = True
+
+    for collection in summary.get('collections', []):
+        collection['total_value_usd'] = collection.get('total_value_bnb', 0) * bnb_price
+        if collection.get('floor_price_bnb'):
+            collection['floor_price_usd'] = collection['floor_price_bnb'] * bnb_price
+
+    summary.get('collections', []).sort(key=lambda x: x.get('total_value_usd', 0), reverse=True)
+    return summary
+
+
+# ============================================================================
+# ARBITRUM NFT ENDPOINTS
+# ============================================================================
+
+@router.get("/arbitrum")
+async def get_arbitrum_nfts(user_id: int = Depends(verify_session), force_refresh: bool = False):
+    """Get all NFTs from Arbitrum wallets."""
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        demo_nfts = await demo_nft_service.get_nfts_by_chain('arbitrum')
+        total_value = sum(n.get('price_usd', 0) for n in demo_nfts)
+        return {
+            'configured': True, 'nfts': demo_nfts, 'total_count': len(demo_nfts),
+            'valued_count': len(demo_nfts), 'total_value_usd': total_value,
+            'total_value_eth': 0, 'eth_price': 3200.0, 'last_updated': None, 'demo_mode': True
+        }
+
+    if not await arbitrum_service.is_configured():
+        return {'configured': False, 'message': 'Alchemy API key not configured', 'nfts': [], 'total_count': 0, 'total_value_usd': 0}
+
+    wallets = await get_all_wallets(user_id=user_id)
+    arb_wallets = [w for w in wallets if w['blockchain'] == 'arbitrum']
+
+    if not arb_wallets:
+        return {'configured': True, 'message': 'No Arbitrum wallets configured', 'nfts': [], 'total_count': 0, 'total_value_usd': 0}
+
+    all_nfts = await arbitrum_service.get_all_nfts(arb_wallets, force_refresh=force_refresh)
+    eth_price = await pricing_service.get_price('ETH')
+
+    total_value_usd = 0.0
+    for nft in all_nfts:
+        floor_price_eth = nft['collection'].get('floor_price_eth', 0) or 0
+        usd_value = floor_price_eth * eth_price
+        nft['floor_price_usd'] = usd_value
+        total_value_usd += usd_value
+
+    all_nfts.sort(key=lambda x: x.get('floor_price_usd', 0), reverse=True)
+
+    return {
+        'configured': True, 'nfts': all_nfts, 'total_count': len(all_nfts),
+        'valued_count': sum(1 for n in all_nfts if n.get('floor_price_usd', 0) > 0),
+        'total_value_usd': total_value_usd,
+        'total_value_eth': sum(n['collection'].get('floor_price_eth', 0) or 0 for n in all_nfts),
+        'eth_price': eth_price,
+        'last_updated': arbitrum_service.last_nft_refresh.isoformat() if arbitrum_service.last_nft_refresh else None
+    }
+
+
+@router.get("/arbitrum/summary")
+async def get_arbitrum_nft_summary(user_id: int = Depends(verify_session)):
+    """Get Arbitrum NFT summary grouped by collection."""
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        summary = await demo_nft_service.get_chain_nft_summary('arbitrum', 3200.0)
+        summary['configured'] = True
+        summary['demo_mode'] = True
+        return summary
+
+    if not await arbitrum_service.is_configured():
+        return {'configured': False, 'message': 'Alchemy API key not configured'}
+
+    wallets = await get_all_wallets(user_id=user_id)
+    arb_wallets = [w for w in wallets if w['blockchain'] == 'arbitrum']
+    summary = await arbitrum_service.get_nft_summary(arb_wallets)
+
+    eth_price = await pricing_service.get_price('ETH')
+    summary['total_value_usd'] = summary.get('total_value_eth', 0) * eth_price
+    summary['eth_price'] = eth_price
+    summary['configured'] = True
+
+    for collection in summary.get('collections', []):
+        collection['total_value_usd'] = collection.get('total_value_eth', 0) * eth_price
+        if collection.get('floor_price_eth'):
+            collection['floor_price_usd'] = collection['floor_price_eth'] * eth_price
+
+    summary.get('collections', []).sort(key=lambda x: x.get('total_value_usd', 0), reverse=True)
+    return summary
+
+
+# ============================================================================
+# AVALANCHE NFT ENDPOINTS
+# ============================================================================
+
+@router.get("/avalanche")
+async def get_avalanche_nfts(user_id: int = Depends(verify_session), force_refresh: bool = False):
+    """Get all NFTs from Avalanche wallets."""
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        demo_nfts = await demo_nft_service.get_nfts_by_chain('avalanche')
+        total_value = sum(n.get('price_usd', 0) for n in demo_nfts)
+        return {
+            'configured': True, 'nfts': demo_nfts, 'total_count': len(demo_nfts),
+            'valued_count': len(demo_nfts), 'total_value_usd': total_value,
+            'total_value_avax': 0, 'avax_price': 35.0, 'last_updated': None, 'demo_mode': True
+        }
+
+    if not await avalanche_service.is_configured():
+        return {'configured': False, 'message': 'Alchemy API key not configured', 'nfts': [], 'total_count': 0, 'total_value_usd': 0}
+
+    wallets = await get_all_wallets(user_id=user_id)
+    avax_wallets = [w for w in wallets if w['blockchain'] == 'avalanche']
+
+    if not avax_wallets:
+        return {'configured': True, 'message': 'No Avalanche wallets configured', 'nfts': [], 'total_count': 0, 'total_value_usd': 0}
+
+    all_nfts = await avalanche_service.get_all_nfts(avax_wallets, force_refresh=force_refresh)
+    avax_price = await pricing_service.get_price('AVAX')
+
+    total_value_usd = 0.0
+    for nft in all_nfts:
+        floor_price_avax = nft['collection'].get('floor_price_avax', 0) or 0
+        usd_value = floor_price_avax * avax_price
+        nft['floor_price_usd'] = usd_value
+        total_value_usd += usd_value
+
+    all_nfts.sort(key=lambda x: x.get('floor_price_usd', 0), reverse=True)
+
+    return {
+        'configured': True, 'nfts': all_nfts, 'total_count': len(all_nfts),
+        'valued_count': sum(1 for n in all_nfts if n.get('floor_price_usd', 0) > 0),
+        'total_value_usd': total_value_usd,
+        'total_value_avax': sum(n['collection'].get('floor_price_avax', 0) or 0 for n in all_nfts),
+        'avax_price': avax_price,
+        'last_updated': avalanche_service.last_nft_refresh.isoformat() if avalanche_service.last_nft_refresh else None
+    }
+
+
+@router.get("/avalanche/summary")
+async def get_avalanche_nft_summary(user_id: int = Depends(verify_session)):
+    """Get Avalanche NFT summary grouped by collection."""
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        summary = await demo_nft_service.get_chain_nft_summary('avalanche', 35.0)
+        summary['configured'] = True
+        summary['demo_mode'] = True
+        return summary
+
+    if not await avalanche_service.is_configured():
+        return {'configured': False, 'message': 'Alchemy API key not configured'}
+
+    wallets = await get_all_wallets(user_id=user_id)
+    avax_wallets = [w for w in wallets if w['blockchain'] == 'avalanche']
+    summary = await avalanche_service.get_nft_summary(avax_wallets)
+
+    avax_price = await pricing_service.get_price('AVAX')
+    summary['total_value_usd'] = summary.get('total_value_avax', 0) * avax_price
+    summary['avax_price'] = avax_price
+    summary['configured'] = True
+
+    for collection in summary.get('collections', []):
+        collection['total_value_usd'] = collection.get('total_value_avax', 0) * avax_price
+        if collection.get('floor_price_avax'):
+            collection['floor_price_usd'] = collection['floor_price_avax'] * avax_price
+
+    summary.get('collections', []).sort(key=lambda x: x.get('total_value_usd', 0), reverse=True)
+    return summary
+
+
+# ============================================================================
 # COMBINED / MULTI-CHAIN ENDPOINTS
 # ============================================================================
 
 @router.get("/all/summary")
 async def get_all_chains_nft_summary(user_id: int = Depends(verify_session)):
     """
-    Get a combined summary of NFTs across all chains (Cardano + Ethereum + Solana + Polygon + Base).
+    Get a combined summary of NFTs across all chains.
     Returns totals and per-chain breakdown.
     """
     # Get prices in parallel
-    ada_price, eth_price, sol_price, matic_price = await asyncio.gather(
+    ada_price, eth_price, sol_price, matic_price, algo_price, bnb_price, avax_price = await asyncio.gather(
         pricing_service.get_price('ADA'),
         pricing_service.get_price('ETH'),
         pricing_service.get_price('SOL'),
         pricing_service.get_price('MATIC'),
+        pricing_service.get_price('ALGO'),
+        pricing_service.get_price('BNB'),
+        pricing_service.get_price('AVAX'),
     )
-    # Base uses ETH as native token, so same price
 
     # Pre-fetch wallets and config checks in parallel
-    wallets, eth_configured, sol_configured, poly_configured, base_configured = await asyncio.gather(
+    wallets, eth_configured, sol_configured, poly_configured, base_configured, bsc_configured, arb_configured, avax_configured = await asyncio.gather(
         get_all_wallets(user_id=user_id),
         ethereum_nft_service.is_configured(),
         solana_nft_service.is_configured(),
         polygon_service.is_configured(),
         base_service.is_configured(),
+        bsc_service.is_configured(),
+        arbitrum_service.is_configured(),
+        avalanche_service.is_configured(),
     )
     polygon_wallets = [w for w in wallets if w['blockchain'] == 'polygon']
     base_wallets = [w for w in wallets if w['blockchain'] == 'base']
+    bsc_wallets = [w for w in wallets if w['blockchain'] == 'bsc']
+    arb_wallets = [w for w in wallets if w['blockchain'] == 'arbitrum']
+    avax_wallets = [w for w in wallets if w['blockchain'] == 'avalanche']
 
     # Fetch all chain summaries in parallel
     async def _summary_cardano():
@@ -862,48 +1185,72 @@ async def get_all_chains_nft_summary(user_id: int = Depends(verify_session)):
                 data['error'] = str(e)
         return 'base', data
 
+    async def _summary_algorand():
+        data = {'chain': 'algorand', 'total_count': 0, 'total_value_usd': 0, 'configured': True}
+        try:
+            s = await algorand_nft_service.get_nft_summary(user_id=user_id)
+            data['total_count'] = s.get('total_nfts', 0)
+            data['total_value_usd'] = s.get('total_value_usd', 0)
+        except Exception as e:
+            data['error'] = str(e)
+        return 'algorand', data
+
+    async def _summary_bsc():
+        data = {'chain': 'bsc', 'total_count': 0, 'total_value_usd': 0, 'configured': bsc_configured}
+        if bsc_configured:
+            try:
+                s = await bsc_service.get_nft_summary(bsc_wallets)
+                data['total_count'] = s.get('total_nfts', 0)
+                data['total_value_usd'] = s.get('total_value_bnb', 0) * bnb_price
+            except Exception as e:
+                data['error'] = str(e)
+        return 'bsc', data
+
+    async def _summary_arbitrum():
+        data = {'chain': 'arbitrum', 'total_count': 0, 'total_value_usd': 0, 'configured': arb_configured}
+        if arb_configured:
+            try:
+                s = await arbitrum_service.get_nft_summary(arb_wallets)
+                data['total_count'] = s.get('total_nfts', 0)
+                data['total_value_usd'] = s.get('total_value_eth', 0) * eth_price
+            except Exception as e:
+                data['error'] = str(e)
+        return 'arbitrum', data
+
+    async def _summary_avalanche():
+        data = {'chain': 'avalanche', 'total_count': 0, 'total_value_usd': 0, 'configured': avax_configured}
+        if avax_configured:
+            try:
+                s = await avalanche_service.get_nft_summary(avax_wallets)
+                data['total_count'] = s.get('total_nfts', 0)
+                data['total_value_usd'] = s.get('total_value_avax', 0) * avax_price
+            except Exception as e:
+                data['error'] = str(e)
+        return 'avalanche', data
+
     results = await asyncio.gather(
         _summary_cardano(), _summary_ethereum(), _summary_solana(),
-        _summary_polygon(), _summary_base()
+        _summary_polygon(), _summary_base(), _summary_algorand(),
+        _summary_bsc(), _summary_arbitrum(), _summary_avalanche()
     )
     chain_map = {chain: data for chain, data in results}
-    cardano_data = chain_map['cardano']
-    ethereum_data = chain_map['ethereum']
-    solana_data = chain_map['solana']
-    polygon_data = chain_map['polygon']
-    base_data = chain_map['base']
 
     # Combined totals
-    total_count = (
-        cardano_data['total_count'] +
-        ethereum_data['total_count'] +
-        solana_data['total_count'] +
-        polygon_data['total_count'] +
-        base_data['total_count']
-    )
-    total_value_usd = (
-        cardano_data['total_value_usd'] +
-        ethereum_data['total_value_usd'] +
-        solana_data['total_value_usd'] +
-        polygon_data['total_value_usd'] +
-        base_data['total_value_usd']
-    )
+    total_count = sum(data['total_count'] for data in chain_map.values())
+    total_value_usd = sum(data['total_value_usd'] for data in chain_map.values())
 
     return {
         'total_count': total_count,
         'total_value_usd': total_value_usd,
-        'chains': {
-            'cardano': cardano_data,
-            'ethereum': ethereum_data,
-            'solana': solana_data,
-            'polygon': polygon_data,
-            'base': base_data
-        },
+        'chains': chain_map,
         'prices': {
             'ada': ada_price,
             'eth': eth_price,
             'sol': sol_price,
-            'matic': matic_price
+            'matic': matic_price,
+            'algo': algo_price,
+            'bnb': bnb_price,
+            'avax': avax_price
         }
     }
 

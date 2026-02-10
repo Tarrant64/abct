@@ -6,14 +6,14 @@
     <title>Wallets & Transactions - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1770691414">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1770726456">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <!-- Chart.js for analytics -->
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1770691414"></script>
+    <script src="/static/js/session-auth.js?v=1770726456"></script>
     <style>
         /* Wallet Manager Styles */
         .wallet-manager {
@@ -932,6 +932,21 @@
                 <button class="chain-tab" data-chain="base" onclick="filterByChain('base')">
                     Base <span class="count" id="count-base">0</span>
                 </button>
+                <button class="chain-tab" data-chain="algorand" onclick="filterByChain('algorand')">
+                    Algorand <span class="count" id="count-algorand">0</span>
+                </button>
+                <button class="chain-tab" data-chain="bsc" onclick="filterByChain('bsc')">
+                    BNB Chain <span class="count" id="count-bsc">0</span>
+                </button>
+                <button class="chain-tab" data-chain="arbitrum" onclick="filterByChain('arbitrum')">
+                    Arbitrum <span class="count" id="count-arbitrum">0</span>
+                </button>
+                <button class="chain-tab" data-chain="avalanche" onclick="filterByChain('avalanche')">
+                    Avalanche <span class="count" id="count-avalanche">0</span>
+                </button>
+                <button class="chain-tab" data-chain="tron" onclick="filterByChain('tron')">
+                    Tron <span class="count" id="count-tron">0</span>
+                </button>
             </div>
 
                 <div class="wallet-list" id="walletList">
@@ -1003,6 +1018,10 @@
                             <option value="solana">Solana</option>
                             <option value="polygon">Polygon</option>
                             <option value="base">Base</option>
+                            <option value="bsc">BNB Chain</option>
+                            <option value="arbitrum">Arbitrum</option>
+                            <option value="avalanche">Avalanche</option>
+                            <option value="tron">Tron</option>
                         </select>
                     </div>
 
@@ -1172,6 +1191,10 @@
                         <option value="polygon">Polygon</option>
                         <option value="base">Base</option>
                         <option value="algorand">Algorand</option>
+                        <option value="bsc">BNB Smart Chain</option>
+                        <option value="arbitrum">Arbitrum</option>
+                        <option value="avalanche">Avalanche</option>
+                        <option value="tron">Tron</option>
                     </select>
                 </div>
                 <div class="form-group" id="cardanoDiscoveryOption" style="display: none;">
@@ -1576,6 +1599,10 @@ base:0x789..." oninput="previewImport()"></textarea>
                         <option value="bitcoin">Bitcoin</option>
                         <option value="solana">Solana</option>
                         <option value="algorand">Algorand</option>
+                        <option value="bsc">BNB Smart Chain</option>
+                        <option value="arbitrum">Arbitrum</option>
+                        <option value="avalanche">Avalanche</option>
+                        <option value="tron">Tron</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -1659,7 +1686,7 @@ base:0x789..." oninput="previewImport()"></textarea>
 
         function updateCounts() {
             const counts = { all: wallets.length };
-            ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base'].forEach(chain => {
+            ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base', 'algorand', 'bsc', 'arbitrum', 'avalanche', 'tron'].forEach(chain => {
                 counts[chain] = wallets.filter(w => w.blockchain === chain).length;
             });
 
@@ -2466,7 +2493,7 @@ base:0x789..." oninput="previewImport()"></textarea>
             const lines = text.split('\n').filter(line => line.trim() && !line.trim().startsWith('#'));
 
             const validWallets = [];
-            const validChains = ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base'];
+            const validChains = ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base', 'algorand', 'bsc', 'arbitrum', 'avalanche', 'tron'];
 
             lines.forEach(line => {
                 const trimmed = line.trim();
@@ -2510,7 +2537,7 @@ base:0x789..." oninput="previewImport()"></textarea>
                 const text = document.getElementById('importText').value;
                 const lines = text.split('\n').filter(line => line.trim() && !line.trim().startsWith('#'));
 
-                const validChains = ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base'];
+                const validChains = ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base', 'algorand', 'bsc', 'arbitrum', 'avalanche', 'tron'];
                 let added = 0;
                 let failed = 0;
                 let lastError = '';
@@ -2889,11 +2916,11 @@ base:0x789..." oninput="previewImport()"></textarea>
         // Waffle menu toggle
     </script>
 
-    <script src="/static/js/app.js?v=1770691414"></script>
+    <script src="/static/js/app.js?v=1770726456"></script>
 
     <!-- Transaction scripts -->
-    <script src="/static/js/transactions.js?v=1770691414"></script>
-    <script src="/static/js/transaction-analytics.js?v=1770691414"></script>
+    <script src="/static/js/transactions.js?v=1770726456"></script>
+    <script src="/static/js/transaction-analytics.js?v=1770726456"></script>
 
     <script>
         // Main tab switching function

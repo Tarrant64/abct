@@ -1,9 +1,11 @@
 """
-Algorand Service - Fetches Algorand blockchain data using Pera API and Tatum.io.
+Algorand Service - Fetches Algorand blockchain data using Algonode and Tatum.io.
 
 APIs:
-- Pera Wallet Public API (no key required): https://docs.perawallet.app/references/public-api
-- Tatum.io Algorand (requires key): https://algorand-mainnet-algod.gateway.tatum.io
+- Algonode (free, no key required): algod + indexer
+  - https://mainnet-api.algonode.cloud (algod)
+  - https://mainnet-idx.algonode.cloud (indexer)
+- Tatum.io Algorand (fallback, requires key): https://algorand-mainnet-algod.gateway.tatum.io
 
 Provides wallet balances, ASA (Algorand Standard Assets) holdings, and transaction history.
 """
@@ -26,11 +28,13 @@ MICROALGOS_PER_ALGO = 1_000_000
 
 
 class AlgorandService(APIKeyManager):
-    """Service for Algorand blockchain data using Pera API + Tatum.io."""
+    """Service for Algorand blockchain data using Algonode (free) + Tatum.io fallback."""
 
     def __init__(self):
         super().__init__(api_name='tatum_algorand', env_var='TATUM_ALGORAND_API_KEY')
-        self.pera_base_url = "https://mainnet.api.perawallet.app"
+        # Algonode provides free, reliable access to Algorand algod + indexer
+        self.algod_base_url = "https://mainnet-api.algonode.cloud"
+        self.indexer_base_url = "https://mainnet-idx.algonode.cloud"
         self.tatum_base_url = "https://algorand-mainnet-algod.gateway.tatum.io"
         self._balance_cache: Dict[str, dict] = {}
         self._cache_ttl = timedelta(minutes=5)
@@ -74,8 +78,8 @@ class AlgorandService(APIKeyManager):
             if datetime.now() - cached['cached_at'] < self._cache_ttl:
                 return cached['data']
 
-        # Try Pera API first (no key required)
-        result = await self._get_balance_pera(address)
+        # Try Algonode first (free, no key required)
+        result = await self._get_balance_algonode(address)
         if result:
             self._balance_cache[address] = {
                 'data': result,
@@ -95,25 +99,24 @@ class AlgorandService(APIKeyManager):
 
         return None
 
-    async def _get_balance_pera(self, address: str) -> Optional[dict]:
-        """Fetch balance from Pera Wallet Public API."""
+    async def _get_balance_algonode(self, address: str) -> Optional[dict]:
+        """Fetch balance from Algonode algod API (free, no key required)."""
         try:
-            client = get_client("pera", timeout=30.0)
+            client = get_client("algonode", timeout=30.0)
             response = await client.get(
-                f"{self.pera_base_url}/v1/accounts/{address}"
+                f"{self.algod_base_url}/v2/accounts/{address}"
             )
 
             if response.status_code == 404:
-                # Account exists but has no transactions
                 return {
                     'address': address,
                     'balance_algo': 0.0,
                     'balance_microalgos': 0,
-                    'source': 'pera'
+                    'source': 'algonode'
                 }
 
             if response.status_code != 200:
-                logger.warning(f"Pera API error: {response.status_code}")
+                logger.warning(f"Algonode algod API error: {response.status_code}")
                 return None
 
             data = response.json()
@@ -124,17 +127,17 @@ class AlgorandService(APIKeyManager):
                 'address': address,
                 'balance_algo': balance_algo,
                 'balance_microalgos': balance_microalgos,
-                'source': 'pera'
+                'source': 'algonode'
             }
 
         except Exception as e:
-            logger.debug(f"Pera API error for {address[:20]}...: {e}")
+            logger.debug(f"Algonode algod error for {address[:20]}...: {e}")
             return None
 
     async def _get_balance_tatum(self, address: str) -> Optional[dict]:
         """Fetch balance from Tatum.io API."""
         try:
-            client = get_client("pera", timeout=30.0)
+            client = get_client("tatum_algorand", timeout=30.0)
             response = await client.get(
                 f"{self.tatum_base_url}/v2/accounts/{address}",
                 headers={"x-api-key": await self.get_api_key()}
@@ -186,8 +189,8 @@ class AlgorandService(APIKeyManager):
         if not self.is_algorand_address(address):
             return []
 
-        # Try Pera first
-        assets = await self._get_assets_pera(address)
+        # Try Algonode indexer first (has dedicated assets endpoint)
+        assets = await self._get_assets_algonode(address)
         if assets is not None:
             return assets
 
@@ -199,12 +202,12 @@ class AlgorandService(APIKeyManager):
 
         return []
 
-    async def _get_assets_pera(self, address: str) -> Optional[List[dict]]:
-        """Fetch ASAs from Pera API."""
+    async def _get_assets_algonode(self, address: str) -> Optional[List[dict]]:
+        """Fetch ASAs from Algonode indexer API."""
         try:
-            client = get_client("pera", timeout=30.0)
+            client = get_client("algonode", timeout=30.0)
             response = await client.get(
-                f"{self.pera_base_url}/v1/accounts/{address}/assets"
+                f"{self.indexer_base_url}/v2/accounts/{address}/assets"
             )
 
             if response.status_code != 200:
@@ -214,8 +217,8 @@ class AlgorandService(APIKeyManager):
             assets = []
 
             for asset in data.get('assets', []):
-                # Skip assets with zero balance
-                if asset.get('amount', 0) == 0:
+                # Skip deleted or zero-balance assets
+                if asset.get('deleted', False) or asset.get('amount', 0) == 0:
                     continue
 
                 assets.append({
@@ -230,13 +233,13 @@ class AlgorandService(APIKeyManager):
             return assets
 
         except Exception as e:
-            logger.debug(f"Pera assets error for {address[:20]}...: {e}")
+            logger.debug(f"Algonode assets error for {address[:20]}...: {e}")
             return None
 
     async def _get_assets_tatum(self, address: str) -> Optional[List[dict]]:
         """Fetch ASAs from Tatum API."""
         try:
-            client = get_client("pera", timeout=30.0)
+            client = get_client("tatum_algorand", timeout=30.0)
             response = await client.get(
                 f"{self.tatum_base_url}/v2/accounts/{address}/assets",
                 headers={"x-api-key": await self.get_api_key()}
@@ -283,8 +286,8 @@ class AlgorandService(APIKeyManager):
             'metadata_hash': '...'
         }
         """
-        # Try Pera first
-        info = await self._get_asset_info_pera(asset_id)
+        # Try Algonode algod first
+        info = await self._get_asset_info_algonode(asset_id)
         if info:
             return info
 
@@ -296,12 +299,12 @@ class AlgorandService(APIKeyManager):
 
         return None
 
-    async def _get_asset_info_pera(self, asset_id: int) -> Optional[dict]:
-        """Fetch asset info from Pera API."""
+    async def _get_asset_info_algonode(self, asset_id: int) -> Optional[dict]:
+        """Fetch asset info from Algonode algod API."""
         try:
-            client = get_client("pera", timeout=30.0)
+            client = get_client("algonode", timeout=30.0)
             response = await client.get(
-                f"{self.pera_base_url}/v1/assets/{asset_id}"
+                f"{self.algod_base_url}/v2/assets/{asset_id}"
             )
 
             if response.status_code != 200:
@@ -322,13 +325,13 @@ class AlgorandService(APIKeyManager):
             }
 
         except Exception as e:
-            logger.debug(f"Pera asset info error for {asset_id}: {e}")
+            logger.debug(f"Algonode asset info error for {asset_id}: {e}")
             return None
 
     async def _get_asset_info_tatum(self, asset_id: int) -> Optional[dict]:
         """Fetch asset info from Tatum API."""
         try:
-            client = get_client("pera", timeout=30.0)
+            client = get_client("tatum_algorand", timeout=30.0)
             response = await client.get(
                 f"{self.tatum_base_url}/v2/assets/{asset_id}",
                 headers={"x-api-key": await self.get_api_key()}
@@ -364,8 +367,8 @@ class AlgorandService(APIKeyManager):
         if not self.is_algorand_address(address):
             return []
 
-        # Try Pera first
-        txs = await self._get_transactions_pera(address, limit)
+        # Try Algonode indexer first
+        txs = await self._get_transactions_algonode(address, limit)
         if txs is not None:
             return txs
 
@@ -377,12 +380,12 @@ class AlgorandService(APIKeyManager):
 
         return []
 
-    async def _get_transactions_pera(self, address: str, limit: int) -> Optional[List[dict]]:
-        """Fetch transactions from Pera API."""
+    async def _get_transactions_algonode(self, address: str, limit: int) -> Optional[List[dict]]:
+        """Fetch transactions from Algonode indexer API."""
         try:
-            client = get_client("pera", timeout=30.0)
+            client = get_client("algonode", timeout=30.0)
             response = await client.get(
-                f"{self.pera_base_url}/v1/accounts/{address}/transactions",
+                f"{self.indexer_base_url}/v2/accounts/{address}/transactions",
                 params={"limit": limit}
             )
 
@@ -393,13 +396,13 @@ class AlgorandService(APIKeyManager):
             return data.get('transactions', [])
 
         except Exception as e:
-            logger.debug(f"Pera transactions error for {address[:20]}...: {e}")
+            logger.debug(f"Algonode transactions error for {address[:20]}...: {e}")
             return None
 
     async def _get_transactions_tatum(self, address: str, limit: int) -> Optional[List[dict]]:
         """Fetch transactions from Tatum API."""
         try:
-            client = get_client("pera", timeout=30.0)
+            client = get_client("tatum_algorand", timeout=30.0)
             response = await client.get(
                 f"{self.tatum_base_url}/v2/accounts/{address}/transactions",
                 headers={"x-api-key": await self.get_api_key()},
@@ -441,14 +444,15 @@ class AlgorandService(APIKeyManager):
             'assets': assets
         }
 
-    def get_rate_limit_status(self) -> dict:
+    async def get_rate_limit_status(self) -> dict:
         """Get current rate limit status."""
+        configured = await self.is_configured()
         return {
-            'configured': self.is_configured(),
+            'configured': configured,
             'cache_size': len(self._balance_cache),
             'cache_ttl_minutes': self._cache_ttl.total_seconds() / 60,
-            'pera_available': True,  # Pera API is always available (no key)
-            'tatum_available': self.is_configured()
+            'algonode_available': True,  # Algonode is always available (no key)
+            'tatum_available': configured
         }
 
     def clear_cache(self):

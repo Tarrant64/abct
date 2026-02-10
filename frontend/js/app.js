@@ -33,17 +33,17 @@ async function authFetch(url, options = {}) {
 }
 
 // Price data cache
-let prices = { ADA: 0, BTC: 0, ETH: 0, SOL: 0, MATIC: 0 };
+let prices = { ADA: 0, BTC: 0, ETH: 0, SOL: 0, MATIC: 0, BNB: 0, AVAX: 0, TRX: 0 };
 let displayMode = 'crypto'; // 'crypto' or 'usd'
 
 // Portfolio totals for calculating total value
-let walletTotals = { ADA: 0, BTC: 0, ETH: 0, SOL: 0, MATIC: 0, ETH_BASE: 0, ALGO: 0 };
+let walletTotals = { ADA: 0, BTC: 0, ETH: 0, SOL: 0, MATIC: 0, ETH_BASE: 0, ALGO: 0, BNB: 0, ETH_ARB: 0, AVAX: 0, TRX: 0 };
 let stakingTotals = {}; // { 'INDY': 1234.56, 'STRIKE': 789.01, etc. }
 let defiTotals = {}; // DeFi tokens held in wallets (governance tokens, stablecoins, etc.)
 let exchangeTotals = { usd: 0 }; // Total USD value from exchanges
 let snapshotTotals = { staking: 0, defi: 0, trackedTokens: 0 }; // From latest snapshot (dashboard only)
-let nftTotals = { cardano: 0, ethereum: 0, solana: 0, polygon: 0, base: 0 }; // NFT values by chain
-let nftCounts = { cardano: 0, ethereum: 0, solana: 0, polygon: 0, base: 0 }; // NFT counts by chain
+let nftTotals = { cardano: 0, ethereum: 0, solana: 0, polygon: 0, base: 0, algorand: 0, bsc: 0, arbitrum: 0, avalanche: 0 }; // NFT values by chain
+let nftCounts = { cardano: 0, ethereum: 0, solana: 0, polygon: 0, base: 0, algorand: 0, bsc: 0, arbitrum: 0, avalanche: 0 }; // NFT counts by chain
 
 // NFT chain selection
 let currentNFTChain = 'cardano';
@@ -148,12 +148,12 @@ function createTokenLogo(logoUrl, symbol, fallbackText = null) {
 
 // Helper to get total NFT value across all chains
 function getNftTotalUsd() {
-    return (nftTotals.cardano || 0) + (nftTotals.ethereum || 0) + (nftTotals.solana || 0) + (nftTotals.polygon || 0) + (nftTotals.base || 0);
+    return (nftTotals.cardano || 0) + (nftTotals.ethereum || 0) + (nftTotals.solana || 0) + (nftTotals.polygon || 0) + (nftTotals.base || 0) + (nftTotals.algorand || 0) + (nftTotals.bsc || 0) + (nftTotals.arbitrum || 0) + (nftTotals.avalanche || 0);
 }
 
 // Update NFT counts in summary cards
 function updateSummaryCardNftCounts() {
-    const chains = ['cardano', 'ethereum', 'solana', 'polygon', 'base'];
+    const chains = ['cardano', 'ethereum', 'solana', 'polygon', 'base', 'algorand', 'bsc', 'arbitrum', 'avalanche'];
     for (const chain of chains) {
         const el = document.getElementById(`${chain}DynNfts`);
         if (el) {
@@ -348,6 +348,10 @@ const CHAIN_CONFIG = {
     polygon:  { name: 'Polygon',  symbol: 'POL',    logo: 'POL',  icon: '⬡', decimals: 6, priceKey: 'MATIC', balanceKey: 'total_matic', nativeLabel: 'POL' },
     base:     { name: 'Base',     symbol: 'ETH',    logo: 'ETH',  icon: 'Ⓑ', decimals: 8, priceKey: 'ETH',   balanceKey: 'total_eth',   nativeLabel: 'ETH' },
     algorand: { name: 'Algorand', symbol: 'ALGO',   logo: 'ALGO', icon: 'Ⓐ', decimals: 6, priceKey: 'ALGO',  balanceKey: 'total_algo',  nativeLabel: 'ALGO' },
+    bsc:       { name: 'BNB Chain',   symbol: 'BNB',  logo: 'BNB',  icon: '◆', decimals: 8, priceKey: 'BNB',   balanceKey: 'total_bnb',  nativeLabel: 'BNB' },
+    arbitrum:  { name: 'Arbitrum',    symbol: 'ETH',  logo: 'ETH',  icon: '◇', decimals: 8, priceKey: 'ETH',   balanceKey: 'total_eth',  nativeLabel: 'ETH' },
+    avalanche: { name: 'Avalanche',   symbol: 'AVAX', logo: 'AVAX', icon: '▲', decimals: 8, priceKey: 'AVAX',  balanceKey: 'total_avax', nativeLabel: 'AVAX' },
+    tron:      { name: 'Tron',        symbol: 'TRX',  logo: 'TRX',  icon: '◈', decimals: 6, priceKey: 'TRX',   balanceKey: 'total_trx',  nativeLabel: 'TRX' },
 };
 
 // Render blockchain cards dynamically, sorted by value, only for chains with wallets
@@ -547,6 +551,10 @@ function getChainAllocations() {
         polygon:  { label: 'Polygon',  symbol: 'POL',  color: '#8247e5', balKey: 'MATIC', priceKey: 'MATIC' },
         base:     { label: 'Base',     symbol: 'ETH',  color: '#0052ff', balKey: 'ETH_BASE', priceKey: 'ETH' },
         algorand: { label: 'Algorand', symbol: 'ALGO', color: '#00d2c2', balKey: 'ALGO',  priceKey: 'ALGO' },
+        bsc:      { label: 'BNB Chain', symbol: 'BNB', color: '#f3ba2f', balKey: 'BNB',  priceKey: 'BNB' },
+        arbitrum: { label: 'Arbitrum', symbol: 'ETH', color: '#28a0f0', balKey: 'ETH_ARB', priceKey: 'ETH' },
+        avalanche:{ label: 'Avalanche', symbol: 'AVAX', color: '#e84142', balKey: 'AVAX', priceKey: 'AVAX' },
+        tron:     { label: 'Tron',     symbol: 'TRX', color: '#ff0013', balKey: 'TRX',  priceKey: 'TRX' },
     };
 
     for (const [chain, cfg] of Object.entries(chainMap)) {
@@ -627,7 +635,29 @@ function updatePortfolioDonut() {
             cutout: '68%',
             plugins: {
                 legend: { display: false },
-                tooltip: { enabled: false },
+                tooltip: {
+                    enabled: true,
+                    callbacks: {
+                        label: function(context) {
+                            const currentAllocs = getChainAllocations();
+                            const currentTotal = lastTotalPortfolioValue > 0 ? lastTotalPortfolioValue : currentAllocs.reduce((s, a) => s + a.usd, 0);
+                            const alloc = currentAllocs[context.dataIndex];
+                            if (!alloc) return '';
+                            const pct = ((alloc.usd / currentTotal) * 100).toFixed(1);
+                            return `${alloc.symbol}  ${pct}%`;
+                        },
+                        title: function() { return ''; }
+                    },
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    bodyColor: '#fff',
+                    bodyFont: { size: 13, weight: 'bold' },
+                    padding: { top: 6, bottom: 6, left: 10, right: 10 },
+                    cornerRadius: 8,
+                    displayColors: true,
+                    boxWidth: 10,
+                    boxHeight: 10,
+                    boxPadding: 4,
+                },
             },
             layout: { padding: 4 },
             animation: { duration: 400, easing: 'easeOutQuart' },
@@ -1290,6 +1320,10 @@ async function loadPortfolioSummary() {
         walletTotals.MATIC = data.polygon?.total_matic || 0;
         walletTotals.ETH_BASE = data.base?.total_eth || 0;
         walletTotals.ALGO = data.algorand?.total_algo || 0;
+        walletTotals.BNB = data.bsc?.total_bnb || 0;
+        walletTotals.ETH_ARB = data.arbitrum?.total_eth || 0;
+        walletTotals.AVAX = data.avalanche?.total_avax || 0;
+        walletTotals.TRX = data.tron?.total_trx || 0;
 
         // Render blockchain cards dynamically (sorted by value, only chains with wallets)
         renderBlockchainCards(data);
@@ -1301,11 +1335,16 @@ async function loadPortfolioSummary() {
         const polygonWalletCount = data.polygon?.wallet_count || 0;
         const baseWalletCount = data.base?.wallet_count || 0;
         const algoWalletCount = data.algorand?.wallet_count || 0;
+        const bscWalletCount = data.bsc?.wallet_count || 0;
+        const arbWalletCount = data.arbitrum?.wallet_count || 0;
+        const avaxWalletCount = data.avalanche?.wallet_count || 0;
+        const tronWalletCount = data.tron?.wallet_count || 0;
         const walletsSummary = document.getElementById('walletsSummary');
         if (walletsSummary) {
             const chainIconMap = {
                 'Cardano': 'ADA', 'Bitcoin': 'BTC', 'Ethereum': 'ETH',
-                'Solana': 'SOL', 'Polygon': 'POL', 'Base': 'BASE', 'Algorand': 'ALGO'
+                'Solana': 'SOL', 'Polygon': 'POL', 'Base': 'BASE', 'Algorand': 'ALGO',
+                'BNB Chain': 'BNB', 'Arbitrum': 'ARB', 'Avalanche': 'AVAX', 'Tron': 'TRX'
             };
             const chains = [];
             if (stakeGroupCount > 0) chains.push({ name: 'Cardano', count: stakeGroupCount, label: `${stakeGroupCount} stake key${stakeGroupCount !== 1 ? 's' : ''}` });
@@ -1315,6 +1354,10 @@ async function loadPortfolioSummary() {
             if (polygonWalletCount > 0) chains.push({ name: 'Polygon', count: polygonWalletCount, label: `${polygonWalletCount} wallet${polygonWalletCount !== 1 ? 's' : ''}` });
             if (baseWalletCount > 0) chains.push({ name: 'Base', count: baseWalletCount, label: `${baseWalletCount} wallet${baseWalletCount !== 1 ? 's' : ''}` });
             if (algoWalletCount > 0) chains.push({ name: 'Algorand', count: algoWalletCount, label: `${algoWalletCount} wallet${algoWalletCount !== 1 ? 's' : ''}` });
+            if (bscWalletCount > 0) chains.push({ name: 'BNB Chain', count: bscWalletCount, label: `${bscWalletCount} wallet${bscWalletCount !== 1 ? 's' : ''}` });
+            if (arbWalletCount > 0) chains.push({ name: 'Arbitrum', count: arbWalletCount, label: `${arbWalletCount} wallet${arbWalletCount !== 1 ? 's' : ''}` });
+            if (avaxWalletCount > 0) chains.push({ name: 'Avalanche', count: avaxWalletCount, label: `${avaxWalletCount} wallet${avaxWalletCount !== 1 ? 's' : ''}` });
+            if (tronWalletCount > 0) chains.push({ name: 'Tron', count: tronWalletCount, label: `${tronWalletCount} wallet${tronWalletCount !== 1 ? 's' : ''}` });
 
             const maxVisible = 4;
             let summaryHtml = '<span class="chain-icons-stack">';
@@ -1330,7 +1373,7 @@ async function loadPortfolioSummary() {
         }
 
         // Render wallets list with stake groups for Cardano
-        renderWalletsGrouped(data.cardano.stake_groups || [], data.bitcoin.wallets || [], data.ethereum?.wallets || [], data.solana?.wallets || [], data.polygon?.wallets || [], data.base?.wallets || []);
+        renderWalletsGrouped(data.cardano.stake_groups || [], data.bitcoin.wallets || [], data.ethereum?.wallets || [], data.solana?.wallets || [], data.polygon?.wallets || [], data.base?.wallets || [], data.algorand?.wallets || [], data.bsc?.wallets || [], data.arbitrum?.wallets || [], data.avalanche?.wallets || [], data.tron?.wallets || []);
 
         // Update total portfolio value
         updateTotalPortfolioValue();
@@ -1454,10 +1497,10 @@ function renderWallets(wallets) {
 }
 
 // Render wallets grouped by stake key (Cardano) and individual (Bitcoin, Ethereum, Solana, Polygon, Base)
-function renderWalletsGrouped(cardanoStakeGroups, bitcoinWallets, ethereumWallets = [], solanaWallets = [], polygonWallets = [], baseWallets = []) {
+function renderWalletsGrouped(cardanoStakeGroups, bitcoinWallets, ethereumWallets = [], solanaWallets = [], polygonWallets = [], baseWallets = [], algorandWallets = [], bscWallets = [], arbitrumWallets = [], avalancheWallets = [], tronWallets = []) {
     if (!walletsList) return;
 
-    const allEmpty = cardanoStakeGroups.length === 0 && bitcoinWallets.length === 0 && ethereumWallets.length === 0 && solanaWallets.length === 0 && polygonWallets.length === 0 && baseWallets.length === 0;
+    const allEmpty = cardanoStakeGroups.length === 0 && bitcoinWallets.length === 0 && ethereumWallets.length === 0 && solanaWallets.length === 0 && polygonWallets.length === 0 && baseWallets.length === 0 && algorandWallets.length === 0 && bscWallets.length === 0 && arbitrumWallets.length === 0 && avalancheWallets.length === 0 && tronWallets.length === 0;
 
     if (allEmpty) {
         setSafeHTML(walletsList, '<p class="empty-state">No wallets found. Add addresses to data/wallets.txt and click "Sync from File".</p>');
@@ -1537,7 +1580,7 @@ function renderWalletsGrouped(cardanoStakeGroups, bitcoinWallets, ethereumWallet
         if (wallets.length === 0) return '';
 
         const totalBalance = wallets.reduce((sum, w) => sum + w.balance, 0);
-        const totalAssets = wallets.reduce((sum, w) => sum + (w.native_assets_count || w.token_count || 0), 0);
+        const totalAssets = wallets.reduce((sum, w) => sum + (w.native_assets_count || w.token_count || w.asset_count || 0), 0);
         const totalNativeAssetsValue = wallets.reduce((sum, w) => sum + (w.native_assets_value_usd || 0), 0);
         const totalUsd = totalBalance * (prices[unit] || 0) + totalNativeAssetsValue;
 
@@ -1549,7 +1592,12 @@ function renderWalletsGrouped(cardanoStakeGroups, bitcoinWallets, ethereumWallet
             'ethereum': 'https://img.logokit.com/crypto/ETH?token=LOGOKIT_KEY_REMOVED&size=24',
             'solana': 'https://img.logokit.com/crypto/SOL?token=LOGOKIT_KEY_REMOVED&size=24',
             'polygon': 'https://img.logokit.com/crypto/POL?token=LOGOKIT_KEY_REMOVED&size=24',
-            'base': 'https://avatars.githubusercontent.com/u/108554348?s=24'
+            'base': 'https://avatars.githubusercontent.com/u/108554348?s=24',
+            'algorand': 'https://img.logokit.com/crypto/ALGO?token=LOGOKIT_KEY_REMOVED&size=24',
+            'bsc': 'https://img.logokit.com/crypto/BNB?token=LOGOKIT_KEY_REMOVED&size=24',
+            'arbitrum': 'https://img.logokit.com/crypto/ARB?token=LOGOKIT_KEY_REMOVED&size=24',
+            'avalanche': 'https://img.logokit.com/crypto/AVAX?token=LOGOKIT_KEY_REMOVED&size=24',
+            'tron': 'https://img.logokit.com/crypto/TRX?token=LOGOKIT_KEY_REMOVED&size=24'
         };
         const logoUrl = logoMap[blockchain] || '';
 
@@ -1579,6 +1627,11 @@ function renderWalletsGrouped(cardanoStakeGroups, bitcoinWallets, ethereumWallet
     html += renderBlockchainSection('solana', solanaWallets, 'SOL', 9);
     html += renderBlockchainSection('polygon', polygonWallets, 'POL', 6);
     html += renderBlockchainSection('base', baseWallets, 'ETH', 8);
+    html += renderBlockchainSection('algorand', algorandWallets, 'ALGO', 6);
+    html += renderBlockchainSection('bsc', bscWallets, 'BNB', 8);
+    html += renderBlockchainSection('arbitrum', arbitrumWallets, 'ETH', 8);
+    html += renderBlockchainSection('avalanche', avalancheWallets, 'AVAX', 8);
+    html += renderBlockchainSection('tron', tronWallets, 'TRX', 6);
 
     // Use innerHTML directly for internally generated HTML (not user input)
     walletsList.innerHTML = html;
@@ -4318,7 +4371,7 @@ async function refreshWallets() {
             ethBalanceUsdEl.textContent = formatUSD(ethUsd);
         }
 
-        renderWalletsGrouped(data.cardano.stake_groups || [], data.bitcoin.wallets || [], data.ethereum?.wallets || [], data.solana?.wallets || [], data.polygon?.wallets || []);
+        renderWalletsGrouped(data.cardano.stake_groups || [], data.bitcoin.wallets || [], data.ethereum?.wallets || [], data.solana?.wallets || [], data.polygon?.wallets || [], data.base?.wallets || [], data.algorand?.wallets || [], data.bsc?.wallets || [], data.arbitrum?.wallets || [], data.avalanche?.wallets || [], data.tron?.wallets || []);
         updateTotalPortfolioValue();
         showStatus('Wallets refreshed');
     } catch (error) {
@@ -4601,6 +4654,106 @@ async function refreshNFTs() {
             updateSummaryCardNftCounts();
 
             renderBaseNFTs(data.nfts, data.eth_price);
+        } else if (currentNFTChain === 'algorand') {
+            // Force refresh Algorand NFTs
+            const response = await authFetch(`${API_BASE}/nfts/algorand?force_refresh=true`);
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch Algorand NFTs');
+            }
+
+            const data = await response.json();
+
+            // Update Algorand NFT totals and counts
+            nftTotals.algorand = data.total_value_usd || 0;
+            nftCounts.algorand = data.total_count || 0;
+
+            // Update Algorand chain tab stats
+            const algorandStats = document.getElementById('algorandNftStats');
+            if (algorandStats) {
+                setSafeHTML(algorandStats, `${data.total_count} · ${formatUSDBlur(data.total_value_usd)}`);
+            }
+
+            // Update section summary with combined totals
+            updateNftSectionSummary();
+            updateSummaryCardNftCounts();
+
+            renderAlgorandNFTs(data.nfts);
+        } else if (currentNFTChain === 'bsc') {
+            // Force refresh BSC NFTs
+            const response = await authFetch(`${API_BASE}/nfts/bsc?force_refresh=true`);
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch BSC NFTs');
+            }
+
+            const data = await response.json();
+
+            // Update BSC NFT totals and counts
+            nftTotals.bsc = data.total_value_usd || 0;
+            nftCounts.bsc = data.total_count || 0;
+
+            // Update BSC chain tab stats
+            const bscStats = document.getElementById('bscNftStats');
+            if (bscStats) {
+                setSafeHTML(bscStats, `${data.total_count} · ${formatUSDBlur(data.total_value_usd)}`);
+            }
+
+            // Update section summary with combined totals
+            updateNftSectionSummary();
+            updateSummaryCardNftCounts();
+
+            renderBscNFTs(data.nfts, data.bnb_price);
+        } else if (currentNFTChain === 'arbitrum') {
+            // Force refresh Arbitrum NFTs
+            const response = await authFetch(`${API_BASE}/nfts/arbitrum?force_refresh=true`);
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch Arbitrum NFTs');
+            }
+
+            const data = await response.json();
+
+            // Update Arbitrum NFT totals and counts
+            nftTotals.arbitrum = data.total_value_usd || 0;
+            nftCounts.arbitrum = data.total_count || 0;
+
+            // Update Arbitrum chain tab stats
+            const arbitrumStats = document.getElementById('arbitrumNftStats');
+            if (arbitrumStats) {
+                setSafeHTML(arbitrumStats, `${data.total_count} · ${formatUSDBlur(data.total_value_usd)}`);
+            }
+
+            // Update section summary with combined totals
+            updateNftSectionSummary();
+            updateSummaryCardNftCounts();
+
+            renderArbitrumNFTs(data.nfts, data.eth_price);
+        } else if (currentNFTChain === 'avalanche') {
+            // Force refresh Avalanche NFTs
+            const response = await authFetch(`${API_BASE}/nfts/avalanche?force_refresh=true`);
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch Avalanche NFTs');
+            }
+
+            const data = await response.json();
+
+            // Update Avalanche NFT totals and counts
+            nftTotals.avalanche = data.total_value_usd || 0;
+            nftCounts.avalanche = data.total_count || 0;
+
+            // Update Avalanche chain tab stats
+            const avalancheStats = document.getElementById('avalancheNftStats');
+            if (avalancheStats) {
+                setSafeHTML(avalancheStats, `${data.total_count} · ${formatUSDBlur(data.total_value_usd)}`);
+            }
+
+            // Update section summary with combined totals
+            updateNftSectionSummary();
+            updateSummaryCardNftCounts();
+
+            renderAvalancheNFTs(data.nfts, data.avax_price);
         }
         showStatus('NFTs refreshed');
     } catch (error) {
@@ -4638,6 +4791,14 @@ async function switchNFTChain(chain) {
         loadPolygonNFTs();
     } else if (chain === 'base') {
         loadBaseNFTs();
+    } else if (chain === 'algorand') {
+        loadAlgorandNFTs();
+    } else if (chain === 'bsc') {
+        loadBscNFTs();
+    } else if (chain === 'arbitrum') {
+        loadArbitrumNFTs();
+    } else if (chain === 'avalanche') {
+        loadAvalancheNFTs();
     }
 }
 
@@ -4803,7 +4964,7 @@ function updateNftSectionSummary() {
     const totalValue = getNftTotalUsd();
 
     // Sum counts from all chains
-    const totalCount = (nftCounts.cardano || 0) + (nftCounts.ethereum || 0) + (nftCounts.solana || 0) + (nftCounts.polygon || 0) + (nftCounts.base || 0);
+    const totalCount = (nftCounts.cardano || 0) + (nftCounts.ethereum || 0) + (nftCounts.solana || 0) + (nftCounts.polygon || 0) + (nftCounts.base || 0) + (nftCounts.algorand || 0) + (nftCounts.bsc || 0) + (nftCounts.arbitrum || 0) + (nftCounts.avalanche || 0);
 
     setSafeHTML(nftsSummary, `
         <span class="nft-count">${totalCount} NFT${totalCount !== 1 ? 's' : ''}</span>
@@ -5389,6 +5550,585 @@ function renderBaseNFTs(nfts, ethPrice) {
     setSafeHTML(nftsList, html);
 }
 
+// Load Algorand NFTs
+async function loadAlgorandNFTs() {
+    const nftsList = document.getElementById('nftsList');
+    if (nftsList) {
+        setSafeHTML(nftsList, '<p class="loading-state">Loading Algorand NFTs...</p>');
+    }
+
+    try {
+        const response = await authFetch(`${API_BASE}/nfts/algorand`);
+
+        if (!response.ok) {
+            throw new Error('Failed to fetch Algorand NFTs');
+        }
+
+        const data = await response.json();
+
+        // Store Algorand NFT total and count for portfolio calculation
+        nftTotals.algorand = data.total_value_usd || 0;
+        nftCounts.algorand = data.total_count || 0;
+
+        // Update Algorand chain tab stats
+        const algorandStats = document.getElementById('algorandNftStats');
+        if (algorandStats) {
+            setSafeHTML(algorandStats, `${data.total_count} · ${formatUSDBlur(data.total_value_usd)}`);
+        }
+
+        // Update section summary and summary card counts
+        updateNftSectionSummary();
+        updateSummaryCardNftCounts();
+        updateTotalPortfolioValue();
+
+        renderAlgorandNFTs(data.nfts);
+
+    } catch (error) {
+        console.error('Error loading Algorand NFTs:', error);
+        if (nftsList) {
+            setSafeHTML(nftsList, '<p class="empty-state">Error loading Algorand NFTs</p>');
+        }
+    }
+}
+
+// Render Algorand NFTs
+function renderAlgorandNFTs(nfts) {
+    const nftsList = document.getElementById('nftsList');
+    if (!nftsList) return;
+
+    if (!nfts || nfts.length === 0) {
+        setSafeHTML(nftsList, '<p class="empty-state">No Algorand NFTs found</p>');
+        return;
+    }
+
+    // Group NFTs by collection (unit_name)
+    const collections = {};
+    const UNKNOWN_KEY = '__unknown__';
+
+    for (const nft of nfts) {
+        const collectionName = nft.collection?.name || '';
+        const key = collectionName || UNKNOWN_KEY;
+
+        if (!collections[key]) {
+            collections[key] = {
+                name: collectionName || 'Other NFTs',
+                isUnknown: !collectionName,
+                nfts: []
+            };
+        }
+        collections[key].nfts.push(nft);
+    }
+
+    let html = '';
+
+    // Sort collections by count, with unknown at the end
+    const sortedCollections = Object.entries(collections).sort((a, b) => {
+        if (a[0] === UNKNOWN_KEY) return 1;
+        if (b[0] === UNKNOWN_KEY) return -1;
+        return b[1].nfts.length - a[1].nfts.length;
+    }).map(([_, v]) => v);
+
+    for (const collection of sortedCollections) {
+        html += `
+            <div class="nft-collection algorand collapsed">
+                <div class="nft-collection-header" onclick="toggleNftCollection(this)">
+                    <span class="collapse-indicator">▶</span>
+                    <div class="collection-info">
+                        <span class="collection-name">
+                            ${blurValue(collection.name)}
+                        </span>
+                        <span class="collection-count">${collection.nfts.length} NFT${collection.nfts.length !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div class="collection-value">
+                        <span class="no-value">No pricing</span>
+                    </div>
+                </div>
+                <div class="nft-items">
+        `;
+
+        for (const nft of collection.nfts) {
+            html += `
+                <div class="nft-item">
+                    <div class="nft-info">
+                        ${nft.image_url ? `<img src="${nft.image_url}" class="nft-thumbnail" alt="${nft.name}" onerror="this.style.display='none'">` : ''}
+                        <span class="nft-name">${nft.name || 'Unnamed NFT'}</span>
+                        <span class="nft-id">#${nft.asset_id}</span>
+                    </div>
+                    <div class="nft-price">
+                        <span class="price-value no-price">--</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        html += `
+                </div>
+            </div>
+        `;
+    }
+
+    setSafeHTML(nftsList, html);
+}
+
+// Load BSC NFTs
+async function loadBscNFTs() {
+    const nftsList = document.getElementById('nftsList');
+    if (nftsList) {
+        setSafeHTML(nftsList, '<p class="loading-state">Loading BSC NFTs...</p>');
+    }
+
+    try {
+        const response = await authFetch(`${API_BASE}/nfts/bsc`);
+
+        if (!response.ok) {
+            throw new Error('Failed to fetch BSC NFTs');
+        }
+
+        const data = await response.json();
+
+        if (!data.configured) {
+            if (nftsList) {
+                setSafeHTML(nftsList, '<p class="empty-state">Alchemy API not configured. <a href="/apis.html" style="color: #667eea;">Configure it in Manage APIs</a> to enable BSC NFT support.</p>');
+            }
+            const bscStats = document.getElementById('bscNftStats');
+            if (bscStats) {
+                bscStats.textContent = 'Not configured';
+            }
+            return;
+        }
+
+        // Store BSC NFT total and count for portfolio calculation
+        nftTotals.bsc = data.total_value_usd || 0;
+        nftCounts.bsc = data.total_count || 0;
+
+        // Update BSC chain tab stats
+        const bscStats = document.getElementById('bscNftStats');
+        if (bscStats) {
+            setSafeHTML(bscStats, `${data.total_count} · ${formatUSDBlur(data.total_value_usd)}`);
+        }
+
+        // Update section summary and summary card counts
+        updateNftSectionSummary();
+        updateSummaryCardNftCounts();
+        updateTotalPortfolioValue();
+
+        renderBscNFTs(data.nfts, data.bnb_price);
+
+    } catch (error) {
+        console.error('Error loading BSC NFTs:', error);
+        if (nftsList) {
+            setSafeHTML(nftsList, '<p class="empty-state">Error loading BSC NFTs</p>');
+        }
+    }
+}
+
+// Render BSC NFTs
+function renderBscNFTs(nfts, bnbPrice) {
+    const nftsList = document.getElementById('nftsList');
+    if (!nftsList) return;
+
+    if (!nfts || nfts.length === 0) {
+        setSafeHTML(nftsList, '<p class="empty-state">No BSC NFTs found</p>');
+        return;
+    }
+
+    // Group NFTs by collection
+    const collections = {};
+    const UNKNOWN_KEY = '__unknown__';
+
+    for (const nft of nfts) {
+        const collectionName = nft.collection?.name || '';
+        const hasFloorPrice = nft.collection?.floor_price_bnb && nft.collection.floor_price_bnb > 0;
+
+        const isKnown = hasFloorPrice;
+        const key = isKnown ? collectionName : UNKNOWN_KEY;
+
+        if (!collections[key]) {
+            collections[key] = {
+                name: isKnown ? collectionName : 'Other NFTs (No Floor Price)',
+                floor_price_bnb: isKnown ? (nft.collection?.floor_price_bnb || 0) : 0,
+                verified: isKnown ? (nft.collection?.verified || false) : false,
+                isUnknown: !isKnown,
+                nfts: []
+            };
+        }
+        collections[key].nfts.push(nft);
+    }
+
+    let html = '';
+
+    // Sort collections by value, with unknown at the end
+    const sortedCollections = Object.entries(collections).sort((a, b) => {
+        if (a[0] === UNKNOWN_KEY) return 1;
+        if (b[0] === UNKNOWN_KEY) return -1;
+
+        const valueA = (a[1].floor_price_bnb || 0) * a[1].nfts.length;
+        const valueB = (b[1].floor_price_bnb || 0) * b[1].nfts.length;
+        return valueB - valueA;
+    }).map(([_, v]) => v);
+
+    for (const collection of sortedCollections) {
+        const collectionValueBnb = (collection.floor_price_bnb || 0) * collection.nfts.length;
+        const collectionValueUsd = collectionValueBnb * (bnbPrice || 0);
+
+        // Collections are collapsed by default
+        html += `
+            <div class="nft-collection bsc collapsed">
+                <div class="nft-collection-header" onclick="toggleNftCollection(this)">
+                    <span class="collapse-indicator">▶</span>
+                    <div class="collection-info">
+                        <span class="collection-name">
+                            ${blurValue(collection.name)}
+                            ${collection.verified ? '<span class="verified-badge" title="Verified Collection">✓</span>' : ''}
+                        </span>
+                        <span class="collection-count">${collection.nfts.length} NFT${collection.nfts.length !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div class="collection-value">
+                        ${collectionValueUsd > 0 ? formatUSDBlur(collectionValueUsd) : '<span class="no-value">No floor price</span>'}
+                    </div>
+                </div>
+                <div class="nft-items">
+        `;
+
+        for (const nft of collection.nfts) {
+            const floorPriceUsd = (nft.collection?.floor_price_bnb || 0) * (bnbPrice || 0);
+
+            html += `
+                <div class="nft-item">
+                    <div class="nft-info">
+                        <a href="${nft.links?.opensea || '#'}" target="_blank" rel="noopener" class="nft-link" title="View on OpenSea">
+                            <span class="nft-link-icon opensea">OS</span>
+                        </a>
+                        <a href="${nft.links?.bscscan || '#'}" target="_blank" rel="noopener" class="nft-link" title="View on BscScan">
+                            <span class="nft-link-icon bscscan">BC</span>
+                        </a>
+                        <span class="nft-name">${nft.name || 'Unnamed NFT'}</span>
+                    </div>
+                    <div class="nft-price">
+                        ${floorPriceUsd > 0 ? `
+                            <span class="price-value">${formatUSDBlur(floorPriceUsd)}</span>
+                            <span class="price-source">(floor)</span>
+                        ` : '<span class="price-value no-price">--</span>'}
+                    </div>
+                </div>
+            `;
+        }
+
+        html += `
+                </div>
+            </div>
+        `;
+    }
+
+    setSafeHTML(nftsList, html);
+}
+
+// Load Arbitrum NFTs
+async function loadArbitrumNFTs() {
+    const nftsList = document.getElementById('nftsList');
+    if (nftsList) {
+        setSafeHTML(nftsList, '<p class="loading-state">Loading Arbitrum NFTs...</p>');
+    }
+
+    try {
+        const response = await authFetch(`${API_BASE}/nfts/arbitrum`);
+
+        if (!response.ok) {
+            throw new Error('Failed to fetch Arbitrum NFTs');
+        }
+
+        const data = await response.json();
+
+        if (!data.configured) {
+            if (nftsList) {
+                setSafeHTML(nftsList, '<p class="empty-state">Alchemy API not configured. <a href="/apis.html" style="color: #667eea;">Configure it in Manage APIs</a> to enable Arbitrum NFT support.</p>');
+            }
+            const arbitrumStats = document.getElementById('arbitrumNftStats');
+            if (arbitrumStats) {
+                arbitrumStats.textContent = 'Not configured';
+            }
+            return;
+        }
+
+        // Store Arbitrum NFT total and count for portfolio calculation
+        nftTotals.arbitrum = data.total_value_usd || 0;
+        nftCounts.arbitrum = data.total_count || 0;
+
+        // Update Arbitrum chain tab stats
+        const arbitrumStats = document.getElementById('arbitrumNftStats');
+        if (arbitrumStats) {
+            setSafeHTML(arbitrumStats, `${data.total_count} · ${formatUSDBlur(data.total_value_usd)}`);
+        }
+
+        // Update section summary and summary card counts
+        updateNftSectionSummary();
+        updateSummaryCardNftCounts();
+        updateTotalPortfolioValue();
+
+        renderArbitrumNFTs(data.nfts, data.eth_price);
+
+    } catch (error) {
+        console.error('Error loading Arbitrum NFTs:', error);
+        if (nftsList) {
+            setSafeHTML(nftsList, '<p class="empty-state">Error loading Arbitrum NFTs</p>');
+        }
+    }
+}
+
+// Render Arbitrum NFTs
+function renderArbitrumNFTs(nfts, ethPrice) {
+    const nftsList = document.getElementById('nftsList');
+    if (!nftsList) return;
+
+    if (!nfts || nfts.length === 0) {
+        setSafeHTML(nftsList, '<p class="empty-state">No Arbitrum NFTs found</p>');
+        return;
+    }
+
+    // Group NFTs by collection
+    const collections = {};
+    const UNKNOWN_KEY = '__unknown__';
+
+    for (const nft of nfts) {
+        const collectionName = nft.collection?.name || '';
+        const hasFloorPrice = nft.collection?.floor_price_eth && nft.collection.floor_price_eth > 0;
+
+        const isKnown = hasFloorPrice;
+        const key = isKnown ? collectionName : UNKNOWN_KEY;
+
+        if (!collections[key]) {
+            collections[key] = {
+                name: isKnown ? collectionName : 'Other NFTs (No Floor Price)',
+                floor_price_eth: isKnown ? (nft.collection?.floor_price_eth || 0) : 0,
+                verified: isKnown ? (nft.collection?.verified || false) : false,
+                isUnknown: !isKnown,
+                nfts: []
+            };
+        }
+        collections[key].nfts.push(nft);
+    }
+
+    let html = '';
+
+    // Sort collections by value, with unknown at the end
+    const sortedCollections = Object.entries(collections).sort((a, b) => {
+        if (a[0] === UNKNOWN_KEY) return 1;
+        if (b[0] === UNKNOWN_KEY) return -1;
+
+        const valueA = (a[1].floor_price_eth || 0) * a[1].nfts.length;
+        const valueB = (b[1].floor_price_eth || 0) * b[1].nfts.length;
+        return valueB - valueA;
+    }).map(([_, v]) => v);
+
+    for (const collection of sortedCollections) {
+        const collectionValueEth = (collection.floor_price_eth || 0) * collection.nfts.length;
+        const collectionValueUsd = collectionValueEth * (ethPrice || 0);
+
+        // Collections are collapsed by default
+        html += `
+            <div class="nft-collection arbitrum collapsed">
+                <div class="nft-collection-header" onclick="toggleNftCollection(this)">
+                    <span class="collapse-indicator">▶</span>
+                    <div class="collection-info">
+                        <span class="collection-name">
+                            ${blurValue(collection.name)}
+                            ${collection.verified ? '<span class="verified-badge" title="Verified Collection">✓</span>' : ''}
+                        </span>
+                        <span class="collection-count">${collection.nfts.length} NFT${collection.nfts.length !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div class="collection-value">
+                        ${collectionValueUsd > 0 ? formatUSDBlur(collectionValueUsd) : '<span class="no-value">No floor price</span>'}
+                    </div>
+                </div>
+                <div class="nft-items">
+        `;
+
+        for (const nft of collection.nfts) {
+            const floorPriceUsd = (nft.collection?.floor_price_eth || 0) * (ethPrice || 0);
+
+            html += `
+                <div class="nft-item">
+                    <div class="nft-info">
+                        <a href="${nft.links?.opensea || '#'}" target="_blank" rel="noopener" class="nft-link" title="View on OpenSea">
+                            <span class="nft-link-icon opensea">OS</span>
+                        </a>
+                        <a href="${nft.links?.arbiscan || '#'}" target="_blank" rel="noopener" class="nft-link" title="View on Arbiscan">
+                            <span class="nft-link-icon arbiscan">AS</span>
+                        </a>
+                        <span class="nft-name">${nft.name || 'Unnamed NFT'}</span>
+                    </div>
+                    <div class="nft-price">
+                        ${floorPriceUsd > 0 ? `
+                            <span class="price-value">${formatUSDBlur(floorPriceUsd)}</span>
+                            <span class="price-source">(floor)</span>
+                        ` : '<span class="price-value no-price">--</span>'}
+                    </div>
+                </div>
+            `;
+        }
+
+        html += `
+                </div>
+            </div>
+        `;
+    }
+
+    setSafeHTML(nftsList, html);
+}
+
+// Load Avalanche NFTs
+async function loadAvalancheNFTs() {
+    const nftsList = document.getElementById('nftsList');
+    if (nftsList) {
+        setSafeHTML(nftsList, '<p class="loading-state">Loading Avalanche NFTs...</p>');
+    }
+
+    try {
+        const response = await authFetch(`${API_BASE}/nfts/avalanche`);
+
+        if (!response.ok) {
+            throw new Error('Failed to fetch Avalanche NFTs');
+        }
+
+        const data = await response.json();
+
+        if (!data.configured) {
+            if (nftsList) {
+                setSafeHTML(nftsList, '<p class="empty-state">Alchemy API not configured. <a href="/apis.html" style="color: #667eea;">Configure it in Manage APIs</a> to enable Avalanche NFT support.</p>');
+            }
+            const avalancheStats = document.getElementById('avalancheNftStats');
+            if (avalancheStats) {
+                avalancheStats.textContent = 'Not configured';
+            }
+            return;
+        }
+
+        // Store Avalanche NFT total and count for portfolio calculation
+        nftTotals.avalanche = data.total_value_usd || 0;
+        nftCounts.avalanche = data.total_count || 0;
+
+        // Update Avalanche chain tab stats
+        const avalancheStats = document.getElementById('avalancheNftStats');
+        if (avalancheStats) {
+            setSafeHTML(avalancheStats, `${data.total_count} · ${formatUSDBlur(data.total_value_usd)}`);
+        }
+
+        // Update section summary and summary card counts
+        updateNftSectionSummary();
+        updateSummaryCardNftCounts();
+        updateTotalPortfolioValue();
+
+        renderAvalancheNFTs(data.nfts, data.avax_price);
+
+    } catch (error) {
+        console.error('Error loading Avalanche NFTs:', error);
+        if (nftsList) {
+            setSafeHTML(nftsList, '<p class="empty-state">Error loading Avalanche NFTs</p>');
+        }
+    }
+}
+
+// Render Avalanche NFTs
+function renderAvalancheNFTs(nfts, avaxPrice) {
+    const nftsList = document.getElementById('nftsList');
+    if (!nftsList) return;
+
+    if (!nfts || nfts.length === 0) {
+        setSafeHTML(nftsList, '<p class="empty-state">No Avalanche NFTs found</p>');
+        return;
+    }
+
+    // Group NFTs by collection
+    const collections = {};
+    const UNKNOWN_KEY = '__unknown__';
+
+    for (const nft of nfts) {
+        const collectionName = nft.collection?.name || '';
+        const hasFloorPrice = nft.collection?.floor_price_avax && nft.collection.floor_price_avax > 0;
+
+        const isKnown = hasFloorPrice;
+        const key = isKnown ? collectionName : UNKNOWN_KEY;
+
+        if (!collections[key]) {
+            collections[key] = {
+                name: isKnown ? collectionName : 'Other NFTs (No Floor Price)',
+                floor_price_avax: isKnown ? (nft.collection?.floor_price_avax || 0) : 0,
+                verified: isKnown ? (nft.collection?.verified || false) : false,
+                isUnknown: !isKnown,
+                nfts: []
+            };
+        }
+        collections[key].nfts.push(nft);
+    }
+
+    let html = '';
+
+    // Sort collections by value, with unknown at the end
+    const sortedCollections = Object.entries(collections).sort((a, b) => {
+        if (a[0] === UNKNOWN_KEY) return 1;
+        if (b[0] === UNKNOWN_KEY) return -1;
+
+        const valueA = (a[1].floor_price_avax || 0) * a[1].nfts.length;
+        const valueB = (b[1].floor_price_avax || 0) * b[1].nfts.length;
+        return valueB - valueA;
+    }).map(([_, v]) => v);
+
+    for (const collection of sortedCollections) {
+        const collectionValueAvax = (collection.floor_price_avax || 0) * collection.nfts.length;
+        const collectionValueUsd = collectionValueAvax * (avaxPrice || 0);
+
+        // Collections are collapsed by default
+        html += `
+            <div class="nft-collection avalanche collapsed">
+                <div class="nft-collection-header" onclick="toggleNftCollection(this)">
+                    <span class="collapse-indicator">▶</span>
+                    <div class="collection-info">
+                        <span class="collection-name">
+                            ${blurValue(collection.name)}
+                            ${collection.verified ? '<span class="verified-badge" title="Verified Collection">✓</span>' : ''}
+                        </span>
+                        <span class="collection-count">${collection.nfts.length} NFT${collection.nfts.length !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div class="collection-value">
+                        ${collectionValueUsd > 0 ? formatUSDBlur(collectionValueUsd) : '<span class="no-value">No floor price</span>'}
+                    </div>
+                </div>
+                <div class="nft-items">
+        `;
+
+        for (const nft of collection.nfts) {
+            const floorPriceUsd = (nft.collection?.floor_price_avax || 0) * (avaxPrice || 0);
+
+            html += `
+                <div class="nft-item">
+                    <div class="nft-info">
+                        <a href="${nft.links?.opensea || '#'}" target="_blank" rel="noopener" class="nft-link" title="View on OpenSea">
+                            <span class="nft-link-icon opensea">OS</span>
+                        </a>
+                        <a href="${nft.links?.snowtrace || '#'}" target="_blank" rel="noopener" class="nft-link" title="View on Snowtrace">
+                            <span class="nft-link-icon snowtrace">ST</span>
+                        </a>
+                        <span class="nft-name">${nft.name || 'Unnamed NFT'}</span>
+                    </div>
+                    <div class="nft-price">
+                        ${floorPriceUsd > 0 ? `
+                            <span class="price-value">${formatUSDBlur(floorPriceUsd)}</span>
+                            <span class="price-source">(floor)</span>
+                        ` : '<span class="price-value no-price">--</span>'}
+                    </div>
+                </div>
+            `;
+        }
+
+        html += `
+                </div>
+            </div>
+        `;
+    }
+
+    setSafeHTML(nftsList, html);
+}
+
 // Load NFT summaries for all chains (for combined totals on page load)
 async function loadAllNftSummaries() {
     try {
@@ -5471,6 +6211,59 @@ async function loadAllNftSummaries() {
                     baseStats.textContent = 'Not configured';
                 }
             }
+            if (data.chains.algorand) {
+                nftTotals.algorand = data.chains.algorand.total_value_usd || 0;
+                nftCounts.algorand = data.chains.algorand.total_count || 0;
+                const algorandStats = document.getElementById('algorandNftStats');
+                if (algorandStats) {
+                    setSafeHTML(algorandStats, `${data.chains.algorand.total_count || 0} · ${formatUSDBlur(data.chains.algorand.total_value_usd || 0)}`);
+                }
+            }
+            if (data.chains.bsc && data.chains.bsc.configured) {
+                nftTotals.bsc = data.chains.bsc.total_value_usd || 0;
+                nftCounts.bsc = data.chains.bsc.total_count || 0;
+                const bscStats = document.getElementById('bscNftStats');
+                if (bscStats) {
+                    setSafeHTML(bscStats, `${data.chains.bsc.total_count || 0} · ${formatUSDBlur(data.chains.bsc.total_value_usd || 0)}`);
+                }
+            } else {
+                nftTotals.bsc = 0;
+                nftCounts.bsc = 0;
+                const bscStats = document.getElementById('bscNftStats');
+                if (bscStats) {
+                    bscStats.textContent = 'Not configured';
+                }
+            }
+            if (data.chains.arbitrum && data.chains.arbitrum.configured) {
+                nftTotals.arbitrum = data.chains.arbitrum.total_value_usd || 0;
+                nftCounts.arbitrum = data.chains.arbitrum.total_count || 0;
+                const arbitrumStats = document.getElementById('arbitrumNftStats');
+                if (arbitrumStats) {
+                    setSafeHTML(arbitrumStats, `${data.chains.arbitrum.total_count || 0} · ${formatUSDBlur(data.chains.arbitrum.total_value_usd || 0)}`);
+                }
+            } else {
+                nftTotals.arbitrum = 0;
+                nftCounts.arbitrum = 0;
+                const arbitrumStats = document.getElementById('arbitrumNftStats');
+                if (arbitrumStats) {
+                    arbitrumStats.textContent = 'Not configured';
+                }
+            }
+            if (data.chains.avalanche && data.chains.avalanche.configured) {
+                nftTotals.avalanche = data.chains.avalanche.total_value_usd || 0;
+                nftCounts.avalanche = data.chains.avalanche.total_count || 0;
+                const avalancheStats = document.getElementById('avalancheNftStats');
+                if (avalancheStats) {
+                    setSafeHTML(avalancheStats, `${data.chains.avalanche.total_count || 0} · ${formatUSDBlur(data.chains.avalanche.total_value_usd || 0)}`);
+                }
+            } else {
+                nftTotals.avalanche = 0;
+                nftCounts.avalanche = 0;
+                const avalancheStats = document.getElementById('avalancheNftStats');
+                if (avalancheStats) {
+                    avalancheStats.textContent = 'Not configured';
+                }
+            }
         }
 
         // Update section summary and summary card counts
@@ -5519,11 +6312,14 @@ async function globalRefreshAll() {
 
         await Promise.all(refreshPromises);
 
-        // Also refresh Ethereum, Solana, Polygon, and Base NFTs
+        // Also refresh Ethereum, Solana, Polygon, Base, BSC, Arbitrum, and Avalanche NFTs
         authFetch(`${API_BASE}/nfts/ethereum?force_refresh=true`).catch(() => null);
         authFetch(`${API_BASE}/nfts/solana?force_refresh=true`).catch(() => null);
         authFetch(`${API_BASE}/nfts/polygon?force_refresh=true`).catch(() => null);
         authFetch(`${API_BASE}/nfts/base?force_refresh=true`).catch(() => null);
+        authFetch(`${API_BASE}/nfts/bsc?force_refresh=true`).catch(() => null);
+        authFetch(`${API_BASE}/nfts/arbitrum?force_refresh=true`).catch(() => null);
+        authFetch(`${API_BASE}/nfts/avalanche?force_refresh=true`).catch(() => null);
 
         // Reload all UI components (force refresh for global refresh)
         await loadPortfolioSummary();
@@ -5547,6 +6343,14 @@ async function globalRefreshAll() {
             loadPolygonNFTs();
         } else if (currentNFTChain === 'base') {
             loadBaseNFTs();
+        } else if (currentNFTChain === 'algorand') {
+            loadAlgorandNFTs();
+        } else if (currentNFTChain === 'bsc') {
+            loadBscNFTs();
+        } else if (currentNFTChain === 'arbitrum') {
+            loadArbitrumNFTs();
+        } else if (currentNFTChain === 'avalanche') {
+            loadAvalancheNFTs();
         }
 
         // Refresh portfolio card stats (fire-and-forget)
@@ -7829,17 +8633,6 @@ function selectBreakdownSegment(index) {
     const items = window.breakdownLegendItems;
     if (!items || !items[index]) return;
 
-    const item = items[index];
-    const selectionInfo = document.getElementById('breakdownSelectionInfo');
-
-    // Update selection info
-    selectionInfo.innerHTML = `
-        <div class="selection-name">${item.symbol} - ${item.name}</div>
-        <div class="selection-value">${formatUSD(item.value_usd)}</div>
-        <div class="selection-percentage">${item.percentage.toFixed(2)}% of total holdings</div>
-    `;
-    selectionInfo.classList.add('visible');
-
     // Highlight selected legend item
     document.querySelectorAll('.breakdown-legend-item-compact').forEach((el, i) => {
         if (i === index) {
@@ -7875,13 +8668,6 @@ function generateColorForToken(index) {
 
 function closeAssetBreakdownModal() {
     document.getElementById('assetBreakdownModal').classList.add('hidden');
-
-    // Clear selection info
-    const selectionInfo = document.getElementById('breakdownSelectionInfo');
-    if (selectionInfo) {
-        selectionInfo.classList.remove('visible');
-        selectionInfo.innerHTML = '';
-    }
 
     // Clear selected legend items
     document.querySelectorAll('.breakdown-legend-item-compact').forEach(el => {

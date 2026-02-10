@@ -33,6 +33,9 @@ logger = logging.getLogger(__name__)
 ETHERSCAN_BASE_URL = "https://api.etherscan.io/api"
 BASESCAN_BASE_URL = "https://api.basescan.org/api"
 POLYGONSCAN_BASE_URL = "https://api.polygonscan.com/api"
+BSCSCAN_BASE_URL = "https://api.bscscan.com/api"
+ARBISCAN_BASE_URL = "https://api.arbiscan.io/api"
+SNOWSCAN_BASE_URL = "https://api.snowscan.xyz/api"
 
 # Cache settings
 ETHERSCAN_CACHE_TTL = 300  # 5 minutes for transaction data
@@ -60,6 +63,24 @@ class EtherscanService(APIKeyManager):
             'chain_id': 137,
             'native_symbol': 'MATIC',
             'explorer_name': 'Polygonscan'
+        },
+        'bsc': {
+            'base_url': BSCSCAN_BASE_URL,
+            'chain_id': 56,
+            'native_symbol': 'BNB',
+            'explorer_name': 'BscScan'
+        },
+        'arbitrum': {
+            'base_url': ARBISCAN_BASE_URL,
+            'chain_id': 42161,
+            'native_symbol': 'ETH',
+            'explorer_name': 'Arbiscan'
+        },
+        'avalanche': {
+            'base_url': SNOWSCAN_BASE_URL,
+            'chain_id': 43114,
+            'native_symbol': 'AVAX',
+            'explorer_name': 'Snowscan'
         }
     }
 
