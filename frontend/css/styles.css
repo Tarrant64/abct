@@ -1723,10 +1723,10 @@ header h1 {
 .waffle-menu-theme { display: none; }
 .waffle-menu-container { display: none; }
 
-/* Hide old header elements */
+/* Hide old header elements (scoped to header tag only, not page content) */
 header h1 { display: none; }
-.header-actions > .btn { display: none; }
-.header-actions { display: none; }
+header .header-actions > .btn { display: none; }
+header .header-actions { display: none; }
 
 /* Header becomes a flex container for nav + avatar */
 header {
