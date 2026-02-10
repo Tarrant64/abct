@@ -8062,7 +8062,8 @@ function renderPortfolioHeatmap() {
 
     // Calculate layout using squarified treemap
     const containerWidth = container.clientWidth || 800;
-    const totalHeight = 280;
+    // Use generous height to fill the slide area
+    const totalHeight = 480;
 
     // Allocate width per chain group — ensure minimum readable width
     const chainLayouts = [];
@@ -8122,10 +8123,14 @@ function renderPortfolioHeatmap() {
             // Size text based on tile area
             const area = tile.w * tile.h;
             let symbolSize, changeSize, valueSize;
-            if (area > 8000) {
-                symbolSize = '1rem'; changeSize = '0.8rem'; valueSize = '0.7rem';
+            if (area > 40000) {
+                symbolSize = '1.8rem'; changeSize = '1.2rem'; valueSize = '1rem';
+            } else if (area > 20000) {
+                symbolSize = '1.4rem'; changeSize = '1rem'; valueSize = '0.85rem';
+            } else if (area > 8000) {
+                symbolSize = '1.1rem'; changeSize = '0.85rem'; valueSize = '0.75rem';
             } else if (area > 3000) {
-                symbolSize = '0.85rem'; changeSize = '0.7rem'; valueSize = '0.65rem';
+                symbolSize = '0.9rem'; changeSize = '0.75rem'; valueSize = '0.65rem';
             } else if (area > 1000) {
                 symbolSize = '0.75rem'; changeSize = '0.6rem'; valueSize = '0';
             } else {
