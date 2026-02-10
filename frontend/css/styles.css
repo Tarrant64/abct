@@ -3031,6 +3031,9 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
 
 .heatmap-slide-inner {
     padding: 20px;
+    display: flex;
+    flex-direction: column;
+    min-height: 500px;
 }
 
 .heatmap-slide-header {
@@ -3070,7 +3073,8 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     flex-wrap: nowrap;
     gap: 3px;
     width: 100%;
-    min-height: 200px;
+    flex: 1;
+    min-height: 400px;
     overflow-x: auto;
 }
 
