@@ -2784,12 +2784,13 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
 /* Portfolio Card Two-Column Layout */
 .portfolio-card-body {
     display: flex;
-    gap: 24px;
-    align-items: flex-start;
+    align-items: center;
+    justify-content: space-evenly;
+    gap: 12px;
 }
 
 .portfolio-card-left {
-    flex: 1;
+    flex: 0 1 auto;
     text-align: left;
     min-width: 0;
 }
@@ -2801,7 +2802,7 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     gap: 12px;
     align-items: flex-end;
     text-align: right;
-    padding-left: 24px;
+    padding-left: 16px;
     border-left: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -2812,7 +2813,7 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     gap: 12px;
     align-items: flex-end;
     text-align: right;
-    padding-left: 24px;
+    padding-left: 16px;
     border-left: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -2859,6 +2860,89 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
 .holding-change.positive { color: #00d26a; }
 .holding-change.negative { color: #ff4757; }
 
+/* Global Market Stat */
+.global-market-stat {
+    margin-top: 10px;
+    font-size: 0.78rem;
+    color: var(--text-secondary, #999);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.global-market-stat .global-mcap-label {
+    color: var(--text-secondary, #888);
+}
+
+.global-market-stat .global-mcap-value {
+    font-weight: 600;
+    color: var(--text-primary, #e0e0e0);
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+}
+
+.global-market-stat .global-mcap-change {
+    font-size: 0.75rem;
+}
+
+.global-market-stat .global-mcap-change.positive { color: #00d26a; }
+.global-market-stat .global-mcap-change.negative { color: #ff4757; }
+
+[data-theme="light"] .global-market-stat .global-mcap-value {
+    color: #1f2937;
+}
+
+[data-theme="light"] .global-market-stat .global-mcap-label {
+    color: #6b7280;
+}
+
+/* Portfolio Donut Chart */
+.portfolio-donut-container {
+    position: relative;
+    flex: 0 0 220px;
+    width: 220px;
+    height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.donut-center-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: none;
+    width: 125px;
+}
+
+.donut-center-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary, #999);
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.donut-center-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary, #e0e0e0);
+    white-space: nowrap;
+}
+
+.donut-center-sub {
+    font-size: 0.7rem;
+    color: var(--text-secondary, #999);
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 /* Portfolio Stats (right column) */
 .portfolio-stat .stat-label {
     font-size: 0.7rem;
@@ -2902,6 +2986,13 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
         justify-content: center;
     }
 
+    .portfolio-donut-container {
+        flex: 0 0 180px;
+        width: 180px;
+        height: 180px;
+        margin: 0 auto;
+    }
+
     .portfolio-card-right {
         flex-direction: row;
         align-items: center;
@@ -2932,6 +3023,158 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
         width: 1px;
         height: 40px;
     }
+}
+
+/* ============================================ */
+/* Portfolio Heatmap                            */
+/* ============================================ */
+
+.heatmap-slide-inner {
+    padding: 20px;
+}
+
+.heatmap-slide-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.heatmap-slide-header .analytics-title {
+    margin: 0;
+}
+
+.heatmap-legend {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.7rem;
+    color: var(--text-secondary, #999);
+}
+
+.heatmap-legend-item {
+    display: inline-block;
+    width: 16px;
+    height: 10px;
+    border-radius: 2px;
+}
+
+.heatmap-legend-item.neg-heavy { background: var(--accent-error, #ff6b6b); }
+.heatmap-legend-item.neg-light { background: color-mix(in srgb, var(--accent-error, #ff6b6b) 50%, var(--bg-secondary, #16213e)); }
+.heatmap-legend-item.neutral   { background: var(--bg-secondary, #16213e); border: 1px solid var(--border-color, #2a2a4a); }
+.heatmap-legend-item.pos-light { background: color-mix(in srgb, var(--accent-success, #00d26a) 50%, var(--bg-secondary, #16213e)); }
+.heatmap-legend-item.pos-heavy { background: var(--accent-success, #00d26a); }
+
+.heatmap-container {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 3px;
+    width: 100%;
+    min-height: 200px;
+    overflow-x: auto;
+}
+
+.heatmap-chain-group {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.heatmap-chain-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: rgba(255, 255, 255, 0.6);
+    padding: 2px 6px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 3px 3px 0 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.heatmap-chain-tiles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    flex: 1;
+}
+
+.heatmap-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    padding: 4px;
+    overflow: hidden;
+    cursor: default;
+    transition: filter 0.15s ease, transform 0.15s ease;
+    position: relative;
+    min-width: 0;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.heatmap-tile:hover {
+    filter: brightness(1.2);
+    transform: scale(1.02);
+    z-index: 2;
+}
+
+.heatmap-tile .tile-symbol {
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    line-height: 1.2;
+}
+
+.heatmap-tile .tile-change {
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    white-space: nowrap;
+    line-height: 1.2;
+}
+
+.heatmap-tile .tile-value {
+    color: rgba(255, 255, 255, 0.7);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    white-space: nowrap;
+    line-height: 1.2;
+}
+
+/* Light theme heatmap overrides */
+[data-theme="light"] .heatmap-chain-label {
+    color: rgba(0, 0, 0, 0.6);
+    background: rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .heatmap-tile .tile-symbol {
+    color: #1a1a2e;
+    text-shadow: none;
+}
+
+[data-theme="light"] .heatmap-tile .tile-change {
+    color: rgba(26, 26, 46, 0.85);
+    text-shadow: none;
+}
+
+[data-theme="light"] .heatmap-tile .tile-value {
+    color: rgba(26, 26, 46, 0.65);
+    text-shadow: none;
+}
+
+[data-theme="light"] .heatmap-tile {
+    border-color: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .heatmap-legend-item.neutral {
+    background: #e5e7eb;
 }
 
 /* Total Portfolio Loading Spinner */
@@ -2966,9 +3209,12 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
 /* Analytics Slider Container */
 .analytics-slider-container {
     position: relative;
-    overflow: hidden;
     margin-top: 20px;
     padding-bottom: 15px;
+}
+
+.analytics-slider-viewport {
+    overflow: hidden;
 }
 
 .analytics-slider {
@@ -2991,9 +3237,8 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    background: rgba(255, 255, 255, 0.15);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: var(--bg-secondary, #16213e);
+    border: 1px solid var(--border-color, #2a2a4a);
     border-radius: 50%;
     width: 40px;
     height: 40px;
@@ -3003,21 +3248,23 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     cursor: pointer;
     z-index: 10;
     transition: all 0.3s ease;
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--text-secondary, #a0a0a0);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .slider-nav:hover {
-    background: rgba(255, 255, 255, 0.25);
-    color: rgba(255, 255, 255, 1);
+    background: var(--accent-success, #00d26a);
+    color: #fff;
+    border-color: var(--accent-success, #00d26a);
     transform: translateY(-50%) scale(1.1);
 }
 
 .slider-nav-left {
-    left: 10px;
+    left: -18px;
 }
 
 .slider-nav-right {
-    right: 10px;
+    right: -18px;
 }
 
 .slider-indicators {
@@ -8092,6 +8339,9 @@ body.privacy-mode .portfolio-card-right .stat-sub {
     user-select: none;
 }
 
+body.privacy-mode .donut-center-value,
+body.privacy-mode .donut-center-sub,
+body.privacy-mode .heatmap-tile .tile-value,
 body.privacy-mode .wallet-balance,
 body.privacy-mode .total-value,
 body.privacy-mode .total-portfolio-card .total-value,
@@ -8483,6 +8733,18 @@ body.privacy-mode a[data-href] {
 [data-theme="light"] .total-portfolio-card .breakdown-item {
     background-color: #f5f7fa;
     border-radius: 24px;
+}
+
+[data-theme="light"] .donut-center-label {
+    color: #6b7280;
+}
+
+[data-theme="light"] .donut-center-value {
+    color: #1f2937;
+}
+
+[data-theme="light"] .donut-center-sub {
+    color: #6b7280;
 }
 
 [data-theme="light"] .portfolio-card-right {

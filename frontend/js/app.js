@@ -37,7 +37,7 @@ let prices = { ADA: 0, BTC: 0, ETH: 0, SOL: 0, MATIC: 0 };
 let displayMode = 'crypto'; // 'crypto' or 'usd'
 
 // Portfolio totals for calculating total value
-let walletTotals = { ADA: 0, BTC: 0, ETH: 0, SOL: 0, MATIC: 0, ETH_BASE: 0 };
+let walletTotals = { ADA: 0, BTC: 0, ETH: 0, SOL: 0, MATIC: 0, ETH_BASE: 0, ALGO: 0 };
 let stakingTotals = {}; // { 'INDY': 1234.56, 'STRIKE': 789.01, etc. }
 let defiTotals = {}; // DeFi tokens held in wallets (governance tokens, stablecoins, etc.)
 let exchangeTotals = { usd: 0 }; // Total USD value from exchanges
@@ -153,31 +153,13 @@ function getNftTotalUsd() {
 
 // Update NFT counts in summary cards
 function updateSummaryCardNftCounts() {
-    const cardanoNftsEl = document.getElementById('cardanoNfts');
-    const ethereumNftsEl = document.getElementById('ethereumNfts');
-    const solanaNftsEl = document.getElementById('solanaNfts');
-    const polygonNftsEl = document.getElementById('polygonNfts');
-    const baseNftsEl = document.getElementById('baseNfts');
-
-    if (cardanoNftsEl) {
-        const count = nftCounts.cardano || 0;
-        cardanoNftsEl.textContent = `${count} NFT${count !== 1 ? 's' : ''}`;
-    }
-    if (ethereumNftsEl) {
-        const count = nftCounts.ethereum || 0;
-        ethereumNftsEl.textContent = `${count} NFT${count !== 1 ? 's' : ''}`;
-    }
-    if (solanaNftsEl) {
-        const count = nftCounts.solana || 0;
-        solanaNftsEl.textContent = `${count} NFT${count !== 1 ? 's' : ''}`;
-    }
-    if (polygonNftsEl) {
-        const count = nftCounts.polygon || 0;
-        polygonNftsEl.textContent = `${count} NFT${count !== 1 ? 's' : ''}`;
-    }
-    if (baseNftsEl) {
-        const count = nftCounts.base || 0;
-        baseNftsEl.textContent = `${count} NFT${count !== 1 ? 's' : ''}`;
+    const chains = ['cardano', 'ethereum', 'solana', 'polygon', 'base'];
+    for (const chain of chains) {
+        const el = document.getElementById(`${chain}DynNfts`);
+        if (el) {
+            const count = nftCounts[chain] || 0;
+            el.textContent = count > 0 ? `${count} NFT${count !== 1 ? 's' : ''}` : '';
+        }
     }
 }
 
@@ -324,39 +306,28 @@ function formatMarketCap(marketCap) {
     return `${value} <span class="mcap-suffix">${suffix}</span>`;
 }
 
-// Update price and 1hr change display in summary cards
+// Update price and 1hr change display in dynamic summary cards
 function updatePriceDisplay() {
-    const tokens = [
-        { symbol: 'ADA', priceEl: 'adaPrice', changeEl: 'adaChange', mcapEl: 'adaMcap' },
-        { symbol: 'BTC', priceEl: 'btcPrice', changeEl: 'btcChange', mcapEl: 'btcMcap' },
-        { symbol: 'ETH', priceEl: 'ethPrice', changeEl: 'ethChange', mcapEl: 'ethMcap' },
-        { symbol: 'SOL', priceEl: 'solPrice', changeEl: 'solChange', mcapEl: 'solMcap' },
-        { symbol: 'MATIC', priceEl: 'maticPrice', changeEl: 'maticChange', mcapEl: 'maticMcap' }
-    ];
+    // Map each chain to its price symbol for lookup in priceData
+    const chainPriceMap = {
+        cardano: 'ADA', bitcoin: 'BTC', ethereum: 'ETH',
+        solana: 'SOL', polygon: 'MATIC', base: 'ETH', algorand: 'ALGO'
+    };
 
-    for (const { symbol, priceEl, changeEl, mcapEl } of tokens) {
-        const priceElement = document.getElementById(priceEl);
-        const changeElement = document.getElementById(changeEl);
-        const mcapElement = document.getElementById(mcapEl);
+    for (const [chain, symbol] of Object.entries(chainPriceMap)) {
+        const priceElement = document.getElementById(`${chain}DynPrice`);
+        const changeElement = document.getElementById(`${chain}DynChange`);
+        const mcapElement = document.getElementById(`${chain}DynMcap`);
         const pd = priceData[symbol];
 
         if (priceElement && pd) {
-            // Format price based on magnitude
-            const price = pd.usd || 0;
-            if (price >= 1000) {
-                priceElement.textContent = `$${price.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-            } else if (price >= 1) {
-                priceElement.textContent = `$${price.toFixed(2)}`;
-            } else {
-                priceElement.textContent = `$${price.toFixed(4)}`;
-            }
+            priceElement.textContent = formatPriceStr(pd.usd || 0);
         }
 
         if (changeElement && pd) {
             const change1h = pd.usd_1h_change || 0;
             const changeText = `${change1h >= 0 ? '+' : ''}${change1h.toFixed(2)}%`;
             changeElement.textContent = changeText;
-            // Static colors regardless of theme: green for positive, red for negative
             changeElement.classList.remove('positive', 'negative');
             changeElement.classList.add(change1h >= 0 ? 'positive' : 'negative');
         }
@@ -366,6 +337,110 @@ function updatePriceDisplay() {
             setSafeHTML(mcapElement, mcap > 0 ? `MCap: ${formatMarketCap(mcap)}` : '');
         }
     }
+}
+
+// Chain config for dynamic blockchain card rendering
+const CHAIN_CONFIG = {
+    cardano:  { name: 'Cardano',  symbol: 'ADA',   logo: 'ADA',  icon: '₳', decimals: 6, priceKey: 'ADA',   balanceKey: 'total_ada',   nativeLabel: 'ADA' },
+    bitcoin:  { name: 'Bitcoin',  symbol: 'BTC',    logo: 'BTC',  icon: '₿', decimals: 8, priceKey: 'BTC',   balanceKey: 'total_btc',   nativeLabel: 'BTC' },
+    ethereum: { name: 'Ethereum', symbol: 'ETH',    logo: 'ETH',  icon: 'Ξ', decimals: 8, priceKey: 'ETH',   balanceKey: 'total_eth',   nativeLabel: 'ETH' },
+    solana:   { name: 'Solana',   symbol: 'SOL',    logo: 'SOL',  icon: '◎', decimals: 9, priceKey: 'SOL',   balanceKey: 'total_sol',   nativeLabel: 'SOL' },
+    polygon:  { name: 'Polygon',  symbol: 'POL',    logo: 'POL',  icon: '⬡', decimals: 6, priceKey: 'MATIC', balanceKey: 'total_matic', nativeLabel: 'POL' },
+    base:     { name: 'Base',     symbol: 'ETH',    logo: 'ETH',  icon: 'Ⓑ', decimals: 8, priceKey: 'ETH',   balanceKey: 'total_eth',   nativeLabel: 'ETH' },
+    algorand: { name: 'Algorand', symbol: 'ALGO',   logo: 'ALGO', icon: 'Ⓐ', decimals: 6, priceKey: 'ALGO',  balanceKey: 'total_algo',  nativeLabel: 'ALGO' },
+};
+
+// Render blockchain cards dynamically, sorted by value, only for chains with wallets
+function renderBlockchainCards(portfolioData) {
+    const container = document.getElementById('blockchainCards');
+    if (!container) return;
+
+    // Build chain data array with USD values
+    const chains = [];
+    for (const [chain, cfg] of Object.entries(CHAIN_CONFIG)) {
+        const chainData = portfolioData[chain];
+        if (!chainData) continue;
+        const walletCount = chainData.wallet_count || 0;
+        if (walletCount === 0) continue;
+
+        const nativeBalance = chainData[cfg.balanceKey] || 0;
+        const price = prices[cfg.priceKey] || 0;
+        const nativeAssetsUsd = chainData.native_assets_value_usd || 0;
+        const totalUsd = nativeBalance * price + nativeAssetsUsd;
+
+        chains.push({ chain, cfg, chainData, nativeBalance, price, totalUsd, walletCount });
+    }
+
+    // Sort by USD value, highest first
+    chains.sort((a, b) => b.totalUsd - a.totalUsd);
+
+    if (chains.length === 0) {
+        setSafeHTML(container, '<div class="empty-state" style="grid-column: 1/-1; text-align: center; padding: 40px;"><p>No wallets configured. Add wallets in <a href="/wallets.html">Manage Wallets</a>.</p></div>');
+        return;
+    }
+
+    // Build cards HTML
+    let html = '';
+    for (const { chain, cfg, chainData, nativeBalance, totalUsd, walletCount } of chains) {
+        const pd = priceData[cfg.priceKey];
+        const priceStr = formatPriceStr(pd?.usd || 0);
+        const change1h = pd?.usd_1h_change || 0;
+        const changeStr = `${change1h >= 0 ? '+' : ''}${change1h.toFixed(2)}%`;
+        const changeClass = change1h >= 0 ? 'positive' : 'negative';
+        const mcapHtml = pd?.market_cap ? `MCap: ${formatMarketCap(pd.market_cap)}` : '';
+
+        // Build details spans
+        let details = `<span>${walletCount} wallet${walletCount !== 1 ? 's' : ''}</span>`;
+        if (chain === 'cardano' && chainData.native_assets_count) {
+            details += `<span>${chainData.native_assets_count} native asset${chainData.native_assets_count !== 1 ? 's' : ''}</span>`;
+        }
+        if (chainData.token_count) {
+            details += `<span>${chainData.token_count} token${chainData.token_count !== 1 ? 's' : ''}</span>`;
+        }
+
+        // NFT count for this chain (if any)
+        const nftCount = nftCounts[chain] || 0;
+        if (nftCount > 0) {
+            details += `<span id="${chain}DynNfts">${nftCount} NFT${nftCount !== 1 ? 's' : ''}</span>`;
+        } else {
+            details += `<span id="${chain}DynNfts"></span>`;
+        }
+
+        html += `
+            <div class="summary-card ${chain} clickable" data-chain="${chain}">
+                <div class="card-header">
+                    <img src="${getLogoKitUrl(cfg.logo, 32)}" alt="${cfg.name}" class="blockchain-logo">
+                    <span>${cfg.name}</span>
+                    <div class="price-info">
+                        <span class="token-price" id="${chain}DynPrice">${priceStr}</span>
+                        <span class="price-change ${changeClass}" id="${chain}DynChange">${changeStr}</span>
+                        <span class="market-cap" id="${chain}DynMcap">${mcapHtml}</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="balance">${formatCryptoBlur(nativeBalance.toFixed(cfg.decimals), cfg.nativeLabel, cfg.decimals)}</div>
+                    <div class="balance-secondary">${formatUSDBlur(totalUsd)}</div>
+                    <div class="details">${details}</div>
+                </div>
+            </div>`;
+    }
+
+    setSafeHTML(container, html);
+
+    // Attach click handlers and image error handlers (DOMPurify strips inline event attributes)
+    container.querySelectorAll('.summary-card[data-chain]').forEach(card => {
+        card.addEventListener('click', () => openAssetBreakdown(card.dataset.chain));
+    });
+    container.querySelectorAll('img.blockchain-logo').forEach(img => {
+        img.addEventListener('error', () => { img.style.display = 'none'; });
+    });
+}
+
+// Format price string for card display
+function formatPriceStr(price) {
+    if (price >= 1000) return `$${price.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+    if (price >= 1) return `$${price.toFixed(2)}`;
+    return `$${price.toFixed(4)}`;
 }
 
 // Update total portfolio value display
@@ -381,7 +456,8 @@ function updateTotalPortfolioValue() {
     const solWalletValue = walletTotals.SOL * (prices.SOL || 0);
     const maticWalletValue = walletTotals.MATIC * (prices.MATIC || 0);
     const baseEthWalletValue = walletTotals.ETH_BASE * (prices.ETH || 0);  // Base uses ETH
-    const walletsTotal = adaWalletValue + btcWalletValue + ethWalletValue + solWalletValue + maticWalletValue + baseEthWalletValue;
+    const algoWalletValue = walletTotals.ALGO * (prices.ALGO || 0);
+    const walletsTotal = adaWalletValue + btcWalletValue + ethWalletValue + solWalletValue + maticWalletValue + baseEthWalletValue + algoWalletValue;
 
     // Calculate staking value — use per-token totals if loaded (assets page), else snapshot USD
     let stakingTotal = 0;
@@ -447,6 +523,181 @@ function updateTotalPortfolioValue() {
 
     // Update top holdings pills
     renderTopHoldings();
+
+    // Store actual total for donut center display
+    lastTotalPortfolioValue = totalValue;
+
+    // Update portfolio donut chart
+    updatePortfolioDonut();
+}
+
+// Portfolio donut chart instance
+let portfolioDonutChart = null;
+let donutSelectedIndex = -1;
+let lastPortfolioData = null; // Stored for donut chart native asset values
+let lastTotalPortfolioValue = 0; // Actual total including staking, exchanges, NFTs
+
+function getChainAllocations() {
+    const allocations = [];
+    const chainMap = {
+        cardano:  { label: 'Cardano',  symbol: 'ADA',  color: '#0033ad', balKey: 'ADA',   priceKey: 'ADA' },
+        bitcoin:  { label: 'Bitcoin',  symbol: 'BTC',  color: '#f7931a', balKey: 'BTC',   priceKey: 'BTC' },
+        ethereum: { label: 'Ethereum', symbol: 'ETH',  color: '#627eea', balKey: 'ETH',   priceKey: 'ETH' },
+        solana:   { label: 'Solana',   symbol: 'SOL',  color: '#9945ff', balKey: 'SOL',   priceKey: 'SOL' },
+        polygon:  { label: 'Polygon',  symbol: 'POL',  color: '#8247e5', balKey: 'MATIC', priceKey: 'MATIC' },
+        base:     { label: 'Base',     symbol: 'ETH',  color: '#0052ff', balKey: 'ETH_BASE', priceKey: 'ETH' },
+        algorand: { label: 'Algorand', symbol: 'ALGO', color: '#00d2c2', balKey: 'ALGO',  priceKey: 'ALGO' },
+    };
+
+    for (const [chain, cfg] of Object.entries(chainMap)) {
+        const balance = walletTotals[cfg.balKey] || 0;
+        const price = prices[cfg.priceKey] || 0;
+        const nativeAssetsUsd = lastPortfolioData?.[chain]?.native_assets_value_usd || 0;
+        const usd = balance * price + nativeAssetsUsd;
+        if (usd > 0) {
+            allocations.push({
+                chain, label: cfg.label, symbol: cfg.symbol,
+                color: cfg.color, usd, balance, priceKey: cfg.priceKey
+            });
+        }
+    }
+
+    // Sort by value descending
+    allocations.sort((a, b) => b.usd - a.usd);
+    return allocations;
+}
+
+function updatePortfolioDonut() {
+    const canvas = document.getElementById('portfolioDonutChart');
+    if (!canvas || typeof Chart === 'undefined') return;
+
+    const allocations = getChainAllocations();
+    const totalUsd = allocations.reduce((s, a) => s + a.usd, 0);
+
+    if (totalUsd === 0) {
+        // Hide donut if no data
+        const container = document.getElementById('portfolioDonutContainer');
+        if (container) container.style.display = 'none';
+        return;
+    }
+
+    // Show container
+    const container = document.getElementById('portfolioDonutContainer');
+    if (container) container.style.display = 'flex';
+
+    const labels = allocations.map(a => a.label);
+    const data = allocations.map(a => a.usd);
+    const colors = allocations.map(a => a.color);
+
+    // Set default center text — use actual portfolio total (includes staking, exchanges, NFTs)
+    const displayTotal = lastTotalPortfolioValue > 0 ? lastTotalPortfolioValue : totalUsd;
+    if (donutSelectedIndex < 0) {
+        setDonutCenterText('Total Balance', formatUSD(displayTotal), '');
+    }
+
+    if (portfolioDonutChart) {
+        // Update existing chart data
+        const ds = portfolioDonutChart.data.datasets[0];
+        portfolioDonutChart.data.labels = labels;
+        ds.data = data;
+        // Only reset colors if no segment is selected
+        if (donutSelectedIndex < 0) {
+            ds.backgroundColor = colors;
+        }
+        portfolioDonutChart.update('none');
+        return;
+    }
+
+    // Create new chart
+    portfolioDonutChart = new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+            labels,
+            datasets: [{
+                data,
+                backgroundColor: colors,
+                borderWidth: 0,
+                borderRadius: 2,
+                spacing: 2,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            cutout: '68%',
+            plugins: {
+                legend: { display: false },
+                tooltip: { enabled: false },
+            },
+            layout: { padding: 4 },
+            animation: { duration: 400, easing: 'easeOutQuart' },
+            onClick: (evt, elements) => {
+                // Recalculate fresh data for current state
+                const currentAllocs = getChainAllocations();
+                const currentAllocTotal = currentAllocs.reduce((s, a) => s + a.usd, 0);
+                const currentDisplayTotal = lastTotalPortfolioValue > 0 ? lastTotalPortfolioValue : currentAllocTotal;
+
+                if (!elements.length) {
+                    donutSelectedIndex = -1;
+                    resetDonutHighlight();
+                    setDonutCenterText('Total Balance', formatUSD(currentDisplayTotal), '');
+                    return;
+                }
+                const idx = elements[0].index;
+                if (donutSelectedIndex === idx) {
+                    donutSelectedIndex = -1;
+                    resetDonutHighlight();
+                    setDonutCenterText('Total Balance', formatUSD(currentDisplayTotal), '');
+                } else {
+                    donutSelectedIndex = idx;
+                    highlightDonutSegment(idx);
+                    const a = currentAllocs[idx];
+                    if (a) {
+                        const pct = ((a.usd / currentDisplayTotal) * 100).toFixed(1) + '%';
+                        setDonutCenterText(a.label, formatUSD(a.usd), pct);
+                    }
+                }
+            },
+            onHover: (evt, elements) => {
+                canvas.style.cursor = elements.length ? 'pointer' : 'default';
+            }
+        }
+    });
+}
+
+function setDonutCenterText(label, value, sub) {
+    const labelEl = document.getElementById('donutCenterLabel');
+    const valueEl = document.getElementById('donutCenterValue');
+    const subEl = document.getElementById('donutCenterSub');
+    if (labelEl) labelEl.textContent = label;
+    if (valueEl) valueEl.textContent = value;
+    if (subEl) subEl.textContent = sub;
+}
+
+function highlightDonutSegment(activeIdx) {
+    if (!portfolioDonutChart) return;
+    const ds = portfolioDonutChart.data.datasets[0];
+    const allocations = getChainAllocations();
+    const newColors = allocations.map((a, i) => {
+        if (i === activeIdx) return a.color;
+        return a.color + '40'; // Dim non-selected segments
+    });
+    const newBorderWidths = allocations.map((_, i) => i === activeIdx ? 3 : 0);
+    const newBorderColors = allocations.map((_, i) => i === activeIdx ? '#ffffff' : 'transparent');
+    ds.backgroundColor = newColors;
+    ds.borderWidth = newBorderWidths;
+    ds.borderColor = newBorderColors;
+    portfolioDonutChart.update('none');
+}
+
+function resetDonutHighlight() {
+    if (!portfolioDonutChart) return;
+    const ds = portfolioDonutChart.data.datasets[0];
+    const allocations = getChainAllocations();
+    ds.backgroundColor = allocations.map(a => a.color);
+    ds.borderWidth = 0;
+    ds.borderColor = 'transparent';
+    portfolioDonutChart.update('none');
 }
 
 // Restore cached portfolio total for instant display on page load (before API calls complete)
@@ -531,6 +782,47 @@ function renderTopHoldings() {
     }).join('');
 
     setSafeHTML(container, pills);
+}
+
+// Load and display global crypto market cap with 24h change
+async function loadGlobalMarketCap() {
+    const container = document.getElementById('globalMarketStat');
+    if (!container) return;
+
+    try {
+        const response = await authFetch(`${API_BASE}/prices/global`);
+        if (!response.ok) throw new Error('API error');
+        const data = await response.json();
+
+        const mcap = data.total_market_cap_usd || 0;
+        const change = data.market_cap_change_percentage_24h || 0;
+
+        if (mcap === 0) {
+            container.innerHTML = '';
+            return;
+        }
+
+        // Format market cap (trillions)
+        let mcapStr;
+        if (mcap >= 1e12) {
+            mcapStr = '$' + (mcap / 1e12).toFixed(2) + 'T';
+        } else if (mcap >= 1e9) {
+            mcapStr = '$' + (mcap / 1e9).toFixed(1) + 'B';
+        } else {
+            mcapStr = '$' + (mcap / 1e6).toFixed(0) + 'M';
+        }
+
+        const changeStr = (change >= 0 ? '+' : '') + change.toFixed(2) + '%';
+        const changeClass = change >= 0 ? 'positive' : 'negative';
+
+        setSafeHTML(container,
+            `<span class="global-mcap-label">Crypto Market Cap</span>` +
+            `<span class="global-mcap-value">${mcapStr}</span>` +
+            `<span class="global-mcap-change ${changeClass}">${changeStr}</span>`
+        );
+    } catch (e) {
+        console.error('[Global] Failed to load market cap:', e);
+    }
 }
 
 // Load 7-day portfolio change from balance history
@@ -987,6 +1279,9 @@ async function loadPortfolioSummary() {
             }
         }
 
+        // Store portfolio data for donut chart
+        lastPortfolioData = data;
+
         // Store wallet totals for portfolio calculation
         walletTotals.ADA = data.cardano.total_ada;
         walletTotals.BTC = data.bitcoin.total_btc;
@@ -994,121 +1289,10 @@ async function loadPortfolioSummary() {
         walletTotals.SOL = data.solana?.total_sol || 0;
         walletTotals.MATIC = data.polygon?.total_matic || 0;
         walletTotals.ETH_BASE = data.base?.total_eth || 0;
+        walletTotals.ALGO = data.algorand?.total_algo || 0;
 
-        // Calculate USD values (native coin + tokens)
-        const adaUsd = data.cardano.total_ada * (prices.ADA || 0) + (data.cardano.native_assets_value_usd || 0);
-        const btcUsd = data.bitcoin.total_btc * (prices.BTC || 0) + (data.bitcoin.native_assets_value_usd || 0);
-        const ethUsd = (data.ethereum?.total_eth || 0) * (prices.ETH || 0) + (data.ethereum?.native_assets_value_usd || 0);
-        const solUsd = (data.solana?.total_sol || 0) * (prices.SOL || 0) + (data.solana?.native_assets_value_usd || 0);
-        const maticUsd = (data.polygon?.total_matic || 0) * (prices.MATIC || 0) + (data.polygon?.native_assets_value_usd || 0);
-        const baseEthUsd = (data.base?.total_eth || 0) * (prices.ETH || 0) + (data.base?.native_assets_value_usd || 0);
-
-        // Update Cardano summary
-        if (adaBalance) {
-            setSafeHTML(adaBalance, formatCryptoBlur(data.cardano.total_ada, 'ADA', 6));
-        }
-        const adaBalanceUsd = document.getElementById('adaBalanceUsd');
-        if (adaBalanceUsd) {
-            setSafeHTML(adaBalanceUsd, formatUSDBlur(adaUsd));
-        }
-        if (cardanoWallets) {
-            cardanoWallets.textContent = `${data.cardano.wallet_count} wallet${data.cardano.wallet_count !== 1 ? 's' : ''}`;
-        }
-        if (cardanoAssets) {
-            cardanoAssets.textContent = `${data.cardano.native_assets_count} native asset${data.cardano.native_assets_count !== 1 ? 's' : ''}`;
-        }
-
-        // Update Bitcoin summary
-        if (btcBalance) {
-            setSafeHTML(btcBalance, formatCryptoBlur(data.bitcoin.total_btc.toFixed(8), 'BTC', 8));
-        }
-        const btcBalanceUsd = document.getElementById('btcBalanceUsd');
-        if (btcBalanceUsd) {
-            setSafeHTML(btcBalanceUsd, formatUSDBlur(btcUsd));
-        }
-        if (bitcoinWallets) {
-            bitcoinWallets.textContent = `${data.bitcoin.wallet_count} wallet${data.bitcoin.wallet_count !== 1 ? 's' : ''}`;
-        }
-        // Update Ethereum summary
-        if (ethBalance) {
-            setSafeHTML(ethBalance, formatCryptoBlur((data.ethereum?.total_eth || 0).toFixed(8), 'ETH', 8));
-        }
-        const ethBalanceUsd = document.getElementById('ethBalanceUsd');
-        if (ethBalanceUsd) {
-            setSafeHTML(ethBalanceUsd, formatUSDBlur(ethUsd));
-        }
-        if (ethereumWallets) {
-            ethereumWallets.textContent = `${data.ethereum?.wallet_count || 0} wallet${(data.ethereum?.wallet_count || 0) !== 1 ? 's' : ''}`;
-        }
-        if (ethereumTokens) {
-            ethereumTokens.textContent = `${data.ethereum?.token_count || 0} token${(data.ethereum?.token_count || 0) !== 1 ? 's' : ''}`;
-        }
-
-        // Update Solana summary
-        const solBalance = document.getElementById('solBalance');
-        if (solBalance) {
-            setSafeHTML(solBalance, formatCryptoBlur((data.solana?.total_sol || 0).toFixed(9), 'SOL', 9));
-        }
-        const solBalanceUsd = document.getElementById('solBalanceUsd');
-        if (solBalanceUsd) {
-            setSafeHTML(solBalanceUsd, formatUSDBlur(solUsd));
-        }
-        const solanaWallets = document.getElementById('solanaWallets');
-        if (solanaWallets) {
-            solanaWallets.textContent = `${data.solana?.wallet_count || 0} wallet${(data.solana?.wallet_count || 0) !== 1 ? 's' : ''}`;
-        }
-        const solanaTokens = document.getElementById('solanaTokens');
-        if (solanaTokens) {
-            solanaTokens.textContent = `${data.solana?.token_count || 0} token${(data.solana?.token_count || 0) !== 1 ? 's' : ''}`;
-        }
-
-        // Update Polygon summary
-        const maticBalance = document.getElementById('maticBalance');
-        if (maticBalance) {
-            setSafeHTML(maticBalance, formatCryptoBlur((data.polygon?.total_matic || 0).toFixed(6), 'POL', 6));
-        }
-        const maticBalanceUsd = document.getElementById('maticBalanceUsd');
-        if (maticBalanceUsd) {
-            setSafeHTML(maticBalanceUsd, formatUSDBlur(maticUsd));
-        }
-        const polygonWallets = document.getElementById('polygonWallets');
-        if (polygonWallets) {
-            polygonWallets.textContent = `${data.polygon?.wallet_count || 0} wallet${(data.polygon?.wallet_count || 0) !== 1 ? 's' : ''}`;
-        }
-        const polygonTokens = document.getElementById('polygonTokens');
-        if (polygonTokens) {
-            polygonTokens.textContent = `${data.polygon?.token_count || 0} token${(data.polygon?.token_count || 0) !== 1 ? 's' : ''}`;
-        }
-
-        // Update Base summary (Base uses ETH as native token)
-        const baseEthBalance = document.getElementById('baseEthBalance');
-        if (baseEthBalance) {
-            setSafeHTML(baseEthBalance, formatCryptoBlur((data.base?.total_eth || 0).toFixed(8), 'ETH', 8));
-        }
-        const baseEthBalanceUsd = document.getElementById('baseEthBalanceUsd');
-        if (baseEthBalanceUsd) {
-            setSafeHTML(baseEthBalanceUsd, formatUSDBlur(baseEthUsd));
-        }
-        // Base uses ETH price - copy from Ethereum card
-        const baseEthPrice = document.getElementById('baseEthPrice');
-        const baseEthChange = document.getElementById('baseEthChange');
-        if (baseEthPrice) {
-            const ethPriceEl = document.getElementById('ethPrice');
-            const ethChangeEl = document.getElementById('ethChange');
-            if (ethPriceEl) baseEthPrice.textContent = ethPriceEl.textContent;
-            if (ethChangeEl) {
-                baseEthChange.textContent = ethChangeEl.textContent;
-                baseEthChange.className = ethChangeEl.className;
-            }
-        }
-        const baseWallets = document.getElementById('baseWallets');
-        if (baseWallets) {
-            baseWallets.textContent = `${data.base?.wallet_count || 0} wallet${(data.base?.wallet_count || 0) !== 1 ? 's' : ''}`;
-        }
-        const baseTokens = document.getElementById('baseTokens');
-        if (baseTokens) {
-            baseTokens.textContent = `${data.base?.token_count || 0} token${(data.base?.token_count || 0) !== 1 ? 's' : ''}`;
-        }
+        // Render blockchain cards dynamically (sorted by value, only chains with wallets)
+        renderBlockchainCards(data);
 
         // Update wallets section summary - overlapping chain icons
         const stakeGroupCount = data.cardano.stake_groups?.length || 0;
@@ -1116,11 +1300,12 @@ async function loadPortfolioSummary() {
         const solWalletCount = data.solana?.wallet_count || 0;
         const polygonWalletCount = data.polygon?.wallet_count || 0;
         const baseWalletCount = data.base?.wallet_count || 0;
+        const algoWalletCount = data.algorand?.wallet_count || 0;
         const walletsSummary = document.getElementById('walletsSummary');
         if (walletsSummary) {
             const chainIconMap = {
                 'Cardano': 'ADA', 'Bitcoin': 'BTC', 'Ethereum': 'ETH',
-                'Solana': 'SOL', 'Polygon': 'POL', 'Base': 'BASE'
+                'Solana': 'SOL', 'Polygon': 'POL', 'Base': 'BASE', 'Algorand': 'ALGO'
             };
             const chains = [];
             if (stakeGroupCount > 0) chains.push({ name: 'Cardano', count: stakeGroupCount, label: `${stakeGroupCount} stake key${stakeGroupCount !== 1 ? 's' : ''}` });
@@ -1129,6 +1314,7 @@ async function loadPortfolioSummary() {
             if (solWalletCount > 0) chains.push({ name: 'Solana', count: solWalletCount, label: `${solWalletCount} wallet${solWalletCount !== 1 ? 's' : ''}` });
             if (polygonWalletCount > 0) chains.push({ name: 'Polygon', count: polygonWalletCount, label: `${polygonWalletCount} wallet${polygonWalletCount !== 1 ? 's' : ''}` });
             if (baseWalletCount > 0) chains.push({ name: 'Base', count: baseWalletCount, label: `${baseWalletCount} wallet${baseWalletCount !== 1 ? 's' : ''}` });
+            if (algoWalletCount > 0) chains.push({ name: 'Algorand', count: algoWalletCount, label: `${algoWalletCount} wallet${algoWalletCount !== 1 ? 's' : ''}` });
 
             const maxVisible = 4;
             let summaryHtml = '<span class="chain-icons-stack">';
@@ -7119,7 +7305,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             loadAllNftSummaries(),
             loadAnalyticsData(true),
             load7DayPortfolioChange(),
-            load7DayTransactionCount()
+            load7DayTransactionCount(),
+            loadGlobalMarketCap()
         ]).then(() => {
             console.log('[Overview] Background data loading complete');
             updateTotalPortfolioValue();
@@ -7771,6 +7958,7 @@ async function loadAnalyticsData(background = false) {
         analyticsData = cached;
         renderCoinAllocationChart();
         renderCategoryAllocationChart();
+        renderPortfolioHeatmap();
     }
 
     // Show refresh indicator if we already have data (refreshing) or if loading fresh
@@ -7787,6 +7975,7 @@ async function loadAnalyticsData(background = false) {
         analyticsData = freshData;
         renderCoinAllocationChart();
         renderCategoryAllocationChart();
+        renderPortfolioHeatmap();
         setRefreshIndicators('done');
     } catch (error) {
         console.error('Error loading analytics data:', error);
@@ -7796,13 +7985,274 @@ async function loadAnalyticsData(background = false) {
     }
 }
 
+// ===========================
+// Portfolio Heatmap (Treemap)
+// ===========================
+
+function getHeatmapColor(change) {
+    // Theme-aware gradient using --accent-success and --accent-error
+    const style = getComputedStyle(document.documentElement);
+    const successHex = style.getPropertyValue('--accent-success').trim() || '#00d26a';
+    const errorHex = style.getPropertyValue('--accent-error').trim() || '#ff6b6b';
+    const bgHex = style.getPropertyValue('--bg-secondary').trim() || '#16213e';
+
+    function hexToRgb(hex) {
+        hex = hex.replace('#', '');
+        return [parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16)];
+    }
+    function lerp(a, b, t) { return Math.round(a + (b - a) * t); }
+
+    const [sr, sg, sb] = hexToRgb(successHex);
+    const [er, eg, eb] = hexToRgb(errorHex);
+    const [nr, ng, nb] = hexToRgb(bgHex); // neutral base
+
+    const clamped = Math.max(-15, Math.min(15, change));
+    const intensity = Math.abs(clamped) / 15;
+
+    if (clamped >= 0) {
+        // Neutral -> accent-success
+        return `rgb(${lerp(nr, sr, intensity)}, ${lerp(ng, sg, intensity)}, ${lerp(nb, sb, intensity)})`;
+    } else {
+        // Neutral -> accent-error
+        return `rgb(${lerp(nr, er, intensity)}, ${lerp(ng, eg, intensity)}, ${lerp(nb, eb, intensity)})`;
+    }
+}
+
+function renderPortfolioHeatmap() {
+    const container = document.getElementById('heatmapContainer');
+    if (!container || !analyticsData) return;
+
+    const coins = analyticsData.coin_allocation || [];
+    // Only tokens with >$10 value
+    const filtered = coins.filter(c => c.value_usd >= 10);
+
+    if (filtered.length === 0) {
+        container.innerHTML = '<div style="text-align:center;color:#888;padding:40px;">No token data available</div>';
+        return;
+    }
+
+    // Group by blockchain
+    const chainNames = {
+        cardano: 'Cardano', bitcoin: 'Bitcoin', ethereum: 'Ethereum',
+        solana: 'Solana', polygon: 'Polygon', base: 'Base', algorand: 'Algorand'
+    };
+    const groups = {};
+    let totalValue = 0;
+
+    for (const coin of filtered) {
+        const chain = coin.blockchain || 'cardano';
+        if (!groups[chain]) groups[chain] = { tokens: [], totalUsd: 0 };
+        // Use backend 24h change if available, else try client priceData
+        let change24h = coin.price_change_24h || 0;
+        if (!change24h && priceData[coin.symbol]) {
+            change24h = priceData[coin.symbol].usd_24h_change || 0;
+        }
+        groups[chain].tokens.push({ ...coin, change24h });
+        groups[chain].totalUsd += coin.value_usd;
+        totalValue += coin.value_usd;
+    }
+
+    // Sort groups by total value, sort tokens within each group
+    const sortedChains = Object.entries(groups)
+        .sort((a, b) => b[1].totalUsd - a[1].totalUsd);
+
+    for (const [, group] of sortedChains) {
+        group.tokens.sort((a, b) => b.value_usd - a.value_usd);
+    }
+
+    // Calculate layout using squarified treemap
+    const containerWidth = container.clientWidth || 800;
+    const totalHeight = 280;
+
+    // Allocate width per chain group — ensure minimum readable width
+    const chainLayouts = [];
+    const gapSize = 3;
+    const numChains = sortedChains.length;
+    const minChainWidth = 100;
+    const availableWidth = containerWidth - (numChains - 1) * gapSize;
+
+    // First pass: give each chain proportional width with minimum
+    let rawWidths = sortedChains.map(([, group]) => {
+        const proportional = Math.floor(availableWidth * (group.totalUsd / totalValue));
+        return Math.max(minChainWidth, proportional);
+    });
+
+    // Scale to fit if total exceeds available width
+    let rawTotal = rawWidths.reduce((s, w) => s + w, 0);
+    if (rawTotal > availableWidth) {
+        const scale = availableWidth / rawTotal;
+        rawWidths = rawWidths.map(w => Math.max(minChainWidth, Math.floor(w * scale)));
+        // If still over (due to min widths), scale down the larger ones only
+        rawTotal = rawWidths.reduce((s, w) => s + w, 0);
+        if (rawTotal > availableWidth) {
+            const excess = rawTotal - availableWidth;
+            const largeChains = rawWidths.filter(w => w > minChainWidth);
+            const largeTotal = largeChains.reduce((s, w) => s + w, 0);
+            rawWidths = rawWidths.map(w => {
+                if (w > minChainWidth) {
+                    return Math.max(minChainWidth, Math.floor(w - excess * (w / largeTotal)));
+                }
+                return w;
+            });
+        }
+    }
+
+    let xOffset = 0;
+    sortedChains.forEach(([chain, group], i) => {
+        chainLayouts.push({ chain, group, x: xOffset, width: rawWidths[i] });
+        xOffset += rawWidths[i] + gapSize;
+    });
+
+    // Build HTML
+    let html = '';
+    for (const { chain, group, x, width } of chainLayouts) {
+        const labelHeight = 18;
+        const tileAreaHeight = totalHeight - labelHeight - 3;
+        const chainLabel = chainNames[chain] || chain;
+
+        // Layout tokens within this chain group using simple row packing
+        const tiles = layoutTreemapTiles(group.tokens, width, tileAreaHeight);
+
+        let tilesHtml = '';
+        for (const tile of tiles) {
+            const bgColor = getHeatmapColor(tile.token.change24h);
+            const changeStr = (tile.token.change24h >= 0 ? '+' : '') + tile.token.change24h.toFixed(2) + '%';
+            const valueStr = formatUSD(tile.token.value_usd);
+
+            // Size text based on tile area
+            const area = tile.w * tile.h;
+            let symbolSize, changeSize, valueSize;
+            if (area > 8000) {
+                symbolSize = '1rem'; changeSize = '0.8rem'; valueSize = '0.7rem';
+            } else if (area > 3000) {
+                symbolSize = '0.85rem'; changeSize = '0.7rem'; valueSize = '0.65rem';
+            } else if (area > 1000) {
+                symbolSize = '0.75rem'; changeSize = '0.6rem'; valueSize = '0';
+            } else {
+                symbolSize = '0.65rem'; changeSize = '0'; valueSize = '0';
+            }
+
+            tilesHtml += `<div class="heatmap-tile" style="` +
+                `position:absolute;left:${tile.x}px;top:${tile.y}px;` +
+                `width:${tile.w}px;height:${tile.h}px;` +
+                `background:${bgColor};" ` +
+                `title="${tile.token.symbol}: ${valueStr} (${changeStr})">` +
+                `<span class="tile-symbol" style="font-size:${symbolSize}">${tile.token.symbol}</span>` +
+                (changeSize !== '0' ? `<span class="tile-change" style="font-size:${changeSize}">${changeStr}</span>` : '') +
+                (valueSize !== '0' ? `<span class="tile-value" style="font-size:${valueSize}">${valueStr}</span>` : '') +
+                `</div>`;
+        }
+
+        html += `<div class="heatmap-chain-group" style="width:${width}px;height:${totalHeight}px;">` +
+            `<div class="heatmap-chain-label">${chainLabel}</div>` +
+            `<div style="position:relative;width:${width}px;height:${tileAreaHeight}px;">` +
+            tilesHtml +
+            `</div></div>`;
+    }
+
+    container.innerHTML = html;
+}
+
+// Squarified treemap layout algorithm
+function layoutTreemapTiles(tokens, width, height) {
+    if (tokens.length === 0) return [];
+
+    const totalValue = tokens.reduce((s, t) => s + t.value_usd, 0);
+    if (totalValue === 0) return [];
+
+    const results = [];
+    const remaining = tokens.map(t => ({
+        token: t,
+        area: (t.value_usd / totalValue) * width * height
+    }));
+
+    squarify(remaining, [], { x: 0, y: 0, w: width, h: height }, results);
+    return results;
+}
+
+function squarify(items, row, rect, results) {
+    if (items.length === 0) {
+        layoutRow(row, rect, results);
+        return;
+    }
+
+    if (row.length === 0) {
+        row.push(items[0]);
+        squarify(items.slice(1), row, rect, results);
+        return;
+    }
+
+    const rowWithNext = [...row, items[0]];
+    if (worstRatio(row, rect) >= worstRatio(rowWithNext, rect)) {
+        squarify(items.slice(1), rowWithNext, rect, results);
+    } else {
+        const newRect = layoutRow(row, rect, results);
+        squarify(items, [], newRect, results);
+    }
+}
+
+function worstRatio(row, rect) {
+    const totalArea = row.reduce((s, r) => s + r.area, 0);
+    const shortSide = Math.min(rect.w, rect.h);
+    if (shortSide === 0 || totalArea === 0) return Infinity;
+
+    let worst = 0;
+    for (const item of row) {
+        const ratio = Math.max(
+            (shortSide * shortSide * item.area) / (totalArea * totalArea),
+            (totalArea * totalArea) / (shortSide * shortSide * item.area)
+        );
+        worst = Math.max(worst, ratio);
+    }
+    return worst;
+}
+
+function layoutRow(row, rect, results) {
+    if (row.length === 0) return rect;
+
+    const totalArea = row.reduce((s, r) => s + r.area, 0);
+    const horizontal = rect.w >= rect.h;
+
+    if (horizontal) {
+        const rowWidth = totalArea / rect.h;
+        let y = rect.y;
+        for (const item of row) {
+            const h = item.area / rowWidth;
+            results.push({
+                token: item.token,
+                x: Math.round(rect.x),
+                y: Math.round(y),
+                w: Math.max(1, Math.round(rowWidth) - 1),
+                h: Math.max(1, Math.round(h) - 1)
+            });
+            y += h;
+        }
+        return { x: rect.x + rowWidth, y: rect.y, w: rect.w - rowWidth, h: rect.h };
+    } else {
+        const rowHeight = totalArea / rect.w;
+        let x = rect.x;
+        for (const item of row) {
+            const w = item.area / rowHeight;
+            results.push({
+                token: item.token,
+                x: Math.round(x),
+                y: Math.round(rect.y),
+                w: Math.max(1, Math.round(w) - 1),
+                h: Math.max(1, Math.round(rowHeight) - 1)
+            });
+            x += w;
+        }
+        return { x: rect.x, y: rect.y + rowHeight, w: rect.w, h: rect.h - rowHeight };
+    }
+}
+
 function nextAnalyticsSlide() {
-    currentAnalyticsSlide = (currentAnalyticsSlide + 1) % 4;
+    currentAnalyticsSlide = (currentAnalyticsSlide + 1) % 5;
     updateAnalyticsSlide();
 }
 
 function previousAnalyticsSlide() {
-    currentAnalyticsSlide = (currentAnalyticsSlide - 1 + 4) % 4;
+    currentAnalyticsSlide = (currentAnalyticsSlide - 1 + 5) % 5;
     updateAnalyticsSlide();
 }
 
@@ -7834,8 +8284,8 @@ function updateAnalyticsSlide() {
 
     slider.style.transform = `translateX(-${currentAnalyticsSlide * 100}%)`;
 
-    // Load/refresh analytics data when switching to chart slides
-    if (currentAnalyticsSlide > 0 && currentAnalyticsSlide < 3) {
+    // Load/refresh analytics data when switching to chart or heatmap slides
+    if (currentAnalyticsSlide > 0 && currentAnalyticsSlide !== 3) {
         if (!analyticsData) {
             loadAnalyticsData();
         }

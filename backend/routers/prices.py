@@ -9,6 +9,7 @@ import sys
 import os
 import httpx
 import logging
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.pricing import pricing_service
@@ -16,6 +17,9 @@ from services.http_client import get_client
 
 router = APIRouter(prefix="/prices", tags=["prices"])
 logger = logging.getLogger(__name__)
+
+# Cache for global market data (5 min TTL)
+_global_market_cache = {"data": None, "timestamp": 0}
 
 
 @router.get("")
@@ -137,6 +141,49 @@ async def search_token(query: str):
     except Exception as e:
         logger.error(f"Error searching for token {query}: {e}")
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+
+
+@router.get("/global")
+async def get_global_market():
+    """Get global crypto market cap and 24h change percentage"""
+    global _global_market_cache
+    now = time.time()
+
+    # Return cache if fresh (5 min)
+    if _global_market_cache["data"] and now - _global_market_cache["timestamp"] < 300:
+        return _global_market_cache["data"]
+
+    try:
+        client = get_client("coingecko", timeout=10.0)
+        response = await client.get("https://api.coingecko.com/api/v3/global")
+
+        if response.status_code == 200:
+            data = response.json().get("data", {})
+            result = {
+                "total_market_cap_usd": data.get("total_market_cap", {}).get("usd", 0),
+                "market_cap_change_percentage_24h": data.get("market_cap_change_percentage_24h_usd", 0),
+                "total_volume_usd": data.get("total_volume", {}).get("usd", 0),
+                "btc_dominance": data.get("market_cap_percentage", {}).get("btc", 0),
+                "active_cryptocurrencies": data.get("active_cryptocurrencies", 0),
+                "source": "CoinGecko"
+            }
+            _global_market_cache = {"data": result, "timestamp": now}
+            return result
+        elif response.status_code == 429:
+            logger.warning("CoinGecko rate limited on /global")
+            if _global_market_cache["data"]:
+                return _global_market_cache["data"]
+            return {"error": "Rate limited", "total_market_cap_usd": 0}
+        else:
+            logger.error(f"CoinGecko /global failed: {response.status_code}")
+            if _global_market_cache["data"]:
+                return _global_market_cache["data"]
+            return {"error": "API error", "total_market_cap_usd": 0}
+    except Exception as e:
+        logger.error(f"Error fetching global market data: {e}")
+        if _global_market_cache["data"]:
+            return _global_market_cache["data"]
+        return {"error": str(e), "total_market_cap_usd": 0}
 
 
 @router.get("/{symbol}")
