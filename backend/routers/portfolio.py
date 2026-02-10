@@ -1403,8 +1403,11 @@ async def get_portfolio_analytics(user_id: int = Depends(verify_session)):
     coin_allocations = []
     total_value = 0
 
+    # Chain symbol to blockchain name mapping
+    chain_symbol_map = {'ADA': 'cardano', 'BTC': 'bitcoin', 'ETH': 'ethereum', 'SOL': 'solana', 'POL': 'polygon', 'ALGO': 'algorand'}
+
     # Add native coins
-    for blockchain in ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon']:
+    for blockchain in ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base', 'algorand']:
         chain_data = summary.get(blockchain, {})
         if blockchain == 'cardano':
             qty = chain_data.get('total_ada', 0)
@@ -1421,10 +1424,17 @@ async def get_portfolio_analytics(user_id: int = Depends(verify_session)):
         elif blockchain == 'polygon':
             qty = chain_data.get('total_matic', 0)
             symbol = 'POL'
+        elif blockchain == 'base':
+            qty = chain_data.get('total_eth', 0)
+            symbol = 'ETH'
+        elif blockchain == 'algorand':
+            qty = chain_data.get('total_algo', 0)
+            symbol = 'ALGO'
         else:
             continue
 
-        price = all_prices.get(symbol, {}).get('usd', 0)
+        price_data = all_prices.get(symbol, {})
+        price = price_data.get('usd', 0)
         value_usd = qty * price
 
         if value_usd > 0:
@@ -1433,8 +1443,10 @@ async def get_portfolio_analytics(user_id: int = Depends(verify_session)):
                 'name': symbol,
                 'quantity': qty,
                 'value_usd': value_usd,
+                'blockchain': blockchain,
                 'category': TOKEN_CATEGORIES.get(symbol, 'Other'),
-                'logo_url': logokit_service.get_crypto_logo_url(symbol, size=64)
+                'logo_url': logokit_service.get_crypto_logo_url(symbol, size=64),
+                'price_change_24h': price_data.get('usd_24h_change', 0),
             })
             total_value += value_usd
 
@@ -1443,13 +1455,17 @@ async def get_portfolio_analytics(user_id: int = Depends(verify_session)):
         value_usd = asset.get('value_usd') or 0
         if value_usd > 0:
             symbol = asset.get('ticker') or asset.get('asset_name', '')[:10]
+            blockchain = asset.get('blockchain', 'cardano')
+            price_data = all_prices.get(symbol, {})
             coin_allocations.append({
                 'symbol': symbol,
                 'name': asset.get('asset_name', symbol),
                 'quantity': asset.get('total_quantity', 0),
                 'value_usd': value_usd,
+                'blockchain': blockchain,
                 'category': TOKEN_CATEGORIES.get(symbol, 'Other'),
-                'logo_url': logokit_service.get_crypto_logo_url(symbol, size=64)
+                'logo_url': logokit_service.get_crypto_logo_url(symbol, size=64),
+                'price_change_24h': price_data.get('usd_24h_change', 0),
             })
             total_value += value_usd
 

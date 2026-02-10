@@ -6,7 +6,7 @@
     <title>A Better Crypto Tracker</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1770647025">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1770691003">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preconnect" href="https://unpkg.com" crossorigin>
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
@@ -15,7 +15,7 @@
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1770647025"></script>
+    <script src="/static/js/session-auth.js?v=1770691003"></script>
 </head>
 <body>
     <div class="container">
@@ -89,6 +89,15 @@
                             <div class="total-value" id="totalPortfolioValue">$0.00</div>
                             <div class="last-updated" id="lastUpdated" style="font-size: 0.75rem; color: #888; margin-top: 5px;"></div>
                             <div class="top-holdings" id="topHoldings"></div>
+                            <div class="global-market-stat" id="globalMarketStat"></div>
+                        </div>
+                        <div class="portfolio-donut-container" id="portfolioDonutContainer">
+                            <canvas id="portfolioDonutChart"></canvas>
+                            <div class="donut-center-text" id="donutCenterText">
+                                <div class="donut-center-label" id="donutCenterLabel"></div>
+                                <div class="donut-center-value" id="donutCenterValue"></div>
+                                <div class="donut-center-sub" id="donutCenterSub"></div>
+                            </div>
                         </div>
                         <div class="portfolio-card-right">
                             <div class="portfolio-stat">
@@ -244,134 +253,13 @@
                         </svg>
                     </button>
 
+                    <div class="analytics-slider-viewport">
                     <div class="analytics-slider">
                         <!-- Slide 1: Blockchain Summary Cards -->
                         <div class="analytics-slide active" data-slide="0">
-                            <div class="summary-cards">
-                                <div class="summary-card cardano clickable" onclick="openAssetBreakdown('cardano')">
-                        <div class="card-header">
-                            <img src="https://img.logokit.com/crypto/ADA?token=pk_fr08287a4c625f400f32a9&size=32" alt="Cardano" class="blockchain-logo" onerror="this.outerHTML='<span class=\'blockchain-icon\'>₳</span>'">
-                            <span>Cardano</span>
-                            <div class="price-info">
-                                <span class="token-price" id="adaPrice">$0.00</span>
-                                <span class="price-change" id="adaChange">0.0%</span>
-                                <span class="market-cap" id="adaMcap"></span>
+                            <div class="summary-cards" id="blockchainCards">
+                                <!-- Dynamically populated by renderBlockchainCards() -->
                             </div>
-                        </div>
-                        <div class="card-body">
-                            <div class="balance" id="adaBalance">0.000000 ADA</div>
-                            <div class="balance-secondary" id="adaBalanceUsd">($0.00)</div>
-                            <div class="details">
-                                <span id="cardanoWallets">0 wallets</span>
-                                <span id="cardanoAssets">0 native assets</span>
-                                <span id="cardanoNfts">0 NFTs</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="summary-card bitcoin clickable" onclick="openAssetBreakdown('bitcoin')">
-                        <div class="card-header">
-                            <img src="https://img.logokit.com/crypto/BTC?token=pk_fr08287a4c625f400f32a9&size=32" alt="Bitcoin" class="blockchain-logo" onerror="this.outerHTML='<span class=\'blockchain-icon\'>₿</span>'">
-                            <span>Bitcoin</span>
-                            <div class="price-info">
-                                <span class="token-price" id="btcPrice">$0.00</span>
-                                <span class="price-change" id="btcChange">0.0%</span>
-                                <span class="market-cap" id="btcMcap"></span>
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <div class="balance" id="btcBalance">0.00000000 BTC</div>
-                            <div class="balance-secondary" id="btcBalanceUsd">($0.00)</div>
-                            <div class="details">
-                                <span id="bitcoinWallets">0 wallets</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="summary-card ethereum clickable" onclick="openAssetBreakdown('ethereum')">
-                        <div class="card-header">
-                            <img src="https://img.logokit.com/crypto/ETH?token=pk_fr08287a4c625f400f32a9&size=32" alt="Ethereum" class="blockchain-logo" onerror="this.outerHTML='<span class=\'blockchain-icon\'>Ξ</span>'">
-                            <span>Ethereum</span>
-                            <div class="price-info">
-                                <span class="token-price" id="ethPrice">$0.00</span>
-                                <span class="price-change" id="ethChange">0.0%</span>
-                                <span class="market-cap" id="ethMcap"></span>
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <div class="balance" id="ethBalance">0.00000000 ETH</div>
-                            <div class="balance-secondary" id="ethBalanceUsd">($0.00)</div>
-                            <div class="details">
-                                <span id="ethereumWallets">0 wallets</span>
-                                <span id="ethereumTokens">0 tokens</span>
-                                <span id="ethereumNfts">0 NFTs</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="summary-card solana clickable" onclick="openAssetBreakdown('solana')">
-                        <div class="card-header">
-                            <img src="https://img.logokit.com/crypto/SOL?token=pk_fr08287a4c625f400f32a9&size=32" alt="Solana" class="blockchain-logo" onerror="this.outerHTML='<span class=\'blockchain-icon\'>◎</span>'">
-                            <span>Solana</span>
-                            <div class="price-info">
-                                <span class="token-price" id="solPrice">$0.00</span>
-                                <span class="price-change" id="solChange">0.0%</span>
-                                <span class="market-cap" id="solMcap"></span>
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <div class="balance" id="solBalance">0.000000000 SOL</div>
-                            <div class="balance-secondary" id="solBalanceUsd">($0.00)</div>
-                            <div class="details">
-                                <span id="solanaWallets">0 wallets</span>
-                                <span id="solanaTokens">0 tokens</span>
-                                <span id="solanaNfts">0 NFTs</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="summary-card polygon clickable" onclick="openAssetBreakdown('polygon')">
-                        <div class="card-header">
-                            <img src="https://img.logokit.com/crypto/POL?token=pk_fr08287a4c625f400f32a9&size=32" alt="Polygon" class="blockchain-logo" onerror="this.outerHTML='<span class=\'blockchain-icon\'>⬡</span>'">
-                            <span>Polygon</span>
-                            <div class="price-info">
-                                <span class="token-price" id="maticPrice">$0.00</span>
-                                <span class="price-change" id="maticChange">0.0%</span>
-                                <span class="market-cap" id="maticMcap"></span>
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <div class="balance" id="maticBalance">0.000000 POL</div>
-                            <div class="balance-secondary" id="maticBalanceUsd">($0.00)</div>
-                            <div class="details">
-                                <span id="polygonWallets">0 wallets</span>
-                                <span id="polygonTokens">0 tokens</span>
-                                <span id="polygonNfts">0 NFTs</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="summary-card base clickable" onclick="openAssetBreakdown('base')">
-                        <div class="card-header">
-                            <img src="https://img.logokit.com/crypto/ETH?token=pk_fr08287a4c625f400f32a9&size=32" alt="Base" class="blockchain-logo" onerror="this.outerHTML='<span class=\'blockchain-icon\'>Ⓑ</span>'">
-                            <span>Base</span>
-                            <div class="price-info">
-                                <span class="token-price" id="baseEthPrice">$0.00</span>
-                                <span class="price-change" id="baseEthChange">0.0%</span>
-                                <span class="market-cap" id="baseEthMcap"></span>
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <div class="balance" id="baseEthBalance">0.00000000 ETH</div>
-                            <div class="balance-secondary" id="baseEthBalanceUsd">($0.00)</div>
-                            <div class="details">
-                                <span id="baseWallets">0 wallets</span>
-                                <span id="baseTokens">0 tokens</span>
-                                <span id="baseNfts">0 NFTs</span>
-                            </div>
-                                </div>
-                            </div>
-                        </div>
                         </div>
 
                         <!-- Slide 2: Coin Allocation Chart -->
@@ -467,6 +355,24 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Slide 5: Portfolio Heatmap -->
+                        <div class="analytics-slide" data-slide="4" id="heatmapSection">
+                            <div class="heatmap-slide-inner">
+                                <div class="heatmap-slide-header">
+                                    <h3 class="analytics-title">Portfolio Heatmap</h3>
+                                    <div class="heatmap-legend">
+                                        <span class="heatmap-legend-item neg-heavy"></span><span>-10%</span>
+                                        <span class="heatmap-legend-item neg-light"></span><span>-5%</span>
+                                        <span class="heatmap-legend-item neutral"></span><span>0%</span>
+                                        <span class="heatmap-legend-item pos-light"></span><span>+5%</span>
+                                        <span class="heatmap-legend-item pos-heavy"></span><span>+10%</span>
+                                    </div>
+                                </div>
+                                <div class="heatmap-container" id="heatmapContainer"></div>
+                            </div>
+                        </div>
+                    </div>
                     </div>
 
                     <button class="slider-nav slider-nav-right" onclick="nextAnalyticsSlide()" aria-label="Next slide">
@@ -481,6 +387,7 @@
                         <button class="slider-indicator" onclick="goToAnalyticsSlide(1)" aria-label="Slide 2"></button>
                         <button class="slider-indicator" onclick="goToAnalyticsSlide(2)" aria-label="Slide 3"></button>
                         <button class="slider-indicator" onclick="goToAnalyticsSlide(3)" aria-label="Slide 4"></button>
+                        <button class="slider-indicator" onclick="goToAnalyticsSlide(4)" aria-label="Slide 5"></button>
                     </div>
                 </div>
             </section>
@@ -584,6 +491,6 @@
         </footer>
     </div>
 
-    <script src="/static/js/app.js?v=1770647025"></script>
+    <script src="/static/js/app.js?v=1770691003"></script>
 </body>
 </html>

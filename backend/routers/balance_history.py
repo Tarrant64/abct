@@ -55,6 +55,7 @@ async def start_collection(
     try:
         from engine.orchestrator import backfill_orchestrator
         from engine.models import BackfillRequest, ChainId, WorkDomain
+        from engine import db as engine_db
 
         if blockchain:
             chains = [ChainId(blockchain)]
@@ -67,9 +68,14 @@ async def start_collection(
         )
 
         backfill_id = await backfill_orchestrator.plan_backfill(user_id, request)
+
+        # Create scheduler run record for manual trigger
+        run_id = await engine_db.create_scheduler_run(user_id, backfill_id, 'manual')
+        backfill_orchestrator.set_run_id(backfill_id, run_id)
+
         await backfill_orchestrator.run_backfill(backfill_id)
 
-        await log_service.info("balance_history", f"Engine backfill started: id={backfill_id}")
+        await log_service.info("balance_history", f"Engine backfill started: id={backfill_id}, run={run_id}")
         return {"status": "started", "job_id": backfill_id}
 
     except Exception as e:
@@ -337,17 +343,53 @@ async def set_schedule(
     await set_user_setting(user_id, 'balance_history_schedule_enabled', '1' if body.enabled else '0')
     await set_user_setting(user_id, 'balance_history_schedule_hours', str(body.interval_hours))
 
-    if body.enabled and body.interval_hours > 0:
-        await balance_history_service.start_scheduler(user_id, body.interval_hours)
-        await log_service.info("balance_history", f"Scheduler started: user={user_id}, interval={body.interval_hours}h")
-        logger.info(f"Balance history scheduler started: user={user_id}, interval={body.interval_hours}h")
-    else:
-        await balance_history_service.stop_scheduler(user_id)
-        await log_service.info("balance_history", f"Scheduler stopped: user={user_id}")
-        logger.info(f"Balance history scheduler stopped: user={user_id}")
+    # Use V2 engine scheduler
+    try:
+        from engine.orchestrator import backfill_orchestrator
+        if body.enabled and body.interval_hours > 0:
+            await backfill_orchestrator.start_auto_collect(user_id, body.interval_hours)
+            await log_service.info("balance_history", f"V2 scheduler started: user={user_id}, interval={body.interval_hours}h")
+            logger.info(f"V2 engine scheduler started: user={user_id}, interval={body.interval_hours}h")
+        else:
+            await backfill_orchestrator.stop_auto_collect(user_id)
+            await log_service.info("balance_history", f"V2 scheduler stopped: user={user_id}")
+            logger.info(f"V2 engine scheduler stopped: user={user_id}")
+    except Exception as e:
+        logger.warning(f"V2 scheduler failed, falling back to V1: {e}")
+        if body.enabled and body.interval_hours > 0:
+            await balance_history_service.start_scheduler(user_id, body.interval_hours)
+        else:
+            await balance_history_service.stop_scheduler(user_id)
 
     return {
         "status": "ok",
         "enabled": body.enabled,
         "interval_hours": body.interval_hours,
     }
+
+
+@router.get("/last-run")
+async def get_last_run(user_id: int = Depends(verify_session)):
+    """Get the most recent collection run info and next scheduled run time."""
+    from datetime import datetime, timedelta
+
+    run = None
+    try:
+        from engine import db as engine_db
+        run = await engine_db.get_latest_scheduler_run(user_id)
+    except Exception as e:
+        logger.debug(f"Failed to get last run: {e}")
+
+    # Calculate next run from schedule settings + last run time
+    next_run = None
+    try:
+        enabled = await get_user_setting(user_id, 'balance_history_schedule_enabled', '0')
+        interval_hours = int(await get_user_setting(user_id, 'balance_history_schedule_hours', '0'))
+        if enabled == '1' and interval_hours > 0 and run and run.get('started_at'):
+            started = datetime.fromisoformat(run['started_at'])
+            next_dt = started + timedelta(hours=interval_hours)
+            next_run = next_dt.isoformat()
+    except Exception:
+        pass
+
+    return {"run": run, "next_run": next_run}
