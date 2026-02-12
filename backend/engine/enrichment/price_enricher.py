@@ -257,7 +257,14 @@ class PriceEnricher:
         return None
 
     async def fetch_historical_prices_batch(self, symbol: str, dates: List[str]) -> Dict[str, float]:
-        """Fetch historical prices for multiple dates. Returns {date: price}."""
+        """Fetch historical prices for multiple dates. Returns {date: price}.
+
+        Strategy (multi-source with caching):
+          1. Check engine_price_history cache first
+          2. CoinGecko /market_chart?days=365 bulk fetch for last year (free tier)
+          3. DefiLlama per-date for any remaining gaps (older dates, etc.)
+          4. All fetched prices are cached in engine_price_history for reuse
+        """
         cg_id = ASSET_TO_COINGECKO.get(symbol)
         if not cg_id:
             return {}
@@ -271,54 +278,102 @@ class PriceEnricher:
             return {}
         price_key = f"{chain}:native"
 
-        # Check engine cache -- only fetch dates we don't have
+        # Step 1: Check engine cache — only fetch dates we don't have
         cached = await engine_db.get_prices(price_key)
         cached_dates = {p['date'] for p in cached}
+        result = {p['date']: p['price_usd'] for p in cached if p['date'] in set(dates)}
         missing_dates = [d for d in dates if d not in cached_dates]
 
-        result = {p['date']: p['price_usd'] for p in cached if p['date'] in set(dates)}
-
         if not missing_dates:
+            logger.info(f"{symbol}: all {len(result)} prices found in cache")
             return result
 
         logger.info(f"Fetching {len(missing_dates)} historical prices for {symbol} ({len(result)} cached)")
 
-        # Fetch missing dates from DefiLlama (one request per date, with delays)
-        batch_to_store = []
-        for i, date in enumerate(sorted(missing_dates)):
-            ts = int(datetime.strptime(date, '%Y-%m-%d').replace(hour=12).timestamp())
-            price = await self._fetch_from_defillama(cg_id, ts)
-            source = "defillama"
+        # Step 2: CoinGecko bulk fetch (free tier: /market_chart?days=365)
+        # This gets daily prices for the last year in a single API call.
+        cg_bulk_count = 0
+        retries = 0
+        while retries < 3:
+            try:
+                client = get_client("coingecko_historical", timeout=60.0)
+                response = await client.get(
+                    f"https://api.coingecko.com/api/v3/coins/{cg_id}/market_chart",
+                    params={'vs_currency': 'usd', 'days': 365}
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    prices_list = data.get('prices', [])
+                    batch_to_store = []
+                    for ts_ms, price in prices_list:
+                        date_str = datetime.utcfromtimestamp(ts_ms / 1000).strftime('%Y-%m-%d')
+                        if price and price > 0 and date_str in set(missing_dates):
+                            result[date_str] = price
+                            batch_to_store.append({
+                                'asset_id': price_key, 'date': date_str,
+                                'price_usd': price, 'source': 'coingecko',
+                            })
+                            cg_bulk_count += 1
+                    if batch_to_store:
+                        await engine_db.upsert_prices_batch(batch_to_store)
+                    logger.info(f"CoinGecko bulk: {cg_bulk_count} prices for {symbol} (from {len(prices_list)} points)")
+                    break
+                elif response.status_code == 429:
+                    retries += 1
+                    logger.warning(f"CoinGecko rate limit for {symbol}, waiting 60s (retry {retries}/3)")
+                    await asyncio.sleep(60)
+                    continue
+                else:
+                    logger.warning(f"CoinGecko market_chart returned {response.status_code} for {symbol}")
+                    break
+            except Exception as e:
+                logger.warning(f"CoinGecko market_chart error for {symbol}: {e}")
+                break
 
-            if not price:
-                price = await self._fetch_from_coingecko_date(cg_id, date)
-                source = "coingecko"
+        # Step 3: DefiLlama per-date for anything still missing
+        still_missing = [d for d in missing_dates if d not in result]
 
-            if price and price > 0:
-                result[date] = price
-                batch_to_store.append({
-                    'asset_id': price_key, 'date': date,
-                    'price_usd': price, 'source': source,
-                })
+        if still_missing:
+            logger.info(f"DefiLlama: fetching {len(still_missing)} remaining {symbol} prices")
+            batch_to_store = []
+            dl_count = 0
+            for i, date in enumerate(sorted(still_missing)):
+                ts = int(datetime.strptime(date, '%Y-%m-%d').replace(hour=12).timestamp())
+                price = await self._fetch_from_defillama(cg_id, ts)
+                source = "defillama"
 
-            # Rate limit: ~2 requests/sec for DefiLlama
-            if (i + 1) % 2 == 0 and i < len(missing_dates) - 1:
-                await asyncio.sleep(1)
+                if not price:
+                    price = await self._fetch_from_coingecko_date(cg_id, date)
+                    source = "coingecko"
 
-            # Periodic batch store every 50 prices
-            if len(batch_to_store) >= 50:
+                if price and price > 0:
+                    result[date] = price
+                    dl_count += 1
+                    batch_to_store.append({
+                        'asset_id': price_key, 'date': date,
+                        'price_usd': price, 'source': source,
+                    })
+
+                # Rate limit: ~2 requests/sec for DefiLlama
+                if (i + 1) % 2 == 0 and i < len(still_missing) - 1:
+                    await asyncio.sleep(1)
+
+                # Periodic batch store every 50 prices
+                if len(batch_to_store) >= 50:
+                    await engine_db.upsert_prices_batch(batch_to_store)
+                    batch_to_store = []
+
+                # Progress logging every 100 dates
+                if (i + 1) % 100 == 0:
+                    logger.info(f"  DefiLlama {symbol}: {i+1}/{len(still_missing)} fetched ({dl_count} prices)")
+
+            if batch_to_store:
                 await engine_db.upsert_prices_batch(batch_to_store)
-                batch_to_store = []
+            logger.info(f"DefiLlama: got {dl_count}/{len(still_missing)} prices for {symbol}")
 
-            # Progress logging every 100 dates
-            if (i + 1) % 100 == 0:
-                logger.info(f"  {symbol}: {i+1}/{len(missing_dates)} prices fetched")
-
-        # Store remaining
-        if batch_to_store:
-            await engine_db.upsert_prices_batch(batch_to_store)
-
-        logger.info(f"Fetched {len(result)} total prices for {symbol}")
+        total_fetched = len(result)
+        logger.info(f"Total prices for {symbol}: {total_fetched}/{len(dates)} "
+                     f"(cache={len(dates)-len(missing_dates)}, CG={cg_bulk_count}, DL={total_fetched-len(dates)+len(missing_dates)-cg_bulk_count})")
         return result
 
     async def fetch_token_prices_batch(self, chain: str, asset_id: str,
