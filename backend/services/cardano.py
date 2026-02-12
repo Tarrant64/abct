@@ -15,6 +15,151 @@ from services.http_client import get_client
 
 logger = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# Local bech32 stake-key derivation (no external dependencies)
+# ---------------------------------------------------------------------------
+# Cardano addr1q (type 0, base address) encodes:
+#   header (1 byte) | payment_credential (28 bytes) | stake_credential (28 bytes)
+# A stake/reward address (stake1...) is:
+#   header (1 byte, 0xe1 for mainnet) | stake_credential (28 bytes)
+# We can extract the stake credential from any valid addr1q address
+# without hitting any API.
+
+_BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+_BECH32_CHARSET_REV = {c: i for i, c in enumerate(_BECH32_CHARSET)}
+_BECH32_GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3]
+
+
+def _bech32_polymod(values):
+    chk = 1
+    for v in values:
+        b = chk >> 25
+        chk = ((chk & 0x1ffffff) << 5) ^ v
+        for i in range(5):
+            chk ^= _BECH32_GEN[i] if ((b >> i) & 1) else 0
+    return chk
+
+
+def _bech32_hrp_expand(hrp):
+    return [ord(x) >> 5 for x in hrp] + [0] + [ord(x) & 31 for x in hrp]
+
+
+def _bech32_verify_checksum(hrp, data):
+    return _bech32_polymod(_bech32_hrp_expand(hrp) + data) == 1
+
+
+def _bech32_decode(bech_str: str, verify: bool = True):
+    """Decode a bech32 string. Returns (hrp, 5-bit data) or (None, None).
+
+    Args:
+        bech_str: The bech32-encoded string
+        verify: If True, verify checksum (strict mode). If False, skip
+                checksum verification (best-effort for mangled addresses).
+    """
+    if bech_str.lower() != bech_str and bech_str.upper() != bech_str:
+        return None, None
+    bech_str = bech_str.lower()
+    pos = bech_str.rfind('1')
+    if pos < 1 or pos + 7 > len(bech_str):
+        return None, None
+    hrp = bech_str[:pos]
+    data_part = bech_str[pos + 1:]
+    if any(c not in _BECH32_CHARSET for c in data_part):
+        return None, None
+    data = [_BECH32_CHARSET_REV[c] for c in data_part]
+    if verify and not _bech32_verify_checksum(hrp, data):
+        return None, None
+    return hrp, data[:-6]  # strip checksum
+
+
+def _bech32_create_checksum(hrp, data):
+    values = _bech32_hrp_expand(hrp) + data
+    polymod = _bech32_polymod(values + [0, 0, 0, 0, 0, 0]) ^ 1
+    return [(polymod >> 5 * (5 - i)) & 31 for i in range(6)]
+
+
+def _bech32_encode(hrp, data):
+    combined = data + _bech32_create_checksum(hrp, data)
+    return hrp + '1' + ''.join(_BECH32_CHARSET[d] for d in combined)
+
+
+def _convert_bits(data, frombits, tobits, pad=True):
+    """General power-of-2 base conversion."""
+    acc = 0
+    bits = 0
+    ret = []
+    maxv = (1 << tobits) - 1
+    for value in data:
+        acc = (acc << frombits) | value
+        bits += frombits
+        while bits >= tobits:
+            bits -= tobits
+            ret.append((acc >> bits) & maxv)
+    if pad:
+        if bits:
+            ret.append((acc << (tobits - bits)) & maxv)
+    elif bits >= frombits or ((acc << (tobits - bits)) & maxv):
+        return None
+    return ret
+
+
+def _derive_stake_key_local(address: str) -> Optional[str]:
+    """Derive the stake key (stake1...) from a Cardano base address (addr1q...).
+
+    Returns None if the address is not a valid base address or can't be decoded.
+    """
+    hrp, data5 = _bech32_decode(address)
+    if hrp is None or data5 is None:
+        # Retry without checksum verification (best-effort for mangled addresses)
+        hrp, data5 = _bech32_decode(address, verify=False)
+        if hrp is None or data5 is None:
+            return None
+
+    # Only mainnet base addresses (addr) supported
+    if hrp != 'addr':
+        return None
+
+    # Convert from 5-bit to 8-bit
+    data8 = _convert_bits(data5, 5, 8, pad=False)
+    if data8 is None or len(data8) < 57:
+        # Base address = 1 header + 28 payment + 28 stake = 57 bytes
+        return None
+
+    header = data8[0]
+    addr_type = (header >> 4) & 0x0f
+    network = header & 0x0f
+
+    # Type 0 = base address (payment key hash + stake key hash)
+    # Type 2 = base address (payment script hash + stake key hash)
+    # Type 3 = base address (payment script hash + stake script hash)
+    # Only types 0-3 contain a stake credential
+    if addr_type > 3:
+        return None  # Enterprise, pointer, or other address — no stake key
+
+    # Extract stake credential (last 28 bytes)
+    stake_credential = data8[29:57]
+    if len(stake_credential) != 28:
+        return None
+
+    # Build reward (stake) address header:
+    # type 14 (0xe) for key hash stake cred, type 15 (0xf) for script stake cred
+    # Types 0,2 have key-hash stake cred; types 1,3 have script-hash stake cred
+    if addr_type in (0, 2):
+        reward_header = (0x0e << 4) | network  # 0xe0 | network = 0xe1 for mainnet
+    else:
+        reward_header = (0x0f << 4) | network  # 0xf0 | network = 0xf1 for mainnet
+
+    reward_bytes = [reward_header] + stake_credential
+
+    # Convert back to 5-bit and bech32 encode with "stake" hrp
+    reward_data5 = _convert_bits(reward_bytes, 8, 5)
+    if reward_data5 is None:
+        return None
+
+    return _bech32_encode('stake', reward_data5)
+
+
 class CardanoService:
     """Service for fetching Cardano wallet data with Blockfrost primary and cexplorer fallback."""
 
@@ -258,7 +403,13 @@ class CardanoService:
             return []
 
     async def get_stake_address(self, address: str) -> Optional[str]:
-        """Get the stake address associated with a payment address."""
+        """Get the stake address associated with a payment address.
+
+        Tries Blockfrost API first, then falls back to local bech32
+        derivation for addr1q base addresses (which encode the stake
+        credential directly in the address bytes).
+        """
+        # Try Blockfrost API first
         try:
             client = get_client("blockfrost", timeout=30.0)
             response = await client.get(
@@ -269,11 +420,18 @@ class CardanoService:
 
             if response.status_code == 200:
                 data = response.json()
-                return data.get('stake_address')
-            return None
+                stake = data.get('stake_address')
+                if stake:
+                    return stake
 
         except Exception as e:
-            logger.error(f"Error getting stake address: {e}")
+            logger.error(f"Error getting stake address from Blockfrost: {e}")
+
+        # Fallback: derive stake key locally from addr1q base addresses
+        try:
+            return _derive_stake_key_local(address)
+        except Exception as e:
+            logger.debug(f"Local stake key derivation failed for {address[:20]}...: {e}")
             return None
 
     async def get_asset_metadata(self, asset_id: str) -> Optional[dict]:

@@ -33,6 +33,14 @@ logger = logging.getLogger(__name__)
 log_service = get_logging_service()
 
 
+def _compute_coverage(data: list) -> dict:
+    """Compute coverage stats from a list of {date, value, chains} points."""
+    if not data:
+        return {'oldest_date': None, 'newest_date': None, 'total_days': 0}
+    dates = [p['date'] for p in data]
+    return {'oldest_date': min(dates), 'newest_date': max(dates), 'total_days': len(dates)}
+
+
 @router.post("/collect")
 async def start_collection(
     user_id: int = Depends(verify_session),
@@ -235,34 +243,72 @@ async def get_history_data(
 
     logger.info(f"Balance history data requested: user={user_id}, range={range}")
 
-    # Try V2 engine first
-    try:
-        from engine import db as engine_db
-        from engine.orchestrator import backfill_orchestrator
-
-        event_count = await engine_db.get_event_count(user_id)
-        if event_count > 0:
-            result = await backfill_orchestrator.get_history_data(user_id, range)
-            if result.get('data'):
-                logger.info(f"Serving history from engine: {len(result['data'])} data points")
-                return result
-    except Exception as e:
-        logger.warning(f"Engine history failed, falling back to V1: {e}")
-
-    # V1 fallback
     range_to_days = {
         '24h': 1, '1w': 7, '1m': 30, '3m': 90,
         '6m': 180, '1y': 365, '2y': 730,
     }
     days = range_to_days.get(range)  # None for 'all' and 'custom'
 
-    result = await balance_history_service.get_aggregated_history(
+    # Collect data from both V2 engine and V1 balance_history table, then merge.
+    # The Data Collectors tab writes to V1, while scheduled backfills write to V2.
+    # Merging ensures the chart reflects data from both sources.
+
+    v2_data = []
+    try:
+        from engine import db as engine_db
+        from engine.orchestrator import backfill_orchestrator
+
+        event_count = await engine_db.get_event_count(user_id)
+        if event_count > 0:
+            v2_result = await backfill_orchestrator.get_history_data(user_id, range)
+            v2_data = v2_result.get('data', [])
+            if v2_data:
+                logger.info(f"Engine returned {len(v2_data)} data points")
+    except Exception as e:
+        logger.warning(f"Engine history failed: {e}")
+
+    v1_result = await balance_history_service.get_aggregated_history(
         user_id=user_id,
         days=days,
         start_date=start_date if range == 'custom' else None,
         end_date=end_date if range == 'custom' else None,
     )
-    return result
+    v1_data = v1_result.get('data', [])
+    if v1_data:
+        logger.info(f"V1 returned {len(v1_data)} data points")
+
+    # If only one source has data, return it directly
+    if not v2_data:
+        return v1_result
+    if not v1_data:
+        return {'data': v2_data, 'coverage': _compute_coverage(v2_data)}
+
+    # Merge: V2 chains take priority; V1 fills in chains V2 doesn't cover
+    v2_chains = set()
+    for point in v2_data:
+        v2_chains.update(point.get('chains', {}).keys())
+
+    v2_by_date = {p['date']: p for p in v2_data}
+    v1_by_date = {p['date']: p for p in v1_data}
+    all_dates = sorted(set(v2_by_date.keys()) | set(v1_by_date.keys()))
+
+    merged = []
+    for date in all_dates:
+        chains = {}
+        # V1 chains that V2 doesn't cover
+        if date in v1_by_date:
+            for chain, val in v1_by_date[date].get('chains', {}).items():
+                if chain not in v2_chains:
+                    chains[chain] = val
+        # V2 chains (always preferred)
+        if date in v2_by_date:
+            for chain, val in v2_by_date[date].get('chains', {}).items():
+                chains[chain] = val
+        total = sum(chains.values())
+        merged.append({'date': date, 'value': total, 'chains': chains})
+
+    logger.info(f"Merged history: {len(merged)} data points (V2 chains: {v2_chains})")
+    return {'data': merged, 'coverage': _compute_coverage(merged)}
 
 
 @router.post("/backfill-prices")
