@@ -169,6 +169,10 @@ class BackfillOrchestrator:
             from database import get_all_wallets
             wallets = await get_all_wallets(user_id=user_id)
 
+            # Filter by wallet_ids if specified
+            if request.wallet_ids:
+                wallets = [w for w in wallets if w.get('id') in request.wallet_ids]
+
             total_subjects = 0
             for wallet in wallets:
                 blockchain = wallet.get('blockchain', '').lower()
