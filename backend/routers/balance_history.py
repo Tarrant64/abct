@@ -45,7 +45,7 @@ def _compute_coverage(data: list) -> dict:
 async def start_collection(
     user_id: int = Depends(verify_session),
     blockchain: str = Query(None, description="Optional chain filter"),
-    max_days: int = Query(1095, description="Max days back to collect"),
+    max_days: int = Query(3650, description="Max days back to collect (default ~10 years = all history)"),
     force: bool = Query(False, description="Force full re-collection, ignoring existing data"),
 ):
     """Start background balance history collection via the V2 engine pipeline.
@@ -105,7 +105,7 @@ async def start_collection(
 async def start_wallet_collection(
     user_id: int = Depends(verify_session),
     wallet_ids: List[int] = Query(..., description="Wallet IDs to collect"),
-    max_days: int = Query(1095),
+    max_days: int = Query(3650),
     force: bool = Query(False),
 ):
     """Start balance history collection for specific wallets."""
