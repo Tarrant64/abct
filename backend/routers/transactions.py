@@ -3,9 +3,10 @@ Transaction History Router - API endpoints for consolidated transaction history
 """
 
 from fastapi import APIRouter, Query, Depends, HTTPException, BackgroundTasks
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 import logging
 import asyncio
+import aiosqlite
 from datetime import datetime
 
 import sys
@@ -105,16 +106,16 @@ async def get_transaction_history(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-async def _background_fetch_task(user_id: int, days: int, blockchain: Optional[str]):
+async def _background_fetch_task(user_id: int, days: int, blockchain: Optional[str], wallet_ids: List[int] = None):
     """Background task to fetch transactions"""
     try:
         background_tasks[user_id]['status'] = 'running'
         background_tasks[user_id]['message'] = 'Fetching transactions from blockchains...'
 
-        logger.info(f"Background fetch started for user {user_id}, days={days}, blockchain={blockchain}")
+        logger.info(f"Background fetch started for user {user_id}, days={days}, blockchain={blockchain}, wallet_ids={wallet_ids}")
 
         counts = await transaction_history_service.fetch_transactions(
-            user_id, days, blockchain
+            user_id, days, blockchain, wallet_ids=wallet_ids
         )
 
         total = sum(counts.values())
@@ -244,6 +245,46 @@ async def refresh_transaction_history(
     except Exception as e:
         logger.error(f"Error refreshing transaction history: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/refresh/wallets")
+async def start_wallet_refresh(
+    background_tasks_runner: BackgroundTasks,
+    user_id: int = Depends(verify_session),
+    wallet_ids: List[int] = Query(..., description="Wallet IDs to fetch"),
+    days: int = Query(30, ge=1, le=100000),
+):
+    """Start background transaction fetch for specific wallets."""
+    if user_id in background_tasks and background_tasks[user_id].get('status') == 'running':
+        return {'success': False, 'message': 'Transaction fetch already in progress', 'task_id': user_id}
+
+    background_tasks[user_id] = {
+        'task_id': user_id,
+        'status': 'starting',
+        'message': 'Starting transaction fetch...',
+        'started_at': datetime.now().isoformat(),
+        'days': days,
+        'wallet_ids': wallet_ids,
+    }
+    background_tasks_runner.add_task(_background_fetch_task, user_id, days, None, wallet_ids)
+    return {'success': True, 'message': 'Transaction fetch started', 'task_id': user_id}
+
+
+@router.get("/last-run")
+async def get_tx_last_run(user_id: int = Depends(verify_session)):
+    """Get the most recent transaction fetch timestamp."""
+    from config import DATABASE_PATH
+    try:
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            cursor = await db.execute(
+                "SELECT MAX(fetched_at) FROM transaction_history WHERE user_id = ?",
+                (user_id,)
+            )
+            row = await cursor.fetchone()
+            last_run = row[0] if row and row[0] else None
+        return {'success': True, 'last_run': last_run}
+    except Exception as e:
+        return {'success': True, 'last_run': None}
 
 
 @router.get("/stats")

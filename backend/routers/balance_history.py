@@ -9,6 +9,7 @@ as the primary data source, with V1 balance_history table as fallback.
 import logging
 import sys
 import os
+from typing import List
 
 from fastapi import APIRouter, Query, Depends
 from pydantic import BaseModel
@@ -90,6 +91,30 @@ async def start_collection(
             force=force,
         )
         return {"status": "started", "job_id": job_id}
+
+
+@router.post("/collect/wallets")
+async def start_wallet_collection(
+    user_id: int = Depends(verify_session),
+    wallet_ids: List[int] = Query(..., description="Wallet IDs to collect"),
+    max_days: int = Query(730),
+    force: bool = Query(False),
+):
+    """Start balance history collection for specific wallets."""
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        return {"status": "completed", "job_id": -1}
+
+    logger.info(f"Balance history collect for wallets requested: user={user_id}, wallets={wallet_ids}")
+    await log_service.info("balance_history", f"Wallet-specific collection requested: user={user_id}, wallets={wallet_ids}")
+
+    job_id = await balance_history_service.collect_history(
+        user_id=user_id,
+        max_days_back=max_days,
+        force=force,
+        wallet_ids=wallet_ids,
+    )
+    return {"status": "started", "job_id": job_id}
 
 
 @router.get("/collect/status")

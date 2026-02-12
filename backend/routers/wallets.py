@@ -22,6 +22,7 @@ from services.algorand import algorand_service
 from services.evm_chain import bsc_service, arbitrum_service, avalanche_service
 from services.tron import tron_service
 from services.logging_service import get_logging_service
+from services.transaction_history import transaction_history_service
 from services.demo_wallet_service import demo_wallet_service
 from services.demo_defi_service import demo_defi_service
 from services.pricing import pricing_service
@@ -881,6 +882,17 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         }
 
 
+async def _trigger_tx_history(user_id: int, wallet_id: int, blockchain: str):
+    """Fire-and-forget transaction history fetch for a newly added wallet."""
+    try:
+        await transaction_history_service.fetch_transactions(
+            user_id, days=30, blockchain=blockchain, wallet_ids=[wallet_id]
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Auto tx-history fetch failed for wallet {wallet_id}: {e}")
+
+
 @router.post("/discover")
 async def discover_related_wallets(data: dict, user_id: int = Depends(verify_session)):
     """
@@ -1229,6 +1241,9 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
             # Also save the original stake address to wallets.txt for reference
             append_to_wallets_file(address, wallet.label)
 
+            # Fire-and-forget tx history fetch for all newly added Cardano addresses
+            asyncio.create_task(transaction_history_service.fetch_transactions(user_id, days=30, blockchain='cardano'))
+
             return {
                 "message": f"Stake address expanded to {added_count} payment address(es)",
                 "stake_address": address,
@@ -1283,6 +1298,9 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
                         print(f"Warning: Failed to refresh balance for {addr[:15]}...: {e}")
                 added_count += 1
 
+            # Fire-and-forget tx history fetch for all newly added Bitcoin addresses
+            asyncio.create_task(transaction_history_service.fetch_transactions(user_id, days=30, blockchain='bitcoin'))
+
             return {
                 "message": f"xpub expanded to {added_count} Bitcoin address(es)",
                 "xpub": xpub_short,
@@ -1306,6 +1324,8 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
                 await _refresh_wallet_balance(saved_wallet)
             except Exception as e:
                 print(f"Warning: Failed to refresh balance for {address}: {e}")
+            # Fire-and-forget tx history fetch for the newly added wallet
+            asyncio.create_task(_trigger_tx_history(user_id, saved_wallet['id'], blockchain))
 
         return {
             "message": "Wallet added",

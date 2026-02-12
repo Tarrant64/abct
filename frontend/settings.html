@@ -6,9 +6,9 @@
     <title>Connectors - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1770726755">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771027200">
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
-    <script src="/static/js/session-auth.js?v=1770726755"></script>
+    <script src="/static/js/session-auth.js?v=1771027200"></script>
     <style>
         .settings-tab-nav { display: flex; gap: 4px; border-bottom: 2px solid var(--border-color, #30363d); margin-bottom: 20px; }
         .settings-tab-btn { background: transparent; border: none; color: var(--text-secondary, #888); padding: 12px 24px; font-size: 0.95rem; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.2s; }
@@ -2580,6 +2580,7 @@
             <button class="settings-tab-btn active" data-tab="apis" onclick="switchSettingsTab('apis')">API Keys</button>
             <button class="settings-tab-btn" data-tab="security" onclick="switchSettingsTab('security')">Security</button>
             <button class="settings-tab-btn" data-tab="backup" onclick="switchSettingsTab('backup')">Backup</button>
+            <button class="settings-tab-btn" data-tab="collectors" onclick="switchSettingsTab('collectors')">Data Collectors</button>
         </div>
 
         <!-- ===== API KEYS TAB ===== -->
@@ -3253,6 +3254,67 @@
         <div id="statusMessages">
             <!-- Dynamic status messages appear here -->
         </div>
+        </div>
+
+        <!-- ===== DATA COLLECTORS TAB ===== -->
+        <div id="collectorsTab" class="settings-tab-content">
+            <div class="section-card collector-section">
+                <h3>Transaction History Collector</h3>
+                <div class="collector-last-run" id="txLastRun">Last run: Loading...</div>
+
+                <div class="wallet-multiselect" id="txWalletSelect">
+                    <button type="button" class="wallet-multiselect-btn" onclick="toggleMultiselect('txWalletSelect')">
+                        <span class="multiselect-label">All wallets</span>
+                        <span>&#9660;</span>
+                    </button>
+                    <div class="wallet-multiselect-dropdown" id="txWalletDropdown">
+                        <div class="wallet-multiselect-item" onclick="toggleSelectAll('txWalletSelect')">
+                            <input type="checkbox" checked class="select-all-checkbox">
+                            <label><strong>Select All</strong></label>
+                        </div>
+                        <div class="wallet-multiselect-divider"></div>
+                        <div class="wallet-list" id="txWalletList">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="collector-form-row">
+                    <div class="collector-form-group">
+                        <label>Days of history</label>
+                        <input type="number" id="txDays" value="30" min="1" max="365" style="width: 80px;">
+                    </div>
+                    <button class="btn btn-primary" id="txRunBtn" onclick="runTxCollector()">Run Collector</button>
+                </div>
+
+                <div class="collector-status" id="txStatus"></div>
+            </div>
+
+            <div class="section-card collector-section">
+                <h3>Portfolio Balance History Collector</h3>
+                <div class="collector-last-run" id="balLastRun">Last run: Loading...</div>
+
+                <div class="wallet-multiselect" id="balWalletSelect">
+                    <button type="button" class="wallet-multiselect-btn" onclick="toggleMultiselect('balWalletSelect')">
+                        <span class="multiselect-label">All wallets</span>
+                        <span>&#9660;</span>
+                    </button>
+                    <div class="wallet-multiselect-dropdown" id="balWalletDropdown">
+                        <div class="wallet-multiselect-item" onclick="toggleSelectAll('balWalletSelect')">
+                            <input type="checkbox" checked class="select-all-checkbox">
+                            <label><strong>Select All</strong></label>
+                        </div>
+                        <div class="wallet-multiselect-divider"></div>
+                        <div class="wallet-list" id="balWalletList">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" id="balRunBtn" onclick="runBalanceCollector()">Run Collector</button>
+
+                <div class="collector-status" id="balStatus"></div>
+            </div>
         </div>
 
     </div>
@@ -5389,7 +5451,324 @@
         }
     </script>
 
-    <script src="/static/js/app.js?v=1770726755"></script>
+    <!-- ===== DATA COLLECTORS STYLES ===== -->
+    <style>
+        .collector-section { margin-bottom: 24px; }
+        .collector-section h3 { margin: 0 0 4px 0; color: var(--text-primary, #eaeaea); }
+        .collector-last-run { color: var(--text-secondary, #888); font-size: 13px; margin-bottom: 16px; }
+        .wallet-multiselect { position: relative; margin-bottom: 16px; }
+        .wallet-multiselect-btn { width: 100%; padding: 10px 14px; background: var(--bg-secondary, #1e1e2e); border: 1px solid var(--border-color, #30363d); border-radius: 8px; color: var(--text-primary, #eaeaea); cursor: pointer; text-align: left; font-size: 14px; display: flex; justify-content: space-between; align-items: center; }
+        .wallet-multiselect-btn:hover { border-color: var(--accent-success, #00d26a); }
+        .wallet-multiselect-dropdown { display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 100; background: var(--bg-secondary, #1e1e2e); border: 1px solid var(--border-color, #30363d); border-radius: 8px; max-height: 300px; overflow-y: auto; margin-top: 4px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+        .wallet-multiselect-dropdown.open { display: block; }
+        .wallet-multiselect-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; transition: background 0.15s; }
+        .wallet-multiselect-item:hover { background: var(--bg-hover, rgba(255,255,255,0.05)); }
+        .wallet-multiselect-item label { cursor: pointer; flex: 1; font-size: 13px; color: var(--text-primary, #eaeaea); }
+        .wallet-multiselect-item .chain-badge { font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(100,126,234,0.2); color: #667eea; text-transform: capitalize; }
+        .wallet-multiselect-divider { border-top: 1px solid var(--border-color, #30363d); margin: 4px 0; }
+        .collector-status { margin-top: 12px; padding: 10px 14px; border-radius: 8px; font-size: 13px; display: none; }
+        .collector-status.visible { display: block; }
+        .collector-status.running { background: rgba(100,126,234,0.1); color: #667eea; }
+        .collector-status.completed { background: rgba(16,185,129,0.1); color: #10b981; }
+        .collector-status.failed { background: rgba(220,53,69,0.1); color: #dc3545; }
+        .collector-form-row { display: flex; gap: 12px; align-items: end; margin-bottom: 16px; }
+        .collector-form-group { display: flex; flex-direction: column; gap: 4px; }
+        .collector-form-group label { font-size: 12px; color: var(--text-secondary, #888); }
+        .collector-form-group input, .collector-form-group select { padding: 8px 12px; background: var(--bg-secondary, #1e1e2e); border: 1px solid var(--border-color, #30363d); border-radius: 6px; color: var(--text-primary, #eaeaea); font-size: 14px; }
+    </style>
+
+    <!-- ===== DATA COLLECTORS SCRIPTS ===== -->
+    <script>
+        let collectorWallets = [];
+
+        async function loadCollectorsTab() {
+            try {
+                // Fetch wallets
+                const walletRes = await authFetch('/wallets');
+                if (walletRes.ok) {
+                    const data = await walletRes.json();
+                    collectorWallets = data.wallets || [];
+                    populateWalletDropdown('txWalletList', 'txWalletSelect');
+                    populateWalletDropdown('balWalletList', 'balWalletSelect');
+                }
+
+                // Fetch tx last run
+                const txRunRes = await authFetch('/transactions/last-run');
+                if (txRunRes.ok) {
+                    const txData = await txRunRes.json();
+                    const txEl = document.getElementById('txLastRun');
+                    if (txData.last_run) {
+                        const d = new Date(txData.last_run);
+                        txEl.textContent = 'Last run: ' + d.toLocaleString();
+                    } else {
+                        txEl.textContent = 'Last run: Never';
+                    }
+                }
+
+                // Fetch balance-history last run
+                const balRunRes = await authFetch('/balance-history/last-run');
+                if (balRunRes.ok) {
+                    const balData = await balRunRes.json();
+                    const balEl = document.getElementById('balLastRun');
+                    if (balData.run && balData.run.started_at) {
+                        const d = new Date(balData.run.started_at);
+                        balEl.textContent = 'Last run: ' + d.toLocaleString();
+                    } else {
+                        balEl.textContent = 'Last run: Never';
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to load collectors tab:', e);
+            }
+        }
+
+        function populateWalletDropdown(listId, selectId) {
+            const list = document.getElementById(listId);
+            if (!list) return;
+            list.innerHTML = '';
+            collectorWallets.forEach(w => {
+                const addrShort = w.address.length > 20
+                    ? w.address.slice(0, 10) + '...' + w.address.slice(-6)
+                    : w.address;
+                const label = w.label ? w.label : addrShort;
+                const item = document.createElement('div');
+                item.className = 'wallet-multiselect-item';
+                item.setAttribute('data-wallet-id', w.id);
+                item.innerHTML = `
+                    <input type="checkbox" checked data-wallet-id="${w.id}">
+                    <label>${label}</label>
+                    <span class="chain-badge">${w.blockchain}</span>
+                `;
+                item.addEventListener('click', function(e) {
+                    if (e.target.tagName !== 'INPUT') {
+                        const cb = item.querySelector('input[type="checkbox"]');
+                        cb.checked = !cb.checked;
+                    }
+                    updateMultiselectLabel(selectId);
+                });
+                list.appendChild(item);
+            });
+        }
+
+        function toggleMultiselect(selectId) {
+            const container = document.getElementById(selectId);
+            const dropdown = container.querySelector('.wallet-multiselect-dropdown');
+            dropdown.classList.toggle('open');
+        }
+
+        function toggleSelectAll(selectId) {
+            const container = document.getElementById(selectId);
+            const selectAllCb = container.querySelector('.select-all-checkbox');
+            const newState = !selectAllCb.checked;
+            selectAllCb.checked = newState;
+            container.querySelectorAll('.wallet-list input[type="checkbox"]').forEach(cb => {
+                cb.checked = newState;
+            });
+            updateMultiselectLabel(selectId);
+        }
+
+        function updateMultiselectLabel(selectId) {
+            const container = document.getElementById(selectId);
+            const allCbs = container.querySelectorAll('.wallet-list input[type="checkbox"]');
+            const checkedCbs = container.querySelectorAll('.wallet-list input[type="checkbox"]:checked');
+            const label = container.querySelector('.multiselect-label');
+            const selectAllCb = container.querySelector('.select-all-checkbox');
+
+            if (checkedCbs.length === 0) {
+                label.textContent = 'No wallets selected';
+                selectAllCb.checked = false;
+            } else if (checkedCbs.length === allCbs.length) {
+                label.textContent = 'All wallets';
+                selectAllCb.checked = true;
+            } else {
+                label.textContent = checkedCbs.length + ' of ' + allCbs.length + ' wallets';
+                selectAllCb.checked = false;
+            }
+        }
+
+        function getSelectedWalletIds(selectId) {
+            const container = document.getElementById(selectId);
+            const checked = container.querySelectorAll('.wallet-list input[type="checkbox"]:checked');
+            return Array.from(checked).map(cb => parseInt(cb.getAttribute('data-wallet-id')));
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            document.querySelectorAll('.wallet-multiselect-dropdown.open').forEach(dd => {
+                const container = dd.closest('.wallet-multiselect');
+                if (!container.contains(e.target)) {
+                    dd.classList.remove('open');
+                }
+            });
+        });
+
+        function setCollectorStatus(elId, status, message) {
+            const el = document.getElementById(elId);
+            el.className = 'collector-status visible ' + status;
+            el.textContent = message;
+        }
+
+        async function runTxCollector() {
+            const walletIds = getSelectedWalletIds('txWalletSelect');
+            if (walletIds.length === 0) {
+                setCollectorStatus('txStatus', 'failed', 'Please select at least one wallet.');
+                return;
+            }
+
+            const days = parseInt(document.getElementById('txDays').value) || 30;
+            const btn = document.getElementById('txRunBtn');
+            btn.disabled = true;
+            btn.textContent = 'Running...';
+            setCollectorStatus('txStatus', 'running', 'Starting transaction fetch...');
+
+            try {
+                const params = new URLSearchParams();
+                walletIds.forEach(id => params.append('wallet_ids', id));
+                params.append('days', days);
+
+                const res = await authFetch('/transactions/refresh/wallets?' + params.toString(), {
+                    method: 'POST'
+                });
+                const data = await res.json();
+
+                if (!data.success) {
+                    setCollectorStatus('txStatus', 'failed', data.message || 'Failed to start.');
+                    btn.disabled = false;
+                    btn.textContent = 'Run Collector';
+                    return;
+                }
+
+                // Poll for status
+                const pollInterval = setInterval(async () => {
+                    try {
+                        const statusRes = await authFetch('/transactions/refresh/status');
+                        const statusData = await statusRes.json();
+
+                        if (statusData.status === 'completed') {
+                            clearInterval(pollInterval);
+                            setCollectorStatus('txStatus', 'completed',
+                                'Completed: ' + (statusData.total_fetched || 0) + ' transactions fetched.');
+                            btn.disabled = false;
+                            btn.textContent = 'Run Collector';
+                            // Refresh last run time
+                            const txRunRes = await authFetch('/transactions/last-run');
+                            if (txRunRes.ok) {
+                                const txData = await txRunRes.json();
+                                if (txData.last_run) {
+                                    document.getElementById('txLastRun').textContent = 'Last run: ' + new Date(txData.last_run).toLocaleString();
+                                }
+                            }
+                        } else if (statusData.status === 'failed') {
+                            clearInterval(pollInterval);
+                            setCollectorStatus('txStatus', 'failed', statusData.message || 'Fetch failed.');
+                            btn.disabled = false;
+                            btn.textContent = 'Run Collector';
+                        } else {
+                            setCollectorStatus('txStatus', 'running', statusData.message || 'Running...');
+                        }
+                    } catch (e) {
+                        clearInterval(pollInterval);
+                        setCollectorStatus('txStatus', 'failed', 'Error polling status.');
+                        btn.disabled = false;
+                        btn.textContent = 'Run Collector';
+                    }
+                }, 2000);
+            } catch (e) {
+                setCollectorStatus('txStatus', 'failed', 'Error: ' + e.message);
+                btn.disabled = false;
+                btn.textContent = 'Run Collector';
+            }
+        }
+
+        async function runBalanceCollector() {
+            const walletIds = getSelectedWalletIds('balWalletSelect');
+            if (walletIds.length === 0) {
+                setCollectorStatus('balStatus', 'failed', 'Please select at least one wallet.');
+                return;
+            }
+
+            const btn = document.getElementById('balRunBtn');
+            btn.disabled = true;
+            btn.textContent = 'Running...';
+            setCollectorStatus('balStatus', 'running', 'Starting balance history collection...');
+
+            try {
+                const params = new URLSearchParams();
+                walletIds.forEach(id => params.append('wallet_ids', id));
+
+                const res = await authFetch('/balance-history/collect/wallets?' + params.toString(), {
+                    method: 'POST'
+                });
+                const data = await res.json();
+
+                if (data.status === 'completed') {
+                    setCollectorStatus('balStatus', 'completed', 'Collection completed.');
+                    btn.disabled = false;
+                    btn.textContent = 'Run Collector';
+                    return;
+                }
+
+                // Poll for status
+                const pollInterval = setInterval(async () => {
+                    try {
+                        const statusRes = await authFetch('/balance-history/collect/status');
+                        const statusData = await statusRes.json();
+
+                        if (statusData.status === 'completed') {
+                            clearInterval(pollInterval);
+                            setCollectorStatus('balStatus', 'completed',
+                                'Collection complete. ' + (statusData.processed_items || 0) + ' items processed.');
+                            btn.disabled = false;
+                            btn.textContent = 'Run Collector';
+                            // Refresh last run time
+                            const balRunRes = await authFetch('/balance-history/last-run');
+                            if (balRunRes.ok) {
+                                const balData = await balRunRes.json();
+                                if (balData.run && balData.run.started_at) {
+                                    document.getElementById('balLastRun').textContent = 'Last run: ' + new Date(balData.run.started_at).toLocaleString();
+                                }
+                            }
+                        } else if (statusData.status === 'failed') {
+                            clearInterval(pollInterval);
+                            setCollectorStatus('balStatus', 'failed', statusData.error_message || 'Collection failed.');
+                            btn.disabled = false;
+                            btn.textContent = 'Run Collector';
+                        } else {
+                            const progress = statusData.progress ? (' (' + statusData.progress + '%)') : '';
+                            setCollectorStatus('balStatus', 'running', (statusData.step || 'Running...') + progress);
+                        }
+                    } catch (e) {
+                        clearInterval(pollInterval);
+                        setCollectorStatus('balStatus', 'failed', 'Error polling status.');
+                        btn.disabled = false;
+                        btn.textContent = 'Run Collector';
+                    }
+                }, 2000);
+            } catch (e) {
+                setCollectorStatus('balStatus', 'failed', 'Error: ' + e.message);
+                btn.disabled = false;
+                btn.textContent = 'Run Collector';
+            }
+        }
+
+        // Load collectors tab data when switching to it
+        document.addEventListener('DOMContentLoaded', function() {
+            const origFn = switchSettingsTab;
+            window.switchSettingsTab = function(tabName) {
+                origFn(tabName);
+                if (tabName === 'collectors') {
+                    loadCollectorsTab();
+                }
+            };
+            // Also load if already on collectors tab (e.g., via URL hash)
+            const hash = window.location.hash.replace('#', '');
+            if (hash === 'collectors') {
+                loadCollectorsTab();
+            }
+        });
+    </script>
+
+    <script src="/static/js/app.js?v=1771027200"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             if (typeof initializePrivacyMode === 'function') {

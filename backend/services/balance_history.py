@@ -98,6 +98,7 @@ class BalanceHistoryService:
         blockchain: str = None,
         max_days_back: int = 730,
         force: bool = False,
+        wallet_ids: List[int] = None,
     ) -> int:
         """Start background collection for a user's wallets.
 
@@ -106,6 +107,7 @@ class BalanceHistoryService:
             blockchain: Optional chain filter (e.g. 'cardano')
             max_days_back: Maximum days to look back (default 2 years)
             force: If True, ignore existing data and re-collect from scratch
+            wallet_ids: Optional list of wallet IDs to collect for (None for all)
 
         Returns:
             Job ID
@@ -121,7 +123,7 @@ class BalanceHistoryService:
         self._cancel_flags[user_id] = False
 
         task = asyncio.create_task(
-            self._run_collection(user_id, job_id, blockchain, max_days_back, force)
+            self._run_collection(user_id, job_id, blockchain, max_days_back, force, wallet_ids)
         )
         self._running_tasks[user_id] = task
         return job_id
@@ -148,7 +150,8 @@ class BalanceHistoryService:
     # ------------------------------------------------------------------
 
     async def _run_collection(self, user_id: int, job_id: int,
-                              blockchain: str, max_days_back: int, force: bool = False):
+                              blockchain: str, max_days_back: int, force: bool = False,
+                              wallet_ids: List[int] = None):
         """Main collection loop — runs as a background task."""
         try:
             wallets = await get_all_wallets(user_id)
@@ -158,6 +161,10 @@ class BalanceHistoryService:
                 if w['blockchain'] in SUPPORTED_CHAINS
                 and (blockchain is None or w['blockchain'] == blockchain)
             ]
+
+            # Filter by wallet IDs if specified
+            if wallet_ids:
+                target_wallets = [w for w in target_wallets if w['id'] in wallet_ids]
 
             if not target_wallets:
                 await log_service.info("balance_history", f"No supported wallets found for user {user_id}")
