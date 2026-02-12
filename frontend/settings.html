@@ -5632,6 +5632,10 @@
                 const res = await authFetch('/transactions/refresh/wallets?' + params.toString(), {
                     method: 'POST'
                 });
+                if (!res.ok) {
+                    const text = await res.text();
+                    throw new Error('Server returned ' + res.status + ': ' + text.substring(0, 100));
+                }
                 const data = await res.json();
 
                 if (!data.success) {
@@ -5645,6 +5649,7 @@
                 const pollInterval = setInterval(async () => {
                     try {
                         const statusRes = await authFetch('/transactions/refresh/status');
+                        if (!statusRes.ok) throw new Error('Status poll failed: ' + statusRes.status);
                         const statusData = await statusRes.json();
 
                         if (statusData.status === 'completed') {
@@ -5702,6 +5707,10 @@
                 const res = await authFetch('/balance-history/collect/wallets?' + params.toString(), {
                     method: 'POST'
                 });
+                if (!res.ok) {
+                    const text = await res.text();
+                    throw new Error('Server returned ' + res.status + ': ' + text.substring(0, 100));
+                }
                 const data = await res.json();
 
                 if (data.status === 'completed') {
@@ -5715,6 +5724,7 @@
                 const pollInterval = setInterval(async () => {
                     try {
                         const statusRes = await authFetch('/balance-history/collect/status');
+                        if (!statusRes.ok) throw new Error('Status poll failed: ' + statusRes.status);
                         const statusData = await statusRes.json();
 
                         if (statusData.status === 'completed') {
@@ -5762,6 +5772,10 @@
 
             try {
                 const res = await authFetch('/balance-history/backfill-prices', { method: 'POST' });
+                if (!res.ok) {
+                    const text = await res.text();
+                    throw new Error('Server returned ' + res.status + ': ' + text.substring(0, 100));
+                }
                 const data = await res.json();
 
                 if (data.status === 'nothing_to_backfill') {
