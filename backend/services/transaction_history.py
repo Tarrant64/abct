@@ -41,6 +41,21 @@ logger = logging.getLogger(__name__)
 class TransactionHistoryService:
     """Fetch and normalize transactions from all blockchains."""
 
+    # V2 engine chain → native token symbol/name mapping
+    _CHAIN_NATIVE = {
+        'cardano': ('ADA', 'Cardano'),
+        'bitcoin': ('BTC', 'Bitcoin'),
+        'ethereum': ('ETH', 'Ethereum'),
+        'solana': ('SOL', 'Solana'),
+        'polygon': ('MATIC', 'Polygon'),
+        'base': ('ETH', 'Ethereum'),
+        'algorand': ('ALGO', 'Algorand'),
+        'bnb': ('BNB', 'BNB Chain'),
+        'tron': ('TRX', 'Tron'),
+        'avalanche': ('AVAX', 'Avalanche'),
+        'arbitrum': ('ETH', 'Ethereum'),
+    }
+
     def __init__(self):
         self.supported_blockchains = ['cardano', 'ethereum', 'bitcoin', 'solana', 'polygon', 'base']
 
@@ -84,6 +99,72 @@ class TransactionHistoryService:
             logger.error(f"Error comparing transaction time: {e}")
             return True  # Keep transaction if we can't determine age
 
+    async def _get_v2_events_as_transactions(
+        self, user_id: int, days: int = 7, blockchain: str = None
+    ) -> List[dict]:
+        """Query V2 engine events and convert to transaction_history format."""
+        try:
+            from engine import db as engine_db
+
+            min_time = int((datetime.utcnow() - timedelta(days=days)).timestamp())
+            events = await engine_db.get_events(
+                user_id, chain=blockchain, min_time=min_time, limit=5000
+            )
+            if not events:
+                return []
+
+            # Group events by tx_id, take the primary event per tx
+            seen_tx = {}
+            for evt in events:
+                tx_id = evt.get('tx_id', '')
+                if tx_id not in seen_tx:
+                    seen_tx[tx_id] = evt
+
+            transactions = []
+            for tx_id, evt in seen_tx.items():
+                chain = evt.get('chain', '')
+                asset_id = evt.get('asset_id', '')
+                if asset_id == 'native':
+                    symbol, name = self._CHAIN_NATIVE.get(chain, (asset_id, ''))
+                else:
+                    symbol, name = asset_id, ''
+
+                direction = evt.get('direction', '')
+                mapped_dir = 'sent' if direction == 'out' else 'received' if direction == 'in' else direction
+
+                from_addr = evt.get('account_id', '') if direction == 'out' else (evt.get('counterparty') or '')
+                to_addr = (evt.get('counterparty') or '') if direction == 'out' else evt.get('account_id', '')
+
+                block_time = evt.get('block_time', 0)
+                tx_time = datetime.utcfromtimestamp(block_time).isoformat() if block_time else None
+
+                transactions.append({
+                    'user_id': user_id,
+                    'wallet_id': None,
+                    'blockchain': chain,
+                    'tx_hash': tx_id,
+                    'tx_time': tx_time,
+                    'tx_time_formatted': tx_time,
+                    'direction': mapped_dir,
+                    'amount': str(evt.get('amount', '0')),
+                    'token_symbol': symbol,
+                    'token_name': name,
+                    'from_address': from_addr,
+                    'to_address': to_addr,
+                    'fee': str(evt.get('fee', '0')) if evt.get('fee') else '0',
+                    'status': 'confirmed',
+                    'metadata': json.dumps(evt.get('metadata', {})) if isinstance(evt.get('metadata'), dict) else (evt.get('metadata') or ''),
+                    'fetched_at': evt.get('created_at', ''),
+                    'wallet_address': evt.get('account_id', ''),
+                    'wallet_name': None,
+                })
+
+            logger.info(f"V2 engine: converted {len(transactions)} events to transaction format")
+            return transactions
+        except Exception as e:
+            logger.debug(f"V2 engine events query failed: {e}")
+            return []
+
     async def get_transaction_bounds(self, user_id: int, wallet_id: int, blockchain: str) -> Optional[dict]:
         """
         Get the newest and oldest transaction timestamps for a wallet.
@@ -118,6 +199,9 @@ class TransactionHistoryService:
         """
         Fetch transactions from all wallets for a user.
 
+        Tries V2 engine indexing first (populates engine_events), then
+        falls back to V1 chain-specific fetchers (populates transaction_history).
+
         Args:
             user_id: User ID to fetch transactions for
             days: Number of days of transaction history
@@ -127,9 +211,42 @@ class TransactionHistoryService:
         Returns:
             Dict with counts of transactions fetched per blockchain
         """
+        # Try V2 engine indexing to populate engine_events
+        try:
+            from engine.orchestrator import backfill_orchestrator
+            from engine.models import BackfillRequest, ChainId, WorkDomain
+            from engine import db as engine_db
+
+            all_wallets = await get_all_wallets(user_id)
+            selected = all_wallets
+            if blockchain:
+                selected = [w for w in selected if w['blockchain'] == blockchain]
+            if wallet_ids:
+                selected = [w for w in selected if w['id'] in wallet_ids]
+
+            chains = set()
+            for w in selected:
+                c = w.get('blockchain', '').lower()
+                try:
+                    chains.add(ChainId(c))
+                except ValueError:
+                    pass
+
+            if chains:
+                request = BackfillRequest(
+                    chains=list(chains),
+                    wallet_ids=wallet_ids,
+                    domains=[WorkDomain.INDEX, WorkDomain.HYDRATE, WorkDomain.NORMALIZE],
+                )
+                backfill_id = await backfill_orchestrator.plan_backfill(user_id, request)
+                await backfill_orchestrator.run_backfill(backfill_id)
+                logger.info(f"V2 engine indexing triggered for transaction fetch: backfill={backfill_id}")
+        except Exception as e:
+            logger.debug(f"V2 engine indexing for transactions skipped: {e}")
+
         start_time = datetime.utcnow() - timedelta(days=days)
 
-        # Get all wallets for user
+        # V1 chain-specific fetchers (still runs to populate transaction_history table)
         wallets = await get_all_wallets(user_id)
 
         if not wallets:
@@ -924,8 +1041,34 @@ class TransactionHistoryService:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute(query, params)
             rows = await cursor.fetchall()
+            v1_results = [dict(row) for row in rows]
 
-            return [dict(row) for row in rows]
+        # Merge V2 engine events (deduplicated by tx_hash, V2 fills gaps)
+        v2_results = await self._get_v2_events_as_transactions(user_id, days, blockchain)
+        if not v2_results:
+            return v1_results
+
+        # Build set of V1 tx hashes for dedup
+        v1_hashes = {tx.get('tx_hash') for tx in v1_results if tx.get('tx_hash')}
+
+        # Add V2 events not already in V1, applying same filters
+        for tx in v2_results:
+            if tx['tx_hash'] in v1_hashes:
+                continue
+            if direction and tx.get('direction') != direction:
+                continue
+            if search:
+                search_lower = search.lower()
+                if not any(
+                    search_lower in (tx.get(f) or '').lower()
+                    for f in ('tx_hash', 'from_address', 'to_address', 'token_symbol', 'token_name')
+                ):
+                    continue
+            v1_results.append(tx)
+
+        # Re-sort merged results by tx_time descending
+        v1_results.sort(key=lambda x: x.get('tx_time') or '', reverse=True)
+        return v1_results[:1000]
 
 
 # Singleton

@@ -1206,7 +1206,26 @@ class BalanceHistoryService:
                     await asyncio.sleep(interval_hours * 3600)
                     logger.info(f"Scheduler: Starting auto-collection for user {user_id}")
                     await log_service.info("balance_history", f"Scheduler: Starting auto-collection for user {user_id} (every {interval_hours}h)")
-                    await self.collect_history(user_id=user_id)
+
+                    # Try V2 engine backfill first, fall back to V1
+                    try:
+                        from engine.orchestrator import backfill_orchestrator
+                        from engine.models import BackfillRequest, ChainId, WorkDomain
+                        from engine import db as engine_db
+
+                        request = BackfillRequest(
+                            chains=list(ChainId),
+                            domains=[WorkDomain.INDEX, WorkDomain.HYDRATE, WorkDomain.NORMALIZE, WorkDomain.ENRICH_PRICE],
+                        )
+                        backfill_id = await backfill_orchestrator.plan_backfill(user_id, request)
+                        run_id = await engine_db.create_scheduler_run(user_id, backfill_id, 'scheduled')
+                        backfill_orchestrator.set_run_id(backfill_id, run_id)
+                        await backfill_orchestrator.run_backfill(backfill_id)
+                        logger.info(f"Scheduler: V2 engine backfill started for user {user_id}: {backfill_id}")
+                    except Exception as engine_err:
+                        logger.warning(f"Scheduler: V2 engine failed ({engine_err}), using V1 collector")
+                        await self.collect_history(user_id=user_id)
+
                 except asyncio.CancelledError:
                     logger.info(f"Scheduler cancelled for user {user_id}")
                     break

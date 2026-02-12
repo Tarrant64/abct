@@ -108,7 +108,11 @@ async def start_wallet_collection(
     max_days: int = Query(3650),
     force: bool = Query(False),
 ):
-    """Start balance history collection for specific wallets."""
+    """Start balance history collection for specific wallets via V2 engine pipeline.
+
+    Routes through the V2 engine (expand -> index -> hydrate -> normalize -> enrich)
+    with V1 fallback if the engine fails.
+    """
     username = await get_username_by_user_id(user_id)
     if username and await is_demo_user(username):
         return {"status": "completed", "job_id": -1}
@@ -116,13 +120,60 @@ async def start_wallet_collection(
     logger.info(f"Balance history collect for wallets requested: user={user_id}, wallets={wallet_ids}")
     await log_service.info("balance_history", f"Wallet-specific collection requested: user={user_id}, wallets={wallet_ids}")
 
-    job_id = await balance_history_service.collect_history(
-        user_id=user_id,
-        max_days_back=max_days,
-        force=force,
-        wallet_ids=wallet_ids,
-    )
-    return {"status": "started", "job_id": job_id}
+    # Try V2 engine backfill with wallet filtering
+    try:
+        from engine.orchestrator import backfill_orchestrator
+        from engine.models import BackfillRequest, ChainId, WorkDomain
+        from engine import db as engine_db
+
+        # Determine chains from the selected wallets
+        from database import get_all_wallets
+        all_wallets = await get_all_wallets(user_id=user_id)
+        selected_chains = set()
+        for w in all_wallets:
+            if w.get('id') in wallet_ids:
+                chain = w.get('blockchain', '').lower()
+                if chain:
+                    selected_chains.add(chain)
+
+        chains = []
+        for c in selected_chains:
+            try:
+                chains.append(ChainId(c))
+            except ValueError:
+                pass
+
+        if not chains:
+            chains = list(ChainId)
+
+        request = BackfillRequest(
+            chains=chains,
+            wallet_ids=wallet_ids,
+            domains=[WorkDomain.INDEX, WorkDomain.HYDRATE, WorkDomain.NORMALIZE, WorkDomain.ENRICH_PRICE],
+        )
+
+        backfill_id = await backfill_orchestrator.plan_backfill(user_id, request)
+
+        run_id = await engine_db.create_scheduler_run(user_id, backfill_id, 'manual')
+        backfill_orchestrator.set_run_id(backfill_id, run_id)
+
+        await backfill_orchestrator.run_backfill(backfill_id)
+
+        await log_service.info("balance_history", f"Engine wallet backfill started: id={backfill_id}, wallets={wallet_ids}")
+        return {"status": "started", "job_id": backfill_id}
+
+    except Exception as e:
+        logger.warning(f"Engine wallet backfill failed, falling back to V1: {e}")
+        await log_service.warning("balance_history", f"Engine wallet backfill failed ({e}), using V1 collector")
+
+        # V1 fallback
+        job_id = await balance_history_service.collect_history(
+            user_id=user_id,
+            max_days_back=max_days,
+            force=force,
+            wallet_ids=wallet_ids,
+        )
+        return {"status": "started", "job_id": job_id}
 
 
 @router.get("/collect/status")

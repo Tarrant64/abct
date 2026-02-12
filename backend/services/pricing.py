@@ -191,6 +191,27 @@ class PricingService:
                     price = stale_price
             result[s] = price
 
+        # Write current prices to engine price cache for today
+        if has_valid_prices:
+            try:
+                from engine import db as engine_db
+                today = datetime.now().strftime('%Y-%m-%d')
+                prices_to_cache = []
+                for s in symbols:
+                    p = result.get(s, 0)
+                    cg_id = ASSET_TO_COINGECKO.get(s.upper())
+                    if p > 0 and cg_id:
+                        prices_to_cache.append({
+                            'asset_id': cg_id,
+                            'date': today,
+                            'price_usd': p,
+                            'source': 'pricing_service'
+                        })
+                if prices_to_cache:
+                    await engine_db.upsert_prices_batch(prices_to_cache)
+            except Exception:
+                pass  # Don't break current pricing if engine cache write fails
+
         return result
 
     async def _fetch_from_coingecko(self, symbols: List[str]) -> None:
@@ -490,40 +511,56 @@ class PricingService:
 
     async def get_historical_prices(self, symbols: List[str] = None, days: int = 30) -> Dict[str, List[dict]]:
         """
-        Get historical prices for specified symbols from CoinGecko.
+        Get historical prices for specified symbols.
+        Checks engine_price_history cache first, then CoinGecko, and writes back to cache.
         Returns dict mapping symbol to list of {date, price, time} objects.
 
         Args:
             symbols: List of symbols (e.g., ['ADA', 'BTC', 'ETH', 'SOL', 'MATIC'])
             days: Number of days (1, 7, 30, 90, 180, 365)
-
-        CoinGecko free API: /coins/{id}/market_chart
-        Automatic granularity:
-            - days=1: 5-minute intervals (288 data points)
-            - days=2-90: hourly intervals
-            - days>90: daily intervals
         """
         if symbols is None:
-            # Default to all blockchain native tokens
             symbols = ['ADA', 'BTC', 'ETH', 'SOL', 'MATIC']
 
         historical_data = {}
+        end_date = datetime.now().strftime('%Y-%m-%d')
+        start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+
+        # For daily granularity (days > 90), check engine price cache first
+        if days > 90:
+            try:
+                from engine import db as engine_db
+                for symbol in symbols:
+                    cg_id = ASSET_TO_COINGECKO.get(symbol)
+                    if not cg_id:
+                        continue
+                    cached = await engine_db.get_prices(cg_id, start_date, end_date)
+                    if cached and len(cached) >= days * 0.8:
+                        historical_data[symbol] = [
+                            {'date': row['date'], 'price': row['price_usd'], 'time': row['date']}
+                            for row in cached if row.get('price_usd', 0) > 0
+                        ]
+                        logger.info(f"Engine cache hit: {len(historical_data[symbol])} daily prices for {symbol}")
+            except Exception as e:
+                logger.warning(f"Engine price cache lookup failed: {e}")
+
+        # Fetch from CoinGecko for symbols not resolved from cache
+        symbols_to_fetch = [s for s in symbols if s not in historical_data]
+        if not symbols_to_fetch:
+            return historical_data
 
         try:
+            import asyncio
             client = get_client("coingecko_historical", timeout=60.0)
-            for symbol in symbols:
+            for symbol in symbols_to_fetch:
                 cg_id = ASSET_TO_COINGECKO.get(symbol)
                 if not cg_id:
                     continue
 
-                # CoinGecko market_chart endpoint - auto granularity based on days
                 response = await fetch_with_retry(
                     client, "GET",
                     f"{COINGECKO_BASE_URL}/coins/{cg_id}/market_chart",
-                    params={
-                        'vs_currency': 'usd',
-                        'days': days
-                    }
+                    params={'vs_currency': 'usd', 'days': days}
                 )
 
                 if response.status_code == 200:
@@ -531,39 +568,48 @@ class PricingService:
                     prices = data.get('prices', [])
 
                     # Convert to {date, price, time} format
-                    # 'time' field is for TradingView lightweight-charts compatibility
                     # TradingView expects: Unix timestamp (seconds) for intraday, YYYY-MM-DD for daily
                     historical_data[symbol] = []
                     for timestamp_ms, price in prices:
                         timestamp_sec = int(timestamp_ms / 1000)
                         dt = datetime.fromtimestamp(timestamp_sec)
 
-                        # Format based on granularity
                         if days <= 90:
-                            # Intraday/hourly: use Unix timestamp in seconds
                             time_value = timestamp_sec
                             date_str = dt.strftime('%Y-%m-%d %H:%M')
                         else:
-                            # Daily intervals: use YYYY-MM-DD string
                             time_value = dt.strftime('%Y-%m-%d')
                             date_str = dt.strftime('%Y-%m-%d')
 
                         historical_data[symbol].append({
                             'date': date_str,
                             'price': price,
-                            'time': time_value  # Unix timestamp (int) or date string
+                            'time': time_value
                         })
 
                     logger.info(f"CoinGecko: fetched {len(prices)} historical prices for {symbol} (days={days})")
+
+                    # Write daily prices back to engine cache
+                    if days > 90:
+                        try:
+                            from engine import db as engine_db
+                            prices_to_cache = [
+                                {'asset_id': cg_id, 'date': e['date'][:10], 'price_usd': e['price'], 'source': 'coingecko'}
+                                for e in historical_data[symbol]
+                                if isinstance(e['time'], str) and e['price'] > 0
+                            ]
+                            if prices_to_cache:
+                                await engine_db.upsert_prices_batch(prices_to_cache)
+                                logger.info(f"Cached {len(prices_to_cache)} daily prices for {symbol} in engine")
+                        except Exception as cache_err:
+                            logger.warning(f"Failed to cache prices for {symbol}: {cache_err}")
+
                 elif response.status_code == 429:
                     logger.warning(f"CoinGecko rate limited for {symbol}, waiting...")
-                    import asyncio
-                    await asyncio.sleep(60)  # Wait 60 seconds for rate limit
+                    await asyncio.sleep(60)
                 else:
                     logger.warning(f"CoinGecko historical API error for {symbol}: {response.status_code}")
 
-                # Small delay between requests to avoid rate limiting
-                import asyncio
                 await asyncio.sleep(1)
 
         except Exception as e:

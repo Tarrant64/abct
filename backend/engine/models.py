@@ -183,6 +183,7 @@ class BackfillRequest(BaseModel):
     chains: List[ChainId]
     start_date: Optional[str] = None
     end_date: Optional[str] = None
+    wallet_ids: Optional[List[int]] = None
     domains: List[WorkDomain] = [
         WorkDomain.INDEX,
         WorkDomain.HYDRATE,
