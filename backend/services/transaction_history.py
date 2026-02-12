@@ -112,7 +112,8 @@ class TransactionHistoryService:
         self,
         user_id: int,
         days: int = 7,
-        blockchain: str = None
+        blockchain: str = None,
+        wallet_ids: List[int] = None
     ) -> Dict[str, int]:
         """
         Fetch transactions from all wallets for a user.
@@ -121,6 +122,7 @@ class TransactionHistoryService:
             user_id: User ID to fetch transactions for
             days: Number of days of transaction history
             blockchain: Filter by specific blockchain (None for all)
+            wallet_ids: Optional list of wallet IDs to fetch for (None for all)
 
         Returns:
             Dict with counts of transactions fetched per blockchain
@@ -137,6 +139,10 @@ class TransactionHistoryService:
         # Filter by blockchain if specified
         if blockchain:
             wallets = [w for w in wallets if w['blockchain'] == blockchain]
+
+        # Filter by wallet IDs if specified
+        if wallet_ids:
+            wallets = [w for w in wallets if w['id'] in wallet_ids]
 
         counts = {}
 
