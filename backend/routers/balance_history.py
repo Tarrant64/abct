@@ -129,19 +129,23 @@ async def start_wallet_collection(
 async def collection_status(user_id: int = Depends(verify_session)):
     """Poll the current balance history collection job status.
 
-    Checks engine backfill status first, falls back to V1 job status.
+    Checks both V2 engine backfills and V1 jobs, returns whichever is
+    more recent. This ensures Data Collectors tab (V1) status is visible
+    even when old V2 engine backfill records exist.
     """
     username = await get_username_by_user_id(user_id)
     if username and await is_demo_user(username):
         return {"status": "completed", "progress": 100, "step": "Demo data loaded"}
 
-    # Try engine backfill status first
+    v2_resp = None
+    v2_time = None
     try:
         from engine import db as engine_db
         backfills = await engine_db.get_user_backfills(user_id)
         if backfills:
             latest = backfills[0]  # Sorted by created_at DESC
             status = latest['status']
+            v2_time = latest.get('created_at', '')
 
             step_map = {
                 'planning': 'Planning backfill...',
@@ -151,7 +155,7 @@ async def collection_status(user_id: int = Depends(verify_session)):
                 'cancelled': 'Cancelled',
             }
 
-            return {
+            v2_resp = {
                 "job_id": latest['id'],
                 "status": status,
                 "progress": latest.get('progress_pct', 0),
@@ -163,20 +167,37 @@ async def collection_status(user_id: int = Depends(verify_session)):
     except Exception as e:
         logger.debug(f"Engine status check failed: {e}")
 
-    # V1 fallback
+    v1_resp = None
+    v1_time = None
     job = await get_latest_balance_history_job(user_id)
-    if not job:
-        return {"status": "idle", "progress": 0, "step": "No collection started"}
+    if job:
+        v1_time = job.get('started_at') or job.get('created_at', '')
+        v1_resp = {
+            "job_id": job['id'],
+            "status": job['status'],
+            "progress": job.get('progress', 0),
+            "step": job.get('step', ''),
+            "total_items": job.get('total_items', 0),
+            "processed_items": job.get('processed_items', 0),
+            "error_message": job.get('error_message'),
+        }
 
-    return {
-        "job_id": job['id'],
-        "status": job['status'],
-        "progress": job.get('progress', 0),
-        "step": job.get('step', ''),
-        "total_items": job.get('total_items', 0),
-        "processed_items": job.get('processed_items', 0),
-        "error_message": job.get('error_message'),
-    }
+    # If V1 job is currently running, always show V1 status
+    if v1_resp and v1_resp['status'] == 'running':
+        return v1_resp
+
+    # If both exist, return whichever was started more recently
+    if v2_resp and v1_resp:
+        if (v1_time or '') >= (v2_time or ''):
+            return v1_resp
+        return v2_resp
+
+    if v2_resp:
+        return v2_resp
+    if v1_resp:
+        return v1_resp
+
+    return {"status": "idle", "progress": 0, "step": "No collection started"}
 
 
 @router.post("/collect/cancel")
@@ -445,11 +466,21 @@ async def get_last_run(user_id: int = Depends(verify_session)):
     from datetime import datetime, timedelta
 
     run = None
+
+    # Check V2 engine scheduler runs
     try:
         from engine import db as engine_db
         run = await engine_db.get_latest_scheduler_run(user_id)
     except Exception as e:
-        logger.debug(f"Failed to get last run: {e}")
+        logger.debug(f"Failed to get engine last run: {e}")
+
+    # Also check V1 jobs (Data Collectors tab uses V1)
+    v1_job = await get_latest_balance_history_job(user_id)
+    if v1_job and v1_job.get('status') in ('completed', 'running'):
+        v1_started = v1_job.get('started_at') or v1_job.get('created_at', '')
+        v2_started = run.get('started_at', '') if run else ''
+        if v1_started >= v2_started:
+            run = {'started_at': v1_started, 'status': v1_job['status']}
 
     # Calculate next run from schedule settings + last run time
     next_run = None
