@@ -96,7 +96,7 @@ class BalanceHistoryService:
         self,
         user_id: int,
         blockchain: str = None,
-        max_days_back: int = 730,
+        max_days_back: int = 1095,
         force: bool = False,
         wallet_ids: List[int] = None,
     ) -> int:
@@ -1115,38 +1115,120 @@ class BalanceHistoryService:
 
     async def _fetch_historical_prices(self, symbol: str,
                                        start_date: str, end_date: str) -> Dict[str, float]:
-        """Fetch daily historical prices using engine (DefiLlama -> CoinGecko).
+        """Fetch daily historical prices via CoinGecko market_chart/range (bulk).
+
+        Uses CoinGecko's range endpoint to get ALL daily prices in 1-2 API calls
+        instead of the old approach of 730+ individual DefiLlama calls.
+        Falls back to per-date DefiLlama calls for any gaps.
 
         Returns:
             Dict mapping date strings (YYYY-MM-DD) to USD price.
         """
-        from engine.enrichment.price_enricher import price_enricher
+        from services.pricing import ASSET_TO_COINGECKO
+
+        cg_id = ASSET_TO_COINGECKO.get(symbol)
+        if not cg_id:
+            logger.warning(f"No CoinGecko ID for symbol {symbol}")
+            return {}
 
         start_dt = datetime.strptime(start_date, '%Y-%m-%d')
         end_dt = min(datetime.strptime(end_date, '%Y-%m-%d'), datetime.utcnow())
-        dates = []
+        result: Dict[str, float] = {}
+
+        # CoinGecko free tier: max 365 days per market_chart/range call.
+        # Split into yearly chunks if needed.
+        chunk_start = start_dt
+        retries = 0
+        while chunk_start <= end_dt:
+            chunk_end = min(chunk_start + timedelta(days=364), end_dt)
+            from_ts = int(chunk_start.timestamp())
+            to_ts = int((chunk_end + timedelta(days=1)).timestamp())  # inclusive end
+
+            try:
+                client = get_client("coingecko_historical", timeout=60.0)
+                response = await client.get(
+                    f"https://api.coingecko.com/api/v3/coins/{cg_id}/market_chart/range",
+                    params={'vs_currency': 'usd', 'from': from_ts, 'to': to_ts}
+                )
+
+                if response.status_code == 200:
+                    retries = 0
+                    data = response.json()
+                    prices_list = data.get('prices', [])
+                    for ts_ms, price in prices_list:
+                        date_str = datetime.utcfromtimestamp(ts_ms / 1000).strftime('%Y-%m-%d')
+                        if price and price > 0:
+                            result[date_str] = price
+                    logger.info(f"CoinGecko range: got {len(prices_list)} price points for {symbol} "
+                                f"({chunk_start.strftime('%Y-%m-%d')} to {chunk_end.strftime('%Y-%m-%d')})")
+                    await log_service.info("balance_history",
+                        f"Fetched {len(prices_list)} {symbol} prices via CoinGecko range")
+                elif response.status_code == 429 and retries < 3:
+                    retries += 1
+                    logger.warning(f"CoinGecko rate limit hit for {symbol} range query, waiting 60s (retry {retries}/3)")
+                    await asyncio.sleep(60)
+                    continue  # retry this chunk
+                else:
+                    logger.warning(f"CoinGecko range returned {response.status_code} for {symbol}: "
+                                   f"{response.text[:200]}")
+            except Exception as e:
+                logger.warning(f"CoinGecko range error for {symbol} "
+                               f"({chunk_start.strftime('%Y-%m-%d')} to {chunk_end.strftime('%Y-%m-%d')}): {e}")
+
+            # Small delay between chunks to respect rate limits
+            await asyncio.sleep(2)
+            chunk_start = chunk_end + timedelta(days=1)
+
+        # Check for missing dates and backfill from DefiLlama
+        all_dates = []
         current = start_dt
         while current <= end_dt:
-            dates.append(current.strftime('%Y-%m-%d'))
+            all_dates.append(current.strftime('%Y-%m-%d'))
             current += timedelta(days=1)
 
-        return await price_enricher.fetch_historical_prices_batch(symbol, dates)
+        missing = [d for d in all_dates if d not in result]
+        if missing and len(missing) <= 30:
+            # Only do per-date DefiLlama fallback for small gaps (< 30 days)
+            logger.info(f"Filling {len(missing)} missing {symbol} prices from DefiLlama")
+            for date_str in missing:
+                try:
+                    ts = int(datetime.strptime(date_str, '%Y-%m-%d').replace(hour=12).timestamp())
+                    dl_client = get_client("defilama", timeout=30.0)
+                    url = f"https://coins.llama.fi/prices/historical/{ts}/coingecko:{cg_id}"
+                    resp = await dl_client.get(url)
+                    if resp.status_code == 200:
+                        coin_data = resp.json().get('coins', {}).get(f"coingecko:{cg_id}", {})
+                        price = coin_data.get('price')
+                        if price and price > 0:
+                            result[date_str] = price
+                except Exception as e:
+                    logger.warning(f"DefiLlama fallback error for {symbol} on {date_str}: {e}")
+                await asyncio.sleep(0.5)
+
+        fetched = len(result)
+        total = len(all_dates)
+        coverage_pct = (fetched / total * 100) if total else 0
+        logger.info(f"Historical prices for {symbol}: {fetched}/{total} dates ({coverage_pct:.0f}% coverage)")
+        if fetched == 0:
+            logger.warning(f"WARNING: Zero prices fetched for {symbol} ({start_date} to {end_date}). "
+                           f"Check CoinGecko/DefiLlama connectivity.")
+            await log_service.warning("balance_history",
+                f"Zero prices fetched for {symbol}. Check API connectivity.")
+
+        return result
 
     # ------------------------------------------------------------------
     # Price backfill
     # ------------------------------------------------------------------
 
     async def backfill_prices(self, user_id: int) -> dict:
-        """Re-fetch prices for all records with native_price_usd = 0.
+        """Re-fetch prices for all balance_history records with native_price_usd = 0.
 
-        Uses engine's PriceEnricher (DefiLlama -> CoinGecko fallback) instead
-        of direct CoinGecko calls. Results are also cached in engine_price_history.
+        Uses CoinGecko market_chart/range for bulk price fetching.
 
         Returns:
             Dict with status and count of updated records.
         """
-        from engine.enrichment.price_enricher import price_enricher
-
         unpriced = await get_unpriced_date_ranges(user_id)
         if not unpriced:
             logger.info(f"No unpriced records found for user {user_id}")
@@ -1159,17 +1241,7 @@ class BalanceHistoryService:
             logger.info(f"Backfilling {count} {symbol} records ({group['min_date']} to {group['max_date']})")
             await log_service.info("balance_history", f"Backfilling {count} {symbol} records ({group['min_date']} to {group['max_date']})")
 
-            # Generate list of all dates in range
-            start = datetime.strptime(group['min_date'], '%Y-%m-%d')
-            end = datetime.strptime(group['max_date'], '%Y-%m-%d')
-            dates = []
-            current = start
-            while current <= end:
-                dates.append(current.strftime('%Y-%m-%d'))
-                current += timedelta(days=1)
-
-            # Use engine's price enricher (DefiLlama -> CoinGecko fallback)
-            prices = await price_enricher.fetch_historical_prices_batch(symbol, dates)
+            prices = await self._fetch_historical_prices(symbol, group['min_date'], group['max_date'])
 
             if prices:
                 updated = await update_balance_history_prices(user_id, symbol, prices)

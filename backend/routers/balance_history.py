@@ -45,7 +45,7 @@ def _compute_coverage(data: list) -> dict:
 async def start_collection(
     user_id: int = Depends(verify_session),
     blockchain: str = Query(None, description="Optional chain filter"),
-    max_days: int = Query(730, description="Max days back to collect"),
+    max_days: int = Query(1095, description="Max days back to collect"),
     force: bool = Query(False, description="Force full re-collection, ignoring existing data"),
 ):
     """Start background balance history collection via the V2 engine pipeline.
@@ -105,7 +105,7 @@ async def start_collection(
 async def start_wallet_collection(
     user_id: int = Depends(verify_session),
     wallet_ids: List[int] = Query(..., description="Wallet IDs to collect"),
-    max_days: int = Query(730),
+    max_days: int = Query(1095),
     force: bool = Query(False),
 ):
     """Start balance history collection for specific wallets."""
@@ -172,6 +172,24 @@ async def collection_status(user_id: int = Depends(verify_session)):
     job = await get_latest_balance_history_job(user_id)
     if job:
         v1_time = job.get('started_at') or job.get('created_at', '')
+        # Detect stuck jobs: if running for > 1 hour, mark as failed
+        if job['status'] == 'running' and v1_time:
+            try:
+                from datetime import datetime
+                started = datetime.fromisoformat(v1_time.replace('Z', '+00:00').replace('+00:00', ''))
+                if (datetime.utcnow() - started).total_seconds() > 3600:
+                    logger.warning(f"Stale V1 job {job['id']} running since {v1_time}, marking as failed")
+                    from database import update_balance_history_job
+                    await update_balance_history_job(
+                        job['id'], status='failed',
+                        error_message='Job timed out (stuck for >1 hour, likely container restart)',
+                        step='Timed out'
+                    )
+                    job['status'] = 'failed'
+                    job['error_message'] = 'Job timed out (stuck for >1 hour)'
+            except Exception:
+                pass
+
         v1_resp = {
             "job_id": job['id'],
             "status": job['status'],

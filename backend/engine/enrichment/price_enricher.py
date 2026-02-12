@@ -546,8 +546,10 @@ class PriceEnricher:
                 data = response.json()
                 coin_data = data.get('coins', {}).get(defillama_key, {})
                 return coin_data.get('price')
+            else:
+                logger.warning(f"DefiLlama returned {response.status_code} for {defillama_key} at {timestamp}")
         except Exception as e:
-            logger.debug(f"DefiLlama historical price error for {defillama_key}: {e}")
+            logger.warning(f"DefiLlama historical price error for {defillama_key}: {e}")
         return None
 
     async def _fetch_from_coingecko_date(self, cg_id: str, date: str) -> Optional[float]:
@@ -568,9 +570,12 @@ class PriceEnricher:
                 current_price = market_data.get('current_price', {})
                 return current_price.get('usd')
             elif response.status_code == 429:
+                logger.warning(f"CoinGecko rate limit hit for {cg_id} on {date}, waiting 65s")
                 await asyncio.sleep(65)
+            else:
+                logger.warning(f"CoinGecko historical returned {response.status_code} for {cg_id} on {date}")
         except Exception as e:
-            logger.debug(f"CoinGecko historical price error for {cg_id} on {date}: {e}")
+            logger.warning(f"CoinGecko historical price error for {cg_id} on {date}: {e}")
         return None
 
     async def fetch_hourly_prices(self, asset_id: str, chain: str, hours: int = 24) -> Dict[str, float]:
