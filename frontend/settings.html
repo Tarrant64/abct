@@ -3311,7 +3311,10 @@
                     </div>
                 </div>
 
-                <button class="btn btn-primary" id="balRunBtn" onclick="runBalanceCollector()">Run Collector</button>
+                <div class="collector-form-row">
+                    <button class="btn btn-primary" id="balRunBtn" onclick="runBalanceCollector()">Run Collector</button>
+                    <button class="btn btn-secondary" id="balBackfillBtn" onclick="runPriceBackfill()" title="Re-fetch prices for records that have $0 price">Backfill Prices</button>
+                </div>
 
                 <div class="collector-status" id="balStatus"></div>
             </div>
@@ -5748,6 +5751,32 @@
                 setCollectorStatus('balStatus', 'failed', 'Error: ' + e.message);
                 btn.disabled = false;
                 btn.textContent = 'Run Collector';
+            }
+        }
+
+        async function runPriceBackfill() {
+            const btn = document.getElementById('balBackfillBtn');
+            btn.disabled = true;
+            btn.textContent = 'Backfilling...';
+            setCollectorStatus('balStatus', 'running', 'Fetching historical prices for records with missing prices...');
+
+            try {
+                const res = await authFetch('/balance-history/backfill-prices', { method: 'POST' });
+                const data = await res.json();
+
+                if (data.status === 'nothing_to_backfill') {
+                    setCollectorStatus('balStatus', 'completed', 'All records already have prices.');
+                } else if (data.status === 'completed') {
+                    const msg = 'Price backfill complete. ' + (data.updated || 0) + ' records updated.';
+                    setCollectorStatus('balStatus', 'completed', msg);
+                } else {
+                    setCollectorStatus('balStatus', 'failed', 'Backfill returned: ' + (data.status || 'unknown'));
+                }
+            } catch (e) {
+                setCollectorStatus('balStatus', 'failed', 'Error: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Backfill Prices';
             }
         }
 
