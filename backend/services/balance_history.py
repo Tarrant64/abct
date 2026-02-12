@@ -96,7 +96,7 @@ class BalanceHistoryService:
         self,
         user_id: int,
         blockchain: str = None,
-        max_days_back: int = 1095,
+        max_days_back: int = 3650,
         force: bool = False,
         wallet_ids: List[int] = None,
     ) -> int:
@@ -105,7 +105,7 @@ class BalanceHistoryService:
         Args:
             user_id: User ID
             blockchain: Optional chain filter (e.g. 'cardano')
-            max_days_back: Maximum days to look back (default 2 years)
+            max_days_back: Maximum days to look back (default ~10 years = all history)
             force: If True, ignore existing data and re-collect from scratch
             wallet_ids: Optional list of wallet IDs to collect for (None for all)
 
