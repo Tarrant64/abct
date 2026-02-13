@@ -125,11 +125,17 @@ async def get_mobile_portfolio_summary(
     )
 
     # Handle errors gracefully
+    if isinstance(portfolio_data, Exception):
+        logger.warning(f"Portfolio data fetch failed: {portfolio_data}")
+        portfolio_data = {}
     if isinstance(exchange_summary, Exception):
+        logger.warning(f"Exchange summary fetch failed: {exchange_summary}")
         exchange_summary = {"total_usd": 0}
     if isinstance(nft_summary, Exception):
-        nft_summary = {"total_value_usd": 0}
+        logger.warning(f"NFT summary fetch failed: {nft_summary}")
+        nft_summary = {"total_value_usd": 0, "collections": []}
     if isinstance(defi_summary, Exception):
+        logger.warning(f"DeFi summary fetch failed: {defi_summary}")
         defi_summary = {"all_positions": []}
 
     # Calculate self-custody value
@@ -669,7 +675,18 @@ async def get_mobile_nfts_summary(
 
     Mobile-optimized wrapper with totals and collection grouping.
     """
-    summary = await nfts.get_nft_summary(user_id=user_id)
+    try:
+        summary = await nfts.get_nft_summary(user_id=user_id)
+    except Exception as e:
+        logger.warning(f"Mobile NFT summary failed: {e}")
+        return {
+            "total_nfts": 0,
+            "total_collections": 0,
+            "total_floor_value_usd": 0,
+            "collections": [],
+            "last_updated": datetime.utcnow().isoformat() + "Z",
+            "error": str(e)
+        }
 
     # Filter by blockchain if specified
     collections = summary.get('collections', [])
@@ -679,13 +696,16 @@ async def get_mobile_nfts_summary(
     # Format for mobile
     mobile_collections = []
     for collection in collections:
+        floor_native = collection.get('floor_price_ada') or 0
+        floor_usd = collection.get('floor_price_usd') or 0
+        total_usd = collection.get('total_value_usd') or 0
         mobile_collections.append({
             "name": collection.get('name', 'Unknown'),
             "blockchain": collection.get('blockchain', 'cardano'),
             "nft_count": collection.get('count', 0),
-            "floor_price_native": round(collection.get('floor_price_ada', 0), 2),
-            "floor_price_usd": round(collection.get('floor_price_usd', 0), 2),
-            "total_floor_value_usd": round(collection.get('total_value_usd', 0), 2),
+            "floor_price_native": round(floor_native, 2),
+            "floor_price_usd": round(floor_usd, 2),
+            "total_floor_value_usd": round(total_usd, 2),
             "logo_url": collection.get('image_url', ''),
             "policy_id": collection.get('policy_id', '')
         })
