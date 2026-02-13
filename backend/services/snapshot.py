@@ -130,33 +130,67 @@ class SnapshotService:
         eth_price = prices.get('ETH', {}).get('usd', 0)
         sol_price = prices.get('SOL', {}).get('usd', 0)
 
-        # Calculate wallet totals for this user
+        # Calculate wallet totals for this user (all chains + on-chain tokens)
         wallets = await get_all_wallets(user_id=user_id)
         ada_amount = 0.0
         btc_amount = 0.0
         eth_amount = 0.0
         sol_amount = 0.0
 
+        # Track all chain native coin amounts
+        chain_amounts = {
+            'cardano': 0.0, 'bitcoin': 0.0, 'ethereum': 0.0, 'solana': 0.0,
+            'polygon': 0.0, 'base': 0.0, 'algorand': 0.0, 'bsc': 0.0,
+            'arbitrum': 0.0, 'avalanche': 0.0, 'tron': 0.0,
+        }
+
+        # Native assets (tokens) value across all wallets
+        native_assets_total_usd = 0.0
+
         for wallet in wallets:
             balance = await get_wallet_balance(wallet['id'])
             if balance:
                 amount = float(balance['amount'])
-                if wallet['blockchain'] == 'cardano':
+                blockchain = wallet['blockchain']
+                if blockchain in chain_amounts:
+                    chain_amounts[blockchain] += amount
+                # Keep legacy vars for snapshot columns
+                if blockchain == 'cardano':
                     ada_amount += amount
-                elif wallet['blockchain'] == 'bitcoin':
+                elif blockchain == 'bitcoin':
                     btc_amount += amount
-                elif wallet['blockchain'] == 'ethereum':
+                elif blockchain == 'ethereum':
                     eth_amount += amount
-                elif wallet['blockchain'] == 'solana':
+                elif blockchain == 'solana':
                     sol_amount += amount
 
-        # Calculate wallet USD values
-        wallet_value_usd = (
-            ada_amount * ada_price +
-            btc_amount * btc_price +
-            eth_amount * eth_price +
-            sol_amount * sol_price
-        )
+            # Calculate on-chain token values (native_assets_value_usd)
+            try:
+                from routers.portfolio import calculate_wallet_native_assets_value
+                token_value = await calculate_wallet_native_assets_value(
+                    wallet['id'], wallet['blockchain'], user_id
+                )
+                native_assets_total_usd += token_value
+            except Exception as e:
+                logger.debug(f"Could not get native assets value for wallet {wallet['id']}: {e}")
+
+        # Map chains to price symbols
+        chain_price_map = {
+            'cardano': 'ADA', 'bitcoin': 'BTC', 'ethereum': 'ETH', 'solana': 'SOL',
+            'polygon': 'POL', 'base': 'ETH', 'algorand': 'ALGO', 'bsc': 'BNB',
+            'arbitrum': 'ETH', 'avalanche': 'AVAX', 'tron': 'TRX',
+        }
+
+        # Calculate wallet USD values from all chains
+        wallet_value_usd = 0.0
+        for chain, amount in chain_amounts.items():
+            if amount > 0:
+                symbol = chain_price_map[chain]
+                price = prices.get(symbol, {}).get('usd', 0)
+                wallet_value_usd += amount * price
+
+        # Add on-chain token values
+        wallet_value_usd += native_assets_total_usd
 
         # Get staking value (from cache if available)
         staking_value_usd = await self._get_staking_value(prices, user_id=user_id)
@@ -297,14 +331,27 @@ class SnapshotService:
             return 0.0
 
     async def _get_exchange_value(self, prices: dict, user_id: int = None) -> float:
-        """Get total exchange value from cached data."""
+        """Get total exchange value from cached data (all exchanges)."""
         try:
             from database import get_cache
-            # Use the correct cache key from exchanges router
-            cached = await get_cache("coinbase_portfolio", user_id=user_id)
-            if cached and 'total_usd' in cached:
-                return float(cached['total_usd'])
-            return 0.0
+            total = 0.0
+
+            # Check all exchange cache keys
+            exchange_keys = [
+                "coinbase_portfolio",
+                "binance_portfolio",
+                "binance_us_portfolio",
+                "okx_portfolio",
+                "bitget_portfolio",
+                "gate_portfolio",
+                "kucoin_portfolio",
+            ]
+            for key in exchange_keys:
+                cached = await get_cache(key, user_id=user_id)
+                if cached and 'total_usd' in cached:
+                    total += float(cached['total_usd'])
+
+            return total
         except Exception as e:
             logger.debug(f"Could not get exchange value: {e}")
             return 0.0
@@ -633,33 +680,46 @@ class SnapshotService:
             prices = await pricing.get_all_tracked_prices()
 
             ada_price = prices.get('ADA', {}).get('usd', 0)
-            btc_price = prices.get('BTC', {}).get('usd', 0)
-            eth_price = prices.get('ETH', {}).get('usd', 0)
-            sol_price = prices.get('SOL', {}).get('usd', 0)
 
-            # Calculate wallet totals for this user
+            # Calculate wallet totals across all chains + on-chain tokens
             wallets = await get_all_wallets(user_id=user_id)
-            ada_amount = btc_amount = eth_amount = sol_amount = 0.0
+
+            chain_amounts = {
+                'cardano': 0.0, 'bitcoin': 0.0, 'ethereum': 0.0, 'solana': 0.0,
+                'polygon': 0.0, 'base': 0.0, 'algorand': 0.0, 'bsc': 0.0,
+                'arbitrum': 0.0, 'avalanche': 0.0, 'tron': 0.0,
+            }
+            chain_price_map = {
+                'cardano': 'ADA', 'bitcoin': 'BTC', 'ethereum': 'ETH', 'solana': 'SOL',
+                'polygon': 'POL', 'base': 'ETH', 'algorand': 'ALGO', 'bsc': 'BNB',
+                'arbitrum': 'ETH', 'avalanche': 'AVAX', 'tron': 'TRX',
+            }
+            native_assets_total_usd = 0.0
 
             for wallet in wallets:
                 balance = await get_wallet_balance(wallet['id'])
                 if balance:
                     amount = float(balance['amount'])
-                    if wallet['blockchain'] == 'cardano':
-                        ada_amount += amount
-                    elif wallet['blockchain'] == 'bitcoin':
-                        btc_amount += amount
-                    elif wallet['blockchain'] == 'ethereum':
-                        eth_amount += amount
-                    elif wallet['blockchain'] == 'solana':
-                        sol_amount += amount
+                    blockchain = wallet['blockchain']
+                    if blockchain in chain_amounts:
+                        chain_amounts[blockchain] += amount
 
-            wallet_value = (
-                ada_amount * ada_price +
-                btc_amount * btc_price +
-                eth_amount * eth_price +
-                sol_amount * sol_price
-            )
+                try:
+                    from routers.portfolio import calculate_wallet_native_assets_value
+                    token_value = await calculate_wallet_native_assets_value(
+                        wallet['id'], wallet['blockchain'], user_id
+                    )
+                    native_assets_total_usd += token_value
+                except Exception:
+                    pass
+
+            wallet_value = 0.0
+            for chain, amount in chain_amounts.items():
+                if amount > 0:
+                    symbol = chain_price_map[chain]
+                    price = prices.get(symbol, {}).get('usd', 0)
+                    wallet_value += amount * price
+            wallet_value += native_assets_total_usd
 
             # Get other component values for this user
             staking_value = await self._get_staking_value(prices, user_id=user_id)
