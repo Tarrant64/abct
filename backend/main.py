@@ -7,11 +7,12 @@ background tasks for portfolio snapshots and NFT price collection.
 
 Startup Sequence:
     1. Initialize SQLite database schema
-    2. Launch background task for portfolio snapshot (every 2 hours)
-    3. Launch background task for incremental NFT floor price collection
-    4. Register all API routers
-    5. Mount static files for frontend
-    6. Start Uvicorn ASGI server
+    2. Warm price caches and collect NFT floor prices
+    3. Seed wallet sources and run off-chain collector (V2)
+    4. Auto-materialize on-chain data from engine events
+    5. Register all API routers
+    6. Mount static files for frontend
+    7. Start Uvicorn ASGI server
 
 API Endpoints:
     - GET /           : Serve frontend dashboard
@@ -159,54 +160,10 @@ async def lifespan(app: FastAPI):
     logger.info("NFT image cache database initialized")
     await log_service.info("main", "NFT image cache database initialized")
 
-    # Check if we need to create today's portfolio snapshot (runs in background)
-    async def create_snapshot_background():
+    # Warm caches on startup (prices + portfolio) — no V1 snapshot needed
+    async def warm_caches_background():
         try:
-            from services.snapshot import snapshot_service
-            from services.rate_limit_tracker import rate_limit_tracker
-
             startup_status["snapshot_check"] = "loading"
-
-            # Check if we should run snapshot creation (30 minute cooldown)
-            should_run, reason = await rate_limit_tracker.should_run_task(
-                task_name='portfolio_snapshot',
-                service='portfolio',
-                cooldown_minutes=30
-            )
-
-            if not should_run:
-                logger.info(f"Skipping portfolio snapshot: {reason}")
-                startup_status["snapshot_check"] = "skipped"
-                return
-
-            logger.info("Checking for portfolio snapshot...")
-            await snapshot_service.check_and_create_snapshot()
-            startup_status["snapshot_check"] = "ready"
-
-            # Mark task as run
-            await rate_limit_tracker.mark_task_run('portfolio_snapshot', 'portfolio', 'auto')
-
-            # V1 auto-generate historical data disabled (V2 on-chain history in development)
-            logger.info("V1 auto-generate historical data disabled (V2 development mode)")
-
-            # Warm the portfolio cache for faster page loads (separate cooldown check)
-            try:
-                should_warm, warm_reason = await rate_limit_tracker.should_run_task(
-                    task_name='cache_warm',
-                    service='portfolio',
-                    cooldown_minutes=10  # Shorter cooldown for cache warming
-                )
-
-                if should_warm:
-                    logger.info("Warming portfolio cache...")
-                    from routers.portfolio import get_portfolio_summary
-                    await get_portfolio_summary(refresh=False)
-                    logger.info("Portfolio cache warmed successfully")
-                    await rate_limit_tracker.mark_task_run('cache_warm', 'portfolio', 'auto')
-                else:
-                    logger.info(f"Skipping cache warm: {warm_reason}")
-            except Exception as cache_error:
-                logger.warning(f"Could not warm portfolio cache: {cache_error}")
 
             # Warm price cache for faster initial page loads
             try:
@@ -217,9 +174,10 @@ async def lifespan(app: FastAPI):
             except Exception as price_error:
                 logger.warning(f"Could not warm price cache: {price_error}")
 
+            startup_status["snapshot_check"] = "ready"
         except Exception as e:
             startup_status["snapshot_check"] = "error"
-            logger.warning(f"Could not check/create portfolio snapshot: {e}")
+            logger.warning(f"Cache warming failed: {e}")
 
     # Incrementally collect NFT floor prices (runs in background)
     async def collect_nft_prices_background():
@@ -280,36 +238,9 @@ async def lifespan(app: FastAPI):
             # Mark overall ready once NFT prices are done (last task)
             startup_status["ready"] = True
 
-    # Periodic snapshot task - runs every 2 hours to create snapshots
-    async def periodic_snapshot_task():
-        """Background task that creates portfolio snapshots every 2 hours."""
-        import asyncio
-        from services.snapshot import snapshot_service
-
-        while True:
-            try:
-                # Wait 2 hours between snapshots
-                await asyncio.sleep(2 * 3600)
-
-                logger.info("Periodic snapshot task: Creating portfolio snapshots...")
-                await log_service.info("main", "Periodic snapshot task: Creating portfolio snapshots")
-
-                await snapshot_service.check_and_create_snapshot()
-
-                logger.info("Periodic snapshot task: Snapshot creation complete")
-                await log_service.info("main", "Periodic snapshot task: Snapshot creation complete")
-            except Exception as e:
-                logger.error(f"Periodic snapshot task error: {e}")
-                await log_service.error("main", f"Periodic snapshot task error: {e}")
-                # Continue running despite errors
-                await asyncio.sleep(3600)  # Wait 1 hour before retrying on error
-
-    # Start background tasks (non-blocking)
-    asyncio.create_task(create_snapshot_background())
+    # Start background tasks (non-blocking) — V1 snapshot tasks removed (V2 only)
+    asyncio.create_task(warm_caches_background())
     asyncio.create_task(collect_nft_prices_background())
-    # Re-enabled: unified chart needs fresh V1 snapshots for off-chain data
-    asyncio.create_task(periodic_snapshot_task())
-    logger.info("Periodic snapshot task started (feeds unified chart off-chain data)")
 
     # Seed wallet_sources and start off-chain collector (V2 per-wallet balances)
     async def offchain_collector_startup():
@@ -348,9 +279,34 @@ async def lifespan(app: FastAPI):
                 await log_service.error("main", f"Periodic off-chain collector error: {e}")
                 await asyncio.sleep(3600)
 
+    # Auto-materialize on-chain data on startup if engine_events exist
+    async def materialize_on_startup():
+        try:
+            from engine.materializer import materializer
+            from engine import db as engine_db
+            from database import get_all_users
+
+            users = await get_all_users()
+            non_demo = [u for u in users if not u.get('is_demo', False)]
+            for user in non_demo:
+                uid = user['id']
+                event_count = await engine_db.get_event_count(uid)
+                if event_count > 0:
+                    logger.info(f"Startup materialize: user {uid} has {event_count} engine_events, materializing...")
+                    await materializer.materialize_onchain(uid)
+                else:
+                    # No engine_events — try V1 balance_history migration
+                    logger.info(f"Startup materialize: user {uid} has 0 engine_events, trying V1 balance_history...")
+                    await materializer.materialize_onchain_from_v1_balance_history(uid)
+                logger.info(f"Startup materialize: user {uid} complete")
+        except Exception as e:
+            logger.warning(f"Startup materialization failed: {e}")
+            await log_service.warning("main", f"Startup materialization failed: {e}")
+
     asyncio.create_task(offchain_collector_startup())
     asyncio.create_task(periodic_offchain_collector())
-    logger.info("Off-chain collector started (per-wallet V2 balances)")
+    asyncio.create_task(materialize_on_startup())
+    logger.info("Off-chain collector + startup materialization started (V2 only)")
 
     # Initialize and optionally start NFT background scheduler
     startup_status["nft_scheduler"] = "initializing"
@@ -372,44 +328,38 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Could not initialize NFT scheduler: {e}")
         await log_service.warning("main", f"NFT scheduler initialization failed: {e}")
 
-    # Start balance history schedulers for users that have them enabled
-    try:
-        from database import get_all_users, get_user_setting
-        from services.balance_history import balance_history_service
-
-        users = await get_all_users()
-        for user in users:
-            uid = user['id']
-            enabled = await get_user_setting(uid, 'balance_history_schedule_enabled', '0')
-            interval = await get_user_setting(uid, 'balance_history_schedule_hours', '0')
-            if enabled == '1' and int(interval) > 0:
-                await balance_history_service.start_scheduler(uid, int(interval))
-                logger.info(f"Balance history scheduler started for user {uid}, interval={interval}h")
-                await log_service.info("main", f"Balance history scheduler started for user {uid}, interval={interval}h")
-    except Exception as e:
-        logger.warning(f"Could not start balance history schedulers: {e}")
-        await log_service.warning("main", f"Balance history scheduler startup failed: {e}")
-
     # Initialize V2 engine orchestrator
     try:
         from engine.orchestrator import backfill_orchestrator
         await backfill_orchestrator.initialize()
         logger.info("V2 engine orchestrator initialized")
         await log_service.info("main", "V2 engine orchestrator initialized")
+
+        # Start V2 auto-collect schedulers for users that have them enabled
+        from database import get_all_users, get_user_setting
+        users = await get_all_users()
+        for user in users:
+            uid = user['id']
+            enabled = await get_user_setting(uid, 'balance_history_schedule_enabled', '0')
+            interval = await get_user_setting(uid, 'balance_history_schedule_hours', '0')
+            if enabled == '1' and int(interval) > 0:
+                await backfill_orchestrator.start_auto_collect(uid, int(interval))
+                logger.info(f"V2 auto-collect started for user {uid}, interval={interval}h")
+                await log_service.info("main", f"V2 auto-collect started for user {uid}, interval={interval}h")
     except Exception as e:
         logger.warning(f"V2 engine orchestrator init failed: {e}")
         await log_service.warning("main", f"V2 engine orchestrator init failed: {e}")
 
     yield
 
-    # Shutdown: Stop balance history schedulers
+    # Shutdown: Stop V2 auto-collect schedulers
     try:
-        from services.balance_history import balance_history_service as bhs
-        for uid in list(bhs._scheduler_tasks.keys()):
-            await bhs.stop_scheduler(uid)
-        logger.info("Balance history schedulers stopped")
+        from engine.orchestrator import backfill_orchestrator as bo
+        for uid in list(bo._auto_collect_tasks.keys()):
+            await bo.stop_auto_collect(uid)
+        logger.info("V2 auto-collect schedulers stopped")
     except Exception as e:
-        logger.warning(f"Error stopping balance history schedulers: {e}")
+        logger.warning(f"Error stopping V2 auto-collect: {e}")
 
     # Shutdown: Stop NFT scheduler
     logger.info("Shutting down NFT scheduler...")

@@ -308,6 +308,15 @@ class BackfillOrchestrator:
             done = sum(s.get('done', 0) for s in stats.values())
             failed = sum(s.get('failed', 0) for s in stats.values())
 
+            # Auto-materialize into wallet_daily_balances
+            try:
+                from engine.materializer import materializer
+                logger.info(f"Backfill {backfill_id}: auto-materializing to wallet_daily_balances...")
+                await materializer.materialize_onchain(user_id)
+                logger.info(f"Backfill {backfill_id}: materialization complete")
+            except Exception as e:
+                logger.warning(f"Backfill {backfill_id}: auto-materialize failed: {e}")
+
             # Count total events for summary
             event_count = await engine_db.get_event_count(user_id)
 

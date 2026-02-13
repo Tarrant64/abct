@@ -1,9 +1,9 @@
 """
-Balance History Router — V2 On-Chain History API
+Balance History Router — V2 Engine API
 
-Endpoints for collecting, querying, and managing real on-chain balance history.
+Endpoints for collecting, querying, and managing on-chain balance history.
 Uses the V2 engine pipeline (expand -> index -> hydrate -> normalize -> enrich)
-as the primary data source, with V1 balance_history table as fallback.
+exclusively. Data is read from wallet_daily_balances.
 """
 
 import logging
@@ -17,14 +17,12 @@ from pydantic import BaseModel
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from auth_utils import verify_session
 from database import (
-    get_latest_balance_history_job,
     get_balance_history_coverage,
     get_user_setting,
     set_user_setting,
     get_username_by_user_id,
 )
 from middleware.demo_mode import is_demo_user
-from services.balance_history import balance_history_service
 from services.demo_data_generator import generate_portfolio_history
 from services.logging_service import get_logging_service
 
@@ -60,45 +58,30 @@ async def start_collection(
     logger.info(f"Balance history collect requested: user={user_id}, chain={blockchain}, max_days={max_days}, force={force}")
     await log_service.info("balance_history", f"Collection requested via engine: user={user_id}, chain={blockchain or 'all'}, max_days={max_days}")
 
-    # Try V2 engine backfill
-    try:
-        from engine.orchestrator import backfill_orchestrator
-        from engine.models import BackfillRequest, ChainId, WorkDomain
-        from engine import db as engine_db
+    from engine.orchestrator import backfill_orchestrator
+    from engine.models import BackfillRequest, ChainId, WorkDomain
+    from engine import db as engine_db
 
-        if blockchain:
-            chains = [ChainId(blockchain)]
-        else:
-            chains = list(ChainId)
+    if blockchain:
+        chains = [ChainId(blockchain)]
+    else:
+        chains = list(ChainId)
 
-        request = BackfillRequest(
-            chains=chains,
-            domains=[WorkDomain.INDEX, WorkDomain.HYDRATE, WorkDomain.NORMALIZE, WorkDomain.ENRICH_PRICE],
-        )
+    request = BackfillRequest(
+        chains=chains,
+        domains=[WorkDomain.INDEX, WorkDomain.HYDRATE, WorkDomain.NORMALIZE, WorkDomain.ENRICH_PRICE],
+    )
 
-        backfill_id = await backfill_orchestrator.plan_backfill(user_id, request)
+    backfill_id = await backfill_orchestrator.plan_backfill(user_id, request)
 
-        # Create scheduler run record for manual trigger
-        run_id = await engine_db.create_scheduler_run(user_id, backfill_id, 'manual')
-        backfill_orchestrator.set_run_id(backfill_id, run_id)
+    # Create scheduler run record for manual trigger
+    run_id = await engine_db.create_scheduler_run(user_id, backfill_id, 'manual')
+    backfill_orchestrator.set_run_id(backfill_id, run_id)
 
-        await backfill_orchestrator.run_backfill(backfill_id)
+    await backfill_orchestrator.run_backfill(backfill_id)
 
-        await log_service.info("balance_history", f"Engine backfill started: id={backfill_id}, run={run_id}")
-        return {"status": "started", "job_id": backfill_id}
-
-    except Exception as e:
-        logger.warning(f"Engine backfill failed, falling back to V1: {e}")
-        await log_service.warning("balance_history", f"Engine backfill failed ({e}), using V1 collector")
-
-        # V1 fallback
-        job_id = await balance_history_service.collect_history(
-            user_id=user_id,
-            blockchain=blockchain,
-            max_days_back=max_days,
-            force=force,
-        )
-        return {"status": "started", "job_id": job_id}
+    await log_service.info("balance_history", f"Engine backfill started: id={backfill_id}, run={run_id}")
+    return {"status": "started", "job_id": backfill_id}
 
 
 @router.post("/collect/wallets")
@@ -120,60 +103,45 @@ async def start_wallet_collection(
     logger.info(f"Balance history collect for wallets requested: user={user_id}, wallets={wallet_ids}")
     await log_service.info("balance_history", f"Wallet-specific collection requested: user={user_id}, wallets={wallet_ids}")
 
-    # Try V2 engine backfill with wallet filtering
-    try:
-        from engine.orchestrator import backfill_orchestrator
-        from engine.models import BackfillRequest, ChainId, WorkDomain
-        from engine import db as engine_db
+    from engine.orchestrator import backfill_orchestrator
+    from engine.models import BackfillRequest, ChainId, WorkDomain
+    from engine import db as engine_db
 
-        # Determine chains from the selected wallets
-        from database import get_all_wallets
-        all_wallets = await get_all_wallets(user_id=user_id)
-        selected_chains = set()
-        for w in all_wallets:
-            if w.get('id') in wallet_ids:
-                chain = w.get('blockchain', '').lower()
-                if chain:
-                    selected_chains.add(chain)
+    # Determine chains from the selected wallets
+    from database import get_all_wallets
+    all_wallets = await get_all_wallets(user_id=user_id)
+    selected_chains = set()
+    for w in all_wallets:
+        if w.get('id') in wallet_ids:
+            chain = w.get('blockchain', '').lower()
+            if chain:
+                selected_chains.add(chain)
 
-        chains = []
-        for c in selected_chains:
-            try:
-                chains.append(ChainId(c))
-            except ValueError:
-                pass
+    chains = []
+    for c in selected_chains:
+        try:
+            chains.append(ChainId(c))
+        except ValueError:
+            pass
 
-        if not chains:
-            chains = list(ChainId)
+    if not chains:
+        chains = list(ChainId)
 
-        request = BackfillRequest(
-            chains=chains,
-            wallet_ids=wallet_ids,
-            domains=[WorkDomain.INDEX, WorkDomain.HYDRATE, WorkDomain.NORMALIZE, WorkDomain.ENRICH_PRICE],
-        )
+    request = BackfillRequest(
+        chains=chains,
+        wallet_ids=wallet_ids,
+        domains=[WorkDomain.INDEX, WorkDomain.HYDRATE, WorkDomain.NORMALIZE, WorkDomain.ENRICH_PRICE],
+    )
 
-        backfill_id = await backfill_orchestrator.plan_backfill(user_id, request)
+    backfill_id = await backfill_orchestrator.plan_backfill(user_id, request)
 
-        run_id = await engine_db.create_scheduler_run(user_id, backfill_id, 'manual')
-        backfill_orchestrator.set_run_id(backfill_id, run_id)
+    run_id = await engine_db.create_scheduler_run(user_id, backfill_id, 'manual')
+    backfill_orchestrator.set_run_id(backfill_id, run_id)
 
-        await backfill_orchestrator.run_backfill(backfill_id)
+    await backfill_orchestrator.run_backfill(backfill_id)
 
-        await log_service.info("balance_history", f"Engine wallet backfill started: id={backfill_id}, wallets={wallet_ids}")
-        return {"status": "started", "job_id": backfill_id}
-
-    except Exception as e:
-        logger.warning(f"Engine wallet backfill failed, falling back to V1: {e}")
-        await log_service.warning("balance_history", f"Engine wallet backfill failed ({e}), using V1 collector")
-
-        # V1 fallback
-        job_id = await balance_history_service.collect_history(
-            user_id=user_id,
-            max_days_back=max_days,
-            force=force,
-            wallet_ids=wallet_ids,
-        )
-        return {"status": "started", "job_id": job_id}
+    await log_service.info("balance_history", f"Engine wallet backfill started: id={backfill_id}, wallets={wallet_ids}")
+    return {"status": "started", "job_id": backfill_id}
 
 
 @router.get("/collect/status")
@@ -188,15 +156,13 @@ async def collection_status(user_id: int = Depends(verify_session)):
     if username and await is_demo_user(username):
         return {"status": "completed", "progress": 100, "step": "Demo data loaded"}
 
-    v2_resp = None
-    v2_time = None
+    # V2 engine status only
     try:
         from engine import db as engine_db
         backfills = await engine_db.get_user_backfills(user_id)
         if backfills:
             latest = backfills[0]  # Sorted by created_at DESC
             status = latest['status']
-            v2_time = latest.get('created_at', '')
 
             step_map = {
                 'planning': 'Planning backfill...',
@@ -206,7 +172,7 @@ async def collection_status(user_id: int = Depends(verify_session)):
                 'cancelled': 'Cancelled',
             }
 
-            v2_resp = {
+            return {
                 "job_id": latest['id'],
                 "status": status,
                 "progress": latest.get('progress_pct', 0),
@@ -218,54 +184,6 @@ async def collection_status(user_id: int = Depends(verify_session)):
     except Exception as e:
         logger.debug(f"Engine status check failed: {e}")
 
-    v1_resp = None
-    v1_time = None
-    job = await get_latest_balance_history_job(user_id)
-    if job:
-        v1_time = job.get('started_at') or job.get('created_at', '')
-        # Detect stuck jobs: if running for > 1 hour, mark as failed
-        if job['status'] == 'running' and v1_time:
-            try:
-                from datetime import datetime
-                started = datetime.fromisoformat(v1_time.replace('Z', '+00:00').replace('+00:00', ''))
-                if (datetime.utcnow() - started).total_seconds() > 3600:
-                    logger.warning(f"Stale V1 job {job['id']} running since {v1_time}, marking as failed")
-                    from database import update_balance_history_job
-                    await update_balance_history_job(
-                        job['id'], status='failed',
-                        error_message='Job timed out (stuck for >1 hour, likely container restart)',
-                        step='Timed out'
-                    )
-                    job['status'] = 'failed'
-                    job['error_message'] = 'Job timed out (stuck for >1 hour)'
-            except Exception:
-                pass
-
-        v1_resp = {
-            "job_id": job['id'],
-            "status": job['status'],
-            "progress": job.get('progress', 0),
-            "step": job.get('step', ''),
-            "total_items": job.get('total_items', 0),
-            "processed_items": job.get('processed_items', 0),
-            "error_message": job.get('error_message'),
-        }
-
-    # If V1 job is currently running, always show V1 status
-    if v1_resp and v1_resp['status'] == 'running':
-        return v1_resp
-
-    # If both exist, return whichever was started more recently
-    if v2_resp and v1_resp:
-        if (v1_time or '') >= (v2_time or ''):
-            return v1_resp
-        return v2_resp
-
-    if v2_resp:
-        return v2_resp
-    if v1_resp:
-        return v1_resp
-
     return {"status": "idle", "progress": 0, "step": "No collection started"}
 
 
@@ -275,20 +193,15 @@ async def cancel_collection(user_id: int = Depends(verify_session)):
     logger.info(f"Balance history collection cancel requested: user={user_id}")
     await log_service.info("balance_history", f"Collection cancel requested: user={user_id}")
 
-    # Try cancelling engine backfill
-    try:
-        from engine import db as engine_db
-        from engine.orchestrator import backfill_orchestrator
-        backfills = await engine_db.get_user_backfills(user_id)
-        for bf in backfills:
-            if bf['status'] in ('planning', 'running'):
-                await backfill_orchestrator.cancel_backfill(bf['id'])
-                return {"status": "cancelled"}
-    except Exception as e:
-        logger.debug(f"Engine cancel failed: {e}")
+    # Cancel engine backfill
+    from engine import db as engine_db
+    from engine.orchestrator import backfill_orchestrator
+    backfills = await engine_db.get_user_backfills(user_id)
+    for bf in backfills:
+        if bf['status'] in ('planning', 'running'):
+            await backfill_orchestrator.cancel_backfill(bf['id'])
+            return {"status": "cancelled"}
 
-    # V1 fallback
-    await balance_history_service.cancel_collection(user_id)
     return {"status": "cancelled"}
 
 
@@ -333,72 +246,37 @@ async def get_history_data(
 
     logger.info(f"Balance history data requested: user={user_id}, range={range}")
 
+    from datetime import datetime, timedelta
+    from database import get_unified_daily_totals
+
     range_to_days = {
         '24h': 1, '1w': 7, '1m': 30, '3m': 90,
         '6m': 180, '1y': 365, '2y': 730,
     }
     days = range_to_days.get(range)  # None for 'all' and 'custom'
 
-    # Collect data from both V2 engine and V1 balance_history table, then merge.
-    # The Data Collectors tab writes to V1, while scheduled backfills write to V2.
-    # Merging ensures the chart reflects data from both sources.
+    # Determine start_date for the query
+    if range == 'custom' and start_date:
+        query_start = start_date
+    elif days:
+        query_start = (datetime.utcnow() - timedelta(days=days)).strftime('%Y-%m-%d')
+    else:
+        query_start = None  # 'all' — no start filter
 
-    v2_data = []
-    try:
-        from engine import db as engine_db
-        from engine.orchestrator import backfill_orchestrator
+    rows = await get_unified_daily_totals(user_id, start_date=query_start)
 
-        event_count = await engine_db.get_event_count(user_id)
-        if event_count > 0:
-            v2_result = await backfill_orchestrator.get_history_data(user_id, range)
-            v2_data = v2_result.get('data', [])
-            if v2_data:
-                logger.info(f"Engine returned {len(v2_data)} data points")
-    except Exception as e:
-        logger.warning(f"Engine history failed: {e}")
+    data = []
+    for row in rows:
+        total = row.get('total_value', 0) or 0
+        data.append({
+            'date': row['date'],
+            'value': round(total, 2),
+            'total_value': round(total, 2),
+            'chains': {},  # Per-chain breakdown not available from unified totals
+        })
 
-    v1_result = await balance_history_service.get_aggregated_history(
-        user_id=user_id,
-        days=days,
-        start_date=start_date if range == 'custom' else None,
-        end_date=end_date if range == 'custom' else None,
-    )
-    v1_data = v1_result.get('data', [])
-    if v1_data:
-        logger.info(f"V1 returned {len(v1_data)} data points")
-
-    # If only one source has data, return it directly
-    if not v2_data:
-        return v1_result
-    if not v1_data:
-        return {'data': v2_data, 'coverage': _compute_coverage(v2_data)}
-
-    # Merge: V2 chains take priority; V1 fills in chains V2 doesn't cover
-    v2_chains = set()
-    for point in v2_data:
-        v2_chains.update(point.get('chains', {}).keys())
-
-    v2_by_date = {p['date']: p for p in v2_data}
-    v1_by_date = {p['date']: p for p in v1_data}
-    all_dates = sorted(set(v2_by_date.keys()) | set(v1_by_date.keys()))
-
-    merged = []
-    for date in all_dates:
-        chains = {}
-        # V1 chains that V2 doesn't cover
-        if date in v1_by_date:
-            for chain, val in v1_by_date[date].get('chains', {}).items():
-                if chain not in v2_chains:
-                    chains[chain] = val
-        # V2 chains (always preferred)
-        if date in v2_by_date:
-            for chain, val in v2_by_date[date].get('chains', {}).items():
-                chains[chain] = val
-        total = sum(chains.values())
-        merged.append({'date': date, 'value': total, 'chains': chains})
-
-    logger.info(f"Merged history: {len(merged)} data points (V2 chains: {v2_chains})")
-    return {'data': merged, 'coverage': _compute_coverage(merged)}
+    logger.info(f"Balance history: {len(data)} data points from wallet_daily_balances")
+    return {'data': data, 'coverage': _compute_coverage(data)}
 
 
 @router.post("/backfill-prices")
@@ -449,10 +327,7 @@ async def backfill_prices(user_id: int = Depends(verify_session)):
     except Exception as e:
         logger.warning(f"Engine price enrichment failed: {e}")
 
-    # Also backfill V1 balance_history prices
-    result = await balance_history_service.backfill_prices(user_id)
-    result['engine_enriched'] = engine_enriched
-    return result
+    return {"status": "completed", "engine_enriched": engine_enriched}
 
 
 @router.get("/coverage")
@@ -504,23 +379,16 @@ async def set_schedule(
     await set_user_setting(user_id, 'balance_history_schedule_enabled', '1' if body.enabled else '0')
     await set_user_setting(user_id, 'balance_history_schedule_hours', str(body.interval_hours))
 
-    # Use V2 engine scheduler
-    try:
-        from engine.orchestrator import backfill_orchestrator
-        if body.enabled and body.interval_hours > 0:
-            await backfill_orchestrator.start_auto_collect(user_id, body.interval_hours)
-            await log_service.info("balance_history", f"V2 scheduler started: user={user_id}, interval={body.interval_hours}h")
-            logger.info(f"V2 engine scheduler started: user={user_id}, interval={body.interval_hours}h")
-        else:
-            await backfill_orchestrator.stop_auto_collect(user_id)
-            await log_service.info("balance_history", f"V2 scheduler stopped: user={user_id}")
-            logger.info(f"V2 engine scheduler stopped: user={user_id}")
-    except Exception as e:
-        logger.warning(f"V2 scheduler failed, falling back to V1: {e}")
-        if body.enabled and body.interval_hours > 0:
-            await balance_history_service.start_scheduler(user_id, body.interval_hours)
-        else:
-            await balance_history_service.stop_scheduler(user_id)
+    # V2 engine scheduler only
+    from engine.orchestrator import backfill_orchestrator
+    if body.enabled and body.interval_hours > 0:
+        await backfill_orchestrator.start_auto_collect(user_id, body.interval_hours)
+        await log_service.info("balance_history", f"V2 scheduler started: user={user_id}, interval={body.interval_hours}h")
+        logger.info(f"V2 engine scheduler started: user={user_id}, interval={body.interval_hours}h")
+    else:
+        await backfill_orchestrator.stop_auto_collect(user_id)
+        await log_service.info("balance_history", f"V2 scheduler stopped: user={user_id}")
+        logger.info(f"V2 engine scheduler stopped: user={user_id}")
 
     return {
         "status": "ok",
@@ -536,20 +404,12 @@ async def get_last_run(user_id: int = Depends(verify_session)):
 
     run = None
 
-    # Check V2 engine scheduler runs
+    # V2 engine scheduler runs only
     try:
         from engine import db as engine_db
         run = await engine_db.get_latest_scheduler_run(user_id)
     except Exception as e:
         logger.debug(f"Failed to get engine last run: {e}")
-
-    # Also check V1 jobs (Data Collectors tab uses V1)
-    v1_job = await get_latest_balance_history_job(user_id)
-    if v1_job and v1_job.get('status') in ('completed', 'running'):
-        v1_started = v1_job.get('started_at') or v1_job.get('created_at', '')
-        v2_started = run.get('started_at', '') if run else ''
-        if v1_started >= v2_started:
-            run = {'started_at': v1_started, 'status': v1_job['status']}
 
     # Calculate next run from schedule settings + last run time
     next_run = None

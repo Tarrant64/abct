@@ -5845,7 +5845,9 @@
                     if (onchain) parts.push(onchain.rows + ' on-chain rows');
                 }
                 if (data.engine_events !== undefined) {
-                    parts.push(data.engine_events + ' engine events');
+                    parts.push(data.engine_events > 0
+                        ? data.engine_events + ' engine events'
+                        : 'V1 history migrated');
                 }
                 if (data.errors && data.errors.onchain) {
                     parts.push('On-chain error: ' + data.errors.onchain);
