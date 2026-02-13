@@ -783,27 +783,65 @@ class SnapshotService:
             logger.error("Could not fetch historical prices from CoinGecko")
             return {"status": "error", "message": "Could not fetch historical prices"}
 
-        # Get current wallet balances (assumes constant holdings for historical calculation)
+        # Get current wallet balances across all chains (assumes constant holdings)
         wallets = await get_all_wallets(user_id=user_id)
         ada_amount = 0.0
         btc_amount = 0.0
         eth_amount = 0.0
         sol_amount = 0.0
 
+        chain_amounts = {
+            'cardano': 0.0, 'bitcoin': 0.0, 'ethereum': 0.0, 'solana': 0.0,
+            'polygon': 0.0, 'base': 0.0, 'algorand': 0.0, 'bsc': 0.0,
+            'arbitrum': 0.0, 'avalanche': 0.0, 'tron': 0.0,
+        }
+        chain_price_symbols = {
+            'cardano': 'ADA', 'bitcoin': 'BTC', 'ethereum': 'ETH', 'solana': 'SOL',
+            'polygon': 'POL', 'base': 'ETH', 'algorand': 'ALGO', 'bsc': 'BNB',
+            'arbitrum': 'ETH', 'avalanche': 'AVAX', 'tron': 'TRX',
+        }
+
+        # Get current native token values
+        native_assets_total_usd = 0.0
+
         for wallet in wallets:
             balance = await get_wallet_balance(wallet['id'])
             if balance:
                 amount = float(balance['amount'])
-                if wallet['blockchain'] == 'cardano':
+                blockchain = wallet['blockchain']
+                if blockchain in chain_amounts:
+                    chain_amounts[blockchain] += amount
+                # Legacy vars for snapshot columns
+                if blockchain == 'cardano':
                     ada_amount += amount
-                elif wallet['blockchain'] == 'bitcoin':
+                elif blockchain == 'bitcoin':
                     btc_amount += amount
-                elif wallet['blockchain'] == 'ethereum':
+                elif blockchain == 'ethereum':
                     eth_amount += amount
-                elif wallet['blockchain'] == 'solana':
+                elif blockchain == 'solana':
                     sol_amount += amount
 
+            try:
+                from routers.portfolio import calculate_wallet_native_assets_value
+                token_value = await calculate_wallet_native_assets_value(
+                    wallet['id'], wallet['blockchain'], user_id
+                )
+                native_assets_total_usd += token_value
+            except Exception:
+                pass
+
+        # Get current non-wallet component values for baseline
+        current_prices = await pricing.get_all_tracked_prices()
+        ada_price_now = current_prices.get('ADA', {}).get('usd', 0)
+        staking_value = await self._get_staking_value(current_prices, user_id=user_id)
+        defi_value = await self._get_defi_value(current_prices, user_id=user_id)
+        exchange_value = await self._get_exchange_value(current_prices, user_id=user_id)
+        nft_value = await self._get_nft_value(ada_price_now, user_id=user_id)
+        tracked_tokens_value = await self._get_tracked_tokens_value(current_prices, user_id=user_id)
+        non_wallet_total = staking_value + defi_value + exchange_value + nft_value + tracked_tokens_value
+
         logger.info(f"Current holdings - ADA: {ada_amount:.2f}, BTC: {btc_amount:.8f}, ETH: {eth_amount:.8f}, SOL: {sol_amount:.8f}")
+        logger.info(f"Native tokens: ${native_assets_total_usd:.2f}, Non-wallet components: ${non_wallet_total:.2f}")
 
         # Build a date -> prices lookup (use daily granularity only)
         # CoinGecko returns hourly data for 2-90 days, so extract just YYYY-MM-DD
@@ -836,18 +874,19 @@ class SnapshotService:
             if ada_price == 0 and btc_price == 0 and eth_price == 0 and sol_price == 0:
                 continue
 
-            # Calculate wallet value at historical prices
-            wallet_value_usd = (
-                ada_amount * ada_price +
-                btc_amount * btc_price +
-                eth_amount * eth_price +
-                sol_amount * sol_price
-            )
+            # Calculate wallet value at historical prices (all chains)
+            wallet_value_usd = 0.0
+            for chain, amount in chain_amounts.items():
+                if amount > 0:
+                    symbol = chain_price_symbols[chain]
+                    price = prices.get(symbol, 0)
+                    wallet_value_usd += amount * price
 
-            # For historical data, we don't have historical staking/defi/exchange/nft data
-            # So we'll set those to 0 (or could estimate based on current proportions)
-            # For simplicity, assume wallet-only value for historical data
-            total_value_usd = wallet_value_usd
+            # Add native token values (using current values as baseline — no historical token prices available)
+            wallet_value_usd += native_assets_total_usd
+
+            # Include non-wallet components (current values as stable baseline)
+            total_value_usd = wallet_value_usd + non_wallet_total
 
             # Parse the date to create a timestamp
             snapshot_date = datetime.strptime(date_str, '%Y-%m-%d')
@@ -865,10 +904,11 @@ class SnapshotService:
                 'eth_price': eth_price,
                 'sol_amount': sol_amount,
                 'sol_price': sol_price,
-                'staking_value_usd': 0,  # Historical staking data not available
-                'defi_value_usd': 0,     # Historical DeFi data not available
-                'exchange_value_usd': 0, # Historical exchange data not available
-                'nft_value_usd': 0       # Historical NFT data not available
+                'staking_value_usd': staking_value,
+                'defi_value_usd': defi_value,
+                'exchange_value_usd': exchange_value,
+                'nft_value_usd': nft_value,
+                'tracked_tokens_value_usd': tracked_tokens_value,
             }
 
             # Save snapshot (will update if exists due to UNIQUE constraint)
@@ -1033,6 +1073,56 @@ class SnapshotService:
                 "tracked_tokens": tracked_tokens_value
             },
             "note": "Historical snapshots now include current component values. This assumes these values have been relatively stable."
+        }
+
+
+    async def reset_and_regenerate(self, user_id: int, days: int = 90) -> dict:
+        """
+        Delete all snapshots for a user and regenerate from scratch.
+
+        Uses historical prices from CoinGecko with current wallet balances
+        and current non-wallet component values as baselines.
+
+        Args:
+            user_id: User ID to reset
+            days: Number of days of history to regenerate (default 90)
+
+        Returns:
+            dict with status and details
+        """
+        import aiosqlite
+        from config import DATABASE_PATH
+
+        logger.info(f"Resetting all snapshots for user {user_id} and regenerating {days} days...")
+
+        # Step 1: Delete all existing snapshots
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            cursor = await db.execute(
+                "SELECT COUNT(*) FROM portfolio_snapshots WHERE user_id = ?", (user_id,)
+            )
+            count_row = await cursor.fetchone()
+            old_count = count_row[0] if count_row else 0
+
+            await db.execute(
+                "DELETE FROM portfolio_snapshots WHERE user_id = ?", (user_id,)
+            )
+            await db.commit()
+
+        logger.info(f"Deleted {old_count} old snapshots for user {user_id}")
+
+        # Step 2: Regenerate historical data (now uses all chains + components)
+        result = await self.generate_historical_data(days=days, user_id=user_id)
+
+        # Step 3: Create a fresh snapshot for right now
+        current = await self.create_snapshot(user_id=user_id, force=True)
+
+        return {
+            "status": "success",
+            "deleted": old_count,
+            "regenerated": result.get('snapshots_created', 0),
+            "days_requested": days,
+            "current_snapshot": current.get('total_value_usd', 0),
+            "note": "All snapshots deleted and regenerated with corrected calculations."
         }
 
 

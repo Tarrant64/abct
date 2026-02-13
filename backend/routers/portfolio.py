@@ -986,6 +986,21 @@ async def backfill_historical_components(user_id: int = Depends(verify_session))
     return result
 
 
+@router.post("/history/reset")
+async def reset_and_regenerate_history(
+    user_id: int = Depends(verify_session),
+    days: int = Query(90, description="Number of days of history to regenerate")
+):
+    """
+    Delete all snapshots and regenerate from scratch.
+
+    Removes all existing snapshots for the user and regenerates using
+    historical prices with current wallet balances and component values.
+    """
+    result = await snapshot_service.reset_and_regenerate(user_id=user_id, days=days)
+    return result
+
+
 @router.post("/tokens/track")
 async def track_token(user_id: int = Depends(verify_session), request: TokenTrackRequest = None):
     """
