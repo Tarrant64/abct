@@ -3318,6 +3318,19 @@
 
                 <div class="collector-status" id="balStatus"></div>
             </div>
+
+            <div class="section-card collector-section">
+                <h3>Rebuild Portfolio History</h3>
+                <p style="color: #9ca3af; font-size: 0.875rem; margin: 8px 0 16px;">
+                    Re-materializes the portfolio chart data from engine events and off-chain snapshots.
+                    Use this if the chart is missing data or showing incorrect values.
+                </p>
+                <div class="collector-form-row">
+                    <button class="btn btn-primary" id="rebuildBtn" onclick="runHistoryRebuild(false)">Rebuild History</button>
+                    <button class="btn btn-warning" id="rebuildNuclearBtn" onclick="runHistoryRebuild(true)" title="Full reset: clears all computed data and rebuilds from scratch">Nuclear Rebuild</button>
+                </div>
+                <div class="collector-status" id="rebuildStatus"></div>
+            </div>
         </div>
 
     </div>
@@ -5791,6 +5804,60 @@
             } finally {
                 btn.disabled = false;
                 btn.textContent = 'Backfill Prices';
+            }
+        }
+
+        async function runHistoryRebuild(nuclear) {
+            const btn = nuclear
+                ? document.getElementById('rebuildNuclearBtn')
+                : document.getElementById('rebuildBtn');
+            const otherBtn = nuclear
+                ? document.getElementById('rebuildBtn')
+                : document.getElementById('rebuildNuclearBtn');
+            const origText = btn.textContent;
+
+            if (nuclear && !confirm('Nuclear rebuild will clear all computed history and rebuild from scratch. Continue?')) {
+                return;
+            }
+
+            btn.disabled = true;
+            otherBtn.disabled = true;
+            btn.textContent = 'Rebuilding...';
+            setCollectorStatus('rebuildStatus', 'running', 'Rebuilding portfolio history from engine data...');
+
+            try {
+                const url = '/portfolio/history/rebuild' + (nuclear ? '?nuclear=true' : '');
+                const res = await authFetch(url, { method: 'POST' });
+                if (!res.ok) {
+                    const text = await res.text();
+                    throw new Error('Server returned ' + res.status + ': ' + text.substring(0, 200));
+                }
+                const data = await res.json();
+
+                const parts = [];
+                parts.push(data.total_rows + ' data points');
+                if (data.date_range && data.date_range.earliest) {
+                    parts.push(data.date_range.earliest + ' to ' + data.date_range.latest);
+                }
+                if (data.breakdown) {
+                    const types = Object.keys(data.breakdown);
+                    const onchain = data.breakdown.on_chain;
+                    if (onchain) parts.push(onchain.rows + ' on-chain rows');
+                }
+                if (data.engine_events !== undefined) {
+                    parts.push(data.engine_events + ' engine events');
+                }
+                if (data.errors && data.errors.onchain) {
+                    parts.push('On-chain error: ' + data.errors.onchain);
+                }
+
+                setCollectorStatus('rebuildStatus', 'completed', 'Rebuild complete: ' + parts.join(' | '));
+            } catch (e) {
+                setCollectorStatus('rebuildStatus', 'failed', 'Error: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                otherBtn.disabled = false;
+                btn.textContent = origText;
             }
         }
 

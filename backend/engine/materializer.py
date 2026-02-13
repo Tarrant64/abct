@@ -39,11 +39,13 @@ class Materializer:
 
         sources = await get_wallet_sources(user_id, source_type='on_chain')
         if not sources:
-            logger.info(f"Materializer: No on-chain sources for user {user_id}")
+            logger.warning(f"Materializer: No on-chain wallet_sources for user {user_id} — run seed_wallet_sources first")
             return
 
         # Load all account subjects for this user
         account_subjects = await engine_db.get_account_subjects(user_id)
+        logger.info(f"Materializer: {len(sources)} on-chain sources, {len(account_subjects)} account subjects")
+
         # Map wallet_id -> list of account_ids
         wallet_accounts: Dict[int, List[str]] = {}
         account_chains: Dict[str, str] = {}
@@ -54,11 +56,19 @@ class Materializer:
             wallet_accounts[wid].append(subj['account_id'])
             account_chains[subj['account_id']] = subj['chain']
 
+        # Log wallet_id matching diagnostics
+        matched = sum(1 for s in sources if s.get('wallet_id') and s['wallet_id'] in wallet_accounts)
+        unmatched = [s['source_key'][:30] for s in sources if not s.get('wallet_id') or s['wallet_id'] not in wallet_accounts]
+        logger.info(f"Materializer: {matched}/{len(sources)} sources matched account_subjects"
+                     f"{f' (unmatched: {unmatched[:5]})' if unmatched else ''}")
+
         # Load all events for replay
         all_events = await engine_db.get_events(user_id, limit=500000)
         if not all_events:
-            logger.info(f"Materializer: No engine events for user {user_id}")
+            logger.warning(f"Materializer: No engine_events for user {user_id} — run a backfill first")
             return
+
+        logger.info(f"Materializer: Replaying {len(all_events)} engine events")
 
         # Load token info for decimals
         all_token_info = await engine_db.get_all_token_info()
@@ -90,7 +100,10 @@ class Materializer:
             ]
 
             if not wallet_events:
+                logger.debug(f"Materializer: source {source['id']} ({source['source_key'][:20]}) — 0 events, skipping")
                 continue
+
+            logger.info(f"Materializer: source {source['id']} ({source['source_key'][:20]}) — {len(wallet_events)} events")
 
             # Replay events → build daily running balances
             balances: Dict[tuple, int] = {}  # (chain, asset_id) -> raw_amount
@@ -145,12 +158,17 @@ class Materializer:
 
             # Load prices
             price_cache: Dict[str, Dict[str, float]] = {}
+            total_prices_loaded = 0
             for price_key in all_price_keys:
                 prices = await engine_db.get_prices(price_key)
+                total_prices_loaded += len(prices)
                 for p in prices:
                     if p['date'] not in price_cache:
                         price_cache[p['date']] = {}
                     price_cache[p['date']][price_key] = p['price_usd']
+
+            logger.info(f"Materializer: source {source['id']} — {len(all_price_keys)} price keys, "
+                         f"{total_prices_loaded} price rows loaded, {len(filled)} dates to fill")
 
             # Build daily balance rows
             batch_rows = []
