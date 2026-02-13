@@ -6370,7 +6370,8 @@ async function globalRefreshAll() {
 }
 
 // ============================================
-// Portfolio History Chart
+// Portfolio History Chart (V1 Legacy — preserved for rollback)
+// The unified chart endpoint (/portfolio/chart/unified) is now primary.
 // ============================================
 
 // Chart instance and data storage
@@ -7100,7 +7101,7 @@ async function loadV2BalanceHistory(range) {
     const coverageText = document.getElementById('v2CoverageText');
 
     try {
-        const response = await authFetch(`${API_BASE}/balance-history/data?range=${range}`);
+        const response = await authFetch(`${API_BASE}/portfolio/chart/unified?range=${range}`);
         if (!response.ok) {
             console.error('V2 balance history API returned', response.status);
             throw new Error(`API error ${response.status}`);
@@ -7161,7 +7162,7 @@ function renderV2Chart(data, range) {
         }
         return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
     });
-    const values = data.map(d => d.value);
+    const values = data.map(d => d.total_value ?? d.value ?? 0);
 
     // Calculate Y axis range with padding
     const minValue = Math.min(...values);
@@ -7196,7 +7197,7 @@ function renderV2Chart(data, range) {
         data: {
             labels: labels,
             datasets: [{
-                label: 'Portfolio Value (On-Chain)',
+                label: 'Portfolio Value',
                 data: values,
                 borderColor: colors.lineColor,
                 backgroundColor: colors.fillColor,
@@ -7230,16 +7231,26 @@ function renderV2Chart(data, range) {
                         afterBody: function(tooltipItems) {
                             const idx = tooltipItems[0].dataIndex;
                             const point = data[idx];
-                            if (point && point.chains) {
-                                const lines = [];
-                                for (const [chain, val] of Object.entries(point.chains)) {
-                                    if (val > 0) {
-                                        lines.push(`  ${chain}: ${formatUSD(val)}`);
-                                    }
+                            if (!point) return [];
+                            const lines = [];
+                            // Component breakdown
+                            const comps = point.breakdown?.components;
+                            if (comps) {
+                                const compLabels = {wallets: 'Wallets', exchange: 'Exchange', staking: 'Staking', defi: 'DeFi', nfts: 'NFTs', tracked_tokens: 'Tracked'};
+                                for (const [key, label] of Object.entries(compLabels)) {
+                                    const val = comps[key] || 0;
+                                    if (val > 0) lines.push(`  ${label}: ${formatUSD(val)}`);
                                 }
-                                return lines;
                             }
-                            return [];
+                            // Chain breakdown
+                            const chains = point.breakdown?.chains || point.chains;
+                            if (chains && Object.keys(chains).length > 0) {
+                                lines.push('  ───');
+                                for (const [chain, val] of Object.entries(chains)) {
+                                    if (val > 0) lines.push(`  ${chain}: ${formatUSD(val)}`);
+                                }
+                            }
+                            return lines;
                         }
                     }
                 }

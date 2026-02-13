@@ -763,9 +763,10 @@ async def get_unified_chart(
     range: str = Query("1w", description="Time range: 24h, 1w, 1m, 3m, 6m, 1y, all"),
 ):
     """
-    Unified portfolio chart from wallet_daily_balances (per-wallet architecture).
+    Unified portfolio chart from wallet_daily_balances (V2 per-wallet architecture).
 
-    Falls back to legacy V2+V1 merge if wallet_daily_balances has no data yet.
+    Reads exclusively from wallet_daily_balances. Run the migration script
+    or POST /portfolio/history/rebuild to populate historical data.
     """
     # Demo mode: return pre-generated fake history
     username = await get_username_by_user_id(user_id)
@@ -781,148 +782,121 @@ async def get_unified_chart(
     from datetime import datetime, timedelta
     start_date = (datetime.utcnow() - timedelta(days=days)).strftime('%Y-%m-%d')
 
-    # NOTE: wallet_daily_balances path disabled until data quality is verified.
-    # Per-wallet data is available via /chart/wallet/{source_id} drill-down.
-    # Main chart always uses proven legacy V2+V1 merge below.
+    from database import get_unified_daily_totals
+    wdb_rows = await get_unified_daily_totals(user_id, start_date=start_date)
 
-    # --- Legacy path: V2 engine + V1 snapshots ---
-    v2_data = []
-    v1_history = []
-
-    async def fetch_v2():
-        nonlocal v2_data
-        try:
-            from engine import db as engine_db
-            from engine.orchestrator import backfill_orchestrator
-            event_count = await engine_db.get_event_count(user_id)
-            if event_count > 0:
-                v2_result = await backfill_orchestrator.get_history_data(user_id, range)
-                v2_data = v2_result.get('data', [])
-        except Exception as e:
-            logger.warning(f"Unified chart: V2 engine failed: {e}")
-
-    async def fetch_v1():
-        nonlocal v1_history
-        try:
-            v1_history = await snapshot_service.get_history(days, user_id=user_id)
-        except Exception as e:
-            logger.warning(f"Unified chart: V1 snapshots failed: {e}")
-
-    await asyncio.gather(fetch_v2(), fetch_v1())
-
-    # If neither source has data, return empty
-    if not v2_data and not v1_history:
+    if not wdb_rows:
         return {
             "data": [],
             "coverage": {"oldest_date": None, "newest_date": None, "total_days": 0}
         }
 
-    # V1-only fallback: return snapshot data in unified format
-    if not v2_data:
-        data = []
-        for point in v1_history:
-            bd = point.get('breakdown', {})
-            wallet_val = bd.get('wallets', 0) or 0
-            exchange_val = bd.get('exchange', 0) or 0
-            staking_val = bd.get('staking', 0) or 0
-            defi_val = bd.get('defi', 0) or 0
-            nft_val = bd.get('nfts', 0) or 0
-            tracked_val = bd.get('tracked_tokens', 0) or 0
-            total = point.get('value', 0) or 0
-            data.append({
-                "date": point['date'],
-                "total_value": round(total, 2),
-                "on_chain_value": round(wallet_val, 2),
-                "off_chain_value": round(exchange_val + staking_val + defi_val + nft_val + tracked_val, 2),
-                "breakdown": {
-                    "chains": {},
-                    "components": {
-                        "wallets": round(wallet_val, 2),
-                        "exchange": round(exchange_val, 2),
-                        "staking": round(staking_val, 2),
-                        "defi": round(defi_val, 2),
-                        "nfts": round(nft_val, 2),
-                        "tracked_tokens": round(tracked_val, 2),
-                    }
-                }
-            })
-        return {"data": data, "coverage": _compute_chart_coverage(data)}
-
-    # V2-only fallback: return on-chain data with zero off-chain
-    if not v1_history:
-        data = []
-        for point in v2_data:
-            on_chain = point.get('value', 0) or 0
-            data.append({
-                "date": point['date'],
-                "total_value": round(on_chain, 2),
-                "on_chain_value": round(on_chain, 2),
-                "off_chain_value": 0,
-                "breakdown": {
-                    "chains": point.get('chains', {}),
-                    "components": {
-                        "wallets": round(on_chain, 2),
-                        "exchange": 0, "staking": 0, "defi": 0, "nfts": 0, "tracked_tokens": 0,
-                    }
-                }
-            })
-        return {"data": data, "coverage": _compute_chart_coverage(data)}
-
-    # --- Merge V2 on-chain + V1 off-chain ---
-    v2_by_date = {p['date']: p for p in v2_data}
-    v1_by_date = {p['date']: p for p in v1_history}
-    all_dates = sorted(set(v2_by_date.keys()) | set(v1_by_date.keys()))
-
-    # Gap-fill V1 off-chain by carrying forward last known values
-    last_v1_offchain = {"exchange": 0, "staking": 0, "defi": 0, "nfts": 0, "tracked_tokens": 0}
-
     data = []
-    for date in all_dates:
-        # V2 on-chain value and chain breakdown
-        v2_point = v2_by_date.get(date)
-        if v2_point:
-            on_chain = v2_point.get('value', 0) or 0
-            chains = v2_point.get('chains', {})
-        else:
-            # Carry forward: use last V2 point's value (or 0 if before V2 coverage)
-            on_chain = data[-1]['on_chain_value'] if data else 0
-            chains = data[-1]['breakdown']['chains'] if data else {}
-
-        # V1 off-chain components
-        v1_point = v1_by_date.get(date)
-        if v1_point:
-            bd = v1_point.get('breakdown', {})
-            last_v1_offchain = {
-                "exchange": bd.get('exchange', 0) or 0,
-                "staking": bd.get('staking', 0) or 0,
-                "defi": bd.get('defi', 0) or 0,
-                "nfts": bd.get('nfts', 0) or 0,
-                "tracked_tokens": bd.get('tracked_tokens', 0) or 0,
-            }
-
-        off_chain = sum(last_v1_offchain.values())
-        total = on_chain + off_chain
+    for row in wdb_rows:
+        on_chain = row.get('on_chain_value', 0) or 0
+        exchange = row.get('exchange_value', 0) or 0
+        staking = row.get('staking_value', 0) or 0
+        defi = row.get('defi_value', 0) or 0
+        nfts = row.get('nft_value', 0) or 0
+        total = row.get('total_value', 0) or 0
+        off_chain = exchange + staking + defi + nfts
 
         data.append({
-            "date": date,
+            "date": row['date'],
             "total_value": round(total, 2),
             "on_chain_value": round(on_chain, 2),
             "off_chain_value": round(off_chain, 2),
             "breakdown": {
-                "chains": chains,
+                "chains": {},
                 "components": {
                     "wallets": round(on_chain, 2),
-                    "exchange": round(last_v1_offchain["exchange"], 2),
-                    "staking": round(last_v1_offchain["staking"], 2),
-                    "defi": round(last_v1_offchain["defi"], 2),
-                    "nfts": round(last_v1_offchain["nfts"], 2),
-                    "tracked_tokens": round(last_v1_offchain["tracked_tokens"], 2),
+                    "exchange": round(exchange, 2),
+                    "staking": round(staking, 2),
+                    "defi": round(defi, 2),
+                    "nfts": round(nfts, 2),
+                    "tracked_tokens": 0,
                 }
             }
         })
 
-    logger.info(f"Unified chart (legacy): {len(data)} points (V2={len(v2_data)}, V1={len(v1_history)})")
+    logger.info(f"Unified chart: {len(data)} points from wallet_daily_balances")
     return {"data": data, "coverage": _compute_chart_coverage(data)}
+
+
+@router.post("/history/rebuild")
+async def rebuild_wallet_history(
+    user_id: int = Depends(verify_session),
+):
+    """
+    Clear wallet_daily_balances and rebuild from V2 engine events + V1 snapshots.
+
+    This re-seeds wallet_sources, then re-materializes all data.
+    """
+    import aiosqlite
+    from config import DATABASE_PATH
+    from database import seed_wallet_sources
+    from engine.materializer import materializer
+
+    # Clear existing data for this user
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("DELETE FROM wallet_daily_balances WHERE user_id = ?", (user_id,))
+        await db.commit()
+    logger.info(f"Cleared wallet_daily_balances for user {user_id}")
+
+    # Re-seed sources
+    await seed_wallet_sources(user_id)
+
+    # Materialize on-chain from V2 engine events
+    try:
+        await materializer.materialize_onchain(user_id)
+    except Exception as e:
+        logger.error(f"Rebuild: on-chain materialization failed: {e}")
+
+    # Materialize off-chain from V1 snapshots
+    try:
+        await materializer.materialize_offchain_from_v1(user_id)
+    except Exception as e:
+        logger.error(f"Rebuild: off-chain materialization failed: {e}")
+
+    # Gap-fill
+    try:
+        await materializer.backfill_offchain_gaps(user_id)
+    except Exception as e:
+        logger.error(f"Rebuild: gap-fill failed: {e}")
+
+    # Count results
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("""
+            SELECT ws.source_type, COUNT(*) as rows, ROUND(SUM(wdb.value_usd), 2) as total_usd
+            FROM wallet_daily_balances wdb
+            JOIN wallet_sources ws ON wdb.source_id = ws.id
+            WHERE wdb.user_id = ?
+            GROUP BY ws.source_type
+        """, (user_id,))
+        breakdown = {row['source_type']: {'rows': row['rows'], 'total_usd': row['total_usd']}
+                     for row in await cursor.fetchall()}
+
+        cursor = await db.execute(
+            "SELECT COUNT(*), MIN(date), MAX(date) FROM wallet_daily_balances WHERE user_id = ?",
+            (user_id,)
+        )
+        stats = await cursor.fetchone()
+
+    # Set migration flag
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute(
+            "INSERT OR IGNORE INTO migrations (migration_key) VALUES ('v1_to_wallet_daily_balances')"
+        )
+        await db.commit()
+
+    logger.info(f"Rebuild complete for user {user_id}: {stats[0]} rows, {stats[1]} to {stats[2]}")
+    return {
+        "status": "rebuilt",
+        "total_rows": stats[0],
+        "date_range": {"earliest": stats[1], "latest": stats[2]},
+        "breakdown": breakdown,
+    }
 
 
 @router.get("/chart/wallet/{source_id}")
