@@ -350,6 +350,17 @@ async def lifespan(app: FastAPI):
         logger.warning(f"V2 engine orchestrator init failed: {e}")
         await log_service.warning("main", f"V2 engine orchestrator init failed: {e}")
 
+    # Restore Cloudflare tunnel if a token was previously configured
+    async def restore_cloudflare_tunnel():
+        try:
+            from routers.cloudflare import auto_restore_tunnel
+            await auto_restore_tunnel()
+        except Exception as e:
+            logger.warning(f"Cloudflare tunnel auto-restore failed: {e}")
+            await log_service.warning("main", f"Cloudflare tunnel auto-restore failed: {e}")
+
+    asyncio.create_task(restore_cloudflare_tunnel())
+
     yield
 
     # Shutdown: Stop V2 auto-collect schedulers

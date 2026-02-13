@@ -282,30 +282,9 @@ EOF
         echo "  ⚠ Service may still be starting. Check: docker logs $CONTAINER_NAME"
     fi
 
-    echo ""
-    echo "Running database migrations..."
-
-    # Run comprehensive SQL migration script (applies all .sql migrations)
-    echo "  Applying SQL migrations..."
-    if docker exec "$CONTAINER_NAME" python3 /app/backend/run_migrations.py 2>&1; then
-        echo "  ✓ SQL migrations applied"
-    else
-        echo "  ⚠ SQL migration may have failed"
-    fi
-
-    # Run Python migrations (safe to run multiple times)
-    echo "  Applying Python migrations..."
-    docker exec "$CONTAINER_NAME" python3 /app/backend/migrations/add_snapshot_quantities.py 2>&1 || true
-
-    # Run legacy schema fixes (safe to run multiple times)
-    echo "  Running schema fixes..."
-    if docker exec "$CONTAINER_NAME" python3 /app/backend/fix_api_settings_schema.py 2>&1; then
-        echo "  ✓ Schema fixes applied"
-    else
-        echo "  ⚠ Schema fix may have failed"
-    fi
-
-    echo "  ✓ Database migrations complete"
+    # Database schema is managed by database.py init_database() on startup
+    # (CREATE TABLE IF NOT EXISTS + ALTER TABLE ADD COLUMN in try/except).
+    # No external migration scripts needed.
 
     echo ""
     echo "Verifying admin account..."
