@@ -307,9 +307,50 @@ async def lifespan(app: FastAPI):
     # Start background tasks (non-blocking)
     asyncio.create_task(create_snapshot_background())
     asyncio.create_task(collect_nft_prices_background())
-    # V1 periodic snapshot task disabled (V2 on-chain history in development)
-    logger.info("Periodic snapshot task disabled (V2 development mode)")
-    # asyncio.create_task(periodic_snapshot_task())
+    # Re-enabled: unified chart needs fresh V1 snapshots for off-chain data
+    asyncio.create_task(periodic_snapshot_task())
+    logger.info("Periodic snapshot task started (feeds unified chart off-chain data)")
+
+    # Seed wallet_sources and start off-chain collector (V2 per-wallet balances)
+    async def offchain_collector_startup():
+        try:
+            from database import get_all_users, seed_wallet_sources
+            from services.offchain_collector import offchain_collector
+
+            users = await get_all_users()
+            non_demo = [u for u in users if not u.get('is_demo', False)]
+            for user in non_demo:
+                await seed_wallet_sources(user['id'])
+            logger.info(f"Wallet sources seeded for {len(non_demo)} user(s)")
+            await log_service.info("main", f"Wallet sources seeded for {len(non_demo)} user(s)")
+
+            # Initial off-chain collection
+            await offchain_collector.collect_all_users()
+            logger.info("Initial off-chain collection complete")
+            await log_service.info("main", "Initial off-chain collection complete")
+        except Exception as e:
+            logger.warning(f"Off-chain collector startup failed: {e}")
+            await log_service.warning("main", f"Off-chain collector startup failed: {e}")
+
+    async def periodic_offchain_collector():
+        """Background task: collect off-chain balances every 2 hours."""
+        from services.offchain_collector import offchain_collector
+        while True:
+            try:
+                await asyncio.sleep(2 * 3600)
+                logger.info("Periodic off-chain collector: Starting collection...")
+                await log_service.info("main", "Periodic off-chain collector: Starting collection")
+                await offchain_collector.collect_all_users()
+                logger.info("Periodic off-chain collector: Collection complete")
+                await log_service.info("main", "Periodic off-chain collector: Collection complete")
+            except Exception as e:
+                logger.error(f"Periodic off-chain collector error: {e}")
+                await log_service.error("main", f"Periodic off-chain collector error: {e}")
+                await asyncio.sleep(3600)
+
+    asyncio.create_task(offchain_collector_startup())
+    asyncio.create_task(periodic_offchain_collector())
+    logger.info("Off-chain collector started (per-wallet V2 balances)")
 
     # Initialize and optionally start NFT background scheduler
     startup_status["nft_scheduler"] = "initializing"
