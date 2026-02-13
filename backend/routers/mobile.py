@@ -115,12 +115,13 @@ async def get_mobile_portfolio_summary(
         if cached:
             return cached
 
-    # Fetch all data in parallel
-    portfolio_data, exchange_summary, nft_summary, defi_summary = await asyncio.gather(
+    # Fetch all data in parallel (including snapshot for staking/defi/tracked tokens)
+    portfolio_data, exchange_summary, nft_summary, defi_summary, snapshot_totals = await asyncio.gather(
         portfolio.get_portfolio_summary(user_id=user_id, refresh=refresh),
         exchanges.get_all_exchanges_summary(user_id=user_id),
         nfts.get_nft_summary(user_id=user_id),
         defi.get_defi_summary(user_id=user_id),
+        portfolio.get_portfolio_totals(user_id=user_id),
         return_exceptions=True
     )
 
@@ -137,6 +138,9 @@ async def get_mobile_portfolio_summary(
     if isinstance(defi_summary, Exception):
         logger.warning(f"DeFi summary fetch failed: {defi_summary}")
         defi_summary = {"all_positions": []}
+    if isinstance(snapshot_totals, Exception):
+        logger.warning(f"Snapshot totals fetch failed: {snapshot_totals}")
+        snapshot_totals = {"staking_usd": 0, "defi_usd": 0, "tracked_tokens_usd": 0}
 
     # Calculate self-custody value
     self_custody_value = 0.0
@@ -146,20 +150,25 @@ async def get_mobile_portfolio_summary(
     # Get prices for native coins
     all_prices = await pricing_service.get_all_tracked_prices()
 
-    for blockchain in ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base']:
+    # All blockchains supported by portfolio summary
+    symbol_map = {
+        'cardano': ('ADA', 'total_ada'),
+        'bitcoin': ('BTC', 'total_btc'),
+        'ethereum': ('ETH', 'total_eth'),
+        'solana': ('SOL', 'total_sol'),
+        'polygon': ('POL', 'total_matic'),
+        'base': ('ETH', 'total_eth'),
+        'algorand': ('ALGO', 'total_algo'),
+        'bsc': ('BNB', 'total_bnb'),
+        'arbitrum': ('ETH', 'total_eth'),
+        'avalanche': ('AVAX', 'total_avax'),
+        'tron': ('TRX', 'total_trx'),
+    }
+
+    for blockchain in symbol_map:
         chain_data = portfolio_data.get(blockchain, {})
         if not chain_data or chain_data.get('wallet_count', 0) == 0:
             continue
-
-        # Map to symbol and get amount
-        symbol_map = {
-            'cardano': ('ADA', 'total_ada'),
-            'bitcoin': ('BTC', 'total_btc'),
-            'ethereum': ('ETH', 'total_eth'),
-            'solana': ('SOL', 'total_sol'),
-            'polygon': ('POL', 'total_matic'),
-            'base': ('ETH', 'total_eth')
-        }
 
         symbol, amount_key = symbol_map[blockchain]
         native_amount = chain_data.get(amount_key, 0)
@@ -190,15 +199,13 @@ async def get_mobile_portfolio_summary(
     exchanges_value = exchange_summary.get('total_usd', 0)
     nfts_value = nft_summary.get('total_value_usd', 0)
 
-    # Calculate DeFi staking value from positions (DeFi summary doesn't have totals)
-    staking_value = 0.0
-    for position in defi_summary.get('all_positions', []):
-        # DeFi positions don't have USD value in summary, so we'll estimate it later
-        # For now, just count it as part of self-custody
-        pass
+    # Staking/DeFi/tracked tokens from latest snapshot (matches web dashboard logic)
+    staking_value = snapshot_totals.get('staking_usd', 0) or 0
+    defi_value = snapshot_totals.get('defi_usd', 0) or 0
+    tracked_tokens_value = snapshot_totals.get('tracked_tokens_usd', 0) or 0
 
     # Calculate total
-    total_value_usd = self_custody_value + exchanges_value + nfts_value + staking_value
+    total_value_usd = self_custody_value + exchanges_value + nfts_value + staking_value + defi_value + tracked_tokens_value
 
     # Calculate percentages
     for blockchain_summary in blockchain_summaries:
@@ -229,6 +236,14 @@ async def get_mobile_portfolio_summary(
             "staking": {
                 "value_usd": round(staking_value, 2),
                 "percentage": round((staking_value / total_value_usd * 100) if total_value_usd > 0 else 0, 1)
+            },
+            "defi": {
+                "value_usd": round(defi_value, 2),
+                "percentage": round((defi_value / total_value_usd * 100) if total_value_usd > 0 else 0, 1)
+            },
+            "tracked_tokens": {
+                "value_usd": round(tracked_tokens_value, 2),
+                "percentage": round((tracked_tokens_value / total_value_usd * 100) if total_value_usd > 0 else 0, 1)
             }
         },
         "blockchains": blockchain_summaries,
