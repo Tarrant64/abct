@@ -456,3 +456,107 @@ async def cloudflare_remove(user_id: int = Depends(verify_session)):
         "success": True,
         "message": "Cloudflare tunnel removed and token deleted",
     }
+
+
+async def auto_restore_tunnel():
+    """Restore Cloudflare tunnel on startup if a token is saved in the DB.
+
+    Called from main.py lifespan. If cloudflared isn't installed, installs it
+    via apt, writes the supervisor program config, and starts the service.
+    If already installed, just ensures it's running.
+
+    This preserves tunnel connectivity across Docker container rebuilds since
+    the token lives in the SQLite database on a persistent volume.
+    """
+    from database import get_all_users
+
+    # Find any user with a saved cloudflare tunnel token
+    users = await get_all_users()
+    token = None
+    for user in users:
+        setting = await get_api_setting("cloudflare_tunnel", user_id=user['id'])
+        if setting and setting.get("api_key"):
+            token = setting["api_key"]
+            break
+
+    if not token:
+        logger.debug("Cloudflare auto-restore: no tunnel token found, skipping")
+        return
+
+    logger.info("Cloudflare auto-restore: tunnel token found, restoring...")
+
+    # Ensure supervisorctl sections exist
+    _ensure_supervisor_ctl()
+
+    installed = shutil.which("cloudflared") is not None or os.path.exists("/usr/bin/cloudflared")
+
+    if not installed:
+        logger.info("Cloudflare auto-restore: cloudflared not installed, installing...")
+
+        # Install GPG key
+        rc, _, err = await _run_cmd(["mkdir", "-p", "--mode=0755", "/usr/share/keyrings"])
+        if rc != 0:
+            logger.warning(f"Cloudflare auto-restore: failed to create keyrings dir: {err}")
+            return
+
+        proc = await asyncio.create_subprocess_shell(
+            "curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg "
+            "> /usr/share/keyrings/cloudflare-main.gpg",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, err_bytes = await proc.communicate()
+        if proc.returncode != 0:
+            logger.warning(f"Cloudflare auto-restore: GPG key download failed: {err_bytes.decode()}")
+            return
+
+        # Add apt repo
+        repo_line = (
+            "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] "
+            "https://pkg.cloudflare.com/cloudflared any main"
+        )
+        try:
+            with open("/etc/apt/sources.list.d/cloudflared.list", "w") as f:
+                f.write(repo_line + "\n")
+        except OSError as e:
+            logger.warning(f"Cloudflare auto-restore: could not write apt source: {e}")
+            return
+
+        # apt-get update (cloudflared repo only for speed)
+        rc, _, err = await _run_cmd([
+            "apt-get", "update",
+            "-o", "Dir::Etc::sourcelist=sources.list.d/cloudflared.list",
+            "-o", "Dir::Etc::sourceparts=-",
+            "-o", "APT::Get::List-Cleanup=0",
+            "-qq",
+        ])
+        if rc != 0:
+            rc, _, err = await _run_cmd(["apt-get", "update", "-qq"])
+            if rc != 0:
+                logger.warning(f"Cloudflare auto-restore: apt-get update failed: {err}")
+                return
+
+        # Install
+        rc, _, err = await _run_cmd(["apt-get", "install", "-y", "-qq", "cloudflared"])
+        if rc != 0:
+            logger.warning(f"Cloudflare auto-restore: apt-get install failed: {err}")
+            return
+
+        logger.info("Cloudflare auto-restore: cloudflared installed successfully")
+
+    # Write supervisor program config and start
+    if not _write_cloudflared_program(token):
+        logger.warning("Cloudflare auto-restore: could not write supervisor config")
+        return
+
+    _sighup_supervisor()
+    await asyncio.sleep(2)
+    await _run_cmd(["supervisorctl", "reread"], ignore_errors=True)
+    await _run_cmd(["supervisorctl", "update"], ignore_errors=True)
+
+    await asyncio.sleep(3)
+    state = await _get_service_state()
+    if state == "RUNNING":
+        logger.info("Cloudflare auto-restore: tunnel is running")
+    else:
+        logger.warning(f"Cloudflare auto-restore: service state is {state or 'unknown'}")
