@@ -143,11 +143,20 @@ class OffchainCollector:
                 logger.debug(f"Offchain collector: NFT total = ${nft_total:,.2f}")
 
         # --- On-Chain (today's live wallet values) ---
+        # NOTE: V1 balance_history stored native-coin-only (token_value_usd = 0).
+        # To maintain consistency with historical data, we only include native
+        # balance × price here. Token values can be added once historical data
+        # is backfilled with token values too.
         onchain_sources = await get_wallet_sources(user_id, source_type='on_chain')
         if onchain_sources:
             from database import get_wallet_balance
-            from routers.portfolio import calculate_wallet_native_assets_value
 
+            chain_symbols = {
+                'cardano': 'ADA', 'bitcoin': 'BTC', 'ethereum': 'ETH',
+                'solana': 'SOL', 'polygon': 'MATIC', 'base': 'ETH',
+                'algorand': 'ALGO', 'bsc': 'BNB', 'arbitrum': 'ETH',
+                'avalanche': 'AVAX', 'tron': 'TRX',
+            }
             onchain_total = 0.0
             for source in onchain_sources:
                 wallet_id = source.get('wallet_id')
@@ -155,17 +164,9 @@ class OffchainCollector:
                     continue
                 try:
                     chain = source.get('chain', '')
-                    # Get native balance value
                     balance_info = await get_wallet_balance(wallet_id)
                     balance = float(balance_info['amount']) if balance_info else 0.0
 
-                    # Price the native balance
-                    chain_symbols = {
-                        'cardano': 'ADA', 'bitcoin': 'BTC', 'ethereum': 'ETH',
-                        'solana': 'SOL', 'polygon': 'MATIC', 'base': 'ETH',
-                        'algorand': 'ALGO', 'bsc': 'BNB', 'arbitrum': 'ETH',
-                        'avalanche': 'AVAX', 'tron': 'TRX',
-                    }
                     symbol = chain_symbols.get(chain)
                     native_value_usd = 0.0
                     if balance > 0 and symbol:
@@ -173,21 +174,14 @@ class OffchainCollector:
                         native_price = price.get('usd', 0) if isinstance(price, dict) else 0
                         native_value_usd = balance * native_price
 
-                    # Get token/native asset value
-                    token_value_usd = await calculate_wallet_native_assets_value(
-                        wallet_id, chain, user_id
-                    )
-
-                    wallet_total = native_value_usd + token_value_usd
-
                     await upsert_wallet_daily_balance(
                         user_id=user_id,
                         source_id=source['id'],
                         date=today,
-                        value_usd=round(wallet_total, 2),
+                        value_usd=round(native_value_usd, 2),
                         metadata=json.dumps({'source': 'live', 'chain': chain}),
                     )
-                    onchain_total += wallet_total
+                    onchain_total += native_value_usd
                 except Exception as e:
                     logger.warning(f"Offchain collector: on-chain wallet {source.get('label', source['source_key'][:20])} failed: {e}")
             if onchain_total > 0:
