@@ -921,6 +921,14 @@ async def rebuild_wallet_history(
     except Exception as e:
         logger.error(f"Rebuild: gap-fill failed: {e}")
 
+    # Anchor today's values from live data (on-chain + off-chain)
+    try:
+        from services.offchain_collector import offchain_collector
+        await offchain_collector.collect_for_user(user_id)
+        logger.info(f"Rebuild: anchored today's live values for user {user_id}")
+    except Exception as e:
+        logger.warning(f"Rebuild: today's live collection failed: {e}")
+
     # Count results
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row

@@ -142,6 +142,57 @@ class OffchainCollector:
                     logger.warning(f"Offchain collector: NFT failed: {e}")
                 logger.debug(f"Offchain collector: NFT total = ${nft_total:,.2f}")
 
+        # --- On-Chain (today's live wallet values) ---
+        onchain_sources = await get_wallet_sources(user_id, source_type='on_chain')
+        if onchain_sources:
+            from database import get_wallet_balance
+            from routers.portfolio import calculate_wallet_native_assets_value
+
+            onchain_total = 0.0
+            for source in onchain_sources:
+                wallet_id = source.get('wallet_id')
+                if not wallet_id:
+                    continue
+                try:
+                    chain = source.get('chain', '')
+                    # Get native balance value
+                    balance_info = await get_wallet_balance(wallet_id)
+                    balance = float(balance_info['amount']) if balance_info else 0.0
+
+                    # Price the native balance
+                    chain_symbols = {
+                        'cardano': 'ADA', 'bitcoin': 'BTC', 'ethereum': 'ETH',
+                        'solana': 'SOL', 'polygon': 'MATIC', 'base': 'ETH',
+                        'algorand': 'ALGO', 'bsc': 'BNB', 'arbitrum': 'ETH',
+                        'avalanche': 'AVAX', 'tron': 'TRX',
+                    }
+                    symbol = chain_symbols.get(chain)
+                    native_value_usd = 0.0
+                    if balance > 0 and symbol:
+                        price = prices.get(symbol, {})
+                        native_price = price.get('usd', 0) if isinstance(price, dict) else 0
+                        native_value_usd = balance * native_price
+
+                    # Get token/native asset value
+                    token_value_usd = await calculate_wallet_native_assets_value(
+                        wallet_id, chain, user_id
+                    )
+
+                    wallet_total = native_value_usd + token_value_usd
+
+                    await upsert_wallet_daily_balance(
+                        user_id=user_id,
+                        source_id=source['id'],
+                        date=today,
+                        value_usd=round(wallet_total, 2),
+                        metadata=json.dumps({'source': 'live', 'chain': chain}),
+                    )
+                    onchain_total += wallet_total
+                except Exception as e:
+                    logger.warning(f"Offchain collector: on-chain wallet {source.get('label', source['source_key'][:20])} failed: {e}")
+            if onchain_total > 0:
+                logger.debug(f"Offchain collector: on-chain total = ${onchain_total:,.2f}")
+
         logger.info(f"Offchain collector: Completed collection for user {user_id}")
 
     async def collect_all_users(self):
