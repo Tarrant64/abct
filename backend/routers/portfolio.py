@@ -781,57 +781,11 @@ async def get_unified_chart(
     from datetime import datetime, timedelta
     start_date = (datetime.utcnow() - timedelta(days=days)).strftime('%Y-%m-%d')
 
-    # Try wallet_daily_balances first (only if migration has been run)
-    wdb_rows = []
-    try:
-        import aiosqlite
-        from config import DATABASE_PATH
-        async with aiosqlite.connect(DATABASE_PATH) as db:
-            cursor = await db.execute(
-                "SELECT 1 FROM migrations WHERE migration_key = 'v1_to_wallet_daily_balances'"
-            )
-            migration_done = await cursor.fetchone()
+    # NOTE: wallet_daily_balances path disabled until data quality is verified.
+    # Per-wallet data is available via /chart/wallet/{source_id} drill-down.
+    # Main chart always uses proven legacy V2+V1 merge below.
 
-        if migration_done:
-            from database import get_unified_daily_totals
-            wdb_rows = await get_unified_daily_totals(user_id, start_date=start_date)
-    except Exception as e:
-        logger.warning(f"Unified chart: wallet_daily_balances check failed: {e}")
-        wdb_rows = []
-
-    if wdb_rows:
-        data = []
-        for row in wdb_rows:
-            on_chain = row.get('on_chain_value', 0) or 0
-            exchange = row.get('exchange_value', 0) or 0
-            staking = row.get('staking_value', 0) or 0
-            defi = row.get('defi_value', 0) or 0
-            nfts = row.get('nft_value', 0) or 0
-            total = row.get('total_value', 0) or 0
-            off_chain = exchange + staking + defi + nfts
-
-            data.append({
-                "date": row['date'],
-                "total_value": round(total, 2),
-                "on_chain_value": round(on_chain, 2),
-                "off_chain_value": round(off_chain, 2),
-                "breakdown": {
-                    "chains": {},
-                    "components": {
-                        "wallets": round(on_chain, 2),
-                        "exchange": round(exchange, 2),
-                        "staking": round(staking, 2),
-                        "defi": round(defi, 2),
-                        "nfts": round(nfts, 2),
-                        "tracked_tokens": 0,
-                    }
-                }
-            })
-
-        logger.info(f"Unified chart (V2 per-wallet): {len(data)} points from wallet_daily_balances")
-        return {"data": data, "coverage": _compute_chart_coverage(data)}
-
-    # --- Legacy fallback: V2 engine + V1 snapshots ---
+    # --- Legacy path: V2 engine + V1 snapshots ---
     v2_data = []
     v1_history = []
 
