@@ -483,10 +483,18 @@ async def auto_restore_tunnel():
         logger.debug("Cloudflare auto-restore: no tunnel token found, skipping")
         return
 
-    logger.info("Cloudflare auto-restore: tunnel token found, restoring...")
+    logger.info("Cloudflare auto-restore: tunnel token found, checking status...")
 
     # Ensure supervisorctl sections exist
     _ensure_supervisor_ctl()
+
+    # If cloudflared is already running under supervisor, nothing to do.
+    # This prevents a restart loop: SIGHUP restarts all supervisor processes
+    # (including uvicorn), which triggers auto_restore_tunnel again.
+    current_state = await _get_service_state()
+    if current_state == "RUNNING":
+        logger.info("Cloudflare auto-restore: tunnel already running, skipping")
+        return
 
     installed = shutil.which("cloudflared") is not None or os.path.exists("/usr/bin/cloudflared")
 
