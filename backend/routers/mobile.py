@@ -18,6 +18,8 @@ import logging
 import sys
 import os
 import asyncio
+import json as json_mod
+import aiosqlite
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -31,11 +33,14 @@ from database import (
     get_wallet_assets,
     get_cache,
     set_cache,
-    get_username_by_user_id
+    get_username_by_user_id,
+    get_wallet_sources,
+    get_wallet_source_by_id,
 )
 from auth_utils import verify_session
 from middleware.demo_mode import is_demo_user
 from services.http_client import get_client
+from config import DATABASE_PATH
 
 router = APIRouter(prefix="/api/mobile", tags=["mobile"])
 logger = logging.getLogger(__name__)
@@ -90,6 +95,200 @@ SYMBOL_TO_COINGECKO = {
     'USDC': 'usd-coin',
     'USDT': 'tether',
 }
+
+SOURCE_TYPE_ORDER = ["on_chain", "exchange", "staking", "defi", "nft"]
+
+SOURCE_GROUP_DISPLAY = {
+    "on_chain": "Self-Custody Wallets",
+    "exchange": "Exchanges",
+    "staking": "Staking",
+    "defi": "DeFi",
+    "nft": "NFTs",
+}
+
+CHAIN_ICON_URLS = {
+    "cardano": "https://cryptologos.cc/logos/cardano-ada-logo.png",
+    "bitcoin": "https://cryptologos.cc/logos/bitcoin-btc-logo.png",
+    "ethereum": "https://cryptologos.cc/logos/ethereum-eth-logo.png",
+    "solana": "https://cryptologos.cc/logos/solana-sol-logo.png",
+    "polygon": "https://cryptologos.cc/logos/polygon-matic-logo.png",
+    "base": "https://cryptologos.cc/logos/base-base-logo.png",
+    "algorand": "https://cryptologos.cc/logos/algorand-algo-logo.png",
+    "bsc": "https://cryptologos.cc/logos/bnb-bnb-logo.png",
+    "arbitrum": "https://cryptologos.cc/logos/arbitrum-arb-logo.png",
+    "avalanche": "https://cryptologos.cc/logos/avalanche-avax-logo.png",
+    "tron": "https://cryptologos.cc/logos/tron-trx-logo.png",
+}
+
+
+def _map_mobile_range_to_portfolio_range(range_value: str) -> str:
+    range_map = {"7d": "1w", "4w": "1m", "3m": "3m", "1y": "1y", "all": "all"}
+    return range_map.get(range_value, "1w")
+
+
+def _compute_value_summary(values: List[float]) -> Dict[str, float]:
+    if not values:
+        return {
+            "starting_value": 0,
+            "ending_value": 0,
+            "change_usd": 0,
+            "change_percent": 0,
+            "highest_value": 0,
+            "lowest_value": 0,
+        }
+    starting_value = values[0]
+    ending_value = values[-1]
+    change_usd = ending_value - starting_value
+    change_percent = (change_usd / starting_value * 100) if starting_value > 0 else 0
+    return {
+        "starting_value": round(starting_value, 2),
+        "ending_value": round(ending_value, 2),
+        "change_usd": round(change_usd, 2),
+        "change_percent": round(change_percent, 2),
+        "highest_value": round(max(values), 2),
+        "lowest_value": round(min(values), 2),
+    }
+
+
+def _source_icon_url(source: Dict) -> str:
+    source_type = (source.get("source_type") or "").lower()
+    if source_type == "exchange":
+        exchange_info = EXCHANGE_INFO.get((source.get("source_key") or "").lower(), {})
+        return exchange_info.get("logo_url", "")
+    if source_type == "on_chain":
+        chain = (source.get("chain") or "").lower()
+        return CHAIN_ICON_URLS.get(chain, "")
+    if source_type == "staking":
+        return "https://img.icons8.com/fluency/96/lock-2.png"
+    if source_type == "defi":
+        return "https://img.icons8.com/fluency/96/combo-chart.png"
+    if source_type == "nft":
+        return "https://img.icons8.com/fluency/96/picture.png"
+    return ""
+
+
+def _group_sources_for_mobile(sources: List[Dict]) -> List[Dict]:
+    grouped = {source_type: [] for source_type in SOURCE_TYPE_ORDER}
+    for source in sources:
+        source_type = source.get("source_type")
+        if source_type not in grouped:
+            continue
+        grouped[source_type].append(source)
+
+    result = []
+    for source_type in SOURCE_TYPE_ORDER:
+        items = grouped[source_type]
+        items.sort(key=lambda item: item.get("latest_value_usd", 0), reverse=True)
+        result.append({
+            "source_type": source_type,
+            "display_name": SOURCE_GROUP_DISPLAY[source_type],
+            "count": len(items),
+            "sources": items,
+        })
+    return result
+
+
+async def _get_latest_source_values(user_id: int) -> Dict[int, Dict]:
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            """
+            SELECT
+                ws.id AS source_id,
+                COALESCE(latest.value_usd, 0) AS latest_value_usd,
+                latest.date AS latest_date
+            FROM wallet_sources ws
+            LEFT JOIN (
+                SELECT wdb.source_id, wdb.value_usd, wdb.date
+                FROM wallet_daily_balances wdb
+                JOIN (
+                    SELECT source_id, MAX(date) AS max_date
+                    FROM wallet_daily_balances
+                    WHERE user_id = ?
+                    GROUP BY source_id
+                ) m
+                    ON wdb.source_id = m.source_id
+                   AND wdb.date = m.max_date
+                WHERE wdb.user_id = ?
+            ) latest
+                ON latest.source_id = ws.id
+            WHERE ws.user_id = ? AND ws.is_active = 1
+            """,
+            (user_id, user_id, user_id),
+        )
+        rows = await cursor.fetchall()
+        return {
+            row["source_id"]: {
+                "latest_value_usd": float(row["latest_value_usd"] or 0),
+                "latest_date": row["latest_date"],
+            }
+            for row in rows
+        }
+
+
+def _build_demo_wallet_sources() -> List[Dict]:
+    return [
+        {
+            "id": 101,
+            "source_type": "on_chain",
+            "source_key": "addr1q9x...demo",
+            "chain": "cardano",
+            "label": "Main Cardano Wallet",
+            "wallet_id": 1,
+            "is_active": 1,
+            "latest_value_usd": 18124.56,
+            "latest_date": datetime.utcnow().strftime("%Y-%m-%d"),
+            "icon_url": CHAIN_ICON_URLS["cardano"],
+        },
+        {
+            "id": 201,
+            "source_type": "exchange",
+            "source_key": "coinbase",
+            "chain": None,
+            "label": "Coinbase",
+            "wallet_id": None,
+            "is_active": 1,
+            "latest_value_usd": 6921.44,
+            "latest_date": datetime.utcnow().strftime("%Y-%m-%d"),
+            "icon_url": EXCHANGE_INFO["coinbase"]["logo_url"],
+        },
+        {
+            "id": 301,
+            "source_type": "staking",
+            "source_key": "staking:addr1q9x...demo",
+            "chain": "cardano",
+            "label": "Cardano Staking",
+            "wallet_id": None,
+            "is_active": 1,
+            "latest_value_usd": 2482.11,
+            "latest_date": datetime.utcnow().strftime("%Y-%m-%d"),
+            "icon_url": "https://img.icons8.com/fluency/96/lock-2.png",
+        },
+        {
+            "id": 401,
+            "source_type": "defi",
+            "source_key": "defi:addr1q9x...demo",
+            "chain": "cardano",
+            "label": "DeFi Positions",
+            "wallet_id": None,
+            "is_active": 1,
+            "latest_value_usd": 1142.38,
+            "latest_date": datetime.utcnow().strftime("%Y-%m-%d"),
+            "icon_url": "https://img.icons8.com/fluency/96/combo-chart.png",
+        },
+        {
+            "id": 501,
+            "source_type": "nft",
+            "source_key": "nft:all",
+            "chain": None,
+            "label": "NFT Portfolio",
+            "wallet_id": None,
+            "is_active": 1,
+            "latest_value_usd": 612.77,
+            "latest_date": datetime.utcnow().strftime("%Y-%m-%d"),
+            "icon_url": "https://img.icons8.com/fluency/96/picture.png",
+        },
+    ]
 
 
 @router.get("/portfolio/summary")
@@ -765,6 +964,225 @@ async def get_mobile_nfts_summary(
     }
 
 
+@router.get("/wallet-sources")
+async def get_mobile_wallet_sources(
+    user_id: int = Depends(verify_session),
+):
+    """
+    List wallet sources grouped by source type with latest USD value for mobile UI.
+    """
+    cache_key = f"mobile_wallet_sources_{user_id}"
+
+    cached = await get_cache(cache_key, user_id=user_id)
+    if cached:
+        return cached
+
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        demo_sources = _build_demo_wallet_sources()
+        result = {
+            "total_sources": len(demo_sources),
+            "groups": _group_sources_for_mobile(demo_sources),
+            "last_updated": datetime.utcnow().isoformat() + "Z",
+        }
+        await set_cache(cache_key, result, MOBILE_CACHE_TTL, user_id=user_id)
+        return result
+
+    sources = await get_wallet_sources(user_id=user_id, active_only=True)
+    latest_values = await _get_latest_source_values(user_id)
+
+    mobile_sources = []
+    for source in sources:
+        latest = latest_values.get(source["id"], {})
+        mobile_sources.append({
+            "id": source["id"],
+            "source_type": source["source_type"],
+            "source_key": source["source_key"],
+            "chain": source.get("chain"),
+            "label": source.get("label"),
+            "wallet_id": source.get("wallet_id"),
+            "is_active": bool(source.get("is_active", 1)),
+            "latest_value_usd": round(float(latest.get("latest_value_usd", 0) or 0), 2),
+            "latest_date": latest.get("latest_date"),
+            "icon_url": _source_icon_url(source),
+        })
+
+    result = {
+        "total_sources": len(mobile_sources),
+        "groups": _group_sources_for_mobile(mobile_sources),
+        "last_updated": datetime.utcnow().isoformat() + "Z",
+    }
+
+    await set_cache(cache_key, result, MOBILE_CACHE_TTL, user_id=user_id)
+    return result
+
+
+@router.get("/wallet-sources/{source_id}/chart")
+async def get_mobile_wallet_source_chart(
+    source_id: int,
+    user_id: int = Depends(verify_session),
+    range: str = Query("7d", description="Time range: 7d, 4w, 3m, 1y, all"),
+):
+    """
+    Get per-wallet/source historical chart for mobile drill-down.
+    """
+    cache_key = f"mobile_wallet_source_chart_{user_id}_{source_id}_{range}"
+
+    cached = await get_cache(cache_key, user_id=user_id)
+    if cached:
+        return cached
+
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        demo_sources = _build_demo_wallet_sources()
+        source = next((s for s in demo_sources if s["id"] == source_id), None)
+        if not source:
+            raise HTTPException(status_code=404, detail="Wallet source not found")
+
+        range_days = {"7d": 7, "4w": 28, "3m": 90, "1y": 365, "all": 365}
+        days = range_days.get(range, 7)
+        base_value = source.get("latest_value_usd", 0) or 0
+
+        data = []
+        for i in range(days):
+            day = datetime.utcnow() - timedelta(days=days - i - 1)
+            daily_value = base_value * (0.9 + (i / max(days, 1)) * 0.2)
+            data.append({
+                "timestamp": day.strftime("%Y-%m-%d"),
+                "value_usd": round(daily_value, 2),
+                "metadata": {},
+            })
+
+        summary = _compute_value_summary([row["value_usd"] for row in data])
+        result = {
+            "source": {
+                "id": source["id"],
+                "source_type": source["source_type"],
+                "source_key": source["source_key"],
+                "chain": source.get("chain"),
+                "label": source.get("label"),
+                "icon_url": source.get("icon_url", ""),
+            },
+            "range": range,
+            "data_points": len(data),
+            "chart_data": data,
+            "summary": summary,
+            "coverage": _compute_chart_coverage([{"date": d["timestamp"]} for d in data]),
+            "last_updated": datetime.utcnow().isoformat() + "Z",
+        }
+        await set_cache(cache_key, result, CHART_CACHE_TTL, user_id=user_id)
+        return result
+
+    source = await get_wallet_source_by_id(source_id)
+    if not source or source.get("user_id") != user_id:
+        raise HTTPException(status_code=404, detail="Wallet source not found")
+
+    mapped_range = _map_mobile_range_to_portfolio_range(range)
+    wallet_chart = await portfolio.get_wallet_chart(
+        source_id=source_id,
+        user_id=user_id,
+        range=mapped_range,
+    )
+
+    data = wallet_chart.get("data", [])
+    chart_data = []
+    for row in data:
+        metadata = row.get("metadata")
+        if isinstance(metadata, str):
+            try:
+                metadata = json_mod.loads(metadata)
+            except (ValueError, TypeError):
+                metadata = {}
+        elif not isinstance(metadata, dict):
+            metadata = {}
+
+        chart_data.append({
+            "timestamp": row.get("date"),
+            "value_usd": round(float(row.get("value_usd") or 0), 2),
+            "metadata": metadata,
+        })
+
+    summary = _compute_value_summary([row["value_usd"] for row in chart_data])
+
+    result = {
+        "source": {
+            "id": source["id"],
+            "source_type": source["source_type"],
+            "source_key": source["source_key"],
+            "chain": source.get("chain"),
+            "label": source.get("label"),
+            "icon_url": _source_icon_url(source),
+        },
+        "range": range,
+        "mapped_range": mapped_range,
+        "data_points": len(chart_data),
+        "chart_data": chart_data,
+        "summary": summary,
+        "coverage": wallet_chart.get("coverage") or {
+            "oldest_date": None,
+            "newest_date": None,
+            "total_days": 0,
+        },
+        "last_updated": datetime.utcnow().isoformat() + "Z",
+    }
+
+    await set_cache(cache_key, result, CHART_CACHE_TTL, user_id=user_id)
+    return result
+
+
+@router.get("/portfolio/breakdown-history")
+async def get_mobile_portfolio_breakdown_history(
+    user_id: int = Depends(verify_session),
+    range: str = Query("7d", description="Time range: 7d, 4w, 3m, 1y, all"),
+):
+    """
+    Stacked composition history by source type for mobile area charts.
+    """
+    cache_key = f"mobile_breakdown_history_{user_id}_{range}"
+
+    cached = await get_cache(cache_key, user_id=user_id)
+    if cached:
+        return cached
+
+    mapped_range = _map_mobile_range_to_portfolio_range(range)
+    unified = await portfolio.get_unified_chart(user_id=user_id, range=mapped_range)
+    points = unified.get("data", [])
+
+    chart_data = []
+    for point in points:
+        components = (point.get("breakdown") or {}).get("components", {})
+        chart_data.append({
+            "timestamp": point.get("date"),
+            "total_value_usd": round(float(point.get("total_value") or 0), 2),
+            "on_chain_value_usd": round(float(point.get("on_chain_value") or 0), 2),
+            "off_chain_value_usd": round(float(point.get("off_chain_value") or 0), 2),
+            "components": {
+                "wallets": round(float(components.get("wallets") or 0), 2),
+                "exchanges": round(float(components.get("exchange") or 0), 2),
+                "staking": round(float(components.get("staking") or 0), 2),
+                "defi": round(float(components.get("defi") or 0), 2),
+                "nfts": round(float(components.get("nfts") or 0), 2),
+                "tracked_tokens": round(float(components.get("tracked_tokens") or 0), 2),
+            },
+        })
+
+    result = {
+        "range": range,
+        "mapped_range": mapped_range,
+        "data_points": len(chart_data),
+        "chart_data": chart_data,
+        "coverage": unified.get("coverage") or {
+            "oldest_date": None,
+            "newest_date": None,
+            "total_days": 0,
+        },
+        "last_updated": datetime.utcnow().isoformat() + "Z",
+    }
+
+    await set_cache(cache_key, result, CHART_CACHE_TTL, user_id=user_id)
+    return result
+
+
 @router.get("/chart/portfolio-history")
 async def get_mobile_portfolio_history(
     user_id: int = Depends(verify_session),
@@ -775,62 +1193,82 @@ async def get_mobile_portfolio_history(
     Get historical portfolio value for charts.
 
     Mobile-optimized format compatible with chart libraries.
+    Uses the unified chart endpoint for complete on-chain + off-chain data.
     """
-    # Use existing portfolio history endpoint
-    history_data = await portfolio.get_portfolio_history(user_id=user_id, range=range)
+    try:
+        # Map mobile ranges to unified endpoint ranges
+        range_map = {"7d": "1w", "4w": "1m", "3m": "3m", "1y": "1y", "all": "all"}
+        unified_range = range_map.get(range, "1w")
 
-    # Snapshot history returns: [{date: "2026-02-10", value: 21000.50, breakdown: {...}}, ...]
-    data_points = history_data.get('data', [])
-    if data_points:
-        values = [point.get('value', 0) for point in data_points]
-        starting_value = values[0] if values else 0
-        ending_value = values[-1] if values else 0
-        change_usd = ending_value - starting_value
-        change_percent = (change_usd / starting_value * 100) if starting_value > 0 else 0
+        # Call unified chart endpoint
+        unified_data = await portfolio.get_unified_chart(user_id=user_id, range=unified_range)
 
-        summary = {
-            "starting_value": round(starting_value, 2),
-            "ending_value": round(ending_value, 2),
-            "change_usd": round(change_usd, 2),
-            "change_percent": round(change_percent, 2),
-            "highest_value": round(max(values), 2),
-            "lowest_value": round(min(values), 2)
-        }
-    else:
-        summary = {
-            "starting_value": 0,
-            "ending_value": 0,
-            "change_usd": 0,
-            "change_percent": 0,
-            "highest_value": 0,
-            "lowest_value": 0
-        }
+        data_points = unified_data.get('data', [])
+        if data_points:
+            values = [(point.get('total_value') or 0) for point in data_points]
+            starting_value = values[0] if values else 0
+            ending_value = values[-1] if values else 0
+            change_usd = ending_value - starting_value
+            change_percent = (change_usd / starting_value * 100) if starting_value > 0 else 0
 
-    # Format chart data — simple (timestamp, value) pairs for mobile chart libs
-    chart_data = []
-    for point in data_points:
-        breakdown = point.get('breakdown', {})
-        chart_data.append({
-            "timestamp": point.get('date', ''),
-            "total_value_usd": round(point.get('value', 0), 2),
-            "breakdown": {
-                "wallets": round(breakdown.get('wallets', 0), 2),
-                "staking": round(breakdown.get('staking', 0), 2),
-                "defi": round(breakdown.get('defi', 0), 2),
-                "exchanges": round(breakdown.get('exchange', 0), 2),
-                "nfts": round(breakdown.get('nfts', 0), 2),
-                "tracked_tokens": round(breakdown.get('tracked_tokens', 0), 2),
+            summary = {
+                "starting_value": round(starting_value, 2),
+                "ending_value": round(ending_value, 2),
+                "change_usd": round(change_usd, 2),
+                "change_percent": round(change_percent, 2),
+                "highest_value": round(max(values), 2),
+                "lowest_value": round(min(values), 2)
             }
-        })
+        else:
+            summary = {
+                "starting_value": 0, "ending_value": 0,
+                "change_usd": 0, "change_percent": 0,
+                "highest_value": 0, "lowest_value": 0
+            }
 
-    return {
-        "range": range,
-        "interval": interval or "daily",
-        "data_points": len(chart_data),
-        "chart_data": chart_data,
-        "summary": summary,
-        "last_updated": datetime.utcnow().isoformat() + "Z"
-    }
+        # Format chart data for mobile chart libs
+        chart_data = []
+        for point in data_points:
+            components = (point.get('breakdown') or {}).get('components', {})
+            chart_data.append({
+                "timestamp": point.get('date', ''),
+                "total_value_usd": round(point.get('total_value') or 0, 2),
+                "on_chain_value_usd": round(point.get('on_chain_value') or 0, 2),
+                "off_chain_value_usd": round(point.get('off_chain_value') or 0, 2),
+                "breakdown": {
+                    "wallets": round(components.get('wallets') or 0, 2),
+                    "staking": round(components.get('staking') or 0, 2),
+                    "defi": round(components.get('defi') or 0, 2),
+                    "exchanges": round(components.get('exchange') or 0, 2),
+                    "nfts": round(components.get('nfts') or 0, 2),
+                    "tracked_tokens": round(components.get('tracked_tokens') or 0, 2),
+                }
+            })
+
+        return {
+            "range": range,
+            "interval": interval or "daily",
+            "data_points": len(chart_data),
+            "chart_data": chart_data,
+            "summary": summary,
+            "last_updated": datetime.utcnow().isoformat() + "Z"
+        }
+
+    except Exception as e:
+        logger.error(f"Mobile portfolio history failed: {e}", exc_info=True)
+        return {
+            "range": range,
+            "interval": interval or "daily",
+            "data_points": 0,
+            "chart_data": [],
+            "summary": {
+                "starting_value": 0, "ending_value": 0,
+                "change_usd": 0, "change_percent": 0,
+                "highest_value": 0, "lowest_value": 0
+            },
+            "last_updated": datetime.utcnow().isoformat() + "Z",
+            "error": str(e)
+        }
 
 
 async def fetch_ohlcv_coingecko(symbol: str, days: int) -> Optional[List[List]]:
