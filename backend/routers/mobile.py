@@ -779,10 +779,10 @@ async def get_mobile_portfolio_history(
     # Use existing portfolio history endpoint
     history_data = await portfolio.get_portfolio_history(user_id=user_id, range=range)
 
-    # Calculate summary stats
+    # Snapshot history returns: [{date: "2026-02-10", value: 21000.50, breakdown: {...}}, ...]
     data_points = history_data.get('data', [])
     if data_points:
-        values = [point['total_value_usd'] for point in data_points]
+        values = [point.get('value', 0) for point in data_points]
         starting_value = values[0] if values else 0
         ending_value = values[-1] if values else 0
         change_usd = ending_value - starting_value
@@ -806,13 +806,21 @@ async def get_mobile_portfolio_history(
             "lowest_value": 0
         }
 
-    # Format chart data
+    # Format chart data — simple (timestamp, value) pairs for mobile chart libs
     chart_data = []
     for point in data_points:
+        breakdown = point.get('breakdown', {})
         chart_data.append({
-            "timestamp": point.get('snapshot_date', ''),
-            "total_value_usd": round(point.get('total_value_usd', 0), 2),
-            "native_values": point.get('native_values', {})
+            "timestamp": point.get('date', ''),
+            "total_value_usd": round(point.get('value', 0), 2),
+            "breakdown": {
+                "wallets": round(breakdown.get('wallets', 0), 2),
+                "staking": round(breakdown.get('staking', 0), 2),
+                "defi": round(breakdown.get('defi', 0), 2),
+                "exchanges": round(breakdown.get('exchange', 0), 2),
+                "nfts": round(breakdown.get('nfts', 0), 2),
+                "tracked_tokens": round(breakdown.get('tracked_tokens', 0), 2),
+            }
         })
 
     return {
