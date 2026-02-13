@@ -951,6 +951,60 @@ async def init_db():
             ON balance_history_jobs(user_id, started_at DESC)
         """)
 
+        # ============================================================================
+        # WALLET SOURCES REGISTRY (V2 per-wallet history)
+        # ============================================================================
+        # Unifies on-chain wallets and off-chain "virtual wallets" (exchanges,
+        # staking, DeFi, NFTs) under one registry for per-wallet balance tracking.
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS wallet_sources (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                source_type TEXT NOT NULL,
+                source_key TEXT NOT NULL,
+                chain TEXT,
+                label TEXT,
+                wallet_id INTEGER,
+                is_active INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, source_type, source_key)
+            )
+        """)
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_wallet_sources_user
+            ON wallet_sources(user_id, is_active)
+        """)
+
+        # ============================================================================
+        # WALLET DAILY BALANCES (V2 per-wallet history)
+        # ============================================================================
+        # Stores daily USD balance for each wallet source. Portfolio total is
+        # SUM(value_usd) across all sources for a given date.
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS wallet_daily_balances (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                source_id INTEGER NOT NULL REFERENCES wallet_sources(id),
+                date TEXT NOT NULL,
+                value_usd REAL NOT NULL DEFAULT 0,
+                metadata TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(source_id, date)
+            )
+        """)
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_wdb_user_date
+            ON wallet_daily_balances(user_id, date)
+        """)
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_wdb_source_date
+            ON wallet_daily_balances(source_id, date)
+        """)
+
         await db.commit()
 
 async def get_db():
@@ -2860,3 +2914,248 @@ async def update_balance_history_prices(user_id: int, symbol: str, price_map: di
             updated += cursor.rowcount
         await db.commit()
     return updated
+
+
+# ============================================================================
+# WALLET SOURCES REGISTRY CRUD
+# ============================================================================
+
+async def upsert_wallet_source(user_id: int, source_type: str, source_key: str,
+                                chain: str = None, label: str = None,
+                                wallet_id: int = None) -> int:
+    """Insert or update a wallet source. Returns the source id."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute(
+            """INSERT INTO wallet_sources (user_id, source_type, source_key, chain, label, wallet_id)
+               VALUES (?, ?, ?, ?, ?, ?)
+               ON CONFLICT(user_id, source_type, source_key) DO UPDATE SET
+                   chain = COALESCE(excluded.chain, wallet_sources.chain),
+                   label = COALESCE(excluded.label, wallet_sources.label),
+                   wallet_id = COALESCE(excluded.wallet_id, wallet_sources.wallet_id),
+                   is_active = 1""",
+            (user_id, source_type, source_key, chain, label, wallet_id)
+        )
+        await db.commit()
+        if cursor.lastrowid:
+            return cursor.lastrowid
+        # If conflict-updated, fetch existing ID
+        cursor = await db.execute(
+            "SELECT id FROM wallet_sources WHERE user_id = ? AND source_type = ? AND source_key = ?",
+            (user_id, source_type, source_key)
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else 0
+
+
+async def get_wallet_sources(user_id: int, source_type: str = None,
+                              active_only: bool = True) -> list:
+    """Get wallet sources for a user, optionally filtered by type."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        query = "SELECT * FROM wallet_sources WHERE user_id = ?"
+        params = [user_id]
+        if active_only:
+            query += " AND is_active = 1"
+        if source_type:
+            query += " AND source_type = ?"
+            params.append(source_type)
+        query += " ORDER BY source_type, source_key"
+        cursor = await db.execute(query, params)
+        return [dict(row) for row in await cursor.fetchall()]
+
+
+async def get_wallet_source_by_id(source_id: int) -> Optional[dict]:
+    """Get a single wallet source by ID."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM wallet_sources WHERE id = ?", (source_id,))
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+
+async def deactivate_wallet_source(source_id: int):
+    """Soft-delete a wallet source."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("UPDATE wallet_sources SET is_active = 0 WHERE id = ?", (source_id,))
+        await db.commit()
+
+
+# ============================================================================
+# WALLET DAILY BALANCES CRUD
+# ============================================================================
+
+async def upsert_wallet_daily_balance(user_id: int, source_id: int, date: str,
+                                       value_usd: float, metadata: str = None):
+    """Insert or update a daily balance for a wallet source."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute(
+            """INSERT INTO wallet_daily_balances (user_id, source_id, date, value_usd, metadata)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(source_id, date) DO UPDATE SET
+                   value_usd = excluded.value_usd,
+                   metadata = COALESCE(excluded.metadata, wallet_daily_balances.metadata),
+                   updated_at = CURRENT_TIMESTAMP""",
+            (user_id, source_id, date, value_usd, metadata)
+        )
+        await db.commit()
+
+
+async def upsert_wallet_daily_balances_batch(rows: list):
+    """Batch insert/update daily balances. Each row: {user_id, source_id, date, value_usd, metadata}."""
+    if not rows:
+        return
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.executemany(
+            """INSERT INTO wallet_daily_balances (user_id, source_id, date, value_usd, metadata)
+               VALUES (:user_id, :source_id, :date, :value_usd, :metadata)
+               ON CONFLICT(source_id, date) DO UPDATE SET
+                   value_usd = excluded.value_usd,
+                   metadata = COALESCE(excluded.metadata, wallet_daily_balances.metadata),
+                   updated_at = CURRENT_TIMESTAMP""",
+            rows
+        )
+        await db.commit()
+
+
+async def get_wallet_daily_balances(user_id: int, start_date: str = None,
+                                     end_date: str = None) -> list:
+    """Get all daily balances for a user, optionally within a date range."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        query = """
+            SELECT wdb.*, ws.source_type, ws.source_key, ws.chain, ws.label
+            FROM wallet_daily_balances wdb
+            JOIN wallet_sources ws ON wdb.source_id = ws.id
+            WHERE wdb.user_id = ?
+        """
+        params = [user_id]
+        if start_date:
+            query += " AND wdb.date >= ?"
+            params.append(start_date)
+        if end_date:
+            query += " AND wdb.date <= ?"
+            params.append(end_date)
+        query += " ORDER BY wdb.date ASC, ws.source_type ASC"
+        cursor = await db.execute(query, params)
+        return [dict(row) for row in await cursor.fetchall()]
+
+
+async def get_unified_daily_totals(user_id: int, start_date: str = None,
+                                    end_date: str = None) -> list:
+    """Get daily portfolio totals with component breakdown from wallet_daily_balances.
+
+    Returns one row per date with total_value and per-source_type subtotals.
+    """
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        query = """
+            SELECT
+                wdb.date,
+                SUM(wdb.value_usd) as total_value,
+                SUM(CASE WHEN ws.source_type = 'on_chain' THEN wdb.value_usd ELSE 0 END) as on_chain_value,
+                SUM(CASE WHEN ws.source_type = 'exchange' THEN wdb.value_usd ELSE 0 END) as exchange_value,
+                SUM(CASE WHEN ws.source_type = 'staking' THEN wdb.value_usd ELSE 0 END) as staking_value,
+                SUM(CASE WHEN ws.source_type = 'defi' THEN wdb.value_usd ELSE 0 END) as defi_value,
+                SUM(CASE WHEN ws.source_type = 'nft' THEN wdb.value_usd ELSE 0 END) as nft_value
+            FROM wallet_daily_balances wdb
+            JOIN wallet_sources ws ON wdb.source_id = ws.id
+            WHERE wdb.user_id = ? AND ws.is_active = 1
+        """
+        params = [user_id]
+        if start_date:
+            query += " AND wdb.date >= ?"
+            params.append(start_date)
+        if end_date:
+            query += " AND wdb.date <= ?"
+            params.append(end_date)
+        query += " GROUP BY wdb.date ORDER BY wdb.date ASC"
+        cursor = await db.execute(query, params)
+        return [dict(row) for row in await cursor.fetchall()]
+
+
+async def get_wallet_source_daily_balances(source_id: int, start_date: str = None,
+                                            end_date: str = None) -> list:
+    """Get daily balances for a specific wallet source (drill-down)."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        query = "SELECT * FROM wallet_daily_balances WHERE source_id = ?"
+        params = [source_id]
+        if start_date:
+            query += " AND date >= ?"
+            params.append(start_date)
+        if end_date:
+            query += " AND date <= ?"
+            params.append(end_date)
+        query += " ORDER BY date ASC"
+        cursor = await db.execute(query, params)
+        return [dict(row) for row in await cursor.fetchall()]
+
+
+async def seed_wallet_sources(user_id: int):
+    """Seed wallet_sources from existing wallets and configured exchanges.
+
+    Idempotent - safe to call on every startup.
+    """
+    # Seed on-chain wallets
+    wallets = await get_all_wallets(user_id=user_id)
+    for w in wallets:
+        await upsert_wallet_source(
+            user_id=user_id,
+            source_type='on_chain',
+            source_key=w['address'],
+            chain=w['blockchain'],
+            label=w.get('label') or f"{w['blockchain']} wallet",
+            wallet_id=w['id']
+        )
+
+    # Seed exchange sources from configured API keys
+    api_settings = await get_all_api_settings(user_id=user_id)
+    exchange_api_names = {
+        'coinbase': 'Coinbase',
+        'binance': 'Binance',
+        'binance_us': 'Binance US',
+        'okx': 'OKX',
+        'bitget': 'Bitget',
+        'gate': 'Gate.io',
+        'kucoin': 'KuCoin',
+    }
+    for setting in api_settings:
+        api_name = setting.get('api_name', '')
+        if api_name in exchange_api_names and setting.get('enabled'):
+            await upsert_wallet_source(
+                user_id=user_id,
+                source_type='exchange',
+                source_key=api_name,
+                label=exchange_api_names[api_name]
+            )
+
+    # Seed staking sources (Cardano wallets with staking)
+    for w in wallets:
+        if w['blockchain'] == 'cardano':
+            await upsert_wallet_source(
+                user_id=user_id,
+                source_type='staking',
+                source_key=f"staking:{w['address']}",
+                chain='cardano',
+                label=f"Cardano Staking ({w.get('label') or w['address'][:12]}...)"
+            )
+
+    # Seed DeFi sources (Cardano wallets with potential DeFi)
+    for w in wallets:
+        if w['blockchain'] == 'cardano':
+            await upsert_wallet_source(
+                user_id=user_id,
+                source_type='defi',
+                source_key=f"defi:{w['address']}",
+                chain='cardano',
+                label=f"DeFi ({w.get('label') or w['address'][:12]}...)"
+            )
+
+    # Seed NFT source (aggregate across all wallets)
+    if wallets:
+        await upsert_wallet_source(
+            user_id=user_id,
+            source_type='nft',
+            source_key='nft:all',
+            label='NFT Portfolio'
+        )

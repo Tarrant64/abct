@@ -757,6 +757,322 @@ async def get_portfolio_totals(user_id: int = Depends(verify_session)):
     }
 
 
+@router.get("/chart/unified")
+async def get_unified_chart(
+    user_id: int = Depends(verify_session),
+    range: str = Query("1w", description="Time range: 24h, 1w, 1m, 3m, 6m, 1y, all"),
+):
+    """
+    Unified portfolio chart from wallet_daily_balances (per-wallet architecture).
+
+    Falls back to legacy V2+V1 merge if wallet_daily_balances has no data yet.
+    """
+    # Demo mode: return pre-generated fake history
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        return await _get_demo_unified_chart(range)
+
+    range_to_days = {
+        '24h': 1, '1w': 7, '1m': 30, '3m': 90,
+        '6m': 180, '1y': 365, 'all': 3650,
+    }
+    days = range_to_days.get(range, 7)
+
+    from datetime import datetime, timedelta
+    start_date = (datetime.utcnow() - timedelta(days=days)).strftime('%Y-%m-%d')
+
+    # Try wallet_daily_balances first (new per-wallet architecture)
+    try:
+        from database import get_unified_daily_totals
+        wdb_rows = await get_unified_daily_totals(user_id, start_date=start_date)
+    except Exception as e:
+        logger.warning(f"Unified chart: wallet_daily_balances query failed: {e}")
+        wdb_rows = []
+
+    if wdb_rows:
+        data = []
+        for row in wdb_rows:
+            on_chain = row.get('on_chain_value', 0) or 0
+            exchange = row.get('exchange_value', 0) or 0
+            staking = row.get('staking_value', 0) or 0
+            defi = row.get('defi_value', 0) or 0
+            nfts = row.get('nft_value', 0) or 0
+            total = row.get('total_value', 0) or 0
+            off_chain = exchange + staking + defi + nfts
+
+            data.append({
+                "date": row['date'],
+                "total_value": round(total, 2),
+                "on_chain_value": round(on_chain, 2),
+                "off_chain_value": round(off_chain, 2),
+                "breakdown": {
+                    "chains": {},
+                    "components": {
+                        "wallets": round(on_chain, 2),
+                        "exchange": round(exchange, 2),
+                        "staking": round(staking, 2),
+                        "defi": round(defi, 2),
+                        "nfts": round(nfts, 2),
+                        "tracked_tokens": 0,
+                    }
+                }
+            })
+
+        logger.info(f"Unified chart (V2 per-wallet): {len(data)} points from wallet_daily_balances")
+        return {"data": data, "coverage": _compute_chart_coverage(data)}
+
+    # --- Legacy fallback: V2 engine + V1 snapshots ---
+    v2_data = []
+    v1_history = []
+
+    async def fetch_v2():
+        nonlocal v2_data
+        try:
+            from engine import db as engine_db
+            from engine.orchestrator import backfill_orchestrator
+            event_count = await engine_db.get_event_count(user_id)
+            if event_count > 0:
+                v2_result = await backfill_orchestrator.get_history_data(user_id, range)
+                v2_data = v2_result.get('data', [])
+        except Exception as e:
+            logger.warning(f"Unified chart: V2 engine failed: {e}")
+
+    async def fetch_v1():
+        nonlocal v1_history
+        try:
+            v1_history = await snapshot_service.get_history(days, user_id=user_id)
+        except Exception as e:
+            logger.warning(f"Unified chart: V1 snapshots failed: {e}")
+
+    await asyncio.gather(fetch_v2(), fetch_v1())
+
+    # If neither source has data, return empty
+    if not v2_data and not v1_history:
+        return {
+            "data": [],
+            "coverage": {"oldest_date": None, "newest_date": None, "total_days": 0}
+        }
+
+    # V1-only fallback: return snapshot data in unified format
+    if not v2_data:
+        data = []
+        for point in v1_history:
+            bd = point.get('breakdown', {})
+            wallet_val = bd.get('wallets', 0) or 0
+            exchange_val = bd.get('exchange', 0) or 0
+            staking_val = bd.get('staking', 0) or 0
+            defi_val = bd.get('defi', 0) or 0
+            nft_val = bd.get('nfts', 0) or 0
+            tracked_val = bd.get('tracked_tokens', 0) or 0
+            total = point.get('value', 0) or 0
+            data.append({
+                "date": point['date'],
+                "total_value": round(total, 2),
+                "on_chain_value": round(wallet_val, 2),
+                "off_chain_value": round(exchange_val + staking_val + defi_val + nft_val + tracked_val, 2),
+                "breakdown": {
+                    "chains": {},
+                    "components": {
+                        "wallets": round(wallet_val, 2),
+                        "exchange": round(exchange_val, 2),
+                        "staking": round(staking_val, 2),
+                        "defi": round(defi_val, 2),
+                        "nfts": round(nft_val, 2),
+                        "tracked_tokens": round(tracked_val, 2),
+                    }
+                }
+            })
+        return {"data": data, "coverage": _compute_chart_coverage(data)}
+
+    # V2-only fallback: return on-chain data with zero off-chain
+    if not v1_history:
+        data = []
+        for point in v2_data:
+            on_chain = point.get('value', 0) or 0
+            data.append({
+                "date": point['date'],
+                "total_value": round(on_chain, 2),
+                "on_chain_value": round(on_chain, 2),
+                "off_chain_value": 0,
+                "breakdown": {
+                    "chains": point.get('chains', {}),
+                    "components": {
+                        "wallets": round(on_chain, 2),
+                        "exchange": 0, "staking": 0, "defi": 0, "nfts": 0, "tracked_tokens": 0,
+                    }
+                }
+            })
+        return {"data": data, "coverage": _compute_chart_coverage(data)}
+
+    # --- Merge V2 on-chain + V1 off-chain ---
+    v2_by_date = {p['date']: p for p in v2_data}
+    v1_by_date = {p['date']: p for p in v1_history}
+    all_dates = sorted(set(v2_by_date.keys()) | set(v1_by_date.keys()))
+
+    # Gap-fill V1 off-chain by carrying forward last known values
+    last_v1_offchain = {"exchange": 0, "staking": 0, "defi": 0, "nfts": 0, "tracked_tokens": 0}
+
+    data = []
+    for date in all_dates:
+        # V2 on-chain value and chain breakdown
+        v2_point = v2_by_date.get(date)
+        if v2_point:
+            on_chain = v2_point.get('value', 0) or 0
+            chains = v2_point.get('chains', {})
+        else:
+            # Carry forward: use last V2 point's value (or 0 if before V2 coverage)
+            on_chain = data[-1]['on_chain_value'] if data else 0
+            chains = data[-1]['breakdown']['chains'] if data else {}
+
+        # V1 off-chain components
+        v1_point = v1_by_date.get(date)
+        if v1_point:
+            bd = v1_point.get('breakdown', {})
+            last_v1_offchain = {
+                "exchange": bd.get('exchange', 0) or 0,
+                "staking": bd.get('staking', 0) or 0,
+                "defi": bd.get('defi', 0) or 0,
+                "nfts": bd.get('nfts', 0) or 0,
+                "tracked_tokens": bd.get('tracked_tokens', 0) or 0,
+            }
+
+        off_chain = sum(last_v1_offchain.values())
+        total = on_chain + off_chain
+
+        data.append({
+            "date": date,
+            "total_value": round(total, 2),
+            "on_chain_value": round(on_chain, 2),
+            "off_chain_value": round(off_chain, 2),
+            "breakdown": {
+                "chains": chains,
+                "components": {
+                    "wallets": round(on_chain, 2),
+                    "exchange": round(last_v1_offchain["exchange"], 2),
+                    "staking": round(last_v1_offchain["staking"], 2),
+                    "defi": round(last_v1_offchain["defi"], 2),
+                    "nfts": round(last_v1_offchain["nfts"], 2),
+                    "tracked_tokens": round(last_v1_offchain["tracked_tokens"], 2),
+                }
+            }
+        })
+
+    logger.info(f"Unified chart (legacy): {len(data)} points (V2={len(v2_data)}, V1={len(v1_history)})")
+    return {"data": data, "coverage": _compute_chart_coverage(data)}
+
+
+@router.get("/chart/wallet/{source_id}")
+async def get_wallet_chart(
+    source_id: int,
+    user_id: int = Depends(verify_session),
+    range: str = Query("1w", description="Time range: 24h, 1w, 1m, 3m, 6m, 1y, all"),
+):
+    """Per-wallet balance history drill-down from wallet_daily_balances."""
+    from database import get_wallet_source_by_id, get_wallet_source_daily_balances
+    from datetime import datetime, timedelta
+    import json as json_mod
+
+    source = await get_wallet_source_by_id(source_id)
+    if not source or source['user_id'] != user_id:
+        raise HTTPException(status_code=404, detail="Wallet source not found")
+
+    range_to_days = {
+        '24h': 1, '1w': 7, '1m': 30, '3m': 90,
+        '6m': 180, '1y': 365, 'all': 3650,
+    }
+    days = range_to_days.get(range, 7)
+    start_date = (datetime.utcnow() - timedelta(days=days)).strftime('%Y-%m-%d')
+
+    rows = await get_wallet_source_daily_balances(source_id, start_date=start_date)
+
+    data = []
+    for row in rows:
+        meta = {}
+        if row.get('metadata'):
+            try:
+                meta = json_mod.loads(row['metadata'])
+            except (ValueError, TypeError):
+                pass
+        data.append({
+            "date": row['date'],
+            "value_usd": round(row['value_usd'], 2),
+            "metadata": meta,
+        })
+
+    return {
+        "source": {
+            "id": source['id'],
+            "source_type": source['source_type'],
+            "source_key": source['source_key'],
+            "chain": source.get('chain'),
+            "label": source.get('label'),
+        },
+        "data": data,
+        "coverage": _compute_chart_coverage([{"date": d["date"]} for d in data]) if data else {
+            "oldest_date": None, "newest_date": None, "total_days": 0
+        },
+    }
+
+
+@router.get("/wallet-sources")
+async def get_wallet_sources_list(
+    user_id: int = Depends(verify_session),
+):
+    """List all wallet sources for the current user."""
+    from database import get_wallet_sources
+    sources = await get_wallet_sources(user_id)
+    return {"sources": sources}
+
+
+def _compute_chart_coverage(data: list) -> dict:
+    """Compute coverage stats from unified chart data."""
+    if not data:
+        return {"oldest_date": None, "newest_date": None, "total_days": 0}
+    dates = [p['date'] for p in data]
+    return {"oldest_date": min(dates), "newest_date": max(dates), "total_days": len(dates)}
+
+
+async def _get_demo_unified_chart(range_str: str) -> dict:
+    """Return pre-generated demo data in unified chart format."""
+    from services.demo_data_generator import generate_portfolio_history
+
+    range_to_days = {
+        '24h': 1, '1w': 7, '1m': 30, '3m': 90,
+        '6m': 180, '1y': 365, 'all': 3650,
+    }
+    days = range_to_days.get(range_str, 7)
+    all_history = generate_portfolio_history(max(days, 90))
+    filtered = all_history[-days:] if days < len(all_history) else all_history
+
+    data = []
+    for s in filtered:
+        total = s.get('total_value_usd', 0)
+        wallets = s.get('self_custody_value_usd', 0)
+        exchange = s.get('exchange_value_usd', 0)
+        defi = s.get('defi_value_usd', 0)
+        nfts = s.get('nft_value_usd', 0)
+        off_chain = exchange + defi + nfts
+        data.append({
+            "date": s['snapshot_date'],
+            "total_value": round(total, 2),
+            "on_chain_value": round(wallets, 2),
+            "off_chain_value": round(off_chain, 2),
+            "breakdown": {
+                "chains": s.get('blockchain_breakdown', {}),
+                "components": {
+                    "wallets": round(wallets, 2),
+                    "exchange": round(exchange, 2),
+                    "staking": 0,
+                    "defi": round(defi, 2),
+                    "nfts": round(nfts, 2),
+                    "tracked_tokens": 0,
+                }
+            }
+        })
+
+    return {"data": data, "coverage": _compute_chart_coverage(data)}
+
+
 @router.post("/snapshot")
 async def create_portfolio_snapshot(user_id: int = Depends(verify_session), force: bool = Query(False, description="Force create even if exists")):
     """
