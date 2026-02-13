@@ -714,15 +714,46 @@ async def get_mobile_nfts_summary(
         floor_native = collection.get('floor_price_ada') or 0
         floor_usd = collection.get('floor_price_usd') or 0
         total_usd = collection.get('total_value_usd') or 0
+        chain = collection.get('blockchain', 'cardano')
+
+        # Get collection image: try collection-level image_url (EVM chains),
+        # then fall back to first NFT's image or thumbnail endpoint
+        logo_url = collection.get('image_url', '')
+        if not logo_url:
+            nft_list = collection.get('nfts', [])
+            if nft_list:
+                first_nft = nft_list[0]
+                # Use direct image URL if available
+                logo_url = first_nft.get('image') or first_nft.get('image_url', '')
+                # If still empty, build thumbnail URL from asset_id
+                if not logo_url:
+                    asset_id = first_nft.get('asset_id', '')
+                    if asset_id:
+                        logo_url = f"/nfts/images/{chain}/{asset_id}/thumbnail"
+
+        # Build individual NFT list with image URLs
+        nft_items = []
+        for nft in collection.get('nfts', []):
+            asset_id = nft.get('asset_id', '')
+            nft_image = nft.get('image') or nft.get('image_url', '')
+            if not nft_image and asset_id:
+                nft_image = f"/nfts/images/{chain}/{asset_id}/thumbnail"
+            nft_items.append({
+                "asset_id": asset_id,
+                "name": nft.get('name', 'Unknown'),
+                "image_url": nft_image,
+            })
+
         mobile_collections.append({
             "name": collection.get('name', 'Unknown'),
-            "blockchain": collection.get('blockchain', 'cardano'),
+            "blockchain": chain,
             "nft_count": collection.get('count', 0),
             "floor_price_native": round(floor_native, 2),
             "floor_price_usd": round(floor_usd, 2),
             "total_floor_value_usd": round(total_usd, 2),
-            "logo_url": collection.get('image_url', ''),
-            "policy_id": collection.get('policy_id', '')
+            "logo_url": logo_url,
+            "policy_id": collection.get('policy_id', ''),
+            "nfts": nft_items,
         })
 
     return {
