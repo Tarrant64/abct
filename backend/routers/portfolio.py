@@ -781,12 +781,22 @@ async def get_unified_chart(
     from datetime import datetime, timedelta
     start_date = (datetime.utcnow() - timedelta(days=days)).strftime('%Y-%m-%d')
 
-    # Try wallet_daily_balances first (new per-wallet architecture)
+    # Try wallet_daily_balances first (only if migration has been run)
+    wdb_rows = []
     try:
-        from database import get_unified_daily_totals
-        wdb_rows = await get_unified_daily_totals(user_id, start_date=start_date)
+        import aiosqlite
+        from config import DATABASE_PATH
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            cursor = await db.execute(
+                "SELECT 1 FROM migrations WHERE migration_key = 'v1_to_wallet_daily_balances'"
+            )
+            migration_done = await cursor.fetchone()
+
+        if migration_done:
+            from database import get_unified_daily_totals
+            wdb_rows = await get_unified_daily_totals(user_id, start_date=start_date)
     except Exception as e:
-        logger.warning(f"Unified chart: wallet_daily_balances query failed: {e}")
+        logger.warning(f"Unified chart: wallet_daily_balances check failed: {e}")
         wdb_rows = []
 
     if wdb_rows:
