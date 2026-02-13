@@ -403,6 +403,86 @@ class Materializer:
                 f"Materializer: Gap-filled {len(batch_rows)} off-chain rows for user {user_id}"
             )
 
+    async def materialize_onchain_from_v1_balance_history(self, user_id: int):
+        """Migrate V1 balance_history on-chain data into wallet_daily_balances.
+
+        Reads the V1 balance_history table (per-wallet, per-date, per-blockchain rows)
+        and writes them as on_chain source rows in wallet_daily_balances. This is the
+        bridge for when engine_events has no data but V1 collected on-chain history.
+        """
+        import aiosqlite
+        from database import (
+            get_wallet_sources, upsert_wallet_daily_balances_batch,
+        )
+
+        # Get on-chain wallet_sources
+        sources = await get_wallet_sources(user_id, source_type='on_chain')
+        if not sources:
+            logger.info(f"Materializer: No on-chain wallet_sources for user {user_id} — cannot migrate V1 balance_history")
+            return
+
+        # Build wallet_id -> source_id map
+        wallet_to_source: Dict[int, int] = {}
+        for s in sources:
+            wid = s.get('wallet_id')
+            if wid:
+                wallet_to_source[wid] = s['id']
+
+        if not wallet_to_source:
+            logger.warning(f"Materializer: No on-chain sources have wallet_id set for user {user_id}")
+            return
+
+        # Read V1 balance_history rows
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("""
+                SELECT wallet_id, blockchain, balance_date, total_value_usd,
+                       native_amount, native_symbol, native_price_usd,
+                       native_value_usd, token_value_usd
+                FROM balance_history
+                WHERE user_id = ? AND total_value_usd > 0
+                ORDER BY balance_date ASC
+            """, (user_id,))
+            v1_rows = [dict(r) for r in await cursor.fetchall()]
+
+        if not v1_rows:
+            logger.info(f"Materializer: No V1 balance_history rows for user {user_id}")
+            return
+
+        logger.info(f"Materializer: Migrating {len(v1_rows)} V1 balance_history rows for user {user_id}")
+
+        batch_rows = []
+        skipped = 0
+        for row in v1_rows:
+            source_id = wallet_to_source.get(row['wallet_id'])
+            if not source_id:
+                skipped += 1
+                continue
+
+            batch_rows.append({
+                'user_id': user_id,
+                'source_id': source_id,
+                'date': row['balance_date'],
+                'value_usd': round(float(row['total_value_usd']), 2),
+                'metadata': json.dumps({
+                    'source': 'v1_balance_history',
+                    'blockchain': row['blockchain'],
+                    'native_amount': row.get('native_amount'),
+                    'native_symbol': row.get('native_symbol'),
+                    'native_price_usd': row.get('native_price_usd'),
+                }),
+            })
+
+        if batch_rows:
+            await upsert_wallet_daily_balances_batch(batch_rows)
+            logger.info(
+                f"Materializer: Wrote {len(batch_rows)} on-chain rows from V1 balance_history "
+                f"for user {user_id} (skipped {skipped} unmapped wallets)"
+            )
+        else:
+            logger.info(f"Materializer: No V1 rows mapped to wallet_sources for user {user_id} "
+                         f"(skipped {skipped})")
+
 
 # Singleton
 materializer = Materializer()

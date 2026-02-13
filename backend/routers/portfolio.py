@@ -892,10 +892,17 @@ async def rebuild_wallet_history(
     except Exception as e:
         logger.warning(f"Rebuild: engine event count check failed: {e}")
 
-    # Materialize on-chain from V2 engine events
+    # Materialize on-chain data
     onchain_error = None
     try:
-        await materializer.materialize_onchain(user_id)
+        if engine_event_count > 0:
+            # V2 engine has events — materialize from engine_events
+            logger.info(f"Rebuild: materializing on-chain from {engine_event_count} engine_events")
+            await materializer.materialize_onchain(user_id)
+        else:
+            # No engine_events — fall back to V1 balance_history table
+            logger.info(f"Rebuild: no engine_events, migrating on-chain from V1 balance_history")
+            await materializer.materialize_onchain_from_v1_balance_history(user_id)
     except Exception as e:
         onchain_error = str(e)
         logger.error(f"Rebuild: on-chain materialization failed: {e}", exc_info=True)

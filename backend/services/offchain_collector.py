@@ -47,15 +47,14 @@ class OffchainCollector:
             get_wallet_sources, upsert_wallet_daily_balance,
             get_all_wallets, get_cache
         )
-        from services.snapshot import SnapshotService
+        from services.offchain_helpers import (
+            get_staking_value, get_defi_value, get_nft_value, get_exchange_value
+        )
 
         today = datetime.now(CT_TIMEZONE).strftime('%Y-%m-%d')
         pricing = await self._get_pricing_service()
         prices = await pricing.get_all_tracked_prices()
         ada_price = prices.get('ADA', {}).get('usd', 0)
-
-        # Create a temporary SnapshotService instance to reuse its helper methods
-        snap = SnapshotService()
 
         # --- Exchanges ---
         exchange_sources = await get_wallet_sources(user_id, source_type='exchange')
@@ -91,8 +90,7 @@ class OffchainCollector:
         # --- Staking ---
         staking_sources = await get_wallet_sources(user_id, source_type='staking')
         if staking_sources:
-            # Get total staking value, then distribute
-            staking_total = await snap._get_staking_value(prices, user_id=user_id)
+            staking_total = await get_staking_value(prices, user_id=user_id)
             if staking_total > 0 and staking_sources:
                 per_source = staking_total / len(staking_sources)
                 for source in staking_sources:
@@ -111,7 +109,7 @@ class OffchainCollector:
         # --- DeFi ---
         defi_sources = await get_wallet_sources(user_id, source_type='defi')
         if defi_sources:
-            defi_total = await snap._get_defi_value(prices, user_id=user_id)
+            defi_total = await get_defi_value(prices, user_id=user_id)
             if defi_total > 0 and defi_sources:
                 per_source = defi_total / len(defi_sources)
                 for source in defi_sources:
@@ -130,7 +128,7 @@ class OffchainCollector:
         # --- NFTs ---
         nft_sources = await get_wallet_sources(user_id, source_type='nft')
         if nft_sources:
-            nft_total = await snap._get_nft_value(ada_price, user_id=user_id)
+            nft_total = await get_nft_value(ada_price, user_id=user_id)
             if nft_total > 0:
                 try:
                     await upsert_wallet_daily_balance(

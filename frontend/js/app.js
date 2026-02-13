@@ -872,8 +872,8 @@ async function load7DayPortfolioChange() {
             return;
         }
 
-        const firstValue = result.data[0].value;
-        const lastValue = result.data[result.data.length - 1].value;
+        const firstValue = result.data[0].total_value ?? result.data[0].value;
+        const lastValue = result.data[result.data.length - 1].total_value ?? result.data[result.data.length - 1].value;
         const dollarChange = lastValue - firstValue;
         const pctChange = firstValue > 0 ? (dollarChange / firstValue) * 100 : 0;
         const isPositive = dollarChange >= 0;
@@ -6553,11 +6553,11 @@ async function loadPortfolioHistory(range = '7d') {
             chartContainer.style.display = 'block';
             renderPortfolioChart(historyData, range);
         } else {
-            // Show empty state, hide chart - reset to original content
+            // Show empty state, hide chart
             portfolioHistoryData = null;
             if (emptyState) {
                 emptyState.style.display = 'flex';
-                setSafeHTML(emptyState, '<p>No historical data yet.</p><p class="chart-empty-hint">Portfolio snapshots are captured every 2 hours.</p><button class="btn btn-primary" onclick="generatePortfolioHistory()" id="generateHistoryBtn">Generate 30-Day History</button>');
+                setSafeHTML(emptyState, '<p>No historical data yet.</p><p class="chart-empty-hint">Run a data collection from the On-Chain (v2) tab, or use the Rebuild button to regenerate history.</p>');
             }
             chartContainer.style.display = 'none';
             if (portfolioChart) {
@@ -6582,92 +6582,9 @@ async function loadPortfolioHistory(range = '7d') {
     }
 }
 
-// Generate portfolio history data (backfill 30 days) - V1 DISABLED
-async function generatePortfolioHistory() {
-    const emptyState = document.getElementById('chartEmptyState');
-
-    // V1 history generation is disabled — direct users to V2
-    if (emptyState) {
-        setSafeHTML(emptyState, '<p>V1 history generation paused.</p><p class="chart-empty-hint">Switch to the <strong>On-Chain (v2)</strong> tab for real blockchain-based history.</p><button class="btn btn-primary" onclick="switchChartSource(\'v2\')">Switch to On-Chain (v2)</button>');
-    }
-}
-
-// Poll the generation status endpoint
-async function _pollGenerationProgress() {
-    const stepEl = document.getElementById('genProgressStep');
-    const barEl = document.getElementById('genProgressBar');
-    const pctEl = document.getElementById('genProgressPct');
-
-    const poll = async () => {
-        try {
-            const response = await authFetch(`${API_BASE}/portfolio/history/generate/status`);
-            const data = await response.json();
-
-            if (stepEl) stepEl.textContent = data.step || 'Working...';
-            if (barEl) barEl.style.width = (data.progress || 0) + '%';
-            if (pctEl) pctEl.textContent = (data.progress || 0) + '%';
-
-            if (data.status === 'completed') {
-                if (stepEl) stepEl.textContent = 'Complete! Loading chart...';
-                if (barEl) barEl.style.width = '100%';
-                if (pctEl) pctEl.textContent = '100%';
-                // Brief pause to show completion, then reload chart
-                setTimeout(async () => {
-                    const activeRangeBtn = document.querySelector('.range-btn.active');
-                    const currentRange = activeRangeBtn ? activeRangeBtn.dataset.range : '7d';
-                    await loadPortfolioHistory(currentRange);
-                }, 1500);
-                return; // Stop polling
-            } else if (data.status === 'error') {
-                _showGenerationError(data.error || 'Generation failed.');
-                return; // Stop polling
-            } else if (data.status === 'idle') {
-                // Not running - might have completed before we started polling
-                const activeRangeBtn = document.querySelector('.range-btn.active');
-                const currentRange = activeRangeBtn ? activeRangeBtn.dataset.range : '7d';
-                await loadPortfolioHistory(currentRange);
-                return;
-            }
-
-            // Continue polling every 2 seconds
-            setTimeout(poll, 2000);
-        } catch (error) {
-            console.error('Error polling generation status:', error);
-            setTimeout(poll, 3000); // Retry with longer delay on error
-        }
-    };
-
-    poll();
-}
-
-// Show generation error with retry button
-function _showGenerationError(message) {
-    const emptyState = document.getElementById('chartEmptyState');
-    if (emptyState) {
-        setSafeHTML(emptyState, '<p>' + (message || 'Error generating history data.') + '</p><button class="btn btn-primary" onclick="generatePortfolioHistory()" id="generateHistoryBtn">Retry</button>');
-    }
-}
-
-// Check if history generation is already running (survives page navigation)
-async function checkRunningHistoryGeneration() {
-    try {
-        const response = await authFetch(`${API_BASE}/portfolio/history/generate/status`);
-        const data = await response.json();
-
-        if (data.status === 'running') {
-            const emptyState = document.getElementById('chartEmptyState');
-            const chartContainer = document.getElementById('portfolioHistoryChart');
-            if (emptyState && chartContainer) {
-                emptyState.style.display = 'flex';
-                chartContainer.style.display = 'none';
-                setSafeHTML(emptyState, '<div class="generation-progress"><p id="genProgressStep">' + (data.step || 'Generation in progress...') + '</p><div class="progress-bar-container"><div class="progress-bar-fill" id="genProgressBar" style="width: ' + (data.progress || 0) + '%"></div></div><p class="chart-empty-hint" id="genProgressPct">' + (data.progress || 0) + '%</p></div>');
-                _pollGenerationProgress();
-            }
-        }
-    } catch (error) {
-        // Silently ignore - this is a background check
-    }
-}
+// V1 history generation removed — these are no-op stubs for backward compat
+async function generatePortfolioHistory() { /* V1 removed */ }
+async function checkRunningHistoryGeneration() { /* V1 removed */ }
 
 // Get theme colors for chart
 function getChartColors() {

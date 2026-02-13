@@ -1,11 +1,15 @@
 """
+DEPRECATED: V1 Snapshot Service
+
+This module is deprecated. V1 snapshots have been replaced by:
+  - offchain_collector.py + offchain_helpers.py (off-chain data collection)
+  - engine/materializer.py (on-chain materialization to wallet_daily_balances)
+
+Helper methods have been extracted to services/offchain_helpers.py.
+Do not add new code here. Kept for reference and migration script compatibility.
+
+Original description:
 Portfolio Snapshot Service - Captures portfolio value every 2 hours.
-
-Strategy for local development app:
-1. Check on app startup if today's snapshot exists and is recent
-2. Create/update snapshot if none exists or if older than 2 hours
-3. Also provide an API endpoint for manual snapshot creation
-
 Snapshots are stored per-day (one per day) but updated every 2 hours
 to keep values current throughout the day.
 """
