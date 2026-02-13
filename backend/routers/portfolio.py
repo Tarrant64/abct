@@ -8,12 +8,11 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database import (
     get_all_wallets, get_wallet_balance, get_wallet_assets,
-    get_cache, set_cache, clear_cache, get_latest_snapshot_date,
+    get_cache, set_cache, clear_cache,
     get_all_token_metadata, toggle_token_tracking, get_tracked_tokens,
     save_token_metadata, update_native_asset_decimals
 )
 from services.cardano import cardano_service
-from services.snapshot import snapshot_service
 from services.pricing import pricing_service
 from services.defi import DEFI_PROTOCOLS
 from services.taptools import taptools_wallet_service
@@ -34,9 +33,6 @@ class TokenTrackRequest(BaseModel):
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 logger = logging.getLogger(__name__)
-
-# Background history generation tracking: user_id -> {status, progress, step, error, result}
-_generation_tasks = {}
 
 # Cache TTL in seconds (7 days for portfolio so it persists between sessions, only cleared on manual refresh)
 from config import CACHE_TTL_PERSISTENT, CACHE_TTL_WARM, CACHE_TTL_HOT
@@ -690,12 +686,14 @@ async def get_portfolio_history(
     range: str = Query("7d", description="Time range: 1d (1 day hourly), 7d (7 days), 4w (4 weeks), 3m (3 months)")
 ):
     """
-    Get portfolio value history for charting.
+    Get portfolio value history for charting (V2 — reads from wallet_daily_balances).
 
-    Returns hourly snapshots for 1d range, daily snapshots for longer ranges.
+    Returns daily data points with breakdown by component.
     """
+    from datetime import datetime, timedelta
+    from database import get_unified_daily_totals
+
     # Demo mode: return pre-generated fake history directly
-    # (DB snapshots lack component fields so get_history recalculates to $0)
     username = await get_username_by_user_id(user_id)
     if username and await is_demo_user(username):
         return await _get_demo_portfolio_history(range)
@@ -703,9 +701,33 @@ async def get_portfolio_history(
     # Map range to days
     days_map = {"1d": 1, "7d": 7, "4w": 28, "3m": 90}
     days = days_map.get(range, 7)
+    start_date = (datetime.utcnow() - timedelta(days=days)).strftime('%Y-%m-%d')
 
-    history = await snapshot_service.get_history(days, user_id=user_id)
-    latest = await get_latest_snapshot_date(user_id=user_id)
+    rows = await get_unified_daily_totals(user_id, start_date=start_date)
+
+    history = []
+    for row in rows:
+        on_chain = row.get('on_chain_value', 0) or 0
+        exchange = row.get('exchange_value', 0) or 0
+        staking = row.get('staking_value', 0) or 0
+        defi = row.get('defi_value', 0) or 0
+        nfts = row.get('nft_value', 0) or 0
+        total = row.get('total_value', 0) or 0
+
+        history.append({
+            "date": row['date'],
+            "value": round(total, 2),
+            "breakdown": {
+                "wallets": round(on_chain, 2),
+                "exchange": round(exchange, 2),
+                "staking": round(staking, 2),
+                "defi": round(defi, 2),
+                "nfts": round(nfts, 2),
+                "tracked_tokens": 0,
+            }
+        })
+
+    latest = rows[-1]['date'] if rows else None
 
     return {
         "range": range,
@@ -719,41 +741,28 @@ async def get_portfolio_history(
 @router.get("/totals")
 async def get_portfolio_totals(user_id: int = Depends(verify_session)):
     """
-    Get portfolio value breakdown from the latest snapshot.
+    Get portfolio value breakdown from wallet_daily_balances (V2).
 
-    Returns component totals (staking, defi, exchange, NFTs, tracked tokens)
-    without making any external API calls - uses cached snapshot data only.
+    Returns component totals (staking, defi, exchange, NFTs) from the latest
+    date in wallet_daily_balances without making any external API calls.
     """
-    import aiosqlite
-    from config import DATABASE_PATH
+    from database import get_unified_daily_totals
 
-    # Get the most recent snapshot with component values
-    async with aiosqlite.connect(DATABASE_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            """SELECT staking_value_usd, defi_value_usd, exchange_value_usd,
-                      nft_value_usd, tracked_tokens_value_usd, snapshot_time
-               FROM portfolio_snapshots
-               WHERE user_id = ?
-               ORDER BY snapshot_date DESC, snapshot_time DESC
-               LIMIT 1""",
-            (user_id,)
-        )
-        row = await cursor.fetchone()
-
-    if not row:
+    rows = await get_unified_daily_totals(user_id)
+    if not rows:
         return {
             "staking_usd": 0, "defi_usd": 0, "exchange_usd": 0,
             "nft_usd": 0, "tracked_tokens_usd": 0, "snapshot_time": None
         }
 
+    latest = rows[-1]  # Most recent date
     return {
-        "staking_usd": float(row["staking_value_usd"] or 0),
-        "defi_usd": float(row["defi_value_usd"] or 0),
-        "exchange_usd": float(row["exchange_value_usd"] or 0),
-        "nft_usd": float(row["nft_value_usd"] or 0),
-        "tracked_tokens_usd": float(row["tracked_tokens_value_usd"] or 0),
-        "snapshot_time": row["snapshot_time"]
+        "staking_usd": float(latest.get('staking_value', 0) or 0),
+        "defi_usd": float(latest.get('defi_value', 0) or 0),
+        "exchange_usd": float(latest.get('exchange_value', 0) or 0),
+        "nft_usd": float(latest.get('nft_value', 0) or 0),
+        "tracked_tokens_usd": 0,
+        "snapshot_time": latest.get('date')
     }
 
 
@@ -826,37 +835,78 @@ async def get_unified_chart(
 @router.post("/history/rebuild")
 async def rebuild_wallet_history(
     user_id: int = Depends(verify_session),
+    nuclear: bool = Query(False, description="Nuclear reset: also clear wallet_sources and re-seed"),
+    full_reindex: bool = Query(False, description="Clear engine data (engine_events, engine_tx_raw) for full re-index"),
 ):
     """
-    Clear wallet_daily_balances and rebuild from V2 engine events + V1 snapshots.
+    Clear wallet_daily_balances and rebuild from V2 engine events.
 
-    This re-seeds wallet_sources, then re-materializes all data.
+    With nuclear=true: also clears wallet_sources and re-seeds them.
+    With full_reindex=true: also clears engine_events and engine_tx_raw for a complete re-index.
     """
     import aiosqlite
     from config import DATABASE_PATH
     from database import seed_wallet_sources
     from engine.materializer import materializer
 
-    # Clear existing data for this user
+    cleared = []
+
+    # Clear existing balance data for this user
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute("DELETE FROM wallet_daily_balances WHERE user_id = ?", (user_id,))
         await db.commit()
+    cleared.append('wallet_daily_balances')
     logger.info(f"Cleared wallet_daily_balances for user {user_id}")
+
+    if nuclear:
+        # Clear wallet_sources and re-seed
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            await db.execute("DELETE FROM wallet_sources WHERE user_id = ?", (user_id,))
+            await db.commit()
+        cleared.append('wallet_sources')
+        logger.info(f"Nuclear: cleared wallet_sources for user {user_id}")
+
+    if full_reindex:
+        # Clear engine data for full re-index
+        try:
+            from engine import db as engine_db
+            async with aiosqlite.connect(DATABASE_PATH) as db:
+                await db.execute("DELETE FROM engine_events WHERE user_id = ?", (user_id,))
+                await db.execute("DELETE FROM engine_tx_index WHERE user_id = ?", (user_id,))
+                await db.execute("DELETE FROM engine_account_subjects WHERE user_id = ?", (user_id,))
+                await db.commit()
+            cleared.extend(['engine_events', 'engine_tx_index', 'engine_account_subjects'])
+            logger.info(f"Nuclear: cleared engine data for user {user_id}")
+        except Exception as e:
+            logger.warning(f"Nuclear: engine data clear failed: {e}")
 
     # Re-seed sources
     await seed_wallet_sources(user_id)
 
+    # Pre-check: how many engine_events exist?
+    engine_event_count = 0
+    try:
+        from engine import db as engine_db
+        engine_event_count = await engine_db.get_event_count(user_id)
+        logger.info(f"Rebuild: user {user_id} has {engine_event_count} engine_events")
+    except Exception as e:
+        logger.warning(f"Rebuild: engine event count check failed: {e}")
+
     # Materialize on-chain from V2 engine events
+    onchain_error = None
     try:
         await materializer.materialize_onchain(user_id)
     except Exception as e:
-        logger.error(f"Rebuild: on-chain materialization failed: {e}")
+        onchain_error = str(e)
+        logger.error(f"Rebuild: on-chain materialization failed: {e}", exc_info=True)
 
-    # Materialize off-chain from V1 snapshots
+    # Materialize off-chain from V1 snapshots (legacy data)
+    offchain_error = None
     try:
         await materializer.materialize_offchain_from_v1(user_id)
     except Exception as e:
-        logger.error(f"Rebuild: off-chain materialization failed: {e}")
+        offchain_error = str(e)
+        logger.error(f"Rebuild: off-chain materialization failed: {e}", exc_info=True)
 
     # Gap-fill
     try:
@@ -890,13 +940,89 @@ async def rebuild_wallet_history(
         )
         await db.commit()
 
-    logger.info(f"Rebuild complete for user {user_id}: {stats[0]} rows, {stats[1]} to {stats[2]}")
+    logger.info(f"Rebuild complete for user {user_id}: {stats[0]} rows, {stats[1]} to {stats[2]}, cleared={cleared}")
     return {
         "status": "rebuilt",
+        "nuclear": nuclear,
+        "full_reindex": full_reindex,
+        "cleared_tables": cleared,
+        "engine_events": engine_event_count,
         "total_rows": stats[0],
         "date_range": {"earliest": stats[1], "latest": stats[2]},
         "breakdown": breakdown,
+        "errors": {
+            "onchain": onchain_error,
+            "offchain": offchain_error,
+        }
     }
+
+
+@router.get("/v2/health")
+async def get_v2_health(user_id: int = Depends(verify_session)):
+    """
+    V2 data health check. Returns counts and date ranges for all V2 data tables.
+    """
+    import aiosqlite
+    from config import DATABASE_PATH
+
+    health = {}
+
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+
+        # wallet_sources
+        cursor = await db.execute(
+            "SELECT COUNT(*) as cnt FROM wallet_sources WHERE user_id = ?", (user_id,)
+        )
+        row = await cursor.fetchone()
+        health['wallet_sources_count'] = row['cnt']
+
+        # wallet_daily_balances
+        cursor = await db.execute(
+            "SELECT COUNT(*) as cnt, MIN(date) as oldest, MAX(date) as newest FROM wallet_daily_balances WHERE user_id = ?",
+            (user_id,)
+        )
+        row = await cursor.fetchone()
+        health['wallet_daily_balances_count'] = row['cnt']
+        health['oldest_date'] = row['oldest']
+        health['newest_date'] = row['newest']
+
+    # Engine tables
+    try:
+        from engine import db as engine_db
+        health['engine_events_count'] = await engine_db.get_event_count(user_id)
+
+        subjects = await engine_db.get_account_subjects(user_id)
+        health['engine_account_subjects'] = len(subjects)
+
+        # Price history count
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            cursor = await db.execute("SELECT COUNT(*) FROM engine_price_history")
+            row = await cursor.fetchone()
+            health['engine_price_history_count'] = row[0]
+    except Exception as e:
+        health['engine_error'] = str(e)
+
+    # Missing dates detection
+    if health.get('oldest_date') and health.get('newest_date'):
+        from datetime import datetime, timedelta
+        oldest = datetime.strptime(health['oldest_date'], '%Y-%m-%d')
+        newest = datetime.strptime(health['newest_date'], '%Y-%m-%d')
+        expected_days = (newest - oldest).days + 1
+
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            cursor = await db.execute(
+                "SELECT COUNT(DISTINCT date) FROM wallet_daily_balances WHERE user_id = ?",
+                (user_id,)
+            )
+            row = await cursor.fetchone()
+            actual_days = row[0]
+
+        health['expected_days'] = expected_days
+        health['actual_days'] = actual_days
+        health['missing_days'] = expected_days - actual_days
+
+    return health
 
 
 @router.get("/chart/wallet/{source_id}")
@@ -1013,231 +1139,29 @@ async def _get_demo_unified_chart(range_str: str) -> dict:
 
 @router.post("/snapshot")
 async def create_portfolio_snapshot(user_id: int = Depends(verify_session), force: bool = Query(False, description="Force create even if exists")):
-    """
-    Manually create a portfolio snapshot.
-
-    Useful for testing or creating snapshots outside the normal schedule.
-    """
-    result = await snapshot_service.create_snapshot(user_id=user_id, force=force)
-    return result
+    """DEPRECATED: V1 snapshot creation. Use off-chain collector (automatic) or POST /portfolio/history/rebuild."""
+    return {
+        "status": "deprecated",
+        "message": "V1 snapshots are deprecated. Off-chain data is collected automatically every 2 hours. Use POST /portfolio/history/rebuild to rebuild historical data."
+    }
 
 
 @router.post("/history/generate")
 async def generate_historical_data(user_id: int = Depends(verify_session), days: int = Query(30, description="Number of days of history to generate")):
-    """
-    Generate historical portfolio data for the past N days.
-
-    Launches generation as a background task and returns immediately.
-    Poll GET /portfolio/history/generate/status for progress updates.
-    """
-    # V1 history generation disabled while V2 on-chain history is being developed
-    return {"status": "disabled", "message": "V1 history generation is disabled while V2 is being developed. Use the On-Chain (v2) tab instead."}
+    """DEPRECATED: V1 history generation. Use POST /portfolio/history/rebuild instead."""
+    return {"status": "deprecated", "message": "V1 history generation removed. Use POST /portfolio/history/rebuild to rebuild from V2 engine data."}
 
 
 @router.get("/history/generate/status")
 async def get_generation_status(user_id: int = Depends(verify_session)):
-    """
-    Get the current status of background history generation.
-
-    Returns progress percentage, current step description, and completion status.
-    """
-    if user_id not in _generation_tasks:
-        return {"status": "idle", "progress": 0, "step": "No generation in progress"}
-    return _generation_tasks[user_id]
-
-
-async def _run_history_generation(user_id: int, days: int):
-    """Background worker that generates historical portfolio data with progress tracking."""
-    task = _generation_tasks[user_id]
-    try:
-        task['step'] = 'Fetching historical prices from CoinGecko...'
-        task['progress'] = 10
-
-        pricing = await snapshot_service._get_pricing_service()
-        historical_prices = await pricing.get_historical_prices(days=days)
-
-        if not historical_prices:
-            task['status'] = 'error'
-            task['error'] = 'Could not fetch historical prices. Check that CoinGecko API is accessible.'
-            task['step'] = 'Failed to fetch prices'
-            return
-
-        task['step'] = 'Loading current wallet balances and component values...'
-        task['progress'] = 20
-
-        wallets = await get_all_wallets(user_id=user_id)
-        ada_amount = btc_amount = eth_amount = sol_amount = 0.0
-
-        for wallet in wallets:
-            balance = await get_wallet_balance(wallet['id'])
-            if balance:
-                amount = float(balance['amount'])
-                if wallet['blockchain'] == 'cardano':
-                    ada_amount += amount
-                elif wallet['blockchain'] == 'bitcoin':
-                    btc_amount += amount
-                elif wallet['blockchain'] == 'ethereum':
-                    eth_amount += amount
-                elif wallet['blockchain'] == 'solana':
-                    sol_amount += amount
-
-        task['step'] = 'Loading staking, exchange, DeFi & NFT values...'
-        task['progress'] = 28
-
-        import json as json_mod
-
-        # Get current component values from the LATEST existing snapshot.
-        # We use stored AGGREGATE USD values (not per-asset quantities) because:
-        # 1. Cache-dependent helpers may return 0 if caches aren't populated
-        # 2. Per-asset exchange quantities may be unreliable or cause price explosion
-        # 3. For generated history, constant component values are acceptable
-        #    (only wallet values change based on historical prices)
-        from database import get_portfolio_history as get_snapshots_db
-        recent_snapshots = await get_snapshots_db(30, user_id=user_id, hourly=True)
-
-        staking_value = 0.0
-        defi_value = 0.0
-        exchange_value = 0.0
-        nft_value = 0.0
-        tracked_tokens_value = 0.0
-
-        if recent_snapshots:
-            # Find the most recent snapshot with meaningful component values
-            for snap in reversed(recent_snapshots):
-                components_sum = (
-                    float(snap.get('staking_value_usd') or 0) +
-                    float(snap.get('defi_value_usd') or 0) +
-                    float(snap.get('exchange_value_usd') or 0) +
-                    float(snap.get('nft_value_usd') or 0) +
-                    float(snap.get('tracked_tokens_value_usd') or 0)
-                )
-                if components_sum > 0:
-                    staking_value = float(snap.get('staking_value_usd') or 0)
-                    defi_value = float(snap.get('defi_value_usd') or 0)
-                    exchange_value = float(snap.get('exchange_value_usd') or 0)
-                    nft_value = float(snap.get('nft_value_usd') or 0)
-                    tracked_tokens_value = float(snap.get('tracked_tokens_value_usd') or 0)
-                    logger.info(f"Using component values from snapshot {snap.get('snapshot_date')} "
-                               f"({snap.get('snapshot_time', 'unknown')})")
-                    break
-
-        # If no snapshot had values, try cache-based helpers as fallback
-        if staking_value == 0 and defi_value == 0 and exchange_value == 0 and nft_value == 0:
-            logger.info("No existing snapshots with component values, trying cache...")
-            current_prices = await pricing.get_all_tracked_prices()
-            ada_current_price = current_prices.get('ADA', {}).get('usd', 0)
-            staking_value = await snapshot_service._get_staking_value(current_prices, user_id=user_id)
-            defi_value = await snapshot_service._get_defi_value(current_prices, user_id=user_id)
-            exchange_value = await snapshot_service._get_exchange_value(current_prices, user_id=user_id)
-            nft_value = await snapshot_service._get_nft_value(ada_current_price, user_id=user_id)
-            tracked_tokens_value = await snapshot_service._get_tracked_tokens_value(current_prices, user_id=user_id)
-
-        logger.info(f"Component values for history gen: staking=${staking_value:.2f}, defi=${defi_value:.2f}, "
-                   f"exchange=${exchange_value:.2f}, nfts=${nft_value:.2f}, tokens=${tracked_tokens_value:.2f}")
-
-        task['step'] = 'Building price history...'
-        task['progress'] = 35
-
-        # Build date -> prices lookup
-        price_by_date = {}
-        for symbol, prices_list in historical_prices.items():
-            for entry in prices_list:
-                date_key = entry['date'][:10]
-                if date_key not in price_by_date:
-                    price_by_date[date_key] = {}
-                price_by_date[date_key][symbol] = entry['price']
-
-        task['step'] = 'Creating historical snapshots...'
-        task['progress'] = 40
-
-        from datetime import datetime
-        from zoneinfo import ZoneInfo
-        from database import save_portfolio_snapshot
-        CT = ZoneInfo("America/Chicago")
-        today_str = str(datetime.now(CT).date())
-
-        sorted_dates = sorted(d for d in price_by_date.keys() if d != today_str)
-        total_dates = len(sorted_dates)
-        created = 0
-
-        for i, date_str in enumerate(sorted_dates):
-            prices = price_by_date[date_str]
-            ada_price = prices.get('ADA', 0)
-            btc_price = prices.get('BTC', 0)
-            eth_price = prices.get('ETH', 0)
-            sol_price = prices.get('SOL', 0)
-
-            if ada_price == 0 and btc_price == 0 and eth_price == 0 and sol_price == 0:
-                continue
-
-            wallet_value_usd = (
-                ada_amount * ada_price +
-                btc_amount * btc_price +
-                eth_amount * eth_price +
-                sol_amount * sol_price
-            )
-
-            # Use stored aggregate USD values for non-wallet components.
-            # Only wallet values change with historical prices (amounts × historical price).
-            # Exchange/staking/DeFi/NFT use current values as constants.
-            total_value_usd = (
-                wallet_value_usd + staking_value + defi_value +
-                exchange_value + nft_value + tracked_tokens_value
-            )
-
-            snapshot_date = datetime.strptime(date_str, '%Y-%m-%d')
-            snapshot_time = snapshot_date.replace(hour=12, minute=0, second=0)
-
-            snapshot_data = {
-                'snapshot_date': date_str,
-                'snapshot_time': snapshot_time.isoformat(),
-                'total_value_usd': total_value_usd,
-                'ada_amount': ada_amount,
-                'ada_price': ada_price,
-                'btc_amount': btc_amount,
-                'btc_price': btc_price,
-                'eth_amount': eth_amount,
-                'eth_price': eth_price,
-                'sol_amount': sol_amount,
-                'sol_price': sol_price,
-                'staking_value_usd': staking_value,
-                'defi_value_usd': defi_value,
-                'exchange_value_usd': exchange_value,
-                'nft_value_usd': nft_value,
-                'tracked_tokens_value_usd': tracked_tokens_value,
-            }
-
-            await save_portfolio_snapshot(snapshot_data, user_id=user_id)
-            created += 1
-
-            # Update progress (40% to 95%)
-            pct = 40 + int((i + 1) / max(total_dates, 1) * 55)
-            task['progress'] = min(pct, 95)
-            task['step'] = f'Processing day {i + 1} of {total_dates}...'
-
-        task['status'] = 'completed'
-        task['progress'] = 100
-        task['step'] = f'Generated {created} snapshots with all components'
-        task['result'] = {'snapshots_created': created, 'days_requested': days}
-        logger.info(f"Background history generation completed for user {user_id}: {created} snapshots")
-
-    except Exception as e:
-        logger.error(f"Background history generation failed for user {user_id}: {e}")
-        task['status'] = 'error'
-        task['error'] = str(e)
-        task['step'] = 'Generation failed'
+    """DEPRECATED: V1 generation status. Always returns idle."""
+    return {"status": "idle", "progress": 0, "step": "V1 generation removed. Use POST /portfolio/history/rebuild."}
 
 
 @router.post("/history/backfill")
 async def backfill_historical_components(user_id: int = Depends(verify_session)):
-    """
-    Backfill historical snapshots with current staking/defi/exchange/NFT values.
-
-    Updates existing snapshots to include non-wallet components, making the
-    chart more accurate. Assumes these component values have been relatively stable.
-    """
-    result = await snapshot_service.backfill_component_values(user_id=user_id)
-    return result
+    """DEPRECATED: V1 component backfill. Use POST /portfolio/history/rebuild instead."""
+    return {"status": "deprecated", "message": "V1 component backfill removed. Use POST /portfolio/history/rebuild to rebuild from V2 engine data."}
 
 
 @router.post("/history/reset")
@@ -1245,14 +1169,8 @@ async def reset_and_regenerate_history(
     user_id: int = Depends(verify_session),
     days: int = Query(90, description="Number of days of history to regenerate")
 ):
-    """
-    Delete all snapshots and regenerate from scratch.
-
-    Removes all existing snapshots for the user and regenerates using
-    historical prices with current wallet balances and component values.
-    """
-    result = await snapshot_service.reset_and_regenerate(user_id=user_id, days=days)
-    return result
+    """DEPRECATED: V1 reset and regenerate. Use POST /portfolio/history/rebuild instead."""
+    return {"status": "deprecated", "message": "V1 reset removed. Use POST /portfolio/history/rebuild to rebuild from V2 engine data."}
 
 
 @router.post("/tokens/track")
