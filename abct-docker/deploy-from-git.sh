@@ -297,13 +297,8 @@ EOF
         echo "  ⚠ Service may still be starting"
     fi
 
-    # Run migrations
-    echo ""
-    echo "Running database migrations..."
-    docker exec "$CONTAINER_NAME" python3 /app/backend/run_migrations.py 2>&1 || true
-    docker exec "$CONTAINER_NAME" python3 /app/backend/migrations/add_snapshot_quantities.py 2>&1 || true
-    docker exec "$CONTAINER_NAME" python3 /app/backend/fix_api_settings_schema.py 2>&1 || true
-    echo "  ✓ Migrations complete"
+    # Database schema is managed by database.py init_database() on startup.
+    # No external migration scripts needed.
 
     echo ""
     echo "Verifying admin account..."
