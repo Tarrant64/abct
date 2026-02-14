@@ -1055,24 +1055,29 @@ class DeFiService:
     async def get_all_pending_rewards(self, address: str) -> Dict:
         """
         Get all pending rewards across all supported protocols.
+        Uses parallel fetching for all protocols simultaneously.
         """
+        import asyncio
+
         rewards = {
             'address': address,
             'protocols': {},
             'total_pending_usd': 0  # Will be calculated with prices
         }
 
-        # Fetch rewards from all protocols
-        indigo_rewards = await self.get_indigo_pending_rewards(address)
-        if indigo_rewards and indigo_rewards.get('pending_rewards', 0) > 0:
+        # Fetch rewards from all protocols in parallel
+        indigo_rewards, strike_rewards, liqwid_rewards = await asyncio.gather(
+            self.get_indigo_pending_rewards(address),
+            self.get_strike_pending_rewards(address),
+            self.get_liqwid_pending_rewards(address),
+            return_exceptions=True
+        )
+
+        if not isinstance(indigo_rewards, Exception) and indigo_rewards and indigo_rewards.get('pending_rewards', 0) > 0:
             rewards['protocols']['Indigo'] = indigo_rewards
-
-        strike_rewards = await self.get_strike_pending_rewards(address)
-        if strike_rewards:
+        if not isinstance(strike_rewards, Exception) and strike_rewards:
             rewards['protocols']['Strike'] = strike_rewards
-
-        liqwid_rewards = await self.get_liqwid_pending_rewards(address)
-        if liqwid_rewards:
+        if not isinstance(liqwid_rewards, Exception) and liqwid_rewards:
             rewards['protocols']['Liqwid'] = liqwid_rewards
 
         return rewards
@@ -1100,7 +1105,10 @@ class DeFiService:
         """
         Get all protocol staking positions for an address.
         Aggregates data from supported protocol APIs including pending rewards.
+        Uses parallel fetching for all protocols simultaneously.
         """
+        import asyncio
+
         staking = {
             'address': address,
             'protocols': {},
@@ -1108,18 +1116,76 @@ class DeFiService:
             'total_pending_rewards': {}
         }
 
-        # Indigo staking - earns both INDY and ADA rewards
-        indigo = await self.get_indigo_staking(address)
+        # Phase 1: Fetch all protocol staking positions in parallel
+        indigo, strike, liqwid, iagon, surf = await asyncio.gather(
+            self.get_indigo_staking(address),
+            self.get_strike_staking(address),
+            self.get_liqwid_staking(address),
+            self.get_iagon_staking(address),
+            self.get_surf_lending_positions(address),
+            return_exceptions=True
+        )
+
+        # Treat exceptions as None
+        if isinstance(indigo, Exception):
+            logger.error(f"Indigo staking error for {address[:20]}: {indigo}")
+            indigo = None
+        if isinstance(strike, Exception):
+            logger.error(f"Strike staking error for {address[:20]}: {strike}")
+            strike = None
+        if isinstance(liqwid, Exception):
+            logger.error(f"Liqwid staking error for {address[:20]}: {liqwid}")
+            liqwid = None
+        if isinstance(iagon, Exception):
+            logger.error(f"Iagon staking error for {address[:20]}: {iagon}")
+            iagon = None
+        if isinstance(surf, Exception):
+            logger.error(f"Surf staking error for {address[:20]}: {surf}")
+            surf = None
+
+        # Phase 2: Fetch rewards and logos in parallel for protocols that returned data
+        reward_tasks = {}
+        logo_tasks = {}
         if indigo:
-            indigo_rewards = await self.get_indigo_pending_rewards(address)
-            indy_logo = await self._get_token_logo_url('INDY')
+            reward_tasks['indigo'] = self.get_indigo_pending_rewards(address)
+            logo_tasks['INDY'] = self._get_token_logo_url('INDY')
+        if strike:
+            reward_tasks['strike'] = self.get_strike_pending_rewards(address)
+            logo_tasks['STRIKE'] = self._get_token_logo_url('STRIKE')
+        if liqwid:
+            reward_tasks['liqwid'] = self.get_liqwid_pending_rewards(address)
+            logo_tasks['LQ'] = self._get_token_logo_url('LQ')
+        if iagon:
+            logo_tasks['IAG'] = self._get_token_logo_url('IAG')
+
+        # Execute all rewards and logos in one parallel batch
+        all_keys = list(reward_tasks.keys()) + list(logo_tasks.keys())
+        all_coros = list(reward_tasks.values()) + list(logo_tasks.values())
+        all_results = await asyncio.gather(*all_coros, return_exceptions=True) if all_coros else []
+
+        # Unpack results
+        rewards = {}
+        logos = {}
+        for i, key in enumerate(all_keys):
+            val = all_results[i]
+            if isinstance(val, Exception):
+                logger.error(f"Error fetching {key}: {val}")
+                val = None
+            if key in reward_tasks:
+                rewards[key] = val
+            else:
+                logos[key] = val
+
+        # Assemble Indigo
+        if indigo:
+            indigo_rewards = rewards.get('indigo')
             staking['protocols']['Indigo'] = {
                 'staked': [{
                     'token': 'INDY',
                     'amount': indigo['total_staked_indy'],
                     'amount_formatted': f"{indigo['total_staked_indy']:,.6f}",
                     'positions': indigo['position_count'],
-                    'logo_url': indy_logo
+                    'logo_url': logos.get('INDY')
                 }],
                 'pending_indy': indigo_rewards.get('pending_indy', 0) if indigo_rewards else 0,
                 'pending_ada': indigo_rewards.get('pending_ada', 0) if indigo_rewards else 0,
@@ -1134,18 +1200,16 @@ class DeFiService:
                 if indigo_rewards.get('pending_ada', 0) > 0:
                     staking['total_pending_rewards']['ADA'] = staking['total_pending_rewards'].get('ADA', 0) + indigo_rewards['pending_ada']
 
-        # Strike Finance staking
-        strike = await self.get_strike_staking(address)
+        # Assemble Strike
         if strike:
-            strike_rewards = await self.get_strike_pending_rewards(address)
-            strike_logo = await self._get_token_logo_url('STRIKE')
+            strike_rewards = rewards.get('strike')
             staking['protocols']['Strike'] = {
                 'staked': [{
                     'token': 'STRIKE',
                     'amount': strike['total_staked_strike'],
                     'amount_formatted': f"{strike['total_staked_strike']:,.6f}",
                     'positions': strike['position_count'],
-                    'logo_url': strike_logo
+                    'logo_url': logos.get('STRIKE')
                 }],
                 'pending_rewards': strike_rewards.get('pending_rewards', 0) if strike_rewards else 0,
                 'accumulated_rewards': strike_rewards.get('accumulated_rewards', 0) if strike_rewards else 0,
@@ -1157,18 +1221,16 @@ class DeFiService:
             if strike_rewards and strike_rewards.get('pending_rewards', 0) > 0:
                 staking['total_pending_rewards']['STRIKE'] = staking['total_pending_rewards'].get('STRIKE', 0) + strike_rewards['pending_rewards']
 
-        # Liqwid Finance staking
-        liqwid = await self.get_liqwid_staking(address)
+        # Assemble Liqwid
         if liqwid:
-            liqwid_rewards = await self.get_liqwid_pending_rewards(address)
-            lq_logo = await self._get_token_logo_url('LQ')
+            liqwid_rewards = rewards.get('liqwid')
             staking['protocols']['Liqwid'] = {
                 'staked': [{
                     'token': 'LQ',
                     'amount': liqwid['total_staked_lq'],
                     'amount_formatted': f"{liqwid['total_staked_lq']:,.6f}",
                     'positions': liqwid['position_count'],
-                    'logo_url': lq_logo
+                    'logo_url': logos.get('LQ')
                 }],
                 'pending_rewards': liqwid_rewards.get('pending_rewards', 0) if liqwid_rewards else 0,
                 'reward_token': 'LQ',
@@ -1181,17 +1243,15 @@ class DeFiService:
             if liqwid_rewards and liqwid_rewards.get('pending_rewards', 0) > 0:
                 staking['total_pending_rewards']['LQ'] = staking['total_pending_rewards'].get('LQ', 0) + liqwid_rewards['pending_rewards']
 
-        # Iagon staking (old contract - calculated from transaction history)
-        iagon = await self.get_iagon_staking(address)
+        # Assemble Iagon
         if iagon:
-            iag_logo = await self._get_token_logo_url('IAG')
             staking['protocols']['Iagon'] = {
                 'staked': [{
                     'token': 'IAG',
                     'amount': iagon['total_staked_iag'],
                     'amount_formatted': f"{iagon['total_staked_iag']:,.6f}",
                     'positions': iagon['position_count'],
-                    'logo_url': iag_logo
+                    'logo_url': logos.get('IAG')
                 }],
                 'total_deposited': iagon['total_deposited'],
                 'total_withdrawn': iagon['total_withdrawn'],
@@ -1202,8 +1262,7 @@ class DeFiService:
             }
             staking['total_positions'] += iagon['position_count']
 
-        # Surf Lending positions
-        surf = await self.get_surf_lending_positions(address)
+        # Assemble Surf Lending
         if surf:
             staking['protocols']['Surf Lending'] = {
                 'staked': [{
