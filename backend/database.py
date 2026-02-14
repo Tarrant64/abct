@@ -2413,7 +2413,7 @@ async def get_api_usage(api_name: str, period_seconds: int = 86400) -> dict:
         window_start = now - timedelta(seconds=period_seconds)
 
         cursor = await db.execute("""
-            SELECT COUNT(*) as call_count
+            SELECT COUNT(*) as call_count, MAX(timestamp) as last_called
             FROM api_call_log
             WHERE api_name = ? AND timestamp >= ?
         """, (api_name, window_start.isoformat()))
@@ -2422,6 +2422,7 @@ async def get_api_usage(api_name: str, period_seconds: int = 86400) -> dict:
         return {
             'api_name': api_name,
             'call_count': row[0] if row else 0,
+            'last_called': row[1] if row and row[1] else None,
             'period_start': window_start.isoformat(),
             'period_end': now.isoformat()
         }
@@ -3069,6 +3070,35 @@ async def get_unified_daily_totals(user_id: int, start_date: str = None,
             query += " AND wdb.date <= ?"
             params.append(end_date)
         query += " GROUP BY wdb.date ORDER BY wdb.date ASC"
+        cursor = await db.execute(query, params)
+        return [dict(row) for row in await cursor.fetchall()]
+
+
+async def get_unified_daily_totals_by_chain(user_id: int, start_date: str = None,
+                                             end_date: str = None) -> list:
+    """Get daily portfolio totals grouped by chain from wallet_daily_balances.
+
+    Returns one row per (date, chain) pair with summed value_usd.
+    """
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        query = """
+            SELECT
+                wdb.date,
+                ws.chain,
+                SUM(wdb.value_usd) as value_usd
+            FROM wallet_daily_balances wdb
+            JOIN wallet_sources ws ON wdb.source_id = ws.id
+            WHERE wdb.user_id = ? AND ws.is_active = 1
+        """
+        params = [user_id]
+        if start_date:
+            query += " AND wdb.date >= ?"
+            params.append(start_date)
+        if end_date:
+            query += " AND wdb.date <= ?"
+            params.append(end_date)
+        query += " GROUP BY wdb.date, ws.chain ORDER BY wdb.date ASC"
         cursor = await db.execute(query, params)
         return [dict(row) for row in await cursor.fetchall()]
 

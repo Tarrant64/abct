@@ -227,14 +227,10 @@ function changeTheme(themeName) {
     }
 
     // Re-render portfolio history chart with new theme colors
-    if (currentChartSource === 'v2' && v2Chart) {
+    if (v2Chart) {
         const activeBtn = document.querySelector('.v2-range.active');
-        const range = activeBtn ? activeBtn.dataset.range : '1y';
+        const range = activeBtn ? activeBtn.dataset.range : '1w';
         loadV2BalanceHistory(range);
-    } else if (portfolioChart) {
-        const activeRangeBtn = document.querySelector('.range-btn.active');
-        const currentRange = activeRangeBtn ? activeRangeBtn.dataset.range : '7d';
-        loadPortfolioHistory(currentRange);
     }
 
     // Re-render analytics charts with new theme colors
@@ -7004,39 +7000,20 @@ function formatChartDate(dateStr, range) {
 // V2 ON-CHAIN BALANCE HISTORY
 // ============================================================================
 
-let currentChartSource = 'v2';
 let v2Chart = null;
+let v2ChartMode = 'combined'; // 'combined' or 'by_chain'
 let v2PollInterval = null;
 
-function switchChartSource(source) {
-    currentChartSource = source;
-
-    // Update tab active states
-    document.querySelectorAll('.source-tab').forEach(tab => {
-        tab.classList.toggle('active', tab.textContent.includes(source === 'v1' ? 'v1' : 'v2'));
-    });
-
-    const v1Wrapper = document.getElementById('v1ChartWrapper');
-    const v2Wrapper = document.getElementById('v2ChartWrapper');
-    const v1Range = document.getElementById('v1RangeSelector');
-    const v2Range = document.getElementById('v2RangeSelector');
-
-    if (source === 'v1') {
-        if (v1Wrapper) v1Wrapper.style.display = '';
-        if (v2Wrapper) v2Wrapper.style.display = 'none';
-        if (v1Range) v1Range.style.display = '';
-        if (v2Range) v2Range.style.display = 'none';
-    } else {
-        if (v1Wrapper) v1Wrapper.style.display = 'none';
-        if (v2Wrapper) v2Wrapper.style.display = '';
-        if (v1Range) v1Range.style.display = 'none';
-        if (v2Range) v2Range.style.display = '';
-        // Load v2 data
-        loadV2BalanceHistory('1w');
-        checkV2CollectionStatus();
-        loadV2Schedule();
-        loadV2LastRun();
+function toggleChartMode() {
+    v2ChartMode = v2ChartMode === 'combined' ? 'by_chain' : 'combined';
+    const btn = document.getElementById('chartModeToggle');
+    if (btn) {
+        btn.textContent = v2ChartMode === 'combined' ? 'By Chain' : 'Combined';
+        btn.classList.toggle('active', v2ChartMode === 'by_chain');
     }
+    const activeBtn = document.querySelector('.v2-range.active');
+    const range = activeBtn ? activeBtn.dataset.range : '1w';
+    loadV2BalanceHistory(range);
 }
 
 async function loadV2BalanceHistory(range) {
@@ -7050,7 +7027,10 @@ async function loadV2BalanceHistory(range) {
     const coverageText = document.getElementById('v2CoverageText');
 
     try {
-        const response = await authFetch(`${API_BASE}/portfolio/chart/unified?range=${range}`);
+        let url = `${API_BASE}/portfolio/chart/unified?range=${range}`;
+        if (v2ChartMode === 'by_chain') url += '&by_chain=true';
+
+        const response = await authFetch(url);
         if (!response.ok) {
             console.error('V2 balance history API returned', response.status);
             throw new Error(`API error ${response.status}`);
@@ -7060,7 +7040,12 @@ async function loadV2BalanceHistory(range) {
         if (result.data && result.data.length > 0) {
             if (emptyState) emptyState.style.display = 'none';
             if (chartCanvas) chartCanvas.style.display = 'block';
-            renderV2Chart(result.data, range);
+
+            if (v2ChartMode === 'by_chain' && result.chain_list) {
+                renderV2ChartByChain(result.data, result.chain_list, range);
+            } else {
+                renderV2Chart(result.data, range);
+            }
 
             // Update coverage info
             if (coverageText && result.coverage) {
@@ -7200,6 +7185,202 @@ function renderV2Chart(data, range) {
                                 }
                             }
                             return lines;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: colors.gridColor, drawBorder: false },
+                    ticks: {
+                        color: colors.tickColor,
+                        font: { size: 11 },
+                        maxRotation: 45,
+                        maxTicksLimit: 12
+                    }
+                },
+                y: {
+                    min: Math.max(0, minValue - padding),
+                    max: maxValue + padding,
+                    grid: { color: colors.gridColor, drawBorder: false },
+                    ticks: {
+                        color: colors.tickColor,
+                        font: { size: 11 },
+                        callback: function(value) { return formatUSD(value); }
+                    }
+                }
+            }
+        }
+    });
+}
+
+const CHAIN_COLORS = {
+    cardano: '#3366FF', bitcoin: '#FF9F1A', ethereum: '#879BFF',
+    solana: '#00FFB2', polygon: '#A36BFF', base: '#4D8AFF',
+    algorand: '#6DC8C8', bnb: '#FFD84D', arbitrum: '#4DB8FF',
+    avalanche: '#FF5B5B', tron: '#FF4D4D',
+};
+let v2HighlightedChainIdx = null; // track which dataset is highlighted
+
+function getChainColor(chain) {
+    return CHAIN_COLORS[chain.toLowerCase()] || '#' + (chain.charCodeAt(0) * 123456 % 0xFFFFFF).toString(16).padStart(6, '0');
+}
+
+function renderV2ChartByChain(data, chainList, range) {
+    const ctx = document.getElementById('v2HistoryChart');
+    if (!ctx) return;
+    if (v2Chart) v2Chart.destroy();
+
+    const colors = getChartColors();
+
+    const labels = data.map(d => {
+        if (d.date.includes('T')) {
+            const [datePart, timePart] = d.date.split('T');
+            const date = new Date(datePart + 'T' + timePart + ':00Z');
+            return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        }
+        const date = new Date(d.date + 'T12:00:00');
+        if (range === '24h' || range === '1w') {
+            return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        }
+        if (range === '1m' || range === '3m') {
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+        return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+    });
+
+    // Build per-chain datasets
+    v2HighlightedChainIdx = null;
+    const datasets = [];
+    for (const chain of chainList) {
+        const chainColor = getChainColor(chain);
+        datasets.push({
+            label: chain.charAt(0).toUpperCase() + chain.slice(1),
+            data: data.map(d => (d.chains && d.chains[chain]) || 0),
+            borderColor: chainColor,
+            backgroundColor: 'transparent',
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0,
+            pointHoverRadius: 5,
+            pointHoverBackgroundColor: chainColor,
+            borderWidth: 2.5,
+            _origColor: chainColor,
+            _origWidth: 2.5,
+        });
+    }
+
+    // Total line (bold, with fill)
+    const totalValues = data.map(d => d.total_value || 0);
+    datasets.unshift({
+        label: 'Total',
+        data: totalValues,
+        borderColor: colors.lineColor,
+        backgroundColor: colors.fillColor,
+        fill: true,
+        tension: 0.3,
+        pointRadius: 0,
+        pointHoverRadius: 6,
+        pointHoverBackgroundColor: colors.pointColor,
+        pointHoverBorderColor: colors.pointBorderColor,
+        pointHoverBorderWidth: 2,
+        borderWidth: 3,
+        _origColor: colors.lineColor,
+        _origWidth: 3,
+    });
+
+    // Y-axis range
+    const allValues = totalValues;
+    const minValue = Math.min(...allValues);
+    const maxValue = Math.max(...allValues);
+    const valueRange = maxValue - minValue || 1;
+    const padding = valueRange * 0.1;
+
+    // Gradient plugin for total line (dataset index 0) — skip when another chain is highlighted
+    const byChainGradientPlugin = {
+        id: 'byChainDynamicGradient',
+        afterLayout: (chart) => {
+            if (!colors.useGradientLine || !colors.gradientStops) return;
+            if (v2HighlightedChainIdx !== null && v2HighlightedChainIdx !== 0) return;
+            const area = chart.chartArea;
+            if (!area) return;
+            const drawCtx = chart.ctx;
+            const lineGrad = drawCtx.createLinearGradient(area.left, 0, area.right, 0);
+            const stops = colors.gradientStops;
+            for (let i = 0; i < stops.length; i++) {
+                lineGrad.addColorStop(i / (stops.length - 1), stops[i]);
+            }
+            chart.data.datasets[0].borderColor = lineGrad;
+            chart.data.datasets[0]._origColor = lineGrad;
+            const fillGrad = drawCtx.createLinearGradient(0, area.top, 0, area.bottom);
+            fillGrad.addColorStop(0, colors.fillColor);
+            fillGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            chart.data.datasets[0].backgroundColor = fillGrad;
+        }
+    };
+
+    v2Chart = new Chart(ctx, {
+        type: 'line',
+        plugins: [byChainGradientPlugin],
+        data: { labels, datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        color: colors.tickColor,
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        padding: 16,
+                        font: { size: 11 },
+                    },
+                    onClick: function(e, legendItem, legend) {
+                        const chart = legend.chart;
+                        const idx = legendItem.datasetIndex;
+                        const dimColor = (c) => typeof c === 'string' ? c + '30' : c;
+                        // If clicking the already-highlighted one, reset all
+                        if (v2HighlightedChainIdx === idx) {
+                            v2HighlightedChainIdx = null;
+                            chart.data.datasets.forEach(ds => {
+                                ds.borderColor = ds._origColor;
+                                ds.borderWidth = ds._origWidth;
+                            });
+                        } else {
+                            v2HighlightedChainIdx = idx;
+                            chart.data.datasets.forEach((ds, i) => {
+                                if (i === idx) {
+                                    ds.borderColor = ds._origColor;
+                                    ds.borderWidth = i === 0 ? 3 : 4;
+                                } else if (i === 0) {
+                                    // Keep Total visible but dimmed
+                                    ds.borderWidth = 1.5;
+                                    ds.borderColor = dimColor(ds._origColor);
+                                } else {
+                                    ds.borderColor = dimColor(ds._origColor);
+                                    ds.borderWidth = 1;
+                                }
+                            });
+                        }
+                        chart.update();
+                    }
+                },
+                tooltip: {
+                    backgroundColor: colors.tooltipBg,
+                    titleColor: colors.tooltipTitle,
+                    bodyColor: colors.tooltipBody,
+                    borderColor: colors.tooltipBorder,
+                    borderWidth: 1,
+                    padding: 12,
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.dataset.label || '';
+                            const val = context.parsed.y;
+                            if (val === 0 && label !== 'Total') return null;
+                            return `  ${label}: ${formatUSD(val)}`;
                         }
                     }
                 }

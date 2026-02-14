@@ -770,6 +770,7 @@ async def get_portfolio_totals(user_id: int = Depends(verify_session)):
 async def get_unified_chart(
     user_id: int = Depends(verify_session),
     range: str = Query("1w", description="Time range: 24h, 1w, 1m, 3m, 6m, 1y, all"),
+    by_chain: bool = Query(False, description="Return per-chain breakdown"),
 ):
     """
     Unified portfolio chart from wallet_daily_balances (V2 per-wallet architecture).
@@ -790,6 +791,38 @@ async def get_unified_chart(
 
     from datetime import datetime, timedelta
     start_date = (datetime.utcnow() - timedelta(days=days)).strftime('%Y-%m-%d')
+
+    if by_chain:
+        from database import get_unified_daily_totals_by_chain
+        chain_rows = await get_unified_daily_totals_by_chain(user_id, start_date=start_date)
+
+        if not chain_rows:
+            return {
+                "data": [],
+                "chain_list": [],
+                "coverage": {"oldest_date": None, "newest_date": None, "total_days": 0}
+            }
+
+        # Pivot rows into per-date objects with chain breakdown
+        from collections import OrderedDict
+        date_map = OrderedDict()
+        chain_totals = {}
+        for row in chain_rows:
+            d = row['date']
+            chain = row['chain'] or 'unknown'
+            val = row['value_usd'] or 0
+            if d not in date_map:
+                date_map[d] = {"date": d, "total_value": 0, "chains": {}}
+            date_map[d]["chains"][chain] = round(date_map[d]["chains"].get(chain, 0) + val, 2)
+            date_map[d]["total_value"] = round(date_map[d]["total_value"] + val, 2)
+            chain_totals[chain] = chain_totals.get(chain, 0) + val
+
+        data = list(date_map.values())
+        # Sort chains by total value descending
+        chain_list = sorted(chain_totals.keys(), key=lambda c: chain_totals[c], reverse=True)
+
+        logger.info(f"Unified chart by_chain: {len(data)} points, {len(chain_list)} chains")
+        return {"data": data, "chain_list": chain_list, "coverage": _compute_chart_coverage(data)}
 
     from database import get_unified_daily_totals
     wdb_rows = await get_unified_daily_totals(user_id, start_date=start_date)
