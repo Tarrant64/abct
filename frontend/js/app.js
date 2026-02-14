@@ -3062,18 +3062,12 @@ async function loadDefiGovernance() {
 
     setSafeHTML(content, `
         <div class="loading-state">
-            <div class="progress-container">
-                <div class="progress-bar" id="defiGovProgressBar"></div>
-            </div>
-            <p class="progress-text" id="defiGovProgressText">Loading DeFi & Governance data...</p>
+            <p class="progress-text" id="defiGovProgressText">Loading DeFi data...</p>
         </div>
     `);
 
-    const progressBar = document.getElementById('defiGovProgressBar');
-    const progressText = document.getElementById('defiGovProgressText');
-
     try {
-        // Get all data in parallel where possible
+        // Phase 1: Fetch base data in parallel (wallets, defi summary, exchanges, native assets)
         const [walletsResponse, defiResponse, exchangeResponse, nativeAssetsResponse] = await Promise.all([
             authFetch(`${API_BASE}/wallets`),
             authFetch(`${API_BASE}/defi/summary`),
@@ -3094,29 +3088,88 @@ async function loadDefiGovernance() {
 
         const cardanoWallets = walletsData.wallets.filter(w => w.blockchain === 'cardano');
 
-        // Load staking data for each wallet
-        if (progressText) progressText.textContent = 'Loading staking positions...';
-        if (progressBar) progressBar.style.width = '20%';
+        // Extract stablecoins immediately (no waiting needed)
+        let exchangeStablecoins = [];
+        if (exchangeData && exchangeData.assets) {
+            exchangeStablecoins = exchangeData.assets.filter(asset =>
+                KNOWN_STABLECOINS.includes(asset.currency)
+            ).map(asset => ({
+                symbol: asset.currency,
+                balance: asset.balance,
+                chain: 'exchange'
+            }));
+        }
 
-        const allStaking = {};
+        let nativeStablecoins = [];
+        if (nativeAssetsData && nativeAssetsData.assets) {
+            nativeStablecoins = nativeAssetsData.assets.filter(asset => {
+                const ticker = asset.ticker || asset.asset_name || '';
+                return KNOWN_STABLECOINS.includes(ticker);
+            }).map(asset => ({
+                symbol: asset.ticker || asset.asset_name,
+                balance: asset.total_quantity || 0,
+                chain: asset.blockchain || 'cardano'
+            }));
+        }
+
+        // Store DeFi totals immediately from cached summary
+        defiTotals = {};
+        if (defiData.positions_by_category) {
+            for (const [category, positions] of Object.entries(defiData.positions_by_category)) {
+                for (const pos of positions) {
+                    const token = pos.token || pos.asset_name || pos.symbol;
+                    if (token && pos.quantity) {
+                        if (!defiTotals[token]) defiTotals[token] = 0;
+                        defiTotals[token] += pos.quantity;
+                    }
+                }
+            }
+        }
+
+        // Phase 2: Render immediately with DeFi data (staking shows as loading)
+        document.body.classList.remove('defi-loading');
+        renderDefiGovernance({}, defiData, exchangeStablecoins, nativeStablecoins, null);
+
+        // Show subtle updating indicator for staking section
+        const stakingSection = document.querySelector('.defi-gov-subsection');
+        if (stakingSection) {
+            const header = stakingSection.querySelector('.defi-gov-subsection-header');
+            if (header) {
+                const indicator = document.createElement('span');
+                indicator.className = 'staking-update-indicator';
+                indicator.id = 'stakingUpdateIndicator';
+                indicator.textContent = ' Loading staking...';
+                indicator.style.cssText = 'font-size: 0.8em; opacity: 0.6; font-weight: normal;';
+                header.appendChild(indicator);
+            }
+        }
+
+        // Phase 3: Fetch ALL wallet staking + governance in parallel (background)
         const adaDelegation = { totalAda: 0, stakedAda: 0, pools: [] };
-        const totalWallets = cardanoWallets.length;
-        let processedWallets = 0;
 
+        // Pre-compute ADA delegation totals from wallet balances
         for (const wallet of cardanoWallets) {
-            const percent = 20 + Math.round((processedWallets / Math.max(totalWallets, 1)) * 60);
-            if (progressBar) progressBar.style.width = `${percent}%`;
-            if (progressText) progressText.textContent = `Checking wallet ${processedWallets + 1} of ${totalWallets}...`;
+            adaDelegation.totalAda += parseFloat(wallet.balance) || 0;
+        }
 
-            // Always accumulate wallet balance for ADA delegation (outside try block)
-            const walletBalance = parseFloat(wallet.balance) || 0;
-            adaDelegation.totalAda += walletBalance;
-
-            // Fetch governance + staking in parallel, handle each independently
-            const [govResult, stakingResult] = await Promise.allSettled([
+        // Fire all wallet requests simultaneously
+        const walletPromises = cardanoWallets.map(wallet =>
+            Promise.allSettled([
                 authFetch(`${API_BASE}/wallets/${wallet.address}/governance`),
                 authFetch(`${API_BASE}/defi/staking/${wallet.address}`)
-            ]);
+            ]).then(results => ({ wallet, results }))
+        );
+
+        const walletResults = await Promise.allSettled(walletPromises);
+
+        // Process all results
+        const allStaking = {};
+        for (const settled of walletResults) {
+            if (settled.status !== 'fulfilled') continue;
+            const { wallet, results } = settled.value;
+            const [govResult, stakingResult] = results;
+
+            const walletBalance = parseFloat(wallet.balance) || 0;
 
             // Process governance result
             if (govResult.status === 'fulfilled' && govResult.value.ok) {
@@ -3140,7 +3193,7 @@ async function loadDefiGovernance() {
 
             // Process staking result
             try {
-                if (stakingResult.status !== 'fulfilled') throw new Error('Staking fetch failed');
+                if (stakingResult.status !== 'fulfilled') continue;
                 const stakingData = await stakingResult.value.json();
 
                 for (const [protocol, data] of Object.entries(stakingData.protocols || {})) {
@@ -3192,11 +3245,7 @@ async function loadDefiGovernance() {
             } catch (e) {
                 console.error(`Error loading staking for ${wallet.address}:`, e);
             }
-            processedWallets++;
         }
-
-        if (progressBar) progressBar.style.width = '90%';
-        if (progressText) progressText.textContent = 'Rendering...';
 
         // Store staking totals for portfolio calculation
         stakingTotals = {};
@@ -3211,55 +3260,10 @@ async function loadDefiGovernance() {
             }
         }
 
-        // Store DeFi totals for portfolio calculation
-        defiTotals = {};
-        if (defiData.positions_by_category) {
-            for (const [category, positions] of Object.entries(defiData.positions_by_category)) {
-                for (const pos of positions) {
-                    // Use token (standard symbol from DEFI_PROTOCOLS) for price lookup
-                    const token = pos.token || pos.asset_name || pos.symbol;
-                    if (token && pos.quantity) {
-                        if (!defiTotals[token]) defiTotals[token] = 0;
-                        defiTotals[token] += pos.quantity;
-                    }
-                }
-            }
-        }
-
-        // Extract exchange stablecoins (use currency field, not symbol)
-        let exchangeStablecoins = [];
-        if (exchangeData && exchangeData.assets) {
-            exchangeStablecoins = exchangeData.assets.filter(asset =>
-                KNOWN_STABLECOINS.includes(asset.currency)
-            ).map(asset => ({
-                symbol: asset.currency,
-                balance: asset.balance,
-                chain: 'exchange'
-            }));
-        }
-
-        // Extract stablecoins from native assets (ETH/SOL chains)
-        let nativeStablecoins = [];
-        if (nativeAssetsData && nativeAssetsData.assets) {
-            nativeStablecoins = nativeAssetsData.assets.filter(asset => {
-                const ticker = asset.ticker || asset.asset_name || '';
-                return KNOWN_STABLECOINS.includes(ticker);
-            }).map(asset => ({
-                symbol: asset.ticker || asset.asset_name,
-                balance: asset.total_quantity || 0,
-                chain: asset.blockchain || 'cardano'
-            }));
-        }
-
-        if (progressBar) progressBar.style.width = '100%';
-
-        await new Promise(resolve => setTimeout(resolve, 200));
-
-        // Render the consolidated view
+        // Phase 4: Re-render with full data (staking + governance now included)
         renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeStablecoins, adaDelegation);
 
         document.body.classList.remove('staking-loading');
-        document.body.classList.remove('defi-loading');
         updateTotalPortfolioValue();
 
     } catch (error) {

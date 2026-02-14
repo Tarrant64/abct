@@ -5,6 +5,7 @@ Provides endpoints for analyzing Cardano DeFi positions.
 """
 
 from fastapi import APIRouter, HTTPException, Query, Depends
+import asyncio
 import logging
 import sys
 import os
@@ -304,10 +305,18 @@ async def get_defi_summary(user_id: int = Depends(verify_session), refresh: bool
     protocol_totals = {}
     wallets_with_defi = 0
 
-    logger.info(f"[DeFi Summary] Analyzing {len(cardano_wallets)} Cardano wallets for user {user_id}")
+    logger.info(f"[DeFi Summary] Analyzing {len(cardano_wallets)} Cardano wallets for user {user_id} (parallel)")
 
-    for i, wallet in enumerate(cardano_wallets):
-        result = await defi_service.analyze_wallet_defi(wallet['address'])
+    # Fetch all wallet DeFi data in parallel
+    wallet_results = await asyncio.gather(*[
+        defi_service.analyze_wallet_defi(w['address']) for w in cardano_wallets
+    ], return_exceptions=True)
+
+    for i, (wallet, result) in enumerate(zip(cardano_wallets, wallet_results)):
+        if isinstance(result, Exception):
+            logger.error(f"[DeFi Summary] Wallet {i+1}/{len(cardano_wallets)} ({wallet['address'][:20]}...): error={result}")
+            continue
+
         logger.info(f"[DeFi Summary] Wallet {i+1}/{len(cardano_wallets)} ({wallet['address'][:20]}...): result={'has data' if result and result.get('defi_positions') else 'None/empty'}")
 
         if result and result['defi_positions']:
