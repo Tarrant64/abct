@@ -6,7 +6,7 @@
     <title>Data & Analytics - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771086368">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771093024">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <!-- Chart.js for analytics -->
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
@@ -15,7 +15,7 @@
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1771086368"></script>
+    <script src="/static/js/session-auth.js?v=1771093024"></script>
     <style>
         /* Wallet Manager Styles */
         .wallet-manager {
@@ -1317,6 +1317,70 @@
         </div>
         <!-- End Blockchains Tab -->
 
+        <!-- Blockchain Asset Breakdown Modal -->
+        <div id="assetBreakdownModal" class="modal hidden">
+            <div class="modal-overlay" onclick="closeAssetBreakdownModal()"></div>
+            <div class="modal-content asset-breakdown-modal">
+                <button class="modal-close" onclick="closeAssetBreakdownModal()">&times;</button>
+                <div class="modal-body">
+                    <h3 class="breakdown-title" id="breakdownChainName">Asset Breakdown</h3>
+
+                    <div class="defillama-metrics" id="defillamaMetrics">
+                        <div class="metric-card">
+                            <span class="metric-label">Market Cap</span>
+                            <span class="metric-value" id="chainMcap">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">TVL</span>
+                            <span class="metric-value" id="chainTvl">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">Stablecoins</span>
+                            <span class="metric-value" id="chainStables">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">24h Volume</span>
+                            <span class="metric-value" id="chainVolume">-</span>
+                        </div>
+                    </div>
+
+                    <div class="breakdown-stats">
+                        <div class="stat">
+                            <span class="label">Your Holdings</span>
+                            <span class="value" id="breakdownTotalValue">$0.00</span>
+                        </div>
+                        <div class="stat">
+                            <span class="label">Asset Types</span>
+                            <span class="value" id="breakdownAssetCount">0</span>
+                        </div>
+                    </div>
+
+                    <div class="supply-metrics-row hidden" id="supplyMetricsRow">
+                        <div class="metric-card">
+                            <span class="metric-label">Circulating Supply</span>
+                            <span class="metric-value" id="supplyCirculating">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">Total Supply</span>
+                            <span class="metric-value" id="supplyTotal">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">Max Supply</span>
+                            <span class="metric-value" id="supplyMax">-</span>
+                        </div>
+                    </div>
+
+                    <div class="breakdown-content">
+                        <div class="breakdown-chart-wrapper">
+                            <canvas id="assetBreakdownChart" width="400" height="400"></canvas>
+                        </div>
+                        <div class="breakdown-legend" id="breakdownLegend"></div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
         <!-- Processing Modal (used during transaction refresh) -->
         <div id="processingModal" class="modal" style="display: none;">
             <div class="modal-content">
@@ -1560,13 +1624,13 @@
         }
     </script>
 
-    <script src="/static/js/app.js?v=1771086368"></script>
+    <script src="/static/js/app.js?v=1771093024"></script>
 
     <!-- Transaction scripts -->
-    <script src="/static/js/transactions.js?v=1771086368"></script>
-    <script src="/static/js/transaction-analytics.js?v=1771086368"></script>
+    <script src="/static/js/transactions.js?v=1771093024"></script>
+    <script src="/static/js/transaction-analytics.js?v=1771093024"></script>
     <!-- Advanced Analytics tab -->
-    <script src="/static/js/analytics-tab.js?v=1771086368"></script>
+    <script src="/static/js/analytics-tab.js?v=1771093024"></script>
 
     <script>
         // Main tab switching function
@@ -1641,7 +1705,7 @@
     </script>
 
     <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
-        <p>ABCT - Data & Analytics | <span id="appVersion" style="opacity: 0.6;">v1.12.0 (BUILD 1771086368)</span></p>
+        <p>ABCT - Data & Analytics | <span id="appVersion" style="opacity: 0.6;">v1.12.0 (BUILD 1771093024)</span></p>
     </footer>
 </body>
 </html>
