@@ -42,7 +42,9 @@ API_REGISTRY = {
         "pricing_note": "Free tier: 50,000 requests/day, 10 requests/sec, burst of 500 requests",
         "default_limit": 50000,  # 50k requests per day on free tier
         "default_period": 86400,
-        "period_label": "day"
+        "period_label": "day",
+        "rate_limit_note": "10 req/sec, 500 burst",
+        "rate_limit_type": "quota"
     },
     "taptools": {
         "name": "TapTools",
@@ -55,7 +57,9 @@ API_REGISTRY = {
         "pricing_note": "$9/mo plan: 100 requests/day",
         "default_limit": 100,  # $9/mo plan limit
         "default_period": 86400,
-        "period_label": "day"
+        "period_label": "day",
+        "rate_limit_note": "~100 req/day on $9/mo plan",
+        "rate_limit_type": "quota"
     },
     "nftcdn": {
         "name": "NFT CDN",
@@ -68,7 +72,9 @@ API_REGISTRY = {
         "pricing_note": "Paid service for NFT metadata and images",
         "default_limit": None,
         "default_period": 86400,
-        "period_label": "day"
+        "period_label": "day",
+        "rate_limit_note": "Paid service, limits not documented",
+        "rate_limit_type": "none"
     },
     "nmkr": {
         "name": "NMKR Studio",
@@ -81,7 +87,9 @@ API_REGISTRY = {
         "pricing_note": "Free API access for NFT metadata",
         "default_limit": None,
         "default_period": 86400,
-        "period_label": "day"
+        "period_label": "day",
+        "rate_limit_note": "Limits not documented",
+        "rate_limit_type": "none"
     },
     "cexplorer": {
         "name": "CExplorer",
@@ -94,7 +102,9 @@ API_REGISTRY = {
         "pricing_note": "Free tier available, limits not documented",
         "default_limit": None,  # Not documented
         "default_period": 86400,
-        "period_label": "day"
+        "period_label": "day",
+        "rate_limit_note": "Limits not documented",
+        "rate_limit_type": "none"
     },
     "maestro": {
         "name": "Maestro",
@@ -107,7 +117,9 @@ API_REGISTRY = {
         "pricing_note": "Free tier: 500,000 credits/mo (credits vary per call)",
         "default_limit": None,  # Credits vary per call type
         "default_period": 86400,
-        "period_label": "day"
+        "period_label": "day",
+        "rate_limit_note": "500K credits/mo (cost varies by endpoint)",
+        "rate_limit_type": "none"
     },
 
     # EVM APIs (Ethereum, Polygon, Base)
@@ -122,7 +134,9 @@ API_REGISTRY = {
         "pricing_note": "Free tier: 30M compute units/mo (~1.8M simple requests)",
         "default_limit": 60000,  # ~30M CU / 30 days = 1M CU/day = ~60k simple requests/day (conservative)
         "default_period": 86400,
-        "period_label": "day"
+        "period_label": "day",
+        "rate_limit_note": "500 CU/sec",
+        "rate_limit_type": "quota"
     },
     "etherscan": {
         "name": "Etherscan",
@@ -132,10 +146,12 @@ API_REGISTRY = {
         "docs_url": "https://etherscan.io/apis",
         "env_var": "ETHERSCAN_API_KEY",
         "pricing": "free",
-        "pricing_note": "Free tier: 3 calls/sec OR 100,000 calls/day",
+        "pricing_note": "Free tier: 5 calls/sec, 100,000 calls/day",
         "default_limit": 100000,  # 100k calls per day
         "default_period": 86400,
-        "period_label": "day"
+        "period_label": "day",
+        "rate_limit_note": "5 req/sec",
+        "rate_limit_type": "quota"
     },
     "beaconchain": {
         "name": "Beaconchain",
@@ -148,7 +164,9 @@ API_REGISTRY = {
         "pricing_note": "Free tier limited; Premium from $5/mo",
         "default_limit": None,  # Not clearly documented
         "default_period": 86400,
-        "period_label": "day"
+        "period_label": "day",
+        "rate_limit_note": "Limits vary by plan",
+        "rate_limit_type": "none"
     },
 
     # Solana APIs
@@ -163,7 +181,9 @@ API_REGISTRY = {
         "pricing_note": "Free tier: 1M credits/mo, 10 RPS rate limit",
         "default_limit": 33333,  # ~1M credits / 30 days = 33k credits/day
         "default_period": 86400,
-        "period_label": "day"
+        "period_label": "day",
+        "rate_limit_note": "10 RPS (RPC), 2 RPS (DAS/Enhanced)",
+        "rate_limit_type": "quota"
     },
     "moralis": {
         "name": "Moralis",
@@ -176,7 +196,9 @@ API_REGISTRY = {
         "pricing_note": "Free tier: 40,000 compute units/month",
         "default_limit": 1333,  # ~40k CU / 30 days = 1333 CU/day
         "default_period": 86400,
-        "period_label": "day"
+        "period_label": "day",
+        "rate_limit_note": "1,000 CU/sec",
+        "rate_limit_type": "quota"
     },
 
     # Pricing APIs
@@ -191,7 +213,9 @@ API_REGISTRY = {
         "env_var": "COINGECKO_API_KEY",
         "default_limit": 333,  # 10k/month ≈ 333/day
         "default_period": 86400,
-        "period_label": "day"
+        "period_label": "day",
+        "rate_limit_note": "30 calls/min",
+        "rate_limit_type": "quota"
     },
     "coinmarketcap": {
         "name": "CoinMarketCap",
@@ -204,7 +228,9 @@ API_REGISTRY = {
         "pricing_note": "Free tier: 10,000 calls/mo",
         "default_limit": 333,  # ~10k/month = 333/day
         "default_period": 86400,
-        "period_label": "day"
+        "period_label": "day",
+        "rate_limit_note": "Per-minute throttle",
+        "rate_limit_type": "quota"
     },
 
     # Data & Analytics APIs
@@ -219,7 +245,9 @@ API_REGISTRY = {
         "pricing_note": "Free tier: 100,000 queries/mo",
         "default_limit": 3333,  # ~100k/month = 3333/day
         "default_period": 86400,
-        "period_label": "day"
+        "period_label": "day",
+        "rate_limit_note": "Rate-limited on free subgraphs",
+        "rate_limit_type": "quota"
     },
     "dune": {
         "name": "Dune Analytics",
@@ -232,7 +260,9 @@ API_REGISTRY = {
         "pricing_note": "Free tier: 1,000 queries/mo",
         "default_limit": 33,  # ~1k/month = 33/day
         "default_period": 86400,
-        "period_label": "day"
+        "period_label": "day",
+        "rate_limit_note": "1,000 queries/mo",
+        "rate_limit_type": "quota"
     },
 
     # Service APIs
@@ -247,7 +277,9 @@ API_REGISTRY = {
         "pricing_note": "Free tier available",
         "default_limit": None,
         "default_period": 86400,
-        "period_label": "day"
+        "period_label": "day",
+        "rate_limit_note": "Limits not documented",
+        "rate_limit_type": "none"
     },
 
     # Exchange APIs
@@ -264,7 +296,9 @@ API_REGISTRY = {
         "default_period": 86400,
         "period_label": "day",
         "requires_file_upload": True,
-        "file_upload_hint": "Upload CDP API key JSON file (contains 'name' and 'privateKey' fields)"
+        "file_upload_hint": "Upload CDP API key JSON file (contains 'name' and 'privateKey' fields)",
+        "rate_limit_note": "No documented read limits",
+        "rate_limit_type": "rate"
     },
     "binance": {
         "name": "Binance.com",
@@ -275,9 +309,11 @@ API_REGISTRY = {
         "env_var": "BINANCE_API_KEY",
         "pricing": "free",
         "pricing_note": "Read-only API access (no trading)",
-        "default_limit": None,
-        "default_period": 86400,
-        "period_label": "day"
+        "default_limit": 6000,
+        "default_period": 60,
+        "period_label": "minute",
+        "rate_limit_note": "6,000 weight/min",
+        "rate_limit_type": "rate"
     },
     "binance_us": {
         "name": "Binance.US",
@@ -288,9 +324,11 @@ API_REGISTRY = {
         "env_var": "BINANCE_US_API_KEY",
         "pricing": "free",
         "pricing_note": "Read-only API access (no trading)",
-        "default_limit": None,
-        "default_period": 86400,
-        "period_label": "day"
+        "default_limit": 6000,
+        "default_period": 60,
+        "period_label": "minute",
+        "rate_limit_note": "6,000 weight/min",
+        "rate_limit_type": "rate"
     },
     "okx": {
         "name": "OKX",
@@ -303,7 +341,9 @@ API_REGISTRY = {
         "pricing_note": "Read-only API access (no trading)",
         "default_limit": None,
         "default_period": 86400,
-        "period_label": "day"
+        "period_label": "day",
+        "rate_limit_note": "10-20 req/2sec per endpoint",
+        "rate_limit_type": "rate"
     },
     "bitget": {
         "name": "Bitget",
@@ -316,7 +356,9 @@ API_REGISTRY = {
         "pricing_note": "Read-only API access (no trading)",
         "default_limit": None,
         "default_period": 86400,
-        "period_label": "day"
+        "period_label": "day",
+        "rate_limit_note": "6,000 req/min",
+        "rate_limit_type": "rate"
     },
     "gate": {
         "name": "Gate.io",
@@ -329,7 +371,9 @@ API_REGISTRY = {
         "pricing_note": "Read-only API access (no trading)",
         "default_limit": None,
         "default_period": 86400,
-        "period_label": "day"
+        "period_label": "day",
+        "rate_limit_note": "Per-endpoint limits",
+        "rate_limit_type": "rate"
     },
     "kucoin": {
         "name": "KuCoin",
@@ -342,7 +386,26 @@ API_REGISTRY = {
         "pricing_note": "Read-only API access (no trading)",
         "default_limit": None,
         "default_period": 86400,
-        "period_label": "day"
+        "period_label": "day",
+        "rate_limit_note": "Resource pool per 30sec",
+        "rate_limit_type": "rate"
+    },
+
+    # TradFi / Market Data APIs
+    "alphavantage": {
+        "name": "Alpha Vantage",
+        "category": "pricing",
+        "description": "Traditional finance data (S&P 500, NASDAQ, Dow Jones, BTC ETF) for cross-asset analytics",
+        "required": False,
+        "docs_url": "https://www.alphavantage.co/support/#api-key",
+        "env_var": "ALPHAVANTAGE_API_KEY",
+        "pricing": "free",
+        "pricing_note": "Free tier: 25 requests/day, 5 requests/minute",
+        "default_limit": 25,
+        "default_period": 86400,
+        "period_label": "day",
+        "rate_limit_note": "5 req/min, 25 req/day",
+        "rate_limit_type": "quota"
     },
 }
 
@@ -695,8 +758,11 @@ async def get_api_utilization():
     """
     Get API utilization data for all configured APIs.
     Returns usage counts, limits, and utilization percentages.
+    Fetches live usage from APIs that support it (CoinGecko, CMC, Blockfrost).
     """
+    import asyncio
     from datetime import datetime, timedelta
+    from services.api_usage_live import get_live_usage
 
     # Get current usage for all APIs
     usage_data = await get_all_api_usage()
@@ -710,6 +776,17 @@ async def get_api_utilization():
     saved_settings = await get_all_api_settings()
     saved_map = {s['api_name']: s for s in saved_settings}
 
+    # Fetch live usage data in parallel for supported APIs
+    live_api_ids = ["coingecko", "coinmarketcap", "blockfrost"]
+    live_results = await asyncio.gather(
+        *[get_live_usage(api_id) for api_id in live_api_ids],
+        return_exceptions=True
+    )
+    live_map = {}
+    for api_id, result in zip(live_api_ids, live_results):
+        if isinstance(result, dict):
+            live_map[api_id] = result
+
     utilization = []
 
     for api_id, api_info in API_REGISTRY.items():
@@ -721,12 +798,22 @@ async def get_api_utilization():
         # Get usage data
         usage = usage_map.get(api_id, {})
         call_count = usage.get('call_count', 0)
+        last_called = usage.get('last_called')
+
+        # Check for live usage data
+        live_data = live_map.get(api_id)
+        usage_source = "live" if live_data else "local"
 
         # Get rate limit (custom or default)
         custom_limit = limits_map.get(api_id)
         if custom_limit:
             requests_limit = custom_limit['requests_limit']
             period_seconds = custom_limit['period_seconds']
+        elif live_data:
+            # Use live data for limits when available
+            requests_limit = live_data.get('requests_limit')
+            period_seconds = api_info.get('default_period', 86400)
+            call_count = live_data.get('call_count', call_count)
         else:
             requests_limit = api_info.get('default_limit')  # May be None
             period_seconds = api_info.get('default_period', 86400)
@@ -751,6 +838,9 @@ async def get_api_utilization():
         else:
             reset_text = f"{minutes_until_reset}m"
 
+        # Use live period_label if available (e.g., "month" instead of "day")
+        period_label = live_data.get('period_label') if live_data else api_info.get('period_label', 'day')
+
         utilization.append({
             "api_id": api_id,
             "name": api_info['name'],
@@ -759,11 +849,15 @@ async def get_api_utilization():
             "call_count": call_count,
             "requests_limit": requests_limit,
             "utilization_pct": utilization_pct,
-            "period_label": api_info.get('period_label', 'day'),
+            "period_label": period_label,
             "reset_in": reset_text,
             "seconds_until_reset": int(seconds_until_reset),
             "has_custom_limit": custom_limit is not None,
-            "pricing": api_info.get('pricing', 'free')
+            "pricing": api_info.get('pricing', 'free'),
+            "last_called": last_called,
+            "rate_limit_type": api_info.get('rate_limit_type', 'none'),
+            "rate_limit_note": api_info.get('rate_limit_note', ''),
+            "usage_source": usage_source
         })
 
     # Sort by utilization (highest first, None last), then by name
@@ -829,7 +923,10 @@ async def get_single_api_utilization(api_id: str):
         "reset_in": reset_text,
         "seconds_until_reset": int(seconds_until_reset),
         "has_custom_limit": custom_limit is not None,
-        "default_limit": api_info.get('default_limit')
+        "default_limit": api_info.get('default_limit'),
+        "last_called": usage.get('last_called'),
+        "rate_limit_type": api_info.get('rate_limit_type', 'none'),
+        "rate_limit_note": api_info.get('rate_limit_note', '')
     }
 
 

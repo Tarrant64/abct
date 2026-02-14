@@ -9678,6 +9678,223 @@ body.privacy-mode a[data-href] {
     opacity: 0.8;
 }
 
+/* ===== Advanced Analytics Tab Styles ===== */
+
+.analytics-summary-cards {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+}
+
+.analytics-summary-card {
+    flex: 1;
+    min-width: 180px;
+    background: var(--card-bg, #1a1a2e);
+    border: 1px solid var(--border-color, #2a2a3e);
+    border-radius: 12px;
+    padding: 16px 20px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.analytics-summary-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.summary-card-label {
+    font-size: 12px;
+    color: var(--text-secondary, #888);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.summary-card-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary, #e0e0e0);
+    line-height: 1.2;
+}
+
+.summary-card-change {
+    margin-top: 4px;
+    font-size: 13px;
+}
+
+.change-indicator {
+    font-weight: 600;
+}
+
+.change-indicator.positive {
+    color: #4ade80;
+}
+
+.change-indicator.negative {
+    color: #f87171;
+}
+
+/* Chain Filter Tabs */
+.chain-filter-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    background: var(--card-bg, #1a1a2e);
+    padding: 6px;
+    border-radius: 10px;
+}
+
+.chain-filter-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    background: transparent;
+    color: var(--text-secondary, #888);
+    transition: all 0.2s;
+}
+
+.chain-filter-btn:hover {
+    background: var(--hover-bg, #2a2a3e);
+    color: var(--text-primary, #e0e0e0);
+}
+
+.chain-filter-btn.active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+/* Chain Financials Table */
+.chain-financials-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card-bg, #1a1a2e);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.chain-financials-table thead {
+    background: var(--hover-bg, #22223a);
+}
+
+.chain-financials-table th {
+    padding: 12px 16px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary, #888);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border-color, #2a2a3e);
+}
+
+.chain-financials-table td {
+    padding: 12px 16px;
+    font-size: 14px;
+    color: var(--text-primary, #e0e0e0);
+    border-bottom: 1px solid var(--border-color, #2a2a3e);
+}
+
+.chain-financials-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.chain-financials-table tbody tr:hover {
+    background: var(--hover-bg, #22223a);
+}
+
+.chain-financials-table .tradfi-row {
+    border-top: 2px solid var(--border-color, #2a2a3e);
+}
+
+.table-responsive {
+    overflow-x: auto;
+    border-radius: 12px;
+    border: 1px solid var(--border-color, #2a2a3e);
+}
+
+/* TradFi Notice */
+.tradfi-notice {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    background: var(--card-bg, #1a1a2e);
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    border-radius: 10px;
+    margin-top: 20px;
+    font-size: 14px;
+    color: var(--text-secondary, #888);
+}
+
+.tradfi-notice a {
+    color: #667eea;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.tradfi-notice a:hover {
+    text-decoration: underline;
+}
+
+.tradfi-notice-icon {
+    font-size: 20px;
+}
+
+/* Light Theme Overrides for Analytics */
+[data-theme="light"] .analytics-summary-card {
+    background: #ffffff;
+    border-color: #e5e7eb;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .analytics-summary-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .chain-filter-tabs {
+    background: #f3f4f6;
+}
+
+[data-theme="light"] .chain-filter-btn:hover {
+    background: #e5e7eb;
+    color: #1a1a2e;
+}
+
+[data-theme="light"] .chain-financials-table {
+    background: #ffffff;
+}
+
+[data-theme="light"] .chain-financials-table thead {
+    background: #f9fafb;
+}
+
+[data-theme="light"] .chain-financials-table th {
+    color: #6b7280;
+    border-bottom-color: #e5e7eb;
+}
+
+[data-theme="light"] .chain-financials-table td {
+    color: #1a1a2e;
+    border-bottom-color: #e5e7eb;
+}
+
+[data-theme="light"] .chain-financials-table tbody tr:hover {
+    background: #f9fafb;
+}
+
+[data-theme="light"] .table-responsive {
+    border-color: #e5e7eb;
+}
+
+[data-theme="light"] .tradfi-notice {
+    background: #ffffff;
+    border-color: rgba(102, 126, 234, 0.2);
+}
+
 .loading-indicator .spinner {
     display: inline-block;
     width: 40px;

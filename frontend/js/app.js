@@ -345,8 +345,8 @@ const CHAIN_CONFIG = {
     bitcoin:  { name: 'Bitcoin',  symbol: 'BTC',    logo: 'BTC',  icon: '₿', decimals: 8, priceKey: 'BTC',   balanceKey: 'total_btc',   nativeLabel: 'BTC' },
     ethereum: { name: 'Ethereum', symbol: 'ETH',    logo: 'ETH',  icon: 'Ξ', decimals: 8, priceKey: 'ETH',   balanceKey: 'total_eth',   nativeLabel: 'ETH' },
     solana:   { name: 'Solana',   symbol: 'SOL',    logo: 'SOL',  icon: '◎', decimals: 9, priceKey: 'SOL',   balanceKey: 'total_sol',   nativeLabel: 'SOL' },
-    polygon:  { name: 'Polygon',  symbol: 'POL',    logo: 'POL',  icon: '⬡', decimals: 6, priceKey: 'MATIC', balanceKey: 'total_matic', nativeLabel: 'POL' },
-    base:     { name: 'Base',     symbol: 'ETH',    logo: 'ETH',  icon: 'Ⓑ', decimals: 8, priceKey: 'ETH',   balanceKey: 'total_eth',   nativeLabel: 'ETH' },
+    polygon:  { name: 'Polygon',  symbol: 'POL',    logo: 'MATIC', icon: '⬡', decimals: 6, priceKey: 'MATIC', balanceKey: 'total_matic', nativeLabel: 'POL' },
+    base:     { name: 'Base',     symbol: 'ETH',    logo: null,    icon: 'Ⓑ', decimals: 8, priceKey: 'ETH',   balanceKey: 'total_eth',   nativeLabel: 'ETH', logoUrl: 'https://avatars.githubusercontent.com/u/108554348' },
     algorand: { name: 'Algorand', symbol: 'ALGO',   logo: 'ALGO', icon: 'Ⓐ', decimals: 6, priceKey: 'ALGO',  balanceKey: 'total_algo',  nativeLabel: 'ALGO' },
     bsc:       { name: 'BNB Chain',   symbol: 'BNB',  logo: 'BNB',  icon: '◆', decimals: 8, priceKey: 'BNB',   balanceKey: 'total_bnb',  nativeLabel: 'BNB' },
     arbitrum:  { name: 'Arbitrum',    symbol: 'ETH',  logo: 'ETH',  icon: '◇', decimals: 8, priceKey: 'ETH',   balanceKey: 'total_eth',  nativeLabel: 'ETH' },
@@ -413,7 +413,7 @@ function renderBlockchainCards(portfolioData) {
         html += `
             <div class="summary-card ${chain} clickable" data-chain="${chain}">
                 <div class="card-header">
-                    <img src="${getLogoKitUrl(cfg.logo, 32)}" alt="${cfg.name}" class="blockchain-logo">
+                    <img src="${cfg.logoUrl ? cfg.logoUrl + '?s=32' : getLogoKitUrl(cfg.logo, 32)}" alt="${cfg.name}" class="blockchain-logo">
                     <span>${cfg.name}</span>
                     <div class="price-info">
                         <span class="token-price" id="${chain}DynPrice">${priceStr}</span>
@@ -1343,8 +1343,11 @@ async function loadPortfolioSummary() {
         if (walletsSummary) {
             const chainIconMap = {
                 'Cardano': 'ADA', 'Bitcoin': 'BTC', 'Ethereum': 'ETH',
-                'Solana': 'SOL', 'Polygon': 'POL', 'Base': 'BASE', 'Algorand': 'ALGO',
+                'Solana': 'SOL', 'Polygon': 'MATIC', 'Algorand': 'ALGO',
                 'BNB Chain': 'BNB', 'Arbitrum': 'ARB', 'Avalanche': 'AVAX', 'Tron': 'TRX'
+            };
+            const chainCustomLogoMap = {
+                'Base': 'https://avatars.githubusercontent.com/u/108554348?s=28'
             };
             const chains = [];
             if (stakeGroupCount > 0) chains.push({ name: 'Cardano', count: stakeGroupCount, label: `${stakeGroupCount} stake key${stakeGroupCount !== 1 ? 's' : ''}` });
@@ -1362,8 +1365,9 @@ async function loadPortfolioSummary() {
             const maxVisible = 4;
             let summaryHtml = '<span class="chain-icons-stack">';
             chains.slice(0, maxVisible).forEach(chain => {
-                const symbol = chainIconMap[chain.name] || chain.name;
-                summaryHtml += `<img src="${getLogoKitUrl(symbol, 28)}" alt="${chain.name}" title="${chain.name}: ${chain.label}" class="chain-icon-circle" onerror="this.style.display='none'">`;
+                const customLogo = chainCustomLogoMap[chain.name];
+                const logoSrc = customLogo || getLogoKitUrl(chainIconMap[chain.name] || chain.name, 28);
+                summaryHtml += `<img src="${logoSrc}" alt="${chain.name}" title="${chain.name}: ${chain.label}" class="chain-icon-circle" onerror="this.style.display='none'">`;
             });
             if (chains.length > maxVisible) {
                 summaryHtml += `<span class="chain-icon-overflow" title="${chains.slice(maxVisible).map(c => c.name).join(', ')}">+${chains.length - maxVisible}</span>`;
@@ -1591,7 +1595,7 @@ function renderWalletsGrouped(cardanoStakeGroups, bitcoinWallets, ethereumWallet
             'bitcoin': 'https://img.logokit.com/crypto/BTC?token=pk_fr08287a4c625f400f32a9&size=24',
             'ethereum': 'https://img.logokit.com/crypto/ETH?token=pk_fr08287a4c625f400f32a9&size=24',
             'solana': 'https://img.logokit.com/crypto/SOL?token=pk_fr08287a4c625f400f32a9&size=24',
-            'polygon': 'https://img.logokit.com/crypto/POL?token=pk_fr08287a4c625f400f32a9&size=24',
+            'polygon': 'https://img.logokit.com/crypto/MATIC?token=pk_fr08287a4c625f400f32a9&size=24',
             'base': 'https://avatars.githubusercontent.com/u/108554348?s=24',
             'algorand': 'https://img.logokit.com/crypto/ALGO?token=pk_fr08287a4c625f400f32a9&size=24',
             'bsc': 'https://img.logokit.com/crypto/BNB?token=pk_fr08287a4c625f400f32a9&size=24',
