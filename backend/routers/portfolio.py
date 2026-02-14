@@ -789,6 +789,14 @@ async def get_unified_chart(
     }
     days = range_to_days.get(range, 7)
 
+    # Check cache first
+    chain_suffix = '_by_chain' if by_chain else ''
+    cache_key = f"unified_chart_{user_id}_{range}{chain_suffix}"
+    cached = await get_cache(cache_key, user_id=user_id)
+    if cached:
+        cached['from_cache'] = True
+        return cached
+
     from datetime import datetime, timedelta
     start_date = (datetime.utcnow() - timedelta(days=days)).strftime('%Y-%m-%d')
 
@@ -822,7 +830,9 @@ async def get_unified_chart(
         chain_list = sorted(chain_totals.keys(), key=lambda c: chain_totals[c], reverse=True)
 
         logger.info(f"Unified chart by_chain: {len(data)} points, {len(chain_list)} chains")
-        return {"data": data, "chain_list": chain_list, "coverage": _compute_chart_coverage(data)}
+        result = {"data": data, "chain_list": chain_list, "coverage": _compute_chart_coverage(data)}
+        await set_cache(cache_key, result, ttl_seconds=CACHE_TTL_WARM, user_id=user_id)
+        return result
 
     from database import get_unified_daily_totals
     wdb_rows = await get_unified_daily_totals(user_id, start_date=start_date)
@@ -862,7 +872,9 @@ async def get_unified_chart(
         })
 
     logger.info(f"Unified chart: {len(data)} points from wallet_daily_balances")
-    return {"data": data, "coverage": _compute_chart_coverage(data)}
+    result = {"data": data, "coverage": _compute_chart_coverage(data)}
+    await set_cache(cache_key, result, ttl_seconds=CACHE_TTL_WARM, user_id=user_id)
+    return result
 
 
 @router.post("/history/rebuild")
@@ -883,6 +895,11 @@ async def rebuild_wallet_history(
     from engine.materializer import materializer
 
     cleared = []
+
+    # Invalidate cached chart data for all ranges
+    for r in ('24h', '1w', '1m', '3m', '6m', '1y', 'all'):
+        await clear_cache(f"unified_chart_{user_id}_{r}", user_id=user_id)
+        await clear_cache(f"unified_chart_{user_id}_{r}_by_chain", user_id=user_id)
 
     # Clear existing balance data for this user
     async with aiosqlite.connect(DATABASE_PATH) as db:

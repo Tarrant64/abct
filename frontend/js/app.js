@@ -7004,6 +7004,20 @@ let v2Chart = null;
 let v2ChartMode = 'combined'; // 'combined' or 'by_chain'
 let v2PollInterval = null;
 
+const chartDataCache = {
+    _store: {},
+    ttl: 5 * 60 * 1000, // 5 minutes
+    key(range, mode) { return `${range}_${mode}`; },
+    get(range, mode) {
+        const entry = this._store[this.key(range, mode)];
+        if (!entry) return null;
+        if (Date.now() - entry.ts > this.ttl) { delete this._store[this.key(range, mode)]; return null; }
+        return entry.data;
+    },
+    set(range, mode, data) { this._store[this.key(range, mode)] = { data, ts: Date.now() }; },
+    clear() { this._store = {}; },
+};
+
 function toggleChartMode() {
     v2ChartMode = v2ChartMode === 'combined' ? 'by_chain' : 'combined';
     const btn = document.getElementById('chartModeToggle');
@@ -7027,15 +7041,22 @@ async function loadV2BalanceHistory(range) {
     const coverageText = document.getElementById('v2CoverageText');
 
     try {
-        let url = `${API_BASE}/portfolio/chart/unified?range=${range}`;
-        if (v2ChartMode === 'by_chain') url += '&by_chain=true';
+        // Check client-side cache first
+        let result = chartDataCache.get(range, v2ChartMode);
+        if (!result) {
+            let url = `${API_BASE}/portfolio/chart/unified?range=${range}`;
+            if (v2ChartMode === 'by_chain') url += '&by_chain=true';
 
-        const response = await authFetch(url);
-        if (!response.ok) {
-            console.error('V2 balance history API returned', response.status);
-            throw new Error(`API error ${response.status}`);
+            const response = await authFetch(url);
+            if (!response.ok) {
+                console.error('V2 balance history API returned', response.status);
+                throw new Error(`API error ${response.status}`);
+            }
+            result = await response.json();
+            if (result.data && result.data.length > 0) {
+                chartDataCache.set(range, v2ChartMode, result);
+            }
         }
-        const result = await response.json();
 
         if (result.data && result.data.length > 0) {
             if (emptyState) emptyState.style.display = 'none';
@@ -7413,7 +7434,8 @@ function pollV2CollectionStatus() {
                 v2PollInterval = null;
                 const progress = document.getElementById('v2CollectionProgress');
                 if (progress) progress.style.display = 'none';
-                // Reload chart and last-run info
+                // Clear cache and reload chart with fresh data
+                chartDataCache.clear();
                 const activeBtn = document.querySelector('.v2-range.active');
                 const range = activeBtn ? activeBtn.dataset.range : '1y';
                 await loadV2BalanceHistory(range);
