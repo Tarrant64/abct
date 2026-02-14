@@ -7270,58 +7270,15 @@ function renderV2ChartByChain(data, chainList, range) {
         });
     }
 
-    // Total line (bold, with fill)
-    const totalValues = data.map(d => d.total_value || 0);
-    datasets.unshift({
-        label: 'Total',
-        data: totalValues,
-        borderColor: colors.lineColor,
-        backgroundColor: colors.fillColor,
-        fill: true,
-        tension: 0.3,
-        pointRadius: 0,
-        pointHoverRadius: 6,
-        pointHoverBackgroundColor: colors.pointColor,
-        pointHoverBorderColor: colors.pointBorderColor,
-        pointHoverBorderWidth: 2,
-        borderWidth: 3,
-        _origColor: colors.lineColor,
-        _origWidth: 3,
-    });
-
-    // Y-axis range
-    const allValues = totalValues;
-    const minValue = Math.min(...allValues);
-    const maxValue = Math.max(...allValues);
+    // Y-axis range based on per-chain values only
+    const allChainValues = datasets.flatMap(ds => ds.data);
+    const minValue = Math.min(...allChainValues);
+    const maxValue = Math.max(...allChainValues);
     const valueRange = maxValue - minValue || 1;
     const padding = valueRange * 0.1;
 
-    // Gradient plugin for total line (dataset index 0) — skip when another chain is highlighted
-    const byChainGradientPlugin = {
-        id: 'byChainDynamicGradient',
-        afterLayout: (chart) => {
-            if (!colors.useGradientLine || !colors.gradientStops) return;
-            if (v2HighlightedChainIdx !== null && v2HighlightedChainIdx !== 0) return;
-            const area = chart.chartArea;
-            if (!area) return;
-            const drawCtx = chart.ctx;
-            const lineGrad = drawCtx.createLinearGradient(area.left, 0, area.right, 0);
-            const stops = colors.gradientStops;
-            for (let i = 0; i < stops.length; i++) {
-                lineGrad.addColorStop(i / (stops.length - 1), stops[i]);
-            }
-            chart.data.datasets[0].borderColor = lineGrad;
-            chart.data.datasets[0]._origColor = lineGrad;
-            const fillGrad = drawCtx.createLinearGradient(0, area.top, 0, area.bottom);
-            fillGrad.addColorStop(0, colors.fillColor);
-            fillGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            chart.data.datasets[0].backgroundColor = fillGrad;
-        }
-    };
-
     v2Chart = new Chart(ctx, {
         type: 'line',
-        plugins: [byChainGradientPlugin],
         data: { labels, datasets },
         options: {
             responsive: true,
@@ -7342,7 +7299,6 @@ function renderV2ChartByChain(data, chainList, range) {
                         const chart = legend.chart;
                         const idx = legendItem.datasetIndex;
                         const dimColor = (c) => typeof c === 'string' ? c + '30' : c;
-                        // If clicking the already-highlighted one, reset all
                         if (v2HighlightedChainIdx === idx) {
                             v2HighlightedChainIdx = null;
                             chart.data.datasets.forEach(ds => {
@@ -7354,11 +7310,7 @@ function renderV2ChartByChain(data, chainList, range) {
                             chart.data.datasets.forEach((ds, i) => {
                                 if (i === idx) {
                                     ds.borderColor = ds._origColor;
-                                    ds.borderWidth = i === 0 ? 3 : 4;
-                                } else if (i === 0) {
-                                    // Keep Total visible but dimmed
-                                    ds.borderWidth = 1.5;
-                                    ds.borderColor = dimColor(ds._origColor);
+                                    ds.borderWidth = 4;
                                 } else {
                                     ds.borderColor = dimColor(ds._origColor);
                                     ds.borderWidth = 1;
@@ -7379,7 +7331,7 @@ function renderV2ChartByChain(data, chainList, range) {
                         label: function(context) {
                             const label = context.dataset.label || '';
                             const val = context.parsed.y;
-                            if (val === 0 && label !== 'Total') return null;
+                            if (val === 0) return null;
                             return `  ${label}: ${formatUSD(val)}`;
                         }
                     }
