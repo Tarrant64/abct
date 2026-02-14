@@ -864,6 +864,7 @@
         <!-- Main Tab Navigation -->
         <div class="main-tab-nav">
             <button class="main-tab-btn active" onclick="switchMainTab('transactions')">Transactions</button>
+            <button class="main-tab-btn" onclick="switchMainTab('activity')">Activity</button>
             <button class="main-tab-btn" onclick="switchMainTab('analytics')">Analytics</button>
         </div>
 
@@ -997,9 +998,9 @@
         <!-- End Transactions Tab -->
 
         <!-- ===================== -->
-        <!-- ANALYTICS TAB         -->
+        <!-- ACTIVITY TAB          -->
         <!-- ===================== -->
-        <div id="analyticsTab" class="main-tab-content">
+        <div id="activityTab" class="main-tab-content">
             <section class="analytics-section">
                 <div class="section-header-inline">
                     <h2>Transaction Activity by Blockchain</h2>
@@ -1042,6 +1043,147 @@
                     </div>
                 </div>
             </section>
+        </div>
+        <!-- End Activity Tab -->
+
+        <!-- ===================== -->
+        <!-- ANALYTICS TAB         -->
+        <!-- ===================== -->
+        <div id="analyticsTab" class="main-tab-content">
+            <!-- Summary Cards -->
+            <div class="analytics-summary-cards" id="analyticsSummaryCards">
+                <div class="analytics-summary-card" id="summaryMarketCap">
+                    <div class="summary-card-label">Total Crypto Market Cap</div>
+                    <div class="summary-card-value privacy-sensitive" id="summaryMarketCapValue">--</div>
+                    <div class="summary-card-change" id="summaryMarketCapChange"></div>
+                </div>
+                <div class="analytics-summary-card" id="summaryBtcDominance">
+                    <div class="summary-card-label">BTC Dominance</div>
+                    <div class="summary-card-value" id="summaryBtcDominanceValue">--</div>
+                    <div class="summary-card-change" id="summaryBtcDominanceChange"></div>
+                </div>
+                <div class="analytics-summary-card" id="summaryTotalTvl">
+                    <div class="summary-card-label">Total DeFi TVL</div>
+                    <div class="summary-card-value privacy-sensitive" id="summaryTotalTvlValue">--</div>
+                    <div class="summary-card-change" id="summaryTotalTvlChange"></div>
+                </div>
+                <div class="analytics-summary-card" id="summaryDexVolume">
+                    <div class="summary-card-label">24h DEX Volume</div>
+                    <div class="summary-card-value privacy-sensitive" id="summaryDexVolumeValue">--</div>
+                    <div class="summary-card-change" id="summaryDexVolumeChange"></div>
+                </div>
+                <!-- TradFi cards (shown when Alpha Vantage is configured) -->
+                <div class="analytics-summary-card tradfi-card" id="summarySpy" style="display: none;">
+                    <div class="summary-card-label">S&P 500</div>
+                    <div class="summary-card-value privacy-sensitive" id="summarySpyValue">--</div>
+                    <div class="summary-card-change" id="summarySpyChange"></div>
+                </div>
+                <div class="analytics-summary-card tradfi-card" id="summaryCorrelation" style="display: none;">
+                    <div class="summary-card-label">BTC/S&P Correlation (30d)</div>
+                    <div class="summary-card-value" id="summaryCorrelationValue">--</div>
+                    <div class="summary-card-change" id="summaryCorrelationChange"></div>
+                </div>
+            </div>
+
+            <!-- Relative Strength Chart -->
+            <section class="analytics-section" id="relativeStrengthSection">
+                <div class="section-header-inline">
+                    <h2>Relative Strength</h2>
+                    <div class="period-buttons">
+                        <button class="period-btn" onclick="changeRelativeStrengthPeriod(7)">7D</button>
+                        <button class="period-btn active" onclick="changeRelativeStrengthPeriod(30)">30D</button>
+                        <button class="period-btn" onclick="changeRelativeStrengthPeriod(90)">90D</button>
+                    </div>
+                </div>
+                <div class="analytics-chart-container" id="relativeStrengthChartContainer" style="display: none;">
+                    <canvas id="relativeStrengthChart"></canvas>
+                </div>
+                <div id="relativeStrengthLoading" class="loading-indicator" style="display: none;">
+                    <span class="spinner"></span>
+                    <p>Loading relative strength data...</p>
+                </div>
+            </section>
+
+            <!-- Cross-Asset Comparison Table -->
+            <section class="analytics-section" id="crossAssetSection">
+                <div class="section-header-inline">
+                    <h2>Cross-Asset Comparison</h2>
+                </div>
+                <div class="table-responsive">
+                    <table class="chain-financials-table" id="crossAssetTable">
+                        <thead>
+                            <tr>
+                                <th>Asset</th>
+                                <th>Price</th>
+                                <th>7d Change</th>
+                                <th>30d Change</th>
+                                <th>TVL</th>
+                                <th>24h Fees</th>
+                                <th>DEX Volume</th>
+                            </tr>
+                        </thead>
+                        <tbody id="crossAssetTableBody">
+                            <tr><td colspan="7" style="text-align: center; color: #888; padding: 40px;">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Network Health & Economics -->
+            <section class="analytics-section" id="networkHealthSection">
+                <div class="section-header-inline">
+                    <h2>Network Health & Economics</h2>
+                </div>
+
+                <!-- Chain Filter Tabs -->
+                <div class="chain-filter-tabs" id="chainFilterTabs">
+                    <button class="chain-filter-btn active" onclick="filterAnalyticsChain('all')">All</button>
+                    <button class="chain-filter-btn" onclick="filterAnalyticsChain('Ethereum')">Ethereum</button>
+                    <button class="chain-filter-btn" onclick="filterAnalyticsChain('Solana')">Solana</button>
+                    <button class="chain-filter-btn" onclick="filterAnalyticsChain('Cardano')">Cardano</button>
+                    <button class="chain-filter-btn" onclick="filterAnalyticsChain('Bitcoin')">Bitcoin</button>
+                    <button class="chain-filter-btn" onclick="filterAnalyticsChain('Polygon')">Polygon</button>
+                    <button class="chain-filter-btn" onclick="filterAnalyticsChain('Base')">Base</button>
+                    <button class="chain-filter-btn" onclick="filterAnalyticsChain('Arbitrum')">Arbitrum</button>
+                    <button class="chain-filter-btn" onclick="filterAnalyticsChain('Avalanche')">Avalanche</button>
+                    <button class="chain-filter-btn" onclick="filterAnalyticsChain('BSC')">BNB Chain</button>
+                </div>
+
+                <!-- Chain Financials Table -->
+                <div class="table-responsive">
+                    <table class="chain-financials-table" id="chainFinancialsTable">
+                        <thead>
+                            <tr>
+                                <th>Chain</th>
+                                <th>TVL</th>
+                                <th>24h Fees</th>
+                                <th>24h Revenue</th>
+                                <th>DEX Volume</th>
+                                <th>TVL Change (1d)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="chainFinancialsBody">
+                            <tr><td colspan="6" style="text-align: center; color: #888; padding: 40px;">Loading chain metrics...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Fee History Chart (visible when single chain selected) -->
+                <div id="feeHistorySection" style="display: none;">
+                    <div class="section-header-inline" style="margin-top: 20px;">
+                        <h3 id="feeHistoryTitle">Fee History</h3>
+                    </div>
+                    <div class="analytics-chart-container" id="feeHistoryChartContainer">
+                        <canvas id="feeHistoryChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TradFi Not Configured Notice -->
+            <div id="tradfiNotConfigured" class="tradfi-notice" style="display: none;">
+                <span class="tradfi-notice-icon">📊</span>
+                <span>Want TradFi comparisons (S&P 500, NASDAQ, BTC ETF)? <a href="/settings.html#apis">Add Alpha Vantage API key in Settings</a></span>
+            </div>
         </div>
         <!-- End Analytics Tab -->
 
@@ -1293,6 +1435,8 @@
     <!-- Transaction scripts -->
     <script src="/static/js/transactions.js?v=1771077617"></script>
     <script src="/static/js/transaction-analytics.js?v=1771077617"></script>
+    <!-- Advanced Analytics tab -->
+    <script src="/static/js/analytics-tab.js?v=1771077617"></script>
 
     <script>
         // Main tab switching function
@@ -1300,22 +1444,34 @@
             // Update tab buttons
             document.querySelectorAll('.main-tab-btn').forEach(btn => {
                 btn.classList.remove('active');
-                if (btn.textContent.toLowerCase().replace(/\s+/g, '') === tabName.toLowerCase()) {
-                    btn.classList.add('active');
-                }
             });
-            if (event && event.target) event.target.classList.add('active');
+            if (event && event.target && event.target.classList) {
+                event.target.classList.add('active');
+            } else {
+                // Programmatic call - find matching button
+                document.querySelectorAll('.main-tab-btn').forEach(btn => {
+                    if (btn.textContent.toLowerCase().trim() === tabName.toLowerCase()) {
+                        btn.classList.add('active');
+                    }
+                });
+            }
 
             // Update tab content
             document.querySelectorAll('.main-tab-content').forEach(content => {
                 content.classList.remove('active');
             });
 
-            document.getElementById(tabName + 'Tab').classList.add('active');
+            const tabEl = document.getElementById(tabName + 'Tab');
+            if (tabEl) tabEl.classList.add('active');
 
-            // Initialize analytics chart when switching to analytics tab
-            if (tabName === 'analytics' && typeof initAnalyticsChart === 'function' && !analyticsChart) {
+            // Initialize activity chart when switching to activity tab
+            if (tabName === 'activity' && typeof initAnalyticsChart === 'function' && !analyticsChart) {
                 initAnalyticsChart();
+            }
+
+            // Initialize advanced analytics tab on first open
+            if (tabName === 'analytics' && typeof initAnalyticsTab === 'function') {
+                initAnalyticsTab();
             }
 
             // Update URL hash
@@ -1337,9 +1493,14 @@
             }
 
             // Handle hash-based tab navigation
-            const hash = window.location.hash.replace('#', '');
-            if (hash && document.getElementById(hash + 'Tab')) {
+            let hash = window.location.hash.replace('#', '');
+            // Valid tab names
+            const validTabs = ['transactions', 'activity', 'analytics'];
+            if (hash && validTabs.includes(hash)) {
                 switchMainTab(hash);
+            } else if (hash && !validTabs.includes(hash)) {
+                // Unknown hash - default to transactions
+                switchMainTab('transactions');
             }
         });
     </script>

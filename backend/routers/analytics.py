@@ -1,0 +1,211 @@
+"""
+Analytics Router - Advanced on-chain metrics, market benchmarks, TradFi comparisons
+
+Endpoints:
+    GET /analytics/chain-metrics              - All 9 chains: TVL, fees, revenue, DEX volume
+    GET /analytics/chain-metrics/{chain}       - Single chain detailed metrics
+    GET /analytics/chain-fees-history/{chain}  - Daily fee history for chart
+    GET /analytics/market-summary              - Crypto market cap, BTC dominance, total TVL, DEX volume
+    GET /analytics/relative-strength           - Normalized % change for major assets
+    GET /analytics/tradfi/summary              - TradFi index data (requires Alpha Vantage)
+    GET /analytics/tradfi/history/{symbol}     - TradFi daily close prices
+    GET /analytics/tradfi/correlation          - BTC vs S&P 500 correlation
+"""
+
+import logging
+import os
+import sys
+from typing import Optional
+from fastapi import APIRouter, Depends, Query, HTTPException
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from auth_utils import verify_session
+from services.chain_analytics import chain_analytics_service, SUPPORTED_CHAINS
+
+router = APIRouter(prefix="/analytics", tags=["analytics"])
+logger = logging.getLogger(__name__)
+
+
+@router.get("/chain-metrics")
+async def get_chain_metrics(user_id: int = Depends(verify_session)):
+    """Get TVL, fees, revenue, and DEX volume for all supported chains"""
+    try:
+        data = await chain_analytics_service.get_chain_overview()
+        return {"success": True, "chains": data.get("chains", {}), "timestamp": data.get("timestamp")}
+    except Exception as e:
+        logger.error(f"Error fetching chain metrics: {e}")
+        return {"success": False, "error": str(e), "chains": {}}
+
+
+@router.get("/chain-metrics/{chain}")
+async def get_chain_metric(chain: str, user_id: int = Depends(verify_session)):
+    """Get detailed metrics for a single chain"""
+    if chain not in SUPPORTED_CHAINS:
+        raise HTTPException(status_code=400, detail=f"Unsupported chain: {chain}. Supported: {SUPPORTED_CHAINS}")
+
+    try:
+        data = await chain_analytics_service.get_chain_overview()
+        chain_data = data.get("chains", {}).get(chain, {})
+        return {"success": True, "chain": chain, "metrics": chain_data}
+    except Exception as e:
+        logger.error(f"Error fetching metrics for {chain}: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/chain-fees-history/{chain}")
+async def get_chain_fees_history(
+    chain: str,
+    days: int = Query(default=30, ge=7, le=365),
+    user_id: int = Depends(verify_session)
+):
+    """Get daily fee history for a specific chain (for charting)"""
+    if chain not in SUPPORTED_CHAINS:
+        raise HTTPException(status_code=400, detail=f"Unsupported chain: {chain}")
+
+    try:
+        history = await chain_analytics_service.get_chain_fees_history(chain, days)
+        return {"success": True, "chain": chain, "days": days, "history": history}
+    except Exception as e:
+        logger.error(f"Error fetching fee history for {chain}: {e}")
+        return {"success": False, "error": str(e), "history": []}
+
+
+@router.get("/market-summary")
+async def get_market_summary(user_id: int = Depends(verify_session)):
+    """Get combined crypto market summary: market cap, BTC dominance, total TVL, total DEX volume"""
+    try:
+        from services.http_client import get_client
+        import asyncio
+
+        # Fetch CoinGecko global data + DefiLlama totals in parallel
+        async def fetch_global():
+            client = get_client("coingecko", timeout=10.0)
+            resp = await client.get("https://api.coingecko.com/api/v3/global")
+            if resp.status_code == 200:
+                return resp.json().get("data", {})
+            return {}
+
+        async def fetch_tvl():
+            return await chain_analytics_service.get_total_tvl()
+
+        async def fetch_dex_volume():
+            return await chain_analytics_service.get_total_dex_volume()
+
+        global_data, total_tvl, dex_volume = await asyncio.gather(
+            fetch_global(), fetch_tvl(), fetch_dex_volume()
+        )
+
+        return {
+            "success": True,
+            "total_market_cap_usd": global_data.get("total_market_cap", {}).get("usd", 0),
+            "market_cap_change_24h": global_data.get("market_cap_change_percentage_24h_usd", 0),
+            "btc_dominance": global_data.get("market_cap_percentage", {}).get("btc", 0),
+            "total_defi_tvl": total_tvl,
+            "total_dex_volume_24h": dex_volume,
+        }
+    except Exception as e:
+        logger.error(f"Error fetching market summary: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/relative-strength")
+async def get_relative_strength(
+    days: int = Query(default=30, ge=7, le=90),
+    user_id: int = Depends(verify_session)
+):
+    """Get normalized % change for major crypto assets over time"""
+    try:
+        from services.pricing import pricing_service
+
+        symbols = ['BTC', 'ETH', 'SOL', 'ADA', 'POL']
+        historical = await pricing_service.get_historical_prices(symbols, days)
+
+        # Normalize each asset to % change from day 0
+        result = {}
+        for symbol, prices in historical.items():
+            if not prices:
+                continue
+            base_price = prices[0].get('price', 0)
+            if base_price <= 0:
+                continue
+
+            result[symbol] = [
+                {
+                    'date': p.get('date', ''),
+                    'time': p.get('time', ''),
+                    'change_pct': ((p.get('price', 0) - base_price) / base_price) * 100
+                }
+                for p in prices
+            ]
+
+        return {"success": True, "days": days, "assets": result}
+    except Exception as e:
+        logger.error(f"Error fetching relative strength: {e}")
+        return {"success": False, "error": str(e), "assets": {}}
+
+
+# ---- TradFi Endpoints (Phase 3) ----
+
+@router.get("/tradfi/summary")
+async def get_tradfi_summary(user_id: int = Depends(verify_session)):
+    """Get TradFi index data (S&P 500, NASDAQ, Dow, BTC ETF). Requires Alpha Vantage API key."""
+    try:
+        from services.tradfi_data import tradfi_service
+        if not await tradfi_service.is_configured():
+            return {"success": False, "configured": False, "message": "Alpha Vantage API key not configured"}
+
+        data = await tradfi_service.get_all_indices()
+        return {"success": True, "configured": True, "indices": data}
+    except ImportError:
+        return {"success": False, "configured": False, "message": "TradFi service not available"}
+    except Exception as e:
+        logger.error(f"Error fetching TradFi summary: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/tradfi/history/{symbol}")
+async def get_tradfi_history(
+    symbol: str,
+    days: int = Query(default=30, ge=7, le=365),
+    user_id: int = Depends(verify_session)
+):
+    """Get daily close prices for a TradFi symbol"""
+    try:
+        from services.tradfi_data import tradfi_service
+        if not await tradfi_service.is_configured():
+            return {"success": False, "configured": False, "message": "Alpha Vantage API key not configured"}
+
+        data = await tradfi_service.get_daily_data(symbol.upper())
+        if not data:
+            raise HTTPException(status_code=404, detail=f"No data found for {symbol}")
+
+        # Trim to requested days
+        history = data.get('history', [])[-days:]
+        return {"success": True, "symbol": symbol.upper(), "history": history}
+    except ImportError:
+        return {"success": False, "configured": False}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching TradFi history for {symbol}: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/tradfi/correlation")
+async def get_tradfi_correlation(
+    days: int = Query(default=30, ge=7, le=365),
+    user_id: int = Depends(verify_session)
+):
+    """Get BTC vs S&P 500 correlation coefficient"""
+    try:
+        from services.tradfi_data import tradfi_service
+        if not await tradfi_service.is_configured():
+            return {"success": False, "configured": False, "message": "Alpha Vantage API key not configured"}
+
+        correlation = await tradfi_service.get_btc_spy_correlation(days)
+        return {"success": True, "days": days, "correlation": correlation}
+    except ImportError:
+        return {"success": False, "configured": False}
+    except Exception as e:
+        logger.error(f"Error computing correlation: {e}")
+        return {"success": False, "error": str(e)}

@@ -39,6 +39,7 @@ MORALIS_API_KEY = os.getenv("MORALIS_API_KEY", "")
 ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY", "")
 CMC_API_KEY = os.getenv("CMC_API_KEY", "")
 GRAPH_API_KEY = os.getenv("GRAPH_API_KEY", "")
+ALPHAVANTAGE_API_KEY = os.getenv("ALPHAVANTAGE_API_KEY", "")
 
 # LogoKit API Configuration
 LOGOKIT_API_KEY = os.getenv('LOGOKIT_API_KEY', 'LOGOKIT_KEY_REMOVED')
