@@ -833,8 +833,7 @@
 
         <!-- Tab Navigation -->
         <div class="assets-tab-nav">
-            <button class="assets-tab-btn active" data-tab="blockchain" onclick="switchAssetsTab('blockchain')">Blockchain</button>
-            <button class="assets-tab-btn" data-tab="wallets" onclick="switchAssetsTab('wallets')">Self-Custody Wallets</button>
+            <button class="assets-tab-btn active" data-tab="wallets" onclick="switchAssetsTab('wallets')">Self-Custody Wallets</button>
             <button class="assets-tab-btn" data-tab="manageWallets" onclick="switchAssetsTab('manageWallets')">Manage Wallets</button>
             <button class="assets-tab-btn" data-tab="exchanges" onclick="switchAssetsTab('exchanges')">Exchanges</button>
             <button class="assets-tab-btn" data-tab="defi" onclick="switchAssetsTab('defi')">DeFi</button>
@@ -842,15 +841,8 @@
             <button class="assets-tab-btn" data-tab="tokens" onclick="switchAssetsTab('tokens')">Custom Tokens</button>
         </div>
 
-        <!-- Blockchain Summary Tab -->
-        <div id="blockchainTab" class="assets-tab-content active">
-            <div class="summary-cards" id="blockchainCards">
-                <!-- Dynamically populated by renderBlockchainCards() -->
-            </div>
-        </div>
-
         <!-- Self-Custody Wallets Tab -->
-        <div id="walletsTab" class="assets-tab-content">
+        <div id="walletsTab" class="assets-tab-content active">
             <section class="wallets-section">
                 <div class="section-header" onclick="toggleSection(this)">
                     <h2>Self-Custody Wallets</h2>
@@ -1431,7 +1423,7 @@ base:0x789..." oninput="previewImport()"></textarea>
     <script src="/static/js/wallet-management.js?v=1771077617"></script>
     <script>
         // Assets page tab switching
-        const ASSETS_TABS = ['blockchain', 'wallets', 'manageWallets', 'exchanges', 'defi', 'governance', 'tokens'];
+        const ASSETS_TABS = ['wallets', 'manageWallets', 'exchanges', 'defi', 'governance', 'tokens'];
 
         let manageWalletsLoaded = false;
 
@@ -1459,6 +1451,11 @@ base:0x789..." oninput="previewImport()"></textarea>
         // Handle hash-based tab switching on load
         document.addEventListener('DOMContentLoaded', () => {
             const hash = window.location.hash.replace('#', '');
+            // Redirect old #blockchain hash to data page
+            if (hash === 'blockchain') {
+                window.location.href = '/data.html#blockchains';
+                return;
+            }
             if (ASSETS_TABS.includes(hash)) {
                 switchAssetsTab(hash);
             }

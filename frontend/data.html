@@ -10,6 +10,8 @@
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <!-- Chart.js for analytics -->
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+    <!-- TradingView Lightweight Charts for price charts -->
+    <script defer src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
@@ -863,15 +865,16 @@
 
         <!-- Main Tab Navigation -->
         <div class="main-tab-nav">
-            <button class="main-tab-btn active" onclick="switchMainTab('transactions')">Transactions</button>
+            <button class="main-tab-btn active" onclick="switchMainTab('blockchains')">Blockchains</button>
             <button class="main-tab-btn" onclick="switchMainTab('activity')">Activity</button>
+            <button class="main-tab-btn" onclick="switchMainTab('transactions')">Transactions</button>
             <button class="main-tab-btn" onclick="switchMainTab('analytics')">Analytics</button>
         </div>
 
         <!-- ===================== -->
         <!-- TRANSACTIONS TAB      -->
         <!-- ===================== -->
-        <div id="transactionsTab" class="main-tab-content active">
+        <div id="transactionsTab" class="main-tab-content">
             <!-- Filter Bar -->
             <section class="filter-section">
                 <div class="section-header-inline">
@@ -1187,6 +1190,133 @@
         </div>
         <!-- End Analytics Tab -->
 
+        <!-- ===================== -->
+        <!-- BLOCKCHAINS TAB       -->
+        <!-- ===================== -->
+        <div id="blockchainsTab" class="main-tab-content active">
+            <!-- Blockchain Cards Grid -->
+            <section>
+                <div class="section-header-inline">
+                    <h2>Blockchain Overview</h2>
+                </div>
+                <div class="summary-cards" id="blockchainCards">
+                    <!-- Dynamically populated by renderBlockchainCards() -->
+                </div>
+            </section>
+
+            <!-- Coin Allocation -->
+            <section style="margin-top: 30px;">
+                <div class="analytics-chart-container">
+                    <h3 class="analytics-title">Coin Allocation<span class="analytics-refresh-indicator" id="coinRefreshIndicator" title="Refreshing data..."></span></h3>
+                    <div class="analytics-content">
+                        <div class="analytics-chart-wrapper">
+                            <canvas id="coinAllocationChart"></canvas>
+                        </div>
+                        <div class="analytics-legend" id="coinAllocationLegend"></div>
+                    </div>
+                    <div class="analytics-selection-info" id="coinSelectionInfo"></div>
+                </div>
+            </section>
+
+            <!-- Category Allocation -->
+            <section style="margin-top: 30px;">
+                <div class="analytics-chart-container">
+                    <h3 class="analytics-title">Asset Allocation by Category<span class="analytics-refresh-indicator" id="categoryRefreshIndicator" title="Refreshing data..."></span></h3>
+                    <div class="analytics-content">
+                        <div class="analytics-chart-wrapper">
+                            <canvas id="categoryAllocationChart"></canvas>
+                        </div>
+                        <div class="analytics-legend" id="categoryAllocationLegend"></div>
+                    </div>
+                    <div class="analytics-selection-info" id="categorySelectionInfo"></div>
+                </div>
+            </section>
+
+            <!-- Price Charts -->
+            <section style="margin-top: 30px;">
+                <div class="price-charts-container">
+                    <!-- Left Side: Blockchain Selector -->
+                    <div class="blockchain-selector">
+                        <div class="blockchain-btn active" data-blockchain="cardano" onclick="selectBlockchain('cardano')">
+                            <img src="https://img.logokit.com/crypto/ADA?token=LOGOKIT_KEY_REMOVED&size=32" alt="Cardano" class="chain-logo" onerror="this.style.display='none';">
+                            <span class="chain-name">Cardano</span>
+                            <span class="chain-ticker">ADA</span>
+                        </div>
+                        <div class="blockchain-btn" data-blockchain="bitcoin" onclick="selectBlockchain('bitcoin')">
+                            <img src="https://img.logokit.com/crypto/BTC?token=LOGOKIT_KEY_REMOVED&size=32" alt="Bitcoin" class="chain-logo" onerror="this.style.display='none';">
+                            <span class="chain-name">Bitcoin</span>
+                            <span class="chain-ticker">BTC</span>
+                        </div>
+                        <div class="blockchain-btn" data-blockchain="ethereum" onclick="selectBlockchain('ethereum')">
+                            <img src="https://img.logokit.com/crypto/ETH?token=LOGOKIT_KEY_REMOVED&size=32" alt="Ethereum" class="chain-logo" onerror="this.style.display='none';">
+                            <span class="chain-name">Ethereum</span>
+                            <span class="chain-ticker">ETH</span>
+                        </div>
+                        <div class="blockchain-btn" data-blockchain="solana" onclick="selectBlockchain('solana')">
+                            <img src="https://img.logokit.com/crypto/SOL?token=LOGOKIT_KEY_REMOVED&size=32" alt="Solana" class="chain-logo" onerror="this.style.display='none';">
+                            <span class="chain-name">Solana</span>
+                            <span class="chain-ticker">SOL</span>
+                        </div>
+                        <div class="blockchain-btn" data-blockchain="polygon" onclick="selectBlockchain('polygon')">
+                            <img src="https://img.logokit.com/crypto/POL?token=LOGOKIT_KEY_REMOVED&size=32" alt="Polygon" class="chain-logo" onerror="this.style.display='none';">
+                            <span class="chain-name">Polygon</span>
+                            <span class="chain-ticker">POL</span>
+                        </div>
+                        <div class="blockchain-btn" data-blockchain="base" onclick="selectBlockchain('base')">
+                            <img src="https://img.logokit.com/crypto/ETH?token=LOGOKIT_KEY_REMOVED&size=32" alt="Base" class="chain-logo" onerror="this.style.display='none';">
+                            <span class="chain-name">Base</span>
+                            <span class="chain-ticker">ETH</span>
+                        </div>
+                    </div>
+
+                    <!-- Right Side: Chart Area -->
+                    <div class="price-chart-area">
+                        <div class="chart-header">
+                            <div class="chart-title-wrapper">
+                                <h3 id="chartTitle">Cardano (ADA)</h3>
+                                <div class="chart-stats">
+                                    <span id="chartPrice" class="price">$0.00</span>
+                                    <span id="chartChange" class="change">--</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TradingView Chart Container -->
+                        <div id="priceChart" class="price-chart-wrapper"></div>
+
+                        <!-- Timeframe Selector -->
+                        <div class="timeframe-selector">
+                            <button class="timeframe-btn" data-timeframe="1H" onclick="selectTimeframe('1H')">1H</button>
+                            <button class="timeframe-btn" data-timeframe="4H" onclick="selectTimeframe('4H')">4H</button>
+                            <button class="timeframe-btn active" data-timeframe="1D" onclick="selectTimeframe('1D')">1D</button>
+                            <button class="timeframe-btn" data-timeframe="7D" onclick="selectTimeframe('7D')">7D</button>
+                            <button class="timeframe-btn" data-timeframe="3M" onclick="selectTimeframe('3M')">3M</button>
+                            <button class="timeframe-btn" data-timeframe="1Y" onclick="selectTimeframe('1Y')">1Y</button>
+                            <button class="timeframe-btn" data-timeframe="ALL" onclick="selectTimeframe('ALL')">ALL</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Portfolio Heatmap -->
+            <section style="margin-top: 30px;" id="heatmapSection">
+                <div class="heatmap-slide-inner">
+                    <div class="heatmap-slide-header">
+                        <h3 class="analytics-title">Portfolio Heatmap</h3>
+                        <div class="heatmap-legend">
+                            <span class="heatmap-legend-item neg-heavy"></span><span>-10%</span>
+                            <span class="heatmap-legend-item neg-light"></span><span>-5%</span>
+                            <span class="heatmap-legend-item neutral"></span><span>0%</span>
+                            <span class="heatmap-legend-item pos-light"></span><span>+5%</span>
+                            <span class="heatmap-legend-item pos-heavy"></span><span>+10%</span>
+                        </div>
+                    </div>
+                    <div class="heatmap-container" id="heatmapContainer"></div>
+                </div>
+            </section>
+        </div>
+        <!-- End Blockchains Tab -->
+
         <!-- Processing Modal (used during transaction refresh) -->
         <div id="processingModal" class="modal" style="display: none;">
             <div class="modal-content">
@@ -1474,6 +1604,11 @@
                 initAnalyticsTab();
             }
 
+            // Initialize blockchains tab on first open
+            if (tabName === 'blockchains' && typeof initBlockchainsTab === 'function') {
+                initBlockchainsTab();
+            }
+
             // Update URL hash
             if (history.replaceState) {
                 history.replaceState(null, null, '#' + tabName);
@@ -1495,12 +1630,12 @@
             // Handle hash-based tab navigation
             let hash = window.location.hash.replace('#', '');
             // Valid tab names
-            const validTabs = ['transactions', 'activity', 'analytics'];
+            const validTabs = ['transactions', 'activity', 'analytics', 'blockchains'];
             if (hash && validTabs.includes(hash)) {
                 switchMainTab(hash);
-            } else if (hash && !validTabs.includes(hash)) {
-                // Unknown hash - default to transactions
-                switchMainTab('transactions');
+            } else {
+                // Default to blockchains tab (init it since it's active by default)
+                switchMainTab('blockchains');
             }
         });
     </script>
