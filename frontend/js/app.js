@@ -379,7 +379,7 @@ function renderBlockchainCards(portfolioData) {
     chains.sort((a, b) => b.totalUsd - a.totalUsd);
 
     if (chains.length === 0) {
-        setSafeHTML(container, '<div class="empty-state" style="grid-column: 1/-1; text-align: center; padding: 40px;"><p>No wallets configured. Add wallets in <a href="/wallets.html">Manage Wallets</a>.</p></div>');
+        setSafeHTML(container, '<div class="empty-state" style="grid-column: 1/-1; text-align: center; padding: 40px;"><p>No wallets configured. Add wallets in <a href="/assets.html#manageWallets">Manage Wallets</a>.</p></div>');
         return;
     }
 
@@ -3271,8 +3271,24 @@ async function loadDefiGovernance() {
     }
 }
 
-// Render consolidated DeFi & Governance section
+// Chain badge helper (shared across DeFi/Governance sections)
+function getGovChainBadge(chain) {
+    const badges = {
+        'cardano': '<span class="chain-badge cardano" title="Cardano">ADA</span>',
+        'ethereum': '<span class="chain-badge ethereum" title="Ethereum">ETH</span>',
+        'solana': '<span class="chain-badge solana" title="Solana">SOL</span>'
+    };
+    return badges[chain] || badges['cardano'];
+}
+
+// Render consolidated DeFi & Governance section (calls both sub-renderers)
 function renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeStablecoins = [], adaDelegation = null) {
+    renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStablecoins, adaDelegation);
+    renderGovernanceContent(defiData);
+}
+
+// Render DeFi tab: Staked Positions + Stablecoins + Other DeFi Tokens
+function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStablecoins = [], adaDelegation = null) {
     const content = document.getElementById('defiGovernanceContent');
     const summary = document.getElementById('defiGovernanceSummary');
 
@@ -3280,20 +3296,8 @@ function renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeS
 
     let html = '';
     let totalStakedValue = 0;
-    let totalUnstakedValue = 0;
     let totalStableValue = 0;
     let stakedCount = 0;
-    let governanceTokenCount = 0;
-
-    // Chain badge helper (shared across all sections)
-    const getGovChainBadge = (chain) => {
-        const badges = {
-            'cardano': '<span class="chain-badge cardano" title="Cardano">ADA</span>',
-            'ethereum': '<span class="chain-badge ethereum" title="Ethereum">ETH</span>',
-            'solana': '<span class="chain-badge solana" title="Solana">SOL</span>'
-        };
-        return badges[chain] || badges['cardano'];
-    };
 
     // ========================================
     // SECTION 1: STAKED POSITIONS
@@ -3436,53 +3440,6 @@ function renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeS
                     </div>
                     <div class="card-amount">${formatCryptoBlur(formattedQty, displayName)}</div>
                     <div class="card-value">${usdValue > 0 ? formatUSDBlur(usdValue) : '--'}</div>
-                </div>
-            `;
-        }
-
-        html += `</div></div>`;
-    }
-
-    // ========================================
-    // SECTION 2: GOVERNANCE TOKENS (Unstaked)
-    // ========================================
-    const governancePositions = defiData.positions_by_category?.['Governance Tokens'] || [];
-
-    if (governancePositions.length > 0) {
-        html += `<div class="defi-gov-subsection">
-            <div class="defi-gov-subsection-header">
-                <span class="subsection-icon">🏛️</span>
-                <span class="subsection-title">Governance Tokens (Unstaked)</span>
-            </div>
-            <div class="defi-gov-list">`;
-
-        // Sort by value descending
-        governancePositions.sort((a, b) => {
-            const valueA = a.quantity * (prices[a.asset_name] || 0);
-            const valueB = b.quantity * (prices[b.asset_name] || 0);
-            return valueB - valueA;
-        });
-
-        for (const pos of governancePositions) {
-            const tokenPrice = prices[pos.asset_name] || 0;
-            const usdValue = pos.quantity * tokenPrice;
-            totalUnstakedValue += usdValue;
-            governanceTokenCount++;
-
-            const govInfo = GOVERNANCE_LINKS[pos.asset_name];
-            // Default to cardano for now; can be extended when we support other chains
-            const chain = pos.blockchain || 'cardano';
-
-            // Get token logo with fallback
-            const tokenLogoUrl = `https://img.logokit.com/crypto/${pos.asset_name}?token=LOGOKIT_KEY_REMOVED&size=32`;
-
-            html += `
-                <div class="defi-gov-line">
-                    <img src="${tokenLogoUrl}" alt="${pos.asset_name}" class="token-logo-line" onerror="this.style.display='none'">
-                    <span class="line-token">${getGovChainBadge(chain)} ${pos.asset_name}</span>
-                    <span class="line-amount">${blurValue(pos.quantity_formatted)}</span>
-                    <span class="line-value">${usdValue > 0 ? formatUSDBlur(usdValue) : '--'}</span>
-                    ${govInfo ? `<a href="${govInfo.url}" target="_blank" rel="noopener" class="gov-vote-link" title="Vote with ${pos.asset_name}">Vote</a>` : '<span class="gov-vote-placeholder"></span>'}
                 </div>
             `;
         }
@@ -3695,26 +3652,97 @@ function renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeS
 
     // Empty state
     if (html === '') {
-        html = '<p class="empty-state">No DeFi positions or governance tokens found.</p>';
+        html = '<p class="empty-state">No DeFi positions found.</p>';
     }
 
     setSafeHTML(content, html);
 
-    // Update summary
+    // Update DeFi summary
     if (summary) {
-        const totalValue = totalStakedValue + totalUnstakedValue + totalStableValue;
+        const totalValue = totalStakedValue + totalStableValue;
         let summaryParts = [];
 
         if (stakedCount > 0) {
             summaryParts.push(`${stakedCount} staked`);
         }
-        if (governanceTokenCount > 0) {
-            summaryParts.push(`${governanceTokenCount} gov tokens`);
-        }
 
         setSafeHTML(summary, `
             <span class="defi-gov-count">${summaryParts.join(' · ') || 'No positions'}</span>
             <span class="defi-gov-total">${formatUSDBlur(totalValue)}</span>
+        `);
+    }
+}
+
+// Render Governance tab: Governance Tokens (Unstaked)
+function renderGovernanceContent(defiData) {
+    const content = document.getElementById('governanceContent');
+    const summary = document.getElementById('governanceSummary');
+
+    if (!content) return;
+
+    let html = '';
+    let totalUnstakedValue = 0;
+    let governanceTokenCount = 0;
+
+    const governancePositions = defiData.positions_by_category?.['Governance Tokens'] || [];
+
+    if (governancePositions.length > 0) {
+        html += `<div class="defi-gov-subsection">
+            <div class="defi-gov-subsection-header">
+                <span class="subsection-icon">\uD83C\uDFDB\uFE0F</span>
+                <span class="subsection-title">Governance Tokens (Unstaked)</span>
+            </div>
+            <div class="defi-gov-list">`;
+
+        // Sort by value descending
+        governancePositions.sort((a, b) => {
+            const valueA = a.quantity * (prices[a.asset_name] || 0);
+            const valueB = b.quantity * (prices[b.asset_name] || 0);
+            return valueB - valueA;
+        });
+
+        for (const pos of governancePositions) {
+            const tokenPrice = prices[pos.asset_name] || 0;
+            const usdValue = pos.quantity * tokenPrice;
+            totalUnstakedValue += usdValue;
+            governanceTokenCount++;
+
+            const govInfo = GOVERNANCE_LINKS[pos.asset_name];
+            const chain = pos.blockchain || 'cardano';
+
+            const tokenLogoUrl = `https://img.logokit.com/crypto/${pos.asset_name}?token=LOGOKIT_KEY_REMOVED&size=32`;
+
+            html += `
+                <div class="defi-gov-line">
+                    <img src="${tokenLogoUrl}" alt="${pos.asset_name}" class="token-logo-line" onerror="this.style.display='none'">
+                    <span class="line-token">${getGovChainBadge(chain)} ${pos.asset_name}</span>
+                    <span class="line-amount">${blurValue(pos.quantity_formatted)}</span>
+                    <span class="line-value">${usdValue > 0 ? formatUSDBlur(usdValue) : '--'}</span>
+                    ${govInfo ? `<a href="${govInfo.url}" target="_blank" rel="noopener" class="gov-vote-link" title="Vote with ${pos.asset_name}">Vote</a>` : '<span class="gov-vote-placeholder"></span>'}
+                </div>
+            `;
+        }
+
+        html += `</div></div>`;
+    }
+
+    // Empty state
+    if (html === '') {
+        html = '<p class="empty-state">No governance tokens found.</p>';
+    }
+
+    setSafeHTML(content, html);
+
+    // Update governance summary
+    if (summary) {
+        let summaryParts = [];
+        if (governanceTokenCount > 0) {
+            summaryParts.push(`${governanceTokenCount} tokens`);
+        }
+
+        setSafeHTML(summary, `
+            <span class="governance-count">${summaryParts.join(' · ') || 'No tokens'}</span>
+            <span class="governance-total">${formatUSDBlur(totalUnstakedValue)}</span>
         `);
     }
 }
@@ -8065,7 +8093,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         Promise.allSettled([
             loadExchangeData(),
             loadDefiGovernance(),
-            loadCustomTokens()
+            loadCustomTokens(),
+            preFetchAssetBreakdowns()
         ]).then(() => {
             console.log('[Assets] Data loading complete');
         });
@@ -8893,12 +8922,12 @@ function layoutRow(row, rect, results) {
 }
 
 function nextAnalyticsSlide() {
-    currentAnalyticsSlide = (currentAnalyticsSlide + 1) % 5;
+    currentAnalyticsSlide = (currentAnalyticsSlide + 1) % 4;
     updateAnalyticsSlide();
 }
 
 function previousAnalyticsSlide() {
-    currentAnalyticsSlide = (currentAnalyticsSlide - 1 + 5) % 5;
+    currentAnalyticsSlide = (currentAnalyticsSlide - 1 + 4) % 4;
     updateAnalyticsSlide();
 }
 
@@ -8931,7 +8960,7 @@ function updateAnalyticsSlide() {
     slider.style.transform = `translateX(-${currentAnalyticsSlide * 100}%)`;
 
     // Load/refresh analytics data when switching to chart or heatmap slides
-    if (currentAnalyticsSlide > 0 && currentAnalyticsSlide !== 3) {
+    if (currentAnalyticsSlide >= 0 && currentAnalyticsSlide !== 2) {
         if (!analyticsData) {
             loadAnalyticsData();
         }

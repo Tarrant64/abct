@@ -6,9 +6,9 @@
     <title>ABCT - Manage APIs</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771009377">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771077617">
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1771009377"></script>
+    <script src="/static/js/session-auth.js?v=1771077617"></script>
     <style>
         /* API Manager Styles */
         .api-manager {
@@ -721,6 +721,20 @@
         .utilization-card-badge.paid {
             background: rgba(239, 68, 68, 0.2);
             color: #ef4444;
+        }
+
+        .utilization-card-badge.live {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            font-size: 8px;
+            padding: 1px 5px;
+            letter-spacing: 0.5px;
+        }
+
+        .utilization-rate-note {
+            font-size: 11px;
+            color: #6b7280;
+            font-style: italic;
         }
 
         .utilization-pct {
@@ -2063,21 +2077,51 @@
         }
 
         function renderUtilizationCard(api) {
+            const isRateType = api.rate_limit_type === 'rate';
             const hasLimit = api.utilization_pct !== null && api.requests_limit !== null;
+            const isLive = api.usage_source === 'live';
 
             const utilizationClass = !hasLimit ? 'unknown' :
                                     api.utilization_pct < 50 ? 'low' :
                                     api.utilization_pct < 80 ? 'medium' : 'high';
             const configuredClass = api.configured ? '' : 'not-configured';
 
-            const pctDisplay = hasLimit ? `${api.utilization_pct}%` : 'N/A';
-            const barWidth = hasLimit ? api.utilization_pct : 0;
-            const usageDisplay = hasLimit
-                ? `${api.call_count.toLocaleString()} / ${api.requests_limit.toLocaleString()}`
-                : `${api.call_count.toLocaleString()} calls (limit N/A)`;
+            // Period suffix
+            const periodSuffix = api.period_label === 'month' ? '/mo' :
+                                 api.period_label === 'minute' ? '/min' : '/day';
+
+            // Build display strings based on API type
+            let pctDisplay, barWidth, usageDisplay;
+
+            if (isRateType && !hasLimit) {
+                // Rate-type APIs (exchanges) without quota limits
+                pctDisplay = '\u221E'; // infinity symbol
+                barWidth = 0;
+                usageDisplay = api.call_count > 0
+                    ? `${api.call_count.toLocaleString()} calls`
+                    : 'No calls tracked';
+            } else if (hasLimit) {
+                pctDisplay = `${api.utilization_pct}%`;
+                barWidth = api.utilization_pct;
+                usageDisplay = `${api.call_count.toLocaleString()} / ${api.requests_limit.toLocaleString()}${periodSuffix}`;
+            } else {
+                pctDisplay = 'N/A';
+                barWidth = 0;
+                usageDisplay = api.call_count > 0
+                    ? `${api.call_count.toLocaleString()} calls`
+                    : 'No calls tracked';
+            }
+
+            // Live badge
+            const liveBadge = isLive ? ' <span class="utilization-card-badge live">LIVE</span>' : '';
+
+            // Rate limit note
+            const rateNote = api.rate_limit_note
+                ? `<span class="utilization-rate-note">${api.rate_limit_note}</span>`
+                : '';
 
             // Format last called timestamp
-            let lastCalledDisplay = 'N/A';
+            let lastCalledDisplay = '';
             if (api.last_called) {
                 const lastCalled = new Date(api.last_called);
                 const now = new Date();
@@ -2097,12 +2141,16 @@
                 }
             }
 
+            const lastCalledHtml = lastCalledDisplay
+                ? `<span class="utilization-last-called">Last called: ${lastCalledDisplay}</span>`
+                : '';
+
             return `
                 <div class="utilization-card ${configuredClass}">
                     <div class="utilization-card-header">
                         <div class="utilization-card-name">
                             <h4>${api.name}</h4>
-                            <span class="utilization-card-badge ${api.pricing}">${api.pricing}</span>
+                            <span class="utilization-card-badge ${api.pricing}">${api.pricing}</span>${liveBadge}
                         </div>
                         <span class="utilization-pct ${utilizationClass}">${pctDisplay}</span>
                     </div>
@@ -2112,7 +2160,8 @@
                     <div class="utilization-details">
                         <div class="utilization-left">
                             <span class="utilization-usage">${usageDisplay}</span>
-                            <span class="utilization-last-called">Last called: ${lastCalledDisplay}</span>
+                            ${rateNote}
+                            ${lastCalledHtml}
                         </div>
                         <span class="utilization-reset">Resets in ${api.reset_in}</span>
                     </div>
@@ -2479,7 +2528,7 @@
     </div>
 
     <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
-        <p>ABCT - API Configuration | <span style="opacity: 0.6;">v1.10.2 (BUILD 1771009377)</span></p>
+        <p>ABCT - API Configuration | <span style="opacity: 0.6;">v1.11.0 (BUILD 1771077617)</span></p>
     </footer>
 </body>
 </html>

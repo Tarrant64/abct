@@ -6,12 +6,13 @@
     <title>Assets - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771009377">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771077617">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1771009377"></script>
+    <script src="/static/js/session-auth.js?v=1771077617"></script>
     <style>
         .assets-page {
             max-width: 1400px;
@@ -57,6 +58,717 @@
         .assets-tab-content.active {
             display: block;
         }
+
+        /* Wallet Management Styles */
+        .wallet-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .wallet-header h1 {
+            margin: 0;
+            color: #e0e0e0;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #2a2a3e;
+            color: #e0e0e0;
+            border: 1px solid #3a3a4e;
+        }
+
+        .btn-secondary:hover {
+            background: #3a3a4e;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        /* Chain Tabs */
+        .chain-tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            background: #1a1a2e;
+            padding: 10px;
+            border-radius: 12px;
+        }
+
+        .chain-tab {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            background: transparent;
+            color: #888;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .chain-tab:hover {
+            background: #2a2a3e;
+            color: #e0e0e0;
+        }
+
+        .chain-tab.active {
+            background: #2a2a3e;
+            color: #e0e0e0;
+        }
+
+        .chain-tab .count {
+            background: #3a3a4e;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+        }
+
+        .chain-tab.active .count {
+            background: #667eea;
+        }
+
+        .chain-tab[data-chain="cardano"].active { border-bottom: 3px solid #0033AD; }
+        .chain-tab[data-chain="bitcoin"].active { border-bottom: 3px solid #F7931A; }
+        .chain-tab[data-chain="ethereum"].active { border-bottom: 3px solid #627EEA; }
+        .chain-tab[data-chain="solana"].active { border-bottom: 3px solid #14F195; }
+        .chain-tab[data-chain="polygon"].active { border-bottom: 3px solid #8247E5; }
+        .chain-tab[data-chain="base"].active { border-bottom: 3px solid #0052FF; }
+
+        /* Wallet List */
+        .wallet-list {
+            background: #1a1a2e;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .wallet-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            border-bottom: 1px solid #2a2a3e;
+            transition: background 0.2s;
+        }
+
+        .wallet-item:hover {
+            background: #22223a;
+        }
+
+        .wallet-item:last-child {
+            border-bottom: none;
+        }
+
+        .wallet-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .wallet-address {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 14px;
+            color: #e0e0e0;
+            word-break: break-all;
+            display: inline-block;
+        }
+
+        .copy-address-btn {
+            margin-left: 8px;
+            padding: 4px 6px;
+            background: transparent;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            font-size: 16px;
+            opacity: 0.4;
+            transition: opacity 0.2s;
+            vertical-align: middle;
+        }
+
+        .copy-address-btn:hover {
+            opacity: 0.8;
+        }
+
+        .copy-address-btn.copied {
+            color: #28a745;
+            opacity: 1;
+        }
+
+        .wallet-label {
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        .wallet-balance {
+            text-align: right;
+            margin-right: 20px;
+        }
+
+        .wallet-balance .amount {
+            font-size: 14px;
+            color: #e0e0e0;
+        }
+
+        .wallet-balance .unit {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .wallet-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* Stake Key Groups */
+        .stake-group {
+            border-bottom: 1px solid #2a2a3e;
+        }
+
+        .stake-group:last-child {
+            border-bottom: none;
+        }
+
+        .stake-group-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            cursor: pointer !important;
+            transition: background 0.2s;
+            background: linear-gradient(135deg, rgba(0, 51, 173, 0.1) 0%, rgba(0, 51, 173, 0.05) 100%);
+        }
+
+        .stake-group-header:hover {
+            background: linear-gradient(135deg, rgba(0, 51, 173, 0.15) 0%, rgba(0, 51, 173, 0.08) 100%);
+        }
+
+        .stake-group.expanded .stake-group-header {
+            border-bottom: 1px solid #3a3a4e;
+        }
+
+        .stake-group-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+        }
+
+        .expand-icon {
+            color: #667eea;
+            font-size: 10px;
+            width: 16px;
+            transition: transform 0.2s;
+        }
+
+        .stake-group.expanded .expand-icon {
+            transform: rotate(90deg);
+        }
+
+        .stake-key-display {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+            color: #888;
+        }
+
+        .group-label {
+            color: #e0e0e0;
+            font-size: 13px;
+        }
+
+        .stake-group-summary {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            font-size: 13px;
+        }
+
+        .stake-group-summary .wallet-count {
+            color: #667eea;
+            font-weight: 500;
+        }
+
+        .stake-group-summary .total-balance {
+            color: #4ade80;
+            font-weight: 500;
+        }
+
+        .stake-group-summary .asset-count {
+            color: #888;
+        }
+
+        .stake-group-wallets {
+            background: rgba(0, 0, 0, 0.2);
+            border-left: 3px solid #0033ad;
+            margin-left: 20px;
+        }
+
+        .wallet-item.grouped {
+            padding-left: 30px;
+            background: transparent;
+        }
+
+        .wallet-item.grouped:hover {
+            background: rgba(0, 51, 173, 0.1);
+        }
+
+        .wallet-label .token-count {
+            background: rgba(102, 126, 234, 0.2);
+            color: #667eea;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            margin-left: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .wallet-label .token-count:hover {
+            background: rgba(102, 126, 234, 0.3);
+        }
+
+        .wallet-label .label-text {
+            color: #aaa;
+        }
+
+        /* Wallet Assets Expansion */
+        .wallet-assets-container {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-left: 3px solid #667eea;
+            border-radius: 4px;
+        }
+
+        .wallet-assets-container.expanded {
+            display: block;
+        }
+
+        .wallet-asset-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .wallet-asset-item:last-child {
+            border-bottom: none;
+        }
+
+        .wallet-asset-name {
+            font-size: 13px;
+            color: #e0e0e0;
+            font-weight: 500;
+        }
+
+        .wallet-asset-quantity {
+            font-size: 13px;
+            color: #888;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #888;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 10px;
+            color: #e0e0e0;
+        }
+
+        /* Token List */
+        .token-list {
+            background: #1a1a2e;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .token-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            border-bottom: 1px solid #2a2a3e;
+            transition: background 0.2s;
+        }
+
+        .token-item:hover {
+            background: #22223a;
+        }
+
+        .token-item:last-child {
+            border-bottom: none;
+        }
+
+        .token-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .token-name {
+            font-size: 14px;
+            color: #e0e0e0;
+            font-weight: 500;
+        }
+
+        .token-details {
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .token-details .chain {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        .token-details .chain.cardano { background: rgba(0, 51, 173, 0.3); color: #4d7fff; }
+        .token-details .chain.ethereum { background: rgba(98, 126, 234, 0.3); color: #627EEA; }
+        .token-details .chain.bitcoin { background: rgba(247, 147, 26, 0.3); color: #F7931A; }
+        .token-details .chain.solana { background: rgba(20, 241, 149, 0.3); color: #14F195; }
+
+        .token-quantity {
+            text-align: right;
+            margin-right: 20px;
+        }
+
+        .token-quantity .amount {
+            font-size: 14px;
+            color: #e0e0e0;
+        }
+
+        .token-quantity .value {
+            font-size: 12px;
+            color: #4ade80;
+        }
+
+        .token-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .wallet-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+
+            .wallet-balance {
+                text-align: left;
+                margin-right: 0;
+            }
+
+            .wallet-actions {
+                width: 100%;
+                justify-content: flex-end;
+            }
+
+            .assets-tab-nav {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .assets-tab-btn {
+                white-space: nowrap;
+                padding: 10px 16px;
+                font-size: 0.85rem;
+            }
+        }
+
+        /* Privacy Mode - Manage Wallets */
+        body.privacy-mode .wallet-address {
+            filter: blur(8px);
+            user-select: none;
+        }
+        body.privacy-mode .label-text {
+            filter: blur(8px);
+            user-select: none;
+        }
+        body.privacy-mode .wallet-balance .amount {
+            filter: blur(10px);
+            user-select: none;
+        }
+        body.privacy-mode .wallet-balance .unit {
+            filter: blur(10px);
+            user-select: none;
+        }
+        body.privacy-mode .token-count {
+            filter: blur(6px);
+            user-select: none;
+        }
+
+        /* Discovery modal styles */
+        .discover-address {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #2a2a3e;
+        }
+
+        .discover-address:last-child {
+            border-bottom: none;
+        }
+
+        .discover-address .address {
+            font-family: monospace;
+            font-size: 12px;
+            color: #e0e0e0;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .discover-address .balance {
+            color: #4ade80;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+
+        .discover-address .status {
+            font-size: 11px;
+            color: #888;
+        }
+
+        .discover-address .status.tracked {
+            color: #667eea;
+        }
+
+        /* Modal styles for wallet management */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-overlay > .modal {
+            background: #1a1a2e;
+            border-radius: 16px;
+            padding: 30px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-overlay > .modal h2 {
+            margin: 0 0 20px 0;
+            color: #e0e0e0;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #e0e0e0;
+            font-size: 14px;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #3a3a4e;
+            border-radius: 8px;
+            background: #2a2a3e;
+            color: #e0e0e0;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group textarea {
+            min-height: 150px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+        }
+
+        .form-group .hint {
+            font-size: 12px;
+            color: #888;
+            margin-top: 6px;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 30px;
+        }
+
+        .import-preview {
+            margin-top: 20px;
+            padding: 15px;
+            background: #2a2a3e;
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .import-preview h4 {
+            margin: 0 0 10px 0;
+            color: #e0e0e0;
+            font-size: 14px;
+        }
+
+        .import-item {
+            display: flex;
+            gap: 10px;
+            padding: 5px 0;
+            font-size: 12px;
+            border-bottom: 1px solid #3a3a4e;
+        }
+
+        .import-item:last-child {
+            border-bottom: none;
+        }
+
+        .import-item .chain {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        .import-item .chain.cardano { background: rgba(0, 51, 173, 0.3); color: #4d7fff; }
+        .import-item .chain.bitcoin { background: rgba(247, 147, 26, 0.3); color: #F7931A; }
+        .import-item .chain.ethereum { background: rgba(98, 126, 234, 0.3); color: #627EEA; }
+        .import-item .chain.solana { background: rgba(20, 241, 149, 0.3); color: #14F195; }
+        .import-item .chain.polygon { background: rgba(130, 71, 229, 0.3); color: #8247E5; }
+        .import-item .chain.base { background: rgba(0, 82, 255, 0.3); color: #0052FF; }
+
+        .import-item .address {
+            font-family: monospace;
+            color: #e0e0e0;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .status-message {
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .status-message.success {
+            display: block;
+            background: rgba(40, 167, 69, 0.2);
+            border: 1px solid #28a745;
+            color: #28a745;
+        }
+
+        .status-message.error {
+            display: block;
+            background: rgba(220, 53, 69, 0.2);
+            border: 1px solid #dc3545;
+            color: #dc3545;
+        }
+
+        .asset-type-tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 20px;
+            background: #1a1a2e;
+            padding: 4px;
+            border-radius: 12px;
+            width: fit-content;
+        }
+
+        .asset-tab {
+            padding: 10px 24px;
+            border: none;
+            background: transparent;
+            color: #888;
+            cursor: pointer;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .asset-tab.active {
+            background: #667eea;
+            color: #fff;
+        }
+
+        .asset-tab:hover:not(.active) {
+            color: #e0e0e0;
+        }
     </style>
 </head>
 <body>
@@ -66,6 +778,7 @@
                 <a href="/" class="nav-item">Overview</a>
                 <a href="/assets.html" class="nav-item active">Assets</a>
                 <a href="/nfts.html" class="nav-item">NFTs</a>
+                <a href="/data.html" class="nav-item">Data & Analytics</a>
             </nav>
             <div class="header-right-controls">
                 <div class="user-avatar-container">
@@ -77,9 +790,7 @@
                             <span id="userMenuName">User</span>
                         </div>
                         <div class="user-menu-divider"></div>
-                        <a href="/wallets.html" class="user-menu-item">Manage Wallets</a>
-                        <a href="/settings.html" class="user-menu-item">Connectors</a>
-                        <a href="/system.html" class="user-menu-item">Settings</a>
+                        <a href="/settings.html" class="user-menu-item">Settings</a>
                         <div class="user-menu-divider"></div>
                         <button class="user-menu-item" onclick="togglePrivacyMode()">
                             Privacy Mode <span class="privacy-indicator" id="privacyIndicator">OFF</span>
@@ -122,14 +833,24 @@
 
         <!-- Tab Navigation -->
         <div class="assets-tab-nav">
-            <button class="assets-tab-btn active" data-tab="wallets" onclick="switchAssetsTab('wallets')">Self-Custody Wallets</button>
+            <button class="assets-tab-btn active" data-tab="blockchain" onclick="switchAssetsTab('blockchain')">Blockchain</button>
+            <button class="assets-tab-btn" data-tab="wallets" onclick="switchAssetsTab('wallets')">Self-Custody Wallets</button>
+            <button class="assets-tab-btn" data-tab="manageWallets" onclick="switchAssetsTab('manageWallets')">Manage Wallets</button>
             <button class="assets-tab-btn" data-tab="exchanges" onclick="switchAssetsTab('exchanges')">Exchanges</button>
-            <button class="assets-tab-btn" data-tab="defi" onclick="switchAssetsTab('defi')">DeFi & Governance</button>
+            <button class="assets-tab-btn" data-tab="defi" onclick="switchAssetsTab('defi')">DeFi</button>
+            <button class="assets-tab-btn" data-tab="governance" onclick="switchAssetsTab('governance')">Governance</button>
             <button class="assets-tab-btn" data-tab="tokens" onclick="switchAssetsTab('tokens')">Custom Tokens</button>
         </div>
 
+        <!-- Blockchain Summary Tab -->
+        <div id="blockchainTab" class="assets-tab-content active">
+            <div class="summary-cards" id="blockchainCards">
+                <!-- Dynamically populated by renderBlockchainCards() -->
+            </div>
+        </div>
+
         <!-- Self-Custody Wallets Tab -->
-        <div id="walletsTab" class="assets-tab-content active">
+        <div id="walletsTab" class="assets-tab-content">
             <section class="wallets-section">
                 <div class="section-header" onclick="toggleSection(this)">
                     <h2>Self-Custody Wallets</h2>
@@ -150,6 +871,121 @@
             </section>
         </div>
 
+        <!-- Manage Wallets Tab -->
+        <div id="manageWalletsTab" class="assets-tab-content">
+            <div class="wallet-header">
+                <h1>Manage Wallets</h1>
+                <div class="header-actions" id="walletHeaderActions">
+                    <button class="btn btn-secondary" onclick="openImportModal()">
+                        Import from File
+                    </button>
+                    <button class="btn btn-secondary" onclick="exportWallets()">
+                        Export to File
+                    </button>
+                    <button class="btn btn-primary" onclick="openAddModal()">
+                        + Add Wallet
+                    </button>
+                </div>
+                <div class="header-actions" id="tokenHeaderActions" style="display: none;">
+                    <button class="btn btn-primary" onclick="openAddTokenModal()">
+                        + Add Token
+                    </button>
+                </div>
+            </div>
+
+            <!-- Asset Type Tabs -->
+            <div class="asset-type-tabs">
+                <button class="asset-tab active" data-type="wallets" onclick="switchAssetTab('wallets')">
+                    Self-Custody Wallets
+                </button>
+                <button class="asset-tab" data-type="exchanges" onclick="switchAssetTab('exchanges')">
+                    Exchanges
+                </button>
+                <button class="asset-tab" data-type="tokens" onclick="switchAssetTab('tokens')">
+                    Manual Tokens
+                </button>
+            </div>
+
+            <div id="manageStatusMessage" class="status-message"></div>
+
+            <!-- Wallets Section -->
+            <div id="walletsSection">
+                <div class="chain-tabs">
+                    <button class="chain-tab active" data-chain="all" onclick="filterByChain('all')">
+                        All <span class="count" id="count-all">0</span>
+                    </button>
+                    <button class="chain-tab" data-chain="cardano" onclick="filterByChain('cardano')">
+                        Cardano <span class="count" id="count-cardano">0</span>
+                    </button>
+                    <button class="chain-tab" data-chain="bitcoin" onclick="filterByChain('bitcoin')">
+                        Bitcoin <span class="count" id="count-bitcoin">0</span>
+                    </button>
+                    <button class="chain-tab" data-chain="ethereum" onclick="filterByChain('ethereum')">
+                        Ethereum <span class="count" id="count-ethereum">0</span>
+                    </button>
+                    <button class="chain-tab" data-chain="solana" onclick="filterByChain('solana')">
+                        Solana <span class="count" id="count-solana">0</span>
+                    </button>
+                    <button class="chain-tab" data-chain="polygon" onclick="filterByChain('polygon')">
+                        Polygon <span class="count" id="count-polygon">0</span>
+                    </button>
+                    <button class="chain-tab" data-chain="base" onclick="filterByChain('base')">
+                        Base <span class="count" id="count-base">0</span>
+                    </button>
+                    <button class="chain-tab" data-chain="algorand" onclick="filterByChain('algorand')">
+                        Algorand <span class="count" id="count-algorand">0</span>
+                    </button>
+                    <button class="chain-tab" data-chain="bsc" onclick="filterByChain('bsc')">
+                        BNB Chain <span class="count" id="count-bsc">0</span>
+                    </button>
+                    <button class="chain-tab" data-chain="arbitrum" onclick="filterByChain('arbitrum')">
+                        Arbitrum <span class="count" id="count-arbitrum">0</span>
+                    </button>
+                    <button class="chain-tab" data-chain="avalanche" onclick="filterByChain('avalanche')">
+                        Avalanche <span class="count" id="count-avalanche">0</span>
+                    </button>
+                    <button class="chain-tab" data-chain="tron" onclick="filterByChain('tron')">
+                        Tron <span class="count" id="count-tron">0</span>
+                    </button>
+                </div>
+
+                <div class="wallet-list" id="walletList">
+                    <div class="empty-state">
+                        <div class="loading"></div>
+                        <p>Loading wallets...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Exchanges Section -->
+            <div id="exchangesSection" style="display: none;">
+                <div class="exchange-info-box">
+                    <h3>Exchange API Configuration</h3>
+                    <p style="font-size: 16px; line-height: 1.6;">
+                        Exchange API configuration has been moved to the <strong>Settings</strong> page for easier management.
+                    </p>
+                    <div style="margin-top: 20px;">
+                        <a href="/settings.html#apis" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none;">
+                            <span>Go to Settings</span>
+                        </a>
+                    </div>
+                    <p style="margin-top: 20px; font-size: 14px; color: #888;">
+                        You can configure API keys for Coinbase, Binance.com, Binance.US, OKX, Bitget, Gate.io, and KuCoin directly from the web interface.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Manual Tokens Section -->
+            <div id="tokensSection" style="display: none;">
+                <div class="token-list" id="tokenList">
+                    <div class="empty-state">
+                        <h3>No manual tokens</h3>
+                        <p>Add tokens manually to track holdings not in your wallets.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Exchange Wallets Tab -->
         <div id="exchangesTab" class="assets-tab-content">
             <section class="exchanges-section">
@@ -167,19 +1003,36 @@
             </section>
         </div>
 
-        <!-- DeFi & Governance Tab -->
+        <!-- DeFi Tab -->
         <div id="defiTab" class="assets-tab-content">
             <section class="defi-governance-section">
                 <div class="section-header" onclick="toggleSection(this)">
-                    <h2>DeFi & Governance</h2>
+                    <h2>DeFi</h2>
                     <div class="section-summary" id="defiGovernanceSummary">
                         <span class="defi-gov-status">Loading...</span>
                     </div>
-                    <button class="section-refresh-btn" onclick="event.stopPropagation(); refreshDefiGovernance();" title="Refresh DeFi & Governance">&#10227;</button>
+                    <button class="section-refresh-btn" onclick="event.stopPropagation(); refreshDefiGovernance();" title="Refresh DeFi">&#10227;</button>
                     <span class="collapse-icon">&#9660;</span>
                 </div>
                 <div class="defi-governance-content section-content" id="defiGovernanceContent">
-                    <p class="empty-state">Loading DeFi & Governance data...</p>
+                    <p class="empty-state">Loading DeFi data...</p>
+                </div>
+            </section>
+        </div>
+
+        <!-- Governance Tab -->
+        <div id="governanceTab" class="assets-tab-content">
+            <section class="governance-section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h2>Governance</h2>
+                    <div class="section-summary" id="governanceSummary">
+                        <span class="governance-status">Loading...</span>
+                    </div>
+                    <button class="section-refresh-btn" onclick="event.stopPropagation(); refreshDefiGovernance();" title="Refresh Governance">&#10227;</button>
+                    <span class="collapse-icon">&#9660;</span>
+                </div>
+                <div class="governance-content section-content" id="governanceContent">
+                    <p class="empty-state">Loading Governance data...</p>
                 </div>
             </section>
         </div>
@@ -239,25 +1092,366 @@
                 </div>
             </div>
         </div>
+        <!-- Blockchain Asset Breakdown Modal -->
+        <div id="assetBreakdownModal" class="modal hidden">
+            <div class="modal-overlay" onclick="closeAssetBreakdownModal()"></div>
+            <div class="modal-content asset-breakdown-modal">
+                <button class="modal-close" onclick="closeAssetBreakdownModal()">&times;</button>
+                <div class="modal-body">
+                    <h3 class="breakdown-title" id="breakdownChainName">Asset Breakdown</h3>
+                    <div class="defillama-metrics" id="defillamaMetrics">
+                        <div class="metric-card">
+                            <span class="metric-label">Market Cap</span>
+                            <span class="metric-value" id="chainMcap">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">TVL</span>
+                            <span class="metric-value" id="chainTvl">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">Stablecoins</span>
+                            <span class="metric-value" id="chainStables">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">24h Volume</span>
+                            <span class="metric-value" id="chainVolume">-</span>
+                        </div>
+                    </div>
+                    <div class="breakdown-stats">
+                        <div class="stat">
+                            <span class="label">Your Holdings</span>
+                            <span class="value" id="breakdownTotalValue">$0.00</span>
+                        </div>
+                        <div class="stat">
+                            <span class="label">Asset Types</span>
+                            <span class="value" id="breakdownAssetCount">0</span>
+                        </div>
+                    </div>
+                    <div class="supply-metrics-row hidden" id="supplyMetricsRow">
+                        <div class="metric-card">
+                            <span class="metric-label">Circulating Supply</span>
+                            <span class="metric-value" id="supplyCirculating">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">Total Supply</span>
+                            <span class="metric-value" id="supplyTotal">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">Max Supply</span>
+                            <span class="metric-value" id="supplyMax">-</span>
+                        </div>
+                    </div>
+                    <div class="breakdown-content">
+                        <div class="breakdown-chart-wrapper">
+                            <canvas id="assetBreakdownChart" width="400" height="400"></canvas>
+                        </div>
+                        <div class="breakdown-legend" id="breakdownLegend"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Wallet Modal -->
+    <div class="modal-overlay" id="addModal">
+        <div class="modal">
+            <h2>Add Wallet</h2>
+            <form onsubmit="addWallet(event)">
+                <div class="form-group">
+                    <label for="walletChain">Blockchain</label>
+                    <select id="walletChain" required>
+                        <option value="">Select blockchain...</option>
+                        <option value="cardano">Cardano</option>
+                        <option value="bitcoin">Bitcoin</option>
+                        <option value="ethereum">Ethereum</option>
+                        <option value="solana">Solana</option>
+                        <option value="polygon">Polygon</option>
+                        <option value="base">Base</option>
+                        <option value="algorand">Algorand</option>
+                        <option value="bsc">BNB Smart Chain</option>
+                        <option value="arbitrum">Arbitrum</option>
+                        <option value="avalanche">Avalanche</option>
+                        <option value="tron">Tron</option>
+                    </select>
+                </div>
+                <div class="form-group" id="cardanoDiscoveryOption" style="display: none;">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                        <input type="checkbox" id="enableDiscovery" checked>
+                        <span>Discover all wallets under stake key</span>
+                    </label>
+                    <div class="hint" style="margin-top: 5px;">
+                        When enabled, finds all payment addresses sharing the same stake key and lets you add them together.
+                    </div>
+                </div>
+                <div class="form-group" id="bitcoinXpubOption" style="display: none;">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                        <input type="checkbox" id="enableXpub" onchange="toggleXpubMode()">
+                        <span>Enter xpub (HD wallet extended public key)</span>
+                    </label>
+                    <div class="hint" style="margin-top: 5px;">
+                        Discover all addresses from an xpub/ypub/zpub. Automatically finds addresses with balance.
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="walletAddress" id="addressLabel">Wallet Address</label>
+                    <input type="text" id="walletAddress" placeholder="Enter wallet address" required>
+                    <div class="hint" id="addressHint">
+                        Examples:<br>
+                        Cardano: addr1q..., stake1u...<br>
+                        Bitcoin: bc1..., 1..., 3..., xpub..., ypub..., zpub...<br>
+                        Ethereum/Polygon/Base: 0x...<br>
+                        Solana: Base58 address
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="walletLabel">Label (optional)</label>
+                    <input type="text" id="walletLabel" placeholder="e.g., Main Wallet, Cold Storage">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeAddModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Wallet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Import Modal -->
+    <div class="modal-overlay" id="importModal">
+        <div class="modal">
+            <h2>Import Wallets</h2>
+            <div class="form-group">
+                <label for="importText">Paste wallet addresses</label>
+                <textarea id="importText" placeholder="Enter one wallet per line in format:
+chain:address
+
+Examples:
+cardano:addr1q8nl...
+bitcoin:bc1qxy...
+ethereum:0x123...
+solana:ABC123...
+polygon:0x456...
+base:0x789..." oninput="previewImport()"></textarea>
+                <div class="hint">
+                    Format: <code>chain:address</code> (one per line)<br>
+                    Supported chains: cardano, bitcoin, ethereum, solana, polygon, base
+                </div>
+            </div>
+
+            <div class="import-preview" id="importPreview" style="display: none;">
+                <h4>Preview (<span id="importCount">0</span> wallets)</h4>
+                <div id="importPreviewList"></div>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeImportModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="importWallets()" id="importBtn" disabled>
+                    Import Wallets
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Label Modal -->
+    <div class="modal-overlay" id="editModal">
+        <div class="modal">
+            <h2>Edit Wallet Label</h2>
+            <form onsubmit="saveLabel(event)">
+                <input type="hidden" id="editWalletId">
+                <div class="form-group">
+                    <label>Address</label>
+                    <input type="text" id="editWalletAddress" readonly style="background: #1a1a2e;">
+                </div>
+                <div class="form-group">
+                    <label for="editWalletLabel">Label</label>
+                    <input type="text" id="editWalletLabel" placeholder="Enter a label for this wallet">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Cardano Discovery Modal -->
+    <div class="modal-overlay" id="discoverModal">
+        <div class="modal" style="max-width: 700px;">
+            <h2>Discovered Cardano Wallets</h2>
+            <div id="discoverInfo" class="form-group">
+                <p style="color: #888; margin-bottom: 15px;">
+                    <span id="discoverStakeKey" style="font-family: monospace; font-size: 12px;"></span>
+                </p>
+                <div style="display: flex; gap: 20px; margin-bottom: 15px;">
+                    <div><strong id="discoverTotal">0</strong> total addresses</div>
+                    <div><strong id="discoverWithUtxos">0</strong> with UTXOs</div>
+                    <div><strong id="discoverNew">0</strong> new (not tracked)</div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                    <input type="checkbox" id="selectAllDiscover" onchange="toggleSelectAllDiscover()" checked>
+                    <span>Select all new addresses with UTXOs</span>
+                </label>
+            </div>
+
+            <div id="discoverList" style="max-height: 300px; overflow-y: auto; background: #2a2a3e; border-radius: 8px; padding: 10px;">
+            </div>
+
+            <div class="form-group" style="margin-top: 15px;">
+                <label for="discoverLabel">Label for new wallets (optional)</label>
+                <input type="text" id="discoverLabel" placeholder="e.g., Main Stake Key">
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeDiscoverModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="addDiscoveredWallets()" id="addDiscoveredBtn">
+                    Add Selected Wallets
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bitcoin xpub Discovery Modal -->
+    <div class="modal-overlay" id="xpubModal">
+        <div class="modal" style="max-width: 750px;">
+            <h2>Discovered Bitcoin Addresses</h2>
+            <div class="form-group">
+                <p style="color: #888; margin-bottom: 15px;">
+                    HD Wallet Type: <strong id="xpubType" style="color: #f7931a;"></strong>
+                </p>
+                <div style="display: flex; gap: 20px; margin-bottom: 15px;">
+                    <div><strong id="xpubTotal">0</strong> addresses found</div>
+                    <div><strong id="xpubBalance">0</strong> BTC total</div>
+                    <div><strong id="xpubNew">0</strong> new (not tracked)</div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                    <input type="checkbox" id="selectAllXpub" onchange="toggleSelectAllXpub()" checked>
+                    <span>Select all new addresses</span>
+                </label>
+            </div>
+
+            <div id="xpubList" style="max-height: 300px; overflow-y: auto; background: #2a2a3e; border-radius: 8px; padding: 10px;">
+            </div>
+
+            <div class="form-group" style="margin-top: 15px;">
+                <label for="xpubLabel">Label for new wallets (optional)</label>
+                <input type="text" id="xpubLabel" placeholder="e.g., Hardware Wallet">
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeXpubModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="addSelectedXpubAddresses()">
+                    Add Selected Wallets
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Token Modal -->
+    <div class="modal-overlay" id="addTokenModal">
+        <div class="modal">
+            <h2>Add Manual Token</h2>
+            <p style="color: #888; margin-bottom: 20px;">
+                Track tokens that are not in your connected wallets (e.g., tokens held elsewhere, or custom tracking).
+            </p>
+            <form onsubmit="addManualToken(event)">
+                <div class="form-group">
+                    <label for="tokenChain">Blockchain</label>
+                    <select id="tokenChain" required>
+                        <option value="">Select blockchain...</option>
+                        <option value="cardano">Cardano</option>
+                        <option value="ethereum">Ethereum</option>
+                        <option value="bitcoin">Bitcoin</option>
+                        <option value="solana">Solana</option>
+                        <option value="algorand">Algorand</option>
+                        <option value="bsc">BNB Smart Chain</option>
+                        <option value="arbitrum">Arbitrum</option>
+                        <option value="avalanche">Avalanche</option>
+                        <option value="tron">Tron</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="tokenIdentifier">Token Ticker or Policy ID / Contract</label>
+                    <input type="text" id="tokenIdentifier" placeholder="e.g., INDY or policy ID" required>
+                    <div class="hint">
+                        Enter a ticker symbol (e.g., INDY, SNEK) or the full policy ID / contract address
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="tokenAmount">Quantity</label>
+                    <input type="text" id="tokenAmount" placeholder="e.g., 1000" required>
+                </div>
+                <div class="form-group">
+                    <label for="tokenLabel">Label (optional)</label>
+                    <input type="text" id="tokenLabel" placeholder="e.g., Cold Storage INDY">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeAddTokenModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Token</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Token Modal -->
+    <div class="modal-overlay" id="editTokenModal">
+        <div class="modal">
+            <h2>Edit Token</h2>
+            <form onsubmit="saveTokenEdit(event)">
+                <input type="hidden" id="editTokenId">
+                <div class="form-group">
+                    <label>Token</label>
+                    <input type="text" id="editTokenName" readonly style="background: #1a1a2e;">
+                </div>
+                <div class="form-group">
+                    <label for="editTokenAmount">Quantity</label>
+                    <input type="text" id="editTokenAmount" required>
+                </div>
+                <div class="form-group">
+                    <label for="editTokenLabel">Label</label>
+                    <input type="text" id="editTokenLabel" placeholder="Enter a label">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeEditTokenModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <footer>
-        <p>ABCT - Assets | <span id="appVersion" style="opacity: 0.6;">v1.10.2 (BUILD 1771009377)</span></p>
+        <p>ABCT - Assets | <span id="appVersion" style="opacity: 0.6;">v1.11.0 (BUILD 1771077617)</span></p>
     </footer>
 
-    <script src="/static/js/app.js?v=1771009377"></script>
+    <script src="/static/js/app.js?v=1771077617"></script>
+    <script src="/static/js/wallet-management.js?v=1771077617"></script>
     <script>
         // Assets page tab switching
+        const ASSETS_TABS = ['blockchain', 'wallets', 'manageWallets', 'exchanges', 'defi', 'governance', 'tokens'];
+
+        let manageWalletsLoaded = false;
+
         function switchAssetsTab(tabName) {
             // Update tab buttons
             document.querySelectorAll('.assets-tab-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.tab === tabName);
             });
             // Update tab content
-            document.getElementById('walletsTab').classList.toggle('active', tabName === 'wallets');
-            document.getElementById('exchangesTab').classList.toggle('active', tabName === 'exchanges');
-            document.getElementById('defiTab').classList.toggle('active', tabName === 'defi');
-            document.getElementById('tokensTab').classList.toggle('active', tabName === 'tokens');
+            ASSETS_TABS.forEach(tab => {
+                const el = document.getElementById(tab + 'Tab');
+                if (el) el.classList.toggle('active', tab === tabName);
+            });
+            // Lazy-load wallet management data
+            if (tabName === 'manageWallets' && !manageWalletsLoaded) {
+                manageWalletsLoaded = true;
+                if (typeof loadWalletManagement === 'function') {
+                    loadWalletManagement();
+                }
+            }
             // Update URL hash
             window.location.hash = tabName;
         }
@@ -265,7 +1459,7 @@
         // Handle hash-based tab switching on load
         document.addEventListener('DOMContentLoaded', () => {
             const hash = window.location.hash.replace('#', '');
-            if (['wallets', 'exchanges', 'defi', 'tokens'].includes(hash)) {
+            if (ASSETS_TABS.includes(hash)) {
                 switchAssetsTab(hash);
             }
         });

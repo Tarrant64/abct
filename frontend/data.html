@@ -1,0 +1,1351 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark-mode">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data & Analytics - ABCT</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771077617">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <!-- Chart.js for analytics -->
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+    <!-- DOMPurify for XSS protection -->
+    <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+    <!-- Session-based authentication -->
+    <script src="/static/js/session-auth.js?v=1771077617"></script>
+    <style>
+        /* Wallet Manager Styles */
+        .wallet-manager {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Page Navigation Header */
+        .page-nav-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .nav-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .back-link {
+            color: #888;
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.2s;
+        }
+
+        .back-link:hover {
+            color: #e0e0e0;
+        }
+
+        /* Waffle menu styles are in styles.css */
+
+        .wallet-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .wallet-header h1 {
+            margin: 0;
+            color: #e0e0e0;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #2a2a3e;
+            color: #e0e0e0;
+            border: 1px solid #3a3a4e;
+        }
+
+        .btn-secondary:hover {
+            background: #3a3a4e;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        /* Chain Tabs */
+        .chain-tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            background: #1a1a2e;
+            padding: 10px;
+            border-radius: 12px;
+        }
+
+        .chain-tab {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            background: transparent;
+            color: #888;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .chain-tab:hover {
+            background: #2a2a3e;
+            color: #e0e0e0;
+        }
+
+        .chain-tab.active {
+            background: #2a2a3e;
+            color: #e0e0e0;
+        }
+
+        .chain-tab .count {
+            background: #3a3a4e;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+        }
+
+        .chain-tab.active .count {
+            background: #667eea;
+        }
+
+        /* Chain colors */
+        .chain-tab[data-chain="cardano"].active { border-bottom: 3px solid #0033AD; }
+        .chain-tab[data-chain="bitcoin"].active { border-bottom: 3px solid #F7931A; }
+        .chain-tab[data-chain="ethereum"].active { border-bottom: 3px solid #627EEA; }
+        .chain-tab[data-chain="solana"].active { border-bottom: 3px solid #14F195; }
+        .chain-tab[data-chain="polygon"].active { border-bottom: 3px solid #8247E5; }
+        .chain-tab[data-chain="base"].active { border-bottom: 3px solid #0052FF; }
+
+        /* Wallet List */
+        .wallet-list {
+            background: #1a1a2e;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .wallet-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            border-bottom: 1px solid #2a2a3e;
+            transition: background 0.2s;
+        }
+
+        .wallet-item:hover {
+            background: #22223a;
+        }
+
+        .wallet-item:last-child {
+            border-bottom: none;
+        }
+
+        .wallet-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .wallet-address {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 14px;
+            color: #e0e0e0;
+            word-break: break-all;
+            display: inline-block;
+        }
+
+        .copy-address-btn {
+            margin-left: 8px;
+            padding: 4px 6px;
+            background: transparent;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            font-size: 16px;
+            opacity: 0.4;
+            transition: opacity 0.2s;
+            vertical-align: middle;
+        }
+
+        .copy-address-btn:hover {
+            opacity: 0.8;
+        }
+
+        .copy-address-btn.copied {
+            color: #28a745;
+            opacity: 1;
+        }
+
+        .stake-key-display {
+            font-family: 'Monaco', 'Menlo', monospace;
+        }
+
+        .wallet-label {
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        .wallet-balance {
+            text-align: right;
+            margin-right: 20px;
+        }
+
+        .wallet-balance .amount {
+            font-size: 14px;
+            color: #e0e0e0;
+        }
+
+        .wallet-balance .unit {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .wallet-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* Stake Key Groups */
+        .stake-group {
+            border-bottom: 1px solid #2a2a3e;
+        }
+
+        .stake-group:last-child {
+            border-bottom: none;
+        }
+
+        .stake-group-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            cursor: pointer !important;
+            transition: background 0.2s;
+            background: linear-gradient(135deg, rgba(0, 51, 173, 0.1) 0%, rgba(0, 51, 173, 0.05) 100%);
+        }
+
+        .stake-group-header:hover {
+            background: linear-gradient(135deg, rgba(0, 51, 173, 0.15) 0%, rgba(0, 51, 173, 0.08) 100%);
+        }
+
+        .stake-group.expanded .stake-group-header {
+            border-bottom: 1px solid #3a3a4e;
+        }
+
+        .stake-group-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+        }
+
+        .expand-icon {
+            color: #667eea;
+            font-size: 10px;
+            width: 16px;
+            transition: transform 0.2s;
+        }
+
+        .stake-group.expanded .expand-icon {
+            transform: rotate(90deg);
+        }
+
+        .stake-key-display {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+            color: #888;
+        }
+
+        .group-label {
+            color: #e0e0e0;
+            font-size: 13px;
+        }
+
+        .stake-group-summary {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            font-size: 13px;
+        }
+
+        .stake-group-summary .wallet-count {
+            color: #667eea;
+            font-weight: 500;
+        }
+
+        .stake-group-summary .total-balance {
+            color: #4ade80;
+            font-weight: 500;
+        }
+
+        .stake-group-summary .asset-count {
+            color: #888;
+        }
+
+        .stake-group-wallets {
+            background: rgba(0, 0, 0, 0.2);
+            border-left: 3px solid #0033ad;
+            margin-left: 20px;
+        }
+
+        .wallet-item.grouped {
+            padding-left: 30px;
+            background: transparent;
+        }
+
+        .wallet-item.grouped:hover {
+            background: rgba(0, 51, 173, 0.1);
+        }
+
+        .wallet-label .token-count {
+            background: rgba(102, 126, 234, 0.2);
+            color: #667eea;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            margin-left: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .wallet-label .token-count:hover {
+            background: rgba(102, 126, 234, 0.3);
+        }
+
+        .wallet-label .label-text {
+            color: #aaa;
+        }
+
+        /* Wallet Assets Expansion */
+        .wallet-assets-container {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            border-left: 3px solid #667eea;
+            border-radius: 4px;
+        }
+
+        .wallet-assets-container.expanded {
+            display: block;
+        }
+
+        .wallet-asset-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .wallet-asset-item:last-child {
+            border-bottom: none;
+        }
+
+        .wallet-asset-name {
+            font-size: 13px;
+            color: #e0e0e0;
+            font-weight: 500;
+        }
+
+        .wallet-asset-quantity {
+            font-size: 13px;
+            color: #888;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #888;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 10px;
+            color: #e0e0e0;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: #1a1a2e;
+            border-radius: 16px;
+            padding: 30px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal h2 {
+            margin: 0 0 20px 0;
+            color: #e0e0e0;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #e0e0e0;
+            font-size: 14px;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #3a3a4e;
+            border-radius: 8px;
+            background: #2a2a3e;
+            color: #e0e0e0;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group textarea {
+            min-height: 150px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+        }
+
+        .form-group .hint {
+            font-size: 12px;
+            color: #888;
+            margin-top: 6px;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 30px;
+        }
+
+        /* Import Preview */
+        .import-preview {
+            margin-top: 20px;
+            padding: 15px;
+            background: #2a2a3e;
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .import-preview h4 {
+            margin: 0 0 10px 0;
+            color: #e0e0e0;
+            font-size: 14px;
+        }
+
+        .import-item {
+            display: flex;
+            gap: 10px;
+            padding: 5px 0;
+            font-size: 12px;
+            border-bottom: 1px solid #3a3a4e;
+        }
+
+        .import-item:last-child {
+            border-bottom: none;
+        }
+
+        .import-item .chain {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        .import-item .chain.cardano { background: rgba(0, 51, 173, 0.3); color: #4d7fff; }
+        .import-item .chain.bitcoin { background: rgba(247, 147, 26, 0.3); color: #F7931A; }
+        .import-item .chain.ethereum { background: rgba(98, 126, 234, 0.3); color: #627EEA; }
+        .import-item .chain.solana { background: rgba(20, 241, 149, 0.3); color: #14F195; }
+        .import-item .chain.polygon { background: rgba(130, 71, 229, 0.3); color: #8247E5; }
+        .import-item .chain.base { background: rgba(0, 82, 255, 0.3); color: #0052FF; }
+
+        .import-item .address {
+            font-family: monospace;
+            color: #e0e0e0;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Status messages */
+        .status-message {
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .status-message.success {
+            display: block;
+            background: rgba(40, 167, 69, 0.2);
+            border: 1px solid #28a745;
+            color: #28a745;
+        }
+
+        .status-message.error {
+            display: block;
+            background: rgba(220, 53, 69, 0.2);
+            border: 1px solid #dc3545;
+            color: #dc3545;
+        }
+
+        /* Loading spinner */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #3a3a4e;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Back link */
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #888;
+            text-decoration: none;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .back-link:hover {
+            color: #e0e0e0;
+        }
+
+        /* Asset Type Tabs */
+        .asset-type-tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 20px;
+            background: #1a1a2e;
+            padding: 4px;
+            border-radius: 12px;
+            width: fit-content;
+        }
+
+        .asset-tab {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            background: transparent;
+            color: #888;
+            transition: all 0.2s;
+        }
+
+        .asset-tab:hover {
+            color: #e0e0e0;
+        }
+
+        .asset-tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        /* Token List */
+        .token-list {
+            background: #1a1a2e;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .token-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            border-bottom: 1px solid #2a2a3e;
+            transition: background 0.2s;
+        }
+
+        .token-item:hover {
+            background: #22223a;
+        }
+
+        .token-item:last-child {
+            border-bottom: none;
+        }
+
+        .token-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .token-name {
+            font-size: 14px;
+            color: #e0e0e0;
+            font-weight: 500;
+        }
+
+        .token-details {
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .token-details .chain {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        .token-details .chain.cardano { background: rgba(0, 51, 173, 0.3); color: #4d7fff; }
+        .token-details .chain.ethereum { background: rgba(98, 126, 234, 0.3); color: #627EEA; }
+        .token-details .chain.bitcoin { background: rgba(247, 147, 26, 0.3); color: #F7931A; }
+        .token-details .chain.solana { background: rgba(20, 241, 149, 0.3); color: #14F195; }
+
+        .token-quantity {
+            text-align: right;
+            margin-right: 20px;
+        }
+
+        .token-quantity .amount {
+            font-size: 14px;
+            color: #e0e0e0;
+        }
+
+        .token-quantity .value {
+            font-size: 12px;
+            color: #4ade80;
+        }
+
+        .token-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .wallet-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+
+            .wallet-balance {
+                text-align: left;
+                margin-right: 0;
+            }
+
+            .wallet-actions {
+                width: 100%;
+                justify-content: flex-end;
+            }
+        }
+
+        /* Privacy Mode - Manage Wallets page */
+        body.privacy-mode .wallet-address {
+            filter: blur(8px);
+            user-select: none;
+        }
+        body.privacy-mode .label-text {
+            filter: blur(8px);
+            user-select: none;
+        }
+        body.privacy-mode .wallet-balance .amount {
+            filter: blur(10px);
+            user-select: none;
+        }
+        body.privacy-mode .wallet-balance .unit {
+            filter: blur(10px);
+            user-select: none;
+        }
+        body.privacy-mode .token-count {
+            filter: blur(6px);
+            user-select: none;
+        }
+
+        /* Main Tab Navigation */
+        .main-tab-nav {
+            display: flex;
+            gap: 0;
+            margin-bottom: 24px;
+            background: #1a1a2e;
+            padding: 4px;
+            border-radius: 12px;
+            width: fit-content;
+        }
+
+        .main-tab-btn {
+            padding: 12px 28px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            background: transparent;
+            color: #888;
+            transition: all 0.2s;
+        }
+
+        .main-tab-btn:hover {
+            color: #e0e0e0;
+        }
+
+        .main-tab-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .main-tab-content {
+            display: none;
+        }
+
+        .main-tab-content.active {
+            display: block;
+        }
+    </style>
+    <script>
+        // XSS Protection - Safe HTML rendering
+        function setSafeHTML(element, html) {
+            if (!element) return;
+            if (typeof DOMPurify !== 'undefined') {
+                element.innerHTML = DOMPurify.sanitize(html);
+            } else {
+                console.warn('DOMPurify not loaded, falling back to textContent');
+                element.textContent = html;
+            }
+        }
+    </script>
+</head>
+<body>
+    <div class="wallet-manager">
+        <header>
+            <nav class="main-nav">
+                <a href="/" class="nav-item">Overview</a>
+                <a href="/assets.html" class="nav-item">Assets</a>
+                <a href="/nfts.html" class="nav-item">NFTs</a>
+                <a href="/data.html" class="nav-item active">Data & Analytics</a>
+            </nav>
+            <div class="header-right-controls">
+                <div class="user-avatar-container">
+                    <button class="user-avatar-btn" onclick="toggleUserMenu()">
+                        <div class="avatar-circle" id="userAvatar">?</div>
+                    </button>
+                    <div class="user-menu-dropdown" id="userMenu">
+                        <div class="user-menu-header">
+                            <span id="userMenuName">User</span>
+                        </div>
+                        <div class="user-menu-divider"></div>
+                        <a href="/settings.html" class="user-menu-item">Settings</a>
+                        <div class="user-menu-divider"></div>
+                        <button class="user-menu-item" onclick="togglePrivacyMode()">
+                            Privacy Mode <span class="privacy-indicator" id="privacyIndicator">OFF</span>
+                        </button>
+                        <div class="user-menu-theme-row">
+                            <span>Theme</span>
+                            <select id="themeSelect" onchange="changeTheme(this.value)" title="Select theme">
+                                <option value="dark-mode">Dark Mode</option>
+                                <option value="light">Light</option>
+                                <option value="cypherpunk1">Cypherpunk 1</option>
+                                <option value="ocean-depths">Ocean Depths</option>
+                                <option value="sunset-horizon">Sunset Horizon</option>
+                                <option value="cypher">Cypher</option>
+                                <option value="cypher2">Cypher2</option>
+                                <option value="cypher3">Cypher3</option>
+                            </select>
+                        </div>
+                        <div class="user-menu-divider"></div>
+                        <button class="user-menu-item" id="changePasswordMenuItem" onclick="showChangePasswordModal()">Change Password</button>
+                        <button class="user-menu-item user-menu-logout" onclick="logout()">Logout</button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Status Bar -->
+        <div id="statusBar" class="status-bar hidden">
+            <span id="statusMessage"></span>
+        </div>
+
+        <!-- Main Tab Navigation -->
+        <div class="main-tab-nav">
+            <button class="main-tab-btn active" onclick="switchMainTab('transactions')">Transactions</button>
+            <button class="main-tab-btn" onclick="switchMainTab('analytics')">Analytics</button>
+        </div>
+
+        <!-- ===================== -->
+        <!-- TRANSACTIONS TAB      -->
+        <!-- ===================== -->
+        <div id="transactionsTab" class="main-tab-content active">
+            <!-- Filter Bar -->
+            <section class="filter-section">
+                <div class="section-header-inline">
+                    <h2>Filters</h2>
+                </div>
+                <div class="filter-bar">
+                    <div class="filter-group">
+                        <label for="daysFilter">Time Period:</label>
+                        <select id="daysFilter" onchange="loadTransactions()">
+                            <option value="7">Last 7 days</option>
+                            <option value="30">Last 30 days</option>
+                            <option value="90" selected>Last 90 days</option>
+                            <option value="365">Last year</option>
+                            <option value="99999">All time</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="blockchainFilter">Blockchain:</label>
+                        <select id="blockchainFilter" onchange="loadTransactions()">
+                            <option value="">All Chains</option>
+                            <option value="cardano">Cardano</option>
+                            <option value="ethereum">Ethereum</option>
+                            <option value="bitcoin">Bitcoin</option>
+                            <option value="solana">Solana</option>
+                            <option value="polygon">Polygon</option>
+                            <option value="base">Base</option>
+                            <option value="bsc">BNB Chain</option>
+                            <option value="arbitrum">Arbitrum</option>
+                            <option value="avalanche">Avalanche</option>
+                            <option value="tron">Tron</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="directionFilter">Direction:</label>
+                        <select id="directionFilter" onchange="loadTransactions()">
+                            <option value="">All Directions</option>
+                            <option value="received">Received</option>
+                            <option value="sent">Sent</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="searchBox">Search:</label>
+                        <input type="search" id="searchBox" placeholder="Hash, address, token..." onkeyup="handleSearchKeyup(event)">
+                    </div>
+
+                    <button class="btn btn-primary" onclick="refreshTransactions()" title="Fetch latest transactions from blockchains">
+                        &#128260; Refresh
+                    </button>
+                </div>
+            </section>
+
+            <!-- Transaction Stats -->
+            <section class="stats-section" id="statsSection" style="display: none;">
+                <div class="section-header-inline">
+                    <h2>Statistics</h2>
+                </div>
+                <div class="stats-grid" id="statsGrid">
+                    <!-- Stats populated by JS -->
+                </div>
+            </section>
+
+            <!-- Transaction Table (Wireshark-style) -->
+            <section class="transactions-section">
+                <div class="section-header-inline">
+                    <h2>Transactions</h2>
+                    <span id="txCount" class="badge">0</span>
+                </div>
+                <div class="transaction-list">
+                    <div id="loadingIndicator" class="loading-indicator" style="display: none;">
+                        <span class="spinner"></span>
+                        <p>Loading transactions...</p>
+                    </div>
+
+                    <div id="emptyState" class="empty-state" style="display: none;">
+                        <p>No transactions found for the selected filters.</p>
+                        <button class="btn btn-primary" onclick="refreshTransactions()">Fetch Transactions</button>
+                    </div>
+
+                    <table id="txTable" style="display: none;">
+                        <thead>
+                            <tr>
+                                <th width="5%"></th>
+                                <th width="15%">Time</th>
+                                <th width="10%">Chain</th>
+                                <th width="10%">Direction</th>
+                                <th width="15%">Amount</th>
+                                <th width="10%">Token</th>
+                                <th width="35%">Hash</th>
+                            </tr>
+                        </thead>
+                        <tbody id="txTableBody">
+                            <!-- Rows populated by JS -->
+                        </tbody>
+                    </table>
+
+                    <!-- Pagination Controls -->
+                    <div id="paginationControls" class="pagination-controls" style="display: none;">
+                        <div class="pagination-info">
+                            <span>Showing <span id="pageStart">0</span>-<span id="pageEnd">0</span> of <span id="totalTransactions">0</span></span>
+                        </div>
+                        <div class="pagination-buttons">
+                            <button class="btn btn-secondary" onclick="goToFirstPage()" id="firstPageBtn" disabled>First</button>
+                            <button class="btn btn-secondary" onclick="previousPage()" id="prevPageBtn" disabled>Previous</button>
+                            <span class="page-indicator">Page <span id="currentPage">1</span> of <span id="totalPages">1</span></span>
+                            <button class="btn btn-secondary" onclick="nextPage()" id="nextPageBtn" disabled>Next</button>
+                            <button class="btn btn-secondary" onclick="goToLastPage()" id="lastPageBtn" disabled>Last</button>
+                        </div>
+                        <div class="pagination-size">
+                            <label for="pageSizeSelect">Per page:</label>
+                            <select id="pageSizeSelect" onchange="changePageSize()">
+                                <option value="10">10</option>
+                                <option value="20" selected>20</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+        <!-- End Transactions Tab -->
+
+        <!-- ===================== -->
+        <!-- ANALYTICS TAB         -->
+        <!-- ===================== -->
+        <div id="analyticsTab" class="main-tab-content">
+            <section class="analytics-section">
+                <div class="section-header-inline">
+                    <h2>Transaction Activity by Blockchain</h2>
+                </div>
+
+                <!-- Time Period Controls -->
+                <div class="analytics-controls">
+                    <div class="period-buttons">
+                        <button class="period-btn" onclick="changeAnalyticsPeriod(7)">1 Week</button>
+                        <button class="period-btn active" onclick="changeAnalyticsPeriod(30)">30 Days</button>
+                        <button class="period-btn" onclick="changeAnalyticsPeriod(365)">1 Year</button>
+                        <button class="period-btn" onclick="changeAnalyticsPeriod(99999)">All Time</button>
+                    </div>
+                </div>
+
+                <!-- Loading Indicator -->
+                <div id="analyticsLoading" class="loading-indicator" style="display: none;">
+                    <span class="spinner"></span>
+                    <p>Loading analytics...</p>
+                </div>
+
+                <!-- Empty State -->
+                <div id="analyticsEmpty" class="empty-state" style="display: none;">
+                    <p>No transaction data available for analytics.</p>
+                </div>
+
+                <!-- Chart Container -->
+                <div id="analyticsChartContainer" class="analytics-chart-container" style="display: none;">
+                    <canvas id="analyticsChart"></canvas>
+                </div>
+
+                <!-- Chain Indicators -->
+                <div class="chain-indicators-section">
+                    <div class="section-header-inline">
+                        <h3>Filter by Blockchain</h3>
+                        <span class="hint-text">Click to highlight/unhighlight chains</span>
+                    </div>
+                    <div id="chainIndicators" class="chain-indicators">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </section>
+        </div>
+        <!-- End Analytics Tab -->
+
+        <!-- Processing Modal (used during transaction refresh) -->
+        <div id="processingModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <h2>Fetching Transactions...</h2>
+                <div class="spinner"></div>
+                <p id="processingStatus">Loading transactions from blockchains...</p>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .discover-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            border-bottom: 1px solid #3a3a4e;
+        }
+        .discover-item:last-child {
+            border-bottom: none;
+        }
+        .discover-item.tracked {
+            opacity: 0.5;
+        }
+        .discover-item .address {
+            flex: 1;
+            font-family: monospace;
+            font-size: 12px;
+            color: #e0e0e0;
+        }
+        .discover-item .balance {
+            font-size: 12px;
+            color: #888;
+            min-width: 100px;
+            text-align: right;
+        }
+        .discover-item .balance.has-utxos {
+            color: #4ade80;
+        }
+        .discover-item .status {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            min-width: 70px;
+            text-align: center;
+        }
+        .discover-item .status.tracked {
+            background: rgba(102, 126, 234, 0.2);
+            color: #667eea;
+        }
+        .discover-item .status.new {
+            background: rgba(74, 222, 128, 0.2);
+            color: #4ade80;
+        }
+        .discover-item .chain-type {
+            font-size: 11px;
+            color: #888;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        /* Exchange Management Styles */
+        .exchange-info-box {
+            background: rgba(102, 126, 234, 0.1);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .exchange-info-box h3 {
+            margin: 0 0 10px 0;
+            color: #667eea;
+        }
+
+        .exchange-info-box p {
+            margin: 8px 0;
+            color: #b0b0b0;
+            line-height: 1.6;
+        }
+
+        .exchange-status-container {
+            margin-bottom: 30px;
+        }
+
+        .exchange-status-container h3 {
+            margin-bottom: 15px;
+            color: #e0e0e0;
+        }
+
+        .exchange-status-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+        }
+
+        .exchange-status-card {
+            background: #2a2a3e;
+            border: 1px solid #3a3a4e;
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .exchange-status-card.configured {
+            border-color: rgba(74, 222, 128, 0.3);
+            background: rgba(74, 222, 128, 0.05);
+        }
+
+        .exchange-status-card.not-configured {
+            opacity: 0.6;
+        }
+
+        .exchange-logo-large {
+            width: 40px;
+            height: 40px;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+
+        .exchange-status-info {
+            flex: 1;
+        }
+
+        .exchange-status-info h4 {
+            margin: 0 0 4px 0;
+            font-size: 16px;
+            color: #e0e0e0;
+        }
+
+        .exchange-status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .exchange-status-badge.configured {
+            background: rgba(74, 222, 128, 0.2);
+            color: #4ade80;
+        }
+
+        .exchange-status-badge.not-configured {
+            background: rgba(156, 163, 175, 0.2);
+            color: #9ca3af;
+        }
+
+        .exchange-setup-guide h3 {
+            margin-bottom: 20px;
+            color: #e0e0e0;
+        }
+
+        .exchange-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .exchange-card {
+            background: #2a2a3e;
+            border: 1px solid #3a3a4e;
+            border-radius: 12px;
+            padding: 20px;
+            transition: all 0.2s;
+        }
+
+        .exchange-card:hover {
+            border-color: rgba(102, 126, 234, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .exchange-card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .exchange-card-header h4 {
+            margin: 0;
+            color: #e0e0e0;
+            font-size: 18px;
+        }
+
+        .exchange-card p {
+            color: #b0b0b0;
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+
+        .exchange-card code {
+            background: rgba(102, 126, 234, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #a0a0ff;
+        }
+
+        .setup-link {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .setup-link:hover {
+            color: #764ba2;
+            text-decoration: underline;
+        }
+    </style>
+
+    <script>
+        // Status Messages
+        function showStatus(message, type) {
+            const statusBar = document.getElementById('statusBar');
+            const statusMessage = document.getElementById('statusMessage');
+
+            if (!statusBar || !statusMessage) {
+                console.log(`Status: ${message}${type === 'error' ? ' (error)' : ''}`);
+                return;
+            }
+
+            statusMessage.textContent = message;
+            statusBar.classList.remove('hidden', 'error', 'success');
+
+            if (type === 'error') {
+                statusBar.classList.add('error');
+            } else if (type === 'success') {
+                statusBar.classList.add('success');
+            }
+
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                statusBar.classList.add('hidden');
+            }, 5000);
+        }
+    </script>
+
+    <script src="/static/js/app.js?v=1771077617"></script>
+
+    <!-- Transaction scripts -->
+    <script src="/static/js/transactions.js?v=1771077617"></script>
+    <script src="/static/js/transaction-analytics.js?v=1771077617"></script>
+
+    <script>
+        // Main tab switching function
+        function switchMainTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.main-tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.textContent.toLowerCase().replace(/\s+/g, '') === tabName.toLowerCase()) {
+                    btn.classList.add('active');
+                }
+            });
+            if (event && event.target) event.target.classList.add('active');
+
+            // Update tab content
+            document.querySelectorAll('.main-tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            document.getElementById(tabName + 'Tab').classList.add('active');
+
+            // Initialize analytics chart when switching to analytics tab
+            if (tabName === 'analytics' && typeof initAnalyticsChart === 'function' && !analyticsChart) {
+                initAnalyticsChart();
+            }
+
+            // Update URL hash
+            if (history.replaceState) {
+                history.replaceState(null, null, '#' + tabName);
+            }
+        }
+
+    </script>
+
+    <script>
+        // Initialize privacy mode and theme on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof initializePrivacyMode === 'function') {
+                initializePrivacyMode();
+            }
+            if (typeof loadSavedTheme === 'function') {
+                loadSavedTheme();
+            }
+
+            // Handle hash-based tab navigation
+            const hash = window.location.hash.replace('#', '');
+            if (hash && document.getElementById(hash + 'Tab')) {
+                switchMainTab(hash);
+            }
+        });
+    </script>
+
+    <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
+        <p>ABCT - Data & Analytics | <span id="appVersion" style="opacity: 0.6;">v1.11.0 (BUILD 1771077617)</span></p>
+    </footer>
+</body>
+</html>
