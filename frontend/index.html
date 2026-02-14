@@ -6,7 +6,7 @@
     <title>A Better Crypto Tracker</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771009377">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771077617">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="preconnect" href="https://unpkg.com" crossorigin>
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
@@ -15,7 +15,7 @@
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1771009377"></script>
+    <script src="/static/js/session-auth.js?v=1771077617"></script>
 </head>
 <body>
     <div class="container">
@@ -24,6 +24,7 @@
                 <a href="/" class="nav-item active">Overview</a>
                 <a href="/assets.html" class="nav-item">Assets</a>
                 <a href="/nfts.html" class="nav-item">NFTs</a>
+                <a href="/data.html" class="nav-item">Data & Analytics</a>
             </nav>
             <div class="header-right-controls">
                 <div class="user-avatar-container">
@@ -35,9 +36,7 @@
                             <span id="userMenuName">User</span>
                         </div>
                         <div class="user-menu-divider"></div>
-                        <a href="/wallets.html" class="user-menu-item">Manage Wallets</a>
-                        <a href="/settings.html" class="user-menu-item">Connectors</a>
-                        <a href="/system.html" class="user-menu-item">Settings</a>
+                        <a href="/settings.html" class="user-menu-item">Settings</a>
                         <div class="user-menu-divider"></div>
                         <button class="user-menu-item" onclick="togglePrivacyMode()">
                             Privacy Mode <span class="privacy-indicator" id="privacyIndicator">OFF</span>
@@ -255,15 +254,8 @@
 
                     <div class="analytics-slider-viewport">
                     <div class="analytics-slider">
-                        <!-- Slide 1: Blockchain Summary Cards -->
+                        <!-- Slide 1: Coin Allocation Chart -->
                         <div class="analytics-slide active" data-slide="0">
-                            <div class="summary-cards" id="blockchainCards">
-                                <!-- Dynamically populated by renderBlockchainCards() -->
-                            </div>
-                        </div>
-
-                        <!-- Slide 2: Coin Allocation Chart -->
-                        <div class="analytics-slide" data-slide="1">
                             <div class="analytics-chart-container">
                                 <h3 class="analytics-title">Coin Allocation<span class="analytics-refresh-indicator" id="coinRefreshIndicator" title="Refreshing data..."></span></h3>
                                 <div class="analytics-content">
@@ -276,8 +268,8 @@
                             </div>
                         </div>
 
-                        <!-- Slide 3: Category Allocation Chart -->
-                        <div class="analytics-slide" data-slide="2">
+                        <!-- Slide 2: Category Allocation Chart -->
+                        <div class="analytics-slide" data-slide="1">
                             <div class="analytics-chart-container">
                                 <h3 class="analytics-title">Asset Allocation by Category<span class="analytics-refresh-indicator" id="categoryRefreshIndicator" title="Refreshing data..."></span></h3>
                                 <div class="analytics-content">
@@ -290,8 +282,8 @@
                             </div>
                         </div>
 
-                        <!-- Slide 4: Price Charts -->
-                        <div class="analytics-slide" data-slide="3">
+                        <!-- Slide 3: Price Charts -->
+                        <div class="analytics-slide" data-slide="2">
                             <div class="price-charts-container">
                                 <!-- Left Side: Blockchain Selector -->
                                 <div class="blockchain-selector">
@@ -356,8 +348,8 @@
                             </div>
                         </div>
 
-                        <!-- Slide 5: Portfolio Heatmap -->
-                        <div class="analytics-slide" data-slide="4" id="heatmapSection">
+                        <!-- Slide 4: Portfolio Heatmap -->
+                        <div class="analytics-slide" data-slide="3" id="heatmapSection">
                             <div class="heatmap-slide-inner">
                                 <div class="heatmap-slide-header">
                                     <h3 class="analytics-title">Portfolio Heatmap</h3>
@@ -387,7 +379,6 @@
                         <button class="slider-indicator" onclick="goToAnalyticsSlide(1)" aria-label="Slide 2"></button>
                         <button class="slider-indicator" onclick="goToAnalyticsSlide(2)" aria-label="Slide 3"></button>
                         <button class="slider-indicator" onclick="goToAnalyticsSlide(3)" aria-label="Slide 4"></button>
-                        <button class="slider-indicator" onclick="goToAnalyticsSlide(4)" aria-label="Slide 5"></button>
                     </div>
                 </div>
             </section>
@@ -485,10 +476,10 @@
         </main>
 
         <footer>
-            <p>ABCT - Personal Crypto Portfolio Tracker | Phase 1 | <span id="appVersion" style="opacity: 0.6;">v1.10.2 (BUILD 1771009377)</span></p>
+            <p>ABCT - Personal Crypto Portfolio Tracker | Phase 1 | <span id="appVersion" style="opacity: 0.6;">v1.11.0 (BUILD 1771077617)</span></p>
         </footer>
     </div>
 
-    <script src="/static/js/app.js?v=1771009377"></script>
+    <script src="/static/js/app.js?v=1771077617"></script>
 </body>
 </html>

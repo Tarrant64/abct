@@ -564,20 +564,25 @@ async def nft_wall():
     """Redirect NFT Wall to NFTs page (Wall tab)."""
     return RedirectResponse(url="/nfts.html#wall", status_code=301)
 
+@app.get("/data.html")
+async def data_page():
+    """Serve the Data & Analytics page (Transactions, Analytics)."""
+    return FileResponse(str(frontend_path / "data.html"))
+
 @app.get("/wallets.html")
-async def wallets_page():
-    """Serve the Wallet Manager page."""
-    return FileResponse(str(frontend_path / "wallets.html"))
+async def wallets_redirect():
+    """Redirect old Wallets page to Data & Analytics."""
+    return RedirectResponse(url="/data.html", status_code=301)
 
 @app.get("/settings.html")
 async def settings_page():
-    """Serve the consolidated Settings page (APIs, Services, Security, Backup)."""
+    """Serve the consolidated Settings page (APIs, Data Collectors, Cache, Logs, Services, Security, Backup)."""
     return FileResponse(str(frontend_path / "settings.html"))
 
 @app.get("/system.html")
-async def system_page():
-    """Serve the consolidated System page (Cache, Logs)."""
-    return FileResponse(str(frontend_path / "system.html"))
+async def system_redirect():
+    """Redirect old System page to Settings."""
+    return RedirectResponse(url="/settings.html", status_code=301)
 
 # Legacy redirects — old URLs redirect to consolidated pages
 @app.get("/apis.html")
@@ -587,8 +592,8 @@ async def apis_redirect():
 
 @app.get("/services.html")
 async def services_redirect():
-    """Redirect to System page (Services tab)."""
-    return RedirectResponse(url="/system.html#services", status_code=301)
+    """Redirect to Settings page (Services tab)."""
+    return RedirectResponse(url="/settings.html#services", status_code=301)
 
 @app.get("/security.html")
 async def security_redirect():
@@ -602,8 +607,8 @@ async def backup_redirect():
 
 @app.get("/logs.html")
 async def logs_redirect():
-    """Redirect to System page (Logs tab)."""
-    return RedirectResponse(url="/system.html#logs", status_code=301)
+    """Redirect to Settings page (Logs tab)."""
+    return RedirectResponse(url="/settings.html#logs", status_code=301)
 
 @app.get("/api-help.html")
 async def api_help_page():
@@ -617,13 +622,13 @@ async def dashv2_page():
 
 @app.get("/cache.html")
 async def cache_redirect():
-    """Redirect to System page (Cache tab)."""
-    return RedirectResponse(url="/system.html#cache", status_code=301)
+    """Redirect to Settings page (Cache tab)."""
+    return RedirectResponse(url="/settings.html#cache", status_code=301)
 
 @app.get("/transactions.html")
 async def transactions_redirect():
-    """Redirect to Wallets page (Transactions tab)."""
-    return RedirectResponse(url="/wallets.html#transactions", status_code=301)
+    """Redirect to Data & Analytics page (Transactions tab)."""
+    return RedirectResponse(url="/data.html#transactions", status_code=301)
 
 @app.get("/health")
 async def health_check():
