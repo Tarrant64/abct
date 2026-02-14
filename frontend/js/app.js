@@ -8925,56 +8925,45 @@ function layoutRow(row, rect, results) {
     }
 }
 
-function nextAnalyticsSlide() {
-    currentAnalyticsSlide = (currentAnalyticsSlide + 1) % 4;
-    updateAnalyticsSlide();
-}
+// Slider functions kept as no-ops for backward compatibility
+// (analytics charts have moved to the Blockchains tab on data.html)
+function nextAnalyticsSlide() {}
+function previousAnalyticsSlide() {}
+function goToAnalyticsSlide(index) {}
+function updateAnalyticsSlide() {}
 
-function previousAnalyticsSlide() {
-    currentAnalyticsSlide = (currentAnalyticsSlide - 1 + 4) % 4;
-    updateAnalyticsSlide();
-}
+// Initialize Blockchains tab on data.html
+let _blockchainsInitialized = false;
+async function initBlockchainsTab() {
+    if (_blockchainsInitialized) return;
+    _blockchainsInitialized = true;
 
-function goToAnalyticsSlide(index) {
-    currentAnalyticsSlide = index;
-    updateAnalyticsSlide();
-}
-
-function updateAnalyticsSlide() {
-    const slides = document.querySelectorAll('.analytics-slide');
-    const indicators = document.querySelectorAll('.slider-indicator');
-    const slider = document.querySelector('.analytics-slider');
-
-    slides.forEach((slide, index) => {
-        if (index === currentAnalyticsSlide) {
-            slide.classList.add('active');
-        } else {
-            slide.classList.remove('active');
+    // Fetch portfolio data for blockchain cards
+    try {
+        const resp = await authFetch(`${API_BASE}/portfolio/summary`);
+        if (resp.ok) {
+            const data = await resp.json();
+            renderBlockchainCards(data);
         }
-    });
+    } catch (e) {
+        console.warn('[Blockchains] Failed to load portfolio data:', e);
+    }
 
-    indicators.forEach((indicator, index) => {
-        if (index === currentAnalyticsSlide) {
-            indicator.classList.add('active');
-        } else {
-            indicator.classList.remove('active');
-        }
-    });
+    // Load analytics data (coin allocation, category allocation, heatmap)
+    await loadAnalyticsData();
 
-    slider.style.transform = `translateX(-${currentAnalyticsSlide * 100}%)`;
-
-    // Load/refresh analytics data when switching to chart or heatmap slides
-    if (currentAnalyticsSlide >= 0 && currentAnalyticsSlide !== 2) {
-        if (!analyticsData) {
-            loadAnalyticsData();
-        }
+    // Initialize price chart
+    if (typeof initializePriceChart === 'function') {
+        setTimeout(() => initializePriceChart(), 200);
     }
 }
 
 function renderCoinAllocationChart() {
     if (!analyticsData || !analyticsData.coin_allocation) return;
 
-    const ctx = document.getElementById('coinAllocationChart').getContext('2d');
+    const canvasEl = document.getElementById('coinAllocationChart');
+    if (!canvasEl) return;
+    const ctx = canvasEl.getContext('2d');
     if (coinAllocationChart) coinAllocationChart.destroy();
 
     // Top 6 coins, rest go into "Other"
@@ -9144,7 +9133,9 @@ function renderCoinLegend(coins, colors) {
 function renderCategoryAllocationChart() {
     if (!analyticsData || !analyticsData.category_allocation) return;
 
-    const ctx = document.getElementById('categoryAllocationChart').getContext('2d');
+    const canvasEl = document.getElementById('categoryAllocationChart');
+    if (!canvasEl) return;
+    const ctx = canvasEl.getContext('2d');
     if (categoryAllocationChart) categoryAllocationChart.destroy();
 
     const categories = analyticsData.category_allocation;
@@ -9755,41 +9746,13 @@ function selectTimeframe(timeframe) {
     loadPriceChartData(currentBlockchain, timeframe);
 }
 
-// Initialize price chart when 4th slide becomes active
+// Initialize price chart when the blockchains tab is visible
 function checkAndInitPriceChart() {
-    const priceChartSlide = document.querySelector('[data-slide="3"]');
-    if (priceChartSlide && priceChartSlide.classList.contains('active') && !priceChartInitialized) {
-        // Small delay to ensure DOM is ready
+    const priceChartContainer = document.getElementById('priceChart');
+    if (priceChartContainer && !priceChartInitialized) {
         setTimeout(() => initializePriceChart(), 100);
     }
 }
-
-// Hook into existing analytics slider navigation
-const originalGoToAnalyticsSlide = window.goToAnalyticsSlide;
-window.goToAnalyticsSlide = function(index) {
-    if (originalGoToAnalyticsSlide) {
-        originalGoToAnalyticsSlide(index);
-    }
-    if (index === 3) {
-        checkAndInitPriceChart();
-    }
-};
-
-const originalNextAnalyticsSlide = window.nextAnalyticsSlide;
-window.nextAnalyticsSlide = function() {
-    if (originalNextAnalyticsSlide) {
-        originalNextAnalyticsSlide();
-    }
-    checkAndInitPriceChart();
-};
-
-const originalPreviousAnalyticsSlide = window.previousAnalyticsSlide;
-window.previousAnalyticsSlide = function() {
-    if (originalPreviousAnalyticsSlide) {
-        originalPreviousAnalyticsSlide();
-    }
-    checkAndInitPriceChart();
-};
 
 // Update changeTheme to recreate price chart
 const originalChangeTheme = window.changeTheme;
