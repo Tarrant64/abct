@@ -518,6 +518,7 @@ class DeFiService:
         """
         Get Liqwid Finance staking positions for an address.
         Queries the Liqwid staking contract for UTxOs with matching user PKH in datum.
+        Uses parallel page fetching to handle large contract state (2700+ UTxOs).
         """
         try:
             # Extract payment credential from address
@@ -526,56 +527,67 @@ class DeFiService:
                 return None
 
             client = get_client("blockfrost", timeout=15.0)
+            sem = asyncio.Semaphore(10)  # Limit concurrent Blockfrost requests
 
-            # Query all UTxOs at the staking contract
-            # Need to page through since there may be many stakers
-            positions = []
-            total_staked = 0
-            page = 1
+            async def fetch_page(pg):
+                async with sem:
+                    resp = await client.get(
+                        f"{BLOCKFROST_BASE_URL}/addresses/{LIQWID_STAKING_ADDRESS}/utxos",
+                        headers=self.headers,
+                        params={"count": 100, "page": pg}
+                    )
+                    if resp.status_code != 200:
+                        return []
+                    return resp.json()
 
-            while True:
-                response = await client.get(
-                    f"{BLOCKFROST_BASE_URL}/addresses/{LIQWID_STAKING_ADDRESS}/utxos",
-                    headers=self.headers,
-                    params={"count": 100, "page": page}
-                )
-
-                if response.status_code != 200:
-                    logger.error(f"Blockfrost error fetching Liqwid staking: {response.status_code}")
-                    break
-
-                utxos = response.json()
-                if not utxos:
-                    break
-
-                # Search for UTxOs with user's PKH in the inline datum
-                for utxo in utxos:
-                    inline_datum = utxo.get('inline_datum') or ''
-
-                    # Check if user's PKH is in the datum
-                    if inline_datum and payment_cred in inline_datum:
-                        lq_amount = 0
-                        for asset in utxo.get('amount', []):
-                            if asset.get('unit') == LIQWID_LQ_TOKEN:
-                                lq_amount = int(asset.get('quantity', 0))
-
-                        if lq_amount > 0:
-                            total_staked += lq_amount
-                            positions.append({
-                                'tx_hash': utxo.get('tx_hash'),
-                                'output_index': utxo.get('output_index'),
-                                'staked_lq_raw': lq_amount,
-                                'staked_lq': lq_amount / 1_000_000
-                            })
-
-                page += 1
-                # Safety limit - scan up to 10 pages (1000 UTxOs)
-                if page > 10:
-                    break
-
-            if not positions:
+            # Phase 1: Fetch first page to confirm contract has UTxOs
+            first_page = await fetch_page(1)
+            if not first_page:
                 return None
 
+            # Phase 2: Fetch remaining pages in parallel (contract has ~2700+ UTxOs = ~28 pages)
+            # Optimistically fetch pages 2-30 in parallel
+            remaining = await asyncio.gather(
+                *[fetch_page(pg) for pg in range(2, 31)],
+                return_exceptions=True
+            )
+
+            all_utxos = list(first_page)
+            for result in remaining:
+                if isinstance(result, Exception) or not result:
+                    continue
+                all_utxos.extend(result)
+
+            logger.info(f"[Liqwid] Scanned {len(all_utxos)} UTxOs for PKH {payment_cred[:16]}...")
+
+            # Search for UTxOs with user's PKH in the inline datum
+            positions = []
+            total_staked = 0
+
+            for utxo in all_utxos:
+                inline_datum = utxo.get('inline_datum') or ''
+
+                # Check if user's PKH is in the datum
+                if inline_datum and payment_cred in inline_datum:
+                    lq_amount = 0
+                    for asset in utxo.get('amount', []):
+                        if asset.get('unit') == LIQWID_LQ_TOKEN:
+                            lq_amount = int(asset.get('quantity', 0))
+
+                    if lq_amount > 0:
+                        total_staked += lq_amount
+                        positions.append({
+                            'tx_hash': utxo.get('tx_hash'),
+                            'output_index': utxo.get('output_index'),
+                            'staked_lq_raw': lq_amount,
+                            'staked_lq': lq_amount / 1_000_000
+                        })
+
+            if not positions:
+                logger.info(f"[Liqwid] No positions found in {len(all_utxos)} UTxOs for {address[:20]}...")
+                return None
+
+            logger.info(f"[Liqwid] Found {len(positions)} positions, {total_staked/1_000_000:.2f} LQ for {address[:20]}...")
             return {
                 'protocol': 'Liqwid',
                 'address': address,
@@ -592,6 +604,7 @@ class DeFiService:
         """
         Get Strike Finance staking positions for an address.
         Queries the Strike staking contract for UTxOs with matching user NFT.
+        Uses parallel page fetching to handle large contract state (1000+ UTxOs).
         """
         try:
             # Extract payment credential from address
@@ -600,60 +613,67 @@ class DeFiService:
                 return None
 
             client = get_client("blockfrost", timeout=15.0)
+            sem = asyncio.Semaphore(10)
 
-            # Query all UTxOs at the staking contract
-            # Need to page through since there may be many stakers
+            async def fetch_page(pg):
+                async with sem:
+                    resp = await client.get(
+                        f"{BLOCKFROST_BASE_URL}/addresses/{STRIKE_STAKING_ADDRESS}/utxos",
+                        headers=self.headers,
+                        params={"count": 100, "page": pg}
+                    )
+                    if resp.status_code != 200:
+                        return []
+                    return resp.json()
+
+            # Fetch first page, then remaining in parallel
+            first_page = await fetch_page(1)
+            if not first_page:
+                return None
+
+            remaining = await asyncio.gather(
+                *[fetch_page(pg) for pg in range(2, 16)],
+                return_exceptions=True
+            )
+
+            all_utxos = list(first_page)
+            for result in remaining:
+                if isinstance(result, Exception) or not result:
+                    continue
+                all_utxos.extend(result)
+
+            logger.info(f"[Strike] Scanned {len(all_utxos)} UTxOs for PKH {payment_cred[:16]}...")
+
+            # Search for UTxOs with user's staking NFT
             total_staked = 0
             positions = []
-            page = 1
 
-            while True:
-                response = await client.get(
-                    f"{BLOCKFROST_BASE_URL}/addresses/{STRIKE_STAKING_ADDRESS}/utxos",
-                    headers=self.headers,
-                    params={"count": 100, "page": page}
-                )
+            for utxo in all_utxos:
+                has_user_nft = False
+                strike_amount = 0
 
-                if response.status_code != 200:
-                    logger.error(f"Blockfrost error fetching Strike staking: {response.status_code}")
-                    break
+                for asset in utxo.get('amount', []):
+                    unit = asset.get('unit', '')
+                    qty = int(asset.get('quantity', 0))
 
-                utxos = response.json()
-                if not utxos:
-                    break
+                    # Check if this UTxO has an NFT with user's PKH
+                    if unit.startswith(STRIKE_STAKING_NFT_POLICY):
+                        asset_name = unit[len(STRIKE_STAKING_NFT_POLICY):]
+                        if asset_name == payment_cred:
+                            has_user_nft = True
 
-                # Search for UTxOs with user's PKH in the staking NFT
-                for utxo in utxos:
-                    has_user_nft = False
-                    strike_amount = 0
+                    # Check for STRIKE tokens
+                    if unit.startswith(STRIKE_TOKEN_POLICY):
+                        strike_amount = qty
 
-                    for asset in utxo.get('amount', []):
-                        unit = asset.get('unit', '')
-                        qty = int(asset.get('quantity', 0))
-
-                        # Check if this UTxO has an NFT with user's PKH
-                        if unit.startswith(STRIKE_STAKING_NFT_POLICY):
-                            asset_name = unit[len(STRIKE_STAKING_NFT_POLICY):]
-                            if asset_name == payment_cred:
-                                has_user_nft = True
-
-                        # Check for STRIKE tokens
-                        if unit.startswith(STRIKE_TOKEN_POLICY):
-                            strike_amount = qty
-
-                    if has_user_nft and strike_amount > 0:
-                        total_staked += strike_amount
-                        positions.append({
-                            'tx_hash': utxo.get('tx_hash'),
-                            'output_index': utxo.get('output_index'),
-                            'staked_strike_raw': strike_amount,
-                            'staked_strike': strike_amount / 1_000_000
-                        })
-
-                page += 1
-                # Safety limit - scan up to 10 pages (1000 UTxOs)
-                if page > 10:
-                    break
+                if has_user_nft and strike_amount > 0:
+                    total_staked += strike_amount
+                    positions.append({
+                        'tx_hash': utxo.get('tx_hash'),
+                        'output_index': utxo.get('output_index'),
+                        'staked_strike_raw': strike_amount,
+                        'staked_strike': strike_amount / 1_000_000
+                    })
 
             if not positions:
                 return None
@@ -1219,8 +1239,8 @@ class DeFiService:
         # Phase 1: Fetch all protocol staking positions in parallel (15s each)
         indigo, strike, liqwid, iagon, surf = await asyncio.gather(
             with_timeout(self.get_indigo_staking(address), "Indigo"),
-            with_timeout(self.get_strike_staking(address), "Strike"),
-            with_timeout(self.get_liqwid_staking(address), "Liqwid"),
+            with_timeout(self.get_strike_staking(address), "Strike", timeout=20),
+            with_timeout(self.get_liqwid_staking(address), "Liqwid", timeout=25),
             with_timeout(self.get_iagon_staking(address), "Iagon", timeout=30),
             with_timeout(self.get_surf_lending_positions(address), "Surf"),
             return_exceptions=True
