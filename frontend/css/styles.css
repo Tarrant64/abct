@@ -1570,54 +1570,6 @@ header h1 {
 }
 
 /* Display Toggle */
-.display-toggle {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.toggle-label {
-    font-size: 0.85rem;
-    color: var(--text-secondary);
-}
-
-.toggle-btn {
-    display: flex;
-    background-color: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 20px;
-    padding: 4px;
-    cursor: pointer;
-}
-
-.toggle-option {
-    padding: 6px 14px;
-    border-radius: 16px;
-    font-size: 0.8rem;
-    font-weight: 500;
-    color: var(--text-secondary);
-    transition: all 0.2s ease;
-}
-
-.toggle-option.active {
-    background-color: var(--accent-cardano);
-    color: white;
-}
-
-/* Compact Display Toggle (next to Portfolio Summary) */
-.display-toggle-compact {
-    margin-left: auto;
-}
-
-.toggle-btn-compact {
-    padding: 2px;
-}
-
-.toggle-btn-compact .toggle-option {
-    padding: 4px 10px;
-    font-size: 0.7rem;
-}
-
 .summary-header {
     align-items: center;
     margin-bottom: 15px;
@@ -3884,49 +3836,9 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     content: ')';
 }
 
-/* Remove parentheses in USD mode */
-body.usd-primary .card-body .balance-secondary::before,
-body.usd-primary .card-body .balance-secondary::after {
-    content: '';
-}
-
-/* Add parentheses around crypto in USD mode */
-body.usd-primary .card-body .balance::before {
-    content: '(';
-}
-
-body.usd-primary .card-body .balance::after {
-    content: ')';
-}
-
-/* USD Primary Mode - Summary Cards */
 .card-body {
     display: flex;
     flex-direction: column;
-}
-
-body.usd-primary .card-body {
-    flex-direction: column;
-}
-
-body.usd-primary .card-body .balance {
-    order: 2;
-    font-size: 1rem;
-    font-weight: 400;
-    color: var(--text-secondary);
-    margin-bottom: 12px;
-}
-
-body.usd-primary .card-body .balance-secondary {
-    order: 1;
-    font-size: 1.8rem;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin-bottom: 4px;
-}
-
-body.usd-primary .card-body .details {
-    order: 3;
 }
 
 .card-body .details {
@@ -4783,21 +4695,6 @@ body.usd-primary .card-body .details {
     content: ')';
 }
 
-/* Remove parentheses in USD mode */
-body.usd-primary .wallet-item .wallet-balance .amount-usd::before,
-body.usd-primary .wallet-item .wallet-balance .amount-usd::after {
-    content: '';
-}
-
-/* Add parentheses around crypto in USD mode */
-body.usd-primary .wallet-item .wallet-balance .amount::before {
-    content: '(';
-}
-
-body.usd-primary .wallet-item .wallet-balance .amount::after {
-    content: ')';
-}
-
 /* Wallet Governance Info */
 .wallet-governance {
     margin-top: 10px;
@@ -4867,28 +4764,9 @@ body.usd-primary .wallet-item .wallet-balance .amount::after {
     color: var(--text-secondary);
 }
 
-/* USD Primary Mode for Wallets */
 .wallet-item .wallet-balance {
     display: flex;
     flex-direction: column;
-}
-
-body.usd-primary .wallet-item .wallet-balance .amount {
-    order: 2;
-    font-size: 0.85rem;
-    font-weight: 400;
-    color: var(--text-secondary);
-}
-
-body.usd-primary .wallet-item .wallet-balance .amount-usd {
-    order: 1;
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
-body.usd-primary .wallet-item .wallet-balance .assets {
-    order: 3;
 }
 
 .wallet-item.cardano {
@@ -4980,36 +4858,6 @@ body.usd-primary .wallet-item .wallet-balance .assets {
 }
 
 .wallet-group-header .group-balance .amount-usd::after {
-    content: ')';
-}
-
-/* USD Primary Mode for Wallet Groups */
-body.usd-primary .wallet-group-header .group-balance .amount {
-    order: 2;
-    font-size: 0.85rem;
-    font-weight: 400;
-    color: var(--text-secondary);
-}
-
-body.usd-primary .wallet-group-header .group-balance .amount-usd {
-    order: 1;
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
-/* Remove parentheses from USD in USD mode */
-body.usd-primary .wallet-group-header .group-balance .amount-usd::before,
-body.usd-primary .wallet-group-header .group-balance .amount-usd::after {
-    content: '';
-}
-
-/* Add parentheses around crypto in USD mode */
-body.usd-primary .wallet-group-header .group-balance .amount::before {
-    content: '(';
-}
-
-body.usd-primary .wallet-group-header .group-balance .amount::after {
     content: ')';
 }
 
@@ -5515,35 +5363,6 @@ body.usd-primary .wallet-group-header .group-balance .amount::after {
 }
 
 .exchange-asset-item .balance-usd::after {
-    content: ')';
-}
-
-/* USD Primary Mode for Exchange Assets */
-body.usd-primary .exchange-asset-item .balance-amount {
-    order: 2;
-    font-size: 0.85rem;
-    color: var(--text-secondary);
-}
-
-body.usd-primary .exchange-asset-item .balance-usd {
-    order: 1;
-    font-size: 0.95rem;
-    font-weight: 500;
-    color: var(--text-primary);
-}
-
-/* Remove parentheses from USD in USD mode */
-body.usd-primary .exchange-asset-item .balance-usd::before,
-body.usd-primary .exchange-asset-item .balance-usd::after {
-    content: '';
-}
-
-/* Add parentheses around crypto in USD mode */
-body.usd-primary .exchange-asset-item .balance-amount::before {
-    content: '(';
-}
-
-body.usd-primary .exchange-asset-item .balance-amount::after {
     content: ')';
 }
 
@@ -7215,6 +7034,10 @@ body.usd-primary .exchange-asset-item .balance-amount::after {
     color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .defi-gov-card .staked-badge {
@@ -7235,6 +7058,8 @@ body.usd-primary .exchange-asset-item .balance-amount::after {
     padding: 2px 8px;
     border-radius: 10px;
     text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .defi-gov-card .ada-delegation-detail {
@@ -7247,6 +7072,109 @@ body.usd-primary .exchange-asset-item .balance-amount::after {
     font-size: 0.8rem;
     color: var(--text-secondary);
     margin-top: 4px;
+}
+
+/* Override cardano chain badge inside DeFi cards for legibility on dark backgrounds */
+.defi-gov-card .chain-badge.cardano {
+    color: var(--text-secondary);
+    background-color: rgba(0, 51, 173, 0.3);
+}
+
+/* Delegation percentage link with undelegated wallet tooltip */
+.delegation-pct-link {
+    position: relative;
+    cursor: pointer;
+    color: var(--accent-error);
+    text-decoration: underline dotted;
+    text-underline-offset: 2px;
+}
+
+.undelegated-tooltip {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 10px 12px;
+    min-width: 240px;
+    max-width: 320px;
+    z-index: 1000;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.delegation-pct-link:hover .undelegated-tooltip,
+.delegation-pct-link:focus .undelegated-tooltip {
+    display: block;
+}
+
+.undelegated-tooltip-header {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.undelegated-wallet-item {
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.15s;
+    position: relative;
+    margin-bottom: 4px;
+}
+
+.undelegated-wallet-item:last-child {
+    margin-bottom: 0;
+}
+
+.undelegated-wallet-item:hover {
+    background-color: var(--bg-card);
+}
+
+.undelegated-wallet-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.undelegated-label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.undelegated-balance {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.undelegated-addr {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    margin-top: 2px;
+}
+
+.copy-feedback {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.7rem;
+    color: var(--accent-success);
+    font-weight: 600;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
 }
 
 .defi-gov-card .card-amount {
