@@ -3048,6 +3048,42 @@ const GOVERNANCE_LINKS = {
 // Known stablecoins
 const KNOWN_STABLECOINS = ['USDC', 'USDT', 'DAI', 'USDM', 'iUSD', 'DJED', 'BUSD', 'TUSD'];
 
+// Restore defiTotals/stakingTotals from cached data for portfolio calculations
+function restoreDefiTotalsFromCache(cached) {
+    defiTotals = {};
+    if (cached.defiData && cached.defiData.positions_by_category) {
+        for (const [category, positions] of Object.entries(cached.defiData.positions_by_category)) {
+            for (const pos of positions) {
+                const token = pos.token || pos.asset_name || pos.symbol;
+                if (token && pos.quantity) {
+                    if (!defiTotals[token]) defiTotals[token] = 0;
+                    defiTotals[token] += pos.quantity;
+                }
+            }
+        }
+    }
+
+    stakingTotals = {};
+    for (const [protocol, data] of Object.entries(cached.allStaking || {})) {
+        for (const [token, stakeData] of Object.entries(data.staked || {})) {
+            if (!stakingTotals[token]) stakingTotals[token] = 0;
+            stakingTotals[token] += stakeData.amount;
+        }
+        if (data.reward_token && data.pending_rewards > 0) {
+            if (!stakingTotals[data.reward_token]) stakingTotals[data.reward_token] = 0;
+            stakingTotals[data.reward_token] += data.pending_rewards;
+        }
+    }
+}
+
+// Show/hide the DeFi background refresh bar
+function setDefiRefreshBar(visible) {
+    const bar = document.getElementById('defiRefreshBar');
+    if (bar) {
+        bar.classList.toggle('active', visible);
+    }
+}
+
 // Load consolidated DeFi & Governance data
 async function loadDefiGovernance() {
     const content = document.getElementById('defiGovernanceContent');
@@ -3055,16 +3091,35 @@ async function loadDefiGovernance() {
 
     if (!content) return;
 
-    // Mark as loading
-    document.body.classList.add('staking-loading');
-    document.body.classList.add('defi-loading');
-    updateTotalPortfolioValue();
+    // Check for cached data and render instantly if available
+    const cached = getCachedDefi();
+    if (cached) {
+        // Render immediately from cache - no spinners
+        restoreDefiTotalsFromCache(cached);
+        document.body.classList.remove('defi-loading');
+        document.body.classList.remove('staking-loading');
+        renderDefiGovernance(
+            cached.allStaking || {},
+            cached.defiData,
+            cached.exchangeStablecoins || [],
+            cached.nativeStablecoins || [],
+            cached.adaDelegation
+        );
+        updateTotalPortfolioValue();
+    } else {
+        // No cache - show loading state
+        document.body.classList.add('staking-loading');
+        document.body.classList.add('defi-loading');
+        updateTotalPortfolioValue();
+        setSafeHTML(content, `
+            <div class="loading-state">
+                <p class="progress-text" id="defiGovProgressText">Loading DeFi data...</p>
+            </div>
+        `);
+    }
 
-    setSafeHTML(content, `
-        <div class="loading-state">
-            <p class="progress-text" id="defiGovProgressText">Loading DeFi data...</p>
-        </div>
-    `);
+    // Show subtle refresh bar for background fetch
+    setDefiRefreshBar(true);
 
     try {
         // Phase 1: Fetch base data in parallel (wallets, defi summary, exchanges, native assets)
@@ -3126,21 +3181,25 @@ async function loadDefiGovernance() {
             }
         }
 
-        // Phase 2: Render immediately with DeFi data (staking shows as loading)
+        // Phase 2: Render with DeFi data (staking shows as loading if no cache)
         document.body.classList.remove('defi-loading');
-        renderDefiGovernance({}, defiData, exchangeStablecoins, nativeStablecoins, null);
+        if (!cached) {
+            renderDefiGovernance({}, defiData, exchangeStablecoins, nativeStablecoins, null);
+        }
 
-        // Show subtle updating indicator for staking section
-        const stakingSection = document.querySelector('.defi-gov-subsection');
-        if (stakingSection) {
-            const header = stakingSection.querySelector('.defi-gov-subsection-header');
-            if (header) {
-                const indicator = document.createElement('span');
-                indicator.className = 'staking-update-indicator';
-                indicator.id = 'stakingUpdateIndicator';
-                indicator.textContent = ' Loading staking...';
-                indicator.style.cssText = 'font-size: 0.8em; opacity: 0.6; font-weight: normal;';
-                header.appendChild(indicator);
+        // Show subtle updating indicator for staking section (only if no cache)
+        if (!cached) {
+            const stakingSection = document.querySelector('.defi-gov-subsection');
+            if (stakingSection) {
+                const header = stakingSection.querySelector('.defi-gov-subsection-header');
+                if (header) {
+                    const indicator = document.createElement('span');
+                    indicator.className = 'staking-update-indicator';
+                    indicator.id = 'stakingUpdateIndicator';
+                    indicator.textContent = ' Loading staking...';
+                    indicator.style.cssText = 'font-size: 0.8em; opacity: 0.6; font-weight: normal;';
+                    header.appendChild(indicator);
+                }
             }
         }
 
@@ -3260,18 +3319,26 @@ async function loadDefiGovernance() {
             }
         }
 
-        // Phase 4: Re-render with full data (staking + governance now included)
+        // Phase 4: Re-render with full fresh data
         renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeStablecoins, adaDelegation);
 
         document.body.classList.remove('staking-loading');
         updateTotalPortfolioValue();
 
+        // Cache the complete result
+        setCachedDefi({ defiData, allStaking, exchangeStablecoins, nativeStablecoins, adaDelegation });
+
     } catch (error) {
         console.error('Error loading DeFi & Governance:', error);
-        setSafeHTML(content, '<p class="empty-state">Error loading DeFi & Governance data.</p>');
+        // Only show error state if we had no cached data
+        if (!cached) {
+            setSafeHTML(content, '<p class="empty-state">Error loading DeFi & Governance data.</p>');
+        }
         document.body.classList.remove('staking-loading');
         document.body.classList.remove('defi-loading');
         updateTotalPortfolioValue();
+    } finally {
+        setDefiRefreshBar(false);
     }
 }
 
@@ -3753,6 +3820,9 @@ function renderGovernanceContent(defiData) {
 
 // Refresh DeFi & Governance section
 async function refreshDefiGovernance() {
+    // Clear cache so loadDefiGovernance() does a full reload
+    sessionStorage.removeItem(DEFI_CACHE_KEY);
+
     const btn = document.querySelector('.defi-governance-section .section-refresh-btn');
     if (btn) {
         btn.classList.add('refreshing');
@@ -8832,6 +8902,29 @@ function getCachedAnalytics() {
 function setCachedAnalytics(data) {
     try {
         sessionStorage.setItem(ANALYTICS_CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
+    } catch { /* sessionStorage full or unavailable */ }
+}
+
+// DeFi cache (mirrors analytics cache pattern)
+const DEFI_CACHE_KEY = 'abct_defi_cache';
+const DEFI_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+function getCachedDefi() {
+    try {
+        const raw = sessionStorage.getItem(DEFI_CACHE_KEY);
+        if (!raw) return null;
+        const cached = JSON.parse(raw);
+        if (Date.now() - cached.timestamp > DEFI_CACHE_TTL) {
+            sessionStorage.removeItem(DEFI_CACHE_KEY);
+            return null;
+        }
+        return cached.data;
+    } catch { return null; }
+}
+
+function setCachedDefi(data) {
+    try {
+        sessionStorage.setItem(DEFI_CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
     } catch { /* sessionStorage full or unavailable */ }
 }
 

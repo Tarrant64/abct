@@ -4095,6 +4095,32 @@ body.usd-primary .card-body .details {
     color: var(--accent-success);
 }
 
+/* DeFi background refresh bar */
+.defi-refresh-bar {
+    height: 3px;
+    width: 100%;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.defi-refresh-bar.active {
+    opacity: 1;
+}
+
+.defi-refresh-bar-fill {
+    height: 100%;
+    width: 30%;
+    background: var(--accent-success, #00d26a);
+    border-radius: 2px;
+    animation: defi-refresh-sweep 1.4s ease-in-out infinite;
+}
+
+@keyframes defi-refresh-sweep {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(433%); }
+}
+
 /* Section Header Inline (non-collapsible sections) */
 .section-header-inline {
     display: flex;
