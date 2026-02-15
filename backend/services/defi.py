@@ -1106,60 +1106,45 @@ class DeFiService:
         """Get logo URL for a token using multiple fallback strategies.
 
         Tries in order:
-        0. LogoKit CDN for known DeFi tokens (instant, no I/O)
         1. Database cache (ticker, policy_id, case-insensitive)
         2. Logostream API (dedicated logo service)
         3. NMKR fallback chain (Token Registry -> Blockfrost -> LogoKit)
         """
-        # Strategy 0: LogoKit CDN for known DeFi tokens (instant, no I/O)
-        for pid, info in DEFI_PROTOCOLS.items():
-            if info.get('token') == token_symbol:
-                from services.logokit_service import logokit_service
-                if logokit_service.api_key:
-                    return logokit_service.get_crypto_logo_url(token_symbol)
-                break
-
         policy_id_for_symbol = None
         asset_id_for_symbol = None
 
         try:
-            from database import get_db_connection
+            import aiosqlite
+            from config import DATABASE_PATH
 
-            conn = get_db_connection()
-            cursor = conn.cursor()
-
-            # Strategy 1: Exact ticker match for cached logo
-            cursor.execute("SELECT logo_url FROM token_metadata WHERE ticker = ? AND logo_url IS NOT NULL", (token_symbol,))
-            row = cursor.fetchone()
-            if row and row[0]:
-                conn.close()
-                return row[0]
-
-            # Strategy 2: Look up by policy_id from DEFI_PROTOCOLS
-            for pid, info in DEFI_PROTOCOLS.items():
-                if info.get('token') == token_symbol:
-                    policy_id_for_symbol = pid
-                    # First check for logo_url
-                    cursor.execute("SELECT logo_url FROM token_metadata WHERE policy_id = ? AND logo_url IS NOT NULL LIMIT 1", (pid,))
-                    row = cursor.fetchone()
+            async with aiosqlite.connect(DATABASE_PATH) as db:
+                # Strategy 1: Exact ticker match for cached logo
+                async with db.execute("SELECT logo_url FROM token_metadata WHERE ticker = ? AND logo_url IS NOT NULL", (token_symbol,)) as cursor:
+                    row = await cursor.fetchone()
                     if row and row[0]:
-                        conn.close()
                         return row[0]
-                    # Even without logo, grab the asset_id for NMKR fallback
-                    cursor.execute("SELECT asset_id FROM token_metadata WHERE policy_id = ? LIMIT 1", (pid,))
-                    row = cursor.fetchone()
+
+                # Strategy 2: Look up by policy_id from DEFI_PROTOCOLS
+                for pid, info in DEFI_PROTOCOLS.items():
+                    if info.get('token') == token_symbol:
+                        policy_id_for_symbol = pid
+                        # First check for logo_url
+                        async with db.execute("SELECT logo_url FROM token_metadata WHERE policy_id = ? AND logo_url IS NOT NULL LIMIT 1", (pid,)) as cursor:
+                            row = await cursor.fetchone()
+                            if row and row[0]:
+                                return row[0]
+                        # Even without logo, grab the asset_id for NMKR fallback
+                        async with db.execute("SELECT asset_id FROM token_metadata WHERE policy_id = ? LIMIT 1", (pid,)) as cursor:
+                            row = await cursor.fetchone()
+                            if row and row[0]:
+                                asset_id_for_symbol = row[0]
+                        break
+
+                # Strategy 3: Case-insensitive ticker match
+                async with db.execute("SELECT logo_url FROM token_metadata WHERE LOWER(ticker) = LOWER(?) AND logo_url IS NOT NULL LIMIT 1", (token_symbol,)) as cursor:
+                    row = await cursor.fetchone()
                     if row and row[0]:
-                        asset_id_for_symbol = row[0]
-                    break
-
-            # Strategy 3: Case-insensitive ticker match
-            cursor.execute("SELECT logo_url FROM token_metadata WHERE LOWER(ticker) = LOWER(?) AND logo_url IS NOT NULL LIMIT 1", (token_symbol,))
-            row = cursor.fetchone()
-            if row and row[0]:
-                conn.close()
-                return row[0]
-
-            conn.close()
+                        return row[0]
         except Exception as e:
             logger.error(f"Error in DB logo lookup for {token_symbol}: {e}")
 
@@ -1255,6 +1240,8 @@ class DeFiService:
             logo_tasks['LQ'] = self._get_token_logo_url('LQ')
         if iagon:
             logo_tasks['IAG'] = self._get_token_logo_url('IAG')
+        if surf:
+            logo_tasks['ADA'] = self._get_token_logo_url('ADA')
 
         # Execute all rewards and logos in one parallel batch
         all_keys = list(reward_tasks.keys()) + list(logo_tasks.keys())
@@ -1367,7 +1354,8 @@ class DeFiService:
                     'token': 'ADA',
                     'amount': surf.get('total_supplied_ada', 0),
                     'amount_formatted': f"{surf.get('total_supplied_ada', 0):,.6f}",
-                    'positions': surf.get('position_count', 0)
+                    'positions': surf.get('position_count', 0),
+                    'logo_url': logos.get('ADA')
                 }],
                 'pending_rewards': surf.get('pending_rewards', 0),
                 'reward_token': 'SURF',

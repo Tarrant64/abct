@@ -1,0 +1,1591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ABCT - Help & Guide</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771175419">
+    <script src="/static/js/session-auth.js?v=1771175419"></script>
+    <style>
+        /* ========== Help Page Layout ========== */
+        .help-page {
+            display: flex;
+            gap: 0;
+            max-width: 1300px;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: calc(100vh - 120px);
+        }
+
+        /* ========== Sidebar TOC ========== */
+        .help-toc {
+            position: sticky;
+            top: 20px;
+            width: 250px;
+            min-width: 250px;
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+            padding: 20px 16px;
+            border-right: 1px solid var(--border-color, rgba(255,255,255,0.1));
+            scrollbar-width: thin;
+        }
+
+        .help-toc h3 {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-secondary, #888);
+            margin: 0 0 12px 0;
+            padding: 0 8px;
+        }
+
+        .help-toc a {
+            display: block;
+            padding: 8px 12px;
+            color: var(--text-secondary, #aaa);
+            text-decoration: none;
+            font-size: 13px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            line-height: 1.4;
+        }
+
+        .help-toc a:hover {
+            color: var(--text-primary, #fff);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .help-toc a.active {
+            color: var(--accent-success, #00d26a);
+            background: rgba(0, 210, 106, 0.1);
+            font-weight: 600;
+        }
+
+        /* ========== Main Content ========== */
+        .help-content {
+            flex: 1;
+            max-width: 900px;
+            padding: 0 40px;
+            overflow-y: auto;
+        }
+
+        .help-content section {
+            margin-bottom: 60px;
+            scroll-margin-top: 20px;
+        }
+
+        .help-content h2 {
+            font-size: 24px;
+            color: var(--text-primary, #fff);
+            margin: 0 0 8px 0;
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--accent-success, #00d26a);
+        }
+
+        .help-content h3 {
+            font-size: 18px;
+            color: var(--text-primary, #e0e0e0);
+            margin: 28px 0 12px 0;
+        }
+
+        .help-content p {
+            color: var(--text-secondary, #b0b0b0);
+            line-height: 1.7;
+            margin: 0 0 16px 0;
+            font-size: 14px;
+        }
+
+        /* ========== Hero Section ========== */
+        .help-hero {
+            background: linear-gradient(135deg, rgba(0, 210, 106, 0.15) 0%, rgba(0, 150, 255, 0.1) 100%);
+            border: 1px solid rgba(0, 210, 106, 0.3);
+            border-radius: 16px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .help-hero h1 {
+            font-size: 32px;
+            color: var(--text-primary, #fff);
+            margin: 0 0 8px 0;
+        }
+
+        .help-hero .tagline {
+            color: var(--accent-success, #00d26a);
+            font-size: 16px;
+            margin: 0 0 16px 0;
+            font-weight: 500;
+        }
+
+        .help-hero p {
+            max-width: 600px;
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        /* ========== Quick Start Steps ========== */
+        .quick-steps {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin: 24px 0;
+        }
+
+        .quick-step {
+            background: var(--bg-card, rgba(26, 26, 46, 0.8));
+            border: 1px solid var(--border-color, rgba(255,255,255,0.1));
+            border-radius: 12px;
+            padding: 24px 20px;
+            text-align: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .quick-step:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .quick-step .step-num {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--accent-success, #00d26a);
+            color: #000;
+            font-weight: 700;
+            font-size: 16px;
+            margin-bottom: 12px;
+        }
+
+        .quick-step .step-icon {
+            font-size: 28px;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .quick-step h4 {
+            color: var(--text-primary, #fff);
+            margin: 0 0 6px 0;
+            font-size: 15px;
+        }
+
+        .quick-step p {
+            font-size: 13px;
+            margin: 0;
+        }
+
+        /* ========== Architecture Diagram ========== */
+        .arch-diagram {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            margin: 24px 0;
+            max-width: 700px;
+        }
+
+        .arch-layer {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 20px;
+            border-radius: 10px;
+            border: 1px solid;
+            position: relative;
+        }
+
+        .arch-layer .layer-icon {
+            font-size: 24px;
+            min-width: 36px;
+            text-align: center;
+        }
+
+        .arch-layer .layer-info h4 {
+            margin: 0 0 4px 0;
+            font-size: 15px;
+            color: var(--text-primary, #fff);
+        }
+
+        .arch-layer .layer-info p {
+            margin: 0;
+            font-size: 12px;
+            color: var(--text-secondary, #aaa);
+        }
+
+        .arch-layer.frontend {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: rgba(59, 130, 246, 0.3);
+        }
+
+        .arch-layer.backend {
+            background: rgba(0, 210, 106, 0.1);
+            border-color: rgba(0, 210, 106, 0.3);
+        }
+
+        .arch-layer.services {
+            background: rgba(249, 115, 22, 0.1);
+            border-color: rgba(249, 115, 22, 0.3);
+        }
+
+        .arch-layer.external {
+            background: rgba(168, 85, 247, 0.1);
+            border-color: rgba(168, 85, 247, 0.3);
+        }
+
+        .arch-arrow {
+            text-align: center;
+            color: var(--text-secondary, #666);
+            font-size: 18px;
+            line-height: 1;
+            padding: 2px 0;
+        }
+
+        /* ========== Chain Cards Grid ========== */
+        .chain-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+            margin: 20px 0;
+        }
+
+        .chain-card {
+            background: var(--bg-card, rgba(26, 26, 46, 0.8));
+            border: 1px solid var(--border-color, rgba(255,255,255,0.1));
+            border-radius: 10px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .chain-card .chain-head {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .chain-card .chain-logo {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            object-fit: contain;
+            flex-shrink: 0;
+        }
+
+        .chain-card .chain-name {
+            font-weight: 600;
+            color: var(--text-primary, #fff);
+            font-size: 14px;
+        }
+
+        .chain-card .chain-detail {
+            font-size: 12px;
+            color: var(--text-secondary, #aaa);
+        }
+
+        .chain-card .chain-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            width: fit-content;
+        }
+
+        .badge-free {
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .badge-key {
+            background: rgba(59, 130, 246, 0.15);
+            color: #3b82f6;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        /* ========== API Tier Sections ========== */
+        .tier-section {
+            border-radius: 12px;
+            padding: 24px;
+            margin: 20px 0;
+            border: 1px solid;
+        }
+
+        .tier-section h3 {
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .tier-section.tier-free {
+            background: rgba(16, 185, 129, 0.06);
+            border-color: rgba(16, 185, 129, 0.25);
+        }
+
+        .tier-section.tier-free h3 { color: #10b981; }
+
+        .tier-section.tier-key {
+            background: rgba(59, 130, 246, 0.06);
+            border-color: rgba(59, 130, 246, 0.25);
+        }
+
+        .tier-section.tier-key h3 { color: #3b82f6; }
+
+        .tier-section.tier-paid {
+            background: rgba(249, 115, 22, 0.06);
+            border-color: rgba(249, 115, 22, 0.25);
+        }
+
+        .tier-section.tier-paid h3 { color: #f97316; }
+
+        .api-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .api-item {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color, rgba(255,255,255,0.08));
+            border-radius: 8px;
+            padding: 14px;
+        }
+
+        .api-item h4 {
+            color: var(--text-primary, #fff);
+            margin: 0 0 4px 0;
+            font-size: 14px;
+        }
+
+        .api-item p {
+            margin: 0;
+            font-size: 12px;
+        }
+
+        .api-item .api-link {
+            display: inline-block;
+            margin-top: 6px;
+            font-size: 12px;
+            color: var(--accent-success, #00d26a);
+            text-decoration: none;
+        }
+
+        .api-item .api-link:hover {
+            text-decoration: underline;
+        }
+
+        /* ========== Exchange Cards ========== */
+        .exchange-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 12px;
+            margin: 20px 0;
+        }
+
+        .exchange-card {
+            background: var(--bg-card, rgba(26, 26, 46, 0.8));
+            border: 1px solid var(--border-color, rgba(255,255,255,0.1));
+            border-radius: 10px;
+            padding: 16px;
+        }
+
+        .exchange-card h4 {
+            color: var(--text-primary, #fff);
+            margin: 0 0 8px 0;
+            font-size: 15px;
+        }
+
+        .exchange-card .ex-detail {
+            font-size: 12px;
+            color: var(--text-secondary, #aaa);
+            margin: 4px 0;
+        }
+
+        .exchange-card .ex-auth {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            background: rgba(168, 85, 247, 0.15);
+            color: #a855f7;
+            border: 1px solid rgba(168, 85, 247, 0.3);
+            margin-top: 8px;
+        }
+
+        /* ========== Pricing Flow Diagram ========== */
+        .flow-diagram {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            margin: 24px 0;
+            max-width: 600px;
+        }
+
+        .flow-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .flow-box {
+            padding: 10px 18px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary, #fff);
+            border: 1px solid;
+            white-space: nowrap;
+        }
+
+        .flow-box.primary {
+            background: rgba(0, 210, 106, 0.12);
+            border-color: rgba(0, 210, 106, 0.4);
+        }
+
+        .flow-box.secondary {
+            background: rgba(59, 130, 246, 0.12);
+            border-color: rgba(59, 130, 246, 0.4);
+        }
+
+        .flow-box.fallback {
+            background: rgba(249, 115, 22, 0.12);
+            border-color: rgba(249, 115, 22, 0.4);
+        }
+
+        .flow-box.cardano {
+            background: rgba(0, 51, 173, 0.15);
+            border-color: rgba(0, 51, 173, 0.4);
+        }
+
+        .flow-arrow-h {
+            color: var(--text-secondary, #666);
+            font-size: 16px;
+        }
+
+        .flow-label {
+            font-size: 12px;
+            color: var(--text-secondary, #888);
+            padding: 6px 0 4px 0;
+            font-weight: 600;
+        }
+
+        /* ========== Feature Matrix ========== */
+        .feature-table-wrap {
+            overflow-x: auto;
+            margin: 20px 0;
+            border-radius: 10px;
+            border: 1px solid var(--border-color, rgba(255,255,255,0.1));
+        }
+
+        .feature-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .feature-table th {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 12px 16px;
+            text-align: left;
+            color: var(--text-primary, #e0e0e0);
+            font-weight: 600;
+            border-bottom: 2px solid var(--border-color, rgba(255,255,255,0.1));
+            white-space: nowrap;
+        }
+
+        .feature-table td {
+            padding: 10px 16px;
+            border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.06));
+            color: var(--text-secondary, #b0b0b0);
+        }
+
+        .feature-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .feature-table .check {
+            color: #10b981;
+            font-weight: 700;
+        }
+
+        .feature-table .cross {
+            color: #ef4444;
+            opacity: 0.5;
+        }
+
+        .feature-table .partial {
+            color: #f59e0b;
+        }
+
+        /* ========== Priority List ========== */
+        .priority-list {
+            list-style: none;
+            padding: 0;
+            margin: 20px 0;
+            counter-reset: priority;
+        }
+
+        .priority-list li {
+            counter-increment: priority;
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            padding: 14px 16px;
+            margin-bottom: 8px;
+            background: var(--bg-card, rgba(26, 26, 46, 0.8));
+            border: 1px solid var(--border-color, rgba(255,255,255,0.1));
+            border-radius: 10px;
+        }
+
+        .priority-list li::before {
+            content: counter(priority);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--accent-success, #00d26a);
+            color: #000;
+            font-weight: 700;
+            font-size: 13px;
+        }
+
+        .priority-list .pri-info h4 {
+            margin: 0 0 4px 0;
+            color: var(--text-primary, #fff);
+            font-size: 14px;
+        }
+
+        .priority-list .pri-info p {
+            margin: 0;
+            font-size: 13px;
+        }
+
+        .impact-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        .impact-high {
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+        }
+
+        .impact-medium {
+            background: rgba(59, 130, 246, 0.15);
+            color: #3b82f6;
+        }
+
+        .impact-low {
+            background: rgba(168, 85, 247, 0.15);
+            color: #a855f7;
+        }
+
+        /* ========== FAQ Section ========== */
+        .faq-list {
+            margin: 20px 0;
+        }
+
+        .faq-list details {
+            margin-bottom: 8px;
+            border: 1px solid var(--border-color, rgba(255,255,255,0.1));
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .faq-list summary {
+            padding: 14px 18px;
+            cursor: pointer;
+            color: var(--text-primary, #e0e0e0);
+            font-weight: 500;
+            font-size: 14px;
+            background: rgba(255, 255, 255, 0.02);
+            list-style: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: background 0.2s;
+        }
+
+        .faq-list summary:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .faq-list summary::before {
+            content: "▸";
+            font-size: 14px;
+            transition: transform 0.2s;
+            color: var(--accent-success, #00d26a);
+        }
+
+        .faq-list details[open] summary::before {
+            transform: rotate(90deg);
+        }
+
+        .faq-list summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .faq-list .faq-answer {
+            padding: 4px 18px 18px;
+        }
+
+        .faq-list .faq-answer p {
+            margin: 8px 0;
+        }
+
+        .faq-list .faq-answer code {
+            background: rgba(255, 255, 255, 0.08);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #f59e0b;
+        }
+
+        /* ========== Security Note ========== */
+        .info-callout {
+            padding: 14px 18px;
+            border-radius: 10px;
+            margin: 16px 0;
+            font-size: 13px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            line-height: 1.6;
+        }
+
+        .info-callout.warning {
+            background: rgba(249, 115, 22, 0.08);
+            border: 1px solid rgba(249, 115, 22, 0.25);
+            color: #fb923c;
+        }
+
+        .info-callout.info {
+            background: rgba(59, 130, 246, 0.08);
+            border: 1px solid rgba(59, 130, 246, 0.25);
+            color: #60a5fa;
+        }
+
+        .info-callout.success {
+            background: rgba(16, 185, 129, 0.08);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            color: #34d399;
+        }
+
+        .info-callout .callout-icon {
+            font-size: 18px;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        /* ========== Back to Top ========== */
+        .back-to-top {
+            display: inline-block;
+            margin-top: 16px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            color: var(--text-secondary, #888);
+            text-decoration: none;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color, rgba(255,255,255,0.08));
+            transition: all 0.2s;
+        }
+
+        .back-to-top:hover {
+            color: var(--text-primary, #fff);
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        /* ========== Light Theme Overrides ========== */
+        [data-theme="light"] .help-toc {
+            border-right-color: #e5e7eb;
+        }
+
+        [data-theme="light"] .help-toc a:hover {
+            background: rgba(0, 0, 0, 0.04);
+        }
+
+        [data-theme="light"] .help-toc a.active {
+            background: rgba(0, 184, 148, 0.1);
+        }
+
+        [data-theme="light"] .help-hero {
+            background: linear-gradient(135deg, rgba(0, 184, 148, 0.08) 0%, rgba(59, 130, 246, 0.06) 100%);
+            border-color: rgba(0, 184, 148, 0.2);
+        }
+
+        [data-theme="light"] .quick-step,
+        [data-theme="light"] .chain-card,
+        [data-theme="light"] .exchange-card,
+        [data-theme="light"] .priority-list li {
+            background: #fff;
+            border-color: #e5e7eb;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+        }
+
+        [data-theme="light"] .api-item {
+            background: rgba(0, 0, 0, 0.02);
+            border-color: #e5e7eb;
+        }
+
+        [data-theme="light"] .tier-section.tier-free {
+            background: rgba(16, 185, 129, 0.04);
+            border-color: rgba(16, 185, 129, 0.2);
+        }
+
+        [data-theme="light"] .tier-section.tier-key {
+            background: rgba(59, 130, 246, 0.04);
+            border-color: rgba(59, 130, 246, 0.2);
+        }
+
+        [data-theme="light"] .tier-section.tier-paid {
+            background: rgba(249, 115, 22, 0.04);
+            border-color: rgba(249, 115, 22, 0.2);
+        }
+
+        [data-theme="light"] .feature-table th {
+            background: #f9fafb;
+            border-bottom-color: #e5e7eb;
+        }
+
+        [data-theme="light"] .feature-table td {
+            border-bottom-color: #f3f4f6;
+        }
+
+        [data-theme="light"] .feature-table-wrap {
+            border-color: #e5e7eb;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+        }
+
+        [data-theme="light"] .faq-list details {
+            border-color: #e5e7eb;
+        }
+
+        [data-theme="light"] .faq-list summary {
+            background: #fafafa;
+        }
+
+        [data-theme="light"] .faq-list summary:hover {
+            background: #f3f4f6;
+        }
+
+        [data-theme="light"] .faq-list .faq-answer code {
+            background: #f3f4f6;
+            color: #d97706;
+        }
+
+        [data-theme="light"] .back-to-top {
+            background: #f9fafb;
+            border-color: #e5e7eb;
+        }
+
+        /* ========== Responsive ========== */
+        @media (max-width: 900px) {
+            .help-page {
+                flex-direction: column;
+                padding: 12px;
+            }
+
+            .help-toc {
+                position: static;
+                width: 100%;
+                min-width: 100%;
+                max-height: none;
+                border-right: none;
+                border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.1));
+                padding: 12px;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+                align-items: center;
+            }
+
+            .help-toc h3 {
+                width: 100%;
+                margin-bottom: 6px;
+            }
+
+            .help-toc a {
+                padding: 6px 10px;
+                font-size: 12px;
+            }
+
+            .help-content {
+                padding: 0 8px;
+            }
+
+            .quick-steps {
+                grid-template-columns: 1fr;
+            }
+
+            .chain-grid {
+                grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            }
+
+            .api-list {
+                grid-template-columns: 1fr;
+            }
+
+            .exchange-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .flow-row {
+                flex-wrap: wrap;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .exchange-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .chain-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <nav class="main-nav">
+                <a href="/" class="nav-item">Overview</a>
+                <a href="/assets.html" class="nav-item">Assets</a>
+                <a href="/nfts.html" class="nav-item">NFTs</a>
+                <a href="/data.html" class="nav-item">Data & Analytics</a>
+            </nav>
+            <div class="header-right-controls">
+                <div class="user-avatar-container">
+                    <button class="user-avatar-btn" onclick="toggleUserMenu()">
+                        <div class="avatar-circle" id="userAvatar">?</div>
+                    </button>
+                    <div class="user-menu-dropdown" id="userMenu">
+                        <div class="user-menu-header">
+                            <span id="userMenuName">User</span>
+                        </div>
+                        <div class="user-menu-divider"></div>
+                        <a href="/settings.html" class="user-menu-item">Settings</a>
+                        <a href="/help.html" class="user-menu-item active">Help & Guide</a>
+                        <div class="user-menu-divider"></div>
+                        <button class="user-menu-item" onclick="togglePrivacyMode()">
+                            Privacy Mode <span class="privacy-indicator" id="privacyIndicator">OFF</span>
+                        </button>
+                        <div class="user-menu-theme-row">
+                            <span>Theme</span>
+                            <select id="themeSelect" onchange="changeTheme(this.value)" title="Select theme">
+                                <option value="dark-mode">Dark Mode</option>
+                                <option value="light">Light</option>
+                                <option value="cypherpunk1">Cypherpunk 1</option>
+                                <option value="ocean-depths">Ocean Depths</option>
+                                <option value="sunset-horizon">Sunset Horizon</option>
+                                <option value="cypher">Cypher</option>
+                                <option value="cypher2">Cypher2</option>
+                                <option value="cypher3">Cypher3</option>
+                            </select>
+                        </div>
+                        <div class="user-menu-divider"></div>
+                        <button class="user-menu-item" id="changePasswordMenuItem" onclick="showChangePasswordModal()">Change Password</button>
+                        <button class="user-menu-item user-menu-logout" onclick="logout()">Logout</button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="help-page" id="helpTop">
+            <!-- Sidebar TOC -->
+            <nav class="help-toc" id="helpToc">
+                <h3>Contents</h3>
+                <a href="#welcome" class="active">Welcome</a>
+                <a href="#architecture">Architecture</a>
+                <a href="#blockchains">Supported Blockchains</a>
+                <a href="#api-keys">API Key Guide</a>
+                <a href="#exchanges">Exchange Integration</a>
+                <a href="#pricing">Pricing System</a>
+                <a href="#features">Feature Matrix</a>
+                <a href="#setup">Recommended Setup</a>
+                <a href="#faq">FAQ</a>
+            </nav>
+
+            <!-- Main Content -->
+            <main class="help-content">
+
+                <!-- 1. Welcome & Quick Start -->
+                <section id="welcome">
+                    <div class="help-hero">
+                        <h1>A Better Crypto Tracker</h1>
+                        <div class="tagline">Self-hosted multi-chain portfolio tracking</div>
+                        <p>ABCT is a privacy-first cryptocurrency portfolio tracker that aggregates wallet balances, exchange accounts, DeFi positions, and NFT collections across 11 blockchains &mdash; all running on your own hardware.</p>
+                    </div>
+
+                    <h2>Quick Start</h2>
+                    <p>Get up and running in three steps. No API keys are required for basic functionality &mdash; you can always add them later to unlock more features.</p>
+
+                    <div class="quick-steps">
+                        <div class="quick-step">
+                            <span class="step-icon">&#128092;</span>
+                            <span class="step-num">1</span>
+                            <h4>Add Wallets</h4>
+                            <p>Paste your public wallet addresses on the <a href="/assets.html" style="color: var(--accent-success, #00d26a);">Assets</a> page.</p>
+                        </div>
+                        <div class="quick-step">
+                            <span class="step-icon">&#128273;</span>
+                            <span class="step-num">2</span>
+                            <h4>Configure APIs</h4>
+                            <p>Add free API keys in <a href="/settings.html" style="color: var(--accent-success, #00d26a);">Settings</a> for richer data.</p>
+                        </div>
+                        <div class="quick-step">
+                            <span class="step-icon">&#128200;</span>
+                            <span class="step-num">3</span>
+                            <h4>View Portfolio</h4>
+                            <p>Your <a href="/" style="color: var(--accent-success, #00d26a);">Dashboard</a> shows aggregated values and charts.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2. Architecture Overview -->
+                <section id="architecture">
+                    <h2>Architecture Overview</h2>
+                    <p>ABCT uses a four-layer architecture. The frontend talks to a FastAPI backend, which delegates to specialized service modules that call external blockchain and pricing APIs.</p>
+
+                    <div class="arch-diagram">
+                        <div class="arch-layer frontend">
+                            <span class="layer-icon">&#127912;</span>
+                            <div class="layer-info">
+                                <h4>Frontend</h4>
+                                <p>Vanilla HTML/CSS/JS &bull; Chart.js &bull; TradingView widgets</p>
+                            </div>
+                        </div>
+                        <div class="arch-arrow">&#9660;</div>
+                        <div class="arch-layer backend">
+                            <span class="layer-icon">&#9889;</span>
+                            <div class="layer-info">
+                                <h4>FastAPI Backend</h4>
+                                <p>REST API routers &bull; SQLite database &bull; Session auth</p>
+                            </div>
+                        </div>
+                        <div class="arch-arrow">&#9660;</div>
+                        <div class="arch-layer services">
+                            <span class="layer-icon">&#128295;</span>
+                            <div class="layer-info">
+                                <h4>Services Layer</h4>
+                                <p>Blockchain services &bull; Exchange connectors &bull; Price aggregator</p>
+                            </div>
+                        </div>
+                        <div class="arch-arrow">&#9660;</div>
+                        <div class="arch-layer external">
+                            <span class="layer-icon">&#127760;</span>
+                            <div class="layer-info">
+                                <h4>External APIs</h4>
+                                <p>Blockfrost &bull; Alchemy &bull; Helius &bull; CoinGecko &bull; Exchanges</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="info-callout info">
+                        <span class="callout-icon">&#128161;</span>
+                        <div>All data stays on your machine. ABCT only makes outbound read-only API calls to fetch blockchain data and prices &mdash; nothing is sent to third-party analytics or tracking services.</div>
+                    </div>
+                </section>
+
+                <!-- 3. Supported Blockchains -->
+                <section id="blockchains">
+                    <h2>Supported Blockchains</h2>
+                    <p>ABCT tracks on-chain balances, tokens, staking rewards, and NFTs across these networks.</p>
+
+                    <div class="chain-grid">
+                        <div class="chain-card">
+                            <div class="chain-head">
+                                <img src="https://img.logokit.com/crypto/ADA?token=LOGOKIT_KEY_REMOVED&size=32" alt="Cardano" class="chain-logo" onerror="this.style.display='none'">
+                                <span class="chain-name">Cardano</span>
+                            </div>
+                            <span class="chain-detail">ADA &bull; Blockfrost / CExplorer</span>
+                            <span class="chain-badge badge-key">Free Key</span>
+                        </div>
+                        <div class="chain-card">
+                            <div class="chain-head">
+                                <img src="https://img.logokit.com/crypto/BTC?token=LOGOKIT_KEY_REMOVED&size=32" alt="Bitcoin" class="chain-logo" onerror="this.style.display='none'">
+                                <span class="chain-name">Bitcoin</span>
+                            </div>
+                            <span class="chain-detail">BTC &bull; Blockstream API</span>
+                            <span class="chain-badge badge-free">No Key Needed</span>
+                        </div>
+                        <div class="chain-card">
+                            <div class="chain-head">
+                                <img src="https://img.logokit.com/crypto/ETH?token=LOGOKIT_KEY_REMOVED&size=32" alt="Ethereum" class="chain-logo" onerror="this.style.display='none'">
+                                <span class="chain-name">Ethereum</span>
+                            </div>
+                            <span class="chain-detail">ETH &bull; Alchemy / Etherscan</span>
+                            <span class="chain-badge badge-key">Free Key</span>
+                        </div>
+                        <div class="chain-card">
+                            <div class="chain-head">
+                                <img src="https://img.logokit.com/crypto/SOL?token=LOGOKIT_KEY_REMOVED&size=32" alt="Solana" class="chain-logo" onerror="this.style.display='none'">
+                                <span class="chain-name">Solana</span>
+                            </div>
+                            <span class="chain-detail">SOL &bull; Helius RPC</span>
+                            <span class="chain-badge badge-key">Free Key</span>
+                        </div>
+                        <div class="chain-card">
+                            <div class="chain-head">
+                                <img src="https://img.logokit.com/crypto/MATIC?token=LOGOKIT_KEY_REMOVED&size=32" alt="Polygon" class="chain-logo" onerror="this.style.display='none'">
+                                <span class="chain-name">Polygon</span>
+                            </div>
+                            <span class="chain-detail">MATIC &bull; Alchemy</span>
+                            <span class="chain-badge badge-key">Free Key</span>
+                        </div>
+                        <div class="chain-card">
+                            <div class="chain-head">
+                                <img src="https://avatars.githubusercontent.com/u/108554348?s=32" alt="Base" class="chain-logo" onerror="this.style.display='none'">
+                                <span class="chain-name">Base</span>
+                            </div>
+                            <span class="chain-detail">ETH &bull; Alchemy</span>
+                            <span class="chain-badge badge-key">Free Key</span>
+                        </div>
+                        <div class="chain-card">
+                            <div class="chain-head">
+                                <img src="https://img.logokit.com/crypto/ALGO?token=LOGOKIT_KEY_REMOVED&size=32" alt="Algorand" class="chain-logo" onerror="this.style.display='none'">
+                                <span class="chain-name">Algorand</span>
+                            </div>
+                            <span class="chain-detail">ALGO &bull; Algonode</span>
+                            <span class="chain-badge badge-free">No Key Needed</span>
+                        </div>
+                        <div class="chain-card">
+                            <div class="chain-head">
+                                <img src="https://img.logokit.com/crypto/TRX?token=LOGOKIT_KEY_REMOVED&size=32" alt="Tron" class="chain-logo" onerror="this.style.display='none'">
+                                <span class="chain-name">Tron</span>
+                            </div>
+                            <span class="chain-detail">TRX &bull; TronGrid</span>
+                            <span class="chain-badge badge-free">No Key Needed</span>
+                        </div>
+                        <div class="chain-card">
+                            <div class="chain-head">
+                                <img src="https://img.logokit.com/crypto/BNB?token=LOGOKIT_KEY_REMOVED&size=32" alt="BSC" class="chain-logo" onerror="this.style.display='none'">
+                                <span class="chain-name">BSC</span>
+                            </div>
+                            <span class="chain-detail">BNB &bull; BSCScan / Moralis</span>
+                            <span class="chain-badge badge-key">Free Key</span>
+                        </div>
+                        <div class="chain-card">
+                            <div class="chain-head">
+                                <img src="https://avatars.githubusercontent.com/u/119917794?s=32" alt="Arbitrum" class="chain-logo" onerror="this.style.display='none'">
+                                <span class="chain-name">Arbitrum</span>
+                            </div>
+                            <span class="chain-detail">ETH &bull; Alchemy / Arbiscan</span>
+                            <span class="chain-badge badge-key">Free Key</span>
+                        </div>
+                        <div class="chain-card">
+                            <div class="chain-head">
+                                <img src="https://img.logokit.com/crypto/AVAX?token=LOGOKIT_KEY_REMOVED&size=32" alt="Avalanche" class="chain-logo" onerror="this.style.display='none'">
+                                <span class="chain-name">Avalanche</span>
+                            </div>
+                            <span class="chain-detail">AVAX &bull; SnowTrace / Moralis</span>
+                            <span class="chain-badge badge-key">Free Key</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 4. API Key Guide -->
+                <section id="api-keys">
+                    <h2>API Key Guide</h2>
+                    <p>ABCT works without any API keys, but adding free keys dramatically improves data coverage. Here's what each tier unlocks.</p>
+
+                    <!-- Tier 1: No Keys -->
+                    <div class="tier-section tier-free">
+                        <h3>&#9989; Tier 1: Works Without Any Keys</h3>
+                        <p>These APIs are public and require no authentication. Basic portfolio tracking works out of the box.</p>
+                        <div class="api-list">
+                            <div class="api-item">
+                                <h4>Blockstream</h4>
+                                <p>Bitcoin balances, UTXOs, and transaction history</p>
+                            </div>
+                            <div class="api-item">
+                                <h4>TronGrid</h4>
+                                <p>Tron TRX and TRC-20 token balances</p>
+                            </div>
+                            <div class="api-item">
+                                <h4>Algonode</h4>
+                                <p>Algorand ALGO and ASA token balances</p>
+                            </div>
+                            <div class="api-item">
+                                <h4>DefiLlama</h4>
+                                <p>Fallback token pricing for all chains</p>
+                            </div>
+                            <div class="api-item">
+                                <h4>Coinbase Public API</h4>
+                                <p>Spot prices for major pairs (no key needed)</p>
+                            </div>
+                            <div class="api-item">
+                                <h4>CoinGecko (Free Tier)</h4>
+                                <p>Basic pricing with generous rate limits (30 calls/min)</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tier 2: Free Keys -->
+                    <div class="tier-section tier-key">
+                        <h3>&#128273; Tier 2: Free API Keys</h3>
+                        <p>Sign up for free accounts at these providers to unlock full chain support and higher rate limits.</p>
+                        <div class="api-list">
+                            <div class="api-item">
+                                <h4>Blockfrost</h4>
+                                <p>Full Cardano support: ADA, native tokens, staking, NFTs, DeFi</p>
+                                <a href="https://blockfrost.io" target="_blank" rel="noopener" class="api-link">blockfrost.io &rarr;</a>
+                            </div>
+                            <div class="api-item">
+                                <h4>Alchemy</h4>
+                                <p>Ethereum, Polygon, Base, Arbitrum: tokens, NFTs, balances</p>
+                                <a href="https://www.alchemy.com" target="_blank" rel="noopener" class="api-link">alchemy.com &rarr;</a>
+                            </div>
+                            <div class="api-item">
+                                <h4>Helius</h4>
+                                <p>Solana: SPL tokens, NFTs, compressed NFTs, DeFi positions</p>
+                                <a href="https://helius.dev" target="_blank" rel="noopener" class="api-link">helius.dev &rarr;</a>
+                            </div>
+                            <div class="api-item">
+                                <h4>Etherscan</h4>
+                                <p>Ethereum transaction history and gas tracking</p>
+                                <a href="https://etherscan.io/apis" target="_blank" rel="noopener" class="api-link">etherscan.io &rarr;</a>
+                            </div>
+                            <div class="api-item">
+                                <h4>CoinMarketCap</h4>
+                                <p>Pricing fallback with 10,000 credits/month free tier</p>
+                                <a href="https://coinmarketcap.com/api/" target="_blank" rel="noopener" class="api-link">coinmarketcap.com &rarr;</a>
+                            </div>
+                            <div class="api-item">
+                                <h4>CExplorer</h4>
+                                <p>Cardano pool info, delegation data, stake rewards</p>
+                                <a href="https://cexplorer.io" target="_blank" rel="noopener" class="api-link">cexplorer.io &rarr;</a>
+                            </div>
+                            <div class="api-item">
+                                <h4>Moralis</h4>
+                                <p>Multi-chain token balances, NFTs, DeFi positions</p>
+                                <a href="https://moralis.io" target="_blank" rel="noopener" class="api-link">moralis.io &rarr;</a>
+                            </div>
+                            <div class="api-item">
+                                <h4>The Graph</h4>
+                                <p>Uniswap and DEX analytics, liquidity positions</p>
+                                <a href="https://thegraph.com" target="_blank" rel="noopener" class="api-link">thegraph.com &rarr;</a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tier 3: Paid Keys -->
+                    <div class="tier-section tier-paid">
+                        <h3>&#11088; Tier 3: Paid API Keys</h3>
+                        <p>Premium APIs that unlock advanced features like NFT floor prices and historical OHLCV chart data.</p>
+                        <div class="api-list">
+                            <div class="api-item">
+                                <h4>TapTools (~$10/mo)</h4>
+                                <p>Cardano NFT floor prices, token analytics, OHLCV history, portfolio insights</p>
+                                <a href="https://taptools.io" target="_blank" rel="noopener" class="api-link">taptools.io &rarr;</a>
+                            </div>
+                            <div class="api-item">
+                                <h4>CoinGecko Pro</h4>
+                                <p>Higher rate limits (500 calls/min), historical data, advanced endpoints</p>
+                                <a href="https://www.coingecko.com/en/api/pricing" target="_blank" rel="noopener" class="api-link">coingecko.com &rarr;</a>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 5. Exchange Integration -->
+                <section id="exchanges">
+                    <h2>Exchange Integration</h2>
+                    <p>Connect centralized exchange accounts to include held balances in your portfolio. All connections are read-only.</p>
+
+                    <div class="info-callout warning">
+                        <span class="callout-icon">&#128274;</span>
+                        <div>Always create API keys with <strong>read-only permissions</strong>. ABCT never needs trade or withdrawal access. Disable withdrawals and trading when generating your keys.</div>
+                    </div>
+
+                    <div class="exchange-grid">
+                        <div class="exchange-card">
+                            <h4>Binance</h4>
+                            <div class="ex-detail">Spot & earn balances</div>
+                            <div class="ex-detail">Largest global exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Binance US</h4>
+                            <div class="ex-detail">US-regulated spot balances</div>
+                            <div class="ex-detail">Separate from global Binance</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Coinbase</h4>
+                            <div class="ex-detail">All account balances</div>
+                            <div class="ex-detail">OAuth or API key</div>
+                            <span class="ex-auth">EC Key (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>OKX</h4>
+                            <div class="ex-detail">Spot, earn, funding balances</div>
+                            <div class="ex-detail">Requires passphrase</div>
+                            <span class="ex-auth">HMAC + passphrase</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Bitget</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">Requires passphrase</div>
+                            <span class="ex-auth">HMAC + passphrase</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>KuCoin</h4>
+                            <div class="ex-detail">Spot & margin balances</div>
+                            <div class="ex-detail">Requires passphrase</div>
+                            <span class="ex-auth">HMAC + passphrase</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Gate.io</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">Simple key/secret pair</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 6. Pricing System -->
+                <section id="pricing">
+                    <h2>Pricing System</h2>
+                    <p>ABCT uses a multi-source pricing engine with automatic failover. If one source is rate-limited or down, the next one takes over seamlessly.</p>
+
+                    <h3>General Pricing Chain</h3>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box primary">CoinGecko</div>
+                            <span class="flow-arrow-h">&rarr;</span>
+                            <div class="flow-box secondary">CoinMarketCap</div>
+                            <span class="flow-arrow-h">&rarr;</span>
+                            <div class="flow-box secondary">Coinbase</div>
+                            <span class="flow-arrow-h">&rarr;</span>
+                            <div class="flow-box fallback">DefiLlama</div>
+                        </div>
+                    </div>
+
+                    <h3>Cardano Token Pricing</h3>
+                    <div class="flow-diagram">
+                        <div class="flow-row">
+                            <div class="flow-box cardano">Charli3</div>
+                            <span class="flow-arrow-h">&rarr;</span>
+                            <div class="flow-box cardano">TapTools</div>
+                            <span class="flow-arrow-h">&rarr;</span>
+                            <div class="flow-box fallback">DefiLlama</div>
+                        </div>
+                    </div>
+
+                    <div class="info-callout info">
+                        <span class="callout-icon">&#128337;</span>
+                        <div>
+                            <strong>Rate limiting protection:</strong> When CoinGecko returns a 429 (rate limited), ABCT automatically switches to fallback sources and waits 60 seconds before retrying. Stale cached prices are served as a last resort so your portfolio value always displays.
+                        </div>
+                    </div>
+
+                    <h3>Cache TTL Tiers</h3>
+                    <div class="feature-table-wrap">
+                        <table class="feature-table">
+                            <thead>
+                                <tr>
+                                    <th>Tier</th>
+                                    <th>Duration</th>
+                                    <th>Data Type</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>Hot</strong></td>
+                                    <td>5 minutes</td>
+                                    <td>Prices, exchange balances, wallet balances</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Warm</strong></td>
+                                    <td>1 hour</td>
+                                    <td>Analytics, charts, allocation breakdowns</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Cold</strong></td>
+                                    <td>24 hours</td>
+                                    <td>NFT data, DeFi positions</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Persistent</strong></td>
+                                    <td>7 days</td>
+                                    <td>Portfolio summary snapshots</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 7. Feature Matrix -->
+                <section id="features">
+                    <h2>Feature Matrix</h2>
+                    <p>What you can do at each API configuration level.</p>
+
+                    <div class="feature-table-wrap">
+                        <table class="feature-table">
+                            <thead>
+                                <tr>
+                                    <th>Feature</th>
+                                    <th>No Keys</th>
+                                    <th>Free Keys</th>
+                                    <th>All Keys</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>BTC / TRX / ALGO balances</td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>Basic price data</td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>Exchange balances</td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>ETH / SOL / ADA balances</td>
+                                    <td><span class="cross">&#10007;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>ERC-20 / SPL token balances</td>
+                                    <td><span class="cross">&#10007;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>NFT display &amp; gallery</td>
+                                    <td><span class="cross">&#10007;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>Transaction history</td>
+                                    <td><span class="cross">&#10007;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>DeFi &amp; staking tracking</td>
+                                    <td><span class="cross">&#10007;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>Token logos</td>
+                                    <td><span class="cross">&#10007;</span></td>
+                                    <td><span class="partial">Partial</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>NFT floor prices</td>
+                                    <td><span class="cross">&#10007;</span></td>
+                                    <td><span class="cross">&#10007;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>Historical OHLCV charts</td>
+                                    <td><span class="cross">&#10007;</span></td>
+                                    <td><span class="cross">&#10007;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>Higher rate limits</td>
+                                    <td><span class="cross">&#10007;</span></td>
+                                    <td><span class="cross">&#10007;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 8. Recommended Setup Guide -->
+                <section id="setup">
+                    <h2>Recommended Setup</h2>
+                    <p>For the best experience, add API keys in this priority order. Each step significantly improves data coverage.</p>
+
+                    <ul class="priority-list">
+                        <li>
+                            <div class="pri-info">
+                                <h4>Blockfrost <span class="impact-badge impact-high">High Impact</span></h4>
+                                <p>Unlocks full Cardano support: ADA, native tokens, staking rewards, NFTs, and DeFi positions. Essential if you hold any Cardano assets.</p>
+                            </div>
+                        </li>
+                        <li>
+                            <div class="pri-info">
+                                <h4>Alchemy <span class="impact-badge impact-high">High Impact</span></h4>
+                                <p>Covers Ethereum, Polygon, Base, and Arbitrum with a single key. Unlocks ERC-20 tokens, NFTs, and transaction history across 4 EVM chains.</p>
+                            </div>
+                        </li>
+                        <li>
+                            <div class="pri-info">
+                                <h4>Helius <span class="impact-badge impact-high">High Impact</span></h4>
+                                <p>Full Solana support including SPL tokens, compressed NFTs, and DeFi positions. Free tier is generous for personal use.</p>
+                            </div>
+                        </li>
+                        <li>
+                            <div class="pri-info">
+                                <h4>CoinMarketCap <span class="impact-badge impact-medium">Medium Impact</span></h4>
+                                <p>Adds a pricing fallback source, improving price reliability. 10,000 free credits per month.</p>
+                            </div>
+                        </li>
+                        <li>
+                            <div class="pri-info">
+                                <h4>Etherscan <span class="impact-badge impact-medium">Medium Impact</span></h4>
+                                <p>Ethereum transaction history and internal transactions. Useful for tracking gas costs and token transfers.</p>
+                            </div>
+                        </li>
+                        <li>
+                            <div class="pri-info">
+                                <h4>TapTools <span class="impact-badge impact-low">Optional</span></h4>
+                                <p>Paid (~$10/mo). Adds Cardano NFT floor prices, OHLCV charts, and advanced token analytics. Only needed for heavy Cardano users.</p>
+                            </div>
+                        </li>
+                    </ul>
+
+                    <div class="info-callout success">
+                        <span class="callout-icon">&#127919;</span>
+                        <div>With just the first 3 keys (Blockfrost + Alchemy + Helius), you'll have comprehensive coverage for all major chains. These are all free and take about 5 minutes total to set up.</div>
+                    </div>
+                </section>
+
+                <!-- 9. FAQ / Troubleshooting -->
+                <section id="faq">
+                    <h2>FAQ & Troubleshooting</h2>
+
+                    <div class="faq-list">
+                        <details>
+                            <summary>Why are some token prices showing as $0 or missing?</summary>
+                            <div class="faq-answer">
+                                <p>This usually means the token isn't listed on any of your configured pricing sources. ABCT tries CoinGecko, CoinMarketCap, Coinbase, and DefiLlama in order. Very small or new tokens may not be listed on any of these.</p>
+                                <p>For Cardano native tokens, adding TapTools provides the best coverage. Check the <a href="/settings.html" style="color: var(--accent-success, #00d26a);">API Keys</a> page to make sure your pricing APIs are configured.</p>
+                            </div>
+                        </details>
+
+                        <details>
+                            <summary>I'm getting rate-limited. What should I do?</summary>
+                            <div class="faq-answer">
+                                <p>Rate limiting means you've hit the free tier call limit for an API. ABCT handles this automatically by switching to fallback sources and caching results.</p>
+                                <p>If it happens frequently, consider upgrading to a paid CoinGecko plan or reducing refresh frequency. The cache system ensures your portfolio always shows recent data even during rate limits.</p>
+                            </div>
+                        </details>
+
+                        <details>
+                            <summary>How do I clear cached data?</summary>
+                            <div class="faq-answer">
+                                <p>Go to <a href="/settings.html" style="color: var(--accent-success, #00d26a);">Settings &rarr; Cache</a> tab. You can clear all caches or selectively clear specific cache keys. The dashboard also has a refresh button that forces a fresh data fetch.</p>
+                            </div>
+                        </details>
+
+                        <details>
+                            <summary>What permissions should I use for exchange API keys?</summary>
+                            <div class="faq-answer">
+                                <p><strong>Always use read-only permissions.</strong> ABCT only needs to read your balances. Specifically:</p>
+                                <p>&bull; <strong>Enable:</strong> View/Read balances, View account info<br>
+                                &bull; <strong>Disable:</strong> Trading, Withdrawals, Transfers, Futures</p>
+                                <p>For OKX, Bitget, and KuCoin, you'll also need the passphrase you set during key creation.</p>
+                            </div>
+                        </details>
+
+                        <details>
+                            <summary>How does Privacy Mode work?</summary>
+                            <div class="faq-answer">
+                                <p>Privacy Mode hides all dollar values and balances on screen. Toggle it from the user menu (avatar icon) in the top-right corner. Your data isn't deleted &mdash; it's just hidden from view. Useful for screen sharing or public environments.</p>
+                            </div>
+                        </details>
+
+                        <details>
+                            <summary>Can I change the theme?</summary>
+                            <div class="faq-answer">
+                                <p>Yes! Open the user menu (avatar icon in the top-right) and use the Theme dropdown. Available themes: Dark Mode, Light, Cypherpunk 1, Ocean Depths, Sunset Horizon, and several Cypher variants. Your choice is saved in your browser.</p>
+                            </div>
+                        </details>
+
+                        <details>
+                            <summary>How do I back up my data?</summary>
+                            <div class="faq-answer">
+                                <p>Go to <a href="/settings.html" style="color: var(--accent-success, #00d26a);">Settings &rarr; Backup & Restore</a>. You can export your wallets, API keys, and settings as an encrypted backup file. The same page lets you restore from a previous backup.</p>
+                                <p>The SQLite database file is stored at <code>data/portfolio.db</code> &mdash; you can also copy this file directly for a full backup.</p>
+                            </div>
+                        </details>
+
+                        <details>
+                            <summary>Why isn't my wallet balance updating?</summary>
+                            <div class="faq-answer">
+                                <p>Check a few things:</p>
+                                <p>&bull; <strong>API key configured?</strong> Most chains need an API key (see the API Key Guide above)<br>
+                                &bull; <strong>Correct address format?</strong> Make sure the address matches the chain (e.g., <code>addr1...</code> for Cardano, <code>0x...</code> for Ethereum)<br>
+                                &bull; <strong>Cache stale?</strong> Try the refresh button or clear caches in Settings</p>
+                                <p>Check <a href="/settings.html" style="color: var(--accent-success, #00d26a);">Settings &rarr; Logs</a> for any error messages from the backend.</p>
+                            </div>
+                        </details>
+                    </div>
+
+                    <a href="#helpTop" class="back-to-top">&uarr; Back to top</a>
+                </section>
+
+            </main>
+        </div>
+
+        <footer style="text-align: center; padding: 20px; margin-top: 20px; color: #888; font-size: 0.875rem;">
+            <p>ABCT - Help & Guide | <span style="opacity: 0.6;">v1.12.3 (BUILD 1771175419)</span></p>
+        </footer>
+    </div>
+
+    <script>
+        // TOC active state tracking
+        document.addEventListener('DOMContentLoaded', function() {
+            const tocLinks = document.querySelectorAll('.help-toc a');
+            const sections = document.querySelectorAll('.help-content section');
+
+            // Smooth scroll for TOC links
+            tocLinks.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const target = document.querySelector(this.getAttribute('href'));
+                    if (target) {
+                        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                });
+            });
+
+            // Intersection observer for active state
+            const observer = new IntersectionObserver(entries => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        tocLinks.forEach(l => l.classList.remove('active'));
+                        const activeLink = document.querySelector('.help-toc a[href="#' + entry.target.id + '"]');
+                        if (activeLink) activeLink.classList.add('active');
+                    }
+                });
+            }, { rootMargin: '-20% 0px -70% 0px' });
+
+            sections.forEach(section => observer.observe(section));
+        });
+    </script>
+</body>
+</html>

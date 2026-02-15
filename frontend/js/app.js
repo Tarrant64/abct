@@ -44,6 +44,10 @@ let snapshotTotals = { staking: 0, defi: 0, trackedTokens: 0 }; // From latest s
 let nftTotals = { cardano: 0, ethereum: 0, solana: 0, polygon: 0, base: 0, algorand: 0, bsc: 0, arbitrum: 0, avalanche: 0 }; // NFT values by chain
 let nftCounts = { cardano: 0, ethereum: 0, solana: 0, polygon: 0, base: 0, algorand: 0, bsc: 0, arbitrum: 0, avalanche: 0 }; // NFT counts by chain
 
+// Lazy governance tab rendering
+let _govRenderData = null; // { defiData, allStaking } for lazy governance tab
+let _govRendered = false;
+
 // NFT chain selection
 let currentNFTChain = 'cardano';
 
@@ -2560,6 +2564,10 @@ async function loadStakingPositions() {
                         }
                         allStaking[protocol].staked[stake.token].amount += stake.amount;
                         allStaking[protocol].staked[stake.token].positions += stake.positions;
+                        // Carry logo_url from backend (first wallet wins)
+                        if (stake.logo_url && !allStaking[protocol].staked[stake.token].logo_url) {
+                            allStaking[protocol].staked[stake.token].logo_url = stake.logo_url;
+                        }
                     }
 
                     // Aggregate rewards based on protocol
@@ -3389,10 +3397,18 @@ function getGovChainBadge(chain) {
     return badges[chain] || badges['cardano'];
 }
 
-// Render consolidated DeFi & Governance section (calls both sub-renderers)
+// Render consolidated DeFi & Governance section (calls DeFi immediately, defers Governance)
 function renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeStablecoins = [], adaDelegation = null) {
     renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStablecoins, adaDelegation);
-    renderGovernanceContent(defiData, allStaking);
+    // Store data for lazy governance rendering
+    _govRenderData = { defiData, allStaking };
+    _govRendered = false;
+    // Only render governance if that tab is currently active
+    const govTab = document.getElementById('governanceTab');
+    if (govTab && govTab.classList.contains('active')) {
+        renderGovernanceContent(defiData, allStaking);
+        _govRendered = true;
+    }
 }
 
 // Render DeFi tab: Staked Positions + Stablecoins + Other DeFi Tokens
@@ -3465,7 +3481,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
             html += `
                 <div class="defi-gov-card staked">
                     <div class="card-header">
-                        <img src="https://img.logokit.com/crypto/ADA?token=LOGOKIT_KEY_REMOVED&size=32" alt="ADA" class="token-logo-staking" onerror="this.style.display='none'">
+                        <span class="token-logo-wrap"><img src="https://img.logokit.com/crypto/ADA?token=LOGOKIT_KEY_REMOVED&size=32" alt="ADA" class="token-logo-staking" onerror="this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>ADA</span>'"></span>
                         <span class="protocol-name"><span class="chain-badge cardano" title="Cardano">ADA</span> ADA Delegation</span>
                         <span class="liquid-badge">\uD83D\uDCA7 Liquid</span>
                     </div>
@@ -3532,7 +3548,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
                 html += `
                     <div class="defi-gov-card staked">
                         <div class="card-header">
-                            <img src="${tokenLogoUrl}" alt="${token}" class="token-logo-staking" onerror="this.style.display='none'">
+                            <span class="token-logo-wrap"><img src="${tokenLogoUrl}" alt="${token}" class="token-logo-staking" onerror="this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>${token.slice(0,3)}</span>'"></span>
                             <span class="protocol-name">${chainBadge} ${protocol}</span>
                             <span class="staked-badge">Staked</span>
                         </div>
@@ -3564,7 +3580,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
             html += `
                 <div class="defi-gov-card staked">
                     <div class="card-header">
-                        <img src="${tokenLogoUrl}" alt="${displayName}" class="token-logo-staking" onerror="this.style.display='none'">
+                        <span class="token-logo-wrap"><img src="${tokenLogoUrl}" alt="${displayName}" class="token-logo-staking" onerror="this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>${displayName.slice(0,3)}</span>'"></span>
                         <span class="protocol-name">${chainBadge} ${pos.protocol}</span>
                         <span class="liquid-badge">\uD83D\uDCA7 Liquid</span>
                     </div>
