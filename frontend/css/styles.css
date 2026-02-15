@@ -7074,8 +7074,9 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     margin-top: 4px;
 }
 
-/* Override cardano chain badge inside DeFi cards for legibility on dark backgrounds */
-.defi-gov-card .chain-badge.cardano {
+/* Override cardano chain badge inside DeFi/Governance sections for legibility on dark backgrounds */
+.defi-gov-card .chain-badge.cardano,
+.defi-gov-line .chain-badge.cardano {
     color: var(--text-secondary);
     background-color: rgba(0, 51, 173, 0.3);
 }
@@ -7092,7 +7093,7 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
 .undelegated-tooltip {
     display: none;
     position: absolute;
-    bottom: calc(100% + 8px);
+    top: calc(100% + 8px);
     left: 0;
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
@@ -7100,6 +7101,8 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     padding: 10px 12px;
     min-width: 240px;
     max-width: 320px;
+    max-height: 300px;
+    overflow-y: auto;
     z-index: 1000;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
