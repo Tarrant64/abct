@@ -7245,8 +7245,7 @@ body.usd-primary .exchange-asset-item .balance-amount::after {
 
 .defi-gov-card .pool-info {
     font-size: 0.8rem;
-    color: var(--accent-cardano, #0033ad);
-    opacity: 0.8;
+    color: var(--text-secondary);
     margin-top: 4px;
 }
 

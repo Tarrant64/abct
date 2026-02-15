@@ -3408,9 +3408,9 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
                     <div class="card-header">
                         <img src="https://img.logokit.com/crypto/ADA?token=pk_fr08287a4c625f400f32a9&size=32" alt="ADA" class="token-logo-staking" onerror="this.style.display='none'">
                         <span class="protocol-name"><span class="chain-badge cardano" title="Cardano">ADA</span> ADA Delegation</span>
-                        <span class="staked-badge">Staked</span>
+                        <span class="liquid-badge">\uD83D\uDCA7 Liquid</span>
                     </div>
-                    <div class="ada-delegation-detail">${blurValue(stakedFormatted)} of ${blurValue(totalFormatted)} ADA staked</div>
+                    <div class="ada-delegation-detail">${blurValue(stakedFormatted)} of ${blurValue(totalFormatted)} ADA delegated</div>
                     <div class="card-value">${formatUSDBlur(stakedUsd)}</div>
                     ${poolInfoHtml}
                 </div>
