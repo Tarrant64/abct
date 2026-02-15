@@ -10,8 +10,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database import (
     get_all_wallets, get_wallet_by_address, save_wallet,
     save_balance, clear_wallet_balances, save_native_assets,
-    get_wallet_assets, get_wallet_balance
+    get_wallet_assets, get_wallet_balance,
+    get_cache, set_cache
 )
+from config import CACHE_TTL_COLD
 from services.cardano import cardano_service, is_stake_address
 from services.bitcoin import bitcoin_service
 from services.ethereum import ethereum_service
@@ -1480,7 +1482,7 @@ async def get_stake_address_info(stake_address: str, user_id: int = Depends(veri
 
 
 @router.get("/{address}/governance")
-async def get_wallet_governance(address: str, user_id: int = Depends(verify_session)):
+async def get_wallet_governance(address: str, refresh: bool = False, user_id: int = Depends(verify_session)):
     """
     Get governance and staking info for a Cardano wallet.
     Includes staking pool, DRep delegation, and pending rewards.
@@ -1496,6 +1498,14 @@ async def get_wallet_governance(address: str, user_id: int = Depends(verify_sess
             detail="Governance info only available for Cardano addresses"
         )
 
+    cache_key = f"governance_{address}"
+
+    if not refresh:
+        cached = await get_cache(cache_key)
+        if cached:
+            cached['from_cache'] = True
+            return cached
+
     gov_info = await cardano_service.get_wallet_governance_info(address)
 
     if not gov_info:
@@ -1503,6 +1513,9 @@ async def get_wallet_governance(address: str, user_id: int = Depends(verify_sess
             status_code=404,
             detail="Could not fetch governance info"
         )
+
+    gov_info['from_cache'] = False
+    await set_cache(cache_key, gov_info, CACHE_TTL_COLD)
 
     return gov_info
 

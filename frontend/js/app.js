@@ -3065,7 +3065,7 @@ function setDefiRefreshBar(visible) {
 }
 
 // Load consolidated DeFi & Governance data
-async function loadDefiGovernance() {
+async function loadDefiGovernance(forceRefresh = false) {
     const content = document.getElementById('defiGovernanceContent');
     const summary = document.getElementById('defiGovernanceSummary');
 
@@ -3073,6 +3073,7 @@ async function loadDefiGovernance() {
 
     // Check for cached data and render instantly if available
     const cached = getCachedDefi();
+    const cacheAge = getCachedDefiAge();
     if (cached) {
         // Render immediately from cache - no spinners
         restoreDefiTotalsFromCache(cached);
@@ -3086,6 +3087,11 @@ async function loadDefiGovernance() {
             cached.adaDelegation
         );
         updateTotalPortfolioValue();
+
+        // Cache < 2 min old: skip background refresh entirely (unless forced)
+        if (!forceRefresh && cacheAge < 2 * 60 * 1000) {
+            return;
+        }
     } else {
         // No cache - show loading state
         document.body.classList.add('staking-loading');
@@ -3192,10 +3198,11 @@ async function loadDefiGovernance() {
         }
 
         // Fire all wallet requests simultaneously
+        const refreshParam = forceRefresh ? '?refresh=true' : '';
         const walletPromises = cardanoWallets.map(wallet =>
             Promise.allSettled([
-                authFetch(`${API_BASE}/wallets/${wallet.address}/governance`),
-                authFetch(`${API_BASE}/defi/staking/${wallet.address}`)
+                authFetch(`${API_BASE}/wallets/${wallet.address}/governance${refreshParam}`),
+                authFetch(`${API_BASE}/defi/staking/${wallet.address}${refreshParam}`)
             ]).then(results => ({ wallet, results }))
         );
 
@@ -3893,7 +3900,7 @@ async function refreshDefiGovernance() {
         refreshPromises.push(authFetch(`${API_BASE}/defi/summary?refresh=true`).catch(() => null));
 
         await Promise.all(refreshPromises);
-        await loadDefiGovernance();
+        await loadDefiGovernance(true);
 
         showStatus('DeFi & Governance refreshed');
     } catch (error) {
@@ -8972,6 +8979,15 @@ function getCachedDefi() {
         }
         return cached.data;
     } catch { return null; }
+}
+
+function getCachedDefiAge() {
+    try {
+        const raw = sessionStorage.getItem(DEFI_CACHE_KEY);
+        if (!raw) return Infinity;
+        const cached = JSON.parse(raw);
+        return Date.now() - cached.timestamp;
+    } catch { return Infinity; }
 }
 
 function setCachedDefi(data) {
