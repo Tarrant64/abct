@@ -3679,7 +3679,31 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     height: 24px;
     border-radius: 50%;
     object-fit: cover;
+}
+
+.token-logo-wrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
     margin-right: 8px;
+    flex-shrink: 0;
+}
+
+.token-logo-wrap .logo-fallback {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.5rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
 }
 
 .token-logo-line {

@@ -616,6 +616,11 @@ async def api_help_page():
     """Serve the API Reference documentation page."""
     return FileResponse(str(frontend_path / "api-help.html"))
 
+@app.get("/help.html")
+async def help_page():
+    """Serve the Help & Guide page."""
+    return FileResponse(str(frontend_path / "help.html"))
+
 @app.get("/dashv2.html")
 async def dashv2_page():
     """Serve the DashV2 experimental widget dashboard page."""
