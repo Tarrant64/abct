@@ -334,11 +334,15 @@ async def get_defi_summary(user_id: int = Depends(verify_session), refresh: bool
                         'type_label': pos['type_label'],
                         'decimals': pos['decimals'],
                         'quantity_raw': 0,
-                        'wallet_count': 0
+                        'wallet_count': 0,
+                        'logo_url': pos.get('logo_url')
                     }
 
                 all_positions[key]['quantity_raw'] += pos['quantity_raw']
                 all_positions[key]['wallet_count'] += 1
+                # Preserve logo_url from any wallet that has it
+                if pos.get('logo_url') and not all_positions[key].get('logo_url'):
+                    all_positions[key]['logo_url'] = pos['logo_url']
 
                 # Protocol totals
                 protocol = pos['protocol']
