@@ -825,7 +825,6 @@
         <!-- Tab Navigation -->
         <div class="assets-tab-nav">
             <button class="assets-tab-btn active" data-tab="wallets" onclick="switchAssetsTab('wallets')">Self-Custody Wallets</button>
-            <button class="assets-tab-btn" data-tab="manageWallets" onclick="switchAssetsTab('manageWallets')">Manage Wallets</button>
             <button class="assets-tab-btn" data-tab="exchanges" onclick="switchAssetsTab('exchanges')">Exchanges</button>
             <button class="assets-tab-btn" data-tab="defi" onclick="switchAssetsTab('defi')">DeFi</button>
             <button class="assets-tab-btn" data-tab="governance" onclick="switchAssetsTab('governance')">Governance</button>
@@ -845,146 +844,38 @@
                         <span class="chain-count polygon">0 Polygon</span>
                         <span class="chain-count base">0 Base</span>
                     </div>
+                    <div class="header-actions" onclick="event.stopPropagation()">
+                        <button class="btn btn-secondary btn-small" onclick="openImportModal()">Import</button>
+                        <button class="btn btn-secondary btn-small" onclick="exportWallets()">Export</button>
+                        <button class="btn btn-primary btn-small" onclick="openAddModal()">+ Add</button>
+                    </div>
                     <button class="section-refresh-btn" onclick="event.stopPropagation(); refreshWallets();" title="Refresh wallets">&#10227;</button>
                     <span class="collapse-icon">&#9660;</span>
+                </div>
+                <div class="chain-tabs" id="selfCustodyChainTabs">
+                    <button class="chain-tab active" data-chain="all" onclick="filterSelfCustodyByChain('all')">All</button>
+                    <button class="chain-tab" data-chain="cardano" onclick="filterSelfCustodyByChain('cardano')">Cardano</button>
+                    <button class="chain-tab" data-chain="bitcoin" onclick="filterSelfCustodyByChain('bitcoin')">Bitcoin</button>
+                    <button class="chain-tab" data-chain="ethereum" onclick="filterSelfCustodyByChain('ethereum')">Ethereum</button>
+                    <button class="chain-tab" data-chain="solana" onclick="filterSelfCustodyByChain('solana')">Solana</button>
+                    <button class="chain-tab" data-chain="polygon" onclick="filterSelfCustodyByChain('polygon')">Polygon</button>
+                    <button class="chain-tab" data-chain="base" onclick="filterSelfCustodyByChain('base')">Base</button>
+                    <button class="chain-tab" data-chain="algorand" onclick="filterSelfCustodyByChain('algorand')">Algorand</button>
+                    <button class="chain-tab" data-chain="bsc" onclick="filterSelfCustodyByChain('bsc')">BNB Chain</button>
+                    <button class="chain-tab" data-chain="arbitrum" onclick="filterSelfCustodyByChain('arbitrum')">Arbitrum</button>
+                    <button class="chain-tab" data-chain="avalanche" onclick="filterSelfCustodyByChain('avalanche')">Avalanche</button>
+                    <button class="chain-tab" data-chain="tron" onclick="filterSelfCustodyByChain('tron')">Tron</button>
+                    <button class="chain-tab" data-chain="xrp" onclick="filterSelfCustodyByChain('xrp')">XRP</button>
+                    <button class="chain-tab" data-chain="hedera" onclick="filterSelfCustodyByChain('hedera')">Hedera</button>
+                    <button class="chain-tab" data-chain="multiversx" onclick="filterSelfCustodyByChain('multiversx')">MultiversX</button>
+                    <button class="chain-tab" data-chain="sui" onclick="filterSelfCustodyByChain('sui')">Sui</button>
+                    <button class="chain-tab" data-chain="aptos" onclick="filterSelfCustodyByChain('aptos')">Aptos</button>
+                    <button class="chain-tab" data-chain="filecoin" onclick="filterSelfCustodyByChain('filecoin')">Filecoin</button>
                 </div>
                 <div id="walletsList" class="wallets-list section-content">
                     <p class="loading-state">Loading wallet data...</p>
                 </div>
             </section>
-        </div>
-
-        <!-- Manage Wallets Tab -->
-        <div id="manageWalletsTab" class="assets-tab-content">
-            <div class="wallet-header">
-                <h1>Manage Wallets</h1>
-                <div class="header-actions" id="walletHeaderActions">
-                    <button class="btn btn-secondary" onclick="openImportModal()">
-                        Import from File
-                    </button>
-                    <button class="btn btn-secondary" onclick="exportWallets()">
-                        Export to File
-                    </button>
-                    <button class="btn btn-primary" onclick="openAddModal()">
-                        + Add Wallet
-                    </button>
-                </div>
-                <div class="header-actions" id="tokenHeaderActions" style="display: none;">
-                    <button class="btn btn-primary" onclick="openAddTokenModal()">
-                        + Add Token
-                    </button>
-                </div>
-            </div>
-
-            <!-- Asset Type Tabs -->
-            <div class="asset-type-tabs">
-                <button class="asset-tab active" data-type="wallets" onclick="switchAssetTab('wallets')">
-                    Self-Custody Wallets
-                </button>
-                <button class="asset-tab" data-type="exchanges" onclick="switchAssetTab('exchanges')">
-                    Exchanges
-                </button>
-                <button class="asset-tab" data-type="tokens" onclick="switchAssetTab('tokens')">
-                    Manual Tokens
-                </button>
-            </div>
-
-            <div id="manageStatusMessage" class="status-message"></div>
-
-            <!-- Wallets Section -->
-            <div id="walletsSection">
-                <div class="chain-tabs">
-                    <button class="chain-tab active" data-chain="all" onclick="filterByChain('all')">
-                        All <span class="count" id="count-all">0</span>
-                    </button>
-                    <button class="chain-tab" data-chain="cardano" onclick="filterByChain('cardano')">
-                        Cardano <span class="count" id="count-cardano">0</span>
-                    </button>
-                    <button class="chain-tab" data-chain="bitcoin" onclick="filterByChain('bitcoin')">
-                        Bitcoin <span class="count" id="count-bitcoin">0</span>
-                    </button>
-                    <button class="chain-tab" data-chain="ethereum" onclick="filterByChain('ethereum')">
-                        Ethereum <span class="count" id="count-ethereum">0</span>
-                    </button>
-                    <button class="chain-tab" data-chain="solana" onclick="filterByChain('solana')">
-                        Solana <span class="count" id="count-solana">0</span>
-                    </button>
-                    <button class="chain-tab" data-chain="polygon" onclick="filterByChain('polygon')">
-                        Polygon <span class="count" id="count-polygon">0</span>
-                    </button>
-                    <button class="chain-tab" data-chain="base" onclick="filterByChain('base')">
-                        Base <span class="count" id="count-base">0</span>
-                    </button>
-                    <button class="chain-tab" data-chain="algorand" onclick="filterByChain('algorand')">
-                        Algorand <span class="count" id="count-algorand">0</span>
-                    </button>
-                    <button class="chain-tab" data-chain="bsc" onclick="filterByChain('bsc')">
-                        BNB Chain <span class="count" id="count-bsc">0</span>
-                    </button>
-                    <button class="chain-tab" data-chain="arbitrum" onclick="filterByChain('arbitrum')">
-                        Arbitrum <span class="count" id="count-arbitrum">0</span>
-                    </button>
-                    <button class="chain-tab" data-chain="avalanche" onclick="filterByChain('avalanche')">
-                        Avalanche <span class="count" id="count-avalanche">0</span>
-                    </button>
-                    <button class="chain-tab" data-chain="tron" onclick="filterByChain('tron')">
-                        Tron <span class="count" id="count-tron">0</span>
-                    </button>
-                    <button class="chain-tab" data-chain="xrp" onclick="filterByChain('xrp')">
-                        XRP <span class="count" id="count-xrp">0</span>
-                    </button>
-                    <button class="chain-tab" data-chain="hedera" onclick="filterByChain('hedera')">
-                        Hedera <span class="count" id="count-hedera">0</span>
-                    </button>
-                    <button class="chain-tab" data-chain="multiversx" onclick="filterByChain('multiversx')">
-                        MultiversX <span class="count" id="count-multiversx">0</span>
-                    </button>
-                    <button class="chain-tab" data-chain="sui" onclick="filterByChain('sui')">
-                        Sui <span class="count" id="count-sui">0</span>
-                    </button>
-                    <button class="chain-tab" data-chain="aptos" onclick="filterByChain('aptos')">
-                        Aptos <span class="count" id="count-aptos">0</span>
-                    </button>
-                    <button class="chain-tab" data-chain="filecoin" onclick="filterByChain('filecoin')">
-                        Filecoin <span class="count" id="count-filecoin">0</span>
-                    </button>
-                </div>
-
-                <div class="wallet-list" id="walletList">
-                    <div class="empty-state">
-                        <div class="loading"></div>
-                        <p>Loading wallets...</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Exchanges Section -->
-            <div id="exchangesSection" style="display: none;">
-                <div class="exchange-info-box">
-                    <h3>Exchange API Configuration</h3>
-                    <p style="font-size: 16px; line-height: 1.6;">
-                        Exchange API configuration has been moved to the <strong>Settings</strong> page for easier management.
-                    </p>
-                    <div style="margin-top: 20px;">
-                        <a href="/settings.html#apis" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px; text-decoration: none;">
-                            <span>Go to Settings</span>
-                        </a>
-                    </div>
-                    <p style="margin-top: 20px; font-size: 14px; color: #888;">
-                        You can configure API keys for Coinbase, Binance.com, Binance.US, OKX, Bitget, Gate.io, and KuCoin directly from the web interface.
-                    </p>
-                </div>
-            </div>
-
-            <!-- Manual Tokens Section -->
-            <div id="tokensSection" style="display: none;">
-                <div class="token-list" id="tokenList">
-                    <div class="empty-state">
-                        <h3>No manual tokens</h3>
-                        <p>Add tokens manually to track holdings not in your wallets.</p>
-                    </div>
-                </div>
-            </div>
         </div>
 
         <!-- Exchange Wallets Tab -->
@@ -1045,6 +936,9 @@
                     <h2>Custom Tokens</h2>
                     <div class="section-summary" id="customTokensSummary">
                         <span>0 tokens</span>
+                    </div>
+                    <div class="header-actions" onclick="event.stopPropagation()">
+                        <button class="btn btn-primary btn-small" onclick="openAddTokenModal()">+ Add Token</button>
                     </div>
                     <button class="section-refresh-btn" onclick="event.stopPropagation(); loadCustomTokens();" title="Refresh custom tokens">&#10227;</button>
                     <span class="collapse-icon">&#9660;</span>
@@ -1432,11 +1326,14 @@ base:0x789..." oninput="previewImport()"></textarea>
     <script src="/static/js/wallet-management.js?v=1771191395"></script>
     <script>
         // Assets page tab switching
-        const ASSETS_TABS = ['wallets', 'manageWallets', 'exchanges', 'defi', 'governance', 'tokens'];
+        const ASSETS_TABS = ['wallets', 'exchanges', 'defi', 'governance', 'tokens'];
 
-        let manageWalletsLoaded = false;
+        let customTokensTabLoaded = false;
 
         function switchAssetsTab(tabName) {
+            // Redirect old manageWallets hash to wallets
+            if (tabName === 'manageWallets') tabName = 'wallets';
+
             // Update tab buttons
             document.querySelectorAll('.assets-tab-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.tab === tabName);
@@ -1446,11 +1343,11 @@ base:0x789..." oninput="previewImport()"></textarea>
                 const el = document.getElementById(tab + 'Tab');
                 if (el) el.classList.toggle('active', tab === tabName);
             });
-            // Lazy-load wallet management data
-            if (tabName === 'manageWallets' && !manageWalletsLoaded) {
-                manageWalletsLoaded = true;
-                if (typeof loadWalletManagement === 'function') {
-                    loadWalletManagement();
+            // Lazy-load custom tokens on first visit
+            if (tabName === 'tokens' && !customTokensTabLoaded) {
+                customTokensTabLoaded = true;
+                if (typeof loadCustomTokens === 'function') {
+                    loadCustomTokens();
                 }
             }
             // Lazy-render governance tab on first visit
@@ -1462,6 +1359,22 @@ base:0x789..." oninput="previewImport()"></textarea>
             window.location.hash = tabName;
         }
 
+        // Filter Self-Custody wallet sections by chain (show/hide, no re-render)
+        function filterSelfCustodyByChain(chain) {
+            // Toggle active class on chain-tab buttons
+            document.querySelectorAll('#selfCustodyChainTabs .chain-tab').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.chain === chain);
+            });
+            // Show/hide blockchain sections
+            document.querySelectorAll('#walletsList .blockchain-section').forEach(section => {
+                if (chain === 'all') {
+                    section.style.display = '';
+                } else {
+                    section.style.display = section.dataset.chain === chain ? '' : 'none';
+                }
+            });
+        }
+
         // Handle hash-based tab switching on load
         document.addEventListener('DOMContentLoaded', () => {
             const hash = window.location.hash.replace('#', '');
@@ -1470,7 +1383,7 @@ base:0x789..." oninput="previewImport()"></textarea>
                 window.location.href = '/data.html#blockchains';
                 return;
             }
-            if (ASSETS_TABS.includes(hash)) {
+            if (ASSETS_TABS.includes(hash) || hash === 'manageWallets') {
                 switchAssetsTab(hash);
             }
         });
