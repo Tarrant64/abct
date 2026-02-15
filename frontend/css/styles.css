@@ -6997,6 +6997,14 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     font-family: 'SF Mono', Monaco, 'Courier New', monospace;
 }
 
+.defi-last-updated {
+    font-size: 0.75rem;
+    color: var(--text-tertiary, #888);
+    font-weight: 400;
+    opacity: 0.7;
+    white-space: nowrap;
+}
+
 .defi-governance-content {
     display: flex;
     flex-direction: column;

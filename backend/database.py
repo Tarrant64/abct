@@ -1271,6 +1271,30 @@ async def get_cache(key: str, user_id: Optional[int] = None):
         return None
 
 
+async def get_stale_cache(key: str, user_id: Optional[int] = None):
+    """Get cached value even if expired (stale fallback).
+
+    Returns (data, expires_at_iso) tuple, or (None, None) if no row exists.
+    """
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        if user_id is not None:
+            cursor = await db.execute(
+                "SELECT value, expires_at FROM cache WHERE user_id = ? AND key = ?",
+                (user_id, key)
+            )
+        else:
+            cursor = await db.execute(
+                "SELECT value, expires_at FROM cache WHERE user_id IS NULL AND key = ?",
+                (key,)
+            )
+        row = await cursor.fetchone()
+        if row:
+            import json
+            return json.loads(row['value']), row['expires_at']
+        return None, None
+
+
 async def set_cache(key: str, value, ttl_seconds: int = 300, user_id: Optional[int] = None):
     """Set a value in the cache with TTL.
 

@@ -13,7 +13,8 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.defi import defi_service
 from services.demo_defi_service import demo_defi_service
-from database import get_all_wallets, get_cache, set_cache, get_username_by_user_id
+from datetime import datetime, timedelta
+from database import get_all_wallets, get_cache, set_cache, get_stale_cache, get_username_by_user_id
 from middleware.demo_mode import is_demo_user
 from auth_utils import verify_session
 from config import CACHE_TTL_COLD
@@ -87,10 +88,26 @@ async def get_staking_positions(address: str, refresh: bool = False, user_id: in
             cached['from_cache'] = True
             return cached
 
-    result = await defi_service.get_all_staking_positions(address)
+        # Fresh cache miss — try stale fallback so frontend gets instant data
+        stale_data, stale_expires = await get_stale_cache(cache_key)
+        if stale_data:
+            cached_at = (datetime.fromisoformat(stale_expires) - timedelta(seconds=STAKING_CACHE_TTL)).isoformat()
+            stale_data['from_cache'] = True
+            stale_data['stale'] = True
+            stale_data['cached_at'] = cached_at
+            return stale_data
+
+    # Fetch previous result for protocol-level merge on timeout
+    previous_result = None
+    stale_data, stale_expires = await get_stale_cache(cache_key)
+    if stale_data and stale_data.get('protocols'):
+        previous_result = stale_data
+
+    result = await defi_service.get_all_staking_positions(address, previous_result=previous_result)
 
     if result:
         result['from_cache'] = False
+        result['cached_at'] = datetime.now().isoformat()
         await set_cache(cache_key, result, STAKING_CACHE_TTL)
 
     return result
