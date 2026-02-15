@@ -709,8 +709,8 @@ class DeFiService:
             total_deposits = 0
             total_withdrawals = 0
 
-            # Fetch UTxOs in parallel batches (10 concurrent) instead of sequentially
-            sem = asyncio.Semaphore(10)
+            # Fetch UTxOs in parallel batches (20 concurrent) instead of sequentially
+            sem = asyncio.Semaphore(20)
 
             async def fetch_tx_utxos(tx_hash):
                 async with sem:
@@ -1192,11 +1192,12 @@ class DeFiService:
 
         return None
 
-    async def get_all_staking_positions(self, address: str) -> Dict:
+    async def get_all_staking_positions(self, address: str, previous_result: Dict = None) -> Dict:
         """
         Get all protocol staking positions for an address.
         Aggregates data from supported protocol APIs including pending rewards.
         Uses parallel fetching with per-protocol timeouts to avoid 504s.
+        If previous_result is provided, timed-out protocols are filled from it.
         """
         import asyncio
 
@@ -1220,7 +1221,7 @@ class DeFiService:
             with_timeout(self.get_indigo_staking(address), "Indigo"),
             with_timeout(self.get_strike_staking(address), "Strike"),
             with_timeout(self.get_liqwid_staking(address), "Liqwid"),
-            with_timeout(self.get_iagon_staking(address), "Iagon", timeout=20),
+            with_timeout(self.get_iagon_staking(address), "Iagon", timeout=30),
             with_timeout(self.get_surf_lending_positions(address), "Surf"),
             return_exceptions=True
         )
@@ -1241,6 +1242,17 @@ class DeFiService:
         if isinstance(surf, Exception):
             logger.error(f"Surf staking error for {address[:20]}: {surf}")
             surf = None
+
+        # Fill timed-out protocols from previous cache result
+        if previous_result and previous_result.get('protocols'):
+            prev = previous_result['protocols']
+            protocol_map = {'Indigo': indigo, 'Strike': strike, 'Liqwid': liqwid, 'Iagon': iagon, 'Surf Lending': surf}
+            for name, val in protocol_map.items():
+                if val is None and name in prev:
+                    logger.info(f"[Staking] {name} timed out — using previous cached data (stale)")
+                    prev[name]['stale'] = True
+                    staking['protocols'][name] = prev[name]
+                    staking['total_positions'] += prev[name].get('total_positions', 0)
 
         # Phase 2: Fetch rewards and logos in parallel for protocols that returned data
         reward_tasks = {}

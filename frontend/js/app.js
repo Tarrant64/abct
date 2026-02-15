@@ -3136,6 +3136,7 @@ async function loadDefiGovernance(forceRefresh = false) {
             cached.adaDelegation
         );
         updateTotalPortfolioValue();
+        updateDefiTimestamp();
 
         // Cache < 2 min old: skip background refresh entirely (unless forced)
         if (!forceRefresh && cacheAge < 2 * 60 * 1000) {
@@ -3372,6 +3373,7 @@ async function loadDefiGovernance(forceRefresh = false) {
 
         // Cache the complete result
         setCachedDefi({ defiData, allStaking, exchangeStablecoins, nativeStablecoins, adaDelegation });
+        updateDefiTimestamp();
 
     } catch (error) {
         console.error('Error loading DeFi & Governance:', error);
@@ -3936,9 +3938,6 @@ function renderGovernanceContent(defiData, allStaking = {}) {
 
 // Refresh DeFi & Governance section
 async function refreshDefiGovernance() {
-    // Clear cache so loadDefiGovernance() does a full reload
-    sessionStorage.removeItem(DEFI_CACHE_KEY);
-
     const btn = document.querySelector('.defi-governance-section .section-refresh-btn');
     if (btn) {
         btn.classList.add('refreshing');
@@ -8954,26 +8953,21 @@ function setCachedAnalytics(data) {
     } catch { /* sessionStorage full or unavailable */ }
 }
 
-// DeFi cache (mirrors analytics cache pattern)
+// DeFi cache — persistent across tabs/sessions via localStorage
 const DEFI_CACHE_KEY = 'abct_defi_cache';
-const DEFI_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 function getCachedDefi() {
     try {
-        const raw = sessionStorage.getItem(DEFI_CACHE_KEY);
+        const raw = localStorage.getItem(DEFI_CACHE_KEY);
         if (!raw) return null;
         const cached = JSON.parse(raw);
-        if (Date.now() - cached.timestamp > DEFI_CACHE_TTL) {
-            sessionStorage.removeItem(DEFI_CACHE_KEY);
-            return null;
-        }
         return cached.data;
     } catch { return null; }
 }
 
 function getCachedDefiAge() {
     try {
-        const raw = sessionStorage.getItem(DEFI_CACHE_KEY);
+        const raw = localStorage.getItem(DEFI_CACHE_KEY);
         if (!raw) return Infinity;
         const cached = JSON.parse(raw);
         return Date.now() - cached.timestamp;
@@ -8982,8 +8976,23 @@ function getCachedDefiAge() {
 
 function setCachedDefi(data) {
     try {
-        sessionStorage.setItem(DEFI_CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
-    } catch { /* sessionStorage full or unavailable */ }
+        localStorage.setItem(DEFI_CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
+    } catch { /* localStorage full or unavailable */ }
+}
+
+function updateDefiTimestamp() {
+    const el = document.getElementById('defiLastUpdated');
+    if (!el) return;
+    const age = getCachedDefiAge();
+    if (age === Infinity) { el.textContent = ''; return; }
+    const mins = Math.floor(age / 60000);
+    const hours = Math.floor(age / 3600000);
+    const days = Math.floor(age / 86400000);
+    if (mins < 1) el.textContent = 'Updated just now';
+    else if (mins < 60) el.textContent = `Updated ${mins} min ago`;
+    else if (hours < 24) el.textContent = `Updated ${hours}h ago`;
+    else if (days === 1) el.textContent = 'Updated yesterday';
+    else el.textContent = `Updated ${days} days ago`;
 }
 
 function setRefreshIndicators(state) {
