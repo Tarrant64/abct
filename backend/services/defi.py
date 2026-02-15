@@ -5,6 +5,7 @@ Identifies DeFi protocol tokens, LP positions, and staking receipts.
 Tracks staked positions, pending rewards, and APY/APR via protocol APIs.
 """
 
+import asyncio
 import httpx
 import bech32
 import traceback
@@ -377,6 +378,19 @@ class DeFiService:
                         'type': pos['type_label'],
                         'quantity': pos['quantity_formatted']
                     })
+
+            # Fetch logo URLs for governance tokens
+            gov_tokens = [pos['token'] for pos in defi_positions.values() if pos['type'] == 'governance']
+            if gov_tokens:
+                logo_coros = {t: self._get_token_logo_url(t) for t in set(gov_tokens)}
+                logo_results = await asyncio.gather(*logo_coros.values(), return_exceptions=True)
+                logo_map = {}
+                for t, result in zip(logo_coros.keys(), logo_results):
+                    if isinstance(result, str):
+                        logo_map[t] = result
+                for pos in defi_positions.values():
+                    if pos['type'] == 'governance' and pos['token'] in logo_map:
+                        pos['logo_url'] = logo_map[pos['token']]
 
             # Categorize by type
             by_category = {}

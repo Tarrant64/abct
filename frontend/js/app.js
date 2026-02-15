@@ -3231,7 +3231,7 @@ async function loadDefiGovernance() {
                     console.error(`[DeFi] Governance parse error for ${wallet.address.slice(0,15)}:`, e);
                 }
             }
-            if (!walletDelegated) {
+            if (!walletDelegated && walletBalance > 1) {
                 adaDelegation.undelegatedWallets.push({
                     address: wallet.address,
                     label: wallet.label || null,
@@ -3774,9 +3774,12 @@ function renderGovernanceContent(defiData, allStaking = {}) {
     for (const pos of governancePositions) {
         const token = pos.asset_name;
         if (!govTokenMap[token]) {
-            govTokenMap[token] = { wallet: 0, staked: 0, blockchain: pos.blockchain || 'cardano' };
+            govTokenMap[token] = { wallet: 0, staked: 0, blockchain: pos.blockchain || 'cardano', logo_url: null };
         }
         govTokenMap[token].wallet += pos.quantity || 0;
+        if (pos.logo_url && !govTokenMap[token].logo_url) {
+            govTokenMap[token].logo_url = pos.logo_url;
+        }
     }
 
     // 2. Staked governance tokens (LQ, INDY, etc. are still usable in governance)
@@ -3784,9 +3787,12 @@ function renderGovernanceContent(defiData, allStaking = {}) {
         for (const [token, stakeData] of Object.entries(data.staked || {})) {
             if (GOVERNANCE_LINKS[token]) {
                 if (!govTokenMap[token]) {
-                    govTokenMap[token] = { wallet: 0, staked: 0, blockchain: data.blockchain || 'cardano' };
+                    govTokenMap[token] = { wallet: 0, staked: 0, blockchain: data.blockchain || 'cardano', logo_url: null };
                 }
                 govTokenMap[token].staked += stakeData.amount || 0;
+                if (stakeData.logo_url && !govTokenMap[token].logo_url) {
+                    govTokenMap[token].logo_url = stakeData.logo_url;
+                }
             }
         }
     }
@@ -3797,7 +3803,7 @@ function renderGovernanceContent(defiData, allStaking = {}) {
             const total = data.wallet + data.staked;
             const tokenPrice = prices[token] || 0;
             const usdValue = total * tokenPrice;
-            return { token, wallet: data.wallet, staked: data.staked, total, usdValue, blockchain: data.blockchain };
+            return { token, wallet: data.wallet, staked: data.staked, total, usdValue, blockchain: data.blockchain, logo_url: data.logo_url };
         })
         .filter(t => t.usdValue >= 1)
         .sort((a, b) => b.usdValue - a.usdValue);
@@ -3815,7 +3821,7 @@ function renderGovernanceContent(defiData, allStaking = {}) {
             governanceTokenCount++;
 
             const govInfo = GOVERNANCE_LINKS[t.token];
-            const tokenLogoUrl = `https://img.logokit.com/crypto/${t.token}?token=pk_fr08287a4c625f400f32a9&size=32`;
+            const tokenLogoUrl = t.logo_url || `https://img.logokit.com/crypto/${t.token}?token=pk_fr08287a4c625f400f32a9&size=32`;
             const totalFormatted = t.total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
             // Show breakdown if both wallet and staked exist
