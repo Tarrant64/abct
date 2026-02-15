@@ -6027,6 +6027,8 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     overflow-y: auto;
     border: 1px solid var(--border-color);
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    position: relative;
+    z-index: 1;
 }
 
 .modal-header {

@@ -1097,21 +1097,63 @@ class DeFiService:
         return rewards
 
     async def _get_token_logo_url(self, token_symbol: str) -> Optional[str]:
-        """Get cached logo URL for a token from database."""
+        """Get logo URL for a token using database cache then NMKR fallback chain.
+
+        Tries in order:
+        1. Database cache (ticker, policy_id, case-insensitive)
+        2. NMKR fallback chain (NMKR -> Token Registry -> Blockfrost -> LogoKit)
+        """
+        policy_id_for_symbol = None
+
         try:
-            import sqlite3
             from database import get_db_connection
 
             conn = get_db_connection()
             cursor = conn.cursor()
-            cursor.execute("SELECT logo_url FROM token_metadata WHERE ticker = ?", (token_symbol,))
-            row = cursor.fetchone()
-            conn.close()
 
+            # Strategy 1: Exact ticker match for cached logo
+            cursor.execute("SELECT logo_url FROM token_metadata WHERE ticker = ? AND logo_url IS NOT NULL", (token_symbol,))
+            row = cursor.fetchone()
             if row and row[0]:
+                conn.close()
                 return row[0]
+
+            # Strategy 2: Look up by policy_id from DEFI_PROTOCOLS
+            for pid, info in DEFI_PROTOCOLS.items():
+                if info.get('token') == token_symbol:
+                    policy_id_for_symbol = pid
+                    cursor.execute("SELECT logo_url FROM token_metadata WHERE policy_id = ? AND logo_url IS NOT NULL LIMIT 1", (pid,))
+                    row = cursor.fetchone()
+                    if row and row[0]:
+                        conn.close()
+                        return row[0]
+                    break
+
+            # Strategy 3: Case-insensitive ticker match
+            cursor.execute("SELECT logo_url FROM token_metadata WHERE LOWER(ticker) = LOWER(?) AND logo_url IS NOT NULL LIMIT 1", (token_symbol,))
+            row = cursor.fetchone()
+            if row and row[0]:
+                conn.close()
+                return row[0]
+
+            conn.close()
         except Exception as e:
-            logger.error(f"Error fetching logo for {token_symbol}: {e}")
+            logger.error(f"Error in DB logo lookup for {token_symbol}: {e}")
+
+        # Strategy 4: Use NMKR fallback chain (same as portfolio endpoint)
+        if policy_id_for_symbol:
+            try:
+                from services.nmkr_service import nmkr_service
+                token_name_hex = token_symbol.encode('utf-8').hex()
+                logo_url = await nmkr_service.get_token_logo_with_fallbacks(
+                    policy_id_for_symbol,
+                    token_name_hex,
+                    ticker=token_symbol
+                )
+                if logo_url:
+                    return logo_url
+            except Exception as e:
+                logger.error(f"NMKR fallback failed for {token_symbol}: {e}")
 
         return None
 
