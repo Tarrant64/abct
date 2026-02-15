@@ -1097,11 +1097,12 @@ class DeFiService:
         return rewards
 
     async def _get_token_logo_url(self, token_symbol: str) -> Optional[str]:
-        """Get logo URL for a token using database cache then NMKR fallback chain.
+        """Get logo URL for a token using multiple fallback strategies.
 
         Tries in order:
         1. Database cache (ticker, policy_id, case-insensitive)
-        2. NMKR fallback chain (NMKR -> Token Registry -> Blockfrost -> LogoKit)
+        2. Logostream API (dedicated logo service)
+        3. NMKR fallback chain (Token Registry -> Blockfrost -> LogoKit)
         """
         policy_id_for_symbol = None
         asset_id_for_symbol = None
@@ -1113,7 +1114,7 @@ class DeFiService:
             cursor = conn.cursor()
 
             # Strategy 1: Exact ticker match for cached logo
-            cursor.execute("SELECT logo_url, asset_id FROM token_metadata WHERE ticker = ? AND logo_url IS NOT NULL", (token_symbol,))
+            cursor.execute("SELECT logo_url FROM token_metadata WHERE ticker = ? AND logo_url IS NOT NULL", (token_symbol,))
             row = cursor.fetchone()
             if row and row[0]:
                 conn.close()
@@ -1124,7 +1125,7 @@ class DeFiService:
                 if info.get('token') == token_symbol:
                     policy_id_for_symbol = pid
                     # First check for logo_url
-                    cursor.execute("SELECT logo_url, asset_id FROM token_metadata WHERE policy_id = ? AND logo_url IS NOT NULL LIMIT 1", (pid,))
+                    cursor.execute("SELECT logo_url FROM token_metadata WHERE policy_id = ? AND logo_url IS NOT NULL LIMIT 1", (pid,))
                     row = cursor.fetchone()
                     if row and row[0]:
                         conn.close()
@@ -1147,7 +1148,18 @@ class DeFiService:
         except Exception as e:
             logger.error(f"Error in DB logo lookup for {token_symbol}: {e}")
 
-        # Strategy 4: Use NMKR fallback chain (same as portfolio endpoint)
+        # Strategy 4: Try Logostream API (dedicated logo service)
+        try:
+            from services.logostream import logostream_service
+            if await logostream_service.is_configured():
+                logo_url = await logostream_service.get_token_logo(token_symbol, chain='cardano')
+                if logo_url:
+                    logger.info(f"[DeFi Logo] Got logo for {token_symbol} via Logostream")
+                    return logo_url
+        except Exception as e:
+            logger.debug(f"Logostream lookup failed for {token_symbol}: {e}")
+
+        # Strategy 5: Use NMKR fallback chain (Token Registry -> Blockfrost -> LogoKit)
         if policy_id_for_symbol:
             try:
                 from services.nmkr_service import nmkr_service
