@@ -527,18 +527,26 @@ class DeFiService:
                 return None
 
             client = get_client("blockfrost", timeout=15.0)
-            sem = asyncio.Semaphore(10)  # Limit concurrent Blockfrost requests
+            sem = asyncio.Semaphore(5)  # Limit concurrent Blockfrost requests
 
             async def fetch_page(pg):
                 async with sem:
-                    resp = await client.get(
-                        f"{BLOCKFROST_BASE_URL}/addresses/{LIQWID_STAKING_ADDRESS}/utxos",
-                        headers=self.headers,
-                        params={"count": 100, "page": pg}
-                    )
-                    if resp.status_code != 200:
-                        return []
-                    return resp.json()
+                    try:
+                        resp = await client.get(
+                            f"{BLOCKFROST_BASE_URL}/addresses/{LIQWID_STAKING_ADDRESS}/utxos",
+                            headers=self.headers,
+                            params={"count": 100, "page": pg}
+                        )
+                        if resp.status_code == 200:
+                            return resp.json()
+                        elif resp.status_code == 404:
+                            return []  # No more pages
+                        else:
+                            logger.warning(f"[Liqwid] Page {pg} returned HTTP {resp.status_code}")
+                            return None  # Error — eligible for retry
+                    except Exception as e:
+                        logger.warning(f"[Liqwid] Page {pg} fetch failed: {e}")
+                        return None
 
             # Phase 1: Fetch first page to confirm contract has UTxOs
             first_page = await fetch_page(1)
@@ -546,17 +554,33 @@ class DeFiService:
                 return None
 
             # Phase 2: Fetch remaining pages in parallel (contract has ~2700+ UTxOs = ~28 pages)
-            # Optimistically fetch pages 2-30 in parallel
             remaining = await asyncio.gather(
                 *[fetch_page(pg) for pg in range(2, 31)],
                 return_exceptions=True
             )
 
             all_utxos = list(first_page)
-            for result in remaining:
-                if isinstance(result, Exception) or not result:
-                    continue
-                all_utxos.extend(result)
+            failed_pages = []
+            for i, result in enumerate(remaining):
+                pg = i + 2
+                if isinstance(result, Exception):
+                    logger.warning(f"[Liqwid] Page {pg} raised exception: {result}")
+                    failed_pages.append(pg)
+                elif result is None:
+                    failed_pages.append(pg)
+                else:
+                    all_utxos.extend(result)
+
+            # Retry failed pages sequentially (rate-limit safe)
+            if failed_pages:
+                logger.info(f"[Liqwid] Retrying {len(failed_pages)} failed pages sequentially...")
+                for pg in failed_pages:
+                    try:
+                        result = await fetch_page(pg)
+                        if result:
+                            all_utxos.extend(result)
+                    except Exception as e:
+                        logger.warning(f"[Liqwid] Retry page {pg} failed: {e}")
 
             logger.info(f"[Liqwid] Scanned {len(all_utxos)} UTxOs for PKH {payment_cred[:16]}...")
 
@@ -613,18 +637,26 @@ class DeFiService:
                 return None
 
             client = get_client("blockfrost", timeout=15.0)
-            sem = asyncio.Semaphore(10)
+            sem = asyncio.Semaphore(5)
 
             async def fetch_page(pg):
                 async with sem:
-                    resp = await client.get(
-                        f"{BLOCKFROST_BASE_URL}/addresses/{STRIKE_STAKING_ADDRESS}/utxos",
-                        headers=self.headers,
-                        params={"count": 100, "page": pg}
-                    )
-                    if resp.status_code != 200:
-                        return []
-                    return resp.json()
+                    try:
+                        resp = await client.get(
+                            f"{BLOCKFROST_BASE_URL}/addresses/{STRIKE_STAKING_ADDRESS}/utxos",
+                            headers=self.headers,
+                            params={"count": 100, "page": pg}
+                        )
+                        if resp.status_code == 200:
+                            return resp.json()
+                        elif resp.status_code == 404:
+                            return []
+                        else:
+                            logger.warning(f"[Strike] Page {pg} returned HTTP {resp.status_code}")
+                            return None
+                    except Exception as e:
+                        logger.warning(f"[Strike] Page {pg} fetch failed: {e}")
+                        return None
 
             # Fetch first page, then remaining in parallel
             first_page = await fetch_page(1)
@@ -637,10 +669,26 @@ class DeFiService:
             )
 
             all_utxos = list(first_page)
-            for result in remaining:
-                if isinstance(result, Exception) or not result:
-                    continue
-                all_utxos.extend(result)
+            failed_pages = []
+            for i, result in enumerate(remaining):
+                pg = i + 2
+                if isinstance(result, Exception):
+                    logger.warning(f"[Strike] Page {pg} raised exception: {result}")
+                    failed_pages.append(pg)
+                elif result is None:
+                    failed_pages.append(pg)
+                else:
+                    all_utxos.extend(result)
+
+            if failed_pages:
+                logger.info(f"[Strike] Retrying {len(failed_pages)} failed pages sequentially...")
+                for pg in failed_pages:
+                    try:
+                        result = await fetch_page(pg)
+                        if result:
+                            all_utxos.extend(result)
+                    except Exception as e:
+                        logger.warning(f"[Strike] Retry page {pg} failed: {e}")
 
             logger.info(f"[Strike] Scanned {len(all_utxos)} UTxOs for PKH {payment_cred[:16]}...")
 
@@ -729,27 +777,51 @@ class DeFiService:
             total_deposits = 0
             total_withdrawals = 0
 
-            # Fetch UTxOs in parallel batches (20 concurrent) instead of sequentially
-            sem = asyncio.Semaphore(20)
+            # Fetch UTxOs in parallel batches (10 concurrent) instead of sequentially
+            sem = asyncio.Semaphore(10)
 
             async def fetch_tx_utxos(tx_hash):
                 async with sem:
-                    resp = await client.get(
-                        f"{BLOCKFROST_BASE_URL}/txs/{tx_hash}/utxos",
-                        headers=self.headers
-                    )
-                    if resp.status_code != 200:
+                    try:
+                        resp = await client.get(
+                            f"{BLOCKFROST_BASE_URL}/txs/{tx_hash}/utxos",
+                            headers=self.headers
+                        )
+                        if resp.status_code == 200:
+                            return resp.json()
+                        else:
+                            logger.warning(f"[Iagon] UTxO fetch for tx {tx_hash[:16]} returned HTTP {resp.status_code}")
+                            return None
+                    except Exception as e:
+                        logger.warning(f"[Iagon] UTxO fetch for tx {tx_hash[:16]} failed: {e}")
                         return None
-                    return resp.json()
 
             utxo_results = await asyncio.gather(
                 *[fetch_tx_utxos(tx['tx_hash']) for tx in all_txs],
                 return_exceptions=True
             )
 
-            for tx_data in utxo_results:
-                if tx_data is None or isinstance(tx_data, Exception):
-                    continue
+            # Collect failed tx hashes for retry
+            failed_txs = []
+            successful_results = []
+            for i, tx_data in enumerate(utxo_results):
+                if isinstance(tx_data, Exception) or tx_data is None:
+                    failed_txs.append(all_txs[i]['tx_hash'])
+                else:
+                    successful_results.append(tx_data)
+
+            # Retry failed UTxO fetches sequentially
+            if failed_txs:
+                logger.info(f"[Iagon] Retrying {len(failed_txs)}/{len(all_txs)} failed UTxO fetches sequentially...")
+                for tx_hash in failed_txs:
+                    try:
+                        result = await fetch_tx_utxos(tx_hash)
+                        if result:
+                            successful_results.append(result)
+                    except Exception as e:
+                        logger.warning(f"[Iagon] Retry tx {tx_hash[:16]} failed: {e}")
+
+            for tx_data in successful_results:
 
                 # Calculate IAG flows
                 user_sends_iag = 0

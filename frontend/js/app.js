@@ -1220,38 +1220,16 @@ function showStatus(message, isError = false) {
 
 // Format address for display
 function formatAddress(address) {
-    if (address.length > 20) {
-        return `${address.slice(0, 12)}...${address.slice(-8)}`;
+    if (address.length > 14) {
+        return `${address.slice(0, 8)}...${address.slice(-4)}`;
     }
     return address;
 }
 
 function formatAddressDisplay(address, blockchain) {
     if (!address) return '';
-    let prefix = '';
-    const lastChars = 6;
-
-    // Determine chain-specific prefix
-    if (blockchain === 'cardano') {
-        prefix = address.match(/^(addr1|stake1|addr_test1)/)?.[0] || address.slice(0, 5);
-    } else if (blockchain === 'bitcoin') {
-        if (address.startsWith('bc1')) {
-            prefix = 'bc1';
-        } else if (address.startsWith('tb1')) {
-            prefix = 'tb1';
-        } else {
-            prefix = address.slice(0, 1);
-        }
-    } else if (blockchain === 'ethereum' || blockchain === 'polygon' || blockchain === 'base') {
-        prefix = '0x';
-    } else if (blockchain === 'solana') {
-        prefix = address.slice(0, 4);
-    } else {
-        prefix = address.slice(0, 5);
-    }
-
-    const suffix = address.slice(-lastChars);
-    return `${prefix}${'•'.repeat(3)}${suffix}`;
+    if (address.length <= 14) return address;
+    return `${address.slice(0, 8)}...${address.slice(-4)}`;
 }
 
 function copyToClipboard(text, button) {
@@ -2222,7 +2200,7 @@ async function loadStakeKeyGovernanceInfo(stakeGroups) {
                 const drepId = gov.drep.drep_id;
                 const isSpecialDrep = drepId === 'drep_always_abstain' || drepId === 'drep_always_no_confidence';
                 // Use name from backend (fetched from Blockfrost/cexplorer), fallback to truncated ID
-                const truncatedId = drepId ? `${drepId.slice(0, 12)}...${drepId.slice(-6)}` : 'Unknown';
+                const truncatedId = drepId ? `${drepId.slice(0, 8)}...${drepId.slice(-4)}` : 'Unknown';
                 const drepDisplay = gov.drep.drep_name || truncatedId;
                 const drepLink = drepId && !isSpecialDrep ? `https://cexplorer.io/drep/${drepId}` : null;
                 html += `
@@ -3456,6 +3434,9 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
             <div class="defi-gov-subsection-header">
                 <span class="subsection-icon">🔒</span>
                 <span class="subsection-title">Staked Positions</span>
+                <button class="staking-refresh-btn" onclick="refreshStakingOnly(this)" title="Refresh staking data">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                </button>
             </div>
             <div class="defi-gov-cards">`;
 
@@ -3476,7 +3457,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
             } else {
                 const escHtml = (s) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
                 const undelegatedItems = adaDelegation.undelegatedWallets.map(w => {
-                    const shortAddr = w.address.slice(0, 12) + '...' + w.address.slice(-6);
+                    const shortAddr = w.address.slice(0, 8) + '...' + w.address.slice(-4);
                     const displayLabel = w.label ? escHtml(w.label) : shortAddr;
                     const balFormatted = w.balance.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0});
                     return `<div class="undelegated-wallet-item" onclick="event.stopPropagation(); navigator.clipboard.writeText('${w.address}').then(() => { const el = this.querySelector('.copy-feedback'); el.style.opacity='1'; setTimeout(() => el.style.opacity='0', 1200); })">
@@ -3983,6 +3964,38 @@ async function refreshDefiGovernance() {
     } finally {
         if (btn) {
             btn.classList.remove('refreshing');
+        }
+    }
+}
+
+// Refresh only staking positions (per-section refresh)
+async function refreshStakingOnly(btn) {
+    if (btn) {
+        btn.classList.add('refreshing');
+        btn.disabled = true;
+    }
+
+    try {
+        const walletsResponse = await authFetch(`${API_BASE}/wallets`);
+        const walletsData = await walletsResponse.json();
+        const cardanoWallets = walletsData.wallets.filter(w => w.blockchain === 'cardano');
+
+        // Refresh staking for each Cardano wallet in parallel
+        const stakingPromises = cardanoWallets.map(wallet =>
+            authFetch(`${API_BASE}/defi/staking/${wallet.address}?refresh=true`).catch(() => null)
+        );
+        await Promise.all(stakingPromises);
+
+        // Reload the full DeFi view with fresh data
+        await loadDefiGovernance(true);
+        showStatus('Staking positions refreshed');
+    } catch (error) {
+        console.error('Error refreshing staking:', error);
+        showStatus('Failed to refresh staking', true);
+    } finally {
+        if (btn) {
+            btn.classList.remove('refreshing');
+            btn.disabled = false;
         }
     }
 }
@@ -4510,7 +4523,7 @@ async function deleteWallet(address) {
     }
 
     // Confirm deletion
-    const shortAddress = address.length > 20 ? address.slice(0, 10) + '...' + address.slice(-10) : address;
+    const shortAddress = address.length > 14 ? address.slice(0, 8) + '...' + address.slice(-4) : address;
     if (!confirm(`Are you sure you want to delete this wallet?\n\n${shortAddress}\n\nThis will remove it from tracking and from wallets.txt.`)) {
         return;
     }

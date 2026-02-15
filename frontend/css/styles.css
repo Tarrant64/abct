@@ -7050,6 +7050,34 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     font-weight: 500;
 }
 
+.staking-refresh-btn {
+    margin-left: auto;
+    background: none;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 4px 8px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: color 0.2s, border-color 0.2s;
+}
+
+.staking-refresh-btn:hover {
+    color: var(--accent-color);
+    border-color: var(--accent-color);
+}
+
+.staking-refresh-btn.refreshing svg {
+    animation: spin 1s linear infinite;
+}
+
+.staking-refresh-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 /* Staked cards grid */
 .defi-gov-cards {
     display: grid;
