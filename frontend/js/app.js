@@ -8550,6 +8550,7 @@ async function fetchDeFiLlamaMetrics(blockchain) {
         // Fetch TVL, stablecoin supply, and DEX volume from backend proxy
         try {
             const resp = await authFetch(`/analytics/chain-breakdown/${encodeURIComponent(blockchain)}`);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json();
             if (data.success) {
                 tvl = data.tvl || null;
