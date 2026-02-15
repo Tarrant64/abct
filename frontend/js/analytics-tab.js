@@ -42,6 +42,8 @@
         loadChainMetrics();
         loadRelativeStrength(30);
         loadTradFiSummary();
+        loadGasTracker();
+        loadTrendingCoins();
     };
 
     /**
@@ -509,6 +511,71 @@
             }
         } catch (e) {
             console.error('Failed to load TradFi summary:', e);
+        }
+    }
+
+    // ---- Gas Tracker (Phase 4) ----
+
+    async function loadGasTracker() {
+        const container = document.getElementById('gasTrackerCard');
+        if (!container) return;
+
+        try {
+            const resp = await authFetch('/analytics/gas-prices?chain=ethereum');
+            const data = await resp.json();
+
+            if (!data.success) {
+                container.style.display = 'none';
+                return;
+            }
+
+            container.style.display = '';
+            const safeEl = document.getElementById('gasSafe');
+            const standardEl = document.getElementById('gasStandard');
+            const fastEl = document.getElementById('gasFast');
+
+            if (safeEl) safeEl.textContent = Math.round(data.safe_gas_price) + ' Gwei';
+            if (standardEl) standardEl.textContent = Math.round(data.propose_gas_price) + ' Gwei';
+            if (fastEl) fastEl.textContent = Math.round(data.fast_gas_price) + ' Gwei';
+        } catch (e) {
+            console.error('Failed to load gas tracker:', e);
+            if (container) container.style.display = 'none';
+        }
+    }
+
+    // ---- Trending Coins (Phase 4) ----
+
+    async function loadTrendingCoins() {
+        const container = document.getElementById('trendingCoinsCard');
+        if (!container) return;
+
+        try {
+            const resp = await authFetch('/prices/trending');
+            const data = await resp.json();
+
+            if (!data.coins || data.coins.length === 0) {
+                container.style.display = 'none';
+                return;
+            }
+
+            container.style.display = '';
+            const listEl = document.getElementById('trendingCoinsList');
+            if (!listEl) return;
+
+            listEl.innerHTML = data.coins.slice(0, 7).map((coin, i) => {
+                const thumb = coin.thumb ? `<img src="${coin.thumb}" alt="" style="width:20px;height:20px;border-radius:50%;margin-right:8px;vertical-align:middle;">` : '';
+                const price = coin.price_btc ? `${coin.price_btc.toFixed(8)} BTC` : '';
+                return `<div class="trending-coin-item">
+                    <span class="trending-rank">#${i + 1}</span>
+                    ${thumb}
+                    <span class="trending-name">${coin.name || ''}</span>
+                    <span class="trending-symbol">${coin.symbol || ''}</span>
+                    <span class="trending-price">${price}</span>
+                </div>`;
+            }).join('');
+        } catch (e) {
+            console.error('Failed to load trending coins:', e);
+            if (container) container.style.display = 'none';
         }
     }
 })();

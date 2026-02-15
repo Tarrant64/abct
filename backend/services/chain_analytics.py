@@ -229,4 +229,29 @@ class ChainAnalyticsService:
         return 0
 
 
+    async def get_chain_stablecoin_supply(self, chain: str) -> float:
+        """Get total stablecoin supply circulating on a specific chain."""
+        slug = CHAIN_SLUGS.get(chain, chain)
+        cache_key = f"analytics:stablecoin_supply:{slug}"
+        cached = await get_cache(cache_key)
+        if cached is not None:
+            return cached
+
+        try:
+            resp = await self.client.get("https://stablecoins.llama.fi/stablecoins?includePrices=true")
+            if resp.status_code == 200:
+                total = 0
+                for coin in resp.json().get('peggedAssets', []):
+                    chain_circ = coin.get('chainCirculating', {}).get(slug, {})
+                    for peg_type in chain_circ.values():
+                        if isinstance(peg_type, dict):
+                            total += peg_type.get('peggedUSD', 0)
+                await set_cache(cache_key, total, CACHE_TTL_WARM)
+                return total
+        except Exception as e:
+            logger.warning(f"DefiLlama stablecoin supply for {chain} failed: {e}")
+
+        return 0
+
+
 chain_analytics_service = ChainAnalyticsService()

@@ -266,6 +266,31 @@ async def get_liqwid_rewards(address: str, user_id: int = Depends(verify_session
     return result
 
 
+@router.get("/uniswap-positions/{address}")
+async def get_uniswap_positions(address: str, user_id: int = Depends(verify_session)):
+    """
+    Get Uniswap V3 LP positions for an Ethereum address.
+
+    Returns active liquidity positions with token pairs and fee tiers.
+    """
+    try:
+        from services.graph import graph_service
+        if not graph_service.is_configured():
+            return {"success": False, "configured": False, "message": "The Graph API key not configured"}
+
+        positions = await graph_service.get_lp_positions(address)
+        return {
+            "success": True,
+            "address": address,
+            "positions": positions,
+            "count": len(positions),
+            "protocol": "Uniswap V3"
+        }
+    except Exception as e:
+        logger.error(f"Error fetching Uniswap positions for {address}: {e}")
+        return {"success": False, "error": str(e)}
+
+
 @router.get("/summary")
 async def get_defi_summary(user_id: int = Depends(verify_session), refresh: bool = False):
     """

@@ -140,6 +140,110 @@ class MoralisService:
             logger.error(f"Error scanning wallet {wallet_address}: {e}")
             return []
 
+    async def resolve_ens_domain(self, domain: str) -> Optional[str]:
+        """
+        Resolve an ENS domain name to an Ethereum address.
+
+        Args:
+            domain: ENS domain name (e.g., 'vitalik.eth')
+
+        Returns:
+            Ethereum address string or None
+        """
+        api_key = await self._get_api_key()
+        if not api_key:
+            return None
+
+        # Check cache
+        try:
+            from database import get_cache, set_cache
+            from config import CACHE_TTL_PERSISTENT
+            cache_key = f"ens:domain:{domain}"
+            cached = await get_cache(cache_key)
+            if cached:
+                return cached
+        except Exception:
+            pass
+
+        headers = {
+            "Accept": "application/json",
+            "X-API-Key": api_key
+        }
+
+        try:
+            client = get_client("moralis", timeout=15.0)
+            response = await client.get(
+                f"{MORALIS_API_BASE}/resolve/ens/{domain}",
+                headers=headers
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                address = data.get("address")
+                if address:
+                    try:
+                        await set_cache(cache_key, address, CACHE_TTL_PERSISTENT)
+                    except Exception:
+                        pass
+                    return address
+
+        except Exception as e:
+            logger.error(f"Error resolving ENS domain {domain}: {e}")
+
+        return None
+
+    async def resolve_address_to_ens(self, address: str) -> Optional[str]:
+        """
+        Reverse-resolve an Ethereum address to an ENS domain name.
+
+        Args:
+            address: Ethereum address (0x...)
+
+        Returns:
+            ENS domain string or None
+        """
+        api_key = await self._get_api_key()
+        if not api_key:
+            return None
+
+        # Check cache
+        try:
+            from database import get_cache, set_cache
+            from config import CACHE_TTL_PERSISTENT
+            cache_key = f"ens:reverse:{address.lower()}"
+            cached = await get_cache(cache_key)
+            if cached:
+                return cached
+        except Exception:
+            pass
+
+        headers = {
+            "Accept": "application/json",
+            "X-API-Key": api_key
+        }
+
+        try:
+            client = get_client("moralis", timeout=15.0)
+            response = await client.get(
+                f"{MORALIS_API_BASE}/resolve/{address}/reverse",
+                headers=headers
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                ens_name = data.get("name")
+                if ens_name:
+                    try:
+                        await set_cache(cache_key, ens_name, CACHE_TTL_PERSISTENT)
+                    except Exception:
+                        pass
+                    return ens_name
+
+        except Exception as e:
+            logger.error(f"Error resolving address to ENS {address}: {e}")
+
+        return None
+
     async def scan_solana_wallet(self, wallet_address: str) -> List[Dict]:
         """
         Scan Solana wallet tokens for spam.

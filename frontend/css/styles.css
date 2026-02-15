@@ -9751,6 +9751,98 @@ body.privacy-mode a[data-href] {
     color: #f87171;
 }
 
+/* Analytics Utility Row (Gas + Trending) */
+.analytics-utility-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+}
+
+.analytics-utility-card {
+    flex: 1;
+    min-width: 280px;
+    background: var(--card-bg, #1a1a2e);
+    border: 1px solid var(--border-color, #2a2a3e);
+    border-radius: 12px;
+    padding: 16px 20px;
+}
+
+.utility-card-header h3 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    color: var(--text-secondary, #888);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.gas-price-grid {
+    display: flex;
+    gap: 16px;
+    justify-content: space-between;
+}
+
+.gas-tier {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.gas-tier-label {
+    font-size: 12px;
+    color: var(--text-secondary, #888);
+}
+
+.gas-tier-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary, #e0e0e0);
+}
+
+.trending-coins-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.trending-coin-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 0;
+    font-size: 13px;
+}
+
+.trending-rank {
+    width: 24px;
+    color: var(--text-secondary, #888);
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.trending-name {
+    flex: 1;
+    color: var(--text-primary, #e0e0e0);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.trending-symbol {
+    color: var(--text-secondary, #888);
+    font-size: 11px;
+    text-transform: uppercase;
+    margin-right: 8px;
+}
+
+.trending-price {
+    color: var(--text-secondary, #888);
+    font-size: 12px;
+    font-family: var(--font-mono, monospace);
+}
+
 /* Chain Filter Tabs */
 .chain-filter-tabs {
     display: flex;

@@ -6,7 +6,7 @@
     <title>Data & Analytics - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771166586">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771169389">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <!-- Chart.js for analytics -->
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
@@ -15,7 +15,7 @@
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1771166586"></script>
+    <script src="/static/js/session-auth.js?v=1771169389"></script>
     <style>
         /* Wallet Manager Styles */
         .wallet-manager {
@@ -1110,6 +1110,39 @@
                 </div>
             </div>
 
+            <!-- Gas Tracker & Trending Cards Row -->
+            <div class="analytics-utility-row">
+                <!-- Gas Tracker Card -->
+                <div class="analytics-utility-card" id="gasTrackerCard" style="display: none;">
+                    <div class="utility-card-header">
+                        <h3>ETH Gas Prices</h3>
+                    </div>
+                    <div class="gas-price-grid">
+                        <div class="gas-tier">
+                            <span class="gas-tier-label">Safe</span>
+                            <span class="gas-tier-value" id="gasSafe">--</span>
+                        </div>
+                        <div class="gas-tier">
+                            <span class="gas-tier-label">Standard</span>
+                            <span class="gas-tier-value" id="gasStandard">--</span>
+                        </div>
+                        <div class="gas-tier">
+                            <span class="gas-tier-label">Fast</span>
+                            <span class="gas-tier-value" id="gasFast">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Trending Coins Card -->
+                <div class="analytics-utility-card" id="trendingCoinsCard" style="display: none;">
+                    <div class="utility-card-header">
+                        <h3>Trending Coins</h3>
+                    </div>
+                    <div id="trendingCoinsList" class="trending-coins-list">
+                    </div>
+                </div>
+            </div>
+
             <!-- Relative Strength Chart -->
             <section class="analytics-section" id="relativeStrengthSection">
                 <div class="section-header-inline">
@@ -1646,13 +1679,13 @@
         }
     </script>
 
-    <script src="/static/js/app.js?v=1771166586"></script>
+    <script src="/static/js/app.js?v=1771169389"></script>
 
     <!-- Transaction scripts -->
-    <script src="/static/js/transactions.js?v=1771166586"></script>
-    <script src="/static/js/transaction-analytics.js?v=1771166586"></script>
+    <script src="/static/js/transactions.js?v=1771169389"></script>
+    <script src="/static/js/transaction-analytics.js?v=1771169389"></script>
     <!-- Advanced Analytics tab -->
-    <script src="/static/js/analytics-tab.js?v=1771166586"></script>
+    <script src="/static/js/analytics-tab.js?v=1771169389"></script>
 
     <script>
         // Main tab switching function
@@ -1727,7 +1760,7 @@
     </script>
 
     <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
-        <p>ABCT - Data & Analytics | <span id="appVersion" style="opacity: 0.6;">v1.12.3 (BUILD 1771166586)</span></p>
+        <p>ABCT - Data & Analytics | <span id="appVersion" style="opacity: 0.6;">v1.12.3 (BUILD 1771169389)</span></p>
     </footer>
 </body>
 </html>

@@ -7,6 +7,9 @@ Endpoints:
     GET /analytics/chain-fees-history/{chain}  - Daily fee history for chart
     GET /analytics/market-summary              - Crypto market cap, BTC dominance, total TVL, DEX volume
     GET /analytics/relative-strength           - Normalized % change for major assets
+    GET /analytics/gas-prices                  - Current gas prices (Etherscan oracle)
+    GET /analytics/chain-breakdown/{blockchain} - TVL, stablecoins, DEX volume per chain (proxy)
+    GET /analytics/cardano-dex                 - Cardano DEX analytics (Charli3)
     GET /analytics/tradfi/summary              - TradFi index data (requires Alpha Vantage)
     GET /analytics/tradfi/history/{symbol}     - TradFi daily close prices
     GET /analytics/tradfi/correlation          - BTC vs S&P 500 correlation
@@ -142,6 +145,132 @@ async def get_relative_strength(
     except Exception as e:
         logger.error(f"Error fetching relative strength: {e}")
         return {"success": False, "error": str(e), "assets": {}}
+
+
+# ---- Gas / Chain Breakdown / DEX Analytics ----
+
+@router.get("/gas-prices")
+async def get_gas_prices(
+    chain: str = Query(default="ethereum"),
+    user_id: int = Depends(verify_session)
+):
+    """Get current gas prices from Etherscan oracle"""
+    try:
+        from services.etherscan import etherscan_service
+        if not await etherscan_service.is_configured():
+            return {"success": False, "configured": False, "message": "Etherscan API key not configured"}
+
+        data = await etherscan_service.get_gas_price(chain)
+        if not data:
+            return {"success": False, "error": "Failed to fetch gas prices"}
+
+        return {"success": True, **data}
+    except Exception as e:
+        logger.error(f"Error fetching gas prices: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/chain-breakdown/{blockchain}")
+async def get_chain_breakdown(
+    blockchain: str,
+    user_id: int = Depends(verify_session)
+):
+    """Get TVL, stablecoin supply, and DEX volume for a single chain (proxies DefiLlama)"""
+    import asyncio
+    from services.http_client import get_client
+    from database import get_cache, set_cache
+    from config import CACHE_TTL_WARM
+
+    cache_key = f"analytics:chain_breakdown:{blockchain}"
+    cached = await get_cache(cache_key)
+    if cached:
+        return {"success": True, **cached}
+
+    # Map our chain names to DefiLlama slugs
+    slug_map = {
+        'ethereum': 'Ethereum', 'solana': 'Solana', 'cardano': 'Cardano',
+        'bitcoin': 'Bitcoin', 'polygon': 'Polygon', 'base': 'Base',
+        'arbitrum': 'Arbitrum', 'avalanche': 'Avalanche', 'bsc': 'BSC',
+    }
+    slug = slug_map.get(blockchain.lower())
+    if not slug:
+        return {"success": False, "error": f"Unsupported chain: {blockchain}"}
+
+    client = get_client("defillama_analytics", timeout=15.0)
+
+    async def fetch_tvl():
+        try:
+            resp = await client.get(f"https://api.llama.fi/v2/chains")
+            if resp.status_code == 200:
+                for item in resp.json():
+                    name = item.get('name', '')
+                    if name == 'Binance':
+                        name = 'BSC'
+                    if name == slug:
+                        return {'tvl': item.get('tvl', 0), 'tvl_change_1d': item.get('change_1d', 0)}
+        except Exception as e:
+            logger.warning(f"DefiLlama chain TVL failed: {e}")
+        return {'tvl': 0, 'tvl_change_1d': 0}
+
+    async def fetch_stablecoin_supply():
+        try:
+            resp = await client.get("https://stablecoins.llama.fi/stablecoins?includePrices=true")
+            if resp.status_code == 200:
+                total = 0
+                for coin in resp.json().get('peggedAssets', []):
+                    chain_circ = coin.get('chainCirculating', {}).get(slug, {})
+                    for peg_type in chain_circ.values():
+                        if isinstance(peg_type, dict):
+                            total += peg_type.get('peggedUSD', 0)
+                return total
+        except Exception as e:
+            logger.warning(f"DefiLlama stablecoin supply failed: {e}")
+        return 0
+
+    async def fetch_dex_volume():
+        try:
+            resp = await client.get(f"https://api.llama.fi/overview/dexs/{slug}")
+            if resp.status_code == 200:
+                return resp.json().get('total24h', 0) or 0
+        except Exception as e:
+            logger.warning(f"DefiLlama DEX volume failed: {e}")
+        return 0
+
+    try:
+        tvl_data, stablecoin_supply, dex_volume = await asyncio.gather(
+            fetch_tvl(), fetch_stablecoin_supply(), fetch_dex_volume()
+        )
+
+        result = {
+            'chain': blockchain,
+            'tvl': tvl_data['tvl'],
+            'tvl_change_1d': tvl_data['tvl_change_1d'],
+            'stablecoin_supply': stablecoin_supply,
+            'dex_volume_24h': dex_volume,
+        }
+        await set_cache(cache_key, result, CACHE_TTL_WARM)
+        return {"success": True, **result}
+    except Exception as e:
+        logger.error(f"Error fetching chain breakdown for {blockchain}: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/cardano-dex")
+async def get_cardano_dex_analytics(user_id: int = Depends(verify_session)):
+    """Get Cardano DEX breakdown (Minswap, SundaeSwap, etc.) from Charli3"""
+    try:
+        from services.charli3 import charli3_service
+        if not await charli3_service.is_configured():
+            return {"success": False, "configured": False, "message": "Charli3 API key not configured"}
+
+        groups = await charli3_service.get_groups()
+        if not groups:
+            return {"success": False, "error": "Failed to fetch DEX groups"}
+
+        return {"success": True, "dexes": groups}
+    except Exception as e:
+        logger.error(f"Error fetching Cardano DEX analytics: {e}")
+        return {"success": False, "error": str(e)}
 
 
 # ---- TradFi Endpoints (Phase 3) ----
