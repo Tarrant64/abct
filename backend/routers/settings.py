@@ -281,6 +281,21 @@ API_REGISTRY = {
         "rate_limit_note": "Limits not documented",
         "rate_limit_type": "none"
     },
+    "logostream": {
+        "name": "Logostream",
+        "category": "services",
+        "description": "Crypto token and coin logo API with chain-specific lookups",
+        "required": False,
+        "docs_url": "https://logostream.dev/documentation",
+        "env_var": "LOGOSTREAM_API_KEY",
+        "pricing": "freemium",
+        "pricing_note": "Free tier: 100 requests/month",
+        "default_limit": 100,
+        "default_period": 2592000,
+        "period_label": "month",
+        "rate_limit_note": "10 req/min",
+        "rate_limit_type": "quota"
+    },
 
     # Exchange APIs
     "coinbase": {

@@ -556,7 +556,9 @@ class CardanoService:
                 'rewards_ada': str(int(data.get('rewards_sum', 0)) / 1_000_000),
                 'withdrawable_amount': data.get('withdrawable_amount', '0'),
                 'withdrawable_ada': str(int(data.get('withdrawable_amount', 0)) / 1_000_000),
-                'pool_id': data.get('pool_id')
+                'pool_id': data.get('pool_id'),
+                'drep_id': data.get('drep_id'),
+                '_raw': data
             }
 
         except Exception as e:
@@ -698,21 +700,30 @@ class CardanoService:
             logger.error(f"Error getting pool metadata: {e}")
             return None
 
-    async def get_drep_delegation(self, stake_address: str) -> Optional[dict]:
-        """Get DRep (Delegated Representative) delegation for a stake address."""
+    async def get_drep_delegation(self, stake_address: str, account_data: dict = None) -> Optional[dict]:
+        """Get DRep (Delegated Representative) delegation for a stake address.
+
+        Args:
+            stake_address: The stake address to query
+            account_data: Optional raw Blockfrost account data to reuse (avoids duplicate API call)
+        """
         try:
-            client = get_client("blockfrost", timeout=30.0)
-            # Blockfrost Conway governance endpoint
-            response = await client.get(
-                f"{BLOCKFROST_BASE_URL}/accounts/{stake_address}",
-                headers=await self._get_blockfrost_headers(),
-                timeout=30.0
-            )
+            if account_data:
+                data = account_data
+            else:
+                client = get_client("blockfrost", timeout=30.0)
+                # Blockfrost Conway governance endpoint
+                response = await client.get(
+                    f"{BLOCKFROST_BASE_URL}/accounts/{stake_address}",
+                    headers=await self._get_blockfrost_headers(),
+                    timeout=30.0
+                )
 
-            if response.status_code != 200:
-                return None
+                if response.status_code != 200:
+                    return None
 
-            data = response.json()
+                data = response.json()
+
             drep_id = data.get('drep_id')
 
             if not drep_id:
@@ -862,7 +873,7 @@ class CardanoService:
                 'rewards': None
             }
 
-        # Get account info (includes pool_id and rewards)
+        # Get account info (includes pool_id, drep_id, and rewards)
         account_info = await self.get_stake_account_info(stake_address)
 
         # Get pool metadata if delegated
@@ -870,8 +881,11 @@ class CardanoService:
         if account_info and account_info.get('pool_id'):
             pool_info = await self.get_pool_metadata(account_info['pool_id'])
 
-        # Get DRep delegation
-        drep_info = await self.get_drep_delegation(stake_address)
+        # Get DRep delegation - reuse raw account data to avoid duplicate Blockfrost call
+        drep_info = await self.get_drep_delegation(
+            stake_address,
+            account_data=account_info.get('_raw') if account_info else None
+        )
 
         return {
             'has_stake_key': True,

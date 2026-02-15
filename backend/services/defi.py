@@ -856,18 +856,21 @@ class DeFiService:
             logger.warning(f"Could not fetch Indigo APY: {e}")
         return None
 
-    async def get_strike_pending_rewards(self, address: str) -> Optional[Dict]:
+    async def get_strike_pending_rewards(self, address: str, staking_data=None) -> Optional[Dict]:
         """
         Get pending STRIKE rewards.
         Calculated from staking duration and reward rate.
+
+        Args:
+            staking_data: Optional pre-fetched staking data to avoid re-scanning contracts.
         """
         try:
             payment_cred = self._get_payment_credential(address)
             if not payment_cred:
                 return None
 
-            # First check if user has staking positions
-            staking = await self.get_strike_staking(address)
+            # Reuse Phase 1 staking data if provided, otherwise fetch
+            staking = staking_data or await self.get_strike_staking(address)
             if not staking or staking['total_staked_strike'] == 0:
                 return None
 
@@ -921,9 +924,12 @@ class DeFiService:
             logger.error(f"Error fetching Strike rewards: {e}")
             return None
 
-    async def get_liqwid_pending_rewards(self, address: str) -> Optional[Dict]:
+    async def get_liqwid_pending_rewards(self, address: str, staking_data=None) -> Optional[Dict]:
         """
         Get pending LQ rewards from Liqwid Finance via SundaeSwap rewards portal.
+
+        Args:
+            staking_data: Optional pre-fetched staking data to avoid re-scanning contracts.
         """
         try:
             # Get stake address from wallet address
@@ -957,8 +963,8 @@ class DeFiService:
                 except Exception as e:
                     logger.warning(f"Could not fetch from Liqwid rewards API: {e}")
 
-            # Check on-chain staking data
-            staking = await self.get_liqwid_staking(address)
+            # Reuse Phase 1 staking data if provided, otherwise fetch
+            staking = staking_data if staking_data is not None else await self.get_liqwid_staking(address)
             staked_amount = staking['total_staked_lq'] if staking else 0
 
             return {
@@ -1100,10 +1106,19 @@ class DeFiService:
         """Get logo URL for a token using multiple fallback strategies.
 
         Tries in order:
+        0. LogoKit CDN for known DeFi tokens (instant, no I/O)
         1. Database cache (ticker, policy_id, case-insensitive)
         2. Logostream API (dedicated logo service)
         3. NMKR fallback chain (Token Registry -> Blockfrost -> LogoKit)
         """
+        # Strategy 0: LogoKit CDN for known DeFi tokens (instant, no I/O)
+        for pid, info in DEFI_PROTOCOLS.items():
+            if info.get('token') == token_symbol:
+                from services.logokit_service import logokit_service
+                if logokit_service.api_key:
+                    return logokit_service.get_crypto_logo_url(token_symbol)
+                break
+
         policy_id_for_symbol = None
         asset_id_for_symbol = None
 
@@ -1233,10 +1248,10 @@ class DeFiService:
             reward_tasks['indigo'] = self.get_indigo_pending_rewards(address)
             logo_tasks['INDY'] = self._get_token_logo_url('INDY')
         if strike:
-            reward_tasks['strike'] = self.get_strike_pending_rewards(address)
+            reward_tasks['strike'] = self.get_strike_pending_rewards(address, staking_data=strike)
             logo_tasks['STRIKE'] = self._get_token_logo_url('STRIKE')
         if liqwid:
-            reward_tasks['liqwid'] = self.get_liqwid_pending_rewards(address)
+            reward_tasks['liqwid'] = self.get_liqwid_pending_rewards(address, staking_data=liqwid)
             logo_tasks['LQ'] = self._get_token_logo_url('LQ')
         if iagon:
             logo_tasks['IAG'] = self._get_token_logo_url('IAG')
