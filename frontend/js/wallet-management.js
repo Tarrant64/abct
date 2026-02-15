@@ -176,9 +176,7 @@
             const totalAssets = groupWallets.reduce((sum, w) => sum + (w.native_assets_count || 0), 0);
             const groupLabel = groupWallets[0].label || '';
 
-            const stakeKeyPrefix = stakeKey.startsWith('stake1') ? 'stake1' : stakeKey.slice(0, 6);
-            const stakeKeySuffix = stakeKey.slice(-6);
-            const stakeKeyDisplay = `${stakeKeyPrefix}${'•'.repeat(3)}${stakeKeySuffix}`;
+            const stakeKeyDisplay = stakeKey.length > 14 ? `${stakeKey.slice(0, 8)}...${stakeKey.slice(-4)}` : stakeKey;
 
             html += `
                 <div class="stake-group" data-stake-key="${stakeKey}">
@@ -358,57 +356,52 @@
         return units[unit] || unit;
     }
 
-    // Format address with chain identifier + dots + last chars
+    // Format address: first 8 chars + "..." + last 4 chars
     function formatAddressDisplay(address, blockchain) {
         if (!address) return '';
-
-        let prefix = '';
-        const lastChars = 6;
-
-        // Determine chain-specific prefix
-        if (blockchain === 'cardano') {
-            // Cardano addresses: addr1, stake1, etc.
-            prefix = address.match(/^(addr1|stake1|addr_test1)/)?.[0] || address.slice(0, 5);
-        } else if (blockchain === 'bitcoin') {
-            // Bitcoin: bc1, 1, 3, etc.
-            if (address.startsWith('bc1')) {
-                prefix = 'bc1';
-            } else if (address.startsWith('tb1')) {
-                prefix = 'tb1';
-            } else {
-                prefix = address.slice(0, 1); // 1 or 3 for legacy addresses
-            }
-        } else if (blockchain === 'ethereum' || blockchain === 'polygon' || blockchain === 'base') {
-            // Ethereum-like: 0x
-            prefix = '0x';
-        } else if (blockchain === 'solana') {
-            // Solana: first 4-5 chars
-            prefix = address.slice(0, 4);
-        } else {
-            // Default: first 5 chars
-            prefix = address.slice(0, 5);
-        }
-
-        const suffix = address.slice(-lastChars);
-        return `${prefix}${'•'.repeat(3)}${suffix}`;
+        if (address.length <= 14) return address;
+        return `${address.slice(0, 8)}...${address.slice(-4)}`;
     }
 
-    // Copy to Clipboard
+    // Copy to Clipboard (with HTTP fallback for Docker deployments)
     function copyToClipboard(text, button) {
-        navigator.clipboard.writeText(text).then(() => {
-            // Visual feedback
-            const originalHTML = button.innerHTML;
-            button.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
-            button.classList.add('copied');
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(() => {
+                showCopyFeedback(button);
+            }).catch(() => {
+                fallbackCopy(text, button);
+            });
+        } else {
+            fallbackCopy(text, button);
+        }
+    }
 
-            setTimeout(() => {
-                button.innerHTML = originalHTML;
-                button.classList.remove('copied');
-            }, 2000);
-        }).catch(err => {
-            console.error('Failed to copy:', err);
-            alert('Failed to copy address');
-        });
+    function fallbackCopy(text, button) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+            document.execCommand('copy');
+            showCopyFeedback(button);
+        } catch (err) {
+            console.error('Fallback copy failed:', err);
+            alert('Copied: ' + text);
+        } finally {
+            document.body.removeChild(textarea);
+        }
+    }
+
+    function showCopyFeedback(button) {
+        const originalHTML = button.innerHTML;
+        button.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+        button.classList.add('copied');
+        setTimeout(() => {
+            button.innerHTML = originalHTML;
+            button.classList.remove('copied');
+        }, 1500);
     }
 
     // Add Wallet Modal
@@ -589,7 +582,7 @@
                            id="xpub-${idx}"
                            ${addr.already_tracked ? 'disabled' : 'checked'}
                            data-address="${addr.address}">
-                    <div class="address">${addr.address.slice(0, 15)}...${addr.address.slice(-8)}</div>
+                    <div class="address">${addr.address.slice(0, 8)}...${addr.address.slice(-4)}</div>
                     <div class="balance">${addr.balance_btc.toFixed(8)} BTC</div>
                     <div class="chain-type">${addr.chain === 'receive' ? 'Receive' : 'Change'}</div>
                     <div class="status ${addr.already_tracked ? 'tracked' : 'new'}">

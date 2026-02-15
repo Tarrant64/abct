@@ -8731,7 +8731,7 @@
             list.innerHTML = '';
             collectorWallets.forEach(w => {
                 const addrShort = w.address.length > 20
-                    ? w.address.slice(0, 10) + '...' + w.address.slice(-6)
+                    ? w.address.slice(0, 8) + '...' + w.address.slice(-4)
                     : w.address;
                 const label = w.label ? w.label : addrShort;
                 const item = document.createElement('div');

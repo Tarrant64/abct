@@ -426,8 +426,8 @@ function formatHash(hash, blockchain) {
  * Truncate hash for display
  */
 function truncateHash(hash) {
-    if (!hash || hash.length < 16) return hash;
-    return `${hash.substring(0, 8)}...${hash.substring(hash.length - 8)}`;
+    if (!hash || hash.length < 14) return hash;
+    return `${hash.substring(0, 8)}...${hash.substring(hash.length - 4)}`;
 }
 
 /**
@@ -450,8 +450,8 @@ function getExplorerUrl(hash, blockchain) {
  */
 function formatAddress(address) {
     if (!address) return 'N/A';
-    if (address.length < 16) return address;
-    return `${address.substring(0, 10)}...${address.substring(address.length - 10)}`;
+    if (address.length < 14) return address;
+    return `${address.substring(0, 8)}...${address.substring(address.length - 4)}`;
 }
 
 /**
