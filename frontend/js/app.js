@@ -373,6 +373,12 @@ const CHAIN_CONFIG = {
     arbitrum:  { name: 'Arbitrum',    symbol: 'ETH',  logo: 'ETH',  icon: '◇', decimals: 8, priceKey: 'ETH',   balanceKey: 'total_eth',  nativeLabel: 'ETH' },
     avalanche: { name: 'Avalanche',   symbol: 'AVAX', logo: 'AVAX', icon: '▲', decimals: 8, priceKey: 'AVAX',  balanceKey: 'total_avax', nativeLabel: 'AVAX' },
     tron:      { name: 'Tron',        symbol: 'TRX',  logo: 'TRX',  icon: '◈', decimals: 6, priceKey: 'TRX',   balanceKey: 'total_trx',  nativeLabel: 'TRX' },
+    xrp:        { name: 'XRP Ledger',  symbol: 'XRP',  logo: 'XRP',  icon: '✕', decimals: 6, priceKey: 'XRP',   balanceKey: 'total_xrp',  nativeLabel: 'XRP' },
+    hedera:     { name: 'Hedera',      symbol: 'HBAR', logo: 'HBAR', icon: 'ℏ', decimals: 8, priceKey: 'HBAR',  balanceKey: 'total_hbar', nativeLabel: 'HBAR' },
+    multiversx: { name: 'MultiversX',  symbol: 'EGLD', logo: 'EGLD', icon: '⬢', decimals: 8, priceKey: 'EGLD',  balanceKey: 'total_egld', nativeLabel: 'EGLD' },
+    sui:        { name: 'Sui',         symbol: 'SUI',  logo: 'SUI',  icon: '💧', decimals: 9, priceKey: 'SUI',   balanceKey: 'total_sui',  nativeLabel: 'SUI' },
+    aptos:      { name: 'Aptos',       symbol: 'APT',  logo: 'APT',  icon: '⬡', decimals: 8, priceKey: 'APT',   balanceKey: 'total_apt',  nativeLabel: 'APT' },
+    filecoin:   { name: 'Filecoin',    symbol: 'FIL',  logo: 'FIL',  icon: '⬡', decimals: 8, priceKey: 'FIL',   balanceKey: 'total_fil',  nativeLabel: 'FIL' },
 };
 
 // Render blockchain cards dynamically, sorted by value, only for chains with wallets
@@ -576,6 +582,12 @@ function getChainAllocations() {
         arbitrum: { label: 'Arbitrum', symbol: 'ETH', color: '#28a0f0', balKey: 'ETH_ARB', priceKey: 'ETH' },
         avalanche:{ label: 'Avalanche', symbol: 'AVAX', color: '#e84142', balKey: 'AVAX', priceKey: 'AVAX' },
         tron:     { label: 'Tron',     symbol: 'TRX', color: '#ff0013', balKey: 'TRX',  priceKey: 'TRX' },
+        xrp:        { label: 'XRP Ledger', symbol: 'XRP',  color: '#23292f', balKey: 'XRP',  priceKey: 'XRP'  },
+        hedera:     { label: 'Hedera',     symbol: 'HBAR', color: '#3d3d3d', balKey: 'HBAR', priceKey: 'HBAR' },
+        multiversx: { label: 'MultiversX', symbol: 'EGLD', color: '#23f7dd', balKey: 'EGLD', priceKey: 'EGLD' },
+        sui:        { label: 'Sui',        symbol: 'SUI',  color: '#4da2ff', balKey: 'SUI',  priceKey: 'SUI'  },
+        aptos:      { label: 'Aptos',      symbol: 'APT',  color: '#2ed8a3', balKey: 'APT',  priceKey: 'APT'  },
+        filecoin:   { label: 'Filecoin',   symbol: 'FIL',  color: '#0090ff', balKey: 'FIL',  priceKey: 'FIL'  },
     };
 
     for (const [chain, cfg] of Object.entries(chainMap)) {
@@ -1622,7 +1634,13 @@ function renderWalletsGrouped(cardanoStakeGroups, bitcoinWallets, ethereumWallet
             'bsc': 'https://img.logokit.com/crypto/BNB?token=pk_fr08287a4c625f400f32a9&size=24',
             'arbitrum': 'https://img.logokit.com/crypto/ARB?token=pk_fr08287a4c625f400f32a9&size=24',
             'avalanche': 'https://img.logokit.com/crypto/AVAX?token=pk_fr08287a4c625f400f32a9&size=24',
-            'tron': 'https://img.logokit.com/crypto/TRX?token=pk_fr08287a4c625f400f32a9&size=24'
+            'tron': 'https://img.logokit.com/crypto/TRX?token=pk_fr08287a4c625f400f32a9&size=24',
+            'xrp': 'https://img.logokit.com/crypto/XRP?token=pk_fr08287a4c625f400f32a9&size=24',
+            'hedera': 'https://img.logokit.com/crypto/HBAR?token=pk_fr08287a4c625f400f32a9&size=24',
+            'multiversx': 'https://img.logokit.com/crypto/EGLD?token=pk_fr08287a4c625f400f32a9&size=24',
+            'sui': 'https://img.logokit.com/crypto/SUI?token=pk_fr08287a4c625f400f32a9&size=24',
+            'aptos': 'https://img.logokit.com/crypto/APT?token=pk_fr08287a4c625f400f32a9&size=24',
+            'filecoin': 'https://img.logokit.com/crypto/FIL?token=pk_fr08287a4c625f400f32a9&size=24'
         };
         const logoUrl = logoMap[blockchain] || '';
 

@@ -23,6 +23,12 @@ from services.base import base_service
 from services.algorand import algorand_service
 from services.evm_chain import bsc_service, arbitrum_service, avalanche_service
 from services.tron import tron_service
+from services.xrp import xrp_service
+from services.hedera import hedera_service
+from services.multiversx import multiversx_service
+from services.sui import sui_service
+from services.aptos import aptos_service
+from services.filecoin import filecoin_service
 from services.logging_service import get_logging_service
 from services.transaction_history import transaction_history_service
 from services.demo_wallet_service import demo_wallet_service
@@ -245,6 +251,12 @@ async def get_wallet_assets_by_id(wallet_id: int, user_id: int = Depends(verify_
     bnb_price_usd = await pricing_service.get_price('BNB')
     avax_price_usd = await pricing_service.get_price('AVAX')
     trx_price_usd = await pricing_service.get_price('TRX')
+    xrp_price_usd = await pricing_service.get_price('XRP')
+    hbar_price_usd = await pricing_service.get_price('HBAR')
+    egld_price_usd = await pricing_service.get_price('EGLD')
+    sui_price_usd = await pricing_service.get_price('SUI')
+    apt_price_usd = await pricing_service.get_price('APT')
+    fil_price_usd = await pricing_service.get_price('FIL')
 
     # For Cardano wallets, try to get TapTools data for ADA-denominated pricing
     taptools_positions = {}
@@ -411,7 +423,13 @@ async def get_wallet_assets_by_id(wallet_id: int, user_id: int = Depends(verify_
             'bsc': {'ticker': 'BNB', 'name': 'BNB Smart Chain', 'decimals': 18, 'price_usd': bnb_price_usd},
             'arbitrum': {'ticker': 'ETH', 'name': 'Arbitrum (ETH)', 'decimals': 18, 'price_usd': eth_price_usd},
             'avalanche': {'ticker': 'AVAX', 'name': 'Avalanche', 'decimals': 18, 'price_usd': avax_price_usd},
-            'tron': {'ticker': 'TRX', 'name': 'Tron', 'decimals': 6, 'price_usd': trx_price_usd}
+            'tron': {'ticker': 'TRX', 'name': 'Tron', 'decimals': 6, 'price_usd': trx_price_usd},
+            'xrp': {'ticker': 'XRP', 'name': 'XRP Ledger', 'decimals': 6, 'price_usd': xrp_price_usd},
+            'hedera': {'ticker': 'HBAR', 'name': 'Hedera', 'decimals': 8, 'price_usd': hbar_price_usd},
+            'multiversx': {'ticker': 'EGLD', 'name': 'MultiversX', 'decimals': 18, 'price_usd': egld_price_usd},
+            'sui': {'ticker': 'SUI', 'name': 'Sui', 'decimals': 9, 'price_usd': sui_price_usd},
+            'aptos': {'ticker': 'APT', 'name': 'Aptos', 'decimals': 8, 'price_usd': apt_price_usd},
+            'filecoin': {'ticker': 'FIL', 'name': 'Filecoin', 'decimals': 18, 'price_usd': fil_price_usd},
         }
 
         if wallet['blockchain'] in native_config:
@@ -883,6 +901,145 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
                     'source': info.get('source')
                 }
 
+        elif blockchain == 'xrp':
+            info = await xrp_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_xrp']), 'XRP')
+                xrp_assets = [
+                    {
+                        'asset_id': t['contract_address'],
+                        'policy_id': t['contract_address'],
+                        'asset_name': t['symbol'],
+                        'quantity': str(int(float(t['balance_raw']))),
+                        'decimals': t.get('decimals', 0)
+                    }
+                    for t in info.get('tokens', [])
+                ]
+                await save_native_assets(wallet_id, xrp_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_xrp'],
+                    'unit': 'XRP',
+                    'token_count': info.get('token_count', 0),
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'hedera':
+            info = await hedera_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_hbar']), 'HBAR')
+                hedera_assets = [
+                    {
+                        'asset_id': t['contract_address'],
+                        'policy_id': t['contract_address'],
+                        'asset_name': t['symbol'],
+                        'quantity': str(int(t['balance_raw'])),
+                        'decimals': t.get('decimals', 0)
+                    }
+                    for t in info.get('tokens', [])
+                ]
+                await save_native_assets(wallet_id, hedera_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_hbar'],
+                    'unit': 'HBAR',
+                    'token_count': info.get('token_count', 0),
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'multiversx':
+            info = await multiversx_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_egld']), 'EGLD')
+                mx_assets = [
+                    {
+                        'asset_id': t['contract_address'],
+                        'policy_id': t['contract_address'],
+                        'asset_name': t['symbol'],
+                        'quantity': str(int(t['balance_raw'])),
+                        'decimals': t.get('decimals', 0)
+                    }
+                    for t in info.get('tokens', [])
+                ]
+                await save_native_assets(wallet_id, mx_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_egld'],
+                    'unit': 'EGLD',
+                    'token_count': info.get('token_count', 0),
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'sui':
+            info = await sui_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_sui']), 'SUI')
+                sui_assets = [
+                    {
+                        'asset_id': t['contract_address'],
+                        'policy_id': t['contract_address'],
+                        'asset_name': t['symbol'],
+                        'quantity': str(int(t['balance_raw'])),
+                        'decimals': t.get('decimals', 0)
+                    }
+                    for t in info.get('tokens', [])
+                ]
+                await save_native_assets(wallet_id, sui_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_sui'],
+                    'unit': 'SUI',
+                    'token_count': info.get('token_count', 0),
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'aptos':
+            info = await aptos_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_apt']), 'APT')
+                apt_assets = [
+                    {
+                        'asset_id': t['contract_address'],
+                        'policy_id': t['contract_address'],
+                        'asset_name': t['symbol'],
+                        'quantity': str(int(t['balance_raw'])),
+                        'decimals': t.get('decimals', 0)
+                    }
+                    for t in info.get('tokens', [])
+                ]
+                await save_native_assets(wallet_id, apt_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_apt'],
+                    'unit': 'APT',
+                    'token_count': info.get('token_count', 0),
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'filecoin':
+            info = await filecoin_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_fil']), 'FIL')
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_fil'],
+                    'unit': 'FIL',
+                    'token_count': 0,
+                    'source': info.get('source')
+                }
+
         return {
             'address': address,
             'success': False,
@@ -1217,7 +1374,7 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
         if not blockchain:
             raise HTTPException(
                 status_code=400,
-                detail="Could not detect blockchain. Supported: Cardano (addr1, stake1), Bitcoin (1, 3, bc1, xpub, ypub, zpub), Ethereum (0x), Polygon (polygon:0x), Base (base:0x), Solana (base58), BNB Chain (bsc:0x), Arbitrum (arb:0x), Avalanche (avax:0x), Tron (T...)"
+                detail="Could not detect blockchain. Supported: Cardano (addr1, stake1), Bitcoin (1, 3, bc1, xpub/ypub/zpub), Ethereum (0x 42-char), Polygon (polygon:0x), Base (base:0x), Solana (base58), BNB Chain (bsc:0x), Arbitrum (arb:0x), Avalanche (avax:0x), Tron (T...), XRP (r...), Hedera (0.0.N), MultiversX (erd1...), Sui (0x 66-char), Aptos (aptos:0x), Filecoin (f1/f3...)"
             )
 
         # Extract raw address if chain prefix was provided
@@ -1225,7 +1382,7 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
         if ':' in address:
             parts = address.split(':', 1)
             chain_prefix = parts[0].lower()
-            if chain_prefix in ('cardano', 'bitcoin', 'ethereum', 'eth', 'polygon', 'matic', 'base', 'solana', 'sol', 'algorand', 'algo', 'bsc', 'bnb', 'arb', 'arbitrum', 'avax', 'avalanche', 'tron', 'trx'):
+            if chain_prefix in ('cardano', 'bitcoin', 'ethereum', 'eth', 'polygon', 'matic', 'base', 'solana', 'sol', 'algorand', 'algo', 'bsc', 'bnb', 'arb', 'arbitrum', 'avax', 'avalanche', 'tron', 'trx', 'xrp', 'ripple', 'hedera', 'hbar', 'multiversx', 'egld', 'elrond', 'sui', 'aptos', 'apt', 'filecoin', 'fil'):
                 raw_address = parts[1]
         address = raw_address
 
@@ -1427,7 +1584,7 @@ async def delete_wallet(address: str, user_id: int = Depends(verify_session)):
     if ':' in address:
         parts = address.split(':', 1)
         chain_prefix = parts[0].lower()
-        if chain_prefix in ('cardano', 'bitcoin', 'ethereum', 'polygon', 'base', 'solana', 'algorand', 'bsc', 'arbitrum', 'avalanche', 'tron'):
+        if chain_prefix in ('cardano', 'bitcoin', 'ethereum', 'polygon', 'base', 'solana', 'algorand', 'bsc', 'arbitrum', 'avalanche', 'tron', 'xrp', 'hedera', 'multiversx', 'sui', 'aptos', 'filecoin'):
             blockchain = chain_prefix
             raw_address = parts[1]
 

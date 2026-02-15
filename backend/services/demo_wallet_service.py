@@ -1100,7 +1100,17 @@ class DemoWalletService:
             "solana": "SOL",
             "polygon": "POL",
             "base": "ETH",
-            "algorand": "ALGO"
+            "algorand": "ALGO",
+            "bsc": "BNB",
+            "arbitrum": "ETH",
+            "avalanche": "AVAX",
+            "tron": "TRX",
+            "xrp": "XRP",
+            "hedera": "HBAR",
+            "multiversx": "EGLD",
+            "sui": "SUI",
+            "aptos": "APT",
+            "filecoin": "FIL"
         }
         return units.get(blockchain, "UNKNOWN")
 

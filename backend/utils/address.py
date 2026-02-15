@@ -7,7 +7,8 @@ def detect_blockchain(address: str) -> Optional[str]:
 
     Returns:
         'cardano', 'bitcoin', 'ethereum', 'polygon', 'base', 'solana', 'algorand',
-        'bsc', 'arbitrum', 'avalanche', 'tron', or None if unknown
+        'bsc', 'arbitrum', 'avalanche', 'tron', 'xrp', 'hedera', 'multiversx',
+        'sui', 'aptos', 'filecoin', or None if unknown
     """
     address = address.strip()
 
@@ -24,6 +25,12 @@ def detect_blockchain(address: str) -> Optional[str]:
             'arb': 'arbitrum', 'arbitrum': 'arbitrum',
             'avax': 'avalanche', 'avalanche': 'avalanche',
             'tron': 'tron', 'trx': 'tron',
+            'xrp': 'xrp', 'ripple': 'xrp',
+            'hedera': 'hedera', 'hbar': 'hedera',
+            'multiversx': 'multiversx', 'egld': 'multiversx', 'elrond': 'multiversx',
+            'sui': 'sui',
+            'aptos': 'aptos', 'apt': 'aptos',
+            'filecoin': 'filecoin', 'fil': 'filecoin',
         }
         if prefix in prefix_map:
             return prefix_map[prefix]
@@ -37,6 +44,10 @@ def detect_blockchain(address: str) -> Optional[str]:
     if address.startswith('stake1'):
         return 'cardano'
 
+    # MultiversX addresses start with erd1, exactly 62 chars
+    if address.startswith('erd1') and len(address) == 62:
+        return 'multiversx'
+
     # Algorand addresses - 58 characters, base32 (uppercase A-Z and 2-7)
     if len(address) == 58:
         base32_chars = set('ABCDEFGHIJKLMNOPQRSTUVWXYZ234567')
@@ -49,12 +60,35 @@ def detect_blockchain(address: str) -> Optional[str]:
         if all(c in base58_chars for c in address):
             return 'tron'
 
+    # Hedera addresses - shard.realm.num format (e.g., 0.0.1234567)
+    if re.match(r'^\d+\.\d+\.\d+$', address):
+        return 'hedera'
+
+    # XRP addresses - start with r, 25-35 chars, base58
+    if address.startswith('r') and 25 <= len(address) <= 35:
+        base58_chars = set('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz')
+        if all(c in base58_chars for c in address):
+            return 'xrp'
+
+    # Filecoin addresses - start with f0, f1, f3, or f4
+    if len(address) >= 3 and address[0] == 'f' and address[1] in ('0', '1', '3', '4'):
+        return 'filecoin'
+
     # Ethereum addresses - start with 0x and are 42 characters
     if address.lower().startswith('0x') and len(address) == 42:
         try:
             # Verify it's valid hex
             int(address[2:], 16)
             return 'ethereum'
+        except ValueError:
+            pass
+
+    # Sui addresses - start with 0x and are 66 characters (vs ETH 42)
+    # Aptos shares the same format; defaults to Sui. Use aptos: prefix for Aptos.
+    if address.lower().startswith('0x') and len(address) == 66:
+        try:
+            int(address[2:], 16)
+            return 'sui'
         except ValueError:
             pass
 
@@ -167,12 +201,16 @@ def parse_address(line: str) -> Optional[Tuple[str, str]]:
             'eth': 'ethereum', 'sol': 'solana', 'matic': 'polygon',
             'algo': 'algorand', 'bnb': 'bsc', 'arb': 'arbitrum',
             'avax': 'avalanche', 'trx': 'tron',
+            'ripple': 'xrp', 'hbar': 'hedera',
+            'egld': 'multiversx', 'elrond': 'multiversx',
+            'apt': 'aptos', 'fil': 'filecoin',
         }
         if blockchain in prefix_map:
             blockchain = prefix_map[blockchain]
 
         valid_chains = ('cardano', 'bitcoin', 'ethereum', 'polygon', 'base', 'solana',
-                        'algorand', 'bsc', 'arbitrum', 'avalanche', 'tron')
+                        'algorand', 'bsc', 'arbitrum', 'avalanche', 'tron',
+                        'xrp', 'hedera', 'multiversx', 'sui', 'aptos', 'filecoin')
         if blockchain in valid_chains:
             return (blockchain, address)
         return None

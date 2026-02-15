@@ -6,8 +6,8 @@
     <title>ABCT - Help & Guide</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771185405">
-    <script src="/static/js/session-auth.js?v=1771185405"></script>
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771191395">
+    <script src="/static/js/session-auth.js?v=1771191395"></script>
     <style>
         /* ========== Help Page Layout ========== */
         .help-page {
@@ -928,7 +928,7 @@
                     <div class="help-hero">
                         <h1>A Better Crypto Tracker</h1>
                         <div class="tagline">Self-hosted multi-chain portfolio tracking</div>
-                        <p>ABCT is a privacy-first cryptocurrency portfolio tracker that aggregates wallet balances, exchange accounts, DeFi positions, and NFT collections across 11 blockchains &mdash; all running on your own hardware.</p>
+                        <p>ABCT is a privacy-first cryptocurrency portfolio tracker that aggregates wallet balances, exchange accounts, DeFi positions, and NFT collections across 17 blockchains &mdash; all running on your own hardware.</p>
                     </div>
 
                     <h2>Quick Start</h2>
@@ -990,7 +990,7 @@
                             <span class="layer-icon">&#127760;</span>
                             <div class="layer-info">
                                 <h4>External APIs</h4>
-                                <p>Blockfrost &bull; Alchemy &bull; Helius &bull; CoinGecko &bull; Exchanges</p>
+                                <p>Blockfrost &bull; Alchemy &bull; Helius &bull; CoinGecko &bull; XRPL &bull; Hedera &bull; Exchanges</p>
                             </div>
                         </div>
                     </div>
@@ -1095,6 +1095,54 @@
                             <span class="chain-detail">AVAX &bull; SnowTrace / Moralis</span>
                             <span class="chain-badge badge-key">Free Key</span>
                         </div>
+                        <div class="chain-card">
+                            <div class="chain-head">
+                                <img src="https://img.logokit.com/crypto/XRP?token=pk_fr08287a4c625f400f32a9&size=32" alt="XRP Ledger" class="chain-logo" onerror="this.style.display='none'">
+                                <span class="chain-name">XRP Ledger</span>
+                            </div>
+                            <span class="chain-detail">XRP &bull; XRPL Cluster API</span>
+                            <span class="chain-badge badge-free">No Key Needed</span>
+                        </div>
+                        <div class="chain-card">
+                            <div class="chain-head">
+                                <img src="https://img.logokit.com/crypto/HBAR?token=pk_fr08287a4c625f400f32a9&size=32" alt="Hedera" class="chain-logo" onerror="this.style.display='none'">
+                                <span class="chain-name">Hedera</span>
+                            </div>
+                            <span class="chain-detail">HBAR &bull; Mirror Node API</span>
+                            <span class="chain-badge badge-free">No Key Needed</span>
+                        </div>
+                        <div class="chain-card">
+                            <div class="chain-head">
+                                <img src="https://img.logokit.com/crypto/EGLD?token=pk_fr08287a4c625f400f32a9&size=32" alt="MultiversX" class="chain-logo" onerror="this.style.display='none'">
+                                <span class="chain-name">MultiversX</span>
+                            </div>
+                            <span class="chain-detail">EGLD &bull; MultiversX API</span>
+                            <span class="chain-badge badge-free">No Key Needed</span>
+                        </div>
+                        <div class="chain-card">
+                            <div class="chain-head">
+                                <img src="https://img.logokit.com/crypto/SUI?token=pk_fr08287a4c625f400f32a9&size=32" alt="Sui" class="chain-logo" onerror="this.style.display='none'">
+                                <span class="chain-name">Sui</span>
+                            </div>
+                            <span class="chain-detail">SUI &bull; Sui JSON-RPC</span>
+                            <span class="chain-badge badge-free">No Key Needed</span>
+                        </div>
+                        <div class="chain-card">
+                            <div class="chain-head">
+                                <img src="https://img.logokit.com/crypto/APT?token=pk_fr08287a4c625f400f32a9&size=32" alt="Aptos" class="chain-logo" onerror="this.style.display='none'">
+                                <span class="chain-name">Aptos</span>
+                            </div>
+                            <span class="chain-detail">APT &bull; Aptos REST API</span>
+                            <span class="chain-badge badge-free">No Key Needed</span>
+                        </div>
+                        <div class="chain-card">
+                            <div class="chain-head">
+                                <img src="https://img.logokit.com/crypto/FIL?token=pk_fr08287a4c625f400f32a9&size=32" alt="Filecoin" class="chain-logo" onerror="this.style.display='none'">
+                                <span class="chain-name">Filecoin</span>
+                            </div>
+                            <span class="chain-detail">FIL &bull; Glif RPC</span>
+                            <span class="chain-badge badge-free">No Key Needed</span>
+                        </div>
                     </div>
                 </section>
 
@@ -1131,6 +1179,30 @@
                             <div class="api-item">
                                 <h4>CoinGecko (Free Tier)</h4>
                                 <p>Basic pricing with generous rate limits (30 calls/min)</p>
+                            </div>
+                            <div class="api-item">
+                                <h4>XRPL Cluster</h4>
+                                <p>XRP Ledger balances and trust line tokens</p>
+                            </div>
+                            <div class="api-item">
+                                <h4>Hedera Mirror Node</h4>
+                                <p>HBAR balances, HTS tokens, and proxy staking</p>
+                            </div>
+                            <div class="api-item">
+                                <h4>MultiversX API</h4>
+                                <p>EGLD balances, ESDT tokens, and delegation staking</p>
+                            </div>
+                            <div class="api-item">
+                                <h4>Sui JSON-RPC</h4>
+                                <p>SUI balances, coins, and validator staking</p>
+                            </div>
+                            <div class="api-item">
+                                <h4>Aptos REST API</h4>
+                                <p>APT balances, coins, and validator staking</p>
+                            </div>
+                            <div class="api-item">
+                                <h4>Glif RPC</h4>
+                                <p>Filecoin FIL balance tracking</p>
                             </div>
                         </div>
                     </div>
@@ -1347,7 +1419,7 @@
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td>BTC / TRX / ALGO balances</td>
+                                    <td>BTC / TRX / ALGO / XRP / HBAR / EGLD / SUI / APT / FIL balances</td>
                                     <td><span class="check">&#10003;</span></td>
                                     <td><span class="check">&#10003;</span></td>
                                     <td><span class="check">&#10003;</span></td>
@@ -1390,6 +1462,30 @@
                                 </tr>
                                 <tr>
                                     <td>DeFi &amp; staking tracking</td>
+                                    <td><span class="cross">&#10007;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>XRP trust lines / HBAR HTS tokens</td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>EGLD ESDT / SUI coins / APT coins</td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>HBAR / EGLD / SUI / APT staking</td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>Chainlink staking (ETH)</td>
                                     <td><span class="cross">&#10007;</span></td>
                                     <td><span class="check">&#10003;</span></td>
                                     <td><span class="check">&#10003;</span></td>

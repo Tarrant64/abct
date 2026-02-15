@@ -308,6 +308,28 @@ async def get_uniswap_positions(address: str, user_id: int = Depends(verify_sess
         return {"success": False, "error": str(e)}
 
 
+@router.get("/chainlink/{address}")
+async def get_chainlink_staking_positions(address: str, user_id: int = Depends(verify_session)):
+    """
+    Get Chainlink staking positions for an Ethereum address.
+    Reads staked LINK and pending rewards from Chainlink Staking v0.2.
+    """
+    from services.defi import get_chainlink_staking
+
+    result = await get_chainlink_staking(address)
+
+    if not result:
+        return {
+            "protocol": "Chainlink Staking",
+            "address": address,
+            "staked_link": 0,
+            "pending_rewards_link": 0,
+            "message": "No Chainlink staking positions found"
+        }
+
+    return result
+
+
 @router.get("/summary")
 async def get_defi_summary(user_id: int = Depends(verify_session), refresh: bool = False):
     """
