@@ -14,7 +14,7 @@ digraph ABCT_Architecture {
 
     // Title
     labelloc="t";
-    label="ABCT Architecture - A Better Crypto Tracker\nVersion 1.5.0 (Build 1770726755)\n11 Blockchains | 7 Exchanges | Multi-User | Demo Mode";
+    label="ABCT Architecture - A Better Crypto Tracker\nVersion 1.5.0 (Build 1770726755)\n17 Blockchains | 7 Exchanges | Multi-User | Demo Mode";
     fontsize=16;
 
     // ========== SUBGRAPHS ==========
@@ -116,7 +116,7 @@ digraph ABCT_Architecture {
 
                 // Blockchain Services
                 subgraph cluster_blockchain_svc {
-                    label="Blockchain Services (11 Chains)";
+                    label="Blockchain Services (17 Chains)";
                     style="rounded,filled";
                     fillcolor="#FFE0B2";
                     color="#E65100";
@@ -130,6 +130,12 @@ digraph ABCT_Architecture {
                     s_algorand [label="algorand.py\nAlgorand (ALGO)", fillcolor="#FFCC80"];
                     s_evm_chain [label="evm_chain.py\nGeneric EVM Service\n(BSC/Arbitrum/Avalanche)", fillcolor="#FFCC80"];
                     s_tron [label="tron.py\nTron (TRX)", fillcolor="#FFCC80"];
+                    s_xrp [label="xrp.py\nXRP (XRP)", fillcolor="#FFCC80"];
+                    s_hedera [label="hedera.py\nHedera (HBAR)", fillcolor="#FFCC80"];
+                    s_multiversx [label="multiversx.py\nMultiversX (EGLD)", fillcolor="#FFCC80"];
+                    s_sui [label="sui.py\nSui (SUI)", fillcolor="#FFCC80"];
+                    s_aptos [label="aptos.py\nAptos (APT)", fillcolor="#FFCC80"];
+                    s_filecoin [label="filecoin.py\nFilecoin (FIL)", fillcolor="#FFCC80"];
                 }
 
                 // NFT Services
@@ -170,7 +176,7 @@ digraph ABCT_Architecture {
                     fillcolor="#F3E5F5";
                     color="#6A1B9A";
 
-                    s_demo_wallet [label="demo_wallet_service.py\n91 Tokens, 11 Chains", fillcolor="#CE93D8"];
+                    s_demo_wallet [label="demo_wallet_service.py\n91 Tokens, 17 Chains", fillcolor="#CE93D8"];
                     s_demo_nft [label="demo_nft_service.py\n76 NFTs, 7 Collections", fillcolor="#CE93D8"];
                     s_demo_txn [label="demo_transaction_service.py\n1,500 Transactions", fillcolor="#CE93D8"];
                     s_demo_defi [label="demo_defi_service.py\nStaking Positions", fillcolor="#CE93D8"];
@@ -281,6 +287,12 @@ digraph ABCT_Architecture {
             api_blockstream [label="Blockstream\nBitcoin Data", fillcolor="#B2DFDB"];
             api_mempool [label="Mempool.space\nBitcoin Fallback", fillcolor="#B2DFDB"];
             api_helius [label="Helius\nSolana RPC & NFTs", fillcolor="#B2DFDB"];
+            api_xrpl [label="XRPL Cluster\nXRP Ledger API", fillcolor="#B2DFDB"];
+            api_hedera [label="Mirror Node\nHedera API", fillcolor="#B2DFDB"];
+            api_multiversx [label="MultiversX API\nMultiversX Data", fillcolor="#B2DFDB"];
+            api_sui [label="Sui RPC\nSui Data", fillcolor="#B2DFDB"];
+            api_aptos [label="Aptos API\nAptos Data", fillcolor="#B2DFDB"];
+            api_glif [label="Glif RPC\nFilecoin Data", fillcolor="#B2DFDB"];
         }
 
         // Pricing APIs
@@ -386,6 +398,12 @@ digraph ABCT_Architecture {
     r_wallets -> s_algorand;
     r_wallets -> s_evm_chain;
     r_wallets -> s_tron;
+    r_wallets -> s_xrp;
+    r_wallets -> s_hedera;
+    r_wallets -> s_multiversx;
+    r_wallets -> s_sui;
+    r_wallets -> s_aptos;
+    r_wallets -> s_filecoin;
 
     // Routers to NFT Services
     r_nfts -> s_nft;
@@ -460,6 +478,15 @@ digraph ABCT_Architecture {
     s_bitcoin -> api_mempool [label="HTTPS (fallback)", color="#00796B"];
     s_solana -> api_helius [label="HTTPS", color="#00796B"];
     s_sol_nft -> api_helius [label="HTTPS", color="#00796B"];
+    s_xrp -> api_xrpl [label="HTTPS", color="#00796B"];
+    s_hedera -> api_hedera [label="HTTPS", color="#00796B"];
+    s_multiversx -> api_multiversx [label="HTTPS", color="#00796B"];
+    s_sui -> api_sui [label="HTTPS", color="#00796B"];
+    s_aptos -> api_aptos [label="HTTPS", color="#00796B"];
+    s_filecoin -> api_glif [label="HTTPS", color="#00796B"];
+
+    // DeFi service connections
+    s_defi -> api_alchemy [label="Chainlink Staking", color="#3F51B5"];
 
     // Pricing service connections (fallback chain)
     s_pricing -> api_coingecko [label="1st", color="#C2185B"];

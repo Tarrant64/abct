@@ -210,6 +210,48 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
             'token_count': 0,
             'native_assets_value_usd': 0.0,
             'wallets': []
+        },
+        'xrp': {
+            'wallet_count': 0,
+            'total_xrp': 0.0,
+            'token_count': 0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'hedera': {
+            'wallet_count': 0,
+            'total_hbar': 0.0,
+            'token_count': 0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'multiversx': {
+            'wallet_count': 0,
+            'total_egld': 0.0,
+            'token_count': 0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'sui': {
+            'wallet_count': 0,
+            'total_sui': 0.0,
+            'token_count': 0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'aptos': {
+            'wallet_count': 0,
+            'total_apt': 0.0,
+            'token_count': 0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'filecoin': {
+            'wallet_count': 0,
+            'total_fil': 0.0,
+            'token_count': 0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
         }
     }
 
@@ -396,6 +438,52 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
             wallet_summary['token_count'] = len(assets)
             summary['tron']['wallets'].append(wallet_summary)
 
+        elif blockchain == 'xrp':
+            summary['xrp']['wallet_count'] += 1
+            summary['xrp']['total_xrp'] += balance
+            summary['xrp']['token_count'] += len(assets)
+            summary['xrp']['native_assets_value_usd'] += native_assets_value_usd
+            wallet_summary['token_count'] = len(assets)
+            summary['xrp']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'hedera':
+            summary['hedera']['wallet_count'] += 1
+            summary['hedera']['total_hbar'] += balance
+            summary['hedera']['token_count'] += len(assets)
+            summary['hedera']['native_assets_value_usd'] += native_assets_value_usd
+            wallet_summary['token_count'] = len(assets)
+            summary['hedera']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'multiversx':
+            summary['multiversx']['wallet_count'] += 1
+            summary['multiversx']['total_egld'] += balance
+            summary['multiversx']['token_count'] += len(assets)
+            summary['multiversx']['native_assets_value_usd'] += native_assets_value_usd
+            wallet_summary['token_count'] = len(assets)
+            summary['multiversx']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'sui':
+            summary['sui']['wallet_count'] += 1
+            summary['sui']['total_sui'] += balance
+            summary['sui']['token_count'] += len(assets)
+            summary['sui']['native_assets_value_usd'] += native_assets_value_usd
+            wallet_summary['token_count'] = len(assets)
+            summary['sui']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'aptos':
+            summary['aptos']['wallet_count'] += 1
+            summary['aptos']['total_apt'] += balance
+            summary['aptos']['token_count'] += len(assets)
+            summary['aptos']['native_assets_value_usd'] += native_assets_value_usd
+            wallet_summary['token_count'] = len(assets)
+            summary['aptos']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'filecoin':
+            summary['filecoin']['wallet_count'] += 1
+            summary['filecoin']['total_fil'] += balance
+            summary['filecoin']['native_assets_value_usd'] += native_assets_value_usd
+            summary['filecoin']['wallets'].append(wallet_summary)
+
     # Convert stake groups dict to list and round totals
     summary['cardano']['stake_groups'] = [
         {**group, 'total_ada': round(group['total_ada'], 6)}
@@ -417,6 +505,12 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
     summary['arbitrum']['total_eth'] = round(summary['arbitrum']['total_eth'], 8)
     summary['avalanche']['total_avax'] = round(summary['avalanche']['total_avax'], 8)
     summary['tron']['total_trx'] = round(summary['tron']['total_trx'], 6)
+    summary['xrp']['total_xrp'] = round(summary['xrp']['total_xrp'], 6)
+    summary['hedera']['total_hbar'] = round(summary['hedera']['total_hbar'], 8)
+    summary['multiversx']['total_egld'] = round(summary['multiversx']['total_egld'], 8)
+    summary['sui']['total_sui'] = round(summary['sui']['total_sui'], 9)
+    summary['aptos']['total_apt'] = round(summary['aptos']['total_apt'], 8)
+    summary['filecoin']['total_fil'] = round(summary['filecoin']['total_fil'], 8)
 
     # Cache the result with timestamp
     from datetime import datetime
@@ -1695,6 +1789,9 @@ async def get_portfolio_analytics(user_id: int = Depends(verify_session)):
         'ADA': 'Layer 1 (L1)', 'BTC': 'Layer 1 (L1)', 'ETH': 'Layer 1 (L1)',
         'SOL': 'Layer 1 (L1)', 'POL': 'Layer 1 (L1)', 'MATIC': 'Layer 1 (L1)',
         'BNB': 'Layer 1 (L1)', 'AVAX': 'Layer 1 (L1)', 'TRX': 'Layer 1 (L1)',
+        'XRP': 'Layer 1 (L1)', 'HBAR': 'Layer 1 (L1)', 'EGLD': 'Layer 1 (L1)',
+        'SUI': 'Layer 1 (L1)', 'APT': 'Layer 1 (L1)', 'FIL': 'Layer 1 (L1)',
+        'LINK': 'Infrastructure',
 
         # DeFi
         'INDY': 'Decentralized Finance (DeFi)', 'SUNDAE': 'Decentralized Finance (DeFi)',
@@ -1725,10 +1822,10 @@ async def get_portfolio_analytics(user_id: int = Depends(verify_session)):
     total_value = 0
 
     # Chain symbol to blockchain name mapping
-    chain_symbol_map = {'ADA': 'cardano', 'BTC': 'bitcoin', 'ETH': 'ethereum', 'SOL': 'solana', 'POL': 'polygon', 'ALGO': 'algorand', 'BNB': 'bsc', 'AVAX': 'avalanche', 'TRX': 'tron'}
+    chain_symbol_map = {'ADA': 'cardano', 'BTC': 'bitcoin', 'ETH': 'ethereum', 'SOL': 'solana', 'POL': 'polygon', 'ALGO': 'algorand', 'BNB': 'bsc', 'AVAX': 'avalanche', 'TRX': 'tron', 'XRP': 'xrp', 'HBAR': 'hedera', 'EGLD': 'multiversx', 'SUI': 'sui', 'APT': 'aptos', 'FIL': 'filecoin'}
 
     # Add native coins
-    for blockchain in ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base', 'algorand', 'bsc', 'arbitrum', 'avalanche', 'tron']:
+    for blockchain in ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base', 'algorand', 'bsc', 'arbitrum', 'avalanche', 'tron', 'xrp', 'hedera', 'multiversx', 'sui', 'aptos', 'filecoin']:
         chain_data = summary.get(blockchain, {})
         if blockchain == 'cardano':
             qty = chain_data.get('total_ada', 0)
@@ -1763,6 +1860,24 @@ async def get_portfolio_analytics(user_id: int = Depends(verify_session)):
         elif blockchain == 'tron':
             qty = chain_data.get('total_trx', 0)
             symbol = 'TRX'
+        elif blockchain == 'xrp':
+            qty = chain_data.get('total_xrp', 0)
+            symbol = 'XRP'
+        elif blockchain == 'hedera':
+            qty = chain_data.get('total_hbar', 0)
+            symbol = 'HBAR'
+        elif blockchain == 'multiversx':
+            qty = chain_data.get('total_egld', 0)
+            symbol = 'EGLD'
+        elif blockchain == 'sui':
+            qty = chain_data.get('total_sui', 0)
+            symbol = 'SUI'
+        elif blockchain == 'aptos':
+            qty = chain_data.get('total_apt', 0)
+            symbol = 'APT'
+        elif blockchain == 'filecoin':
+            qty = chain_data.get('total_fil', 0)
+            symbol = 'FIL'
         else:
             continue
 
@@ -1860,7 +1975,7 @@ async def get_blockchain_asset_breakdown(
 
     try:
         # Validate blockchain
-        valid_chains = ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base', 'bsc', 'arbitrum', 'avalanche', 'tron']
+        valid_chains = ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base', 'bsc', 'arbitrum', 'avalanche', 'tron', 'xrp', 'hedera', 'multiversx', 'sui', 'aptos', 'filecoin']
         if blockchain not in valid_chains:
             raise HTTPException(400, f"Invalid blockchain: {blockchain}")
 
@@ -1882,12 +1997,16 @@ async def get_blockchain_asset_breakdown(
         native_symbols = {
             'cardano': 'ADA', 'bitcoin': 'BTC', 'ethereum': 'ETH',
             'solana': 'SOL', 'polygon': 'POL', 'base': 'ETH',
-            'bsc': 'BNB', 'arbitrum': 'ETH', 'avalanche': 'AVAX', 'tron': 'TRX'
+            'bsc': 'BNB', 'arbitrum': 'ETH', 'avalanche': 'AVAX', 'tron': 'TRX',
+            'xrp': 'XRP', 'hedera': 'HBAR', 'multiversx': 'EGLD',
+            'sui': 'SUI', 'aptos': 'APT', 'filecoin': 'FIL'
         }
         native_keys = {
             'cardano': 'total_ada', 'bitcoin': 'total_btc', 'ethereum': 'total_eth',
             'solana': 'total_sol', 'polygon': 'total_matic', 'base': 'total_eth',
-            'bsc': 'total_bnb', 'arbitrum': 'total_eth', 'avalanche': 'total_avax', 'tron': 'total_trx'
+            'bsc': 'total_bnb', 'arbitrum': 'total_eth', 'avalanche': 'total_avax', 'tron': 'total_trx',
+            'xrp': 'total_xrp', 'hedera': 'total_hbar', 'multiversx': 'total_egld',
+            'sui': 'total_sui', 'aptos': 'total_apt', 'filecoin': 'total_fil'
         }
 
         native_symbol = native_symbols[blockchain]
@@ -2031,7 +2150,13 @@ async def get_blockchain_price_chart(
             'bsc': 'BNB',
             'arbitrum': 'ETH',  # Arbitrum uses ETH
             'avalanche': 'AVAX',
-            'tron': 'TRX'
+            'tron': 'TRX',
+            'xrp': 'XRP',
+            'hedera': 'HBAR',
+            'multiversx': 'EGLD',
+            'sui': 'SUI',
+            'aptos': 'APT',
+            'filecoin': 'FIL'
         }
 
         symbol = blockchain_symbols.get(blockchain.lower())
@@ -2166,6 +2291,12 @@ async def _get_demo_portfolio_summary() -> dict:
         'arbitrum': ('ETH', 'total_eth'),
         'avalanche': ('AVAX', 'total_avax'),
         'tron': ('TRX', 'total_trx'),
+        'xrp': ('XRP', 'total_xrp'),
+        'hedera': ('HBAR', 'total_hbar'),
+        'multiversx': ('EGLD', 'total_egld'),
+        'sui': ('SUI', 'total_sui'),
+        'aptos': ('APT', 'total_apt'),
+        'filecoin': ('FIL', 'total_fil'),
     }
 
     for wallet in wallets:
@@ -2266,6 +2397,12 @@ async def _get_demo_portfolio_analytics() -> dict:
         'arbitrum': ('ETH', 'Layer 2 (L2)'),
         'avalanche': ('AVAX', 'Layer 1 (L1)'),
         'tron': ('TRX', 'Layer 1 (L1)'),
+        'xrp': ('XRP', 'Layer 1 (L1)'),
+        'hedera': ('HBAR', 'Layer 1 (L1)'),
+        'multiversx': ('EGLD', 'Layer 1 (L1)'),
+        'sui': ('SUI', 'Layer 1 (L1)'),
+        'aptos': ('APT', 'Layer 1 (L1)'),
+        'filecoin': ('FIL', 'Layer 1 (L1)'),
     }
 
     for bc, wallets in demo_wallet_service.demo_wallets.items():
@@ -2326,7 +2463,7 @@ async def _get_demo_portfolio_analytics() -> dict:
 
 async def _get_demo_blockchain_breakdown(blockchain: str) -> dict:
     """Build asset breakdown for a specific blockchain from demo data."""
-    valid_chains = ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base', 'algorand', 'bsc', 'arbitrum', 'avalanche', 'tron']
+    valid_chains = ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base', 'algorand', 'bsc', 'arbitrum', 'avalanche', 'tron', 'xrp', 'hedera', 'multiversx', 'sui', 'aptos', 'filecoin']
     if blockchain not in valid_chains:
         raise HTTPException(400, f"Invalid blockchain: {blockchain}")
 
@@ -2334,6 +2471,8 @@ async def _get_demo_blockchain_breakdown(blockchain: str) -> dict:
         'cardano': 'ADA', 'bitcoin': 'BTC', 'ethereum': 'ETH',
         'solana': 'SOL', 'polygon': 'POL', 'base': 'ETH', 'algorand': 'ALGO',
         'bsc': 'BNB', 'arbitrum': 'ETH', 'avalanche': 'AVAX', 'tron': 'TRX',
+        'xrp': 'XRP', 'hedera': 'HBAR', 'multiversx': 'EGLD',
+        'sui': 'SUI', 'aptos': 'APT', 'filecoin': 'FIL',
     }
     symbol = symbol_map.get(blockchain, 'UNKNOWN')
 

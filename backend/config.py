@@ -97,6 +97,14 @@ HELIUS_RPC_URL = "https://mainnet.helius-rpc.com"
 # TronGrid API (free, no key required)
 TRONGRID_BASE_URL = "https://api.trongrid.io"
 
+# New chain APIs (all free, no key required)
+XRPL_RPC_URL = "https://xrplcluster.com"
+HEDERA_MIRROR_URL = "https://mainnet-public.mirrornode.hedera.com/api/v1"
+MULTIVERSX_API_URL = "https://api.multiversx.com"
+SUI_RPC_URL = "https://fullnode.mainnet.sui.io:443"
+APTOS_API_URL = "https://fullnode.mainnet.aptoslabs.com/v1"
+GLIF_RPC_URL = "https://api.node.glif.io/rpc/v1"
+
 # Etherscan API endpoints (same format works for Basescan, Polygonscan, etc.)
 ETHERSCAN_BASE_URL = "https://api.etherscan.io/api"
 BASESCAN_BASE_URL = "https://api.basescan.org/api"

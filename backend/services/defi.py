@@ -1395,5 +1395,88 @@ class DeFiService:
         return staking
 
 
+# ===== Chainlink Staking (Ethereum) =====
+
+# Chainlink Staking v0.2 contracts on Ethereum mainnet
+CHAINLINK_COMMUNITY_STAKING = "0xBc10f2E862ED4502144c7d632a3459F49DFCDB5e"
+CHAINLINK_NODE_OP_STAKING = "0xa1D76a7cA72128541E9FCAcafbDa3a92ef94FCD5"
+
+# Minimal ABI for reading staked balance - getStake(address) returns (uint256)
+CHAINLINK_STAKING_GET_STAKE_SIG = "0x7a766460"  # getStake(address)
+CHAINLINK_STAKING_GET_REWARD_SIG = "0xc00007b0"  # getReward(address)
+
+
+async def get_chainlink_staking(eth_address: str) -> Optional[Dict]:
+    """
+    Get Chainlink staking positions for an Ethereum address.
+    Reads Chainlink Staking v0.2 community pool contract via Alchemy/public RPC.
+
+    Returns staked LINK amount and pending rewards.
+    """
+    from config import ALCHEMY_API_KEY, ALCHEMY_ETH_URL
+
+    if not ALCHEMY_API_KEY:
+        return None
+
+    try:
+        client = get_client("alchemy_eth", timeout=30.0)
+        rpc_url = f"{ALCHEMY_ETH_URL}/v2/{ALCHEMY_API_KEY}"
+
+        # Pad address to 32 bytes for eth_call data parameter
+        addr_padded = eth_address.lower().replace('0x', '').zfill(64)
+
+        # Try community staking pool first, then node operator pool
+        total_staked = 0
+        total_rewards = 0
+        pool_found = None
+
+        for pool_name, pool_address in [
+            ("Community", CHAINLINK_COMMUNITY_STAKING),
+            ("Node Operator", CHAINLINK_NODE_OP_STAKING)
+        ]:
+            # Read staked amount: getStake(address)
+            stake_data = CHAINLINK_STAKING_GET_STAKE_SIG + addr_padded
+            payload = {
+                "jsonrpc": "2.0", "id": 1, "method": "eth_call",
+                "params": [{"to": pool_address, "data": stake_data}, "latest"]
+            }
+            resp = await client.post(rpc_url, json=payload)
+            if resp.status_code == 200:
+                result = resp.json().get("result", "0x0")
+                staked_raw = int(result, 16) if result != "0x" else 0
+                staked_link = staked_raw / 10**18
+                if staked_link > 0:
+                    total_staked += staked_link
+                    pool_found = pool_name
+
+                    # Read pending rewards: getReward(address)
+                    reward_data = CHAINLINK_STAKING_GET_REWARD_SIG + addr_padded
+                    payload_r = {
+                        "jsonrpc": "2.0", "id": 2, "method": "eth_call",
+                        "params": [{"to": pool_address, "data": reward_data}, "latest"]
+                    }
+                    resp_r = await client.post(rpc_url, json=payload_r)
+                    if resp_r.status_code == 200:
+                        result_r = resp_r.json().get("result", "0x0")
+                        reward_raw = int(result_r, 16) if result_r != "0x" else 0
+                        total_rewards += reward_raw / 10**18
+
+        if total_staked > 0:
+            return {
+                'protocol': 'Chainlink Staking',
+                'pool': pool_found,
+                'staked_link': total_staked,
+                'pending_rewards_link': total_rewards,
+                'token': 'LINK',
+                'source': 'alchemy'
+            }
+
+        return None
+
+    except Exception as e:
+        logging.getLogger(__name__).error(f"Chainlink staking error for {eth_address[:20]}: {e}")
+        return None
+
+
 # Singleton instance
 defi_service = DeFiService()

@@ -58,6 +58,18 @@ ASSET_TO_COINGECKO = {
     'XER': 'xerberus',
     'NIGHT': 'midnight-3',
     'FLOW': 'flow-lending',
+    # New chain native tokens
+    'XRP': 'ripple',
+    'HBAR': 'hedera-hashgraph',
+    'EGLD': 'elrond-erd-2',
+    'SUI': 'sui',
+    'APT': 'aptos',
+    'FIL': 'filecoin',
+    # Existing chains missing from map
+    'BNB': 'binancecoin',
+    'AVAX': 'avalanche-2',
+    'TRX': 'tron',
+    'LINK': 'chainlink',
 }
 
 # Map our asset names to CoinMarketCap symbols
@@ -75,6 +87,16 @@ ASSET_TO_CMC = {
     'MIN': 'MIN',
     'SNEK': 'SNEK',
     'AGIX': 'AGIX',
+    'XRP': 'XRP',
+    'HBAR': 'HBAR',
+    'EGLD': 'EGLD',
+    'SUI': 'SUI',
+    'APT': 'APT',
+    'FIL': 'FIL',
+    'BNB': 'BNB',
+    'AVAX': 'AVAX',
+    'TRX': 'TRX',
+    'LINK': 'LINK',
 }
 
 # Map token symbols to their policy IDs and asset names for TapTools/CExplorer
@@ -96,7 +118,8 @@ CARDANO_TOKEN_POLICIES = {
 }
 
 # Major coins that can be priced by multiple sources
-MAJOR_SYMBOLS = {'ADA', 'BTC', 'ETH', 'SOL', 'MATIC', 'ALGO', 'USDC', 'USDT', 'DAI'}
+MAJOR_SYMBOLS = {'ADA', 'BTC', 'ETH', 'SOL', 'MATIC', 'ALGO', 'USDC', 'USDT', 'DAI',
+                  'XRP', 'HBAR', 'EGLD', 'SUI', 'APT', 'FIL', 'BNB', 'AVAX', 'TRX', 'LINK'}
 
 
 def _classify_symbol(symbol: str) -> str:
@@ -400,7 +423,8 @@ class PricingService:
 
     async def _fetch_from_coinbase(self, symbols: List[str]) -> None:
         """Fetch prices from Coinbase public API (no auth required, fallback source)."""
-        coinbase_symbols = {'ADA', 'BTC', 'ETH', 'SOL', 'MATIC', 'USDC', 'USDT', 'DAI'}
+        coinbase_symbols = {'ADA', 'BTC', 'ETH', 'SOL', 'MATIC', 'USDC', 'USDT', 'DAI',
+                            'XRP', 'HBAR', 'SUI', 'APT', 'FIL', 'AVAX', 'LINK'}
 
         try:
             client = get_client("coinbase_public", timeout=30.0)

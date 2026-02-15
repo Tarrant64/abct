@@ -75,15 +75,20 @@
 |                              Services Layer                                        |
 +-----------------------------------------------------------------------------------+
 |                                                                                    |
-|  Blockchain Services (11 Chains):                                                |
+|  Blockchain Services (17 Chains):                                                |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
 |  | Cardano  | | Bitcoin  | | Ethereum | | Solana   | | Polygon  | |   Base   |     |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
+|  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
+|  | Algorand | |   BSC    | | Arbitrum | |Avalanche | |   Tron   | |   XRP    |     |
+|  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
 |  +----------+ +----------+ +----------+ +----------+ +----------+                  |
-|  | Algorand | |   BSC    | | Arbitrum | |Avalanche | |   Tron   |                  |
+|  | Hedera   | |MultversX | |   Sui    | |  Aptos   | | Filecoin |                  |
 |  +----------+ +----------+ +----------+ +----------+ +----------+                  |
 |  Note: BSC, Arbitrum, and Avalanche share the generic evm_chain.py service         |
 |  Tron uses tron.py with TronGrid API (free, no key required)                       |
+|  XRP, Hedera, MultiversX, Sui, Aptos, and Filecoin use free public APIs (no key)   |
+|  DeFi service includes Chainlink Staking (Ethereum contract reads via Alchemy)     |
 |                                                                                    |
 |  Exchange Services:                                                               |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
@@ -128,9 +133,13 @@
 |  |CExplorer | | TapTools | | Moralis  | | BscScan  | | Arbiscan | | Snowscan |     |
 |  |(Cardano) | |(Cardano) | |(NFTs)    | |(BSC)     | |(Arbitrum)| |(Avalanche)|    |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
+|  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
+|  | TronGrid | | XRPL RPC | |Hedera    | |MultversX | | Sui RPC  | |Aptos API |     |
+|  |(Tron/Free)| |(XRP/Free)| |Mirror API| |  (Free)  | | (Free)   | | (Free)   |     |
+|  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
 |  +----------+                                                                      |
-|  | TronGrid |                                                                      |
-|  |(Tron/Free)|                                                                     |
+|  | Glif RPC |                                                                      |
+|  |(FIL/Free)|                                                                      |
 |  +----------+                                                                      |
 |                                                                                    |
 |  Pricing:                                                                         |
@@ -339,7 +348,7 @@ Events use composite unique keys to prevent duplicates on re-processing:
       |                                                   |
 ```
 
-Demo mode includes: 91 tokens across 11 blockchains, 76 NFTs across 7 collections, 1,500 transactions over 1 year of history, DeFi positions, and exchange balances.
+Demo mode includes: 91 tokens across 17 blockchains, 76 NFTs across 7 collections, 1,500 transactions over 1 year of history, DeFi positions, and exchange balances.
 
 ## Pricing Fallback Chain
 
@@ -394,13 +403,20 @@ Shared persistent `httpx.AsyncClient` instances via `get_client(name, timeout)`:
 - **5 Themes**: Dark Mode (default), Light, Cypherpunk 1, Ocean Depths, Sunset Horizon
 - **Cache Busting**: Build version system (v=1770726755) for immediate updates
 
-### External Services (19 providers)
+### External Services (26 providers)
 - **Cardano**: Blockfrost, CExplorer, TapTools, Koios
 - **Bitcoin**: Blockstream
 - **EVM**: Etherscan, Alchemy, Polygonscan, Basescan, BscScan, Arbiscan, Snowscan
 - **Solana**: Helius
 - **Algorand**: Pera Wallet API, Tatum
 - **Tron**: TronGrid (free, no API key required)
+- **XRP**: XRPL JSON-RPC (free, no API key required)
+- **Hedera**: Mirror Node REST API (free, no API key required)
+- **MultiversX**: MultiversX API (free, no API key required)
+- **Sui**: Sui JSON-RPC (free, no API key required)
+- **Aptos**: Aptos REST API (free, no API key required)
+- **Filecoin**: Glif RPC (free, no API key required)
+- **DeFi**: Chainlink Staking via Alchemy (Ethereum contract reads)
 - **Pricing**: CoinGecko, CoinMarketCap, Coinbase, DefiLlama
 - **Exchanges**: Coinbase CDP, Binance, Binance.US, OKX, Bitget, Gate.io, KuCoin
 
@@ -526,6 +542,12 @@ ABCT/
 │   │   ├── algorand.py             # Algorand blockchain
 │   │   ├── evm_chain.py           # Generic EVM (BSC, Arbitrum, Avalanche)
 │   │   ├── tron.py                # Tron blockchain (TronGrid)
+│   │   ├── xrp.py                 # XRP Ledger (XRPL JSON-RPC)
+│   │   ├── hedera.py              # Hedera (Mirror Node REST API)
+│   │   ├── multiversx.py          # MultiversX (MultiversX API)
+│   │   ├── sui.py                 # Sui (Sui JSON-RPC)
+│   │   ├── aptos.py               # Aptos (Aptos REST API)
+│   │   ├── filecoin.py            # Filecoin (Glif RPC)
 │   │   └── ...                     # Exchange, NFT, demo services
 │   └── middleware/                 # Security middleware
 ├── frontend/                      # HTML/CSS/JS (17 pages)
