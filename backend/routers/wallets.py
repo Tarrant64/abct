@@ -648,14 +648,27 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
                     for token in info.get('tokens', [])
                 ]
                 await save_native_assets(wallet_id, erc20_assets)
-                return {
+
+                # Try ENS reverse resolution
+                ens_name = None
+                try:
+                    from services.moralis import moralis_service
+                    if await moralis_service.is_configured():
+                        ens_name = await moralis_service.resolve_address_to_ens(address)
+                except Exception as e:
+                    logger.debug(f"ENS resolution failed for {address}: {e}")
+
+                result = {
                     'address': address,
                     'success': True,
                     'balance': info['balance_eth'],
                     'unit': 'ETH',
                     'token_count': info.get('token_count', 0),
-                    'source': info.get('source', 'beaconcha.in')
+                    'source': info.get('source', 'alchemy')
                 }
+                if ens_name:
+                    result['ens_name'] = ens_name
+                return result
 
         elif blockchain == 'solana':
             # Service handles fallback to public RPC internally

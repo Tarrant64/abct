@@ -106,6 +106,21 @@ API_REGISTRY = {
         "rate_limit_note": "Limits not documented",
         "rate_limit_type": "none"
     },
+    "charli3": {
+        "name": "Charli3",
+        "category": "cardano",
+        "description": "Cardano token pricing, OHLCV history, and DEX analytics",
+        "required": False,
+        "docs_url": "https://charli3.io/",
+        "env_var": "CHARLI3_API_KEY",
+        "pricing": "freemium",
+        "pricing_note": "Freemium: generous free tier for token pricing",
+        "default_limit": None,
+        "default_period": 86400,
+        "period_label": "day",
+        "rate_limit_note": "Limits not documented",
+        "rate_limit_type": "none"
+    },
     "maestro": {
         "name": "Maestro",
         "category": "cardano",
@@ -247,21 +262,6 @@ API_REGISTRY = {
         "default_period": 86400,
         "period_label": "day",
         "rate_limit_note": "Rate-limited on free subgraphs",
-        "rate_limit_type": "quota"
-    },
-    "dune": {
-        "name": "Dune Analytics",
-        "category": "services",
-        "description": "Blockchain analytics and SQL queries",
-        "required": False,
-        "docs_url": "https://dune.com/settings/api",
-        "env_var": "DUNE_API_KEY",
-        "pricing": "free",
-        "pricing_note": "Free tier: 1,000 queries/mo",
-        "default_limit": 33,  # ~1k/month = 33/day
-        "default_period": 86400,
-        "period_label": "day",
-        "rate_limit_note": "1,000 queries/mo",
         "rate_limit_type": "quota"
     },
 
@@ -1001,6 +1001,7 @@ async def reload_all_api_keys(user_id: int = Depends(verify_session)):
         'services.ethereum',
         'services.etherscan',
         'services.coinbase',
+        'services.charli3',
     ]
 
     reloaded_count = 0

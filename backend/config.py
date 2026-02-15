@@ -40,6 +40,7 @@ ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY", "")
 CMC_API_KEY = os.getenv("CMC_API_KEY", "")
 GRAPH_API_KEY = os.getenv("GRAPH_API_KEY", "")
 ALPHAVANTAGE_API_KEY = os.getenv("ALPHAVANTAGE_API_KEY", "")
+CHARLI3_API_KEY = os.getenv("CHARLI3_API_KEY", "")
 
 # LogoKit API Configuration
 LOGOKIT_API_KEY = os.getenv('LOGOKIT_API_KEY', 'pk_fr08287a4c625f400f32a9')
@@ -83,6 +84,7 @@ BLOCKSTREAM_BASE_URL = "https://blockstream.info/api"
 MEMPOOL_BASE_URL = "https://mempool.space/api"  # Fallback for Bitcoin transactions
 TAPTOOLS_BASE_URL = "https://openapi.taptools.io/api/v1"
 BEACONCHAIN_BASE_URL = "https://beaconcha.in/api/v1"
+ALCHEMY_ETH_URL = "https://eth-mainnet.g.alchemy.com"
 ALCHEMY_BASE_URL = "https://eth-mainnet.g.alchemy.com/nft/v3"
 ALCHEMY_POLYGON_URL = "https://polygon-mainnet.g.alchemy.com"
 ALCHEMY_BASE_URL_CHAIN = "https://base-mainnet.g.alchemy.com"
@@ -105,6 +107,9 @@ SNOWSCAN_BASE_URL = "https://api.snowscan.xyz/api"
 
 # CoinMarketCap API
 CMC_BASE_URL = "https://pro-api.coinmarketcap.com/v1"
+
+# Charli3 API (Cardano token pricing + OHLCV)
+CHARLI3_BASE_URL = "https://api.charli3.io/api/v1"
 
 # Paths
 PROJECT_ROOT = Path(__file__).parent.parent

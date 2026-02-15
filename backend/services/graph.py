@@ -242,6 +242,103 @@ class GraphService:
             logger.error(f"Error fetching multiple token prices from Graph: {e}")
             return {}
 
+    async def get_lp_positions(self, address: str) -> List[Dict]:
+        """
+        Get Uniswap V3 LP positions for an Ethereum address.
+
+        Args:
+            address: Ethereum address (0x...)
+
+        Returns:
+            List of LP position dicts with token pair, liquidity, and fee tier
+        """
+        if not self.is_configured():
+            return []
+
+        address = address.lower()
+
+        # Check cache
+        cache_key = f"lp_positions_{address}"
+        if cache_key in self._cache:
+            cached = self._cache[cache_key]
+            if datetime.now() - cached['timestamp'] < self._cache_ttl:
+                return cached['data']
+
+        try:
+            query = """
+            {
+              positions(where: {owner: "%s", liquidity_gt: "0"}, first: 100) {
+                id
+                liquidity
+                tickLower { tickIdx }
+                tickUpper { tickIdx }
+                token0 { id symbol name decimals }
+                token1 { id symbol name decimals }
+                pool {
+                  feeTier
+                  token0Price
+                  token1Price
+                  totalValueLockedUSD
+                }
+                depositedToken0
+                depositedToken1
+              }
+            }
+            """ % address
+
+            async with get_tracked_client("graph", timeout=30) as client:
+                response = await client.post(
+                    self.uniswap_v3_url,
+                    json={"query": query}
+                )
+
+                if response.status_code != 200:
+                    logger.warning(f"Graph API LP positions request failed: {response.status_code}")
+                    return []
+
+                data = response.json()
+                if 'errors' in data:
+                    logger.warning(f"Graph API LP errors: {data['errors']}")
+                    return []
+
+                positions = data.get('data', {}).get('positions', [])
+                result = []
+
+                for pos in positions:
+                    token0 = pos.get('token0', {})
+                    token1 = pos.get('token1', {})
+                    pool = pos.get('pool', {})
+
+                    result.append({
+                        'position_id': pos.get('id'),
+                        'token0_symbol': token0.get('symbol', '?'),
+                        'token0_name': token0.get('name', ''),
+                        'token0_address': token0.get('id', ''),
+                        'token1_symbol': token1.get('symbol', '?'),
+                        'token1_name': token1.get('name', ''),
+                        'token1_address': token1.get('id', ''),
+                        'fee_tier': int(pool.get('feeTier', 0)),
+                        'liquidity': pos.get('liquidity', '0'),
+                        'deposited_token0': float(pos.get('depositedToken0', 0)),
+                        'deposited_token1': float(pos.get('depositedToken1', 0)),
+                        'pool_tvl_usd': float(pool.get('totalValueLockedUSD', 0)),
+                        'protocol': 'Uniswap V3',
+                        'chain': 'ethereum'
+                    })
+
+                # Cache result
+                self._cache[cache_key] = {
+                    'data': result,
+                    'timestamp': datetime.now()
+                }
+
+                logger.info(f"Found {len(result)} Uniswap V3 LP positions for {address[:10]}")
+                return result
+
+        except Exception as e:
+            logger.error(f"Error fetching LP positions from Graph: {e}")
+            return []
+
     def clear_cache(self):
         """Clear the price cache."""
         self._cache.clear()

@@ -782,6 +782,7 @@ async def import_env_file(env_content: str, user_id: int = Depends(verify_sessio
         'GRAPH_API_KEY': ('graph', 'key'),
         'BEACONCHAIN_API_KEY': ('beaconchain', 'key'),
         'MAESTRO_API_KEY': ('maestro', 'key'),
+        'CHARLI3_API_KEY': ('charli3', 'key'),
         # Exchange keys
         'BINANCE_API_KEY': ('binance', 'key'),
         'BINANCE_API_SECRET': ('binance', 'secret'),

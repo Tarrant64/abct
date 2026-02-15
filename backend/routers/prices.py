@@ -145,7 +145,10 @@ async def search_token(query: str):
 
 @router.get("/global")
 async def get_global_market():
-    """Get global crypto market cap and 24h change percentage"""
+    """
+    Get global crypto market cap and 24h change percentage.
+    Tries CMC first (saves CoinGecko calls), falls back to CoinGecko.
+    """
     global _global_market_cache
     now = time.time()
 
@@ -153,6 +156,36 @@ async def get_global_market():
     if _global_market_cache["data"] and now - _global_market_cache["timestamp"] < 300:
         return _global_market_cache["data"]
 
+    # Try CMC first (save CoinGecko calls)
+    try:
+        from config import CMC_API_KEY, CMC_BASE_URL
+        if CMC_API_KEY:
+            client = get_client("coinmarketcap", timeout=10.0)
+            response = await client.get(
+                f"{CMC_BASE_URL}/global-metrics/quotes/latest",
+                headers={
+                    'X-CMC_PRO_API_KEY': CMC_API_KEY,
+                    'Accept': 'application/json'
+                }
+            )
+            if response.status_code == 200:
+                cmc_data = response.json().get("data", {})
+                quote = cmc_data.get("quote", {}).get("USD", {})
+                result = {
+                    "total_market_cap_usd": quote.get("total_market_cap", 0),
+                    "market_cap_change_percentage_24h": quote.get("total_market_cap_yesterday_percentage_change", 0),
+                    "total_volume_usd": quote.get("total_volume_24h", 0),
+                    "btc_dominance": cmc_data.get("btc_dominance", 0),
+                    "active_cryptocurrencies": cmc_data.get("active_cryptocurrencies", 0),
+                    "source": "CoinMarketCap"
+                }
+                _global_market_cache = {"data": result, "timestamp": now}
+                logger.info("Global market data from CoinMarketCap")
+                return result
+    except Exception as e:
+        logger.debug(f"CMC global market failed, falling back to CoinGecko: {e}")
+
+    # CoinGecko fallback
     try:
         client = get_client("coingecko", timeout=10.0)
         response = await client.get("https://api.coingecko.com/api/v3/global")
@@ -184,6 +217,68 @@ async def get_global_market():
         if _global_market_cache["data"]:
             return _global_market_cache["data"]
         return {"error": str(e), "total_market_cap_usd": 0}
+
+
+@router.get("/trending")
+async def get_trending():
+    """Get trending coins."""
+    trending = await pricing_service.get_trending_coins()
+    return {"coins": trending, "source": "CoinGecko"}
+
+
+@router.get("/stream/cardano")
+async def stream_cardano_prices():
+    """
+    SSE endpoint for live Cardano token prices via Charli3 streaming.
+    Falls back to polling if Charli3 streaming is unavailable.
+    """
+    from fastapi.responses import StreamingResponse
+    import asyncio
+    import json
+
+    async def event_generator():
+        try:
+            from services.charli3 import charli3_service
+            if not await charli3_service.is_configured():
+                yield f"data: {json.dumps({'error': 'Charli3 not configured'})}\n\n"
+                return
+
+            # Get pool IDs for tracked Cardano tokens
+            from services.charli3 import CHARLI3_TOKEN_MAP
+            pool_ids = list(CHARLI3_TOKEN_MAP.values())
+
+            if not pool_ids:
+                yield f"data: {json.dumps({'error': 'No Cardano tokens configured'})}\n\n"
+                return
+
+            try:
+                async for event in charli3_service.stream_tokens(pool_ids):
+                    yield f"data: {json.dumps(event)}\n\n"
+            except Exception as e:
+                logger.warning(f"Charli3 stream failed, falling back to polling: {e}")
+                # Fallback: poll every 30 seconds
+                while True:
+                    try:
+                        prices = await charli3_service.get_token_prices_batch(pool_ids)
+                        if prices:
+                            yield f"data: {json.dumps({'prices': prices, 'source': 'poll'})}\n\n"
+                    except Exception as pe:
+                        logger.error(f"Charli3 poll error: {pe}")
+                    await asyncio.sleep(30)
+
+        except Exception as e:
+            logger.error(f"SSE stream error: {e}")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 
 @router.get("/{symbol}")

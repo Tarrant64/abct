@@ -262,6 +262,47 @@ async function loadPrices() {
     }
 }
 
+// Cardano SSE price stream (Charli3) - updates prices in real-time when available
+let _cardanoPriceStream = null;
+function initCardanoPriceStream() {
+    if (_cardanoPriceStream) return;
+    try {
+        _cardanoPriceStream = new EventSource(`${API_BASE}/prices/stream/cardano`);
+        _cardanoPriceStream.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.error) {
+                    console.debug('Cardano stream:', data.error);
+                    _cardanoPriceStream.close();
+                    _cardanoPriceStream = null;
+                    return;
+                }
+                // Update price data from stream events
+                if (data.prices) {
+                    for (const [symbol, priceInfo] of Object.entries(data.prices)) {
+                        if (priceInfo && priceInfo.price) {
+                            prices[symbol] = priceInfo.price;
+                            if (priceData[symbol]) {
+                                priceData[symbol].usd = priceInfo.price;
+                            }
+                        }
+                    }
+                    updatePriceDisplay();
+                }
+            } catch (e) {
+                console.debug('SSE parse error:', e);
+            }
+        };
+        _cardanoPriceStream.onerror = function() {
+            console.debug('Cardano price stream disconnected, falling back to polling');
+            _cardanoPriceStream.close();
+            _cardanoPriceStream = null;
+        };
+    } catch (e) {
+        console.debug('SSE not available:', e);
+    }
+}
+
 // Format market cap as HTML with styled suffix (e.g., "45.2 <span>B</span>")
 function formatMarketCap(marketCap) {
     if (!marketCap || marketCap === 0) return '';
@@ -8361,6 +8402,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             loadGlobalMarketCap()
         ]).then(() => {
             console.log('[Overview] Background data loading complete');
+            // Start Cardano SSE price stream after initial load
+            initCardanoPriceStream();
             updateTotalPortfolioValue();
             // V2 on-chain history is now the default
             loadV2BalanceHistory('1w');
@@ -8462,7 +8505,7 @@ async function preFetchAssetBreakdowns() {
     console.log('Asset breakdown pre-fetching complete');
 }
 
-// DeFillama API Integration
+// DeFillama API Integration (proxied through backend)
 async function fetchDeFiLlamaMetrics(blockchain) {
     try {
         // Check cache first
@@ -8471,108 +8514,38 @@ async function fetchDeFiLlamaMetrics(blockchain) {
             return cached;
         }
 
-        // Map internal blockchain names to DeFillama chain names
-        const chainMap = {
-            'cardano': 'Cardano',
-            'ethereum': 'Ethereum',
-            'bitcoin': 'Bitcoin',
-            'solana': 'Solana',
-            'polygon': 'Polygon',
-            'base': 'Base'
-        };
-
-        const defiLlamaChain = chainMap[blockchain];
-        if (!defiLlamaChain) return null;
-
         let mcap = null, tvl = null, stablecoins = null, volume = null;
 
         // Use market cap from backend price data (loaded via /prices/all endpoint)
-        // priceData is keyed by symbol (ADA, BTC, ETH, etc.) and includes market_cap
         const blockchainToSymbol = {
             'cardano': 'ADA',
             'ethereum': 'ETH',
             'bitcoin': 'BTC',
             'solana': 'SOL',
             'polygon': 'MATIC',
-            'base': 'ETH' // Base chain uses ETH
+            'base': 'ETH'
         };
 
         const priceSymbol = blockchainToSymbol[blockchain];
         if (priceSymbol && priceData[priceSymbol] && priceData[priceSymbol].market_cap) {
             mcap = priceData[priceSymbol].market_cap;
-            console.log(`Using backend market cap for ${blockchain} (${priceSymbol}):`, mcap);
         }
 
-        // Fetch TVL data
+        // Fetch TVL, stablecoin supply, and DEX volume from backend proxy
         try {
-            const chainsResponse = await fetch('https://api.llama.fi/v2/chains');
-            if (chainsResponse.ok) {
-                const chainsData = await chainsResponse.json();
-                const chainData = chainsData.find(c => c.name === defiLlamaChain || c.gecko_id === blockchain);
-                if (chainData) {
-                    tvl = chainData.tvl;
+            const resp = await authFetch(`/analytics/chain-breakdown/${encodeURIComponent(blockchain)}`);
+            const data = await resp.json();
+            if (data.success) {
+                tvl = data.tvl || null;
+                volume = data.dex_volume_24h || null;
+                if (blockchain === 'bitcoin') {
+                    stablecoins = 'N/A';
+                } else {
+                    stablecoins = data.stablecoin_supply > 0 ? data.stablecoin_supply : null;
                 }
             }
         } catch (e) {
-            console.error('TVL fetch error:', e);
-        }
-
-        // Fetch stablecoin data - Bitcoin doesn't support stablecoins
-        const chainsWithStables = ['ethereum', 'solana', 'polygon', 'base', 'cardano'];
-        if (chainsWithStables.includes(blockchain)) {
-            try {
-                const stablesResponse = await fetch('https://stablecoins.llama.fi/stablecoins?includePrices=true');
-                if (stablesResponse.ok) {
-                    const stablesData = await stablesResponse.json();
-                    console.log('Stablecoins API response:', stablesData);
-
-                    // Sum up all stablecoins on this chain
-                    let totalStables = 0;
-                    if (stablesData.peggedAssets) {
-                        stablesData.peggedAssets.forEach(stable => {
-                            // Check if this stablecoin exists on our chain
-                            const chainKey = blockchain.charAt(0).toUpperCase() + blockchain.slice(1);
-                            const chainCirculating = stable.chainCirculating?.[chainKey] || stable.chainCirculating?.[defiLlamaChain];
-                            if (chainCirculating && chainCirculating.current) {
-                                totalStables += parseFloat(chainCirculating.current.peggedUSD || 0);
-                            }
-                        });
-                    }
-                    stablecoins = totalStables > 0 ? totalStables : null;
-                    console.log('Total stablecoins on chain:', stablecoins);
-                }
-            } catch (e) {
-                console.error('Stablecoins fetch error:', e);
-                stablecoins = null;
-            }
-        } else {
-            // Bitcoin doesn't have stablecoins - explicitly set to 'N/A'
-            stablecoins = 'N/A';
-        }
-
-        // Market cap: Use backend price data (already set above from priceData).
-        // No direct CoinGecko call needed - backend /prices/all already fetches market_cap
-        // from CoinGecko/CMC and caches it, avoiding frontend 429 rate limiting.
-        if (!mcap) {
-            console.log(`No market cap available from backend for ${blockchain} - will show N/A`);
-            // TODO: If market cap is consistently missing, add a dedicated backend endpoint
-            // rather than making direct CoinGecko calls from the frontend.
-        }
-
-        // Fetch 24h volume from DeFillama DEX aggregator
-        try {
-            const volumeResponse = await fetch(`https://api.llama.fi/overview/dexs/${defiLlamaChain}?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true&dataType=dailyVolume`);
-            if (volumeResponse.ok) {
-                const volumeData = await volumeResponse.json();
-                // Get the most recent day's total volume
-                if (volumeData.totalDataChart && volumeData.totalDataChart.length > 0) {
-                    volume = volumeData.totalDataChart[volumeData.totalDataChart.length - 1][1];
-                } else if (volumeData.total24h) {
-                    volume = volumeData.total24h;
-                }
-            }
-        } catch (e) {
-            console.error('Volume fetch error:', e);
+            console.error('Backend chain breakdown error:', e);
         }
 
         return { mcap, tvl, stablecoins, volume };

@@ -1,20 +1,19 @@
 """
-Pricing Service - Fetches cryptocurrency prices with fallback sources.
+Pricing Service - Smart chain-aware routing with fallback sources.
 
-Sources (in order of priority):
-1. CoinGecko (free tier, ~10-30 calls/minute) - Primary source for all tokens
-2. CoinMarketCap (requires API key) - Fallback with rich market data
-3. Coinbase (free, no key required) - Fallback for major coins (BTC, ETH, ADA, SOL, MATIC)
-4. DefiLlama (free, no key required) - Universal fallback for all chains
-5. TapTools (Cardano tokens, requires API key) - Cardano-specific with detailed data
+Routing strategy:
+- Cardano tokens: Charli3 -> TapTools -> DefiLlama
+- Major coins (BTC, ETH, ADA, SOL, etc.): CoinGecko -> CMC -> Coinbase -> DefiLlama
+- Other tokens (DeFi mapped in CoinGecko): CoinGecko -> DefiLlama
 
-DefiLlama API supports:
-- Major coins via coingecko: prefix
-- Cardano tokens via cardano:policyId format
-- EVM tokens via chain:address format (ethereum, polygon, base, etc.)
-See: https://api-docs.defillama.com/llms.txt
+Historical prices:
+- Cardano tokens: Charli3 OHLCV -> DefiLlama chart -> CoinGecko
+- Other tokens: Engine cache -> DefiLlama chart -> CoinGecko
+
+All three routing groups run in parallel via asyncio.gather().
 """
 
+import asyncio
 import httpx
 import logging
 from typing import Dict, Optional, List
@@ -62,7 +61,6 @@ ASSET_TO_COINGECKO = {
 }
 
 # Map our asset names to CoinMarketCap symbols
-# CMC uses symbols directly, but some need special handling
 ASSET_TO_CMC = {
     'ADA': 'ADA',
     'BTC': 'BTC',
@@ -97,9 +95,23 @@ CARDANO_TOKEN_POLICIES = {
     'FLOW': ('2d9db8a89f074aa045eab177f23a3395f62ced8b53499a9e4ad46c80', '464c4f57'),
 }
 
+# Major coins that can be priced by multiple sources
+MAJOR_SYMBOLS = {'ADA', 'BTC', 'ETH', 'SOL', 'MATIC', 'ALGO', 'USDC', 'USDT', 'DAI'}
+
+
+def _classify_symbol(symbol: str) -> str:
+    """Classify a symbol for smart routing."""
+    upper = symbol.upper()
+    if upper in CARDANO_TOKEN_POLICIES and upper not in MAJOR_SYMBOLS:
+        return 'cardano'
+    elif upper in MAJOR_SYMBOLS:
+        return 'major'
+    else:
+        return 'other'
+
 
 class PricingService:
-    """Service for fetching and caching cryptocurrency prices with fallback sources."""
+    """Service for fetching and caching cryptocurrency prices with smart chain-aware routing."""
 
     def __init__(self):
         self.cache: Dict[str, dict] = {}
@@ -113,7 +125,10 @@ class PricingService:
     async def get_prices(self, symbols: list = None, force_refresh: bool = False) -> Dict[str, float]:
         """
         Get current USD prices for specified symbols.
-        Uses multiple sources with fallback logic.
+
+        Smart routing: classifies symbols by chain and routes to best-fit API.
+        Cardano tokens -> Charli3/TapTools, Major coins -> CoinGecko/CMC, Others -> CoinGecko.
+        All three groups run in parallel.
         """
         if symbols is None:
             symbols = ['ADA', 'BTC', 'ETH']
@@ -128,53 +143,23 @@ class PricingService:
             if all_cached_and_valid:
                 return {s: self.cache.get(s, {}).get('usd', 0) for s in symbols}
 
-        # First try CoinGecko for all known symbols (skip if in cooldown from recent 429)
-        if self._coingecko_cooldown_until and datetime.now() < self._coingecko_cooldown_until:
-            logger.info(f"Skipping CoinGecko (cooldown until {self._coingecko_cooldown_until.strftime('%H:%M:%S')}), going straight to fallbacks")
-        else:
-            await self._fetch_from_coingecko(symbols)
+        # Classify symbols into routing groups
+        cardano_syms = [s for s in symbols if _classify_symbol(s) == 'cardano']
+        major_syms = [s for s in symbols if _classify_symbol(s) == 'major']
+        other_syms = [s for s in symbols if _classify_symbol(s) == 'other']
 
-        # Check for missing symbols and try CoinMarketCap as fallback
-        missing_for_cmc = [s for s in symbols if self.cache.get(s, {}).get('usd', 0) == 0
-                          and s.upper() in ASSET_TO_CMC]
-        if missing_for_cmc and CMC_API_KEY:
-            logger.info(f"Trying CoinMarketCap fallback for: {missing_for_cmc}")
-            await self._fetch_from_cmc(missing_for_cmc)
-
-        # Check for missing major symbols and try Coinbase as fallback
-        major_missing = [s for s in symbols if self.cache.get(s, {}).get('usd', 0) == 0
-                        and s.upper() in {'ADA', 'BTC', 'ETH', 'SOL', 'MATIC'}]
-        if major_missing:
-            logger.info(f"Trying Coinbase fallback for: {major_missing}")
-            await self._fetch_from_coinbase(major_missing)
-
-        # Check again for still missing major symbols - try DefiLlama
-        still_missing_major = [s for s in symbols if self.cache.get(s, {}).get('usd', 0) == 0
-                              and s.upper() in ASSET_TO_COINGECKO]
-        if still_missing_major:
-            logger.info(f"Trying DefiLlama fallback for: {still_missing_major}")
-            await self._fetch_from_defillama(still_missing_major, include_major=True)
-
-        # Find Cardano tokens still missing prices
-        missing_cardano = [s for s in symbols if self.cache.get(s, {}).get('usd', 0) == 0 and s.upper() in CARDANO_TOKEN_POLICIES]
-
-        # Try TapTools for missing Cardano tokens
-        if missing_cardano and TAPTOOLS_API_KEY:
-            await self._fetch_from_taptools(missing_cardano)
-
-        # Check again for still missing Cardano tokens
-        still_missing_cardano = [s for s in missing_cardano if self.cache.get(s, {}).get('usd', 0) == 0]
-
-        # Try DefiLlama for still missing Cardano tokens (free, no API key required)
-        if still_missing_cardano:
-            await self._fetch_from_defillama(still_missing_cardano)
+        # Run all three routing groups in parallel
+        await asyncio.gather(
+            self._fetch_cardano_prices(cardano_syms),
+            self._fetch_major_prices(major_syms),
+            self._fetch_other_prices(other_syms),
+            return_exceptions=True
+        )
 
         # Only update last_fetch if we got at least some valid prices
-        # This prevents cache from being "valid" when all sources are failing
         has_valid_prices = any(self.cache.get(s.upper(), {}).get('usd', 0) > 0 for s in symbols)
         if has_valid_prices:
             self.last_fetch = datetime.now()
-            # Save good prices to stale cache as backup
             for s in symbols:
                 price_data = self.cache.get(s.upper())
                 if price_data and price_data.get('usd', 0) > 0:
@@ -214,6 +199,88 @@ class PricingService:
 
         return result
 
+    # ============ Smart Routing Groups ============
+
+    async def _fetch_cardano_prices(self, symbols: List[str]) -> None:
+        """Route: Charli3 -> TapTools -> DefiLlama for Cardano tokens."""
+        if not symbols:
+            return
+
+        # Try Charli3 first
+        try:
+            from services.charli3 import charli3_service
+            charli3_results = await charli3_service.get_token_prices_batch(symbols)
+            for sym, data in charli3_results.items():
+                if data and data.get('price', 0) > 0:
+                    self.cache[sym] = {
+                        'usd': data['price'],
+                        'usd_1h_change': data.get('change_1h', 0),
+                        'usd_24h_change': data.get('change_24h', 0),
+                        'market_cap': 0,
+                        'volume_24h': data.get('volume_24h', 0),
+                        'source': 'Charli3',
+                        'updated_at': datetime.now().isoformat()
+                    }
+        except Exception as e:
+            logger.warning(f"Charli3 pricing failed: {e}")
+
+        # TapTools fallback for missing Cardano tokens
+        missing = [s for s in symbols if self.cache.get(s.upper(), {}).get('usd', 0) == 0]
+        if missing and TAPTOOLS_API_KEY:
+            await self._fetch_from_taptools(missing)
+
+        # DefiLlama final fallback
+        still_missing = [s for s in symbols if self.cache.get(s.upper(), {}).get('usd', 0) == 0]
+        if still_missing:
+            await self._fetch_from_defillama(still_missing)
+
+    async def _fetch_major_prices(self, symbols: List[str]) -> None:
+        """Route: CoinGecko -> CMC -> Coinbase -> DefiLlama for major coins."""
+        if not symbols:
+            return
+
+        # CoinGecko (skip if in cooldown)
+        if self._coingecko_cooldown_until and datetime.now() < self._coingecko_cooldown_until:
+            logger.info(f"Skipping CoinGecko (cooldown), going to CMC for majors")
+        else:
+            await self._fetch_from_coingecko(symbols)
+
+        # CMC fallback
+        missing_for_cmc = [s for s in symbols if self.cache.get(s, {}).get('usd', 0) == 0
+                          and s.upper() in ASSET_TO_CMC]
+        if missing_for_cmc and CMC_API_KEY:
+            await self._fetch_from_cmc(missing_for_cmc)
+
+        # Coinbase fallback
+        still_missing = [s for s in symbols if self.cache.get(s, {}).get('usd', 0) == 0]
+        if still_missing:
+            await self._fetch_from_coinbase(still_missing)
+
+        # DefiLlama final fallback
+        still_missing_2 = [s for s in symbols if self.cache.get(s, {}).get('usd', 0) == 0
+                          and s.upper() in ASSET_TO_COINGECKO]
+        if still_missing_2:
+            await self._fetch_from_defillama(still_missing_2, include_major=True)
+
+    async def _fetch_other_prices(self, symbols: List[str]) -> None:
+        """Route: CoinGecko -> DefiLlama for other tokens (DeFi tokens mapped in CoinGecko)."""
+        if not symbols:
+            return
+
+        # CoinGecko (skip if in cooldown)
+        if self._coingecko_cooldown_until and datetime.now() < self._coingecko_cooldown_until:
+            logger.info(f"Skipping CoinGecko (cooldown) for other tokens")
+        else:
+            await self._fetch_from_coingecko(symbols)
+
+        # DefiLlama fallback
+        still_missing = [s for s in symbols if self.cache.get(s, {}).get('usd', 0) == 0
+                        and s.upper() in ASSET_TO_COINGECKO]
+        if still_missing:
+            await self._fetch_from_defillama(still_missing, include_major=True)
+
+    # ============ Individual Source Fetchers ============
+
     async def _fetch_from_coingecko(self, symbols: List[str]) -> None:
         """Fetch prices from CoinGecko using /coins/markets for 1hr change and market cap."""
         cg_ids = []
@@ -229,7 +296,6 @@ class PricingService:
 
         try:
             client = get_client("coingecko", timeout=30.0)
-            # Use /coins/markets endpoint which provides 1hr change and market cap
             response = await fetch_with_retry(
                 client, "GET",
                 f"{COINGECKO_BASE_URL}/coins/markets",
@@ -259,7 +325,6 @@ class PricingService:
                         }
                 logger.info(f"CoinGecko: fetched prices for {len(data)} tokens")
             elif response.status_code == 429:
-                # Set cooldown to skip CoinGecko for 60 seconds
                 self._coingecko_cooldown_until = datetime.now() + timedelta(seconds=60)
                 logger.warning(f"CoinGecko RATE LIMITED (429) - cooldown 60s, attempting fallbacks for {len(cg_ids)} symbols: {list(symbol_map.values())}")
             else:
@@ -274,14 +339,11 @@ class PricingService:
             logger.debug("CMC API key not configured, skipping")
             return
 
-        # Build list of CMC symbols to fetch
         cmc_symbols = []
         symbol_map = {}
         for symbol in symbols:
-            # Skip if already have a valid price
             if self.cache.get(symbol.upper(), {}).get('usd', 0) > 0:
                 continue
-
             cmc_symbol = ASSET_TO_CMC.get(symbol.upper())
             if cmc_symbol:
                 cmc_symbols.append(cmc_symbol)
@@ -338,7 +400,6 @@ class PricingService:
 
     async def _fetch_from_coinbase(self, symbols: List[str]) -> None:
         """Fetch prices from Coinbase public API (no auth required, fallback source)."""
-        # Coinbase supports these major symbols directly
         coinbase_symbols = {'ADA', 'BTC', 'ETH', 'SOL', 'MATIC', 'USDC', 'USDT', 'DAI'}
 
         try:
@@ -346,12 +407,9 @@ class PricingService:
             for symbol in symbols:
                 if symbol.upper() not in coinbase_symbols:
                     continue
-
-                # Skip if already have a price from CoinGecko
                 if self.cache.get(symbol.upper(), {}).get('usd', 0) > 0:
                     continue
 
-                # Coinbase uses POL for MATIC now
                 cb_symbol = 'POL' if symbol.upper() == 'MATIC' else symbol.upper()
 
                 response = await client.get(
@@ -364,7 +422,7 @@ class PricingService:
                     if price > 0:
                         self.cache[symbol.upper()] = {
                             'usd': price,
-                            'usd_1h_change': 0,  # Coinbase spot doesn't provide change data
+                            'usd_1h_change': 0,
                             'usd_24h_change': 0,
                             'market_cap': 0,
                             'source': 'Coinbase',
@@ -416,18 +474,7 @@ class PricingService:
             logger.error(f"TapTools fetch error: {e}")
 
     async def _fetch_from_defillama(self, symbols: List[str], include_major: bool = False) -> None:
-        """
-        Fetch prices from DefiLlama API (free, no key required).
-
-        Supports:
-        - Major coins via coingecko: prefix (BTC, ETH, ADA, SOL, MATIC)
-        - Cardano tokens via cardano: prefix with policy ID
-        - EVM tokens via chain:address format
-
-        Args:
-            symbols: List of symbols to fetch
-            include_major: If True, also fetch major coins (BTC, ETH, etc.)
-        """
+        """Fetch prices from DefiLlama API (free, no key required)."""
         try:
             client = get_client("defilama", timeout=30.0)
             units = []
@@ -435,19 +482,14 @@ class PricingService:
 
             for symbol in symbols:
                 upper_symbol = symbol.upper()
-
-                # Skip if already have a valid price
                 if self.cache.get(upper_symbol, {}).get('usd', 0) > 0:
                     continue
 
-                # Major coins - use coingecko: prefix
                 if include_major and upper_symbol in ASSET_TO_COINGECKO:
                     cg_id = ASSET_TO_COINGECKO[upper_symbol]
                     unit = f"coingecko:{cg_id}"
                     units.append(unit)
                     symbol_to_unit[unit] = upper_symbol
-
-                # Cardano tokens - use cardano: prefix with policy ID
                 elif upper_symbol in CARDANO_TOKEN_POLICIES:
                     policy_id, asset_name = CARDANO_TOKEN_POLICIES[upper_symbol]
                     unit = f"cardano:{policy_id}{asset_name}"
@@ -457,7 +499,6 @@ class PricingService:
             if not units:
                 return
 
-            # DefiLlama accepts comma-separated list (batch request)
             response = await client.get(
                 f"https://coins.llama.fi/prices/current/{','.join(units)}"
             )
@@ -487,37 +528,17 @@ class PricingService:
         except Exception as e:
             logger.error(f"DefiLlama fetch error: {e}")
 
-    async def get_price(self, symbol: str) -> float:
-        """Get current USD price for a single symbol."""
-        prices = await self.get_prices([symbol])
-        return prices.get(symbol.upper(), 0)
-
-    async def get_all_tracked_prices(self) -> Dict[str, dict]:
-        """Get prices for all tracked assets with metadata."""
-        # Combine all known symbols from both mappings
-        all_symbols = set(ASSET_TO_COINGECKO.keys()) | set(CARDANO_TOKEN_POLICIES.keys())
-        await self.get_prices(list(all_symbols))
-        return self.cache.copy()
-
-    def _is_cache_valid(self) -> bool:
-        """Check if cache is still valid."""
-        if not self.last_fetch:
-            return False
-        return datetime.now() - self.last_fetch < self.cache_duration
-
-    def get_cached_prices(self) -> Dict[str, dict]:
-        """Get cached prices without fetching."""
-        return self.cache.copy()
+    # ============ Historical Prices ============
 
     async def get_historical_prices(self, symbols: List[str] = None, days: int = 30) -> Dict[str, List[dict]]:
         """
         Get historical prices for specified symbols.
-        Checks engine_price_history cache first, then CoinGecko, and writes back to cache.
-        Returns dict mapping symbol to list of {date, price, time} objects.
 
-        Args:
-            symbols: List of symbols (e.g., ['ADA', 'BTC', 'ETH', 'SOL', 'MATIC'])
-            days: Number of days (1, 7, 30, 90, 180, 365)
+        Routing:
+        1. Engine price cache (for days > 90)
+        2. Charli3 OHLCV (for Cardano tokens)
+        3. DefiLlama chart (for non-Cardano, free unlimited)
+        4. CoinGecko market_chart (final fallback)
         """
         if symbols is None:
             symbols = ['ADA', 'BTC', 'ETH', 'SOL', 'MATIC']
@@ -526,7 +547,7 @@ class PricingService:
         end_date = datetime.now().strftime('%Y-%m-%d')
         start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
 
-        # For daily granularity (days > 90), check engine price cache first
+        # Step 1: Check engine price cache (for daily granularity, days > 90)
         if days > 90:
             try:
                 from engine import db as engine_db
@@ -544,15 +565,132 @@ class PricingService:
             except Exception as e:
                 logger.warning(f"Engine price cache lookup failed: {e}")
 
-        # Fetch from CoinGecko for symbols not resolved from cache
         symbols_to_fetch = [s for s in symbols if s not in historical_data]
         if not symbols_to_fetch:
             return historical_data
 
+        # Step 2: Charli3 OHLCV for Cardano tokens
+        cardano_to_fetch = [s for s in symbols_to_fetch if s.upper() in CARDANO_TOKEN_POLICIES]
+        if cardano_to_fetch:
+            await self._fetch_historical_charli3(cardano_to_fetch, days, historical_data)
+
+        # Step 3: DefiLlama chart for remaining symbols
+        remaining = [s for s in symbols_to_fetch if s not in historical_data]
+        if remaining:
+            await self._fetch_historical_defillama(remaining, days, historical_data)
+
+        # Step 4: CoinGecko as final fallback
+        still_remaining = [s for s in symbols_to_fetch if s not in historical_data]
+        if still_remaining:
+            await self._fetch_historical_coingecko(still_remaining, days, historical_data)
+
+        return historical_data
+
+    async def _fetch_historical_charli3(self, symbols: List[str], days: int, historical_data: dict) -> None:
+        """Fetch OHLCV history from Charli3 for Cardano tokens."""
         try:
-            import asyncio
+            from services.charli3 import charli3_service
+            if not await charli3_service.is_configured():
+                return
+
+            now_ts = int(datetime.now().timestamp())
+            from_ts = now_ts - (days * 86400)
+            resolution = "1d" if days > 7 else "60min"
+
+            for symbol in symbols:
+                candles = await charli3_service.get_ohlcv_history(
+                    symbol, resolution=resolution, from_ts=from_ts, to_ts=now_ts
+                )
+                if candles:
+                    historical_data[symbol] = []
+                    for candle in candles:
+                        ts = candle['time']
+                        dt = datetime.fromtimestamp(ts)
+                        if days <= 90:
+                            time_value = ts
+                            date_str = dt.strftime('%Y-%m-%d %H:%M')
+                        else:
+                            time_value = dt.strftime('%Y-%m-%d')
+                            date_str = dt.strftime('%Y-%m-%d')
+
+                        historical_data[symbol].append({
+                            'date': date_str,
+                            'price': candle['close'],
+                            'time': time_value,
+                            'open': candle.get('open'),
+                            'high': candle.get('high'),
+                            'low': candle.get('low'),
+                            'close': candle.get('close'),
+                            'volume': candle.get('volume'),
+                        })
+                    logger.info(f"Charli3: fetched {len(candles)} OHLCV candles for {symbol}")
+
+        except Exception as e:
+            logger.warning(f"Charli3 historical fetch failed: {e}")
+
+    async def _fetch_historical_defillama(self, symbols: List[str], days: int, historical_data: dict) -> None:
+        """Fetch historical prices from DefiLlama chart endpoint."""
+        sem = asyncio.Semaphore(5)
+
+        async def fetch_one(symbol: str):
+            async with sem:
+                cg_id = ASSET_TO_COINGECKO.get(symbol.upper())
+                if not cg_id:
+                    return
+
+                try:
+                    client = get_client("defilama", timeout=60.0)
+                    # DefiLlama chart endpoint
+                    now_ts = int(datetime.now().timestamp())
+                    from_ts = now_ts - (days * 86400)
+                    # Use period parameter for resolution
+                    period = "1d" if days > 7 else "1h"
+
+                    response = await client.get(
+                        f"https://coins.llama.fi/chart/coingecko:{cg_id}",
+                        params={"start": from_ts, "end": now_ts, "period": period}
+                    )
+
+                    if response.status_code == 200:
+                        data = response.json()
+                        coins = data.get('coins', {})
+                        coin_key = f"coingecko:{cg_id}"
+                        coin_data = coins.get(coin_key, {})
+                        prices = coin_data.get('prices', [])
+
+                        if prices:
+                            historical_data[symbol] = []
+                            for entry in prices:
+                                ts = entry.get('timestamp', 0)
+                                price = entry.get('price', 0)
+                                dt = datetime.fromtimestamp(ts)
+
+                                if days <= 90:
+                                    time_value = ts
+                                    date_str = dt.strftime('%Y-%m-%d %H:%M')
+                                else:
+                                    time_value = dt.strftime('%Y-%m-%d')
+                                    date_str = dt.strftime('%Y-%m-%d')
+
+                                historical_data[symbol].append({
+                                    'date': date_str,
+                                    'price': price,
+                                    'time': time_value
+                                })
+                            logger.info(f"DefiLlama: fetched {len(prices)} historical prices for {symbol}")
+                    else:
+                        logger.debug(f"DefiLlama chart error for {symbol}: {response.status_code}")
+
+                except Exception as e:
+                    logger.warning(f"DefiLlama historical fetch error for {symbol}: {e}")
+
+        await asyncio.gather(*[fetch_one(s) for s in symbols], return_exceptions=True)
+
+    async def _fetch_historical_coingecko(self, symbols: List[str], days: int, historical_data: dict) -> None:
+        """Fetch historical prices from CoinGecko (final fallback)."""
+        try:
             client = get_client("coingecko_historical", timeout=60.0)
-            for symbol in symbols_to_fetch:
+            for symbol in symbols:
                 cg_id = ASSET_TO_COINGECKO.get(symbol)
                 if not cg_id:
                     continue
@@ -567,8 +705,6 @@ class PricingService:
                     data = response.json()
                     prices = data.get('prices', [])
 
-                    # Convert to {date, price, time} format
-                    # TradingView expects: Unix timestamp (seconds) for intraday, YYYY-MM-DD for daily
                     historical_data[symbol] = []
                     for timestamp_ms, price in prices:
                         timestamp_sec = int(timestamp_ms / 1000)
@@ -613,9 +749,57 @@ class PricingService:
                 await asyncio.sleep(1)
 
         except Exception as e:
-            logger.error(f"Error fetching historical prices: {e}")
+            logger.error(f"Error fetching historical prices from CoinGecko: {e}")
 
-        return historical_data
+    # ============ Utility Methods ============
+
+    async def get_price(self, symbol: str) -> float:
+        """Get current USD price for a single symbol."""
+        prices = await self.get_prices([symbol])
+        return prices.get(symbol.upper(), 0)
+
+    async def get_all_tracked_prices(self) -> Dict[str, dict]:
+        """Get prices for all tracked assets with metadata."""
+        all_symbols = set(ASSET_TO_COINGECKO.keys()) | set(CARDANO_TOKEN_POLICIES.keys())
+        await self.get_prices(list(all_symbols))
+        return self.cache.copy()
+
+    async def get_trending_coins(self) -> List[dict]:
+        """
+        Get trending coins. Tries CMC first, falls back to CoinGecko.
+        """
+        # Try CoinGecko trending (always available on free tier)
+        try:
+            client = get_client("coingecko", timeout=15.0)
+            response = await client.get(f"{COINGECKO_BASE_URL}/search/trending")
+            if response.status_code == 200:
+                data = response.json()
+                trending = []
+                for item in data.get('coins', [])[:10]:
+                    coin = item.get('item', {})
+                    trending.append({
+                        'name': coin.get('name'),
+                        'symbol': coin.get('symbol', '').upper(),
+                        'thumb': coin.get('thumb'),
+                        'market_cap_rank': coin.get('market_cap_rank'),
+                        'price_btc': coin.get('price_btc', 0),
+                        'source': 'CoinGecko'
+                    })
+                return trending
+        except Exception as e:
+            logger.error(f"Error fetching trending coins: {e}")
+
+        return []
+
+    def _is_cache_valid(self) -> bool:
+        """Check if cache is still valid."""
+        if not self.last_fetch:
+            return False
+        return datetime.now() - self.last_fetch < self.cache_duration
+
+    def get_cached_prices(self) -> Dict[str, dict]:
+        """Get cached prices without fetching."""
+        return self.cache.copy()
 
 
 # Singleton instance
