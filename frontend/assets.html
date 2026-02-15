@@ -6,13 +6,13 @@
     <title>Assets - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771117102">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771118198">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1771117102"></script>
+    <script src="/static/js/session-auth.js?v=1771118198"></script>
     <style>
         .assets-page {
             max-width: 1400px;
@@ -821,16 +821,6 @@
             <span id="statusMessage"></span>
         </div>
 
-        <!-- Display Mode Toggle -->
-        <div class="display-toggle-container" style="text-align: center; margin: 20px 0;">
-            <div class="display-toggle display-toggle-compact" style="display: inline-block;">
-                <button id="displayToggle" class="toggle-btn toggle-btn-compact" onclick="toggleDisplayMode()">
-                    <span class="toggle-option active" data-mode="crypto">Crypto</span>
-                    <span class="toggle-option" data-mode="usd">USD</span>
-                </button>
-            </div>
-        </div>
-
         <!-- Tab Navigation -->
         <div class="assets-tab-nav">
             <button class="assets-tab-btn active" data-tab="wallets" onclick="switchAssetsTab('wallets')">Self-Custody Wallets</button>
@@ -1418,8 +1408,8 @@ base:0x789..." oninput="previewImport()"></textarea>
         <p>ABCT - Assets | <span id="appVersion" style="opacity: 0.6;">v1.12.3 (BUILD 1771113618)</span></p>
     </footer>
 
-    <script src="/static/js/app.js?v=1771117102"></script>
-    <script src="/static/js/wallet-management.js?v=1771117102"></script>
+    <script src="/static/js/app.js?v=1771118198"></script>
+    <script src="/static/js/wallet-management.js?v=1771118198"></script>
     <script>
         // Assets page tab switching
         const ASSETS_TABS = ['wallets', 'manageWallets', 'exchanges', 'defi', 'governance', 'tokens'];

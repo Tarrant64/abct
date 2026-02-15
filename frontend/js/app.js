@@ -34,7 +34,6 @@ async function authFetch(url, options = {}) {
 
 // Price data cache
 let prices = { ADA: 0, BTC: 0, ETH: 0, SOL: 0, MATIC: 0, BNB: 0, AVAX: 0, TRX: 0 };
-let displayMode = 'crypto'; // 'crypto' or 'usd'
 
 // Portfolio totals for calculating total value
 let walletTotals = { ADA: 0, BTC: 0, ETH: 0, SOL: 0, MATIC: 0, ETH_BASE: 0, ALGO: 0, BNB: 0, ETH_ARB: 0, AVAX: 0, TRX: 0 };
@@ -191,25 +190,6 @@ function formatCryptoBlur(value, symbol, decimals = 6) {
         ? value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: decimals})
         : value;
     return `<span class="blur-value">${formatted}</span> ${symbol}`;
-}
-
-// Toggle display mode (crypto vs USD primary)
-function toggleDisplayMode() {
-    const toggleBtn = document.getElementById('displayToggle');
-    const options = toggleBtn.querySelectorAll('.toggle-option');
-
-    if (displayMode === 'crypto') {
-        displayMode = 'usd';
-        document.body.classList.add('usd-primary');
-    } else {
-        displayMode = 'crypto';
-        document.body.classList.remove('usd-primary');
-    }
-
-    // Update toggle button appearance
-    options.forEach(opt => {
-        opt.classList.toggle('active', opt.dataset.mode === displayMode);
-    });
 }
 
 // Theme management
@@ -3204,7 +3184,7 @@ async function loadDefiGovernance() {
         }
 
         // Phase 3: Fetch ALL wallet staking + governance in parallel (background)
-        const adaDelegation = { totalAda: 0, stakedAda: 0, pools: [] };
+        const adaDelegation = { totalAda: 0, stakedAda: 0, pools: [], undelegatedWallets: [] };
 
         // Pre-compute ADA delegation totals from wallet balances
         for (const wallet of cardanoWallets) {
@@ -3231,10 +3211,12 @@ async function loadDefiGovernance() {
             const walletBalance = parseFloat(wallet.balance) || 0;
 
             // Process governance result
+            let walletDelegated = false;
             if (govResult.status === 'fulfilled' && govResult.value.ok) {
                 try {
                     const govData = await govResult.value.json();
                     if (govData.pool && govData.pool.pool_id) {
+                        walletDelegated = true;
                         adaDelegation.stakedAda += walletBalance;
                         const existingPool = adaDelegation.pools.find(p => p.pool_id === govData.pool.pool_id);
                         if (!existingPool) {
@@ -3248,6 +3230,13 @@ async function loadDefiGovernance() {
                 } catch (e) {
                     console.error(`[DeFi] Governance parse error for ${wallet.address.slice(0,15)}:`, e);
                 }
+            }
+            if (!walletDelegated) {
+                adaDelegation.undelegatedWallets.push({
+                    address: wallet.address,
+                    label: wallet.label || null,
+                    balance: walletBalance
+                });
             }
 
             // Process staking result
@@ -3355,7 +3344,7 @@ function getGovChainBadge(chain) {
 // Render consolidated DeFi & Governance section (calls both sub-renderers)
 function renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeStablecoins = [], adaDelegation = null) {
     renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStablecoins, adaDelegation);
-    renderGovernanceContent(defiData);
+    renderGovernanceContent(defiData, allStaking);
 }
 
 // Render DeFi tab: Staked Positions + Stablecoins + Other DeFi Tokens
@@ -3393,8 +3382,30 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
             totalStakedValue += stakedUsd;
             if (adaDelegation.stakedAda > 0) stakedCount++;
 
-            const stakedFormatted = adaDelegation.stakedAda.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0});
             const totalFormatted = adaDelegation.totalAda.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0});
+            const pctDelegated = adaDelegation.totalAda > 0
+                ? Math.round((adaDelegation.stakedAda / adaDelegation.totalAda) * 100) : 0;
+
+            let delegationDetailHtml;
+            if (adaDelegation.undelegatedWallets.length === 0) {
+                delegationDetailHtml = `<div class="ada-delegation-detail">${blurValue(totalFormatted)} ADA (${pctDelegated}% delegated)</div>`;
+            } else {
+                const escHtml = (s) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+                const undelegatedItems = adaDelegation.undelegatedWallets.map(w => {
+                    const shortAddr = w.address.slice(0, 12) + '...' + w.address.slice(-6);
+                    const displayLabel = w.label ? escHtml(w.label) : shortAddr;
+                    const balFormatted = w.balance.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0});
+                    return `<div class="undelegated-wallet-item" onclick="event.stopPropagation(); navigator.clipboard.writeText('${w.address}').then(() => { const el = this.querySelector('.copy-feedback'); el.style.opacity='1'; setTimeout(() => el.style.opacity='0', 1200); })">
+                        <div class="undelegated-wallet-row">
+                            <span class="undelegated-label">${displayLabel}</span>
+                            <span class="undelegated-balance">${balFormatted} ADA</span>
+                        </div>
+                        <span class="undelegated-addr">${shortAddr}</span>
+                        <span class="copy-feedback">Copied!</span>
+                    </div>`;
+                }).join('');
+                delegationDetailHtml = `<div class="ada-delegation-detail">${blurValue(totalFormatted)} ADA <span class="delegation-pct-link" tabindex="0">(${pctDelegated}% delegated)<div class="undelegated-tooltip"><div class="undelegated-tooltip-header">Undelegated Wallets</div>${undelegatedItems}</div></span></div>`;
+            }
 
             let poolInfoHtml = '';
             if (adaDelegation.pools.length > 0) {
@@ -3410,7 +3421,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
                         <span class="protocol-name"><span class="chain-badge cardano" title="Cardano">ADA</span> ADA Delegation</span>
                         <span class="liquid-badge">\uD83D\uDCA7 Liquid</span>
                     </div>
-                    <div class="ada-delegation-detail">${blurValue(stakedFormatted)} of ${blurValue(totalFormatted)} ADA delegated</div>
+                    ${delegationDetailHtml}
                     <div class="card-value">${formatUSDBlur(stakedUsd)}</div>
                     ${poolInfoHtml}
                 </div>
@@ -3744,52 +3755,86 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
     }
 }
 
-// Render Governance tab: Governance Tokens (Unstaked)
-function renderGovernanceContent(defiData) {
+// Render Governance tab: Governance Tokens (wallet + staked combined)
+function renderGovernanceContent(defiData, allStaking = {}) {
     const content = document.getElementById('governanceContent');
     const summary = document.getElementById('governanceSummary');
 
     if (!content) return;
 
     let html = '';
-    let totalUnstakedValue = 0;
+    let totalGovValue = 0;
     let governanceTokenCount = 0;
 
-    const governancePositions = defiData.positions_by_category?.['Governance Tokens'] || [];
+    // Build combined governance token map: wallet holdings + staked amounts
+    const govTokenMap = {};
 
-    if (governancePositions.length > 0) {
+    // 1. Wallet (unstaked) governance positions
+    const governancePositions = defiData.positions_by_category?.['Governance Tokens'] || [];
+    for (const pos of governancePositions) {
+        const token = pos.asset_name;
+        if (!govTokenMap[token]) {
+            govTokenMap[token] = { wallet: 0, staked: 0, blockchain: pos.blockchain || 'cardano' };
+        }
+        govTokenMap[token].wallet += pos.quantity || 0;
+    }
+
+    // 2. Staked governance tokens (LQ, INDY, etc. are still usable in governance)
+    for (const [protocol, data] of Object.entries(allStaking)) {
+        for (const [token, stakeData] of Object.entries(data.staked || {})) {
+            if (GOVERNANCE_LINKS[token]) {
+                if (!govTokenMap[token]) {
+                    govTokenMap[token] = { wallet: 0, staked: 0, blockchain: data.blockchain || 'cardano' };
+                }
+                govTokenMap[token].staked += stakeData.amount || 0;
+            }
+        }
+    }
+
+    // Build sorted list, filter out < $1 total value
+    const govTokens = Object.entries(govTokenMap)
+        .map(([token, data]) => {
+            const total = data.wallet + data.staked;
+            const tokenPrice = prices[token] || 0;
+            const usdValue = total * tokenPrice;
+            return { token, wallet: data.wallet, staked: data.staked, total, usdValue, blockchain: data.blockchain };
+        })
+        .filter(t => t.usdValue >= 1)
+        .sort((a, b) => b.usdValue - a.usdValue);
+
+    if (govTokens.length > 0) {
         html += `<div class="defi-gov-subsection">
             <div class="defi-gov-subsection-header">
                 <span class="subsection-icon">\uD83C\uDFDB\uFE0F</span>
-                <span class="subsection-title">Governance Tokens (Unstaked)</span>
+                <span class="subsection-title">Governance Tokens</span>
             </div>
             <div class="defi-gov-list">`;
 
-        // Sort by value descending
-        governancePositions.sort((a, b) => {
-            const valueA = a.quantity * (prices[a.asset_name] || 0);
-            const valueB = b.quantity * (prices[b.asset_name] || 0);
-            return valueB - valueA;
-        });
-
-        for (const pos of governancePositions) {
-            const tokenPrice = prices[pos.asset_name] || 0;
-            const usdValue = pos.quantity * tokenPrice;
-            totalUnstakedValue += usdValue;
+        for (const t of govTokens) {
+            totalGovValue += t.usdValue;
             governanceTokenCount++;
 
-            const govInfo = GOVERNANCE_LINKS[pos.asset_name];
-            const chain = pos.blockchain || 'cardano';
+            const govInfo = GOVERNANCE_LINKS[t.token];
+            const tokenLogoUrl = `https://img.logokit.com/crypto/${t.token}?token=LOGOKIT_KEY_REMOVED&size=32`;
+            const totalFormatted = t.total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
-            const tokenLogoUrl = `https://img.logokit.com/crypto/${pos.asset_name}?token=LOGOKIT_KEY_REMOVED&size=32`;
+            // Show breakdown if both wallet and staked exist
+            let amountHtml = blurValue(totalFormatted);
+            if (t.staked > 0 && t.wallet > 0) {
+                const walletFmt = t.wallet.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                const stakedFmt = t.staked.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                amountHtml = `<span title="${walletFmt} wallet + ${stakedFmt} staked">${blurValue(totalFormatted)}</span>`;
+            } else if (t.staked > 0) {
+                amountHtml = `<span title="All staked">${blurValue(totalFormatted)}</span>`;
+            }
 
             html += `
                 <div class="defi-gov-line">
-                    <img src="${tokenLogoUrl}" alt="${pos.asset_name}" class="token-logo-line" onerror="this.style.display='none'">
-                    <span class="line-token">${getGovChainBadge(chain)} ${pos.asset_name}</span>
-                    <span class="line-amount">${blurValue(pos.quantity_formatted)}</span>
-                    <span class="line-value">${usdValue > 0 ? formatUSDBlur(usdValue) : '--'}</span>
-                    ${govInfo ? `<a href="${govInfo.url}" target="_blank" rel="noopener" class="gov-vote-link" title="Vote with ${pos.asset_name}">Vote</a>` : '<span class="gov-vote-placeholder"></span>'}
+                    <img src="${tokenLogoUrl}" alt="${t.token}" class="token-logo-line" onerror="this.style.display='none'">
+                    <span class="line-token">${getGovChainBadge(t.blockchain)} ${t.token}</span>
+                    <span class="line-amount">${amountHtml}</span>
+                    <span class="line-value">${formatUSDBlur(t.usdValue)}</span>
+                    ${govInfo ? `<a href="${govInfo.url}" target="_blank" rel="noopener" class="gov-vote-link" title="Vote with ${t.token} on ${govInfo.name}">Vote</a>` : '<span class="gov-vote-placeholder"></span>'}
                 </div>
             `;
         }
@@ -3813,7 +3858,7 @@ function renderGovernanceContent(defiData) {
 
         setSafeHTML(summary, `
             <span class="governance-count">${summaryParts.join(' · ') || 'No tokens'}</span>
-            <span class="governance-total">${formatUSDBlur(totalUnstakedValue)}</span>
+            <span class="governance-total">${formatUSDBlur(totalGovValue)}</span>
         `);
     }
 }
