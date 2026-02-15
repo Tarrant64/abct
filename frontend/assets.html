@@ -6,13 +6,13 @@
     <title>Assets - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771112731">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771113618">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1771112731"></script>
+    <script src="/static/js/session-auth.js?v=1771113618"></script>
     <style>
         .assets-page {
             max-width: 1400px;
@@ -1001,13 +1001,13 @@
                 <div class="section-header" onclick="toggleSection(this)">
                     <h2>DeFi</h2>
                     <div class="section-summary" id="defiGovernanceSummary">
-                        <span class="defi-gov-status">Loading...</span>
+                        <span class="defi-gov-status"></span>
                     </div>
                     <button class="section-refresh-btn" onclick="event.stopPropagation(); refreshDefiGovernance();" title="Refresh DeFi">&#10227;</button>
                     <span class="collapse-icon">&#9660;</span>
                 </div>
+                <div class="defi-refresh-bar" id="defiRefreshBar"><div class="defi-refresh-bar-fill"></div></div>
                 <div class="defi-governance-content section-content" id="defiGovernanceContent">
-                    <p class="empty-state">Loading DeFi data...</p>
                 </div>
             </section>
         </div>
@@ -1018,13 +1018,12 @@
                 <div class="section-header" onclick="toggleSection(this)">
                     <h2>Governance</h2>
                     <div class="section-summary" id="governanceSummary">
-                        <span class="governance-status">Loading...</span>
+                        <span class="governance-status"></span>
                     </div>
                     <button class="section-refresh-btn" onclick="event.stopPropagation(); refreshDefiGovernance();" title="Refresh Governance">&#10227;</button>
                     <span class="collapse-icon">&#9660;</span>
                 </div>
                 <div class="governance-content section-content" id="governanceContent">
-                    <p class="empty-state">Loading Governance data...</p>
                 </div>
             </section>
         </div>
@@ -1416,11 +1415,11 @@ base:0x789..." oninput="previewImport()"></textarea>
     </div>
 
     <footer>
-        <p>ABCT - Assets | <span id="appVersion" style="opacity: 0.6;">v1.12.3 (BUILD 1771112731)</span></p>
+        <p>ABCT - Assets | <span id="appVersion" style="opacity: 0.6;">v1.12.3 (BUILD 1771113618)</span></p>
     </footer>
 
-    <script src="/static/js/app.js?v=1771112731"></script>
-    <script src="/static/js/wallet-management.js?v=1771112731"></script>
+    <script src="/static/js/app.js?v=1771113618"></script>
+    <script src="/static/js/wallet-management.js?v=1771113618"></script>
     <script>
         // Assets page tab switching
         const ASSETS_TABS = ['wallets', 'manageWallets', 'exchanges', 'defi', 'governance', 'tokens'];
