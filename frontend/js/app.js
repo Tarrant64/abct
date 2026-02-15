@@ -3384,7 +3384,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
 
             const totalFormatted = adaDelegation.totalAda.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0});
             const pctDelegated = adaDelegation.totalAda > 0
-                ? Math.round((adaDelegation.stakedAda / adaDelegation.totalAda) * 100) : 0;
+                ? Math.floor((adaDelegation.stakedAda / adaDelegation.totalAda) * 10000) / 100 : 0;
 
             let delegationDetailHtml;
             if (adaDelegation.undelegatedWallets.length === 0) {
@@ -3638,7 +3638,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
 
             html += `
                 <div class="defi-gov-line stable-line">
-                    <img src="${stableLogoUrl}" alt="${symbol}" class="token-logo-line" onerror="this.style.display='none'">
+                    <span class="line-logo"><img src="${stableLogoUrl}" alt="${symbol}" onerror="this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>${symbol.slice(0,3)}</span>'"></span>
                     <span class="line-token">${symbol}</span>
                     <span class="line-chains">${chainBadges}</span>
                     <span class="line-amount" title="${breakdown}">${blurValue(total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}))}</span>
@@ -3677,7 +3677,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
 
                 html += `
                     <div class="defi-gov-line stable-line hidden-stable">
-                        <img src="${hiddenStableLogoUrl}" alt="${symbol}" class="token-logo-line" onerror="this.style.display='none'">
+                        <span class="line-logo"><img src="${hiddenStableLogoUrl}" alt="${symbol}" onerror="this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>${symbol.slice(0,3)}</span>'"></span>
                         <span class="line-token">${symbol}</span>
                         <span class="line-chains">${chainBadges}</span>
                         <span class="line-amount">${blurValue(total.toLocaleString(undefined, {minimumFractionDigits: 4, maximumFractionDigits: 6}))}</span>
@@ -3834,9 +3834,10 @@ function renderGovernanceContent(defiData, allStaking = {}) {
                 amountHtml = `<span title="All staked">${blurValue(totalFormatted)}</span>`;
             }
 
+            const logoFallback = t.token.slice(0, 3);
             html += `
                 <div class="defi-gov-line">
-                    <img src="${tokenLogoUrl}" alt="${t.token}" class="token-logo-line" onerror="this.style.display='none'">
+                    <span class="line-logo"><img src="${tokenLogoUrl}" alt="${t.token}" onerror="this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>${logoFallback}</span>'"></span>
                     <span class="line-token">${getGovChainBadge(t.blockchain)} ${t.token}</span>
                     <span class="line-amount">${amountHtml}</span>
                     <span class="line-value">${formatUSDBlur(t.usdValue)}</span>

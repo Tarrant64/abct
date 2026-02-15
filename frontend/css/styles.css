@@ -7270,17 +7270,50 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
 
 .defi-gov-line {
     display: grid;
-    grid-template-columns: auto 80px 1fr 100px auto;
-    gap: 12px;
+    grid-template-columns: 32px auto 1fr 100px auto;
+    gap: 10px;
     align-items: center;
     padding: 10px 14px;
     background-color: var(--bg-card);
     border-radius: 8px;
 }
 
+.defi-gov-line .line-logo {
+    width: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.defi-gov-line .line-logo img {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.defi-gov-line .line-logo .logo-fallback {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.55rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+
 .defi-gov-line .line-token {
     font-weight: 600;
     color: var(--text-primary);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .defi-gov-line .line-amount {
@@ -7315,7 +7348,7 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
 
 /* Stablecoin specific styles */
 .stablecoins-list .stable-line {
-    grid-template-columns: 60px minmax(80px, auto) 100px 80px;
+    grid-template-columns: 32px 60px minmax(80px, auto) 100px 80px;
     align-items: center;
 }
 
@@ -7471,7 +7504,7 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     }
 
     .stablecoins-list .stable-line {
-        grid-template-columns: auto 1fr 1fr;
+        grid-template-columns: 32px auto 1fr 1fr;
     }
 
     .stable-line .line-chains,
