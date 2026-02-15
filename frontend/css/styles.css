@@ -3946,11 +3946,11 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
 }
 
 .chain-icon-circle {
-    width: 28px;
-    height: 28px;
+    width: 42px;
+    height: 42px;
     border-radius: 50%;
     border: 2px solid var(--bg-card, #0f3460);
-    margin-left: -8px;
+    margin-left: -10px;
     object-fit: cover;
     background: var(--bg-secondary, #16213e);
 }
@@ -3963,14 +3963,14 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
+    width: 42px;
+    height: 42px;
     border-radius: 50%;
     border: 2px solid var(--bg-card, #0f3460);
-    margin-left: -8px;
+    margin-left: -10px;
     background: var(--bg-hover, #1a1a2e);
     color: var(--text-secondary, #a0a0a0);
-    font-size: 0.7rem;
+    font-size: 0.85rem;
     font-weight: 600;
 }
 
@@ -4098,9 +4098,13 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
 }
 
 .wallets-section h2 {
-    margin-bottom: 20px;
+    margin-bottom: 12px;
     font-size: 1.2rem;
     color: var(--text-secondary);
+}
+
+.wallets-section .section-summary {
+    margin-bottom: 12px;
 }
 
 .wallets-section.collapsible-section h2 {

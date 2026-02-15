@@ -1554,7 +1554,7 @@ function renderWalletsGrouped(cardanoStakeGroups, bitcoinWallets, ethereumWallet
         const nativeAssetsValueUsd = cardanoStakeGroups.reduce((sum, g) => sum + (g.native_assets_value_usd || 0), 0);
 
         html += `
-            <div class="blockchain-section cardano collapsed">
+            <div class="blockchain-section cardano collapsed" data-chain="cardano">
                 <div class="blockchain-section-header">
                     <div class="blockchain-info">
                         <img src="https://img.logokit.com/crypto/ADA?token=pk_fr08287a4c625f400f32a9&size=24" alt="Cardano" class="blockchain-logo-small" onerror="this.style.display='none'">
@@ -1645,7 +1645,7 @@ function renderWalletsGrouped(cardanoStakeGroups, bitcoinWallets, ethereumWallet
         const logoUrl = logoMap[blockchain] || '';
 
         return `
-            <div class="blockchain-section ${blockchain} collapsed">
+            <div class="blockchain-section ${blockchain} collapsed" data-chain="${blockchain}">
                 <div class="blockchain-section-header">
                     <div class="blockchain-info">
                         ${logoUrl ? `<img src="${logoUrl}" alt="${blockchainName}" class="blockchain-logo-small" onerror="this.style.display='none'">` : ''}

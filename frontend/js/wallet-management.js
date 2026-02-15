@@ -44,6 +44,10 @@
             wallets = data.wallets || [];
             updateCounts();
             renderWalletsList();
+            // Also refresh the Self-Custody portfolio view on assets page
+            if (typeof refreshWallets === 'function') {
+                refreshWallets();
+            }
         } catch (error) {
             console.error('Error loading wallets:', error);
             showStatus('Failed to load wallets', 'error');
