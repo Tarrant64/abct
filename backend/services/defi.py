@@ -1104,6 +1104,7 @@ class DeFiService:
         2. NMKR fallback chain (NMKR -> Token Registry -> Blockfrost -> LogoKit)
         """
         policy_id_for_symbol = None
+        asset_id_for_symbol = None
 
         try:
             from database import get_db_connection
@@ -1112,7 +1113,7 @@ class DeFiService:
             cursor = conn.cursor()
 
             # Strategy 1: Exact ticker match for cached logo
-            cursor.execute("SELECT logo_url FROM token_metadata WHERE ticker = ? AND logo_url IS NOT NULL", (token_symbol,))
+            cursor.execute("SELECT logo_url, asset_id FROM token_metadata WHERE ticker = ? AND logo_url IS NOT NULL", (token_symbol,))
             row = cursor.fetchone()
             if row and row[0]:
                 conn.close()
@@ -1122,11 +1123,17 @@ class DeFiService:
             for pid, info in DEFI_PROTOCOLS.items():
                 if info.get('token') == token_symbol:
                     policy_id_for_symbol = pid
-                    cursor.execute("SELECT logo_url FROM token_metadata WHERE policy_id = ? AND logo_url IS NOT NULL LIMIT 1", (pid,))
+                    # First check for logo_url
+                    cursor.execute("SELECT logo_url, asset_id FROM token_metadata WHERE policy_id = ? AND logo_url IS NOT NULL LIMIT 1", (pid,))
                     row = cursor.fetchone()
                     if row and row[0]:
                         conn.close()
                         return row[0]
+                    # Even without logo, grab the asset_id for NMKR fallback
+                    cursor.execute("SELECT asset_id FROM token_metadata WHERE policy_id = ? LIMIT 1", (pid,))
+                    row = cursor.fetchone()
+                    if row and row[0]:
+                        asset_id_for_symbol = row[0]
                     break
 
             # Strategy 3: Case-insensitive ticker match
@@ -1144,13 +1151,21 @@ class DeFiService:
         if policy_id_for_symbol:
             try:
                 from services.nmkr_service import nmkr_service
-                token_name_hex = token_symbol.encode('utf-8').hex()
+
+                # Derive hex name from actual asset_id in DB, or encode ticker
+                if asset_id_for_symbol and len(asset_id_for_symbol) > len(policy_id_for_symbol):
+                    token_name_hex = asset_id_for_symbol[len(policy_id_for_symbol):]
+                else:
+                    token_name_hex = token_symbol.encode('utf-8').hex()
+
+                logger.info(f"[DeFi Logo] NMKR fallback for {token_symbol}: policy={policy_id_for_symbol[:16]}..., hex={token_name_hex}")
                 logo_url = await nmkr_service.get_token_logo_with_fallbacks(
                     policy_id_for_symbol,
                     token_name_hex,
                     ticker=token_symbol
                 )
                 if logo_url:
+                    logger.info(f"[DeFi Logo] Got logo for {token_symbol} via NMKR fallback")
                     return logo_url
             except Exception as e:
                 logger.error(f"NMKR fallback failed for {token_symbol}: {e}")
