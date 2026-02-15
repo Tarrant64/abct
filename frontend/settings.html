@@ -4742,7 +4742,7 @@
                         <span>&#9660;</span>
                     </button>
                     <div class="wallet-multiselect-dropdown" id="txWalletDropdown">
-                        <div class="wallet-multiselect-item" onclick="toggleSelectAll('txWalletSelect')">
+                        <div class="wallet-multiselect-item" onclick="toggleSelectAll('txWalletSelect', event)">
                             <input type="checkbox" checked class="select-all-checkbox">
                             <label><strong>Select All</strong></label>
                         </div>
@@ -4774,7 +4774,7 @@
                         <span>&#9660;</span>
                     </button>
                     <div class="wallet-multiselect-dropdown" id="balWalletDropdown">
-                        <div class="wallet-multiselect-item" onclick="toggleSelectAll('balWalletSelect')">
+                        <div class="wallet-multiselect-item" onclick="toggleSelectAll('balWalletSelect', event)">
                             <input type="checkbox" checked class="select-all-checkbox">
                             <label><strong>Select All</strong></label>
                         </div>
@@ -8758,11 +8758,18 @@
             dropdown.classList.toggle('open');
         }
 
-        function toggleSelectAll(selectId) {
+        function toggleSelectAll(selectId, e) {
             const container = document.getElementById(selectId);
             const selectAllCb = container.querySelector('.select-all-checkbox');
-            const newState = !selectAllCb.checked;
-            selectAllCb.checked = newState;
+            let newState;
+            if (e && e.target === selectAllCb) {
+                // Browser already toggled the checkbox natively, use its current state
+                newState = selectAllCb.checked;
+            } else {
+                // Clicked label/div text, manually toggle
+                newState = !selectAllCb.checked;
+                selectAllCb.checked = newState;
+            }
             container.querySelectorAll('.wallet-list input[type="checkbox"]').forEach(cb => {
                 cb.checked = newState;
             });
