@@ -452,7 +452,7 @@ class DeFiService:
             if not payment_cred:
                 return None
 
-            client = get_client("blockfrost", timeout=60.0)
+            client = get_client("blockfrost", timeout=15.0)
 
             # Fetch all staking positions from Indigo
             response = await client.get(
@@ -525,7 +525,7 @@ class DeFiService:
             if not payment_cred:
                 return None
 
-            client = get_client("blockfrost", timeout=60.0)
+            client = get_client("blockfrost", timeout=15.0)
 
             # Query all UTxOs at the staking contract
             # Need to page through since there may be many stakers
@@ -569,8 +569,8 @@ class DeFiService:
                             })
 
                 page += 1
-                # Safety limit - Liqwid has many stakers
-                if page > 50:
+                # Safety limit - scan up to 10 pages (1000 UTxOs)
+                if page > 10:
                     break
 
             if not positions:
@@ -599,7 +599,7 @@ class DeFiService:
             if not payment_cred:
                 return None
 
-            client = get_client("blockfrost", timeout=60.0)
+            client = get_client("blockfrost", timeout=15.0)
 
             # Query all UTxOs at the staking contract
             # Need to page through since there may be many stakers
@@ -651,8 +651,8 @@ class DeFiService:
                         })
 
                 page += 1
-                # Safety limit
-                if page > 20:
+                # Safety limit - scan up to 10 pages (1000 UTxOs)
+                if page > 10:
                     break
 
             if not positions:
@@ -681,12 +681,12 @@ class DeFiService:
         - Net staked = Deposits - Withdrawals
         """
         try:
-            client = get_client("blockfrost", timeout=60.0)
-            # Get all transactions for the address
+            client = get_client("blockfrost", timeout=15.0)
+            # Get transactions for the address (limit to 3 pages = 300 txs max)
             all_txs = []
             page = 1
 
-            while page <= 10:  # Limit to 10 pages (1000 txs)
+            while page <= 3:
                 response = await client.get(
                     f"{BLOCKFROST_BASE_URL}/addresses/{address}/transactions",
                     headers=self.headers,
@@ -709,19 +709,27 @@ class DeFiService:
             total_deposits = 0
             total_withdrawals = 0
 
-            for tx in all_txs:
-                tx_hash = tx['tx_hash']
+            # Fetch UTxOs in parallel batches (10 concurrent) instead of sequentially
+            sem = asyncio.Semaphore(10)
 
-                # Get transaction UTxOs
-                utxo_response = await client.get(
-                    f"{BLOCKFROST_BASE_URL}/txs/{tx_hash}/utxos",
-                    headers=self.headers
-                )
+            async def fetch_tx_utxos(tx_hash):
+                async with sem:
+                    resp = await client.get(
+                        f"{BLOCKFROST_BASE_URL}/txs/{tx_hash}/utxos",
+                        headers=self.headers
+                    )
+                    if resp.status_code != 200:
+                        return None
+                    return resp.json()
 
-                if utxo_response.status_code != 200:
+            utxo_results = await asyncio.gather(
+                *[fetch_tx_utxos(tx['tx_hash']) for tx in all_txs],
+                return_exceptions=True
+            )
+
+            for tx_data in utxo_results:
+                if tx_data is None or isinstance(tx_data, Exception):
                     continue
-
-                tx_data = utxo_response.json()
 
                 # Calculate IAG flows
                 user_sends_iag = 0
@@ -788,7 +796,7 @@ class DeFiService:
             if not payment_cred:
                 return None
 
-            client = get_client("blockfrost", timeout=60.0)
+            client = get_client("blockfrost", timeout=15.0)
 
             # Fetch staking positions which include rewards data
             response = await client.get(
@@ -874,7 +882,7 @@ class DeFiService:
             if not staking or staking['total_staked_strike'] == 0:
                 return None
 
-            client = get_client("blockfrost", timeout=60.0)
+            client = get_client("blockfrost", timeout=15.0)
 
             # Query Strike rewards contract for pending rewards
             # Strike uses epoch-based rewards distribution
@@ -935,7 +943,7 @@ class DeFiService:
             # Get stake address from wallet address
             stake_address = await self._get_stake_address(address)
 
-            client = get_client("blockfrost", timeout=60.0)
+            client = get_client("blockfrost", timeout=15.0)
 
             pending_lq = 0
             claimed_lq = 0
@@ -1007,7 +1015,7 @@ class DeFiService:
             if not payment_cred:
                 return None
 
-            client = get_client("blockfrost", timeout=60.0)
+            client = get_client("blockfrost", timeout=15.0)
 
             # Try Surf Lending API
             try:
@@ -1188,7 +1196,7 @@ class DeFiService:
         """
         Get all protocol staking positions for an address.
         Aggregates data from supported protocol APIs including pending rewards.
-        Uses parallel fetching for all protocols simultaneously.
+        Uses parallel fetching with per-protocol timeouts to avoid 504s.
         """
         import asyncio
 
@@ -1199,13 +1207,21 @@ class DeFiService:
             'total_pending_rewards': {}
         }
 
-        # Phase 1: Fetch all protocol staking positions in parallel
+        # Per-protocol timeout wrapper (15s per protocol, 45s overall)
+        async def with_timeout(coro, name, timeout=15):
+            try:
+                return await asyncio.wait_for(coro, timeout=timeout)
+            except asyncio.TimeoutError:
+                logger.warning(f"[Staking] {name} timed out after {timeout}s for {address[:20]}...")
+                return None
+
+        # Phase 1: Fetch all protocol staking positions in parallel (15s each)
         indigo, strike, liqwid, iagon, surf = await asyncio.gather(
-            self.get_indigo_staking(address),
-            self.get_strike_staking(address),
-            self.get_liqwid_staking(address),
-            self.get_iagon_staking(address),
-            self.get_surf_lending_positions(address),
+            with_timeout(self.get_indigo_staking(address), "Indigo"),
+            with_timeout(self.get_strike_staking(address), "Strike"),
+            with_timeout(self.get_liqwid_staking(address), "Liqwid"),
+            with_timeout(self.get_iagon_staking(address), "Iagon", timeout=20),
+            with_timeout(self.get_surf_lending_positions(address), "Surf"),
             return_exceptions=True
         )
 
@@ -1243,9 +1259,9 @@ class DeFiService:
         if surf:
             logo_tasks['ADA'] = self._get_token_logo_url('ADA')
 
-        # Execute all rewards and logos in one parallel batch
+        # Execute all rewards and logos in one parallel batch (10s timeout)
         all_keys = list(reward_tasks.keys()) + list(logo_tasks.keys())
-        all_coros = list(reward_tasks.values()) + list(logo_tasks.values())
+        all_coros = [with_timeout(c, k, timeout=10) for k, c in zip(all_keys, list(reward_tasks.values()) + list(logo_tasks.values()))]
         all_results = await asyncio.gather(*all_coros, return_exceptions=True) if all_coros else []
 
         # Unpack results
