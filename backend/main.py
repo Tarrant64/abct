@@ -131,6 +131,85 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Expired cache cleanup failed: {e}")
         await log_service.warning("main", f"Expired cache cleanup failed: {e}")
 
+    # Invalidate stale DeFi/staking response caches (ensures fresh logo data after code updates)
+    logger.info("Clearing stale DeFi/staking response caches...")
+    try:
+        import aiosqlite
+        from config import DATABASE_PATH
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            cursor = await db.execute(
+                "DELETE FROM cache WHERE key LIKE 'defi_summary_%' OR key LIKE 'staking_positions_%'"
+            )
+            cleared = cursor.rowcount
+            await db.commit()
+            if cleared > 0:
+                logger.info(f"Cleared {cleared} stale DeFi/staking cache entries")
+    except Exception as e:
+        logger.warning(f"DeFi cache cleanup failed: {e}")
+
+    # Seed missing logos for known DeFi governance tokens
+    logger.info("Checking DeFi token logos...")
+    try:
+        import aiosqlite
+        from config import DATABASE_PATH
+        from services.defi import DEFI_PROTOCOLS
+        from services.http_client import get_client
+
+        tokens_needing_logos = []
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            for pid, info in DEFI_PROTOCOLS.items():
+                token = info.get('token')
+                if not token or info.get('type') != 'governance':
+                    continue
+                async with db.execute(
+                    "SELECT logo_url FROM token_metadata WHERE policy_id = ? AND logo_url IS NOT NULL AND logo_url != '' LIMIT 1",
+                    (pid,)
+                ) as cursor:
+                    row = await cursor.fetchone()
+                    if not row:
+                        # Also check by ticker
+                        async with db.execute(
+                            "SELECT logo_url FROM token_metadata WHERE ticker = ? AND logo_url IS NOT NULL AND logo_url != '' LIMIT 1",
+                            (token,)
+                        ) as cursor2:
+                            row2 = await cursor2.fetchone()
+                            if not row2:
+                                token_name_hex = token.encode('utf-8').hex()
+                                tokens_needing_logos.append((pid, token, token_name_hex))
+
+        if tokens_needing_logos:
+            logger.info(f"Seeding logos for {len(tokens_needing_logos)} DeFi tokens: {[t[1] for t in tokens_needing_logos]}")
+            client = get_client("cardano_token_registry", timeout=10)
+            for pid, token, hex_name in tokens_needing_logos:
+                try:
+                    registry_url = f"https://raw.githubusercontent.com/cardano-foundation/cardano-token-registry/master/mappings/{pid}{hex_name}.json"
+                    resp = await client.get(registry_url)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        logo_b64 = data.get("logo", {}).get("value", "")
+                        if logo_b64:
+                            logo_data_uri = f"data:image/png;base64,{logo_b64}"
+                            async with aiosqlite.connect(DATABASE_PATH) as db:
+                                # Update existing entry or insert new one
+                                await db.execute(
+                                    """INSERT INTO token_metadata (asset_id, policy_id, ticker, logo_url, updated_at)
+                                       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                                       ON CONFLICT(asset_id) DO UPDATE SET logo_url = ?, updated_at = CURRENT_TIMESTAMP""",
+                                    (f"{pid}{hex_name}", pid, token, logo_data_uri, logo_data_uri)
+                                )
+                                await db.commit()
+                            logger.info(f"Seeded logo for {token} ({len(logo_data_uri)} chars)")
+                        else:
+                            logger.debug(f"No logo in Token Registry for {token}")
+                    else:
+                        logger.debug(f"Token Registry returned {resp.status_code} for {token}")
+                except Exception as e:
+                    logger.debug(f"Could not seed logo for {token}: {e}")
+        else:
+            logger.info("All DeFi token logos already cached")
+    except Exception as e:
+        logger.warning(f"DeFi logo seeding failed: {e}")
+
     # Clean up old API call logs (keep last 7 days)
     logger.info("Cleaning up old API call logs...")
     try:
