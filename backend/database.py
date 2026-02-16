@@ -1005,6 +1005,55 @@ async def init_db():
             ON wallet_daily_balances(source_id, date)
         """)
 
+        # ============================================================================
+        # EXCHANGE TRANSACTIONS (CEX full history: buys, sells, sends, receives, etc.)
+        # ============================================================================
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS exchange_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                exchange TEXT NOT NULL,
+                tx_id TEXT NOT NULL,
+                tx_type TEXT NOT NULL,
+                status TEXT DEFAULT 'completed',
+                tx_time TIMESTAMP NOT NULL,
+                amount TEXT,
+                token_symbol TEXT,
+                native_amount TEXT,
+                native_currency TEXT DEFAULT 'USD',
+                fee TEXT,
+                fee_currency TEXT,
+                from_address TEXT,
+                to_address TEXT,
+                network_hash TEXT,
+                metadata TEXT,
+                fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, exchange, tx_id),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_exchange_tx_user
+            ON exchange_transactions(user_id)
+        """)
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_exchange_tx_time
+            ON exchange_transactions(tx_time DESC)
+        """)
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_exchange_tx_exchange
+            ON exchange_transactions(exchange)
+        """)
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_exchange_tx_type
+            ON exchange_transactions(tx_type)
+        """)
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_exchange_tx_token
+            ON exchange_transactions(token_symbol)
+        """)
+
         await db.commit()
 
 async def get_db():

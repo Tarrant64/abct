@@ -249,16 +249,21 @@ function renderTransactions(transactions) {
         const expandIcon = expandedRows.has(globalIndex) ? '&#9660;' : '&#9658;';
 
         if (isCex) {
-            // CEX transaction row
-            const cexDirection = tx.side === 'BUY' ? 'buy' : 'sell';
+            // CEX transaction row — handles all v2 types
+            const cexDirClass = getCexDirectionClass(tx.side);
+            const cexDirLabel = getCexDirectionLabel(tx.side, tx.tx_type);
+            const tokenCol = getCexTokenDisplay(tx);
+            const hashDisplay = tx.network_hash
+                ? formatHash(tx.network_hash, getCexHashChain(tx.token))
+                : (tx.order_id ? truncateHash(tx.order_id) : 'N/A');
             row.innerHTML = `
                 <td class="expand-cell">${expandIcon}</td>
                 <td><span class="tx-badge time-badge">${formatTime(tx.time)}</span></td>
                 <td><span class="chain-badge chain-${tx.exchange}">${formatExchangeName(tx.exchange)}</span></td>
-                <td><span class="direction-badge direction-${cexDirection}">${tx.side}</span></td>
-                <td class="amount-cell"><span class="tx-badge amount-badge">${wrapBlurValue(formatAmount(tx.amount))} ${tx.token}</span></td>
-                <td><span class="token-badge">${tx.token}/${tx.quote_token}</span></td>
-                <td class="hash-cell"><span class="tx-badge hash-badge">${tx.order_id ? truncateHash(tx.order_id) : 'N/A'}</span></td>
+                <td><span class="direction-badge direction-${cexDirClass}">${cexDirLabel}</span></td>
+                <td class="amount-cell"><span class="tx-badge amount-badge">${wrapBlurValue(formatCexAmount(tx))}</span></td>
+                <td>${tokenCol}</td>
+                <td class="hash-cell"><span class="tx-badge hash-badge">${hashDisplay}</span></td>
             `;
         } else {
             // Blockchain transaction row (original)
@@ -283,35 +288,55 @@ function renderTransactions(transactions) {
         detailsRow.style.display = expandedRows.has(globalIndex) ? 'table-row' : 'none';
 
         if (isCex) {
-            // CEX details
-            const tradeDesc = tx.side === 'BUY'
-                ? `Bought ${wrapBlurValue(formatAmount(tx.amount))} ${tx.token} with ${wrapBlurValue(formatAmount(tx.quote_amount))} ${tx.quote_token}`
-                : `Sold ${wrapBlurValue(formatAmount(tx.amount))} ${tx.token} for ${wrapBlurValue(formatAmount(tx.quote_amount))} ${tx.quote_token}`;
+            // CEX details — rich display for all v2 transaction types
+            const tradeDesc = getCexTradeDescription(tx);
+            const addrDetails = getCexAddressDetails(tx);
             detailsRow.innerHTML = `
                 <td colspan="7">
                     <div class="tx-details">
                         <div class="detail-grid">
                             <div class="detail-item">
-                                <strong>Trade:</strong>
+                                <strong>Description:</strong>
                                 <span>${tradeDesc}</span>
                             </div>
-                            <div class="detail-item">
+                            ${tx.quote_amount && tx.side !== 'DEPOSIT' && tx.side !== 'WITHDRAWAL' ? `<div class="detail-item">
+                                <strong>USD Value:</strong>
+                                <span>${wrapBlurValue('$' + formatAmount(tx.quote_amount))}</span>
+                            </div>` : ''}
+                            ${tx.price > 0 ? `<div class="detail-item">
                                 <strong>Price:</strong>
                                 <span>${wrapBlurValue('$' + formatAmount(tx.price))} per ${tx.token}</span>
-                            </div>
-                            <div class="detail-item">
+                            </div>` : ''}
+                            ${tx.fee > 0 ? `<div class="detail-item">
                                 <strong>Fee:</strong>
                                 <span>${wrapBlurValue(formatAmount(tx.fee))} ${tx.fee_token}</span>
-                            </div>
+                            </div>` : ''}
                             <div class="detail-item">
                                 <strong>Exchange:</strong>
                                 <span>${formatExchangeName(tx.exchange)}</span>
                             </div>
+                            ${tx.tx_type ? `<div class="detail-item">
+                                <strong>Type:</strong>
+                                <span>${tx.tx_type}</span>
+                            </div>` : ''}
+                            ${addrDetails}
+                            ${tx.network_hash ? `<div class="detail-item detail-full">
+                                <strong>Network Hash:</strong>
+                                <div class="detail-content">
+                                    <span class="hash-full">${wrapBlurValue(tx.network_hash)}</span>
+                                    <button class="copy-address-btn" onclick="copyToClipboard('${tx.network_hash}', this); event.stopPropagation();" title="Copy hash">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>` : ''}
                             ${tx.order_id ? `<div class="detail-item detail-full">
-                                <strong>Order ID:</strong>
+                                <strong>Transaction ID:</strong>
                                 <div class="detail-content">
                                     <span class="hash-full">${wrapBlurValue(tx.order_id)}</span>
-                                    <button class="copy-address-btn" onclick="copyToClipboard('${tx.order_id}', this); event.stopPropagation();" title="Copy order ID">
+                                    <button class="copy-address-btn" onclick="copyToClipboard('${tx.order_id}', this); event.stopPropagation();" title="Copy ID">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                                             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -601,6 +626,12 @@ async function toggleCexTransactions() {
     const checkbox = document.getElementById('showCexCheckbox');
     showCex = checkbox && checkbox.checked;
 
+    // Show/hide Sync CEX button
+    const syncBtn = document.getElementById('refreshCexBtn');
+    if (syncBtn) {
+        syncBtn.style.display = showCex ? 'inline-flex' : 'none';
+    }
+
     if (showCex) {
         await loadCexTransactionsOnly();
     } else {
@@ -674,6 +705,191 @@ function formatExchangeName(exchange) {
         'binance_us': 'Binance US'
     };
     return names[exchange] || exchange;
+}
+
+/**
+ * Get CSS class for CEX direction badge
+ */
+function getCexDirectionClass(side) {
+    const map = {
+        'BUY': 'buy',
+        'SELL': 'sell',
+        'SEND': 'sent',
+        'RECEIVE': 'received',
+        'DEPOSIT': 'received',
+        'WITHDRAWAL': 'sent',
+        'REWARD': 'received',
+    };
+    return map[side] || 'buy';
+}
+
+/**
+ * Get display label for CEX direction
+ */
+function getCexDirectionLabel(side, txType) {
+    if (txType === 'subscription') return 'Recurring Buy';
+    if (txType === 'staking_reward' || txType === 'inflation_reward') return 'Reward';
+    const map = {
+        'BUY': 'Buy',
+        'SELL': 'Sell',
+        'SEND': 'Send',
+        'RECEIVE': 'Receive',
+        'DEPOSIT': 'Deposit',
+        'WITHDRAWAL': 'Withdraw',
+        'REWARD': 'Reward',
+    };
+    return map[side] || side;
+}
+
+/**
+ * Get token column display for CEX transaction
+ */
+function getCexTokenDisplay(tx) {
+    const side = tx.side;
+    if (side === 'BUY' || side === 'SELL') {
+        return `<span class="token-badge">${tx.token}/${tx.quote_token || 'USD'}</span>`;
+    } else if (side === 'DEPOSIT' || side === 'WITHDRAWAL') {
+        return `<span class="token-badge">${tx.quote_token || 'USD'}</span>`;
+    } else {
+        return `<span class="token-badge">${tx.token || tx.quote_token || '—'}</span>`;
+    }
+}
+
+/**
+ * Format amount for CEX transaction display
+ */
+function formatCexAmount(tx) {
+    const side = tx.side;
+    if (side === 'DEPOSIT' || side === 'WITHDRAWAL') {
+        // Show USD amount for fiat operations
+        return '$' + formatAmount(tx.quote_amount || tx.amount);
+    }
+    return formatAmount(tx.amount) + ' ' + (tx.token || '');
+}
+
+/**
+ * Get a reasonable blockchain for explorer linking from CEX token symbol
+ */
+function getCexHashChain(tokenSymbol) {
+    const map = {
+        'BTC': 'bitcoin',
+        'ETH': 'ethereum',
+        'SOL': 'solana',
+        'ADA': 'cardano',
+        'MATIC': 'polygon',
+    };
+    return map[(tokenSymbol || '').toUpperCase()] || 'ethereum';
+}
+
+/**
+ * Build rich trade description for CEX details panel
+ */
+function getCexTradeDescription(tx) {
+    const amt = wrapBlurValue(formatAmount(tx.amount));
+    const usd = wrapBlurValue('$' + formatAmount(tx.quote_amount));
+    const token = tx.token || '';
+    const quote = tx.quote_token || 'USD';
+
+    switch (tx.side) {
+        case 'BUY':
+            return `Bought ${amt} ${token} for ${usd}`;
+        case 'SELL':
+            return `Sold ${amt} ${token} for ${usd}`;
+        case 'SEND':
+            return `Sent ${amt} ${token}${tx.to_address ? ' to ' + wrapBlurValue(formatAddress(tx.to_address)) : ''}`;
+        case 'RECEIVE':
+            return `Received ${amt} ${token}${tx.from_address ? ' from ' + wrapBlurValue(formatAddress(tx.from_address)) : ''}`;
+        case 'DEPOSIT':
+            return `Deposited ${usd} to ${formatExchangeName(tx.exchange)}`;
+        case 'WITHDRAWAL':
+            return `Withdrew ${usd} from ${formatExchangeName(tx.exchange)}`;
+        case 'REWARD':
+            return `Earned ${amt} ${token} staking reward`;
+        default:
+            return `${tx.side} ${amt} ${token}`;
+    }
+}
+
+/**
+ * Build address detail items for CEX expanded row
+ */
+function getCexAddressDetails(tx) {
+    let html = '';
+    if (tx.to_address) {
+        html += `<div class="detail-item">
+            <strong>To:</strong>
+            <div class="detail-content">
+                <span class="address">${wrapBlurValue(formatAddress(tx.to_address))}</span>
+                <button class="copy-address-btn" onclick="copyToClipboard('${tx.to_address}', this); event.stopPropagation();" title="Copy address">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>`;
+    }
+    if (tx.from_address) {
+        html += `<div class="detail-item">
+            <strong>From:</strong>
+            <div class="detail-content">
+                <span class="address">${wrapBlurValue(formatAddress(tx.from_address))}</span>
+                <button class="copy-address-btn" onclick="copyToClipboard('${tx.from_address}', this); event.stopPropagation();" title="Copy address">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>`;
+    }
+    return html;
+}
+
+/**
+ * Refresh CEX transactions (full re-fetch from exchange APIs)
+ */
+async function refreshCexTransactions() {
+    const btn = document.getElementById('refreshCexBtn');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-small"></span> Syncing...';
+    }
+
+    try {
+        const response = await authFetch('/exchanges/transactions/refresh', {
+            method: 'POST'
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            const results = data.results || {};
+            let msg = 'CEX sync complete';
+            for (const [ex, info] of Object.entries(results)) {
+                if (info.new !== undefined) {
+                    msg += ` | ${ex}: ${info.new} new (${info.total_stored} total)`;
+                }
+            }
+            showStatus(msg, 'success');
+
+            // Reload CEX transactions
+            await loadCexTransactionsOnly();
+            currentPage = 1;
+            const merged = getMergedTransactions();
+            renderTransactions(merged);
+            updateTransactionCount(merged.length);
+        } else {
+            showStatus('CEX sync failed', 'error');
+        }
+    } catch (error) {
+        console.error('Error refreshing CEX transactions:', error);
+        showStatus('Failed to sync CEX transactions', 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '&#128260; Sync CEX';
+        }
+    }
 }
 
 /**

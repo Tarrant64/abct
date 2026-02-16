@@ -11,6 +11,7 @@ import logging
 import json
 import time
 from typing import Dict, List, Optional
+from urllib.parse import urlparse, parse_qs
 import sys
 import os
 from services.http_client import get_client
@@ -407,6 +408,137 @@ class CoinbaseService:
             logger.error(f"Error getting spot price for {currency_pair}: {e}")
 
         return None
+
+    async def get_account_transactions(self, account_uuid: str, user_id: int = None, limit: int = 100) -> List[dict]:
+        """
+        Fetch v2 transactions for a single Coinbase account.
+
+        The v2 endpoint returns ALL transaction types: buy, sell, send, receive,
+        trade, fiat_deposit, fiat_withdrawal, staking_reward, subscription, etc.
+
+        Args:
+            account_uuid: Coinbase account UUID
+            user_id: User ID for auth
+            limit: Max transactions per page (API max 100)
+
+        Returns:
+            List of normalized transaction dicts ready for DB storage
+        """
+        all_txs = []
+        path = f"/v2/accounts/{account_uuid}/transactions"
+        params = {"limit": min(limit, 100), "order": "desc"}
+
+        while True:
+            data = await self._make_request("GET", path, params, user_id=user_id)
+            if not data:
+                break
+
+            transactions = data.get("data", [])
+            for tx in transactions:
+                # Skip non-completed transactions
+                if tx.get("status") != "completed":
+                    continue
+
+                try:
+                    amount_data = tx.get("amount", {})
+                    native_data = tx.get("native_amount", {})
+                    network = tx.get("network", {})
+
+                    normalized = {
+                        "tx_id": tx.get("id", ""),
+                        "tx_type": tx.get("type", "unknown"),
+                        "status": tx.get("status", "completed"),
+                        "tx_time": tx.get("created_at", ""),
+                        "amount": amount_data.get("amount", "0"),
+                        "token_symbol": amount_data.get("currency", ""),
+                        "native_amount": native_data.get("amount", "0"),
+                        "native_currency": native_data.get("currency", "USD"),
+                        "fee": "",
+                        "fee_currency": "",
+                        "from_address": "",
+                        "to_address": "",
+                        "network_hash": network.get("hash", "") if network else "",
+                        "metadata": json.dumps(tx),
+                    }
+
+                    # Extract fee if present
+                    fee_data = tx.get("fee") or tx.get("network", {}).get("transaction_fee") or {}
+                    if isinstance(fee_data, dict):
+                        normalized["fee"] = fee_data.get("amount", "")
+                        normalized["fee_currency"] = fee_data.get("currency", "")
+
+                    # Extract addresses for send/receive types
+                    to_data = tx.get("to", {})
+                    from_data = tx.get("from", {})
+                    if isinstance(to_data, dict):
+                        normalized["to_address"] = to_data.get("address", "") or to_data.get("email", "")
+                    if isinstance(from_data, dict):
+                        normalized["from_address"] = from_data.get("address", "") or from_data.get("email", "")
+
+                    # For network-level address info
+                    if network and isinstance(network, dict):
+                        if not normalized["to_address"]:
+                            normalized["to_address"] = network.get("to_address_info", {}).get("address", "") if isinstance(network.get("to_address_info"), dict) else ""
+
+                    all_txs.append(normalized)
+                except Exception as e:
+                    logger.error(f"Error normalizing v2 transaction: {e}")
+                    continue
+
+            # Paginate via next_uri
+            pagination = data.get("pagination", {})
+            next_uri = pagination.get("next_uri")
+            if not next_uri:
+                break
+
+            # next_uri includes query params like /v2/accounts/.../transactions?starting_after=...
+            # Split into path and params so JWT signs just the path
+            parsed = urlparse(next_uri)
+            path = parsed.path
+            qs = parse_qs(parsed.query)
+            # parse_qs returns lists; flatten to single values for httpx
+            params = {k: v[0] for k, v in qs.items()} if qs else None
+
+        logger.info(f"Fetched {len(all_txs)} v2 transactions for account {account_uuid[:8]}...")
+        return all_txs
+
+    async def get_all_v2_transactions(self, user_id: int = None) -> List[dict]:
+        """
+        Fetch ALL v2 transactions across all Coinbase accounts.
+
+        Iterates through all accounts and deduplicates by tx_id.
+
+        Returns:
+            List of normalized transaction dicts
+        """
+        accounts = await self.get_accounts(user_id=user_id)
+        if not accounts:
+            logger.warning("No Coinbase accounts found for v2 transaction fetch")
+            return []
+
+        all_txs = []
+        seen_ids = set()
+
+        for account in accounts:
+            account_uuid = account.get("uuid", "")
+            if not account_uuid:
+                continue
+
+            try:
+                txs = await self.get_account_transactions(account_uuid, user_id=user_id, limit=100)
+                for tx in txs:
+                    tx_id = tx.get("tx_id", "")
+                    if tx_id and tx_id not in seen_ids:
+                        seen_ids.add(tx_id)
+                        all_txs.append(tx)
+            except Exception as e:
+                logger.error(f"Error fetching v2 transactions for account {account_uuid[:8]}: {e}")
+                continue
+
+        # Sort by tx_time descending
+        all_txs.sort(key=lambda x: x.get("tx_time", ""), reverse=True)
+        logger.info(f"Fetched {len(all_txs)} total v2 transactions from {len(accounts)} accounts")
+        return all_txs
 
     async def get_normalized_transactions(self, user_id: int = None, limit: int = 100) -> List[dict]:
         """

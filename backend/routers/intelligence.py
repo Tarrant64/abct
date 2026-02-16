@@ -356,24 +356,52 @@ async def get_counterparties(
 
 
 async def _get_exchange_trade_counts(user_id: int, time_filter: Optional[str] = None) -> dict:
-    """Fetch trade counts from connected exchanges (Coinbase etc.)."""
-    result = {"total": 0, "deposits": 0, "withdrawals": 0, "buys": 0, "sells": 0}
+    """Fetch trade counts from the exchange_transactions DB table."""
+    result = {
+        "total": 0, "deposits": 0, "withdrawals": 0,
+        "buys": 0, "sells": 0, "sends": 0, "receives": 0, "rewards": 0,
+    }
     try:
-        if await coinbase_service.is_configured(user_id=user_id):
-            orders = await coinbase_service.get_transactions(user_id=user_id, limit=500)
-            for order in orders:
-                # Filter by time if needed
-                created = order.get("created_time") or order.get("created_at", "")
-                if time_filter and created and created < time_filter:
-                    continue
-                side = (order.get("side") or "").upper()
-                result["total"] += 1
-                if side == "BUY":
-                    result["buys"] += 1
-                    result["withdrawals"] += 1  # Buy = funds come from CEX to user
-                elif side == "SELL":
-                    result["sells"] += 1
-                    result["deposits"] += 1  # Sell = funds go from user to CEX
+        sql = """
+            SELECT tx_type, COUNT(*) as cnt
+            FROM exchange_transactions
+            WHERE user_id = ?
+        """
+        params: list = [user_id]
+
+        if time_filter:
+            sql += " AND tx_time >= ?"
+            params.append(time_filter)
+
+        sql += " GROUP BY tx_type"
+
+        async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(sql, params)
+            rows = await cursor.fetchall()
+
+        for row in rows:
+            tx_type = (row["tx_type"] or "").lower()
+            count = row["cnt"]
+            result["total"] += count
+
+            if tx_type in ("buy", "subscription"):
+                result["buys"] += count
+            elif tx_type == "sell":
+                result["sells"] += count
+            elif tx_type == "send":
+                result["sends"] += count
+            elif tx_type == "receive":
+                result["receives"] += count
+            elif tx_type == "fiat_deposit":
+                result["deposits"] += count
+            elif tx_type == "fiat_withdrawal":
+                result["withdrawals"] += count
+            elif tx_type in ("staking_reward", "inflation_reward"):
+                result["rewards"] += count
+            elif tx_type in ("trade", "advanced_trade_fill"):
+                result["buys"] += count  # conservative default
+
     except Exception as e:
         logger.debug(f"Exchange trade count fetch failed: {e}")
     return result
@@ -487,10 +515,39 @@ async def get_flow_summary(
             chains[c]["sent"] = round(chains[c]["sent"], 2)
             chains[c]["received"] = round(chains[c]["received"], 2)
 
-        # Add exchange API trade counts (Coinbase etc.)
+        # Add exchange DB trade counts (Coinbase etc.)
         exchange_trades = await _get_exchange_trade_counts(user_id, time_filter)
         cex_deposits += exchange_trades["deposits"]
         cex_withdrawals += exchange_trades["withdrawals"]
+
+        # Include exchange native_amount in USD flow if available
+        exchange_usd_in = 0.0
+        exchange_usd_out = 0.0
+        try:
+            sql_ex = """
+                SELECT tx_type,
+                       SUM(CAST(COALESCE(native_amount, '0') AS REAL)) as usd_total
+                FROM exchange_transactions
+                WHERE user_id = ?
+            """
+            ex_params: list = [user_id]
+            if time_filter:
+                sql_ex += " AND tx_time >= ?"
+                ex_params.append(time_filter)
+            sql_ex += " GROUP BY tx_type"
+
+            async with aiosqlite.connect(str(DATABASE_PATH)) as db2:
+                db2.row_factory = aiosqlite.Row
+                cursor2 = await db2.execute(sql_ex, ex_params)
+                for row in await cursor2.fetchall():
+                    tt = (row["tx_type"] or "").lower()
+                    usd = abs(row["usd_total"] or 0)
+                    if tt in ("buy", "subscription", "receive", "staking_reward", "inflation_reward"):
+                        exchange_usd_in += usd
+                    elif tt in ("sell", "send", "fiat_withdrawal"):
+                        exchange_usd_out += usd
+        except Exception as e:
+            logger.debug(f"Exchange USD flow query failed: {e}")
 
         result = {
             "total_sent": round(total_sent, 2),
@@ -501,6 +558,13 @@ async def get_flow_summary(
             "cex_withdrawals": cex_withdrawals,
             "self_transfers": self_transfers,
             "exchange_trades": exchange_trades["total"],
+            "exchange_buys": exchange_trades.get("buys", 0),
+            "exchange_sells": exchange_trades.get("sells", 0),
+            "exchange_sends": exchange_trades.get("sends", 0),
+            "exchange_receives": exchange_trades.get("receives", 0),
+            "exchange_rewards": exchange_trades.get("rewards", 0),
+            "exchange_usd_in": round(exchange_usd_in, 2),
+            "exchange_usd_out": round(exchange_usd_out, 2),
             "chains": chains,
         }
 
@@ -536,6 +600,7 @@ async def get_activity_heatmap(
         async with aiosqlite.connect(str(DATABASE_PATH)) as db:
             db.row_factory = aiosqlite.Row
 
+            # On-chain transactions
             sql = """
                 SELECT
                     CAST(strftime('%w', tx_time) AS INTEGER) as dow,
@@ -558,12 +623,43 @@ async def get_activity_heatmap(
             cursor = await db.execute(sql, params)
             rows = await cursor.fetchall()
 
-            heatmap = []
+            # Aggregate into a dict for merging
+            heatmap_map = {}
             for row in rows:
+                key = (row["dow"], row["hour"])
+                heatmap_map[key] = row["count"]
+
+            # Exchange transactions (only if no blockchain filter, since CEX is cross-chain)
+            if not blockchain:
+                ex_sql = """
+                    SELECT
+                        CAST(strftime('%w', tx_time) AS INTEGER) as dow,
+                        CAST(strftime('%H', tx_time) AS INTEGER) as hour,
+                        COUNT(*) as count
+                    FROM exchange_transactions
+                    WHERE user_id = ?
+                """
+                ex_params = [user_id]
+                if time_filter:
+                    ex_sql += " AND tx_time >= ?"
+                    ex_params.append(time_filter)
+                ex_sql += " GROUP BY dow, hour"
+
+                try:
+                    cursor2 = await db.execute(ex_sql, ex_params)
+                    ex_rows = await cursor2.fetchall()
+                    for row in ex_rows:
+                        key = (row["dow"], row["hour"])
+                        heatmap_map[key] = heatmap_map.get(key, 0) + row["count"]
+                except Exception as e:
+                    logger.debug(f"Exchange heatmap query skipped: {e}")
+
+            heatmap = []
+            for (dow, hour), count in heatmap_map.items():
                 heatmap.append({
-                    "day": row["dow"],
-                    "hour": row["hour"],
-                    "count": row["count"],
+                    "day": dow,
+                    "hour": hour,
+                    "count": count,
                 })
 
         await set_cache(cache_key, heatmap, ttl_seconds=CACHE_TTL_WARM, user_id=user_id)
@@ -718,6 +814,61 @@ async def get_large_transactions(
                 "counterparty_label": label,
                 "tx_time": row["tx_time"],
             })
+
+        # Include exchange transactions above threshold
+        if not blockchain:
+            try:
+                ex_sql = """
+                    SELECT tx_id, exchange, tx_type, tx_time, token_symbol,
+                           CAST(COALESCE(amount, '0') AS REAL) as amount_val,
+                           CAST(COALESCE(native_amount, '0') AS REAL) as native_usd,
+                           from_address, to_address
+                    FROM exchange_transactions
+                    WHERE user_id = ?
+                """
+                ex_params: list = [user_id]
+                if time_filter:
+                    ex_sql += " AND tx_time >= ?"
+                    ex_params.append(time_filter)
+                ex_sql += " ORDER BY tx_time DESC"
+
+                async with aiosqlite.connect(str(DATABASE_PATH)) as db2:
+                    db2.row_factory = aiosqlite.Row
+                    cursor2 = await db2.execute(ex_sql, ex_params)
+                    ex_rows = await cursor2.fetchall()
+
+                for row in ex_rows:
+                    usd_value = abs(row["native_usd"] or 0)
+                    if usd_value < min_usd:
+                        continue
+
+                    tx_type = (row["tx_type"] or "").lower()
+                    if tx_type in ("buy", "subscription", "receive", "staking_reward"):
+                        direction = "received"
+                    elif tx_type in ("sell", "send", "fiat_withdrawal"):
+                        direction = "sent"
+                    else:
+                        direction = tx_type
+
+                    amount = abs(row["amount_val"] or 0)
+                    tx_id = row["tx_id"] or ""
+                    short_id = tx_id[:10] + "..." + tx_id[-6:] if len(tx_id) > 20 else tx_id
+
+                    results.append({
+                        "tx_hash": tx_id,
+                        "tx_hash_short": short_id,
+                        "blockchain": row["exchange"],
+                        "direction": direction,
+                        "token_symbol": row["token_symbol"],
+                        "amount": round(amount, 6),
+                        "usd_value": round(usd_value, 2),
+                        "counterparty": row["exchange"].title(),
+                        "counterparty_label": row["exchange"].title(),
+                        "tx_time": row["tx_time"],
+                        "_is_exchange": True,
+                    })
+            except Exception as e:
+                logger.debug(f"Exchange large tx query failed: {e}")
 
         # Sort by USD value descending
         results.sort(key=lambda x: x["usd_value"], reverse=True)

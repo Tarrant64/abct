@@ -1071,5 +1071,148 @@ class TransactionHistoryService:
         return v1_results[:1000]
 
 
+    # ------------------------------------------------------------------
+    # Exchange (CEX) transaction persistence
+    # ------------------------------------------------------------------
+
+    async def save_exchange_transactions(
+        self,
+        user_id: int,
+        exchange: str,
+        transactions: List[dict],
+    ) -> int:
+        """
+        Persist exchange transactions to the exchange_transactions table.
+
+        Uses INSERT OR IGNORE so duplicates (same user_id+exchange+tx_id) are skipped.
+
+        Returns:
+            Number of newly inserted rows
+        """
+        if not transactions:
+            return 0
+
+        inserted = 0
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            for tx in transactions:
+                try:
+                    cursor = await db.execute("""
+                        INSERT OR IGNORE INTO exchange_transactions
+                        (user_id, exchange, tx_id, tx_type, status, tx_time,
+                         amount, token_symbol, native_amount, native_currency,
+                         fee, fee_currency, from_address, to_address,
+                         network_hash, metadata, fetched_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        user_id,
+                        exchange,
+                        tx.get("tx_id", ""),
+                        tx.get("tx_type", "unknown"),
+                        tx.get("status", "completed"),
+                        tx.get("tx_time", ""),
+                        tx.get("amount", ""),
+                        tx.get("token_symbol", ""),
+                        tx.get("native_amount", ""),
+                        tx.get("native_currency", "USD"),
+                        tx.get("fee", ""),
+                        tx.get("fee_currency", ""),
+                        tx.get("from_address", ""),
+                        tx.get("to_address", ""),
+                        tx.get("network_hash", ""),
+                        tx.get("metadata", ""),
+                        datetime.utcnow().isoformat(),
+                    ))
+                    if cursor.rowcount > 0:
+                        inserted += 1
+                except Exception as e:
+                    logger.error(f"Error saving exchange tx {tx.get('tx_id')}: {e}")
+                    continue
+
+            await db.commit()
+
+        logger.info(f"Saved {inserted} new exchange transactions ({exchange}) to database")
+        return inserted
+
+    async def get_exchange_transactions(
+        self,
+        user_id: int,
+        days: int = 90,
+        exchange: str = None,
+        tx_type: str = None,
+        search: str = None,
+        limit: int = 2000,
+    ) -> List[dict]:
+        """
+        Query stored exchange transactions with filtering.
+
+        Args:
+            user_id: User ID
+            days: Number of days to look back (0 = all time)
+            exchange: Filter by exchange name
+            tx_type: Filter by transaction type (buy, sell, send, etc.)
+            search: Text search in tx_id, token_symbol, addresses
+            limit: Max results
+
+        Returns:
+            List of exchange transaction dicts
+        """
+        query = """
+            SELECT * FROM exchange_transactions
+            WHERE user_id = ?
+        """
+        params: list = [user_id]
+
+        if days > 0:
+            cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
+            query += " AND tx_time >= ?"
+            params.append(cutoff)
+
+        if exchange:
+            query += " AND exchange = ?"
+            params.append(exchange)
+
+        if tx_type:
+            query += " AND tx_type = ?"
+            params.append(tx_type)
+
+        if search:
+            query += """ AND (
+                tx_id LIKE ? OR
+                token_symbol LIKE ? OR
+                from_address LIKE ? OR
+                to_address LIKE ? OR
+                network_hash LIKE ?
+            )"""
+            pattern = f"%{search}%"
+            params.extend([pattern] * 5)
+
+        query += " ORDER BY tx_time DESC LIMIT ?"
+        params.append(limit)
+
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(query, params)
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+    async def get_exchange_transaction_count(
+        self,
+        user_id: int,
+        exchange: str = None,
+    ) -> int:
+        """Quick count of stored exchange transactions."""
+        query = "SELECT COUNT(*) FROM exchange_transactions WHERE user_id = ?"
+        params: list = [user_id]
+
+        if exchange:
+            query += " AND exchange = ?"
+            params.append(exchange)
+
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            cursor = await db.execute(query, params)
+            row = await cursor.fetchone()
+            return row[0] if row else 0
+
+
 # Singleton
 transaction_history_service = TransactionHistoryService()

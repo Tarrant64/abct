@@ -23,7 +23,8 @@ from services.gate_service import gate_service
 from services.kucoin_service import kucoin_service
 from services.pricing import pricing_service
 from services.demo_exchange_service import demo_exchange_service
-from database import get_cache, set_cache, get_username_by_user_id
+from services.transaction_history import transaction_history_service
+from database import get_cache, set_cache, clear_cache, get_username_by_user_id
 from middleware.auth import verify_admin
 from middleware.demo_mode import is_demo_user
 from auth_utils import verify_session
@@ -609,68 +610,147 @@ async def get_all_exchanges(user_id: int = Depends(verify_session), refresh: boo
     }
 
 
+def _map_v2_tx_type_to_side(tx_type: str, amount: str = "0") -> str:
+    """Map Coinbase v2 transaction type to a normalized direction/side."""
+    tx_type_lower = tx_type.lower()
+    if tx_type_lower in ("buy", "subscription"):
+        return "BUY"
+    elif tx_type_lower == "sell":
+        return "SELL"
+    elif tx_type_lower == "send":
+        return "SEND"
+    elif tx_type_lower == "receive":
+        return "RECEIVE"
+    elif tx_type_lower in ("fiat_deposit",):
+        return "DEPOSIT"
+    elif tx_type_lower in ("fiat_withdrawal",):
+        return "WITHDRAWAL"
+    elif tx_type_lower in ("staking_reward", "inflation_reward"):
+        return "REWARD"
+    elif tx_type_lower in ("trade", "advanced_trade_fill"):
+        # Determine buy/sell based on amount sign
+        try:
+            if float(amount) >= 0:
+                return "BUY"
+            else:
+                return "SELL"
+        except (ValueError, TypeError):
+            return "BUY"
+    else:
+        return tx_type.upper()
+
+
+def _db_tx_to_normalized(row: dict) -> dict:
+    """Convert an exchange_transactions DB row to the normalized API format."""
+    tx_type = row.get("tx_type", "")
+    amount_str = row.get("amount", "0")
+    side = _map_v2_tx_type_to_side(tx_type, amount_str)
+
+    # Parse amount (remove negative sign for display)
+    try:
+        amount_val = abs(float(amount_str)) if amount_str else 0
+    except (ValueError, TypeError):
+        amount_val = 0
+
+    # Parse native USD amount
+    try:
+        native_amount = abs(float(row.get("native_amount", "0") or "0"))
+    except (ValueError, TypeError):
+        native_amount = 0
+
+    # Parse fee
+    try:
+        fee = abs(float(row.get("fee", "0") or "0"))
+    except (ValueError, TypeError):
+        fee = 0
+
+    return {
+        "exchange": row.get("exchange", "coinbase"),
+        "time": row.get("tx_time", ""),
+        "side": side,
+        "tx_type": tx_type,
+        "amount": amount_val,
+        "token": row.get("token_symbol", ""),
+        "quote_amount": native_amount,
+        "quote_token": row.get("native_currency", "USD"),
+        "price": round(native_amount / amount_val, 2) if amount_val > 0 else 0,
+        "fee": fee,
+        "fee_token": row.get("fee_currency", "USD"),
+        "order_id": row.get("tx_id", ""),
+        "from_address": row.get("from_address", ""),
+        "to_address": row.get("to_address", ""),
+        "network_hash": row.get("network_hash", ""),
+        "_isCex": True,
+    }
+
+
 @router.get("/transactions")
 async def get_exchange_transactions(
     user_id: int = Depends(verify_session),
     days: int = Query(90, description="Number of days to fetch"),
-    exchange: str = Query(None, description="Filter by exchange name")
+    exchange: str = Query(None, description="Filter by exchange name"),
+    refresh: bool = Query(False, description="Force re-fetch from APIs"),
 ):
-    """Get normalized trade history from all configured exchanges."""
+    """Get normalized trade history from all configured exchanges.
+
+    First checks the exchange_transactions DB table (fast path).
+    Falls back to live API fetch for exchanges without DB data.
+    """
     cache_key = f"exchange_transactions_{days}_{exchange or 'all'}"
 
-    cached = await get_cache(cache_key, user_id=user_id)
-    if cached:
-        cached['from_cache'] = True
-        return cached
+    if not refresh:
+        cached = await get_cache(cache_key, user_id=user_id)
+        if cached:
+            cached['from_cache'] = True
+            return cached
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     all_transactions = []
     exchange_counts = {}
 
-    # Build list of exchanges to query
-    exchange_tasks = []
+    # --- Coinbase: read from DB (v2 full history) ---
+    if not exchange or exchange == "coinbase":
+        if await coinbase_service.is_configured(user_id=user_id):
+            db_count = await transaction_history_service.get_exchange_transaction_count(user_id, "coinbase")
 
-    # Coinbase (async is_configured)
-    if (not exchange or exchange == "coinbase") and await coinbase_service.is_configured(user_id=user_id):
-        exchange_tasks.append(("coinbase", coinbase_service.get_normalized_transactions(user_id=user_id, limit=500)))
-
-    # Binance (sync is_configured)
-    if (not exchange or exchange == "binance") and binance_service.is_configured():
-        exchange_tasks.append(("binance", binance_service.get_trade_history(user_id=user_id, limit=500)))
-
-    # Binance US (sync is_configured)
-    if (not exchange or exchange == "binance_us") and binance_us_service.is_configured():
-        exchange_tasks.append(("binance_us", binance_us_service.get_trade_history(user_id=user_id, limit=500)))
-
-    # Execute all in parallel
-    if exchange_tasks:
-        results = await asyncio.gather(
-            *[task for _, task in exchange_tasks],
-            return_exceptions=True
-        )
-
-        for (ex_name, _), result in zip(exchange_tasks, results):
-            if isinstance(result, Exception):
-                logger.error(f"Error fetching {ex_name} transactions: {result}")
-                exchange_counts[ex_name] = 0
-                continue
-
-            # Filter by cutoff date
-            filtered = []
-            for tx in result:
+            if db_count == 0 or refresh:
+                # Auto-fetch on first load or explicit refresh
                 try:
-                    tx_time = tx.get("time", "")
-                    if tx_time:
-                        tx_dt = datetime.fromisoformat(tx_time.replace("Z", "+00:00"))
-                        if tx_dt >= cutoff:
-                            filtered.append(tx)
-                    else:
-                        filtered.append(tx)
-                except (ValueError, TypeError):
-                    filtered.append(tx)
+                    v2_txs = await coinbase_service.get_all_v2_transactions(user_id=user_id)
+                    await transaction_history_service.save_exchange_transactions(user_id, "coinbase", v2_txs)
+                    logger.info(f"Auto-fetched {len(v2_txs)} Coinbase v2 transactions")
+                except Exception as e:
+                    logger.error(f"Error auto-fetching Coinbase v2 transactions: {e}")
 
+            # Read from DB
+            db_rows = await transaction_history_service.get_exchange_transactions(
+                user_id, days=days, exchange="coinbase"
+            )
+            coinbase_txs = [_db_tx_to_normalized(row) for row in db_rows]
+            all_transactions.extend(coinbase_txs)
+            exchange_counts["coinbase"] = len(coinbase_txs)
+
+    # --- Binance: still uses live API (no v2-style full history) ---
+    if (not exchange or exchange == "binance") and binance_service.is_configured():
+        try:
+            result = await binance_service.get_trade_history(user_id=user_id, limit=500)
+            filtered = _filter_by_cutoff(result, cutoff)
             all_transactions.extend(filtered)
-            exchange_counts[ex_name] = len(filtered)
+            exchange_counts["binance"] = len(filtered)
+        except Exception as e:
+            logger.error(f"Error fetching binance transactions: {e}")
+            exchange_counts["binance"] = 0
+
+    # --- Binance US: still uses live API ---
+    if (not exchange or exchange == "binance_us") and binance_us_service.is_configured():
+        try:
+            result = await binance_us_service.get_trade_history(user_id=user_id, limit=500)
+            filtered = _filter_by_cutoff(result, cutoff)
+            all_transactions.extend(filtered)
+            exchange_counts["binance_us"] = len(filtered)
+        except Exception as e:
+            logger.error(f"Error fetching binance_us transactions: {e}")
+            exchange_counts["binance_us"] = 0
 
     # Sort by time descending
     all_transactions.sort(key=lambda x: x.get("time", ""), reverse=True)
@@ -688,6 +768,56 @@ async def get_exchange_transactions(
     return result
 
 
+def _filter_by_cutoff(transactions: list, cutoff: datetime) -> list:
+    """Filter transactions to only include those after cutoff."""
+    filtered = []
+    for tx in transactions:
+        try:
+            tx_time = tx.get("time", "")
+            if tx_time:
+                tx_dt = datetime.fromisoformat(tx_time.replace("Z", "+00:00"))
+                if tx_dt >= cutoff:
+                    filtered.append(tx)
+            else:
+                filtered.append(tx)
+        except (ValueError, TypeError):
+            filtered.append(tx)
+    return filtered
+
+
+@router.post("/transactions/refresh")
+async def refresh_exchange_transactions(
+    user_id: int = Depends(verify_session),
+    exchange: str = Query(None, description="Exchange to refresh (default: all)"),
+):
+    """Trigger a full re-fetch of exchange transactions and store in DB."""
+    results = {}
+
+    if not exchange or exchange == "coinbase":
+        if await coinbase_service.is_configured(user_id=user_id):
+            try:
+                v2_txs = await coinbase_service.get_all_v2_transactions(user_id=user_id)
+                inserted = await transaction_history_service.save_exchange_transactions(
+                    user_id, "coinbase", v2_txs
+                )
+                total = await transaction_history_service.get_exchange_transaction_count(user_id, "coinbase")
+                results["coinbase"] = {
+                    "fetched": len(v2_txs),
+                    "new": inserted,
+                    "total_stored": total,
+                }
+            except Exception as e:
+                logger.error(f"Error refreshing Coinbase transactions: {e}")
+                results["coinbase"] = {"error": str(e)}
+
+    # Invalidate transaction and analytics caches
+    await clear_cache("exchange_transactions_", user_id=user_id)
+    await clear_cache("exchange_analytics_", user_id=user_id)
+    await clear_cache("intelligence_", user_id=user_id)
+
+    return {"success": True, "results": results}
+
+
 @router.get("/analytics/by-exchange")
 async def get_analytics_by_exchange(
     user_id: int = Depends(verify_session),
@@ -701,7 +831,7 @@ async def get_analytics_by_exchange(
         cached['from_cache'] = True
         return cached
 
-    # Fetch all transactions for the period
+    # Fetch from DB + API
     tx_response = await get_exchange_transactions(user_id=user_id, days=days)
     transactions = tx_response.get("transactions", [])
 
@@ -725,11 +855,9 @@ async def get_analytics_by_exchange(
         bucket_format = "%Y-%m"
         bucket_label_fn = lambda d: d.strftime("%b %Y")
 
-    # Build time range of buckets
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(days=days)
 
-    # Generate all bucket labels in order
     bucket_labels = []
     bucket_keys = []
     current = cutoff
@@ -744,10 +872,8 @@ async def get_analytics_by_exchange(
         elif days <= 365:
             current += timedelta(weeks=1)
         else:
-            # Advance by ~30 days for monthly
             current += timedelta(days=30)
 
-    # Count transactions per exchange per bucket
     exchange_buckets = defaultdict(lambda: defaultdict(int))
 
     for tx in transactions:
@@ -762,7 +888,6 @@ async def get_analytics_by_exchange(
         except (ValueError, TypeError):
             continue
 
-    # Build response with ordered counts per exchange
     exchanges = {}
     for ex_name, bucket_counts in exchange_buckets.items():
         exchanges[ex_name] = [bucket_counts.get(bk, 0) for bk in bucket_keys]
