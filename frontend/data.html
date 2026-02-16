@@ -1355,6 +1355,10 @@
                 <div class="analytics-chart-container">
                     <h3 class="analytics-title">Coin Allocation<span class="analytics-refresh-indicator" id="coinRefreshIndicator" title="Refreshing data..."></span></h3>
                     <div class="analytics-content">
+                        <div class="analytics-loading-overlay" id="coinAllocationLoading">
+                            <div class="loading-spinner"></div>
+                            <span class="loading-text">Loading allocations...</span>
+                        </div>
                         <div class="analytics-chart-wrapper">
                             <canvas id="coinAllocationChart"></canvas>
                         </div>
@@ -1369,6 +1373,10 @@
                 <div class="analytics-chart-container">
                     <h3 class="analytics-title">Asset Allocation by Category<span class="analytics-refresh-indicator" id="categoryRefreshIndicator" title="Refreshing data..."></span></h3>
                     <div class="analytics-content">
+                        <div class="analytics-loading-overlay" id="categoryAllocationLoading">
+                            <div class="loading-spinner"></div>
+                            <span class="loading-text">Loading categories...</span>
+                        </div>
                         <div class="analytics-chart-wrapper">
                             <canvas id="categoryAllocationChart"></canvas>
                         </div>
@@ -1561,14 +1569,24 @@
                     <table class="chain-financials-table" id="intelLargeTxTable">
                         <thead>
                             <tr>
-                                <th>Date</th>
-                                <th>Chain</th>
-                                <th>Direction</th>
-                                <th>Token</th>
-                                <th>Amount</th>
-                                <th>USD Value</th>
+                                <th class="sortable" onclick="sortLargeTx('date')">Date<span class="sort-arrow">▼</span></th>
+                                <th class="sortable" onclick="sortLargeTx('chain')">Chain<span class="sort-arrow">▲▼</span></th>
+                                <th class="sortable" onclick="sortLargeTx('direction')">Direction<span class="sort-arrow">▲▼</span></th>
+                                <th class="sortable" onclick="sortLargeTx('token')">Token<span class="sort-arrow">▲▼</span></th>
+                                <th class="sortable" onclick="sortLargeTx('amount')">Amount<span class="sort-arrow">▲▼</span></th>
+                                <th class="sortable sort-active" onclick="sortLargeTx('usd')">USD Value<span class="sort-arrow">▼</span></th>
                                 <th>Counterparty</th>
                                 <th>Tx Hash</th>
+                            </tr>
+                            <tr class="filter-row">
+                                <th></th>
+                                <th><select id="ltFilterChain" onchange="applyLtFilters()"><option value="">All Chains</option></select></th>
+                                <th><select id="ltFilterDirection" onchange="applyLtFilters()"><option value="">All</option><option value="sent">Sent</option><option value="received">Received</option></select></th>
+                                <th><input type="text" id="ltFilterToken" placeholder="Filter..." oninput="applyLtFilters()"></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody id="intelLargeTxBody">

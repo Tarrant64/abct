@@ -16,8 +16,12 @@
     let _cpPage = 1;
     let _cpPageSize = 25;
     let _allLargeTx = [];
+    let _filteredLargeTx = [];
     let _ltPage = 1;
     let _ltPageSize = 25;
+    let _ltSortCol = 'usd';
+    let _ltSortDir = 'desc';
+    let _ltFilters = { chain: '', direction: '', token: '' };
 
     // Color palette
     const FLOW_COLORS = {
@@ -532,7 +536,8 @@
             if (data.success) {
                 _allLargeTx = data.transactions || [];
                 _ltPage = 1;
-                renderLargeTxPage();
+                populateLtChainFilter();
+                applyLtSortAndFilter();
             }
         } catch (err) {
             console.error('Large transactions load error:', err);
@@ -543,14 +548,15 @@
         const tbody = document.getElementById('intelLargeTxBody');
         if (!tbody) return;
 
-        if (!_allLargeTx.length) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#888;">No large transactions found</td></tr>';
+        if (!_filteredLargeTx.length) {
+            const msg = _allLargeTx.length ? 'No transactions match filters' : 'No large transactions found';
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#888;">${msg}</td></tr>`;
             renderLtPagination();
             return;
         }
 
         const start = (_ltPage - 1) * _ltPageSize;
-        const page = _allLargeTx.slice(start, start + _ltPageSize);
+        const page = _filteredLargeTx.slice(start, start + _ltPageSize);
 
         let html = '';
         for (const tx of page) {
@@ -583,7 +589,7 @@
         const container = document.getElementById('intelLargeTxPagination');
         if (!container) return;
 
-        const total = _allLargeTx.length;
+        const total = _filteredLargeTx.length;
         const totalPages = Math.max(1, Math.ceil(total / _ltPageSize));
         const start = (_ltPage - 1) * _ltPageSize + 1;
         const end = Math.min(_ltPage * _ltPageSize, total);
@@ -593,9 +599,11 @@
             return;
         }
 
+        const filterNote = (_ltFilters.chain || _ltFilters.direction || _ltFilters.token)
+            ? ` <span style="color:var(--text-secondary,#888);font-size:11px">(filtered from ${_allLargeTx.length})</span>` : '';
         container.innerHTML = `
             <div class="cp-pagination-controls">
-                <span class="cp-pagination-info">${start}-${end} of ${total}</span>
+                <span class="cp-pagination-info">${start}-${end} of ${total}${filterNote}</span>
                 <button class="cp-page-btn" onclick="changeLtPage(-1)" ${_ltPage <= 1 ? 'disabled' : ''}>&laquo; Prev</button>
                 <span class="cp-page-num">Page ${_ltPage} / ${totalPages}</span>
                 <button class="cp-page-btn" onclick="changeLtPage(1)" ${_ltPage >= totalPages ? 'disabled' : ''}>Next &raquo;</button>
@@ -604,7 +612,7 @@
     }
 
     window.changeLtPage = function(delta) {
-        const totalPages = Math.max(1, Math.ceil(_allLargeTx.length / _ltPageSize));
+        const totalPages = Math.max(1, Math.ceil(_filteredLargeTx.length / _ltPageSize));
         const newPage = _ltPage + delta;
         if (newPage < 1 || newPage > totalPages) return;
         _ltPage = newPage;
@@ -612,7 +620,119 @@
     };
 
     window.changeLargeTxFilter = function() {
+        // Reset inline filters when top-level filters change
+        _ltFilters = { chain: '', direction: '', token: '' };
+        const chainEl = document.getElementById('ltFilterChain');
+        const dirEl = document.getElementById('ltFilterDirection');
+        const tokenEl = document.getElementById('ltFilterToken');
+        if (chainEl) chainEl.value = '';
+        if (dirEl) dirEl.value = '';
+        if (tokenEl) tokenEl.value = '';
         loadLargeTransactions();
+    };
+
+    // ---- Sort & Filter ----
+
+    function applyLtSortAndFilter() {
+        // Filter
+        let data = _allLargeTx;
+        if (_ltFilters.chain) {
+            data = data.filter(tx => (tx.blockchain || '').toLowerCase() === _ltFilters.chain.toLowerCase());
+        }
+        if (_ltFilters.direction) {
+            data = data.filter(tx => tx.direction === _ltFilters.direction);
+        }
+        if (_ltFilters.token) {
+            const q = _ltFilters.token.toLowerCase();
+            data = data.filter(tx => (tx.token_symbol || '').toLowerCase().includes(q));
+        }
+
+        // Sort
+        const col = _ltSortCol;
+        const dir = _ltSortDir === 'asc' ? 1 : -1;
+        data = [...data].sort((a, b) => {
+            let va, vb;
+            switch (col) {
+                case 'date':
+                    va = a.tx_time || '';
+                    vb = b.tx_time || '';
+                    return va < vb ? -dir : va > vb ? dir : 0;
+                case 'chain':
+                    va = (a.blockchain || '').toLowerCase();
+                    vb = (b.blockchain || '').toLowerCase();
+                    return va < vb ? -dir : va > vb ? dir : 0;
+                case 'direction':
+                    va = a.direction || '';
+                    vb = b.direction || '';
+                    return va < vb ? -dir : va > vb ? dir : 0;
+                case 'token':
+                    va = (a.token_symbol || '').toLowerCase();
+                    vb = (b.token_symbol || '').toLowerCase();
+                    return va < vb ? -dir : va > vb ? dir : 0;
+                case 'amount':
+                    return ((a.amount || 0) - (b.amount || 0)) * dir;
+                case 'usd':
+                    return ((a.usd_value || 0) - (b.usd_value || 0)) * dir;
+                default:
+                    return 0;
+            }
+        });
+
+        _filteredLargeTx = data;
+        renderLargeTxPage();
+        updateLtSortHeaders();
+    }
+
+    function updateLtSortHeaders() {
+        const table = document.getElementById('intelLargeTxTable');
+        if (!table) return;
+        const headers = table.querySelectorAll('thead tr:first-child th.sortable');
+        const colMap = ['date', 'chain', 'direction', 'token', 'amount', 'usd'];
+        headers.forEach((th, i) => {
+            const col = colMap[i];
+            const arrow = th.querySelector('.sort-arrow');
+            if (col === _ltSortCol) {
+                th.classList.add('sort-active');
+                if (arrow) arrow.textContent = _ltSortDir === 'asc' ? '▲' : '▼';
+            } else {
+                th.classList.remove('sort-active');
+                if (arrow) arrow.textContent = '▲▼';
+            }
+        });
+    }
+
+    function populateLtChainFilter() {
+        const sel = document.getElementById('ltFilterChain');
+        if (!sel) return;
+        const chains = [...new Set(_allLargeTx.map(tx => tx.blockchain || '').filter(Boolean))].sort();
+        const current = sel.value;
+        sel.innerHTML = '<option value="">All Chains</option>';
+        chains.forEach(c => {
+            const label = c.charAt(0).toUpperCase() + c.slice(1);
+            sel.innerHTML += `<option value="${c}"${c === current ? ' selected' : ''}>${label}</option>`;
+        });
+    }
+
+    window.sortLargeTx = function(col) {
+        if (_ltSortCol === col) {
+            _ltSortDir = _ltSortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+            _ltSortCol = col;
+            _ltSortDir = (col === 'amount' || col === 'usd' || col === 'date') ? 'desc' : 'asc';
+        }
+        _ltPage = 1;
+        applyLtSortAndFilter();
+    };
+
+    window.applyLtFilters = function() {
+        const chainEl = document.getElementById('ltFilterChain');
+        const dirEl = document.getElementById('ltFilterDirection');
+        const tokenEl = document.getElementById('ltFilterToken');
+        _ltFilters.chain = chainEl ? chainEl.value : '';
+        _ltFilters.direction = dirEl ? dirEl.value : '';
+        _ltFilters.token = tokenEl ? tokenEl.value : '';
+        _ltPage = 1;
+        applyLtSortAndFilter();
     };
 
     function formatAmount(val, symbol) {

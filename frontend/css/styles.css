@@ -10277,6 +10277,125 @@ body.privacy-mode a[data-href] {
     border-color: #e5e7eb;
 }
 
+/* Sortable Table Headers */
+.chain-financials-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    padding-right: 24px;
+    transition: background 0.2s;
+}
+
+.chain-financials-table th.sortable:hover {
+    background: rgba(0, 210, 106, 0.1);
+}
+
+.chain-financials-table th.sortable .sort-arrow {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 10px;
+    opacity: 0.3;
+    transition: opacity 0.2s;
+}
+
+.chain-financials-table th.sortable.sort-active .sort-arrow {
+    opacity: 1;
+    color: var(--accent-success, #00d26a);
+}
+
+[data-theme="light"] .chain-financials-table th.sortable:hover {
+    background: #f0fdf4;
+}
+
+[data-theme="light"] .chain-financials-table th.sortable.sort-active .sort-arrow {
+    color: #059669;
+}
+
+/* Inline Table Filter Row */
+.chain-financials-table .filter-row th {
+    padding: 4px 8px;
+    background: rgba(0, 0, 0, 0.15);
+}
+
+.chain-financials-table .filter-row input,
+.chain-financials-table .filter-row select {
+    width: 100%;
+    padding: 4px 8px;
+    font-size: 11px;
+    background: var(--bg-secondary, #1e1e2e);
+    color: var(--text-primary, #e0e0e0);
+    border: 1px solid var(--border-color, #2a2a3e);
+    border-radius: 6px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.chain-financials-table .filter-row input:focus,
+.chain-financials-table .filter-row select:focus {
+    border-color: var(--accent-success, #00d26a);
+}
+
+.chain-financials-table .filter-row input::placeholder {
+    color: var(--text-secondary, #888);
+    font-size: 10px;
+}
+
+[data-theme="light"] .chain-financials-table .filter-row th {
+    background: #f3f4f6;
+}
+
+[data-theme="light"] .chain-financials-table .filter-row input,
+[data-theme="light"] .chain-financials-table .filter-row select {
+    background: #ffffff;
+    color: #1a1a2e;
+    border-color: #e5e7eb;
+}
+
+[data-theme="light"] .chain-financials-table .filter-row input::placeholder {
+    color: #9ca3af;
+}
+
+/* Analytics Chart Loading Overlay */
+.analytics-loading-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 20px;
+    z-index: 10;
+    gap: 12px;
+    backdrop-filter: blur(2px);
+}
+
+.analytics-loading-overlay .loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--border-color, #2a2a3e);
+    border-top-color: var(--accent-success, #00d26a);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 0;
+}
+
+.analytics-loading-overlay .loading-text {
+    font-size: 13px;
+    color: var(--text-secondary, #888);
+    letter-spacing: 0.5px;
+}
+
+[data-theme="light"] .analytics-loading-overlay {
+    background: rgba(255, 255, 255, 0.6);
+}
+
+.analytics-content {
+    position: relative;
+}
+
 [data-theme="light"] .tradfi-notice {
     background: #ffffff;
     border-color: rgba(102, 126, 234, 0.2);

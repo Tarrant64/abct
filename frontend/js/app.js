@@ -9686,14 +9686,17 @@ async function loadPortfolioAnalytics(background = false) {
     if (cached && !portfolioAnalyticsData) {
         portfolioAnalyticsData = cached;
         console.log('[Analytics] Rendering from session cache');
+        setAllocationLoadingOverlays(false);
         renderCoinAllocationChart();
         renderCategoryAllocationChart();
         renderPortfolioHeatmap();
     }
 
-    // Show refresh indicator if we already have data (refreshing) or if loading fresh
+    // Show loading overlays if no cached data yet, or refresh indicator if we have data
     if (portfolioAnalyticsData) {
         setRefreshIndicators('loading');
+    } else {
+        setAllocationLoadingOverlays(true);
     }
 
     try {
@@ -9713,12 +9716,21 @@ async function loadPortfolioAnalytics(background = false) {
         renderCategoryAllocationChart();
         renderPortfolioHeatmap();
         setRefreshIndicators('done');
+        setAllocationLoadingOverlays(false);
     } catch (error) {
         console.error('Error loading analytics data:', error);
         setRefreshIndicators('hide');
+        setAllocationLoadingOverlays(false);
     } finally {
         analyticsLoading = false;
     }
+}
+
+function setAllocationLoadingOverlays(show) {
+    const coinOverlay = document.getElementById('coinAllocationLoading');
+    const catOverlay = document.getElementById('categoryAllocationLoading');
+    if (coinOverlay) coinOverlay.style.display = show ? 'flex' : 'none';
+    if (catOverlay) catOverlay.style.display = show ? 'flex' : 'none';
 }
 
 // ===========================
