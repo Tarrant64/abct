@@ -938,7 +938,7 @@ class DeFiService:
                 'total_staked': total_staked,
                 'ada_backing': snapshot_ada,  # ADA collateral backing the position
                 'reward_tokens': ['INDY', 'ADA'],
-                'rewards_url': 'https://app.indigoprotocol.io/staking'
+                'rewards_url': 'https://app.indigoprotocol.io/earn'
             }
 
         except Exception as e:
@@ -1017,7 +1017,7 @@ class DeFiService:
                 'accumulated_rewards': accumulated_rewards,
                 'reward_token': 'STRIKE',
                 'staked_amount': staking['total_staked_strike'],
-                'rewards_url': 'https://app.strike.finance/stake'
+                'rewards_url': 'https://app.strikefinance.org/perpetuals/ada'
             }
 
         except Exception as e:
@@ -1395,7 +1395,7 @@ class DeFiService:
                 'pending_indy': indigo_rewards.get('pending_indy', 0) if indigo_rewards else 0,
                 'pending_ada': indigo_rewards.get('pending_ada', 0) if indigo_rewards else 0,
                 'reward_tokens': ['INDY', 'ADA'],
-                'rewards_url': 'https://app.indigoprotocol.io/staking',
+                'rewards_url': 'https://app.indigoprotocol.io/earn',
                 'total_positions': indigo['position_count']
             }
             staking['total_positions'] += indigo['position_count']
@@ -1419,7 +1419,7 @@ class DeFiService:
                 'pending_rewards': strike_rewards.get('pending_rewards', 0) if strike_rewards else 0,
                 'accumulated_rewards': strike_rewards.get('accumulated_rewards', 0) if strike_rewards else 0,
                 'reward_token': 'STRIKE',
-                'rewards_url': 'https://app.strike.finance/stake',
+                'rewards_url': 'https://app.strikefinance.org/perpetuals/ada',
                 'total_positions': strike['position_count']
             }
             staking['total_positions'] += strike['position_count']
@@ -1463,6 +1463,7 @@ class DeFiService:
                 'reward_token': 'IAG',
                 'rewards_url': 'https://iagon.com/staking',
                 'total_positions': iagon['position_count'],
+                'category': 'depin',
                 'note': 'Old staking contract - position calculated from transaction history'
             }
             staking['total_positions'] += iagon['position_count']

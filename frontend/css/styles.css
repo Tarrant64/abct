@@ -7132,6 +7132,18 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     flex-shrink: 0;
 }
 
+.defi-gov-card .depin-badge {
+    background-color: #f59e0b;
+    color: #000;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
 .defi-gov-card .ada-delegation-detail {
     font-size: 0.85rem;
     color: var(--text-secondary);

@@ -126,8 +126,9 @@ async def get_helium_staking(wallet_address: str) -> Optional[Dict]:
                 'staked': staked,
                 'pending_rewards': total_pending_hnt,
                 'reward_token': 'HNT',
-                'rewards_url': 'https://app.helium.com',
+                'rewards_url': f'https://world.helium.com/en/wallet/{wallet_address}/performance',
                 'blockchain': 'solana',
+                'category': 'depin',
                 'total_positions': len(staked),
             }
         }

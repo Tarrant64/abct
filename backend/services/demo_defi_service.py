@@ -197,7 +197,7 @@ class DemoDeFiService:
                     "pending_indy": 12.5,
                     "pending_ada": 85.0,
                     "reward_tokens": ["INDY", "ADA"],
-                    "rewards_url": "https://app.indigoprotocol.io/staking",
+                    "rewards_url": "https://app.indigoprotocol.io/earn",
                     "total_positions": 2,
                 },
                 "Strike": {
@@ -212,7 +212,7 @@ class DemoDeFiService:
                     "pending_rewards": 250.0,
                     "accumulated_rewards": 1200.0,
                     "reward_token": "STRIKE",
-                    "rewards_url": "https://app.strike.finance/stake",
+                    "rewards_url": "https://app.strikefinance.org/perpetuals/ada",
                     "total_positions": 1,
                 },
                 "Liqwid": {
