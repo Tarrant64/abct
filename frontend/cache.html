@@ -648,11 +648,12 @@
         async function executeClear() {
             if (!pendingClearAction) return;
 
+            const action = pendingClearAction;
             closeConfirmModal();
             showLoading();
 
             try {
-                const response = await authFetch(`${API_BASE}/api/cache/clear/${pendingClearAction}`, {
+                const response = await authFetch(`${API_BASE}/api/cache/clear/${action}`, {
                     method: 'POST'
                 });
 
@@ -670,7 +671,6 @@
                 showToast('Failed to clear cache', 'error');
             } finally {
                 hideLoading();
-                pendingClearAction = null;
             }
         }
 
