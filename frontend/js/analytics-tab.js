@@ -637,7 +637,12 @@
 
             const summaryData = await summaryResp.json();
             const pricesData = await pricesResp.json();
-            const prices = pricesData.prices || {};
+            const rawPrices = pricesData.prices || {};
+            // /prices/all returns {symbol: {usd: N, ...}} objects - extract USD values
+            const prices = {};
+            for (const [sym, val] of Object.entries(rawPrices)) {
+                prices[sym] = typeof val === 'object' ? (val.usd || 0) : (val || 0);
+            }
             const btcPrice = prices['BTC'] || 0;
 
             if (!btcPrice) {

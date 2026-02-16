@@ -144,6 +144,25 @@ class PricingService:
         self._coingecko_cooldown_until: Optional[datetime] = None
         # Stale cache: backup of last known good prices for graceful degradation
         self._stale_cache: Dict[str, dict] = {}
+        # CoinGecko API key (loaded from DB on first use)
+        self._cg_api_key: Optional[str] = None
+        self._cg_key_loaded = False
+
+    async def _get_cg_headers(self) -> dict:
+        """Get CoinGecko request headers with API key if configured."""
+        if not self._cg_key_loaded:
+            try:
+                from database import get_api_key
+                self._cg_api_key = await get_api_key("coingecko")
+                if self._cg_api_key:
+                    logger.info("CoinGecko demo API key loaded from database")
+            except Exception:
+                pass
+            self._cg_key_loaded = True
+
+        if self._cg_api_key:
+            return {"x-cg-demo-api-key": self._cg_api_key}
+        return {}
 
     async def get_prices(self, symbols: list = None, force_refresh: bool = False) -> Dict[str, float]:
         """
@@ -319,6 +338,7 @@ class PricingService:
 
         try:
             client = get_client("coingecko", timeout=30.0)
+            cg_headers = await self._get_cg_headers()
             response = await fetch_with_retry(
                 client, "GET",
                 f"{COINGECKO_BASE_URL}/coins/markets",
@@ -326,7 +346,8 @@ class PricingService:
                     'ids': ','.join(cg_ids),
                     'vs_currency': 'usd',
                     'price_change_percentage': '1h,24h'
-                }
+                },
+                headers=cg_headers
             )
 
             if response.status_code == 200:
@@ -664,15 +685,15 @@ class PricingService:
 
                 try:
                     client = get_client("defilama", timeout=15.0)
-                    # DefiLlama chart endpoint
+                    # DefiLlama chart endpoint (only use start, not both start+end)
                     now_ts = int(datetime.now().timestamp())
                     from_ts = now_ts - (days * 86400)
-                    # Use period parameter for resolution
                     period = "1d" if days > 7 else "1h"
+                    span = days if period == "1d" else days * 24
 
                     response = await client.get(
                         f"https://coins.llama.fi/chart/coingecko:{cg_id}",
-                        params={"start": from_ts, "end": now_ts, "period": period}
+                        params={"start": from_ts, "span": span, "period": period}
                     )
 
                     if response.status_code == 200:
@@ -714,6 +735,7 @@ class PricingService:
         """Fetch historical prices from CoinGecko (final fallback)."""
         try:
             client = get_client("coingecko_historical", timeout=15.0)
+            cg_headers = await self._get_cg_headers()
             for symbol in symbols:
                 cg_id = ASSET_TO_COINGECKO.get(symbol)
                 if not cg_id:
@@ -723,7 +745,8 @@ class PricingService:
                     response = await fetch_with_retry(
                         client, "GET",
                         f"{COINGECKO_BASE_URL}/coins/{cg_id}/market_chart",
-                        params={'vs_currency': 'usd', 'days': days}
+                        params={'vs_currency': 'usd', 'days': days},
+                        headers=cg_headers
                     )
                 except Exception as req_err:
                     logger.warning(f"CoinGecko historical request failed for {symbol}: {req_err}")

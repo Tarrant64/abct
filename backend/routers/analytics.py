@@ -105,8 +105,11 @@ async def get_market_summary(user_id: int = Depends(verify_session)):
 
             # CoinGecko fallback
             try:
+                from database import get_api_key as _get_api_key
+                cg_key = await _get_api_key("coingecko")
+                cg_headers = {"x-cg-demo-api-key": cg_key} if cg_key else {}
                 client = get_client("coingecko", timeout=10.0)
-                resp = await client.get("https://api.coingecko.com/api/v3/global")
+                resp = await client.get("https://api.coingecko.com/api/v3/global", headers=cg_headers)
                 if resp.status_code == 200:
                     return resp.json().get("data", {})
                 logger.warning(f"CoinGecko /global returned {resp.status_code}")
@@ -154,12 +157,14 @@ async def get_relative_strength(
     try:
         from services.pricing import pricing_service
 
-        symbols = ['BTC', 'ETH', 'SOL', 'ADA', 'POL']
+        symbols = ['BTC', 'ETH', 'SOL', 'ADA', 'MATIC']
         historical = await pricing_service.get_historical_prices(symbols, days)
 
         # Normalize each asset to % change from day 0
+        # Remap MATIC -> POL for frontend consistency
         result = {}
         for symbol, prices in historical.items():
+            symbol = 'POL' if symbol == 'MATIC' else symbol
             if not prices:
                 continue
             base_price = prices[0].get('price', 0)
@@ -177,7 +182,7 @@ async def get_relative_strength(
 
         response = {"success": True, "days": days, "assets": result}
         if result:
-            await set_cache(cache_key, response, ttl=CACHE_TTL_WARM)
+            await set_cache(cache_key, response, CACHE_TTL_WARM)
         return response
     except Exception as e:
         logger.error(f"Error fetching relative strength: {e}")

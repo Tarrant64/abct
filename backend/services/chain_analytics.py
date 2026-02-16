@@ -5,6 +5,7 @@ Provides chain-level metrics: TVL, fees, revenue, DEX volume.
 All data from DefiLlama (free, no API key required).
 """
 
+import asyncio
 import logging
 import time
 from typing import Dict, List, Optional
@@ -59,59 +60,77 @@ class ChainAnalyticsService:
                 'fees_24h': 0, 'revenue_24h': 0, 'dex_volume_24h': 0
             }
 
-        # Fetch TVL per chain
+        # Fetch all data sources in parallel
+        await asyncio.gather(
+            self._fetch_tvl_and_change(chains_data),
+            self._fetch_per_chain_fees_revenue(chains_data),
+            self._fetch_dex_volume(chains_data),
+            return_exceptions=True
+        )
+
+        result = {'chains': chains_data, 'timestamp': int(time.time())}
+        await set_cache(cache_key, result, CACHE_TTL_WARM)
+        return result
+
+    async def _fetch_tvl_and_change(self, chains_data: dict) -> None:
+        """Fetch TVL from bulk endpoint, TVL change from historical data."""
+        # Bulk TVL from /v2/chains
         try:
             resp = await self.client.get(f"{DEFILLAMA_BASE}/v2/chains")
             if resp.status_code == 200:
                 for item in resp.json():
                     name = item.get('name', '')
-                    # Gecko ID match fallback
                     if name == 'Binance':
                         name = 'BSC'
                     if name in chains_data:
-                        chains_data[name]['tvl'] = item.get('tvl', 0)
-                        chains_data[name]['tvl_change_1d'] = item.get('change_1d', 0)
+                        chains_data[name]['tvl'] = item.get('tvl', 0) or 0
         except Exception as e:
             logger.warning(f"DefiLlama chains TVL fetch failed: {e}")
 
-        # Fetch 24h fees & revenue
-        try:
-            resp = await self.client.get(f"{DEFILLAMA_BASE}/overview/fees")
-            if resp.status_code == 200:
-                data = resp.json()
-                for protocol in data.get('protocols', []):
-                    chain = protocol.get('chains', [None])
-                    if isinstance(chain, list) and len(chain) == 1:
-                        chain = chain[0]
-                    else:
-                        chain = protocol.get('chain', '')
-                    # Skip multi-chain protocols for per-chain breakdown
-                    # (they'd be double-counted)
+        # Calculate TVL change from historical data (parallel per chain)
+        async def calc_tvl_change(chain: str):
+            slug = CHAIN_SLUGS.get(chain, chain)
+            try:
+                resp = await self.client.get(f"{DEFILLAMA_BASE}/v2/historicalChainTvl/{slug}")
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if len(data) >= 2:
+                        today_tvl = data[-1].get('tvl', 0)
+                        yesterday_tvl = data[-2].get('tvl', 0)
+                        if yesterday_tvl > 0:
+                            chains_data[chain]['tvl_change_1d'] = ((today_tvl - yesterday_tvl) / yesterday_tvl) * 100
+            except Exception as e:
+                logger.debug(f"TVL change calc failed for {chain}: {e}")
 
-                # Use totalDataChartBreakdown or chain field from data
-                for chain_item in data.get('allChains', []):
-                    pass  # allChains is just a list of chain names
+        await asyncio.gather(*[calc_tvl_change(c) for c in SUPPORTED_CHAINS], return_exceptions=True)
 
-                # Better approach: use chain-level totals from the response
-                chain_totals = {}
-                for protocol in data.get('protocols', []):
-                    chains = protocol.get('chains', [])
-                    total24h = protocol.get('total24h') or 0
-                    revenue24h = protocol.get('totalRevenue24h') or protocol.get('revenue24h') or 0
-                    # Distribute evenly across chains if multi-chain
-                    if chains and total24h:
-                        per_chain = total24h / len(chains)
-                        rev_per_chain = revenue24h / len(chains) if revenue24h else 0
-                        for c in chains:
-                            if c == 'Binance':
-                                c = 'BSC'
-                            if c in chains_data:
-                                chains_data[c]['fees_24h'] += per_chain
-                                chains_data[c]['revenue_24h'] += rev_per_chain
-        except Exception as e:
-            logger.warning(f"DefiLlama fees fetch failed: {e}")
+    async def _fetch_per_chain_fees_revenue(self, chains_data: dict) -> None:
+        """Fetch 24h fees and revenue using per-chain DefiLlama endpoints."""
+        async def fetch_one(chain: str):
+            slug = CHAIN_SLUGS.get(chain, chain)
+            # Fetch fees
+            try:
+                resp = await self.client.get(f"{DEFILLAMA_BASE}/overview/fees/{slug}")
+                if resp.status_code == 200:
+                    chains_data[chain]['fees_24h'] = resp.json().get('total24h', 0) or 0
+            except Exception as e:
+                logger.debug(f"Per-chain fees fetch failed for {chain}: {e}")
 
-        # Fetch DEX volume
+            # Fetch revenue
+            try:
+                resp = await self.client.get(
+                    f"{DEFILLAMA_BASE}/overview/fees/{slug}",
+                    params={'dataType': 'dailyRevenue'}
+                )
+                if resp.status_code == 200:
+                    chains_data[chain]['revenue_24h'] = resp.json().get('total24h', 0) or 0
+            except Exception as e:
+                logger.debug(f"Per-chain revenue fetch failed for {chain}: {e}")
+
+        await asyncio.gather(*[fetch_one(c) for c in SUPPORTED_CHAINS], return_exceptions=True)
+
+    async def _fetch_dex_volume(self, chains_data: dict) -> None:
+        """Fetch DEX volume from bulk endpoint, distributed across chains."""
         try:
             resp = await self.client.get(f"{DEFILLAMA_BASE}/overview/dexs")
             if resp.status_code == 200:
@@ -128,10 +147,6 @@ class ChainAnalyticsService:
                                 chains_data[c]['dex_volume_24h'] += per_chain
         except Exception as e:
             logger.warning(f"DefiLlama DEX volume fetch failed: {e}")
-
-        result = {'chains': chains_data, 'timestamp': int(time.time())}
-        await set_cache(cache_key, result, CACHE_TTL_WARM)
-        return result
 
     async def get_chain_fees_history(self, chain: str, days: int = 30) -> List[Dict]:
         """Get daily fee history for a specific chain."""
