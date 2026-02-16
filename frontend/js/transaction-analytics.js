@@ -7,7 +7,7 @@ var analyticsData = null;  // var to allow redeclaration when loaded alongside a
 let selectedChains = new Set();
 
 // Chain colors matching the theme colors from styles.css
-const CHAIN_COLORS = {
+const TX_CHAIN_COLORS = {
     'cardano': {
         normal: '#5c9eff',
         faded: 'rgba(92, 158, 255, 0.6)',
@@ -208,7 +208,7 @@ function renderAnalyticsChart(data) {
 
     for (const [chain, counts] of Object.entries(data.chains)) {
         const isSelected = selectedChains.has(chain);
-        const colors = CHAIN_COLORS[chain] || {
+        const colors = TX_CHAIN_COLORS[chain] || {
             normal: '#888',
             faded: 'rgba(136, 136, 136, 0.6)',
             fill: 'rgba(136, 136, 136, 0.3)'
@@ -271,7 +271,7 @@ function renderChainIndicators(chains) {
 
     allChains.forEach(chain => {
         const isSelected = selectedChains.has(chain);
-        const colors = CHAIN_COLORS[chain] || { normal: '#888' };
+        const colors = TX_CHAIN_COLORS[chain] || { normal: '#888' };
 
         const indicator = document.createElement('button');
         indicator.className = `chain-indicator ${isSelected ? 'active' : ''}`;
@@ -322,7 +322,7 @@ function toggleChain(chain) {
     const indicators = document.querySelectorAll('.chain-indicator');
     indicators.forEach(indicator => {
         const label = indicator.querySelector('.chain-indicator-label').textContent.toLowerCase();
-        const chain = Object.keys(CHAIN_COLORS).find(c => formatChainName(c).toLowerCase() === label);
+        const chain = Object.keys(TX_CHAIN_COLORS).find(c => formatChainName(c).toLowerCase() === label);
 
         if (chain) {
             if (selectedChains.has(chain)) {
