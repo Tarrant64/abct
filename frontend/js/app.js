@@ -231,6 +231,11 @@ function changeTheme(themeName) {
     if (window.portfolioSankey) {
         window.portfolioSankey.updateTheme();
     }
+
+    // Re-render intelligence tab with new theme colors
+    if (typeof updateIntelligenceTheme === 'function') {
+        updateIntelligenceTheme();
+    }
 }
 
 function loadSavedTheme() {

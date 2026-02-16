@@ -6,7 +6,7 @@
     <title>Data & Analytics - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771252214">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771260908">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <!-- Chart.js for analytics -->
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
@@ -15,7 +15,7 @@
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1771252214"></script>
+    <script src="/static/js/session-auth.js?v=1771260908"></script>
     <style>
         /* Wallet Manager Styles */
         .wallet-manager {
@@ -892,6 +892,7 @@
             <button class="main-tab-btn" onclick="switchMainTab('activity')">Activity</button>
             <button class="main-tab-btn" onclick="switchMainTab('transactions')">Transactions</button>
             <button class="main-tab-btn" onclick="switchMainTab('analytics')">Analytics</button>
+            <button class="main-tab-btn" onclick="switchMainTab('intelligence')">Intelligence</button>
         </div>
 
         <!-- ===================== -->
@@ -1419,6 +1420,110 @@
         </div>
         <!-- End Blockchains Tab -->
 
+        <!-- ===================== -->
+        <!-- INTELLIGENCE TAB      -->
+        <!-- ===================== -->
+        <div id="intelligenceTab" class="main-tab-content">
+            <!-- Controls -->
+            <div class="intelligence-controls">
+                <div class="intelligence-period-btns">
+                    <button class="period-btn" onclick="changeIntelligencePeriod(30)">30D</button>
+                    <button class="period-btn" onclick="changeIntelligencePeriod(90)">90D</button>
+                    <button class="period-btn active" onclick="changeIntelligencePeriod(365)">1Y</button>
+                    <button class="period-btn" onclick="changeIntelligencePeriod(0)">All</button>
+                </div>
+                <select class="intelligence-chain-filter" id="intelligenceChainFilter" onchange="changeIntelligenceChain(this.value)">
+                    <option value="">All Chains</option>
+                    <option value="cardano">Cardano</option>
+                    <option value="ethereum">Ethereum</option>
+                    <option value="bitcoin">Bitcoin</option>
+                    <option value="solana">Solana</option>
+                    <option value="polygon">Polygon</option>
+                    <option value="base">Base</option>
+                </select>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="intelligence-summary-row">
+                <div class="analytics-summary-card">
+                    <div class="summary-card-label">Unique Counterparties</div>
+                    <div class="summary-card-value privacy-sensitive" id="intelCounterpartyCount">--</div>
+                </div>
+                <div class="analytics-summary-card">
+                    <div class="summary-card-label">CEX Interactions</div>
+                    <div class="summary-card-value privacy-sensitive" id="intelCexCount">--</div>
+                    <div class="analytics-summary-sub" id="intelCexSub"></div>
+                </div>
+                <div class="analytics-summary-card">
+                    <div class="summary-card-label">Self-Transfers</div>
+                    <div class="summary-card-value privacy-sensitive" id="intelSelfCount">--</div>
+                </div>
+                <div class="analytics-summary-card">
+                    <div class="summary-card-label">Net Flow</div>
+                    <div class="summary-card-value privacy-sensitive" id="intelNetFlow">--</div>
+                    <div class="analytics-summary-sub" id="intelNetFlowSub"></div>
+                </div>
+            </div>
+
+            <!-- Charts Row -->
+            <div class="intelligence-charts-row">
+                <div class="intelligence-chart-card">
+                    <h3 class="analytics-title">Flow Overview</h3>
+                    <div class="intelligence-chart-wrap">
+                        <canvas id="intelFlowDoughnut"></canvas>
+                    </div>
+                </div>
+                <div class="intelligence-chart-card">
+                    <h3 class="analytics-title">Chain Flow Direction</h3>
+                    <div class="intelligence-chart-wrap">
+                        <canvas id="intelChainFlowBars"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Activity Heatmap -->
+            <div class="intelligence-heatmap-section">
+                <h3 class="analytics-title">Activity Heatmap</h3>
+                <p class="analytics-subtitle">Transaction frequency by day of week and hour (UTC)</p>
+                <div class="intelligence-heatmap-container" id="intelHeatmapContainer">
+                    <!-- SVG heatmap rendered by JS -->
+                </div>
+                <div class="intelligence-heatmap-tooltip" id="intelHeatmapTooltip" style="display:none;"></div>
+            </div>
+
+            <!-- Counterparties Table -->
+            <div class="intelligence-table-section">
+                <h3 class="analytics-title">Top Counterparties</h3>
+                <div class="table-scroll-wrapper">
+                    <table class="chain-financials-table" id="intelCounterpartiesTable">
+                        <thead>
+                            <tr>
+                                <th>Address</th>
+                                <th>Label</th>
+                                <th>Chain</th>
+                                <th>Tx Count</th>
+                                <th>Sent</th>
+                                <th>Received</th>
+                                <th>First Seen</th>
+                                <th>Last Seen</th>
+                            </tr>
+                        </thead>
+                        <tbody id="intelCounterpartiesBody">
+                            <tr><td colspan="8" style="text-align:center;color:#888;">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Empty state -->
+            <div class="intelligence-empty-state" id="intelEmptyState" style="display:none;">
+                <div class="empty-state-icon">&#128269;</div>
+                <h3>No Transaction Data</h3>
+                <p>Fetch your transaction history first from the Transactions tab to see wallet intelligence.</p>
+            </div>
+        </div>
+        <!-- End Intelligence Tab -->
+
         <!-- Blockchain Asset Breakdown Modal -->
         <div id="assetBreakdownModal" class="modal hidden">
             <div class="modal-overlay" onclick="closeAssetBreakdownModal()"></div>
@@ -1726,15 +1831,17 @@
         }
     </script>
 
-    <script src="/static/js/app.js?v=1771252214"></script>
+    <script src="/static/js/app.js?v=1771260908"></script>
 
     <!-- Transaction scripts -->
-    <script src="/static/js/transactions.js?v=1771252214"></script>
-    <script src="/static/js/transaction-analytics.js?v=1771252214"></script>
+    <script src="/static/js/transactions.js?v=1771260908"></script>
+    <script src="/static/js/transaction-analytics.js?v=1771260908"></script>
     <!-- Advanced Analytics tab -->
-    <script src="/static/js/analytics-tab.js?v=1771252214"></script>
+    <script src="/static/js/analytics-tab.js?v=1771260908"></script>
     <!-- Sankey flow diagram -->
-    <script src="/static/js/sankey-chart.js?v=1771252214"></script>
+    <script src="/static/js/sankey-chart.js?v=1771260908"></script>
+    <!-- Wallet Intelligence tab -->
+    <script src="/static/js/wallet-intelligence.js?v=1771260908"></script>
 
     <script>
         // Main tab switching function
@@ -1777,6 +1884,11 @@
                 initBlockchainsTab();
             }
 
+            // Initialize intelligence tab on first open
+            if (tabName === 'intelligence' && typeof initIntelligenceTab === 'function') {
+                initIntelligenceTab();
+            }
+
             // Update URL hash
             if (history.replaceState) {
                 history.replaceState(null, null, '#' + tabName);
@@ -1798,7 +1910,7 @@
             // Handle hash-based tab navigation
             let hash = window.location.hash.replace('#', '');
             // Valid tab names
-            const validTabs = ['transactions', 'activity', 'analytics', 'blockchains'];
+            const validTabs = ['transactions', 'activity', 'analytics', 'blockchains', 'intelligence'];
             if (hash && validTabs.includes(hash)) {
                 switchMainTab(hash);
             } else {
