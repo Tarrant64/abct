@@ -31,6 +31,56 @@ from services.pricing import pricing_service
 router = APIRouter(prefix="/intelligence", tags=["intelligence"])
 logger = logging.getLogger(__name__)
 
+# Amounts in transaction_history may be stored in smallest units (lovelace, satoshi,
+# wei, lamports) depending on which code path inserted them. This map lets us detect
+# and normalize those amounts so USD calculations are correct.
+CHAIN_DIVISOR = {
+    'cardano': 1_000_000,        # 1 ADA = 1,000,000 lovelace
+    'bitcoin': 100_000_000,      # 1 BTC = 100,000,000 satoshi
+    'ethereum': 10**18,          # 1 ETH = 10^18 wei
+    'polygon': 10**18,           # 1 MATIC = 10^18 wei
+    'base': 10**18,              # 1 ETH = 10^18 wei
+    'solana': 1_000_000_000,     # 1 SOL = 1,000,000,000 lamports
+    'algorand': 1_000_000,       # 1 ALGO = 1,000,000 microalgos
+}
+
+# If a native token amount exceeds this per-chain threshold, it's almost certainly
+# stored in smallest units and needs dividing by CHAIN_DIVISOR.
+# These thresholds are generous — well above any realistic single-transaction amount.
+_NATIVE_SYMBOLS = {
+    'cardano': 'ADA', 'bitcoin': 'BTC', 'ethereum': 'ETH',
+    'polygon': 'MATIC', 'base': 'ETH', 'solana': 'SOL', 'algorand': 'ALGO',
+}
+_SMALLEST_UNIT_THRESHOLD = {
+    'cardano': 100_000,       # > 100K means it's lovelace, not ADA
+    'bitcoin': 100,           # > 100 means satoshis, not BTC
+    'ethereum': 1_000_000,    # > 1M means wei, not ETH
+    'polygon': 1_000_000,     # > 1M means wei, not MATIC
+    'base': 1_000_000,        # > 1M means wei, not ETH
+    'solana': 100_000,        # > 100K means lamports, not SOL
+    'algorand': 100_000,      # > 100K means microalgos, not ALGO
+}
+
+
+def _normalize_amount(amount: float, chain: str, token_symbol: str) -> float:
+    """Normalize an amount that may be in smallest units (lovelace/satoshi/wei/etc.)."""
+    chain_lower = chain.lower()
+    native_sym = _NATIVE_SYMBOLS.get(chain_lower)
+    if not native_sym:
+        return amount
+
+    # Only normalize native token amounts
+    if token_symbol and token_symbol.upper() != native_sym:
+        return amount
+
+    threshold = _SMALLEST_UNIT_THRESHOLD.get(chain_lower, 0)
+    divisor = CHAIN_DIVISOR.get(chain_lower, 1)
+
+    if threshold and amount > threshold and divisor > 1:
+        return amount / divisor
+
+    return amount
+
 
 def _get_time_filter(days: int) -> Optional[str]:
     """Return ISO timestamp string for N days ago, or None for 'all time'."""
@@ -134,6 +184,7 @@ async def get_counterparties(
                     direction,
                     from_address,
                     to_address,
+                    token_symbol,
                     CAST(COALESCE(amount, '0') AS REAL) as amount_val,
                     tx_time
                 FROM transaction_history
@@ -183,7 +234,8 @@ async def get_counterparties(
 
                 entry = counterparty_map[key]
                 entry["tx_count"] += 1
-                amount = row["amount_val"] or 0
+                raw_amount = row["amount_val"] or 0
+                amount = _normalize_amount(raw_amount, chain, row["token_symbol"] or "")
                 if direction == "sent":
                     entry["total_sent"] += amount
                 else:
@@ -197,12 +249,14 @@ async def get_counterparties(
                     entry["last_seen"] = tx_time
 
             # Also merge engine_events counterparty data
+            # Note: engine_events stores amounts in SMALLEST units (lovelace/wei/etc.)
             engine_sql = """
                 SELECT
                     chain as blockchain,
                     direction,
                     account_id,
                     counterparty,
+                    asset_id,
                     CAST(COALESCE(amount, '0') AS REAL) as amount_val,
                     block_time
                 FROM engine_events
@@ -247,7 +301,11 @@ async def get_counterparties(
 
                     entry = counterparty_map[key]
                     entry["tx_count"] += 1
-                    amount = row["amount_val"] or 0
+                    raw_amount = row["amount_val"] or 0
+                    # engine_events always stores in smallest units for native tokens
+                    asset_id = row["asset_id"] or ""
+                    token_sym = _NATIVE_SYMBOLS.get(chain.lower(), "") if asset_id == "native" else ""
+                    amount = _normalize_amount(raw_amount, chain, token_sym)
                     direction = row["direction"]
                     if direction == "sent" or direction == "out":
                         entry["total_sent"] += amount
@@ -370,6 +428,7 @@ async def get_flow_summary(
                     direction,
                     from_address,
                     to_address,
+                    token_symbol,
                     CAST(COALESCE(amount, '0') AS REAL) as amount_val
                 FROM transaction_history
                 WHERE user_id = ?
@@ -389,7 +448,8 @@ async def get_flow_summary(
             for row in rows:
                 chain = row["blockchain"]
                 direction = row["direction"]
-                amount = row["amount_val"] or 0
+                raw_amount = row["amount_val"] or 0
+                amount = _normalize_amount(raw_amount, chain, row["token_symbol"] or "")
                 from_addr = row["from_address"] or ""
                 to_addr = row["to_address"] or ""
 
@@ -615,7 +675,9 @@ async def get_large_transactions(
         results = []
         for row in rows:
             sym = (row["token_symbol"] or "").upper()
-            amount = row["amount_val"] or 0
+            raw_amount = row["amount_val"] or 0
+            chain = row["blockchain"]
+            amount = _normalize_amount(raw_amount, chain, sym)
             price = prices.get(sym, 0)
 
             # Stablecoins default to $1
