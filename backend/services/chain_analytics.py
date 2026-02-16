@@ -244,6 +244,166 @@ class ChainAnalyticsService:
         return 0
 
 
+    async def get_stablecoin_market(self) -> Dict:
+        """Get top stablecoins by market cap from DefiLlama."""
+        cache_key = "analytics:market:stablecoins"
+        cached = await get_cache(cache_key)
+        if cached:
+            return cached
+
+        try:
+            resp = await self.client.get("https://stablecoins.llama.fi/stablecoins?includePrices=true")
+            if resp.status_code != 200:
+                logger.warning(f"DefiLlama stablecoins returned {resp.status_code}")
+                return {"total_stablecoin_mcap": 0, "stablecoins": []}
+
+            pegged_assets = resp.json().get('peggedAssets', [])
+
+            stablecoins = []
+            total_mcap = 0
+
+            for coin in pegged_assets:
+                # Sum circulating mcap across all chains
+                circ = coin.get('circulating', {})
+                mcap = 0
+                for peg_type_val in circ.values():
+                    if isinstance(peg_type_val, (int, float)):
+                        mcap += peg_type_val
+
+                if mcap <= 0:
+                    continue
+
+                total_mcap += mcap
+
+                # 7d change
+                mcap_change_7d = 0
+                circ_prev = coin.get('circulatingPrevWeek', {})
+                prev_mcap = 0
+                for peg_type_val in circ_prev.values():
+                    if isinstance(peg_type_val, (int, float)):
+                        prev_mcap += peg_type_val
+                if prev_mcap > 0:
+                    mcap_change_7d = ((mcap - prev_mcap) / prev_mcap) * 100
+
+                # Price from peggedAsset price field
+                price = coin.get('price', 1.0)
+
+                # Chains this stablecoin is on
+                chain_circ = coin.get('chainCirculating', {})
+                chains = list(chain_circ.keys()) if chain_circ else []
+
+                stablecoins.append({
+                    'name': coin.get('name', 'Unknown'),
+                    'symbol': coin.get('symbol', ''),
+                    'mcap': mcap,
+                    'mcap_change_7d': mcap_change_7d,
+                    'price': price,
+                    'chains': chains[:10],
+                    'peg_type': coin.get('pegType', 'Unknown'),
+                })
+
+            # Sort by mcap desc, take top 15
+            stablecoins.sort(key=lambda x: x['mcap'], reverse=True)
+            stablecoins = stablecoins[:15]
+
+            result = {'total_stablecoin_mcap': total_mcap, 'stablecoins': stablecoins}
+            await set_cache(cache_key, result, CACHE_TTL_WARM)
+            return result
+
+        except Exception as e:
+            logger.warning(f"DefiLlama stablecoin market fetch failed: {e}")
+            return {"total_stablecoin_mcap": 0, "stablecoins": []}
+
+    async def get_all_chains_tvl(self, limit: int = 25) -> Dict:
+        """Get top chains by TVL from DefiLlama (all chains, not just our 9)."""
+        cache_key = f"analytics:market:chains_tvl:{limit}"
+        cached = await get_cache(cache_key)
+        if cached:
+            return cached
+
+        try:
+            resp = await self.client.get(f"{DEFILLAMA_BASE}/v2/chains")
+            if resp.status_code != 200:
+                logger.warning(f"DefiLlama chains returned {resp.status_code}")
+                return {"total_tvl": 0, "chains": []}
+
+            raw_chains = resp.json()
+            total_tvl = 0
+            chains = []
+
+            for item in raw_chains:
+                tvl = item.get('tvl', 0) or 0
+                total_tvl += tvl
+
+                name = item.get('name', '')
+                if name == 'Binance':
+                    name = 'BSC'
+
+                chains.append({
+                    'name': name,
+                    'tvl': tvl,
+                    'tvl_change_1d': item.get('change_1d', 0) or 0,
+                    'tvl_change_7d': item.get('change_7d', 0) or 0,
+                })
+
+            # Sort by TVL desc, take top N
+            chains.sort(key=lambda x: x['tvl'], reverse=True)
+            chains = chains[:limit]
+
+            result = {'total_tvl': total_tvl, 'chains': chains}
+            await set_cache(cache_key, result, CACHE_TTL_WARM)
+            return result
+
+        except Exception as e:
+            logger.warning(f"DefiLlama all chains TVL fetch failed: {e}")
+            return {"total_tvl": 0, "chains": []}
+
+    async def get_rwa_protocols(self, limit: int = 15) -> Dict:
+        """Get RWA (Real World Asset) protocols from DefiLlama."""
+        cache_key = f"analytics:market:rwa:{limit}"
+        cached = await get_cache(cache_key)
+        if cached:
+            return cached
+
+        try:
+            resp = await self.client.get(f"{DEFILLAMA_BASE}/protocols")
+            if resp.status_code != 200:
+                logger.warning(f"DefiLlama protocols returned {resp.status_code}")
+                return {"total_rwa_tvl": 0, "protocols": []}
+
+            all_protocols = resp.json()
+            rwa_protocols = []
+            total_rwa_tvl = 0
+
+            for p in all_protocols:
+                category = p.get('category', '')
+                if category != 'RWA':
+                    continue
+
+                tvl = p.get('tvl', 0) or 0
+                total_rwa_tvl += tvl
+
+                rwa_protocols.append({
+                    'name': p.get('name', 'Unknown'),
+                    'tvl': tvl,
+                    'tvl_change_1d': p.get('change_1d', 0) or 0,
+                    'category': category,
+                    'chains': (p.get('chains', []) or [])[:5],
+                    'logo': p.get('logo', ''),
+                })
+
+            # Sort by TVL desc, take top N
+            rwa_protocols.sort(key=lambda x: x['tvl'], reverse=True)
+            rwa_protocols = rwa_protocols[:limit]
+
+            result = {'total_rwa_tvl': total_rwa_tvl, 'protocols': rwa_protocols}
+            await set_cache(cache_key, result, CACHE_TTL_WARM)
+            return result
+
+        except Exception as e:
+            logger.warning(f"DefiLlama RWA protocols fetch failed: {e}")
+            return {"total_rwa_tvl": 0, "protocols": []}
+
     async def get_chain_stablecoin_supply(self, chain: str) -> float:
         """Get total stablecoin supply circulating on a specific chain."""
         slug = CHAIN_SLUGS.get(chain, chain)

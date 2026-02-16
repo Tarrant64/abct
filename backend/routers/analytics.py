@@ -189,6 +189,47 @@ async def get_relative_strength(
         return {"success": False, "error": str(e), "assets": {}}
 
 
+# ---- Crypto Market Data (Stablecoins, Chains TVL, RWA) ----
+
+@router.get("/market/stablecoins")
+async def get_stablecoin_market(user_id: int = Depends(verify_session)):
+    """Get top stablecoins by market cap from DefiLlama"""
+    try:
+        data = await chain_analytics_service.get_stablecoin_market()
+        return {"success": True, **data}
+    except Exception as e:
+        logger.error(f"Error fetching stablecoin market: {e}")
+        return {"success": False, "error": str(e), "total_stablecoin_mcap": 0, "stablecoins": []}
+
+
+@router.get("/market/chains-tvl")
+async def get_all_chains_tvl(
+    limit: int = Query(default=25, ge=5, le=100),
+    user_id: int = Depends(verify_session)
+):
+    """Get top chains by TVL from DefiLlama (all chains)"""
+    try:
+        data = await chain_analytics_service.get_all_chains_tvl(limit)
+        return {"success": True, **data}
+    except Exception as e:
+        logger.error(f"Error fetching chains TVL: {e}")
+        return {"success": False, "error": str(e), "total_tvl": 0, "chains": []}
+
+
+@router.get("/market/rwa")
+async def get_rwa_protocols(
+    limit: int = Query(default=15, ge=5, le=50),
+    user_id: int = Depends(verify_session)
+):
+    """Get RWA (Real World Asset) protocols from DefiLlama"""
+    try:
+        data = await chain_analytics_service.get_rwa_protocols(limit)
+        return {"success": True, **data}
+    except Exception as e:
+        logger.error(f"Error fetching RWA protocols: {e}")
+        return {"success": False, "error": str(e), "total_rwa_tvl": 0, "protocols": []}
+
+
 # ---- Gas / Chain Breakdown / DEX Analytics ----
 
 @router.get("/gas-prices")

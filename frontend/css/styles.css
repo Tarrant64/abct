@@ -10336,6 +10336,46 @@ body.privacy-mode a[data-href] {
     font-size: 20px;
 }
 
+/* Locked tab */
+.main-tab-btn.tab-locked {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.main-tab-btn.tab-locked::after {
+    content: '\1F512';
+    margin-left: 6px;
+    font-size: 11px;
+}
+
+/* Market API notice */
+.market-api-notice {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    background: var(--card-bg, #1a1a2e);
+    border: 1px solid rgba(255, 183, 77, 0.3);
+    border-radius: 10px;
+    margin-bottom: 20px;
+    font-size: 14px;
+    color: var(--text-secondary, #888);
+}
+
+.market-api-notice a {
+    color: #ffb74d;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.market-api-notice a:hover {
+    text-decoration: underline;
+}
+
+[data-theme="light"] .market-api-notice {
+    background: #fffbeb;
+    border-color: rgba(245, 158, 11, 0.3);
+}
+
 /* Light Theme Overrides for Analytics */
 [data-theme="light"] .analytics-summary-card {
     background: #ffffff;

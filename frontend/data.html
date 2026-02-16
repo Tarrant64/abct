@@ -6,7 +6,7 @@
     <title>Data & Analytics - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771282067">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771285863">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <!-- Chart.js for analytics -->
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
@@ -15,7 +15,7 @@
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1771282067"></script>
+    <script src="/static/js/session-auth.js?v=1771285863"></script>
     <style>
         /* Wallet Manager Styles */
         .wallet-manager {
@@ -888,11 +888,12 @@
 
         <!-- Main Tab Navigation -->
         <div class="main-tab-nav">
-            <button class="main-tab-btn active" onclick="switchMainTab('blockchains')">Blockchains</button>
-            <button class="main-tab-btn" onclick="switchMainTab('activity')">Activity</button>
-            <button class="main-tab-btn" onclick="switchMainTab('transactions')">Transactions</button>
-            <button class="main-tab-btn" onclick="switchMainTab('analytics')">Analytics</button>
-            <button class="main-tab-btn" onclick="switchMainTab('intelligence')">Intelligence</button>
+            <button class="main-tab-btn active" data-tab="blockchains" onclick="switchMainTab('blockchains')">Blockchains</button>
+            <button class="main-tab-btn" data-tab="activity" onclick="switchMainTab('activity')">Activity</button>
+            <button class="main-tab-btn" data-tab="transactions" onclick="switchMainTab('transactions')">Transactions</button>
+            <button class="main-tab-btn" data-tab="analytics" onclick="switchMainTab('analytics')">Analytics</button>
+            <button class="main-tab-btn" data-tab="intelligence" onclick="switchMainTab('intelligence')">Wallet Intelligence</button>
+            <button class="main-tab-btn" data-tab="cryptomarket" id="cryptoMarketTabBtn" onclick="switchMainTab('cryptomarket')">Crypto Market</button>
         </div>
 
         <!-- ===================== -->
@@ -1577,6 +1578,120 @@
         </div>
         <!-- End Intelligence Tab -->
 
+        <!-- ===================== -->
+        <!-- CRYPTO MARKET TAB    -->
+        <!-- ===================== -->
+        <div id="cryptomarketTab" class="main-tab-content">
+            <!-- API Notice Banner (hidden by default) -->
+            <div class="market-api-notice" id="marketApiNotice" style="display: none;">
+                <span>&#9888;&#65039;</span>
+                <span>Global market cap and BTC dominance require CoinGecko or CoinMarketCap API key. <a href="/settings.html#apis">Configure in Settings</a></span>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="analytics-summary-cards" id="cryptoMarketSummaryCards">
+                <div class="analytics-summary-card">
+                    <div class="summary-card-label">Total Market Cap</div>
+                    <div class="summary-card-value privacy-sensitive" id="cmTotalMarketCap">--</div>
+                    <div class="summary-card-change" id="cmMarketCapChange"></div>
+                </div>
+                <div class="analytics-summary-card">
+                    <div class="summary-card-label">BTC Dominance</div>
+                    <div class="summary-card-value" id="cmBtcDominance">--</div>
+                </div>
+                <div class="analytics-summary-card">
+                    <div class="summary-card-label">Total DeFi TVL</div>
+                    <div class="summary-card-value privacy-sensitive" id="cmTotalTvl">--</div>
+                </div>
+                <div class="analytics-summary-card">
+                    <div class="summary-card-label">Stablecoin Market Cap</div>
+                    <div class="summary-card-value privacy-sensitive" id="cmStablecoinMcap">--</div>
+                </div>
+                <div class="analytics-summary-card">
+                    <div class="summary-card-label">RWA TVL</div>
+                    <div class="summary-card-value privacy-sensitive" id="cmRwaTvl">--</div>
+                </div>
+            </div>
+
+            <!-- Stablecoin Markets -->
+            <section class="analytics-section" style="margin-top: 24px;">
+                <div class="section-header-inline">
+                    <h2>Stablecoin Markets</h2>
+                </div>
+                <div class="analytics-chart-container" id="stablecoinChartContainer" style="display: none;">
+                    <canvas id="stablecoinBarChart"></canvas>
+                </div>
+                <div class="table-responsive" style="margin-top: 16px;">
+                    <table class="chain-financials-table" id="stablecoinTable">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Name</th>
+                                <th>Market Cap</th>
+                                <th>7d Change</th>
+                                <th>Price</th>
+                                <th>Peg Type</th>
+                                <th>Chains</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stablecoinTableBody">
+                            <tr><td colspan="7" style="text-align: center; color: #888; padding: 40px;">Loading stablecoin data...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Chains by TVL -->
+            <section class="analytics-section" style="margin-top: 24px;">
+                <div class="section-header-inline">
+                    <h2>Chains by TVL</h2>
+                </div>
+                <div class="analytics-chart-container" id="chainsTvlChartContainer" style="display: none;">
+                    <canvas id="chainsTvlBarChart"></canvas>
+                </div>
+                <div class="table-responsive" style="margin-top: 16px;">
+                    <table class="chain-financials-table" id="chainsTvlTable">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Chain</th>
+                                <th>TVL</th>
+                                <th>1d Change</th>
+                                <th>7d Change</th>
+                            </tr>
+                        </thead>
+                        <tbody id="chainsTvlTableBody">
+                            <tr><td colspan="5" style="text-align: center; color: #888; padding: 40px;">Loading chain TVL data...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- RWA Protocols -->
+            <section class="analytics-section" style="margin-top: 24px;">
+                <div class="section-header-inline">
+                    <h2>Real World Assets (RWA)</h2>
+                </div>
+                <div class="table-responsive">
+                    <table class="chain-financials-table" id="rwaTable">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Protocol</th>
+                                <th>TVL</th>
+                                <th>1d Change</th>
+                                <th>Chains</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rwaTableBody">
+                            <tr><td colspan="5" style="text-align: center; color: #888; padding: 40px;">Loading RWA data...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+        <!-- End Crypto Market Tab -->
+
         <!-- Blockchain Asset Breakdown Modal -->
         <div id="assetBreakdownModal" class="modal hidden">
             <div class="modal-overlay" onclick="closeAssetBreakdownModal()"></div>
@@ -1903,35 +2018,36 @@
         }
     </script>
 
-    <script src="/static/js/app.js?v=1771282067"></script>
+    <script src="/static/js/app.js?v=1771285863"></script>
 
     <!-- Transaction scripts -->
-    <script src="/static/js/transactions.js?v=1771282067"></script>
-    <script src="/static/js/transaction-analytics.js?v=1771282067"></script>
+    <script src="/static/js/transactions.js?v=1771285863"></script>
+    <script src="/static/js/transaction-analytics.js?v=1771285863"></script>
     <!-- Advanced Analytics tab -->
-    <script src="/static/js/analytics-tab.js?v=1771282067"></script>
+    <script src="/static/js/analytics-tab.js?v=1771285863"></script>
     <!-- Sankey flow diagram -->
-    <script src="/static/js/sankey-chart.js?v=1771282067"></script>
+    <script src="/static/js/sankey-chart.js?v=1771285863"></script>
     <!-- Wallet Intelligence tab -->
-    <script src="/static/js/wallet-intelligence.js?v=1771282067"></script>
+    <script src="/static/js/wallet-intelligence.js?v=1771285863"></script>
+    <!-- Crypto Market tab -->
+    <script src="/static/js/crypto-market.js?v=1771285863"></script>
 
     <script>
         // Main tab switching function
         function switchMainTab(tabName) {
-            // Update tab buttons
+            // Block locked tabs
+            if (tabName === 'cryptomarket') {
+                const btn = document.getElementById('cryptoMarketTabBtn');
+                if (btn && btn.getAttribute('data-locked') === 'true') return;
+            }
+
+            // Update tab buttons (match on data-tab attribute)
             document.querySelectorAll('.main-tab-btn').forEach(btn => {
                 btn.classList.remove('active');
+                if (btn.dataset.tab === tabName) {
+                    btn.classList.add('active');
+                }
             });
-            if (event && event.target && event.target.classList) {
-                event.target.classList.add('active');
-            } else {
-                // Programmatic call - find matching button
-                document.querySelectorAll('.main-tab-btn').forEach(btn => {
-                    if (btn.textContent.toLowerCase().trim() === tabName.toLowerCase()) {
-                        btn.classList.add('active');
-                    }
-                });
-            }
 
             // Update tab content
             document.querySelectorAll('.main-tab-content').forEach(content => {
@@ -1964,6 +2080,11 @@
                 initIntelligenceTab();
             }
 
+            // Initialize crypto market tab on first open
+            if (tabName === 'cryptomarket' && typeof initCryptoMarketTab === 'function') {
+                initCryptoMarketTab();
+            }
+
             // Update URL hash
             if (history.replaceState) {
                 history.replaceState(null, null, '#' + tabName);
@@ -1982,10 +2103,13 @@
                 loadSavedTheme();
             }
 
+            // Check crypto market tab lock
+            if (typeof checkCryptoMarketLock === 'function') checkCryptoMarketLock();
+
             // Handle hash-based tab navigation
             let hash = window.location.hash.replace('#', '');
             // Valid tab names
-            const validTabs = ['transactions', 'activity', 'analytics', 'blockchains', 'intelligence'];
+            const validTabs = ['transactions', 'activity', 'analytics', 'blockchains', 'intelligence', 'cryptomarket'];
             if (hash && validTabs.includes(hash)) {
                 switchMainTab(hash);
             } else {
