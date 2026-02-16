@@ -24,7 +24,7 @@
   <Category>Crypto: Tools:</Category>
   <WebUI>http://[IP]:[PORT:8080]/</WebUI>
   <TemplateURL/>
-  <Icon>https://raw.githubusercontent.com/your-username/abct/main/icon.png</Icon>
+  <Icon>https://raw.githubusercontent.com/Tarrant64/abct/main/frontend/static/apple-touch-icon.png</Icon>
   <ExtraParams>--restart unless-stopped</ExtraParams>
   <PostArgs/>
   <CPUset/>

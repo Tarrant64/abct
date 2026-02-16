@@ -332,6 +332,7 @@ if [ $SSH_EXIT_CODE -eq 0 ]; then
         echo "Version:   ${DEPLOYED_VERSION}"
     fi
     echo "Deploy:    ${DEPLOY_MINS}m ${DEPLOY_SECS}s"
+    echo "Completed: $(date '+%Y-%m-%d %I:%M:%S %p')"
     echo ""
 else
     echo -e "${RED}Deployment failed.${NC}"
