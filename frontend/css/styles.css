@@ -9712,7 +9712,8 @@ body.privacy-mode a[data-href] {
 .period-btn.active {
     background: var(--accent);
     border-color: var(--accent);
-    color: #1a1a2e;
+    color: #ffffff;
+    font-weight: 600;
     box-shadow: 0 0 15px rgba(0, 210, 106, 0.3);
 }
 
