@@ -663,7 +663,7 @@ class PricingService:
                     return
 
                 try:
-                    client = get_client("defilama", timeout=60.0)
+                    client = get_client("defilama", timeout=15.0)
                     # DefiLlama chart endpoint
                     now_ts = int(datetime.now().timestamp())
                     from_ts = now_ts - (days * 86400)
@@ -713,17 +713,21 @@ class PricingService:
     async def _fetch_historical_coingecko(self, symbols: List[str], days: int, historical_data: dict) -> None:
         """Fetch historical prices from CoinGecko (final fallback)."""
         try:
-            client = get_client("coingecko_historical", timeout=60.0)
+            client = get_client("coingecko_historical", timeout=15.0)
             for symbol in symbols:
                 cg_id = ASSET_TO_COINGECKO.get(symbol)
                 if not cg_id:
                     continue
 
-                response = await fetch_with_retry(
-                    client, "GET",
-                    f"{COINGECKO_BASE_URL}/coins/{cg_id}/market_chart",
-                    params={'vs_currency': 'usd', 'days': days}
-                )
+                try:
+                    response = await fetch_with_retry(
+                        client, "GET",
+                        f"{COINGECKO_BASE_URL}/coins/{cg_id}/market_chart",
+                        params={'vs_currency': 'usd', 'days': days}
+                    )
+                except Exception as req_err:
+                    logger.warning(f"CoinGecko historical request failed for {symbol}: {req_err}")
+                    continue
 
                 if response.status_code == 200:
                     data = response.json()
@@ -765,12 +769,12 @@ class PricingService:
                             logger.warning(f"Failed to cache prices for {symbol}: {cache_err}")
 
                 elif response.status_code == 429:
-                    logger.warning(f"CoinGecko rate limited for {symbol}, waiting...")
-                    await asyncio.sleep(60)
+                    logger.warning(f"CoinGecko rate limited for {symbol}, skipping remaining")
+                    break
                 else:
                     logger.warning(f"CoinGecko historical API error for {symbol}: {response.status_code}")
 
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.5)
 
         except Exception as e:
             logger.error(f"Error fetching historical prices from CoinGecko: {e}")

@@ -6,9 +6,9 @@
     <title>Settings - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771207745">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771209521">
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
-    <script src="/static/js/session-auth.js?v=1771207745"></script>
+    <script src="/static/js/session-auth.js?v=1771209521"></script>
     <script>
         // XSS Protection - Safe HTML rendering (needed before app.js)
         function setSafeHTML(element, html) {
@@ -5165,29 +5165,7 @@
                 </div>
             </div>
 
-            <!-- NFT Background Scheduler -->
-            <div class="service-category">
-                <div class="category-header">
-                    <div class="category-info">
-                        <div class="category-icon" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b;">&#9200;</div>
-                        <div>
-                            <div class="category-title">NFT Background Scheduler</div>
-                            <div class="category-desc">Automatic NFT floor price updates (spreads 95 calls across 24 hours)</div>
-                        </div>
-                    </div>
-                    <div class="category-controls">
-                        <button class="btn btn-sm btn-primary" id="schedulerToggle" onclick="toggleScheduler()">
-                            <span id="schedulerToggleText">Enable</span>
-                        </button>
-                        <button class="btn btn-sm" id="schedulerTrigger" onclick="triggerScheduler()" style="display:none;">
-                            Trigger Now
-                        </button>
-                    </div>
-                </div>
-                <div id="schedulerStatus">
-                    <!-- Populated by JavaScript -->
-                </div>
-            </div>
+            <!-- NFT Background Scheduler (deprecated — hidden) -->
 
             <!-- Restart Actions -->
             <div class="restart-actions">
@@ -5751,7 +5729,7 @@
     </footer>
 
     <!-- App JS (provides changeTheme, loadSavedTheme, togglePrivacyMode, initializePrivacyMode, authFetch) -->
-    <script src="/static/js/app.js?v=1771207745"></script>
+    <script src="/static/js/app.js?v=1771209521"></script>
 
     <!-- ==================== Tab Switching Logic ==================== -->
     <script>
@@ -6431,14 +6409,20 @@
 
         async function loadUtilization() {
             try {
-                const response = await authFetch('/settings/api-utilization');
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 15000);
+                const response = await authFetch('/settings/api-utilization', { signal: controller.signal });
+                clearTimeout(timeoutId);
                 utilizationData = await response.json();
                 renderUtilization(utilizationData);
             } catch (error) {
-                console.error('Error loading utilization:', error);
+                if (error.name === 'AbortError') {
+                    console.warn('Utilization data request timed out (15s)');
+                } else {
+                    console.error('Error loading utilization:', error);
+                }
                 setSafeHTML(document.getElementById('utilizationGrid'),
-                    '<div style="padding: 20px; text-align: center; color: #888;">Failed to load utilization data</div>');
-
+                    '<div style="padding: 20px; text-align: center; color: #888;">Utilization data unavailable</div>');
             }
         }
 
@@ -7212,7 +7196,6 @@
                 updateStartupStatus(startup);
                 updateApiStatus(apiStatus);
                 updateOverview(startup, apiStatus);
-                await loadSchedulerStatus();
 
                 document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
             } catch (error) {

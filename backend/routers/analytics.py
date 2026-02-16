@@ -143,6 +143,14 @@ async def get_relative_strength(
     user_id: int = Depends(verify_session)
 ):
     """Get normalized % change for major crypto assets over time"""
+    from database import get_cache, set_cache
+    from config import CACHE_TTL_WARM
+
+    cache_key = f"relative_strength_{days}"
+    cached = await get_cache(cache_key)
+    if cached:
+        return cached
+
     try:
         from services.pricing import pricing_service
 
@@ -167,7 +175,10 @@ async def get_relative_strength(
                 for p in prices
             ]
 
-        return {"success": True, "days": days, "assets": result}
+        response = {"success": True, "days": days, "assets": result}
+        if result:
+            await set_cache(cache_key, response, ttl=CACHE_TTL_WARM)
+        return response
     except Exception as e:
         logger.error(f"Error fetching relative strength: {e}")
         return {"success": False, "error": str(e), "assets": {}}
