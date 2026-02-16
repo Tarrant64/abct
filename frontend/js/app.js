@@ -3311,7 +3311,9 @@ async function loadDefiGovernance(forceRefresh = false) {
                             claimed_rewards: data.claimed_rewards || 0,
                             total_earned: data.total_earned || 0,
                             rewards_url: data.rewards_url || null,
-                            blockchain: data.blockchain || 'cardano'
+                            blockchain: data.blockchain || 'cardano',
+                            category: data.category || null,
+                            status: data.status || null
                         };
                     }
 
@@ -3373,7 +3375,9 @@ async function loadDefiGovernance(forceRefresh = false) {
                             pending_rewards: 0,
                             reward_token: data.reward_token || '',
                             rewards_url: data.rewards_url || null,
-                            blockchain: data.blockchain || 'solana'
+                            blockchain: data.blockchain || 'solana',
+                            category: data.category || null,
+                            status: data.status || null
                         };
                     }
                     for (const stake of data.staked || []) {
@@ -3930,14 +3934,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
     // Update DeFi summary
     if (summary) {
         const totalValue = totalStakedValue + totalStableValue;
-        let summaryParts = [];
-
-        if (stakedCount > 0) {
-            summaryParts.push(`${stakedCount} staked`);
-        }
-
         setSafeHTML(summary, `
-            <span class="defi-gov-count">${summaryParts.join(' · ') || 'No positions'}</span>
             <span class="defi-gov-total">${formatUSDBlur(totalValue)}</span>
         `);
     }
