@@ -31,7 +31,7 @@ Bitcoin, Ethereum, Solana, Polygon, Base, Algorand, Arbitrum, Avalanche, BNB Cha
 Privacy-focused (self-hosted), transaction analytics, custom tokens, portfolio history with per-wallet tracking
 
 ## Project
-Personal side project built with AI assistance. Goal: Create a robust tracker that doesn't compromise on Cardano while supporting major chains. Community contributions welcome.
+Personal side project built with AI assistance. Goal: Create a robust tracker that doesn't compromise on Cardano while supporting major chains.
 
 **Current Build**: v1.9.0 (BUILD 1771009377)
 
