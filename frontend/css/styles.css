@@ -9429,6 +9429,68 @@ body.privacy-mode a[data-href] {
     color: #00b894;
 }
 
+/* CEX direction badges (buy/sell) */
+.direction-badge.direction-buy {
+    background: rgba(0, 184, 148, 0.2);
+    color: #00b894;
+}
+
+.direction-badge.direction-sell {
+    background: rgba(214, 48, 49, 0.2);
+    color: #d63031;
+}
+
+/* CEX exchange chain badges */
+.chain-badge.chain-coinbase {
+    background: rgba(0, 82, 255, 0.25);
+    color: #4d8bff;
+    border: 1px solid rgba(0, 82, 255, 0.3);
+}
+
+.chain-badge.chain-binance {
+    background: rgba(240, 185, 11, 0.25);
+    color: #f0b90b;
+    border: 1px solid rgba(240, 185, 11, 0.3);
+}
+
+.chain-badge.chain-binance_us {
+    background: rgba(212, 160, 23, 0.25);
+    color: #d4a017;
+    border: 1px solid rgba(212, 160, 23, 0.3);
+}
+
+/* CEX toggle checkbox in filter bar */
+.cex-toggle-group {
+    display: flex;
+    align-items: center;
+}
+
+.cex-toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.cex-toggle-label input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent-primary, #00d26a);
+    cursor: pointer;
+}
+
+.cex-toggle-label span {
+    user-select: none;
+}
+
+/* CEX row subtle indicator */
+.tx-row.cex-row {
+    border-left: 3px solid rgba(0, 82, 255, 0.4);
+}
+
 /* Transaction details row - Sleek expanded view */
 .tx-details-row {
     background: transparent;
@@ -10417,6 +10479,35 @@ body.privacy-mode a[data-href] {
 [data-theme="light"] .direction-badge.direction-received {
     background: rgba(0, 184, 148, 0.1);
     color: #00a884;
+}
+
+[data-theme="light"] .direction-badge.direction-buy {
+    background: rgba(0, 184, 148, 0.1);
+    color: #00a884;
+}
+
+[data-theme="light"] .direction-badge.direction-sell {
+    background: rgba(214, 48, 49, 0.1);
+    color: #c92a2a;
+}
+
+[data-theme="light"] .chain-badge.chain-coinbase {
+    background: rgba(0, 82, 255, 0.1);
+    color: #0052ff;
+}
+
+[data-theme="light"] .chain-badge.chain-binance {
+    background: rgba(240, 185, 11, 0.1);
+    color: #b08c00;
+}
+
+[data-theme="light"] .chain-badge.chain-binance_us {
+    background: rgba(212, 160, 23, 0.1);
+    color: #8b6d00;
+}
+
+[data-theme="light"] .tx-row.cex-row {
+    border-left: 3px solid rgba(0, 82, 255, 0.3);
 }
 
 [data-theme="light"] .tx-badge {

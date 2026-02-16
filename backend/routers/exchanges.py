@@ -5,8 +5,11 @@ Exchange Router - API endpoints for cryptocurrency exchange integrations.
 from fastapi import APIRouter, HTTPException, Query, Depends
 import asyncio
 import logging
+import json
 import sys
 import os
+from datetime import datetime, timezone, timedelta
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +31,7 @@ from auth_utils import verify_session
 router = APIRouter(prefix="/exchanges", tags=["exchanges"])
 
 # Cache TTL in seconds
-from config import CACHE_TTL_HOT
+from config import CACHE_TTL_HOT, CACHE_TTL_WARM
 EXCHANGE_CACHE_TTL = CACHE_TTL_HOT  # 5 minutes for exchange data
 
 # Minimum USD value threshold for displaying assets
@@ -604,3 +607,173 @@ async def get_all_exchanges(user_id: int = Depends(verify_session), refresh: boo
         "total_assets": total_assets,
         "exchange_count": len(all_exchanges)
     }
+
+
+@router.get("/transactions")
+async def get_exchange_transactions(
+    user_id: int = Depends(verify_session),
+    days: int = Query(90, description="Number of days to fetch"),
+    exchange: str = Query(None, description="Filter by exchange name")
+):
+    """Get normalized trade history from all configured exchanges."""
+    cache_key = f"exchange_transactions_{days}_{exchange or 'all'}"
+
+    cached = await get_cache(cache_key, user_id=user_id)
+    if cached:
+        cached['from_cache'] = True
+        return cached
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    all_transactions = []
+    exchange_counts = {}
+
+    # Build list of exchanges to query
+    exchange_tasks = []
+
+    # Coinbase (async is_configured)
+    if (not exchange or exchange == "coinbase") and await coinbase_service.is_configured(user_id=user_id):
+        exchange_tasks.append(("coinbase", coinbase_service.get_normalized_transactions(user_id=user_id, limit=500)))
+
+    # Binance (sync is_configured)
+    if (not exchange or exchange == "binance") and binance_service.is_configured():
+        exchange_tasks.append(("binance", binance_service.get_trade_history(user_id=user_id, limit=500)))
+
+    # Binance US (sync is_configured)
+    if (not exchange or exchange == "binance_us") and binance_us_service.is_configured():
+        exchange_tasks.append(("binance_us", binance_us_service.get_trade_history(user_id=user_id, limit=500)))
+
+    # Execute all in parallel
+    if exchange_tasks:
+        results = await asyncio.gather(
+            *[task for _, task in exchange_tasks],
+            return_exceptions=True
+        )
+
+        for (ex_name, _), result in zip(exchange_tasks, results):
+            if isinstance(result, Exception):
+                logger.error(f"Error fetching {ex_name} transactions: {result}")
+                exchange_counts[ex_name] = 0
+                continue
+
+            # Filter by cutoff date
+            filtered = []
+            for tx in result:
+                try:
+                    tx_time = tx.get("time", "")
+                    if tx_time:
+                        tx_dt = datetime.fromisoformat(tx_time.replace("Z", "+00:00"))
+                        if tx_dt >= cutoff:
+                            filtered.append(tx)
+                    else:
+                        filtered.append(tx)
+                except (ValueError, TypeError):
+                    filtered.append(tx)
+
+            all_transactions.extend(filtered)
+            exchange_counts[ex_name] = len(filtered)
+
+    # Sort by time descending
+    all_transactions.sort(key=lambda x: x.get("time", ""), reverse=True)
+
+    result = {
+        "success": True,
+        "transactions": all_transactions,
+        "exchanges": exchange_counts,
+        "total_count": len(all_transactions),
+        "days": days,
+        "from_cache": False
+    }
+
+    await set_cache(cache_key, result, CACHE_TTL_WARM, user_id=user_id)
+    return result
+
+
+@router.get("/analytics/by-exchange")
+async def get_analytics_by_exchange(
+    user_id: int = Depends(verify_session),
+    days: int = Query(30, description="Number of days to analyze")
+):
+    """Get trade count analytics bucketed by time period and exchange."""
+    cache_key = f"exchange_analytics_{days}"
+
+    cached = await get_cache(cache_key, user_id=user_id)
+    if cached:
+        cached['from_cache'] = True
+        return cached
+
+    # Fetch all transactions for the period
+    tx_response = await get_exchange_transactions(user_id=user_id, days=days)
+    transactions = tx_response.get("transactions", [])
+
+    if not transactions:
+        return {
+            "success": True,
+            "buckets": [],
+            "exchanges": {},
+            "days": days,
+            "from_cache": False
+        }
+
+    # Determine bucket size
+    if days <= 30:
+        bucket_format = "%Y-%m-%d"
+        bucket_label_fn = lambda d: d.strftime("%b %d")
+    elif days <= 365:
+        bucket_format = "%Y-W%W"
+        bucket_label_fn = lambda d: f"W{d.strftime('%W')} {d.strftime('%b')}"
+    else:
+        bucket_format = "%Y-%m"
+        bucket_label_fn = lambda d: d.strftime("%b %Y")
+
+    # Build time range of buckets
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=days)
+
+    # Generate all bucket labels in order
+    bucket_labels = []
+    bucket_keys = []
+    current = cutoff
+    while current <= now:
+        bk = current.strftime(bucket_format)
+        bl = bucket_label_fn(current)
+        if bk not in bucket_keys:
+            bucket_keys.append(bk)
+            bucket_labels.append(bl)
+        if days <= 30:
+            current += timedelta(days=1)
+        elif days <= 365:
+            current += timedelta(weeks=1)
+        else:
+            # Advance by ~30 days for monthly
+            current += timedelta(days=30)
+
+    # Count transactions per exchange per bucket
+    exchange_buckets = defaultdict(lambda: defaultdict(int))
+
+    for tx in transactions:
+        try:
+            tx_time = tx.get("time", "")
+            if not tx_time:
+                continue
+            tx_dt = datetime.fromisoformat(tx_time.replace("Z", "+00:00"))
+            bk = tx_dt.strftime(bucket_format)
+            ex_name = tx.get("exchange", "unknown")
+            exchange_buckets[ex_name][bk] += 1
+        except (ValueError, TypeError):
+            continue
+
+    # Build response with ordered counts per exchange
+    exchanges = {}
+    for ex_name, bucket_counts in exchange_buckets.items():
+        exchanges[ex_name] = [bucket_counts.get(bk, 0) for bk in bucket_keys]
+
+    result = {
+        "success": True,
+        "buckets": bucket_labels,
+        "exchanges": exchanges,
+        "days": days,
+        "from_cache": False
+    }
+
+    await set_cache(cache_key, result, CACHE_TTL_WARM, user_id=user_id)
+    return result

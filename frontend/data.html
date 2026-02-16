@@ -6,7 +6,7 @@
     <title>Data & Analytics - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771269957">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771272770">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <!-- Chart.js for analytics -->
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
@@ -15,7 +15,7 @@
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1771269957"></script>
+    <script src="/static/js/session-auth.js?v=1771272770"></script>
     <style>
         /* Wallet Manager Styles */
         .wallet-manager {
@@ -962,6 +962,13 @@
                         <input type="search" id="searchBox" placeholder="Hash, address, token..." onkeyup="handleSearchKeyup(event)">
                     </div>
 
+                    <div class="filter-group cex-toggle-group">
+                        <label class="cex-toggle-label">
+                            <input type="checkbox" id="showCexCheckbox" onchange="toggleCexTransactions()">
+                            <span>Show CEX</span>
+                        </label>
+                    </div>
+
                     <button class="btn btn-primary" onclick="refreshTransactions()" title="Fetch latest transactions from blockchains">
                         &#128260; Refresh
                     </button>
@@ -1081,6 +1088,39 @@
                         <span class="hint-text">Click to highlight/unhighlight chains</span>
                     </div>
                     <div id="chainIndicators" class="chain-indicators">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </section>
+            <!-- CEX Transaction Activity Section -->
+            <section class="analytics-section" style="margin-top: 24px;">
+                <div class="section-header-inline">
+                    <h2>Transaction Activity by Exchange</h2>
+                </div>
+
+                <!-- Loading Indicator -->
+                <div id="cexAnalyticsLoading" class="loading-indicator" style="display: none;">
+                    <span class="spinner"></span>
+                    <p>Loading exchange analytics...</p>
+                </div>
+
+                <!-- Empty State -->
+                <div id="cexAnalyticsEmpty" class="empty-state" style="display: none;">
+                    <p>No exchange transaction data available. Configure exchange API keys to see trade history.</p>
+                </div>
+
+                <!-- Chart Container -->
+                <div id="cexAnalyticsChartContainer" class="analytics-chart-container" style="display: none;">
+                    <canvas id="cexAnalyticsChart"></canvas>
+                </div>
+
+                <!-- Exchange Indicators -->
+                <div class="chain-indicators-section" id="cexIndicatorsSection" style="display: none;">
+                    <div class="section-header-inline">
+                        <h3>Filter by Exchange</h3>
+                        <span class="hint-text">Click to highlight/unhighlight exchanges</span>
+                    </div>
+                    <div id="cexIndicators" class="chain-indicators">
                         <!-- Populated by JavaScript -->
                     </div>
                 </div>
@@ -1888,17 +1928,17 @@
         }
     </script>
 
-    <script src="/static/js/app.js?v=1771269957"></script>
+    <script src="/static/js/app.js?v=1771272770"></script>
 
     <!-- Transaction scripts -->
-    <script src="/static/js/transactions.js?v=1771269957"></script>
-    <script src="/static/js/transaction-analytics.js?v=1771269957"></script>
+    <script src="/static/js/transactions.js?v=1771272770"></script>
+    <script src="/static/js/transaction-analytics.js?v=1771272770"></script>
     <!-- Advanced Analytics tab -->
-    <script src="/static/js/analytics-tab.js?v=1771269957"></script>
+    <script src="/static/js/analytics-tab.js?v=1771272770"></script>
     <!-- Sankey flow diagram -->
-    <script src="/static/js/sankey-chart.js?v=1771269957"></script>
+    <script src="/static/js/sankey-chart.js?v=1771272770"></script>
     <!-- Wallet Intelligence tab -->
-    <script src="/static/js/wallet-intelligence.js?v=1771269957"></script>
+    <script src="/static/js/wallet-intelligence.js?v=1771272770"></script>
 
     <script>
         // Main tab switching function
@@ -1926,9 +1966,12 @@
             const tabEl = document.getElementById(tabName + 'Tab');
             if (tabEl) tabEl.classList.add('active');
 
-            // Initialize activity chart when switching to activity tab
+            // Initialize activity charts when switching to activity tab
             if (tabName === 'activity' && typeof initAnalyticsChart === 'function' && !analyticsChart) {
                 initAnalyticsChart();
+            }
+            if (tabName === 'activity' && typeof initCexAnalyticsChart === 'function' && !cexAnalyticsChart) {
+                initCexAnalyticsChart();
             }
 
             // Initialize advanced analytics tab on first open

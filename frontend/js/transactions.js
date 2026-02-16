@@ -3,6 +3,8 @@
  */
 
 let currentTransactions = [];
+let cexTransactions = [];
+let showCex = false;
 let expandedRows = new Set();
 let currentPage = 1;
 let pageSize = 20;
@@ -51,10 +53,15 @@ async function loadTransactions() {
 
         if (data.success) {
             currentTransactions = data.transactions || [];
-            renderTransactions(currentTransactions);
-            updateTransactionCount(currentTransactions.length);
+            // If CEX is on, reload CEX too and merge
+            if (showCex) {
+                await loadCexTransactionsOnly();
+            }
+            const merged = getMergedTransactions();
+            renderTransactions(merged);
+            updateTransactionCount(merged.length);
 
-            if (currentTransactions.length === 0) {
+            if (merged.length === 0) {
                 showEmptyState();
             }
         } else {
@@ -231,27 +238,41 @@ function renderTransactions(transactions) {
 
     pageTransactions.forEach((tx, pageIndex) => {
         const globalIndex = startIdx + pageIndex;
+        const isCex = tx._isCex === true;
 
         // Create main row
         const row = document.createElement('tr');
-        row.className = 'tx-row';
+        row.className = `tx-row${isCex ? ' cex-row' : ''}`;
         row.id = `tx-row-${globalIndex}`;
         row.onclick = () => toggleDetails(globalIndex);
 
         const expandIcon = expandedRows.has(globalIndex) ? '&#9660;' : '&#9658;';
 
-        // Format tokens (handle multiple for Cardano)
-        const tokenDisplay = formatTokens(tx);
-
-        row.innerHTML = `
-            <td class="expand-cell">${expandIcon}</td>
-            <td><span class="tx-badge time-badge">${formatTime(tx.tx_time)}</span></td>
-            <td><span class="chain-badge chain-${tx.blockchain}">${formatChainName(tx.blockchain)}</span></td>
-            <td><span class="direction-badge direction-${tx.direction}">${tx.direction}</span></td>
-            <td class="amount-cell"><span class="tx-badge amount-badge">${wrapBlurValue(formatAmount(tx.amount))} ${tx.token_symbol}</span></td>
-            <td>${tokenDisplay}</td>
-            <td class="hash-cell"><span class="tx-badge hash-badge">${formatHash(tx.tx_hash, tx.blockchain)}</span></td>
-        `;
+        if (isCex) {
+            // CEX transaction row
+            const cexDirection = tx.side === 'BUY' ? 'buy' : 'sell';
+            row.innerHTML = `
+                <td class="expand-cell">${expandIcon}</td>
+                <td><span class="tx-badge time-badge">${formatTime(tx.time)}</span></td>
+                <td><span class="chain-badge chain-${tx.exchange}">${formatExchangeName(tx.exchange)}</span></td>
+                <td><span class="direction-badge direction-${cexDirection}">${tx.side}</span></td>
+                <td class="amount-cell"><span class="tx-badge amount-badge">${wrapBlurValue(formatAmount(tx.amount))} ${tx.token}</span></td>
+                <td><span class="token-badge">${tx.token}/${tx.quote_token}</span></td>
+                <td class="hash-cell"><span class="tx-badge hash-badge">${tx.order_id ? truncateHash(tx.order_id) : 'N/A'}</span></td>
+            `;
+        } else {
+            // Blockchain transaction row (original)
+            const tokenDisplay = formatTokens(tx);
+            row.innerHTML = `
+                <td class="expand-cell">${expandIcon}</td>
+                <td><span class="tx-badge time-badge">${formatTime(tx.tx_time)}</span></td>
+                <td><span class="chain-badge chain-${tx.blockchain}">${formatChainName(tx.blockchain)}</span></td>
+                <td><span class="direction-badge direction-${tx.direction}">${tx.direction}</span></td>
+                <td class="amount-cell"><span class="tx-badge amount-badge">${wrapBlurValue(formatAmount(tx.amount))} ${tx.token_symbol}</span></td>
+                <td>${tokenDisplay}</td>
+                <td class="hash-cell"><span class="tx-badge hash-badge">${formatHash(tx.tx_hash, tx.blockchain)}</span></td>
+            `;
+        }
 
         tbody.appendChild(row);
 
@@ -260,62 +281,107 @@ function renderTransactions(transactions) {
         detailsRow.id = `details-${globalIndex}`;
         detailsRow.className = 'tx-details-row';
         detailsRow.style.display = expandedRows.has(globalIndex) ? 'table-row' : 'none';
-        detailsRow.innerHTML = `
-            <td colspan="7">
-                <div class="tx-details">
-                    <div class="detail-grid">
-                        <div class="detail-item">
-                            <strong>From:</strong>
-                            <div class="detail-content">
-                                <span class="address">${wrapBlurValue(formatAddress(tx.from_address))}</span>
-                                ${tx.from_address ? `<button class="copy-address-btn" onclick="copyToClipboard('${tx.from_address}', this); event.stopPropagation();" title="Copy address">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                                    </svg>
-                                </button>` : ''}
+
+        if (isCex) {
+            // CEX details
+            const tradeDesc = tx.side === 'BUY'
+                ? `Bought ${wrapBlurValue(formatAmount(tx.amount))} ${tx.token} with ${wrapBlurValue(formatAmount(tx.quote_amount))} ${tx.quote_token}`
+                : `Sold ${wrapBlurValue(formatAmount(tx.amount))} ${tx.token} for ${wrapBlurValue(formatAmount(tx.quote_amount))} ${tx.quote_token}`;
+            detailsRow.innerHTML = `
+                <td colspan="7">
+                    <div class="tx-details">
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <strong>Trade:</strong>
+                                <span>${tradeDesc}</span>
                             </div>
-                        </div>
-                        <div class="detail-item">
-                            <strong>To:</strong>
-                            <div class="detail-content">
-                                <span class="address">${wrapBlurValue(formatAddress(tx.to_address))}</span>
-                                ${tx.to_address ? `<button class="copy-address-btn" onclick="copyToClipboard('${tx.to_address}', this); event.stopPropagation();" title="Copy address">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                                    </svg>
-                                </button>` : ''}
+                            <div class="detail-item">
+                                <strong>Price:</strong>
+                                <span>${wrapBlurValue('$' + formatAmount(tx.price))} per ${tx.token}</span>
                             </div>
+                            <div class="detail-item">
+                                <strong>Fee:</strong>
+                                <span>${wrapBlurValue(formatAmount(tx.fee))} ${tx.fee_token}</span>
+                            </div>
+                            <div class="detail-item">
+                                <strong>Exchange:</strong>
+                                <span>${formatExchangeName(tx.exchange)}</span>
+                            </div>
+                            ${tx.order_id ? `<div class="detail-item detail-full">
+                                <strong>Order ID:</strong>
+                                <div class="detail-content">
+                                    <span class="hash-full">${wrapBlurValue(tx.order_id)}</span>
+                                    <button class="copy-address-btn" onclick="copyToClipboard('${tx.order_id}', this); event.stopPropagation();" title="Copy order ID">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>` : ''}
                         </div>
-                        <div class="detail-item">
-                            <strong>Fee:</strong>
-                            <span>${formatFee(tx.fee, tx.blockchain)}</span>
-                        </div>
-                        <div class="detail-item">
-                            <strong>Status:</strong>
-                            <span class="status-${tx.status}">${tx.status}</span>
-                        </div>
-                        <div class="detail-item">
-                            <strong>Wallet:</strong>
-                            <span>${wrapBlurValue(tx.wallet_name || tx.wallet_address || 'Unknown')}</span>
-                        </div>
-                        <div class="detail-item detail-full">
-                            <strong>Full Hash:</strong>
-                            <div class="detail-content">
-                                <span class="hash-full">${wrapBlurValue(tx.tx_hash)}</span>
-                                <button class="copy-address-btn" onclick="copyToClipboard('${tx.tx_hash}', this); event.stopPropagation();" title="Copy hash">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                                    </svg>
-                                </button>
+                    </div>
+                </td>
+            `;
+        } else {
+            // Blockchain details (original)
+            detailsRow.innerHTML = `
+                <td colspan="7">
+                    <div class="tx-details">
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <strong>From:</strong>
+                                <div class="detail-content">
+                                    <span class="address">${wrapBlurValue(formatAddress(tx.from_address))}</span>
+                                    ${tx.from_address ? `<button class="copy-address-btn" onclick="copyToClipboard('${tx.from_address}', this); event.stopPropagation();" title="Copy address">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                        </svg>
+                                    </button>` : ''}
+                                </div>
+                            </div>
+                            <div class="detail-item">
+                                <strong>To:</strong>
+                                <div class="detail-content">
+                                    <span class="address">${wrapBlurValue(formatAddress(tx.to_address))}</span>
+                                    ${tx.to_address ? `<button class="copy-address-btn" onclick="copyToClipboard('${tx.to_address}', this); event.stopPropagation();" title="Copy address">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                        </svg>
+                                    </button>` : ''}
+                                </div>
+                            </div>
+                            <div class="detail-item">
+                                <strong>Fee:</strong>
+                                <span>${formatFee(tx.fee, tx.blockchain)}</span>
+                            </div>
+                            <div class="detail-item">
+                                <strong>Status:</strong>
+                                <span class="status-${tx.status}">${tx.status}</span>
+                            </div>
+                            <div class="detail-item">
+                                <strong>Wallet:</strong>
+                                <span>${wrapBlurValue(tx.wallet_name || tx.wallet_address || 'Unknown')}</span>
+                            </div>
+                            <div class="detail-item detail-full">
+                                <strong>Full Hash:</strong>
+                                <div class="detail-content">
+                                    <span class="hash-full">${wrapBlurValue(tx.tx_hash)}</span>
+                                    <button class="copy-address-btn" onclick="copyToClipboard('${tx.tx_hash}', this); event.stopPropagation();" title="Copy hash">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                        </svg>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            </td>
-        `;
+                </td>
+            `;
+        }
 
         tbody.appendChild(detailsRow);
     });
@@ -526,6 +592,88 @@ function handleSearchKeyup(event) {
     if (event.key === 'Enter') {
         loadTransactions();
     }
+}
+
+/**
+ * Toggle CEX transactions visibility
+ */
+async function toggleCexTransactions() {
+    const checkbox = document.getElementById('showCexCheckbox');
+    showCex = checkbox && checkbox.checked;
+
+    if (showCex) {
+        await loadCexTransactionsOnly();
+    } else {
+        cexTransactions = [];
+    }
+
+    currentPage = 1;
+    const merged = getMergedTransactions();
+    renderTransactions(merged);
+    updateTransactionCount(merged.length);
+
+    if (merged.length === 0) {
+        showEmptyState();
+    } else {
+        hideEmptyState();
+    }
+}
+
+/**
+ * Load CEX transactions (without reloading blockchain transactions)
+ */
+async function loadCexTransactionsOnly() {
+    const days = document.getElementById('daysFilter').value;
+    try {
+        const response = await authFetch(`/exchanges/transactions?days=${days}`);
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            cexTransactions = [];
+            return;
+        }
+        const data = await response.json();
+        if (data.success) {
+            cexTransactions = (data.transactions || []).map(tx => ({
+                ...tx,
+                _isCex: true
+            }));
+        } else {
+            cexTransactions = [];
+        }
+    } catch (error) {
+        console.error('Error loading CEX transactions:', error);
+        cexTransactions = [];
+    }
+}
+
+/**
+ * Get merged and sorted transactions
+ */
+function getMergedTransactions() {
+    if (!showCex || cexTransactions.length === 0) {
+        return currentTransactions;
+    }
+
+    // Merge blockchain + CEX, sort by time descending
+    const merged = [...currentTransactions, ...cexTransactions];
+    merged.sort((a, b) => {
+        const timeA = a.tx_time || a.time || '';
+        const timeB = b.tx_time || b.time || '';
+        return timeB.localeCompare(timeA);
+    });
+    return merged;
+}
+
+/**
+ * Format exchange name for display
+ */
+function formatExchangeName(exchange) {
+    const names = {
+        'coinbase': 'Coinbase',
+        'binance': 'Binance',
+        'binance_us': 'Binance US'
+    };
+    return names[exchange] || exchange;
 }
 
 /**

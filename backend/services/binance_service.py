@@ -76,6 +76,66 @@ class BinanceService:
             logger.error(f"Binance API error: {e}")
             return None
 
+    async def get_trade_history(self, user_id: int = None, limit: int = 500) -> List[Dict]:
+        """Get trade history from Binance for assets with balance."""
+        if not self.is_configured():
+            return []
+
+        try:
+            # Get account balances to find assets with holdings
+            data = await self._make_request("/api/v3/account")
+            if not data:
+                return []
+
+            # Find assets with non-zero balance (top 20 by total balance)
+            assets_with_balance = []
+            for balance in data.get("balances", []):
+                total = float(balance.get("free", 0)) + float(balance.get("locked", 0))
+                if total > 0 and balance["asset"] not in ("USD", "USDT", "USDC", "BUSD"):
+                    assets_with_balance.append((balance["asset"], total))
+
+            assets_with_balance.sort(key=lambda x: x[1], reverse=True)
+            assets_with_balance = assets_with_balance[:20]
+
+            all_trades = []
+            for asset, _ in assets_with_balance:
+                # Try USDT pair first, then BUSD, then USD
+                for quote in ("USDT", "BUSD", "USD"):
+                    symbol = f"{asset}{quote}"
+                    trades = await self._make_request("/api/v3/myTrades", {"symbol": symbol, "limit": 50})
+                    if trades and isinstance(trades, list) and len(trades) > 0:
+                        for trade in trades:
+                            all_trades.append({
+                                "exchange": "binance",
+                                "time": self._format_timestamp(trade.get("time", 0)),
+                                "side": "BUY" if trade.get("isBuyer") else "SELL",
+                                "amount": float(trade.get("qty", 0)),
+                                "token": asset,
+                                "quote_amount": float(trade.get("quoteQty", 0)),
+                                "quote_token": quote,
+                                "price": float(trade.get("price", 0)),
+                                "fee": float(trade.get("commission", 0)),
+                                "fee_token": trade.get("commissionAsset", ""),
+                                "order_id": str(trade.get("orderId", ""))
+                            })
+                        break  # Found trades for this asset, skip other quote currencies
+
+            # Sort by time descending
+            all_trades.sort(key=lambda x: x["time"], reverse=True)
+            return all_trades[:limit]
+
+        except Exception as e:
+            logger.error(f"Error fetching Binance trade history: {e}")
+            return []
+
+    @staticmethod
+    def _format_timestamp(ms_timestamp: int) -> str:
+        """Convert millisecond timestamp to ISO format."""
+        from datetime import datetime, timezone
+        if not ms_timestamp:
+            return ""
+        return datetime.fromtimestamp(ms_timestamp / 1000, tz=timezone.utc).isoformat()
+
     async def get_account_balances(self, user_id: int = None) -> Dict:
         """Get account balances from Binance."""
         data = await self._make_request("/api/v3/account")

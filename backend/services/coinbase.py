@@ -408,6 +408,55 @@ class CoinbaseService:
 
         return None
 
+    async def get_normalized_transactions(self, user_id: int = None, limit: int = 100) -> List[dict]:
+        """
+        Get transaction history normalized to the shared exchange trade format.
+
+        Returns list of normalized trade dicts.
+        """
+        raw_orders = await self.get_transactions(user_id=user_id, limit=limit)
+        normalized = []
+
+        for order in raw_orders:
+            try:
+                product_id = order.get("product_id", "")
+                parts = product_id.split("-") if product_id else []
+                token = parts[0] if len(parts) >= 1 else "UNKNOWN"
+                quote_token = parts[1] if len(parts) >= 2 else "USD"
+
+                side = order.get("side", "").upper()
+                filled_size = float(order.get("filled_size", 0))
+                filled_value = float(order.get("filled_value", 0))
+                avg_price = float(order.get("average_filled_price", 0))
+
+                # Extract fee from order_configuration if available
+                fee = 0.0
+                total_fees = order.get("total_fees", "0")
+                if total_fees:
+                    fee = float(total_fees)
+
+                # Timestamp
+                created_time = order.get("created_time", "") or order.get("last_fill_time", "")
+
+                normalized.append({
+                    "exchange": "coinbase",
+                    "time": created_time,
+                    "side": side,
+                    "amount": filled_size,
+                    "token": token,
+                    "quote_amount": filled_value,
+                    "quote_token": quote_token,
+                    "price": avg_price,
+                    "fee": fee,
+                    "fee_token": quote_token,
+                    "order_id": order.get("order_id", "")
+                })
+            except Exception as e:
+                logger.error(f"Error normalizing Coinbase order: {e}")
+                continue
+
+        return normalized
+
     async def get_transactions(self, user_id: int = None, limit: int = 100) -> List[dict]:
         """
         Get transaction history from Coinbase.
