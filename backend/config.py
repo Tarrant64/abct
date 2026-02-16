@@ -105,6 +105,18 @@ SUI_RPC_URL = "https://fullnode.mainnet.sui.io:443"
 APTOS_API_URL = "https://fullnode.mainnet.aptoslabs.com/v1"
 GLIF_RPC_URL = "https://api.node.glif.io/rpc/v1"
 
+# Additional chain APIs (all free, no key required)
+BLOCKCYPHER_LTC_URL = "https://api.blockcypher.com/v1/ltc/main"
+BLOCKCYPHER_DOGE_URL = "https://api.blockcypher.com/v1/doge/main"
+BLOCKCHAIR_ZEC_URL = "https://api.blockchair.com/zcash"
+TZKT_BASE_URL = "https://api.tzkt.io/v1"
+HIRO_BASE_URL = "https://api.mainnet.hiro.so"
+VECHAIN_THOR_URL = "https://mainnet.veblocks.net"
+COSMOS_LCD_URL = "https://cosmos-rest.publicnode.com"
+NEAR_RPC_URL = "https://rpc.mainnet.near.org"
+NEARBLOCKS_API_URL = "https://api.nearblocks.io/v1"
+ICP_ROSETTA_URL = "https://rosetta-api.internetcomputer.org"
+
 # Etherscan API endpoints (same format works for Basescan, Polygonscan, etc.)
 ETHERSCAN_BASE_URL = "https://api.etherscan.io/api"
 BASESCAN_BASE_URL = "https://api.basescan.org/api"

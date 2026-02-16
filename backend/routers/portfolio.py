@@ -252,6 +252,65 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
             'token_count': 0,
             'native_assets_value_usd': 0.0,
             'wallets': []
+        },
+        'litecoin': {
+            'wallet_count': 0,
+            'total_ltc': 0.0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'dogecoin': {
+            'wallet_count': 0,
+            'total_doge': 0.0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'zcash': {
+            'wallet_count': 0,
+            'total_zec': 0.0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'tezos': {
+            'wallet_count': 0,
+            'total_xtz': 0.0,
+            'token_count': 0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'stacks': {
+            'wallet_count': 0,
+            'total_stx': 0.0,
+            'token_count': 0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'vechain': {
+            'wallet_count': 0,
+            'total_vet': 0.0,
+            'token_count': 0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'cosmos': {
+            'wallet_count': 0,
+            'total_atom': 0.0,
+            'token_count': 0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'near': {
+            'wallet_count': 0,
+            'total_near': 0.0,
+            'token_count': 0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'icp': {
+            'wallet_count': 0,
+            'total_icp': 0.0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
         }
     }
 
@@ -484,6 +543,70 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
             summary['filecoin']['native_assets_value_usd'] += native_assets_value_usd
             summary['filecoin']['wallets'].append(wallet_summary)
 
+        elif blockchain == 'litecoin':
+            summary['litecoin']['wallet_count'] += 1
+            summary['litecoin']['total_ltc'] += balance
+            summary['litecoin']['native_assets_value_usd'] += native_assets_value_usd
+            summary['litecoin']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'dogecoin':
+            summary['dogecoin']['wallet_count'] += 1
+            summary['dogecoin']['total_doge'] += balance
+            summary['dogecoin']['native_assets_value_usd'] += native_assets_value_usd
+            summary['dogecoin']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'zcash':
+            summary['zcash']['wallet_count'] += 1
+            summary['zcash']['total_zec'] += balance
+            summary['zcash']['native_assets_value_usd'] += native_assets_value_usd
+            summary['zcash']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'tezos':
+            summary['tezos']['wallet_count'] += 1
+            summary['tezos']['total_xtz'] += balance
+            summary['tezos']['token_count'] += len(assets)
+            summary['tezos']['native_assets_value_usd'] += native_assets_value_usd
+            wallet_summary['token_count'] = len(assets)
+            summary['tezos']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'stacks':
+            summary['stacks']['wallet_count'] += 1
+            summary['stacks']['total_stx'] += balance
+            summary['stacks']['token_count'] += len(assets)
+            summary['stacks']['native_assets_value_usd'] += native_assets_value_usd
+            wallet_summary['token_count'] = len(assets)
+            summary['stacks']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'vechain':
+            summary['vechain']['wallet_count'] += 1
+            summary['vechain']['total_vet'] += balance
+            summary['vechain']['token_count'] += len(assets)
+            summary['vechain']['native_assets_value_usd'] += native_assets_value_usd
+            wallet_summary['token_count'] = len(assets)
+            summary['vechain']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'cosmos':
+            summary['cosmos']['wallet_count'] += 1
+            summary['cosmos']['total_atom'] += balance
+            summary['cosmos']['token_count'] += len(assets)
+            summary['cosmos']['native_assets_value_usd'] += native_assets_value_usd
+            wallet_summary['token_count'] = len(assets)
+            summary['cosmos']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'near':
+            summary['near']['wallet_count'] += 1
+            summary['near']['total_near'] += balance
+            summary['near']['token_count'] += len(assets)
+            summary['near']['native_assets_value_usd'] += native_assets_value_usd
+            wallet_summary['token_count'] = len(assets)
+            summary['near']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'icp':
+            summary['icp']['wallet_count'] += 1
+            summary['icp']['total_icp'] += balance
+            summary['icp']['native_assets_value_usd'] += native_assets_value_usd
+            summary['icp']['wallets'].append(wallet_summary)
+
     # Convert stake groups dict to list and round totals
     summary['cardano']['stake_groups'] = [
         {**group, 'total_ada': round(group['total_ada'], 6)}
@@ -511,6 +634,15 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
     summary['sui']['total_sui'] = round(summary['sui']['total_sui'], 9)
     summary['aptos']['total_apt'] = round(summary['aptos']['total_apt'], 8)
     summary['filecoin']['total_fil'] = round(summary['filecoin']['total_fil'], 8)
+    summary['litecoin']['total_ltc'] = round(summary['litecoin']['total_ltc'], 8)
+    summary['dogecoin']['total_doge'] = round(summary['dogecoin']['total_doge'], 8)
+    summary['zcash']['total_zec'] = round(summary['zcash']['total_zec'], 8)
+    summary['tezos']['total_xtz'] = round(summary['tezos']['total_xtz'], 6)
+    summary['stacks']['total_stx'] = round(summary['stacks']['total_stx'], 6)
+    summary['vechain']['total_vet'] = round(summary['vechain']['total_vet'], 8)
+    summary['cosmos']['total_atom'] = round(summary['cosmos']['total_atom'], 6)
+    summary['near']['total_near'] = round(summary['near']['total_near'], 8)
+    summary['icp']['total_icp'] = round(summary['icp']['total_icp'], 8)
 
     # Cache the result with timestamp
     from datetime import datetime
@@ -1822,10 +1954,10 @@ async def get_portfolio_analytics(user_id: int = Depends(verify_session)):
     total_value = 0
 
     # Chain symbol to blockchain name mapping
-    chain_symbol_map = {'ADA': 'cardano', 'BTC': 'bitcoin', 'ETH': 'ethereum', 'SOL': 'solana', 'POL': 'polygon', 'ALGO': 'algorand', 'BNB': 'bsc', 'AVAX': 'avalanche', 'TRX': 'tron', 'XRP': 'xrp', 'HBAR': 'hedera', 'EGLD': 'multiversx', 'SUI': 'sui', 'APT': 'aptos', 'FIL': 'filecoin'}
+    chain_symbol_map = {'ADA': 'cardano', 'BTC': 'bitcoin', 'ETH': 'ethereum', 'SOL': 'solana', 'POL': 'polygon', 'ALGO': 'algorand', 'BNB': 'bsc', 'AVAX': 'avalanche', 'TRX': 'tron', 'XRP': 'xrp', 'HBAR': 'hedera', 'EGLD': 'multiversx', 'SUI': 'sui', 'APT': 'aptos', 'FIL': 'filecoin', 'LTC': 'litecoin', 'DOGE': 'dogecoin', 'ZEC': 'zcash', 'XTZ': 'tezos', 'STX': 'stacks', 'VET': 'vechain', 'ATOM': 'cosmos', 'NEAR': 'near', 'ICP': 'icp'}
 
     # Add native coins
-    for blockchain in ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base', 'algorand', 'bsc', 'arbitrum', 'avalanche', 'tron', 'xrp', 'hedera', 'multiversx', 'sui', 'aptos', 'filecoin']:
+    for blockchain in ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base', 'algorand', 'bsc', 'arbitrum', 'avalanche', 'tron', 'xrp', 'hedera', 'multiversx', 'sui', 'aptos', 'filecoin', 'litecoin', 'dogecoin', 'zcash', 'tezos', 'stacks', 'vechain', 'cosmos', 'near', 'icp']:
         chain_data = summary.get(blockchain, {})
         if blockchain == 'cardano':
             qty = chain_data.get('total_ada', 0)
@@ -1878,6 +2010,33 @@ async def get_portfolio_analytics(user_id: int = Depends(verify_session)):
         elif blockchain == 'filecoin':
             qty = chain_data.get('total_fil', 0)
             symbol = 'FIL'
+        elif blockchain == 'litecoin':
+            qty = chain_data.get('total_ltc', 0)
+            symbol = 'LTC'
+        elif blockchain == 'dogecoin':
+            qty = chain_data.get('total_doge', 0)
+            symbol = 'DOGE'
+        elif blockchain == 'zcash':
+            qty = chain_data.get('total_zec', 0)
+            symbol = 'ZEC'
+        elif blockchain == 'tezos':
+            qty = chain_data.get('total_xtz', 0)
+            symbol = 'XTZ'
+        elif blockchain == 'stacks':
+            qty = chain_data.get('total_stx', 0)
+            symbol = 'STX'
+        elif blockchain == 'vechain':
+            qty = chain_data.get('total_vet', 0)
+            symbol = 'VET'
+        elif blockchain == 'cosmos':
+            qty = chain_data.get('total_atom', 0)
+            symbol = 'ATOM'
+        elif blockchain == 'near':
+            qty = chain_data.get('total_near', 0)
+            symbol = 'NEAR'
+        elif blockchain == 'icp':
+            qty = chain_data.get('total_icp', 0)
+            symbol = 'ICP'
         else:
             continue
 
@@ -1975,7 +2134,7 @@ async def get_blockchain_asset_breakdown(
 
     try:
         # Validate blockchain
-        valid_chains = ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base', 'bsc', 'arbitrum', 'avalanche', 'tron', 'xrp', 'hedera', 'multiversx', 'sui', 'aptos', 'filecoin']
+        valid_chains = ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base', 'bsc', 'arbitrum', 'avalanche', 'tron', 'xrp', 'hedera', 'multiversx', 'sui', 'aptos', 'filecoin', 'litecoin', 'dogecoin', 'zcash', 'tezos', 'stacks', 'vechain', 'cosmos', 'near', 'icp']
         if blockchain not in valid_chains:
             raise HTTPException(400, f"Invalid blockchain: {blockchain}")
 
@@ -1999,14 +2158,20 @@ async def get_blockchain_asset_breakdown(
             'solana': 'SOL', 'polygon': 'POL', 'base': 'ETH',
             'bsc': 'BNB', 'arbitrum': 'ETH', 'avalanche': 'AVAX', 'tron': 'TRX',
             'xrp': 'XRP', 'hedera': 'HBAR', 'multiversx': 'EGLD',
-            'sui': 'SUI', 'aptos': 'APT', 'filecoin': 'FIL'
+            'sui': 'SUI', 'aptos': 'APT', 'filecoin': 'FIL',
+            'litecoin': 'LTC', 'dogecoin': 'DOGE', 'zcash': 'ZEC',
+            'tezos': 'XTZ', 'stacks': 'STX', 'vechain': 'VET',
+            'cosmos': 'ATOM', 'near': 'NEAR', 'icp': 'ICP'
         }
         native_keys = {
             'cardano': 'total_ada', 'bitcoin': 'total_btc', 'ethereum': 'total_eth',
             'solana': 'total_sol', 'polygon': 'total_matic', 'base': 'total_eth',
             'bsc': 'total_bnb', 'arbitrum': 'total_eth', 'avalanche': 'total_avax', 'tron': 'total_trx',
             'xrp': 'total_xrp', 'hedera': 'total_hbar', 'multiversx': 'total_egld',
-            'sui': 'total_sui', 'aptos': 'total_apt', 'filecoin': 'total_fil'
+            'sui': 'total_sui', 'aptos': 'total_apt', 'filecoin': 'total_fil',
+            'litecoin': 'total_ltc', 'dogecoin': 'total_doge', 'zcash': 'total_zec',
+            'tezos': 'total_xtz', 'stacks': 'total_stx', 'vechain': 'total_vet',
+            'cosmos': 'total_atom', 'near': 'total_near', 'icp': 'total_icp'
         }
 
         native_symbol = native_symbols[blockchain]
@@ -2156,7 +2321,16 @@ async def get_blockchain_price_chart(
             'multiversx': 'EGLD',
             'sui': 'SUI',
             'aptos': 'APT',
-            'filecoin': 'FIL'
+            'filecoin': 'FIL',
+            'litecoin': 'LTC',
+            'dogecoin': 'DOGE',
+            'zcash': 'ZEC',
+            'tezos': 'XTZ',
+            'stacks': 'STX',
+            'vechain': 'VET',
+            'cosmos': 'ATOM',
+            'near': 'NEAR',
+            'icp': 'ICP'
         }
 
         symbol = blockchain_symbols.get(blockchain.lower())
@@ -2297,6 +2471,15 @@ async def _get_demo_portfolio_summary() -> dict:
         'sui': ('SUI', 'total_sui'),
         'aptos': ('APT', 'total_apt'),
         'filecoin': ('FIL', 'total_fil'),
+        'litecoin': ('LTC', 'total_ltc'),
+        'dogecoin': ('DOGE', 'total_doge'),
+        'zcash': ('ZEC', 'total_zec'),
+        'tezos': ('XTZ', 'total_xtz'),
+        'stacks': ('STX', 'total_stx'),
+        'vechain': ('VET', 'total_vet'),
+        'cosmos': ('ATOM', 'total_atom'),
+        'near': ('NEAR', 'total_near'),
+        'icp': ('ICP', 'total_icp'),
     }
 
     for wallet in wallets:
@@ -2403,6 +2586,15 @@ async def _get_demo_portfolio_analytics() -> dict:
         'sui': ('SUI', 'Layer 1 (L1)'),
         'aptos': ('APT', 'Layer 1 (L1)'),
         'filecoin': ('FIL', 'Layer 1 (L1)'),
+        'litecoin': ('LTC', 'Layer 1 (L1)'),
+        'dogecoin': ('DOGE', 'Layer 1 (L1)'),
+        'zcash': ('ZEC', 'Layer 1 (L1)'),
+        'tezos': ('XTZ', 'Layer 1 (L1)'),
+        'stacks': ('STX', 'Layer 1 (L1)'),
+        'vechain': ('VET', 'Layer 1 (L1)'),
+        'cosmos': ('ATOM', 'Layer 1 (L1)'),
+        'near': ('NEAR', 'Layer 1 (L1)'),
+        'icp': ('ICP', 'Layer 1 (L1)'),
     }
 
     for bc, wallets in demo_wallet_service.demo_wallets.items():
@@ -2463,7 +2655,7 @@ async def _get_demo_portfolio_analytics() -> dict:
 
 async def _get_demo_blockchain_breakdown(blockchain: str) -> dict:
     """Build asset breakdown for a specific blockchain from demo data."""
-    valid_chains = ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base', 'algorand', 'bsc', 'arbitrum', 'avalanche', 'tron', 'xrp', 'hedera', 'multiversx', 'sui', 'aptos', 'filecoin']
+    valid_chains = ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base', 'algorand', 'bsc', 'arbitrum', 'avalanche', 'tron', 'xrp', 'hedera', 'multiversx', 'sui', 'aptos', 'filecoin', 'litecoin', 'dogecoin', 'zcash', 'tezos', 'stacks', 'vechain', 'cosmos', 'near', 'icp']
     if blockchain not in valid_chains:
         raise HTTPException(400, f"Invalid blockchain: {blockchain}")
 
@@ -2473,6 +2665,9 @@ async def _get_demo_blockchain_breakdown(blockchain: str) -> dict:
         'bsc': 'BNB', 'arbitrum': 'ETH', 'avalanche': 'AVAX', 'tron': 'TRX',
         'xrp': 'XRP', 'hedera': 'HBAR', 'multiversx': 'EGLD',
         'sui': 'SUI', 'aptos': 'APT', 'filecoin': 'FIL',
+        'litecoin': 'LTC', 'dogecoin': 'DOGE', 'zcash': 'ZEC',
+        'tezos': 'XTZ', 'stacks': 'STX', 'vechain': 'VET',
+        'cosmos': 'ATOM', 'near': 'NEAR', 'icp': 'ICP',
     }
     symbol = symbol_map.get(blockchain, 'UNKNOWN')
 

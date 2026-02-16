@@ -1110,7 +1110,16 @@ class DemoWalletService:
             "multiversx": "EGLD",
             "sui": "SUI",
             "aptos": "APT",
-            "filecoin": "FIL"
+            "filecoin": "FIL",
+            "litecoin": "LTC",
+            "dogecoin": "DOGE",
+            "zcash": "ZEC",
+            "tezos": "XTZ",
+            "stacks": "STX",
+            "vechain": "VET",
+            "cosmos": "ATOM",
+            "near": "NEAR",
+            "icp": "ICP"
         }
         return units.get(blockchain, "UNKNOWN")
 
