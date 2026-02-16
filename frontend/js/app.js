@@ -226,6 +226,11 @@ function changeTheme(themeName) {
             renderCategoryAllocationChart();
         }
     }
+
+    // Re-render Sankey with new theme colors
+    if (window.portfolioSankey) {
+        window.portfolioSankey.updateTheme();
+    }
 }
 
 function loadSavedTheme() {
@@ -1371,6 +1376,14 @@ async function loadPortfolioSummary() {
 
         // Render blockchain cards dynamically (sorted by value, only chains with wallets)
         renderBlockchainCards(data);
+
+        // Update Sankey flow diagram if initialized
+        if (window.portfolioSankey) {
+            const allocs = getChainAllocations();
+            const total = allocs.reduce((sum, a) => sum + a.usd, 0);
+            window.portfolioSankey.setData(total, allocs);
+            window.portfolioSankey.render();
+        }
 
         // Update wallets section summary - overlapping chain icons
         const stakeGroupCount = data.cardano.stake_groups?.length || 0;
@@ -4341,7 +4354,7 @@ async function refreshDepinCard(protocol, btn) {
 
     try {
         // Clear staking cache first to ensure fresh Blockfrost scan
-        await authFetch(`${API_BASE}/cache/clear/staking-cache`, { method: 'POST' }).catch(() => {});
+        await authFetch(`${API_BASE}/api/cache/clear/staking-cache`, { method: 'POST' }).catch(() => {});
 
         // Ensure wallet addresses are available (may not be loaded yet from fire-and-forget fetch)
         if (!window._defiWalletAddresses) {
@@ -4362,15 +4375,23 @@ async function refreshDepinCard(protocol, btn) {
 
         if (protocol === 'Iagon') {
             endpoints = (addrs.cardano || []).map(addr =>
-                authFetch(`${API_BASE}/defi/iagon/${addr}?refresh=true`).then(r => r.ok ? r.json() : null).catch(() => null)
+                authFetch(`${API_BASE}/defi/iagon/${addr}?refresh=true`).then(r => {
+                    if (!r.ok) console.warn(`[DePIN] Iagon fetch for ${addr.slice(0,15)}... returned ${r.status}`);
+                    return r.ok ? r.json() : null;
+                }).catch(e => { console.error(`[DePIN] Iagon fetch error:`, e); return null; })
             );
         } else if (protocol === 'Helium') {
             endpoints = (addrs.solana || []).map(addr =>
-                authFetch(`${API_BASE}/defi/helium/${addr}?refresh=true`).then(r => r.ok ? r.json() : null).catch(() => null)
+                authFetch(`${API_BASE}/defi/helium/${addr}?refresh=true`).then(r => {
+                    if (!r.ok) console.warn(`[DePIN] Helium fetch for ${addr.slice(0,15)}... returned ${r.status}`);
+                    return r.ok ? r.json() : null;
+                }).catch(e => { console.error(`[DePIN] Helium fetch error:`, e); return null; })
             );
         }
 
+        console.log(`[DePIN] Fetching ${protocol} data from ${endpoints.length} wallets...`);
         const results = await Promise.all(endpoints);
+        console.log(`[DePIN] ${protocol} results:`, results.map(r => r ? `protocols: ${Object.keys(r.protocols || {}).join(',')}` : 'null'));
 
         // Aggregate results across wallets
         let totalAmount = 0, pendingRewards = 0;
@@ -4426,6 +4447,24 @@ async function refreshDepinCard(protocol, btn) {
             const img = cardEl.querySelector('.token-logo-staking');
             if (img) img.addEventListener('error', function() { this.parentElement.innerHTML = `<span class="logo-fallback">${token.slice(0,3)}</span>`; });
             cardEl.classList.remove('depin-timeout', 'depin-no-data', 'depin-loading');
+
+            // Update frontend localStorage cache so data persists across renders
+            try {
+                const cachedDefi = getCachedDefi();
+                if (cachedDefi && cachedDefi.allStaking) {
+                    cachedDefi.allStaking[protocol] = {
+                        staked: { [token]: { amount: totalAmount, positions: 1, logo_url: logoUrl } },
+                        pending_rewards: pendingRewards,
+                        reward_token: rewardToken,
+                        rewards_url: rewardsUrl,
+                        blockchain: blockchain || 'cardano',
+                        category: 'depin',
+                        status: null
+                    };
+                    setCachedDefi(cachedDefi);
+                }
+            } catch (e) { /* cache update is best-effort */ }
+
             showStatus(`${protocol} data loaded`);
         } else if (cardEl) {
             showStatus(`No ${protocol} data found`, true);
@@ -9872,6 +9911,19 @@ async function initBlockchainsTab() {
         }
     } catch (e) {
         console.warn('[Blockchains] Failed to load portfolio data:', e);
+    }
+
+    // Initialize Sankey flow diagram
+    if (typeof PortfolioSankey !== 'undefined' && document.getElementById('portfolioSankeyContainer')) {
+        try {
+            window.portfolioSankey = new PortfolioSankey('portfolioSankeyContainer');
+            const allocs = getChainAllocations();
+            const total = allocs.reduce((sum, a) => sum + a.usd, 0);
+            window.portfolioSankey.setData(total, allocs);
+            window.portfolioSankey.render();
+        } catch (e) {
+            console.warn('[Sankey] Failed to initialize:', e);
+        }
     }
 
     // Load analytics data (coin allocation, category allocation, heatmap)

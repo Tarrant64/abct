@@ -85,10 +85,11 @@ async def get_staking_positions(address: str, refresh: bool = False, user_id: in
     if not refresh:
         cached = await get_cache(cache_key)
         if cached:
-            # Invalidate old cache that's missing Iagon DePIN entry
+            # Invalidate cache if Iagon is missing or has a stale status (timeout/no_staking)
             protocols = cached.get('protocols', {})
-            if protocols and 'Iagon' not in protocols:
-                logger.info(f"[Staking] Cache for {address[:20]} missing Iagon — forcing refresh")
+            iagon_status = protocols.get('Iagon', {}).get('status') if protocols else None
+            if protocols and ('Iagon' not in protocols or iagon_status in ('timeout', 'no_staking')):
+                logger.info(f"[Staking] Cache for {address[:20]} Iagon missing/stale (status={iagon_status}) — forcing refresh")
                 refresh = True
             else:
                 cached['from_cache'] = True
@@ -99,8 +100,9 @@ async def get_staking_positions(address: str, refresh: bool = False, user_id: in
         stale_data, stale_expires = await get_stale_cache(cache_key)
         if stale_data:
             protocols = stale_data.get('protocols', {})
-            if protocols and 'Iagon' not in protocols:
-                logger.info(f"[Staking] Stale cache for {address[:20]} missing Iagon — skipping")
+            stale_iagon_status = protocols.get('Iagon', {}).get('status') if protocols else None
+            if protocols and ('Iagon' not in protocols or stale_iagon_status in ('timeout', 'no_staking')):
+                logger.info(f"[Staking] Stale cache for {address[:20]} Iagon missing/stale (status={stale_iagon_status}) — skipping")
             else:
                 cached_at = (datetime.fromisoformat(stale_expires) - timedelta(seconds=STAKING_CACHE_TTL)).isoformat()
                 stale_data['from_cache'] = True
