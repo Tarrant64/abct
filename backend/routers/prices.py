@@ -226,6 +226,70 @@ async def get_trending():
     return {"coins": trending, "source": "CoinGecko"}
 
 
+@router.get("/top-movers")
+async def get_top_movers(
+    min_change: float = 3.0,
+    min_mcap: float = 100_000_000,
+    limit: int = 15
+):
+    """
+    Get top movers in last 24h: coins with >min_change% absolute price change
+    and >min_mcap market cap. Returns sorted by absolute 24h change descending.
+    """
+    cache_key = f"prices:top_movers:{min_change}:{min_mcap}"
+    from database import get_cache, set_cache
+    from config import CACHE_TTL_HOT
+
+    cached = await get_cache(cache_key)
+    if cached:
+        return {"success": True, "movers": cached, "source": "cache"}
+
+    try:
+        client = get_client("coingecko", timeout=15.0)
+        resp = await client.get(
+            "https://api.coingecko.com/api/v3/coins/markets",
+            params={
+                "vs_currency": "usd",
+                "order": "market_cap_desc",
+                "per_page": 250,
+                "page": 1,
+                "price_change_percentage": "24h",
+                "sparkline": "false",
+            }
+        )
+
+        if resp.status_code != 200:
+            logger.warning(f"CoinGecko markets returned {resp.status_code}")
+            return {"success": False, "error": f"API returned {resp.status_code}", "movers": []}
+
+        coins = resp.json()
+        movers = []
+        for coin in coins:
+            mcap = coin.get("market_cap") or 0
+            change_24h = coin.get("price_change_percentage_24h") or 0
+
+            if mcap >= min_mcap and abs(change_24h) >= min_change:
+                movers.append({
+                    "name": coin.get("name"),
+                    "symbol": (coin.get("symbol") or "").upper(),
+                    "image": coin.get("image"),
+                    "price": coin.get("current_price"),
+                    "market_cap": mcap,
+                    "change_24h": round(change_24h, 2),
+                    "volume_24h": coin.get("total_volume") or 0,
+                })
+
+        # Sort by absolute change descending
+        movers.sort(key=lambda x: abs(x["change_24h"]), reverse=True)
+        movers = movers[:limit]
+
+        await set_cache(cache_key, movers, CACHE_TTL_HOT)
+        return {"success": True, "movers": movers, "source": "CoinGecko"}
+    except Exception as e:
+        logger.error(f"Error fetching top movers: {e}")
+        return {"success": False, "error": str(e), "movers": []}
+
+
 @router.get("/stream/cardano")
 async def stream_cardano_prices():
     """

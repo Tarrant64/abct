@@ -78,14 +78,40 @@ async def get_market_summary(user_id: int = Depends(verify_session)):
     """Get combined crypto market summary: market cap, BTC dominance, total TVL, total DEX volume"""
     try:
         from services.http_client import get_client
+        from config import CMC_API_KEY, CMC_BASE_URL
         import asyncio
 
-        # Fetch CoinGecko global data + DefiLlama totals in parallel
         async def fetch_global():
-            client = get_client("coingecko", timeout=10.0)
-            resp = await client.get("https://api.coingecko.com/api/v3/global")
-            if resp.status_code == 200:
-                return resp.json().get("data", {})
+            """Fetch global market data - try CMC first, fall back to CoinGecko."""
+            # Try CMC first (saves CoinGecko rate limit)
+            try:
+                if CMC_API_KEY:
+                    client = get_client("coinmarketcap", timeout=10.0)
+                    resp = await client.get(
+                        f"{CMC_BASE_URL}/global-metrics/quotes/latest",
+                        headers={'X-CMC_PRO_API_KEY': CMC_API_KEY, 'Accept': 'application/json'}
+                    )
+                    if resp.status_code == 200:
+                        cmc_data = resp.json().get("data", {})
+                        quote = cmc_data.get("quote", {}).get("USD", {})
+                        logger.info("Market summary global data from CMC")
+                        return {
+                            "total_market_cap": {"usd": quote.get("total_market_cap", 0)},
+                            "market_cap_change_percentage_24h_usd": quote.get("total_market_cap_yesterday_percentage_change", 0),
+                            "market_cap_percentage": {"btc": cmc_data.get("btc_dominance", 0)},
+                        }
+            except Exception as e:
+                logger.debug(f"CMC global failed, trying CoinGecko: {e}")
+
+            # CoinGecko fallback
+            try:
+                client = get_client("coingecko", timeout=10.0)
+                resp = await client.get("https://api.coingecko.com/api/v3/global")
+                if resp.status_code == 200:
+                    return resp.json().get("data", {})
+                logger.warning(f"CoinGecko /global returned {resp.status_code}")
+            except Exception as e:
+                logger.warning(f"CoinGecko global also failed: {e}")
             return {}
 
         async def fetch_tvl():
