@@ -1,6 +1,7 @@
 /**
  * Advanced Analytics Tab
- * Handles: chain metrics, market summary, relative strength, cross-asset comparison, TradFi
+ * Handles: chain metrics, market summary, relative strength, cross-asset comparison,
+ *          top movers, portfolio vs BTC, TradFi
  */
 (function() {
     'use strict';
@@ -37,13 +38,15 @@
         if (_initialized) return;
         _initialized = true;
 
-        // Load all data in parallel
+        // Load all data in parallel - each section is independent
         loadMarketSummary();
         loadChainMetrics();
         loadRelativeStrength(30);
+        loadCrossAssetTable();
         loadTradFiSummary();
         loadGasTracker();
-        loadTrendingCoins();
+        loadTopMovers();
+        loadPortfolioVsBtc();
     };
 
     /**
@@ -87,13 +90,16 @@
         };
     }
 
-    // ---- Market Summary (Phase 2) ----
+    // ---- Market Summary ----
 
     async function loadMarketSummary() {
         try {
             const resp = await authFetch('/analytics/market-summary');
             const data = await resp.json();
-            if (!data.success) return;
+            if (!data.success) {
+                console.warn('Market summary returned success=false:', data.error);
+                return;
+            }
 
             _marketSummaryData = data;
 
@@ -108,15 +114,12 @@
             if (btcDomEl) btcDomEl.textContent = (data.btc_dominance || 0).toFixed(1) + '%';
             if (tvlEl) tvlEl.textContent = formatLargeNumber(data.total_defi_tvl);
             if (dexEl) dexEl.textContent = formatLargeNumber(data.total_dex_volume_24h);
-
-            // Load cross-asset table with market data
-            loadCrossAssetTable();
         } catch (e) {
             console.error('Failed to load market summary:', e);
         }
     }
 
-    // ---- Chain Metrics (Phase 1) ----
+    // ---- Chain Metrics ----
 
     async function loadChainMetrics() {
         try {
@@ -265,7 +268,7 @@
         });
     }
 
-    // ---- Relative Strength (Phase 2) ----
+    // ---- Relative Strength ----
 
     window.changeRelativeStrengthPeriod = function(days) {
         // Update active button
@@ -290,7 +293,10 @@
 
             if (loading) loading.style.display = 'none';
 
-            if (!data.success || !data.assets || Object.keys(data.assets).length === 0) return;
+            if (!data.success || !data.assets || Object.keys(data.assets).length === 0) {
+                console.warn('Relative strength: no asset data returned');
+                return;
+            }
 
             if (container) container.style.display = 'block';
             renderRelativeStrengthChart(data.assets);
@@ -379,20 +385,31 @@
         });
     }
 
-    // ---- Cross-Asset Comparison Table (Phase 2) ----
+    // ---- Cross-Asset Comparison Table ----
 
     async function loadCrossAssetTable() {
         const body = document.getElementById('crossAssetTableBody');
         if (!body) return;
 
         try {
-            // Fetch relative strength data for 7d and 30d changes
-            const [rs7Resp, rs30Resp] = await Promise.all([
+            // Fetch prices, 7d/30d changes, and chain metrics all in parallel
+            const [priceResp, rs7Resp, rs30Resp, metricsResp] = await Promise.all([
+                authFetch('/prices'),
                 authFetch('/analytics/relative-strength?days=7'),
-                authFetch('/analytics/relative-strength?days=30')
+                authFetch('/analytics/relative-strength?days=30'),
+                _chainMetricsData ? Promise.resolve(null) : authFetch('/analytics/chain-metrics')
             ]);
+
+            const priceData = await priceResp.json();
             const rs7 = await rs7Resp.json();
             const rs30 = await rs30Resp.json();
+            const prices = priceData.prices || {};
+
+            // Use cached chain metrics or freshly fetched
+            if (!_chainMetricsData && metricsResp) {
+                const metricsData = await metricsResp.json();
+                if (metricsData.success) _chainMetricsData = metricsData.chains;
+            }
 
             const get7dChange = (symbol) => {
                 const pts = (rs7.assets || {})[symbol] || [];
@@ -403,16 +420,7 @@
                 return pts.length > 0 ? pts[pts.length - 1].change_pct : null;
             };
 
-            // Get current prices from pricing API
-            let prices = {};
-            try {
-                const priceResp = await authFetch('/prices');
-                const priceData = await priceResp.json();
-                if (priceData.prices) prices = priceData.prices;
-            } catch (e) { /* pricing optional */ }
-
             // Build rows
-            // Note: pricing API uses 'MATIC' key, relative strength uses 'POL'
             const symbols = ['BTC', 'ETH', 'SOL', 'ADA', 'POL'];
             const priceSymbolMap = {
                 'BTC': 'BTC', 'ETH': 'ETH', 'SOL': 'SOL',
@@ -466,7 +474,7 @@
         }
     }
 
-    // ---- TradFi (Phase 3) ----
+    // ---- TradFi ----
 
     async function loadTradFiSummary() {
         try {
@@ -504,17 +512,12 @@
                     if (corrValue) corrValue.textContent = corrData.correlation.toFixed(3);
                 }
             } catch (e) { /* correlation optional */ }
-
-            // Re-render cross-asset table with TradFi data
-            if (_chainMetricsData) {
-                loadCrossAssetTable();
-            }
         } catch (e) {
             console.error('Failed to load TradFi summary:', e);
         }
     }
 
-    // ---- Gas Tracker (Phase 4) ----
+    // ---- Gas Tracker ----
 
     async function loadGasTracker() {
         const container = document.getElementById('gasTrackerCard');
@@ -543,9 +546,49 @@
         }
     }
 
-    // ---- Trending Coins (Phase 4) ----
+    // ---- Top Movers (24h) ----
 
-    async function loadTrendingCoins() {
+    async function loadTopMovers() {
+        const container = document.getElementById('trendingCoinsCard');
+        if (!container) return;
+
+        try {
+            const resp = await authFetch('/prices/top-movers');
+            const data = await resp.json();
+
+            if (!data.success || !data.movers || data.movers.length === 0) {
+                // Fallback: try old trending endpoint
+                loadTrendingFallback();
+                return;
+            }
+
+            container.style.display = '';
+            const listEl = document.getElementById('trendingCoinsList');
+            if (!listEl) return;
+
+            listEl.innerHTML = data.movers.slice(0, 10).map((coin, i) => {
+                const thumb = coin.image ? `<img src="${coin.image}" alt="" style="width:20px;height:20px;border-radius:50%;margin-right:8px;vertical-align:middle;">` : '';
+                const changeVal = coin.change_24h || 0;
+                const changeClass = changeVal >= 0 ? 'positive' : 'negative';
+                const changeSign = changeVal >= 0 ? '+' : '';
+                const priceStr = coin.price ? '$' + coin.price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: coin.price < 1 ? 6 : 2}) : '';
+
+                return `<div class="trending-coin-item">
+                    <span class="trending-rank">#${i + 1}</span>
+                    ${thumb}
+                    <span class="trending-name">${coin.name || ''}</span>
+                    <span class="trending-symbol">${coin.symbol || ''}</span>
+                    <span class="trending-price">${priceStr}</span>
+                    <span class="change-indicator ${changeClass}" style="margin-left:auto;font-weight:600;">${changeSign}${changeVal.toFixed(2)}%</span>
+                </div>`;
+            }).join('');
+        } catch (e) {
+            console.error('Failed to load top movers:', e);
+            loadTrendingFallback();
+        }
+    }
+
+    async function loadTrendingFallback() {
         const container = document.getElementById('trendingCoinsCard');
         if (!container) return;
 
@@ -574,8 +617,157 @@
                 </div>`;
             }).join('');
         } catch (e) {
-            console.error('Failed to load trending coins:', e);
+            console.error('Failed to load trending fallback:', e);
             if (container) container.style.display = 'none';
+        }
+    }
+
+    // ---- Portfolio vs BTC ----
+
+    async function loadPortfolioVsBtc() {
+        const body = document.getElementById('portfolioBtcBody');
+        if (!body) return;
+
+        try {
+            // Fetch portfolio summary and all prices in parallel
+            const [summaryResp, pricesResp] = await Promise.all([
+                authFetch('/portfolio/summary'),
+                authFetch('/prices/all')
+            ]);
+
+            const summaryData = await summaryResp.json();
+            const pricesData = await pricesResp.json();
+            const prices = pricesData.prices || {};
+            const btcPrice = prices['BTC'] || 0;
+
+            if (!btcPrice) {
+                body.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;padding:40px;">BTC price unavailable</td></tr>';
+                return;
+            }
+
+            // Build asset list from portfolio summary
+            // Map chain keys to their symbols and balances
+            const assetMap = {
+                'total_ada': { symbol: 'ADA', name: 'Cardano' },
+                'total_btc': { symbol: 'BTC', name: 'Bitcoin' },
+                'total_eth': { symbol: 'ETH', name: 'Ethereum' },
+                'total_sol': { symbol: 'SOL', name: 'Solana' },
+                'total_matic': { symbol: 'MATIC', name: 'Polygon' },
+                'total_algo': { symbol: 'ALGO', name: 'Algorand' },
+                'total_trx': { symbol: 'TRX', name: 'Tron' },
+                'total_xrp': { symbol: 'XRP', name: 'XRP' },
+                'total_hbar': { symbol: 'HBAR', name: 'Hedera' },
+                'total_egld': { symbol: 'EGLD', name: 'MultiversX' },
+                'total_sui': { symbol: 'SUI', name: 'Sui' },
+                'total_apt': { symbol: 'APT', name: 'Aptos' },
+                'total_fil': { symbol: 'FIL', name: 'Filecoin' },
+                'total_ltc': { symbol: 'LTC', name: 'Litecoin' },
+                'total_doge': { symbol: 'DOGE', name: 'Dogecoin' },
+                'total_zec': { symbol: 'ZEC', name: 'Zcash' },
+                'total_xtz': { symbol: 'XTZ', name: 'Tezos' },
+                'total_stx': { symbol: 'STX', name: 'Stacks' },
+                'total_vet': { symbol: 'VET', name: 'VeChain' },
+                'total_atom': { symbol: 'ATOM', name: 'Cosmos' },
+                'total_near': { symbol: 'NEAR', name: 'NEAR' },
+                'total_icp': { symbol: 'ICP', name: 'ICP' },
+            };
+
+            // Collect assets with value
+            let assets = [];
+            let totalPortfolioUsd = 0;
+
+            for (const [key, info] of Object.entries(assetMap)) {
+                const balance = parseFloat(summaryData[key]) || 0;
+                if (balance <= 0) continue;
+
+                const price = prices[info.symbol] || 0;
+                if (price <= 0) continue;
+
+                const usdValue = balance * price;
+                const btcValue = usdValue / btcPrice;
+
+                assets.push({
+                    name: info.name,
+                    symbol: info.symbol,
+                    balance: balance,
+                    price: price,
+                    usdValue: usdValue,
+                    btcValue: btcValue,
+                });
+                totalPortfolioUsd += usdValue;
+            }
+
+            // Also include exchange balances if present
+            // (exchange_total_usd is a single aggregated number)
+            const exchangeTotal = parseFloat(summaryData.exchange_total_usd) || 0;
+            if (exchangeTotal > 0) {
+                assets.push({
+                    name: 'Exchange Holdings',
+                    symbol: 'MULTI',
+                    balance: null,
+                    price: null,
+                    usdValue: exchangeTotal,
+                    btcValue: exchangeTotal / btcPrice,
+                });
+                totalPortfolioUsd += exchangeTotal;
+            }
+
+            // Include native_assets_value_usd (tokens held in wallets)
+            const nativeAssetsValue = parseFloat(summaryData.native_assets_value_usd) || 0;
+            if (nativeAssetsValue > 0) {
+                assets.push({
+                    name: 'Other Tokens',
+                    symbol: 'TOKENS',
+                    balance: null,
+                    price: null,
+                    usdValue: nativeAssetsValue,
+                    btcValue: nativeAssetsValue / btcPrice,
+                });
+                totalPortfolioUsd += nativeAssetsValue;
+            }
+
+            if (assets.length === 0) {
+                body.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;padding:40px;">No portfolio data available. Add wallets first.</td></tr>';
+                return;
+            }
+
+            // Sort by USD value descending
+            assets.sort((a, b) => b.usdValue - a.usdValue);
+
+            // Render rows
+            let rows = assets.map(a => {
+                const holdingsStr = a.balance !== null
+                    ? a.balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: a.balance < 1 ? 6 : 2}) + ' ' + a.symbol
+                    : '--';
+                const usdStr = '$' + a.usdValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                const btcStr = a.btcValue.toFixed(6) + ' BTC';
+                const pctStr = totalPortfolioUsd > 0
+                    ? (a.usdValue / totalPortfolioUsd * 100).toFixed(2) + '%'
+                    : '--';
+
+                return `<tr>
+                    <td><strong>${a.name}</strong> (${a.symbol})</td>
+                    <td class="privacy-sensitive">${holdingsStr}</td>
+                    <td class="privacy-sensitive">${usdStr}</td>
+                    <td class="privacy-sensitive">${btcStr}</td>
+                    <td class="privacy-sensitive">${pctStr}</td>
+                </tr>`;
+            });
+
+            // Add total row
+            const totalBtc = totalPortfolioUsd / btcPrice;
+            rows.push(`<tr style="border-top: 2px solid var(--border-color, #333); font-weight: 600;">
+                <td><strong>Total Portfolio</strong></td>
+                <td></td>
+                <td class="privacy-sensitive">$${totalPortfolioUsd.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                <td class="privacy-sensitive">${totalBtc.toFixed(6)} BTC</td>
+                <td>100%</td>
+            </tr>`);
+
+            body.innerHTML = rows.join('');
+        } catch (e) {
+            console.error('Failed to load portfolio vs BTC:', e);
+            body.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;padding:40px;">Failed to load portfolio data</td></tr>';
         }
     }
 })();
