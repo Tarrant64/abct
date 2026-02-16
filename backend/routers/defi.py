@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 from database import get_all_wallets, get_cache, set_cache, get_stale_cache, get_username_by_user_id
 from middleware.demo_mode import is_demo_user
 from auth_utils import verify_session
-from config import CACHE_TTL_COLD
+from config import CACHE_TTL_COLD, CACHE_TTL_WARM
 
 logger = logging.getLogger(__name__)
 
@@ -306,6 +306,33 @@ async def get_uniswap_positions(address: str, user_id: int = Depends(verify_sess
     except Exception as e:
         logger.error(f"Error fetching Uniswap positions for {address}: {e}")
         return {"success": False, "error": str(e)}
+
+
+@router.get("/helium/{address}")
+async def get_helium_rewards(address: str, refresh: bool = False, user_id: int = Depends(verify_session)):
+    """Get Helium hotspot rewards for a Solana wallet address."""
+    from services.helium import get_helium_staking
+
+    cache_key = f"helium_rewards_{address}"
+
+    if not refresh:
+        cached = await get_cache(cache_key)
+        if cached:
+            cached['from_cache'] = True
+            return cached
+
+    result = await get_helium_staking(address)
+
+    if not result:
+        return {
+            "protocols": {},
+            "address": address,
+            "message": "No Helium rewards found"
+        }
+
+    result['from_cache'] = False
+    await set_cache(cache_key, result, CACHE_TTL_WARM)
+    return result
 
 
 @router.get("/chainlink/{address}")

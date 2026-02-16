@@ -3348,6 +3348,40 @@ async function loadDefiGovernance(forceRefresh = false) {
             }
         }
 
+        // Phase 3b: Fetch Helium rewards for Solana wallets in parallel
+        const solanaWallets = walletsData.wallets.filter(w => w.blockchain === 'solana');
+        if (solanaWallets.length > 0) {
+            const heliumPromises = solanaWallets.map(wallet =>
+                authFetch(`${API_BASE}/defi/helium/${wallet.address}${refreshParam}`)
+                    .then(r => r.ok ? r.json() : null)
+                    .catch(() => null)
+            );
+            const heliumResults = await Promise.all(heliumPromises);
+
+            for (const heliumData of heliumResults) {
+                if (!heliumData || !heliumData.protocols) continue;
+                for (const [protocol, data] of Object.entries(heliumData.protocols)) {
+                    if (!allStaking[protocol]) {
+                        allStaking[protocol] = {
+                            staked: {},
+                            pending_rewards: 0,
+                            reward_token: data.reward_token || '',
+                            rewards_url: data.rewards_url || null,
+                            blockchain: data.blockchain || 'solana'
+                        };
+                    }
+                    for (const stake of data.staked || []) {
+                        if (!allStaking[protocol].staked[stake.token]) {
+                            allStaking[protocol].staked[stake.token] = { amount: 0, positions: 0, logo_url: stake.logo_url };
+                        }
+                        allStaking[protocol].staked[stake.token].amount += stake.amount;
+                        allStaking[protocol].staked[stake.token].positions += stake.positions;
+                    }
+                    allStaking[protocol].pending_rewards += data.pending_rewards || 0;
+                }
+            }
+        }
+
         // Store staking totals for portfolio calculation
         stakingTotals = {};
         for (const [protocol, data] of Object.entries(allStaking)) {
@@ -3980,10 +4014,16 @@ async function refreshStakingOnly(btn) {
         const walletsData = await walletsResponse.json();
         const cardanoWallets = walletsData.wallets.filter(w => w.blockchain === 'cardano');
 
-        // Refresh staking for each Cardano wallet in parallel
-        const stakingPromises = cardanoWallets.map(wallet =>
-            authFetch(`${API_BASE}/defi/staking/${wallet.address}?refresh=true`).catch(() => null)
-        );
+        // Refresh staking for each Cardano wallet + Helium for Solana wallets in parallel
+        const solanaWallets = walletsData.wallets.filter(w => w.blockchain === 'solana');
+        const stakingPromises = [
+            ...cardanoWallets.map(wallet =>
+                authFetch(`${API_BASE}/defi/staking/${wallet.address}?refresh=true`).catch(() => null)
+            ),
+            ...solanaWallets.map(wallet =>
+                authFetch(`${API_BASE}/defi/helium/${wallet.address}?refresh=true`).catch(() => null)
+            )
+        ];
         await Promise.all(stakingPromises);
 
         // Reload the full DeFi view with fresh data
