@@ -3255,15 +3255,6 @@ async function loadDefiGovernance(forceRefresh = false) {
 
         // Cache < 2 min old: skip background refresh entirely (unless forced)
         if (!forceRefresh && cacheAge < 2 * 60 * 1000) {
-            // Ensure wallet addresses are available for per-card refresh buttons
-            if (!window._defiWalletAddresses) {
-                authFetch(`${API_BASE}/wallets`).then(r => r.json()).then(data => {
-                    window._defiWalletAddresses = {
-                        cardano: data.wallets.filter(w => w.blockchain === 'cardano').map(w => w.address),
-                        solana: data.wallets.filter(w => w.blockchain === 'solana').map(w => w.address)
-                    };
-                }).catch(() => {});
-            }
             return;
         }
     } else {
@@ -4323,10 +4314,26 @@ async function refreshDepinCard(protocol, btn) {
     }
 
     try {
+        // Ensure wallet addresses are available (fetch if not cached)
+        if (!window._defiWalletAddresses) {
+            try {
+                const walletsResp = await authFetch(`${API_BASE}/wallets`);
+                const walletsData = await walletsResp.json();
+                window._defiWalletAddresses = {
+                    cardano: walletsData.wallets.filter(w => w.blockchain === 'cardano').map(w => w.address),
+                    solana: walletsData.wallets.filter(w => w.blockchain === 'solana').map(w => w.address)
+                };
+            } catch (e) {
+                console.error('[DePIN] Failed to fetch wallet addresses:', e);
+                showStatus('Failed to load wallet addresses', true);
+                return;
+            }
+        }
+
         // Clear staking cache first to ensure fresh Blockfrost scan
         await authFetch(`${API_BASE}/cache/clear/staking-cache`, { method: 'POST' }).catch(() => {});
 
-        const addrs = window._defiWalletAddresses || {};
+        const addrs = window._defiWalletAddresses;
         let endpoints = [];
 
         if (protocol === 'Iagon') {
@@ -4337,6 +4344,12 @@ async function refreshDepinCard(protocol, btn) {
             endpoints = (addrs.solana || []).map(addr =>
                 authFetch(`${API_BASE}/defi/helium/${addr}?refresh=true`).then(r => r.ok ? r.json() : null).catch(() => null)
             );
+        }
+
+        if (endpoints.length === 0) {
+            console.warn(`[DePIN] No ${protocol === 'Iagon' ? 'Cardano' : 'Solana'} wallets found`);
+            showStatus(`No wallets found for ${protocol}`, true);
+            return;
         }
 
         const results = await Promise.all(endpoints);
