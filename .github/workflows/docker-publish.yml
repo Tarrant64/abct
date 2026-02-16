@@ -55,3 +55,31 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
+
+  scout-scan:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    permissions:
+      contents: read
+
+    steps:
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Scan for CVEs
+        uses: docker/scout-action@v1
+        with:
+          command: cves
+          image: registry://tarrant64/abct:latest
+          only-severities: critical,high
+          only-fixed: true
+          summary: true
+
+      - name: Base image recommendations
+        uses: docker/scout-action@v1
+        with:
+          command: recommendations
+          image: registry://tarrant64/abct:latest
