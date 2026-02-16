@@ -3361,8 +3361,8 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
 .analytics-chart-wrapper::after {
     content: '';
     position: absolute;
-    inset: -20px;
-    border-radius: 25px;
+    inset: 0;
+    border-radius: 20px;
     background: radial-gradient(circle, rgba(0, 210, 106, 0.05), transparent 70%);
     z-index: -2;
     animation: chartGlow 3s ease-in-out infinite;
@@ -3391,7 +3391,7 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
 
 .analytics-legend {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
     gap: 12px;
     margin-top: 20px;
 }
@@ -3406,6 +3406,7 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     border: 1px solid transparent;
+    overflow: hidden;
 }
 
 .analytics-legend-item-compact:hover {
@@ -9879,13 +9880,22 @@ body.privacy-mode a[data-href] {
     border-radius: 16px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     margin: 12px 0;
-    height: 450px;
+    min-height: 450px;
     backdrop-filter: blur(10px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
 }
 
-.analytics-chart-container canvas {
+/* Line chart containers need fixed height for Chart.js canvas sizing */
+.analytics-chart-container > canvas {
     max-height: 100%;
+}
+
+#analyticsChartContainer,
+#cexAnalyticsChartContainer,
+#relativeStrengthChartContainer,
+#feeHistoryChartContainer {
+    height: 450px;
 }
 
 /* Chain Indicators Section */
@@ -10899,6 +10909,11 @@ body.privacy-mode a[data-href] {
 /* ===========================
    Sankey Flow Diagram
    =========================== */
+
+/* Sankey parent needs overflow visible for tooltip */
+.analytics-chart-container:has(.sankey-container) {
+    overflow: visible;
+}
 
 .sankey-container {
     position: relative;
