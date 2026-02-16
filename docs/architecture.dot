@@ -14,7 +14,7 @@ digraph ABCT_Architecture {
 
     // Title
     labelloc="t";
-    label="ABCT Architecture - A Better Crypto Tracker\nVersion 1.5.0 (Build 1771198770)\n26 Blockchains | 7 Exchanges | Multi-User | Demo Mode";
+    label="ABCT Architecture - A Better Crypto Tracker\nVersion 1.12.3 (Build 1771184565)\n26 Blockchains | 7 Exchanges | Multi-User | Demo Mode";
     fontsize=16;
 
     // ========== SUBGRAPHS ==========
