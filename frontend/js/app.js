@@ -218,7 +218,7 @@ function changeTheme(themeName) {
     }
 
     // Re-render analytics charts with new theme colors
-    if (analyticsData) {
+    if (portfolioAnalyticsData) {
         if (coinAllocationChart) {
             renderCoinAllocationChart();
         }
@@ -9065,7 +9065,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             loadPortfolioTotals(),
             loadCustomTokens(),
             loadAllNftSummaries(),
-            loadAnalyticsData(true),
+            loadPortfolioAnalytics(true),
             load7DayPortfolioChange(),
             load7DayTransactionCount(),
             loadGlobalMarketCap()
@@ -9580,7 +9580,7 @@ function closeAssetBreakdownModal() {
 let currentAnalyticsSlide = 0;
 let coinAllocationChart = null;
 let categoryAllocationChart = null;
-var analyticsData = null;  // var to allow redeclaration by transaction-analytics.js on wallets page
+let portfolioAnalyticsData = null;  // portfolio coin/category data (separate from transaction-analytics.js analyticsData)
 let analyticsLoading = false;
 let selectedCoinIndex = null;
 let selectedCategoryIndex = null;
@@ -9668,7 +9668,7 @@ function setRefreshIndicators(state) {
     }
 }
 
-async function loadAnalyticsData(background = false) {
+async function loadPortfolioAnalytics(background = false) {
     if (analyticsLoading) {
         console.log('[Analytics] Skipped - already loading');
         return;
@@ -9678,8 +9678,8 @@ async function loadAnalyticsData(background = false) {
 
     // Show cached data instantly if available
     const cached = getCachedAnalytics();
-    if (cached && !analyticsData) {
-        analyticsData = cached;
+    if (cached && !portfolioAnalyticsData) {
+        portfolioAnalyticsData = cached;
         console.log('[Analytics] Rendering from session cache');
         renderCoinAllocationChart();
         renderCategoryAllocationChart();
@@ -9687,7 +9687,7 @@ async function loadAnalyticsData(background = false) {
     }
 
     // Show refresh indicator if we already have data (refreshing) or if loading fresh
-    if (analyticsData) {
+    if (portfolioAnalyticsData) {
         setRefreshIndicators('loading');
     }
 
@@ -9703,7 +9703,7 @@ async function loadAnalyticsData(background = false) {
         });
 
         setCachedAnalytics(freshData);
-        analyticsData = freshData;
+        portfolioAnalyticsData = freshData;
         renderCoinAllocationChart();
         renderCategoryAllocationChart();
         renderPortfolioHeatmap();
@@ -9751,9 +9751,9 @@ function getHeatmapColor(change) {
 
 function renderPortfolioHeatmap() {
     const container = document.getElementById('heatmapContainer');
-    if (!container || !analyticsData) return;
+    if (!container || !portfolioAnalyticsData) return;
 
-    const coins = analyticsData.coin_allocation || [];
+    const coins = portfolioAnalyticsData.coin_allocation || [];
     // Only tokens with >$10 value
     const filtered = coins.filter(c => c.value_usd >= 10);
 
@@ -9998,12 +9998,12 @@ async function initBlockchainsTab() {
     }
 
     // Load analytics data (coin allocation, category allocation, heatmap)
-    console.log('[Blockchains] About to call loadAnalyticsData...');
+    console.log('[Blockchains] About to call loadPortfolioAnalytics...');
     try {
-        await loadAnalyticsData();
-        console.log('[Blockchains] loadAnalyticsData completed. analyticsData:', analyticsData ? 'loaded' : 'null');
+        await loadPortfolioAnalytics();
+        console.log('[Blockchains] loadPortfolioAnalytics completed. portfolioAnalyticsData:', portfolioAnalyticsData ? 'loaded' : 'null');
     } catch (e) {
-        console.error('[Blockchains] loadAnalyticsData threw:', e);
+        console.error('[Blockchains] loadPortfolioAnalytics threw:', e);
     }
 
     // Initialize price chart
@@ -10013,7 +10013,7 @@ async function initBlockchainsTab() {
 }
 
 function renderCoinAllocationChart() {
-    if (!analyticsData || !analyticsData.coin_allocation) return;
+    if (!portfolioAnalyticsData || !portfolioAnalyticsData.coin_allocation) return;
 
     const canvasEl = document.getElementById('coinAllocationChart');
     if (!canvasEl) return;
@@ -10021,8 +10021,8 @@ function renderCoinAllocationChart() {
     if (coinAllocationChart) coinAllocationChart.destroy();
 
     // Top 6 coins, rest go into "Other"
-    const topCoins = analyticsData.coin_allocation.slice(0, 6);
-    const remainingCoins = analyticsData.coin_allocation.slice(6);
+    const topCoins = portfolioAnalyticsData.coin_allocation.slice(0, 6);
+    const remainingCoins = portfolioAnalyticsData.coin_allocation.slice(6);
 
     let coins, labels, values, colors;
 
@@ -10121,8 +10121,8 @@ function selectCoinSegment(index) {
     selectedCoinIndex = index;
 
     // Get the coin data - handle "Other" aggregation
-    const topCoins = analyticsData.coin_allocation.slice(0, 6);
-    const remainingCoins = analyticsData.coin_allocation.slice(6);
+    const topCoins = portfolioAnalyticsData.coin_allocation.slice(0, 6);
+    const remainingCoins = portfolioAnalyticsData.coin_allocation.slice(6);
     let coins;
     if (remainingCoins.length > 0) {
         const otherValue = remainingCoins.reduce((sum, c) => sum + c.value_usd, 0);
@@ -10185,14 +10185,14 @@ function renderCoinLegend(coins, colors) {
 }
 
 function renderCategoryAllocationChart() {
-    if (!analyticsData || !analyticsData.category_allocation) return;
+    if (!portfolioAnalyticsData || !portfolioAnalyticsData.category_allocation) return;
 
     const canvasEl = document.getElementById('categoryAllocationChart');
     if (!canvasEl) return;
     const ctx = canvasEl.getContext('2d');
     if (categoryAllocationChart) categoryAllocationChart.destroy();
 
-    const categories = analyticsData.category_allocation;
+    const categories = portfolioAnalyticsData.category_allocation;
     const labels = categories.map(c => c.category);
     const values = categories.map(c => c.value_usd);
     const colors = generateCategoryColors(categories.length);
@@ -10277,7 +10277,7 @@ function renderCategoryAllocationChart() {
 function selectCategorySegment(index) {
     selectedCategoryIndex = index;
 
-    const count = analyticsData.category_allocation.length;
+    const count = portfolioAnalyticsData.category_allocation.length;
 
     // Pop-out effect: offset selected segment
     const offsets = new Array(count).fill(0);
@@ -10320,7 +10320,7 @@ function renderCategoryLegend(categories, colors) {
 }
 
 function showCategoryTooltip(event, categoryIndex) {
-    const category = analyticsData.category_allocation[categoryIndex];
+    const category = portfolioAnalyticsData.category_allocation[categoryIndex];
 
     // Remove existing tooltip if any
     hideCategoryTooltip();
@@ -10520,7 +10520,7 @@ function generateCategoryColors(count) {
         };
     }
 
-    return analyticsData.category_allocation.map(cat =>
+    return portfolioAnalyticsData.category_allocation.map(cat =>
         categoryColors[cat.category] || categoryColors['Other']
     );
 }
