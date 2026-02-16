@@ -36,7 +36,7 @@ async function authFetch(url, options = {}) {
 let prices = { ADA: 0, BTC: 0, ETH: 0, SOL: 0, MATIC: 0, BNB: 0, AVAX: 0, TRX: 0 };
 
 // Portfolio totals for calculating total value
-let walletTotals = { ADA: 0, BTC: 0, ETH: 0, SOL: 0, MATIC: 0, ETH_BASE: 0, ALGO: 0, BNB: 0, ETH_ARB: 0, AVAX: 0, TRX: 0 };
+let walletTotals = { ADA: 0, BTC: 0, ETH: 0, SOL: 0, MATIC: 0, ETH_BASE: 0, ALGO: 0, BNB: 0, ETH_ARB: 0, AVAX: 0, TRX: 0, XRP: 0, HBAR: 0, EGLD: 0, SUI: 0, APT: 0, FIL: 0, LTC: 0, DOGE: 0, ZEC: 0, XTZ: 0, STX: 0, VET: 0, ATOM: 0, NEAR: 0, ICP: 0 };
 let stakingTotals = {}; // { 'INDY': 1234.56, 'STRIKE': 789.01, etc. }
 let defiTotals = {}; // DeFi tokens held in wallets (governance tokens, stablecoins, etc.)
 let exchangeTotals = { usd: 0 }; // Total USD value from exchanges
@@ -379,6 +379,15 @@ const CHAIN_CONFIG = {
     sui:        { name: 'Sui',         symbol: 'SUI',  logo: 'SUI',  icon: '💧', decimals: 9, priceKey: 'SUI',   balanceKey: 'total_sui',  nativeLabel: 'SUI' },
     aptos:      { name: 'Aptos',       symbol: 'APT',  logo: 'APT',  icon: '⬡', decimals: 8, priceKey: 'APT',   balanceKey: 'total_apt',  nativeLabel: 'APT' },
     filecoin:   { name: 'Filecoin',    symbol: 'FIL',  logo: 'FIL',  icon: '⬡', decimals: 8, priceKey: 'FIL',   balanceKey: 'total_fil',  nativeLabel: 'FIL' },
+    litecoin:   { name: 'Litecoin',   symbol: 'LTC',  logo: 'LTC',  icon: 'Ł', decimals: 8, priceKey: 'LTC',   balanceKey: 'total_ltc',  nativeLabel: 'LTC' },
+    dogecoin:   { name: 'Dogecoin',   symbol: 'DOGE', logo: 'DOGE', icon: 'Ð', decimals: 8, priceKey: 'DOGE',  balanceKey: 'total_doge', nativeLabel: 'DOGE' },
+    zcash:      { name: 'Zcash',      symbol: 'ZEC',  logo: 'ZEC',  icon: 'ⓩ', decimals: 8, priceKey: 'ZEC',   balanceKey: 'total_zec',  nativeLabel: 'ZEC' },
+    tezos:      { name: 'Tezos',      symbol: 'XTZ',  logo: 'XTZ',  icon: 'ꜩ', decimals: 6, priceKey: 'XTZ',   balanceKey: 'total_xtz',  nativeLabel: 'XTZ' },
+    stacks:     { name: 'Stacks',     symbol: 'STX',  logo: 'STX',  icon: '⟐', decimals: 6, priceKey: 'STX',   balanceKey: 'total_stx',  nativeLabel: 'STX' },
+    vechain:    { name: 'VeChain',    symbol: 'VET',  logo: 'VET',  icon: '⌬', decimals: 8, priceKey: 'VET',   balanceKey: 'total_vet',  nativeLabel: 'VET' },
+    cosmos:     { name: 'Cosmos',     symbol: 'ATOM', logo: 'ATOM', icon: '⚛', decimals: 6, priceKey: 'ATOM',  balanceKey: 'total_atom', nativeLabel: 'ATOM' },
+    near:       { name: 'NEAR',       symbol: 'NEAR', logo: 'NEAR', icon: 'Ⓝ', decimals: 8, priceKey: 'NEAR',  balanceKey: 'total_near', nativeLabel: 'NEAR' },
+    icp:        { name: 'ICP',        symbol: 'ICP',  logo: 'ICP',  icon: '∞', decimals: 8, priceKey: 'ICP',   balanceKey: 'total_icp',  nativeLabel: 'ICP' },
 };
 
 // Render blockchain cards dynamically, sorted by value, only for chains with wallets
@@ -588,6 +597,15 @@ function getChainAllocations() {
         sui:        { label: 'Sui',        symbol: 'SUI',  color: '#4da2ff', balKey: 'SUI',  priceKey: 'SUI'  },
         aptos:      { label: 'Aptos',      symbol: 'APT',  color: '#2ed8a3', balKey: 'APT',  priceKey: 'APT'  },
         filecoin:   { label: 'Filecoin',   symbol: 'FIL',  color: '#0090ff', balKey: 'FIL',  priceKey: 'FIL'  },
+        litecoin:   { label: 'Litecoin',   symbol: 'LTC',  color: '#345d9d', balKey: 'LTC',  priceKey: 'LTC'  },
+        dogecoin:   { label: 'Dogecoin',   symbol: 'DOGE', color: '#c2a633', balKey: 'DOGE', priceKey: 'DOGE' },
+        zcash:      { label: 'Zcash',      symbol: 'ZEC',  color: '#ecb244', balKey: 'ZEC',  priceKey: 'ZEC'  },
+        tezos:      { label: 'Tezos',      symbol: 'XTZ',  color: '#2c7df7', balKey: 'XTZ',  priceKey: 'XTZ'  },
+        stacks:     { label: 'Stacks',     symbol: 'STX',  color: '#5546ff', balKey: 'STX',  priceKey: 'STX'  },
+        vechain:    { label: 'VeChain',    symbol: 'VET',  color: '#15bdff', balKey: 'VET',  priceKey: 'VET'  },
+        cosmos:     { label: 'Cosmos',     symbol: 'ATOM', color: '#2e3148', balKey: 'ATOM', priceKey: 'ATOM' },
+        near:       { label: 'NEAR',       symbol: 'NEAR', color: '#00c08b', balKey: 'NEAR', priceKey: 'NEAR' },
+        icp:        { label: 'ICP',        symbol: 'ICP',  color: '#29abe2', balKey: 'ICP',  priceKey: 'ICP'  },
     };
 
     for (const [chain, cfg] of Object.entries(chainMap)) {
@@ -1335,6 +1353,21 @@ async function loadPortfolioSummary() {
         walletTotals.ETH_ARB = data.arbitrum?.total_eth || 0;
         walletTotals.AVAX = data.avalanche?.total_avax || 0;
         walletTotals.TRX = data.tron?.total_trx || 0;
+        walletTotals.XRP = data.xrp?.total_xrp || 0;
+        walletTotals.HBAR = data.hedera?.total_hbar || 0;
+        walletTotals.EGLD = data.multiversx?.total_egld || 0;
+        walletTotals.SUI = data.sui?.total_sui || 0;
+        walletTotals.APT = data.aptos?.total_apt || 0;
+        walletTotals.FIL = data.filecoin?.total_fil || 0;
+        walletTotals.LTC = data.litecoin?.total_ltc || 0;
+        walletTotals.DOGE = data.dogecoin?.total_doge || 0;
+        walletTotals.ZEC = data.zcash?.total_zec || 0;
+        walletTotals.XTZ = data.tezos?.total_xtz || 0;
+        walletTotals.STX = data.stacks?.total_stx || 0;
+        walletTotals.VET = data.vechain?.total_vet || 0;
+        walletTotals.ATOM = data.cosmos?.total_atom || 0;
+        walletTotals.NEAR = data.near?.total_near || 0;
+        walletTotals.ICP = data.icp?.total_icp || 0;
 
         // Render blockchain cards dynamically (sorted by value, only chains with wallets)
         renderBlockchainCards(data);
@@ -4806,6 +4839,29 @@ async function refreshWallets() {
         walletTotals.ADA = data.cardano.total_ada;
         walletTotals.BTC = data.bitcoin.total_btc;
         walletTotals.ETH = data.ethereum?.total_eth || 0;
+        walletTotals.SOL = data.solana?.total_sol || 0;
+        walletTotals.MATIC = data.polygon?.total_matic || 0;
+        walletTotals.ETH_BASE = data.base?.total_eth || 0;
+        walletTotals.ALGO = data.algorand?.total_algo || 0;
+        walletTotals.BNB = data.bsc?.total_bnb || 0;
+        walletTotals.ETH_ARB = data.arbitrum?.total_eth || 0;
+        walletTotals.AVAX = data.avalanche?.total_avax || 0;
+        walletTotals.TRX = data.tron?.total_trx || 0;
+        walletTotals.XRP = data.xrp?.total_xrp || 0;
+        walletTotals.HBAR = data.hedera?.total_hbar || 0;
+        walletTotals.EGLD = data.multiversx?.total_egld || 0;
+        walletTotals.SUI = data.sui?.total_sui || 0;
+        walletTotals.APT = data.aptos?.total_apt || 0;
+        walletTotals.FIL = data.filecoin?.total_fil || 0;
+        walletTotals.LTC = data.litecoin?.total_ltc || 0;
+        walletTotals.DOGE = data.dogecoin?.total_doge || 0;
+        walletTotals.ZEC = data.zcash?.total_zec || 0;
+        walletTotals.XTZ = data.tezos?.total_xtz || 0;
+        walletTotals.STX = data.stacks?.total_stx || 0;
+        walletTotals.VET = data.vechain?.total_vet || 0;
+        walletTotals.ATOM = data.cosmos?.total_atom || 0;
+        walletTotals.NEAR = data.near?.total_near || 0;
+        walletTotals.ICP = data.icp?.total_icp || 0;
 
         // Update summary cards (native coin + tokens)
         const adaUsd = data.cardano.total_ada * (prices.ADA || 0) + (data.cardano.native_assets_value_usd || 0);

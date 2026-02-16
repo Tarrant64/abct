@@ -29,6 +29,15 @@ from services.multiversx import multiversx_service
 from services.sui import sui_service
 from services.aptos import aptos_service
 from services.filecoin import filecoin_service
+from services.litecoin import litecoin_service
+from services.dogecoin import dogecoin_service
+from services.zcash import zcash_service
+from services.tezos import tezos_service
+from services.stacks import stacks_service
+from services.vechain import vechain_service
+from services.cosmos import cosmos_service
+from services.near import near_service
+from services.icp import icp_service
 from services.logging_service import get_logging_service
 from services.transaction_history import transaction_history_service
 from services.demo_wallet_service import demo_wallet_service
@@ -257,6 +266,15 @@ async def get_wallet_assets_by_id(wallet_id: int, user_id: int = Depends(verify_
     sui_price_usd = await pricing_service.get_price('SUI')
     apt_price_usd = await pricing_service.get_price('APT')
     fil_price_usd = await pricing_service.get_price('FIL')
+    ltc_price_usd = await pricing_service.get_price('LTC')
+    doge_price_usd = await pricing_service.get_price('DOGE')
+    zec_price_usd = await pricing_service.get_price('ZEC')
+    xtz_price_usd = await pricing_service.get_price('XTZ')
+    stx_price_usd = await pricing_service.get_price('STX')
+    vet_price_usd = await pricing_service.get_price('VET')
+    atom_price_usd = await pricing_service.get_price('ATOM')
+    near_price_usd = await pricing_service.get_price('NEAR')
+    icp_price_usd = await pricing_service.get_price('ICP')
 
     # For Cardano wallets, try to get TapTools data for ADA-denominated pricing
     taptools_positions = {}
@@ -430,6 +448,15 @@ async def get_wallet_assets_by_id(wallet_id: int, user_id: int = Depends(verify_
             'sui': {'ticker': 'SUI', 'name': 'Sui', 'decimals': 9, 'price_usd': sui_price_usd},
             'aptos': {'ticker': 'APT', 'name': 'Aptos', 'decimals': 8, 'price_usd': apt_price_usd},
             'filecoin': {'ticker': 'FIL', 'name': 'Filecoin', 'decimals': 18, 'price_usd': fil_price_usd},
+            'litecoin': {'ticker': 'LTC', 'name': 'Litecoin', 'decimals': 8, 'price_usd': ltc_price_usd},
+            'dogecoin': {'ticker': 'DOGE', 'name': 'Dogecoin', 'decimals': 8, 'price_usd': doge_price_usd},
+            'zcash': {'ticker': 'ZEC', 'name': 'Zcash', 'decimals': 8, 'price_usd': zec_price_usd},
+            'tezos': {'ticker': 'XTZ', 'name': 'Tezos', 'decimals': 6, 'price_usd': xtz_price_usd},
+            'stacks': {'ticker': 'STX', 'name': 'Stacks', 'decimals': 6, 'price_usd': stx_price_usd},
+            'vechain': {'ticker': 'VET', 'name': 'VeChain', 'decimals': 18, 'price_usd': vet_price_usd},
+            'cosmos': {'ticker': 'ATOM', 'name': 'Cosmos', 'decimals': 6, 'price_usd': atom_price_usd},
+            'near': {'ticker': 'NEAR', 'name': 'NEAR Protocol', 'decimals': 24, 'price_usd': near_price_usd},
+            'icp': {'ticker': 'ICP', 'name': 'Internet Computer', 'decimals': 8, 'price_usd': icp_price_usd},
         }
 
         if wallet['blockchain'] in native_config:
@@ -1040,6 +1067,192 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
                     'source': info.get('source')
                 }
 
+        elif blockchain == 'litecoin':
+            info = await litecoin_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_ltc']), 'LTC')
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_ltc'],
+                    'unit': 'LTC',
+                    'token_count': 0,
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'dogecoin':
+            info = await dogecoin_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_doge']), 'DOGE')
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_doge'],
+                    'unit': 'DOGE',
+                    'token_count': 0,
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'zcash':
+            info = await zcash_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_zec']), 'ZEC')
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_zec'],
+                    'unit': 'ZEC',
+                    'token_count': 0,
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'tezos':
+            info = await tezos_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_xtz']), 'XTZ')
+                tezos_assets = [
+                    {
+                        'asset_id': t.get('contract', ''),
+                        'policy_id': t.get('contract', ''),
+                        'asset_name': t.get('symbol', '') or t.get('name', ''),
+                        'quantity': str(int(t.get('balance_raw', '0'))),
+                        'decimals': t.get('decimals', 0)
+                    }
+                    for t in info.get('tokens', [])
+                ]
+                await save_native_assets(wallet_id, tezos_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_xtz'],
+                    'unit': 'XTZ',
+                    'token_count': len(tezos_assets),
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'stacks':
+            info = await stacks_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_stx']), 'STX')
+                stx_assets = [
+                    {
+                        'asset_id': t.get('contract_id', t.get('token_id', '')),
+                        'policy_id': t.get('contract_id', ''),
+                        'asset_name': t.get('token_name', 'unknown'),
+                        'quantity': str(int(t.get('balance', '0'))),
+                        'decimals': t.get('decimals', 6)
+                    }
+                    for t in info.get('tokens', [])
+                ]
+                await save_native_assets(wallet_id, stx_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_stx'],
+                    'unit': 'STX',
+                    'token_count': len(stx_assets),
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'vechain':
+            info = await vechain_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_vet']), 'VET')
+                vet_assets = []
+                for t in info.get('tokens', []):
+                    # VTHO token has no contract address, use symbol as ID
+                    symbol = t.get('symbol', '')
+                    raw_balance = float(t.get('balance', '0'))
+                    decimals = t.get('decimals', 18)
+                    vet_assets.append({
+                        'asset_id': symbol,
+                        'policy_id': symbol,
+                        'asset_name': symbol,
+                        'quantity': str(int(raw_balance * (10 ** decimals))),
+                        'decimals': decimals
+                    })
+                await save_native_assets(wallet_id, vet_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_vet'],
+                    'unit': 'VET',
+                    'token_count': len(vet_assets),
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'cosmos':
+            info = await cosmos_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_atom']), 'ATOM')
+                cosmos_assets = []
+                for t in info.get('tokens', []):
+                    denom = t.get('denom', '')
+                    if denom == 'uatom':
+                        continue  # Skip native ATOM, already saved as balance
+                    cosmos_assets.append({
+                        'asset_id': denom,
+                        'policy_id': denom,
+                        'asset_name': t.get('symbol', denom[:20]),
+                        'quantity': str(int(t.get('amount_raw', '0'))),
+                        'decimals': t.get('decimals') or 6
+                    })
+                await save_native_assets(wallet_id, cosmos_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_atom'],
+                    'unit': 'ATOM',
+                    'token_count': len(cosmos_assets),
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'near':
+            info = await near_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_near']), 'NEAR')
+                near_assets = [
+                    {
+                        'asset_id': t.get('contract', ''),
+                        'policy_id': t.get('contract', ''),
+                        'asset_name': t.get('symbol', '') or t.get('name', ''),
+                        'quantity': str(int(t.get('balance_raw', '0'))),
+                        'decimals': t.get('decimals', 0)
+                    }
+                    for t in info.get('tokens', [])
+                ]
+                await save_native_assets(wallet_id, near_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_near'],
+                    'unit': 'NEAR',
+                    'token_count': len(near_assets),
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'icp':
+            info = await icp_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_icp']), 'ICP')
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_icp'],
+                    'unit': 'ICP',
+                    'token_count': 0,
+                    'source': info.get('source')
+                }
+
         return {
             'address': address,
             'success': False,
@@ -1374,7 +1587,7 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
         if not blockchain:
             raise HTTPException(
                 status_code=400,
-                detail="Could not detect blockchain. Supported: Cardano (addr1, stake1), Bitcoin (1, 3, bc1, xpub/ypub/zpub), Ethereum (0x 42-char), Polygon (polygon:0x), Base (base:0x), Solana (base58), BNB Chain (bsc:0x), Arbitrum (arb:0x), Avalanche (avax:0x), Tron (T...), XRP (r...), Hedera (0.0.N), MultiversX (erd1...), Sui (0x 66-char), Aptos (aptos:0x), Filecoin (f1/f3...)"
+                detail="Could not detect blockchain. Supported: Cardano (addr1, stake1), Bitcoin (1, 3, bc1, xpub/ypub/zpub), Ethereum (0x 42-char), Polygon (polygon:0x), Base (base:0x), Solana (base58), BNB Chain (bsc:0x), Arbitrum (arb:0x), Avalanche (avax:0x), Tron (T...), XRP (r...), Hedera (0.0.N), MultiversX (erd1...), Sui (0x 66-char), Aptos (aptos:0x), Filecoin (f1/f3...), Litecoin (L/M/ltc1), Dogecoin (D...), Zcash (t1/t3), Tezos (tz1/KT1), Stacks (SP...), VeChain (vet:0x), Cosmos (cosmos1...), NEAR (*.near), ICP (icp:...)"
             )
 
         # Extract raw address if chain prefix was provided
@@ -1382,7 +1595,7 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
         if ':' in address:
             parts = address.split(':', 1)
             chain_prefix = parts[0].lower()
-            if chain_prefix in ('cardano', 'bitcoin', 'ethereum', 'eth', 'polygon', 'matic', 'base', 'solana', 'sol', 'algorand', 'algo', 'bsc', 'bnb', 'arb', 'arbitrum', 'avax', 'avalanche', 'tron', 'trx', 'xrp', 'ripple', 'hedera', 'hbar', 'multiversx', 'egld', 'elrond', 'sui', 'aptos', 'apt', 'filecoin', 'fil'):
+            if chain_prefix in ('cardano', 'bitcoin', 'ethereum', 'eth', 'polygon', 'matic', 'base', 'solana', 'sol', 'algorand', 'algo', 'bsc', 'bnb', 'arb', 'arbitrum', 'avax', 'avalanche', 'tron', 'trx', 'xrp', 'ripple', 'hedera', 'hbar', 'multiversx', 'egld', 'elrond', 'sui', 'aptos', 'apt', 'filecoin', 'fil', 'litecoin', 'ltc', 'dogecoin', 'doge', 'zcash', 'zec', 'tezos', 'xtz', 'stacks', 'stx', 'vechain', 'vet', 'cosmos', 'atom', 'near', 'icp'):
                 raw_address = parts[1]
         address = raw_address
 
@@ -1584,7 +1797,7 @@ async def delete_wallet(address: str, user_id: int = Depends(verify_session)):
     if ':' in address:
         parts = address.split(':', 1)
         chain_prefix = parts[0].lower()
-        if chain_prefix in ('cardano', 'bitcoin', 'ethereum', 'polygon', 'base', 'solana', 'algorand', 'bsc', 'arbitrum', 'avalanche', 'tron', 'xrp', 'hedera', 'multiversx', 'sui', 'aptos', 'filecoin'):
+        if chain_prefix in ('cardano', 'bitcoin', 'ethereum', 'polygon', 'base', 'solana', 'algorand', 'bsc', 'arbitrum', 'avalanche', 'tron', 'xrp', 'hedera', 'multiversx', 'sui', 'aptos', 'filecoin', 'litecoin', 'dogecoin', 'zcash', 'tezos', 'stacks', 'vechain', 'cosmos', 'near', 'icp'):
             blockchain = chain_prefix
             raw_address = parts[1]
 

@@ -6,7 +6,7 @@
 +-----------------------------------------------------------------------------------+
 |                              ABCT System (v1.5.0)                                  |
 |                         Multi-User Portfolio Tracker                              |
-|                              BUILD 1770726755                                     |
+|                              BUILD 1771198770                                     |
 +-----------------------------------------------------------------------------------+
 
                                    +-----------------+
@@ -75,19 +75,33 @@
 |                              Services Layer                                        |
 +-----------------------------------------------------------------------------------+
 |                                                                                    |
-|  Blockchain Services (17 Chains):                                                |
+|  Blockchain Services (26 Chains):                                                |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
 |  | Cardano  | | Bitcoin  | | Ethereum | | Solana   | | Polygon  | |   Base   |     |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
 |  | Algorand | |   BSC    | | Arbitrum | |Avalanche | |   Tron   | |   XRP    |     |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
-|  +----------+ +----------+ +----------+ +----------+ +----------+                  |
-|  | Hedera   | |MultversX | |   Sui    | |  Aptos   | | Filecoin |                  |
-|  +----------+ +----------+ +----------+ +----------+ +----------+                  |
+|  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
+|  | Hedera   | |MultversX | |   Sui    | |  Aptos   | | Filecoin | | Litecoin |     |
+|  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
+|  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
+|  | Dogecoin | |  Zcash   | |  Tezos   | |  Stacks  | | VeChain  | |  Cosmos  |     |
+|  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
+|  +----------+ +----------+ +----------+                                             |
+|  |   NEAR   | |   ICP    | |          |                                             |
+|  +----------+ +----------+ +----------+                                             |
 |  Note: BSC, Arbitrum, and Avalanche share the generic evm_chain.py service         |
 |  Tron uses tron.py with TronGrid API (free, no key required)                       |
 |  XRP, Hedera, MultiversX, Sui, Aptos, and Filecoin use free public APIs (no key)   |
+|  Litecoin and Dogecoin use BlockCypher API (free, no key required)                 |
+|  Zcash uses Blockchair API (free, no key required)                                 |
+|  Tezos uses TzKT API (free, no key required) - has tokens + NFTs                  |
+|  Stacks uses Hiro API (free, no key required) - has tokens + NFTs                  |
+|  VeChain uses VeBlocks/Thor API (free, no key required) - has VTHO token           |
+|  Cosmos uses Cosmos LCD/PublicNode (free, no key required) - IBC tokens + staking  |
+|  NEAR uses NEAR RPC + NearBlocks API (free, no key required) - tokens + NFTs       |
+|  ICP uses Rosetta API (free, no key required) - balance only                       |
 |  DeFi service includes Chainlink Staking (Ethereum contract reads via Alchemy)     |
 |                                                                                    |
 |  Exchange Services:                                                               |
@@ -137,10 +151,14 @@
 |  | TronGrid | | XRPL RPC | |Hedera    | |MultversX | | Sui RPC  | |Aptos API |     |
 |  |(Tron/Free)| |(XRP/Free)| |Mirror API| |  (Free)  | | (Free)   | | (Free)   |     |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
-|  +----------+                                                                      |
-|  | Glif RPC |                                                                      |
-|  |(FIL/Free)|                                                                      |
-|  +----------+                                                                      |
+|  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
+|  | Glif RPC | |BlockCyph.| |Blockchair| | TzKT API | | Hiro API | |VeBlocks  |     |
+|  |(FIL/Free)| |(LTC/DOGE)| |(ZEC/Free)| |(XTZ/Free)| |(STX/Free)| |(VET/Free)|     |
+|  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
+|  +----------+ +----------+ +----------+                                             |
+|  |Cosmos LCD| | NEAR RPC | |Rosetta   |                                             |
+|  |(ATOM/Free)| |(NEAR/Free)| |(ICP/Free)|                                             |
+|  +----------+ +----------+ +----------+                                             |
 |                                                                                    |
 |  Pricing:                                                                         |
 |  +----------+ +----------+ +----------+ +----------+ +----------+                  |
@@ -348,7 +366,7 @@ Events use composite unique keys to prevent duplicates on re-processing:
       |                                                   |
 ```
 
-Demo mode includes: 91 tokens across 17 blockchains, 76 NFTs across 7 collections, 1,500 transactions over 1 year of history, DeFi positions, and exchange balances.
+Demo mode includes: 91 tokens across 26 blockchains, 76 NFTs across 7 collections, 1,500 transactions over 1 year of history, DeFi positions, and exchange balances.
 
 ## Pricing Fallback Chain
 
@@ -403,7 +421,7 @@ Shared persistent `httpx.AsyncClient` instances via `get_client(name, timeout)`:
 - **5 Themes**: Dark Mode (default), Light, Cypherpunk 1, Ocean Depths, Sunset Horizon
 - **Cache Busting**: Build version system (v=1770726755) for immediate updates
 
-### External Services (26 providers)
+### External Services (35 providers)
 - **Cardano**: Blockfrost, CExplorer, TapTools, Koios
 - **Bitcoin**: Blockstream
 - **EVM**: Etherscan, Alchemy, Polygonscan, Basescan, BscScan, Arbiscan, Snowscan
@@ -416,6 +434,15 @@ Shared persistent `httpx.AsyncClient` instances via `get_client(name, timeout)`:
 - **Sui**: Sui JSON-RPC (free, no API key required)
 - **Aptos**: Aptos REST API (free, no API key required)
 - **Filecoin**: Glif RPC (free, no API key required)
+- **Litecoin**: BlockCypher API (free, no API key required)
+- **Dogecoin**: BlockCypher API (free, no API key required)
+- **Zcash**: Blockchair API (free, no API key required)
+- **Tezos**: TzKT API (free, no API key required)
+- **Stacks**: Hiro API (free, no API key required)
+- **VeChain**: VeBlocks/Thor API (free, no API key required)
+- **Cosmos**: Cosmos LCD/PublicNode (free, no API key required)
+- **NEAR**: NEAR RPC + NearBlocks API (free, no API key required)
+- **ICP**: Rosetta API (free, no API key required)
 - **DeFi**: Chainlink Staking via Alchemy (Ethereum contract reads)
 - **Pricing**: CoinGecko, CoinMarketCap, Coinbase, DefiLlama
 - **Exchanges**: Coinbase CDP, Binance, Binance.US, OKX, Bitget, Gate.io, KuCoin
@@ -548,6 +575,15 @@ ABCT/
 │   │   ├── sui.py                 # Sui (Sui JSON-RPC)
 │   │   ├── aptos.py               # Aptos (Aptos REST API)
 │   │   ├── filecoin.py            # Filecoin (Glif RPC)
+│   │   ├── litecoin.py            # Litecoin (BlockCypher API)
+│   │   ├── dogecoin.py            # Dogecoin (BlockCypher API)
+│   │   ├── zcash.py               # Zcash (Blockchair API)
+│   │   ├── tezos.py               # Tezos (TzKT API)
+│   │   ├── stacks.py              # Stacks (Hiro API)
+│   │   ├── vechain.py             # VeChain (VeBlocks/Thor API)
+│   │   ├── cosmos.py              # Cosmos (Cosmos LCD/PublicNode)
+│   │   ├── near.py                # NEAR (NEAR RPC + NearBlocks API)
+│   │   ├── icp.py                 # ICP (Rosetta API)
 │   │   └── ...                     # Exchange, NFT, demo services
 │   └── middleware/                 # Security middleware
 ├── frontend/                      # HTML/CSS/JS (17 pages)

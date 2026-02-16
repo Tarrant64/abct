@@ -14,7 +14,7 @@ digraph ABCT_Architecture {
 
     // Title
     labelloc="t";
-    label="ABCT Architecture - A Better Crypto Tracker\nVersion 1.5.0 (Build 1770726755)\n17 Blockchains | 7 Exchanges | Multi-User | Demo Mode";
+    label="ABCT Architecture - A Better Crypto Tracker\nVersion 1.5.0 (Build 1771198770)\n26 Blockchains | 7 Exchanges | Multi-User | Demo Mode";
     fontsize=16;
 
     // ========== SUBGRAPHS ==========
@@ -116,7 +116,7 @@ digraph ABCT_Architecture {
 
                 // Blockchain Services
                 subgraph cluster_blockchain_svc {
-                    label="Blockchain Services (17 Chains)";
+                    label="Blockchain Services (26 Chains)";
                     style="rounded,filled";
                     fillcolor="#FFE0B2";
                     color="#E65100";
@@ -136,6 +136,15 @@ digraph ABCT_Architecture {
                     s_sui [label="sui.py\nSui (SUI)", fillcolor="#FFCC80"];
                     s_aptos [label="aptos.py\nAptos (APT)", fillcolor="#FFCC80"];
                     s_filecoin [label="filecoin.py\nFilecoin (FIL)", fillcolor="#FFCC80"];
+                    s_litecoin [label="litecoin.py\nLitecoin (LTC)", fillcolor="#FFCC80"];
+                    s_dogecoin [label="dogecoin.py\nDogecoin (DOGE)", fillcolor="#FFCC80"];
+                    s_zcash [label="zcash.py\nZcash (ZEC)", fillcolor="#FFCC80"];
+                    s_tezos [label="tezos.py\nTezos (XTZ)", fillcolor="#FFCC80"];
+                    s_stacks [label="stacks.py\nStacks (STX)", fillcolor="#FFCC80"];
+                    s_vechain [label="vechain.py\nVeChain (VET)", fillcolor="#FFCC80"];
+                    s_cosmos [label="cosmos.py\nCosmos (ATOM)", fillcolor="#FFCC80"];
+                    s_near [label="near.py\nNEAR (NEAR)", fillcolor="#FFCC80"];
+                    s_icp [label="icp.py\nICP (ICP)", fillcolor="#FFCC80"];
                 }
 
                 // NFT Services
@@ -176,7 +185,7 @@ digraph ABCT_Architecture {
                     fillcolor="#F3E5F5";
                     color="#6A1B9A";
 
-                    s_demo_wallet [label="demo_wallet_service.py\n91 Tokens, 17 Chains", fillcolor="#CE93D8"];
+                    s_demo_wallet [label="demo_wallet_service.py\n91 Tokens, 26 Chains", fillcolor="#CE93D8"];
                     s_demo_nft [label="demo_nft_service.py\n76 NFTs, 7 Collections", fillcolor="#CE93D8"];
                     s_demo_txn [label="demo_transaction_service.py\n1,500 Transactions", fillcolor="#CE93D8"];
                     s_demo_defi [label="demo_defi_service.py\nStaking Positions", fillcolor="#CE93D8"];
@@ -293,6 +302,14 @@ digraph ABCT_Architecture {
             api_sui [label="Sui RPC\nSui Data", fillcolor="#B2DFDB"];
             api_aptos [label="Aptos API\nAptos Data", fillcolor="#B2DFDB"];
             api_glif [label="Glif RPC\nFilecoin Data", fillcolor="#B2DFDB"];
+            api_blockcypher [label="BlockCypher\nLTC/DOGE Data (Free)", fillcolor="#B2DFDB"];
+            api_blockchair [label="Blockchair\nZcash Data (Free)", fillcolor="#B2DFDB"];
+            api_tzkt [label="TzKT\nTezos Data (Free)", fillcolor="#B2DFDB"];
+            api_hiro [label="Hiro API\nStacks Data (Free)", fillcolor="#B2DFDB"];
+            api_veblocks [label="VeBlocks/Thor\nVeChain Data (Free)", fillcolor="#B2DFDB"];
+            api_cosmos_lcd [label="Cosmos LCD\nPublicNode (Free)", fillcolor="#B2DFDB"];
+            api_near_rpc [label="NEAR RPC\n+ NearBlocks (Free)", fillcolor="#B2DFDB"];
+            api_rosetta [label="Rosetta API\nICP Data (Free)", fillcolor="#B2DFDB"];
         }
 
         // Pricing APIs
@@ -404,6 +421,15 @@ digraph ABCT_Architecture {
     r_wallets -> s_sui;
     r_wallets -> s_aptos;
     r_wallets -> s_filecoin;
+    r_wallets -> s_litecoin;
+    r_wallets -> s_dogecoin;
+    r_wallets -> s_zcash;
+    r_wallets -> s_tezos;
+    r_wallets -> s_stacks;
+    r_wallets -> s_vechain;
+    r_wallets -> s_cosmos;
+    r_wallets -> s_near;
+    r_wallets -> s_icp;
 
     // Routers to NFT Services
     r_nfts -> s_nft;
@@ -484,6 +510,15 @@ digraph ABCT_Architecture {
     s_sui -> api_sui [label="HTTPS", color="#00796B"];
     s_aptos -> api_aptos [label="HTTPS", color="#00796B"];
     s_filecoin -> api_glif [label="HTTPS", color="#00796B"];
+    s_litecoin -> api_blockcypher [label="HTTPS", color="#00796B"];
+    s_dogecoin -> api_blockcypher [label="HTTPS", color="#00796B"];
+    s_zcash -> api_blockchair [label="HTTPS", color="#00796B"];
+    s_tezos -> api_tzkt [label="HTTPS", color="#00796B"];
+    s_stacks -> api_hiro [label="HTTPS", color="#00796B"];
+    s_vechain -> api_veblocks [label="HTTPS", color="#00796B"];
+    s_cosmos -> api_cosmos_lcd [label="HTTPS", color="#00796B"];
+    s_near -> api_near_rpc [label="HTTPS", color="#00796B"];
+    s_icp -> api_rosetta [label="HTTPS", color="#00796B"];
 
     // DeFi service connections
     s_defi -> api_alchemy [label="Chainlink Staking", color="#3F51B5"];

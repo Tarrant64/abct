@@ -8,7 +8,8 @@ def detect_blockchain(address: str) -> Optional[str]:
     Returns:
         'cardano', 'bitcoin', 'ethereum', 'polygon', 'base', 'solana', 'algorand',
         'bsc', 'arbitrum', 'avalanche', 'tron', 'xrp', 'hedera', 'multiversx',
-        'sui', 'aptos', 'filecoin', or None if unknown
+        'sui', 'aptos', 'filecoin', 'litecoin', 'dogecoin', 'zcash', 'tezos',
+        'stacks', 'vechain', 'cosmos', 'near', 'icp', or None if unknown
     """
     address = address.strip()
 
@@ -31,6 +32,15 @@ def detect_blockchain(address: str) -> Optional[str]:
             'sui': 'sui',
             'aptos': 'aptos', 'apt': 'aptos',
             'filecoin': 'filecoin', 'fil': 'filecoin',
+            'litecoin': 'litecoin', 'ltc': 'litecoin',
+            'dogecoin': 'dogecoin', 'doge': 'dogecoin',
+            'zcash': 'zcash', 'zec': 'zcash',
+            'tezos': 'tezos', 'xtz': 'tezos',
+            'stacks': 'stacks', 'stx': 'stacks',
+            'vechain': 'vechain', 'vet': 'vechain',
+            'cosmos': 'cosmos', 'atom': 'cosmos',
+            'near': 'near',
+            'icp': 'icp',
         }
         if prefix in prefix_map:
             return prefix_map[prefix]
@@ -47,6 +57,28 @@ def detect_blockchain(address: str) -> Optional[str]:
     # MultiversX addresses start with erd1, exactly 62 chars
     if address.startswith('erd1') and len(address) == 62:
         return 'multiversx'
+
+    # Cosmos addresses start with cosmos1, bech32 encoded
+    if address.startswith('cosmos1') and 39 <= len(address) <= 45:
+        return 'cosmos'
+
+    # Tezos addresses start with tz1/tz2/tz3 (implicit) or KT1 (contract), 36 chars
+    if address.startswith(('tz1', 'tz2', 'tz3', 'KT1')) and len(address) == 36:
+        return 'tezos'
+
+    # Litecoin bech32 addresses start with ltc1
+    if address.startswith('ltc1') and len(address) >= 26:
+        return 'litecoin'
+
+    # NEAR named accounts end with .near
+    if address.endswith('.near') and len(address) >= 6:
+        return 'near'
+
+    # Stacks addresses start with SP (mainnet) or ST (testnet), 33-41 chars
+    if address.startswith(('SP', 'ST')) and 33 <= len(address) <= 41:
+        base58_chars = set('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz')
+        if all(c in base58_chars for c in address):
+            return 'stacks'
 
     # Algorand addresses - 58 characters, base32 (uppercase A-Z and 2-7)
     if len(address) == 58:
@@ -69,6 +101,24 @@ def detect_blockchain(address: str) -> Optional[str]:
         base58_chars = set('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz')
         if all(c in base58_chars for c in address):
             return 'xrp'
+
+    # Dogecoin addresses - D prefix, 26-35 chars, base58
+    if address.startswith('D') and 26 <= len(address) <= 35:
+        base58_chars = set('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz')
+        if all(c in base58_chars for c in address):
+            return 'dogecoin'
+
+    # ZCash transparent addresses - t1 (P2PKH) or t3 (P2SH), 35 chars
+    if address.startswith(('t1', 't3')) and len(address) == 35:
+        base58_chars = set('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz')
+        if all(c in base58_chars for c in address):
+            return 'zcash'
+
+    # Litecoin legacy addresses - L prefix (P2PKH) or M prefix (P2SH), 26-35 chars
+    if address.startswith(('L', 'M')) and 26 <= len(address) <= 35:
+        base58_chars = set('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz')
+        if all(c in base58_chars for c in address):
+            return 'litecoin'
 
     # Filecoin addresses - start with f0, f1, f3, or f4
     if len(address) >= 3 and address[0] == 'f' and address[1] in ('0', '1', '3', '4'):
@@ -204,13 +254,18 @@ def parse_address(line: str) -> Optional[Tuple[str, str]]:
             'ripple': 'xrp', 'hbar': 'hedera',
             'egld': 'multiversx', 'elrond': 'multiversx',
             'apt': 'aptos', 'fil': 'filecoin',
+            'ltc': 'litecoin', 'doge': 'dogecoin', 'zec': 'zcash',
+            'xtz': 'tezos', 'stx': 'stacks', 'vet': 'vechain',
+            'atom': 'cosmos',
         }
         if blockchain in prefix_map:
             blockchain = prefix_map[blockchain]
 
         valid_chains = ('cardano', 'bitcoin', 'ethereum', 'polygon', 'base', 'solana',
                         'algorand', 'bsc', 'arbitrum', 'avalanche', 'tron',
-                        'xrp', 'hedera', 'multiversx', 'sui', 'aptos', 'filecoin')
+                        'xrp', 'hedera', 'multiversx', 'sui', 'aptos', 'filecoin',
+                        'litecoin', 'dogecoin', 'zcash', 'tezos', 'stacks',
+                        'vechain', 'cosmos', 'near', 'icp')
         if blockchain in valid_chains:
             return (blockchain, address)
         return None
