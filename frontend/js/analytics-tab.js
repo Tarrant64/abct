@@ -645,39 +645,44 @@
                 return;
             }
 
-            // Build asset list from portfolio summary
-            // Map chain keys to their symbols and balances
-            const assetMap = {
-                'total_ada': { symbol: 'ADA', name: 'Cardano' },
-                'total_btc': { symbol: 'BTC', name: 'Bitcoin' },
-                'total_eth': { symbol: 'ETH', name: 'Ethereum' },
-                'total_sol': { symbol: 'SOL', name: 'Solana' },
-                'total_matic': { symbol: 'MATIC', name: 'Polygon' },
-                'total_algo': { symbol: 'ALGO', name: 'Algorand' },
-                'total_trx': { symbol: 'TRX', name: 'Tron' },
-                'total_xrp': { symbol: 'XRP', name: 'XRP' },
-                'total_hbar': { symbol: 'HBAR', name: 'Hedera' },
-                'total_egld': { symbol: 'EGLD', name: 'MultiversX' },
-                'total_sui': { symbol: 'SUI', name: 'Sui' },
-                'total_apt': { symbol: 'APT', name: 'Aptos' },
-                'total_fil': { symbol: 'FIL', name: 'Filecoin' },
-                'total_ltc': { symbol: 'LTC', name: 'Litecoin' },
-                'total_doge': { symbol: 'DOGE', name: 'Dogecoin' },
-                'total_zec': { symbol: 'ZEC', name: 'Zcash' },
-                'total_xtz': { symbol: 'XTZ', name: 'Tezos' },
-                'total_stx': { symbol: 'STX', name: 'Stacks' },
-                'total_vet': { symbol: 'VET', name: 'VeChain' },
-                'total_atom': { symbol: 'ATOM', name: 'Cosmos' },
-                'total_near': { symbol: 'NEAR', name: 'NEAR' },
-                'total_icp': { symbol: 'ICP', name: 'ICP' },
+            // Build asset list from portfolio summary (nested structure)
+            // summaryData has chain keys (cardano, bitcoin, etc.) with total_xxx inside
+            const chainMap = {
+                'cardano':    { balanceKey: 'total_ada',   symbol: 'ADA',   name: 'Cardano' },
+                'bitcoin':    { balanceKey: 'total_btc',   symbol: 'BTC',   name: 'Bitcoin' },
+                'ethereum':   { balanceKey: 'total_eth',   symbol: 'ETH',   name: 'Ethereum' },
+                'solana':     { balanceKey: 'total_sol',   symbol: 'SOL',   name: 'Solana' },
+                'polygon':    { balanceKey: 'total_matic', symbol: 'MATIC', name: 'Polygon' },
+                'base':       { balanceKey: 'total_eth',   symbol: 'ETH',   name: 'Base (ETH)' },
+                'algorand':   { balanceKey: 'total_algo',  symbol: 'ALGO',  name: 'Algorand' },
+                'tron':       { balanceKey: 'total_trx',   symbol: 'TRX',   name: 'Tron' },
+                'xrp':        { balanceKey: 'total_xrp',   symbol: 'XRP',   name: 'XRP' },
+                'hedera':     { balanceKey: 'total_hbar',  symbol: 'HBAR',  name: 'Hedera' },
+                'multiversx': { balanceKey: 'total_egld',  symbol: 'EGLD',  name: 'MultiversX' },
+                'sui':        { balanceKey: 'total_sui',   symbol: 'SUI',   name: 'Sui' },
+                'aptos':      { balanceKey: 'total_apt',   symbol: 'APT',   name: 'Aptos' },
+                'filecoin':   { balanceKey: 'total_fil',   symbol: 'FIL',   name: 'Filecoin' },
+                'litecoin':   { balanceKey: 'total_ltc',   symbol: 'LTC',   name: 'Litecoin' },
+                'dogecoin':   { balanceKey: 'total_doge',  symbol: 'DOGE',  name: 'Dogecoin' },
+                'zcash':      { balanceKey: 'total_zec',   symbol: 'ZEC',   name: 'Zcash' },
+                'tezos':      { balanceKey: 'total_xtz',   symbol: 'XTZ',   name: 'Tezos' },
+                'stacks':     { balanceKey: 'total_stx',   symbol: 'STX',   name: 'Stacks' },
+                'vechain':    { balanceKey: 'total_vet',   symbol: 'VET',   name: 'VeChain' },
+                'cosmos':     { balanceKey: 'total_atom',  symbol: 'ATOM',  name: 'Cosmos' },
+                'near':       { balanceKey: 'total_near',  symbol: 'NEAR',  name: 'NEAR' },
+                'icp':        { balanceKey: 'total_icp',   symbol: 'ICP',   name: 'ICP' },
             };
 
             // Collect assets with value
             let assets = [];
             let totalPortfolioUsd = 0;
+            let totalNativeAssetsUsd = 0;
 
-            for (const [key, info] of Object.entries(assetMap)) {
-                const balance = parseFloat(summaryData[key]) || 0;
+            for (const [chain, info] of Object.entries(chainMap)) {
+                const chainData = summaryData[chain];
+                if (!chainData) continue;
+
+                const balance = parseFloat(chainData[info.balanceKey]) || 0;
                 if (balance <= 0) continue;
 
                 const price = prices[info.symbol] || 0;
@@ -695,35 +700,23 @@
                     btcValue: btcValue,
                 });
                 totalPortfolioUsd += usdValue;
+
+                // Accumulate native token values across all chains
+                const nv = parseFloat(chainData.native_assets_value_usd) || 0;
+                totalNativeAssetsUsd += nv;
             }
 
-            // Also include exchange balances if present
-            // (exchange_total_usd is a single aggregated number)
-            const exchangeTotal = parseFloat(summaryData.exchange_total_usd) || 0;
-            if (exchangeTotal > 0) {
-                assets.push({
-                    name: 'Exchange Holdings',
-                    symbol: 'MULTI',
-                    balance: null,
-                    price: null,
-                    usdValue: exchangeTotal,
-                    btcValue: exchangeTotal / btcPrice,
-                });
-                totalPortfolioUsd += exchangeTotal;
-            }
-
-            // Include native_assets_value_usd (tokens held in wallets)
-            const nativeAssetsValue = parseFloat(summaryData.native_assets_value_usd) || 0;
-            if (nativeAssetsValue > 0) {
+            // Include aggregated native token values (tokens held in wallets)
+            if (totalNativeAssetsUsd > 0) {
                 assets.push({
                     name: 'Other Tokens',
                     symbol: 'TOKENS',
                     balance: null,
                     price: null,
-                    usdValue: nativeAssetsValue,
-                    btcValue: nativeAssetsValue / btcPrice,
+                    usdValue: totalNativeAssetsUsd,
+                    btcValue: totalNativeAssetsUsd / btcPrice,
                 });
-                totalPortfolioUsd += nativeAssetsValue;
+                totalPortfolioUsd += totalNativeAssetsUsd;
             }
 
             if (assets.length === 0) {
