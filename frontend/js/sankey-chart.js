@@ -46,10 +46,10 @@ class PortfolioSankey {
         this.animating = false;
 
         // Layout config
-        this.padding = { top: 20, right: 30, bottom: 20, left: 30 };
-        this.nodeWidth = 24;
-        this.nodeGap = 6;
-        this.minNodeHeight = 18;
+        this.padding = { top: 20, right: 140, bottom: 20, left: 140 };
+        this.nodeWidth = 20;
+        this.nodeGap = 5;
+        this.minNodeHeight = 16;
         this.columnGap = 0; // computed from width
 
         this._createSVG();
@@ -98,6 +98,18 @@ class PortfolioSankey {
         const rect = this.container.getBoundingClientRect();
         this.width = rect.width;
         this.height = Math.max(300, rect.height);
+
+        // Responsive padding — tighten on narrow screens
+        if (this.width < 500) {
+            this.padding.left = 70;
+            this.padding.right = 70;
+        } else if (this.width < 768) {
+            this.padding.left = 100;
+            this.padding.right = 100;
+        } else {
+            this.padding.left = 140;
+            this.padding.right = 140;
+        }
 
         // Clear
         while (this.svg.firstChild) this.svg.removeChild(this.svg.firstChild);

@@ -9669,13 +9669,18 @@ function setRefreshIndicators(state) {
 }
 
 async function loadAnalyticsData(background = false) {
-    if (analyticsLoading) return;
+    if (analyticsLoading) {
+        console.log('[Analytics] Skipped - already loading');
+        return;
+    }
     analyticsLoading = true;
+    console.log('[Analytics] Loading analytics data...');
 
     // Show cached data instantly if available
     const cached = getCachedAnalytics();
     if (cached && !analyticsData) {
         analyticsData = cached;
+        console.log('[Analytics] Rendering from session cache');
         renderCoinAllocationChart();
         renderCategoryAllocationChart();
         renderPortfolioHeatmap();
@@ -9690,6 +9695,12 @@ async function loadAnalyticsData(background = false) {
         const response = await authFetch(`${API_BASE}/portfolio/analytics`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const freshData = await response.json();
+
+        console.log('[Analytics] Fetched:', {
+            coins: freshData.coin_allocation?.length || 0,
+            categories: freshData.category_allocation?.length || 0,
+            total: freshData.total_value_usd
+        });
 
         setCachedAnalytics(freshData);
         analyticsData = freshData;
@@ -9910,11 +9921,13 @@ let _blockchainsInitialized = false;
 async function initBlockchainsTab() {
     if (_blockchainsInitialized) return;
     _blockchainsInitialized = true;
+    console.log('[Blockchains] Initializing tab...');
 
     // Ensure prices and portfolio data are loaded (needed for all charts)
     // On data.html these globals may not be populated yet
     const needsPrices = !prices || !prices.ADA || prices.ADA === 0;
     const needsPortfolio = !lastPortfolioData;
+    console.log('[Blockchains] needsPrices:', needsPrices, 'needsPortfolio:', needsPortfolio);
 
     if (needsPrices || needsPortfolio) {
         try {
@@ -9985,7 +9998,13 @@ async function initBlockchainsTab() {
     }
 
     // Load analytics data (coin allocation, category allocation, heatmap)
-    await loadAnalyticsData();
+    console.log('[Blockchains] About to call loadAnalyticsData...');
+    try {
+        await loadAnalyticsData();
+        console.log('[Blockchains] loadAnalyticsData completed. analyticsData:', analyticsData ? 'loaded' : 'null');
+    } catch (e) {
+        console.error('[Blockchains] loadAnalyticsData threw:', e);
+    }
 
     // Initialize price chart
     if (typeof initializePriceChart === 'function') {
