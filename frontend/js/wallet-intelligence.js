@@ -91,16 +91,24 @@
                 authFetch(`/intelligence/activity-heatmap?${qs}`),
             ]);
 
-            // Check for non-JSON responses (e.g. 404 HTML or auth redirect)
-            for (const [name, resp] of [['flow', flowResp], ['counter', counterResp], ['heat', heatResp]]) {
-                if (!resp.ok) {
-                    console.error(`Intelligence ${name} endpoint returned ${resp.status}`);
+            // Safely parse JSON, returning fallback on error
+            async function safeJson(resp, fallback) {
+                try {
+                    const ct = resp.headers.get('content-type') || '';
+                    if (!resp.ok || !ct.includes('application/json')) {
+                        console.error(`Intelligence endpoint returned ${resp.status} (${ct.split(';')[0]}): ${resp.url}`);
+                        return fallback;
+                    }
+                    return await resp.json();
+                } catch (e) {
+                    console.error('Failed to parse intelligence response:', e);
+                    return fallback;
                 }
             }
 
-            const flowData = flowResp.ok ? await flowResp.json() : { success: false };
-            const counterData = counterResp.ok ? await counterResp.json() : { success: false, counterparties: [] };
-            const heatData = heatResp.ok ? await heatResp.json() : { success: false, heatmap: [] };
+            const flowData = await safeJson(flowResp, { success: false });
+            const counterData = await safeJson(counterResp, { success: false, counterparties: [] });
+            const heatData = await safeJson(heatResp, { success: false, heatmap: [] });
 
             // Check for empty state
             const hasData = flowData.success && (flowData.total_sent > 0 || flowData.total_received > 0);
