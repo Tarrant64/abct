@@ -50,12 +50,19 @@
         try {
             const resp = await authFetch('/settings/apis');
             const data = await resp.json();
-            const apis = data.apis || data.api_keys || [];
+
+            // Response is { categories: { "pricing": { apis: [...] }, ... } }
+            // Flatten all apis from every category
+            const allApis = [];
+            const categories = data.categories || {};
+            for (const cat of Object.values(categories)) {
+                if (cat.apis) allApis.push(...cat.apis);
+            }
 
             let hasGlobalSource = false;
-            for (const api of apis) {
-                const name = (api.name || api.service || '').toLowerCase();
-                if ((name === 'coingecko' || name === 'coinmarketcap') && api.enabled !== false && api.key) {
+            for (const api of allApis) {
+                const id = (api.id || '').toLowerCase();
+                if ((id === 'coingecko' || id === 'coinmarketcap') && api.enabled && api.configured) {
                     hasGlobalSource = true;
                     break;
                 }
