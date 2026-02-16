@@ -153,7 +153,7 @@ async def get_counterparties(
             return {"success": True, "counterparties": _generate_demo_counterparties()}
 
         # Check cache
-        cache_key = f"intelligence_counterparties_{user_id}_{days}_{blockchain or 'all'}"
+        cache_key = f"intelligence_v2_counterparties_{user_id}_{days}_{blockchain or 'all'}"
         cached = await get_cache(cache_key, user_id=user_id)
         if cached:
             return {"success": True, "counterparties": cached}
@@ -393,7 +393,7 @@ async def get_flow_summary(
             return {"success": True, **_generate_demo_flow_summary()}
 
         # Check cache
-        cache_key = f"intelligence_flow_{user_id}_{days}_{blockchain or 'all'}"
+        cache_key = f"intelligence_v2_flow_{user_id}_{days}_{blockchain or 'all'}"
         cached = await get_cache(cache_key, user_id=user_id)
         if cached:
             return {"success": True, **cached}
@@ -526,7 +526,7 @@ async def get_activity_heatmap(
             return {"success": True, "heatmap": _generate_demo_heatmap()}
 
         # Check cache
-        cache_key = f"intelligence_heatmap_{user_id}_{days}_{blockchain or 'all'}"
+        cache_key = f"intelligence_v2_heatmap_{user_id}_{days}_{blockchain or 'all'}"
         cached = await get_cache(cache_key, user_id=user_id)
         if cached:
             return {"success": True, "heatmap": cached}
@@ -604,7 +604,7 @@ async def get_large_transactions(
             return {"success": True, "transactions": [t for t in demo if t["usd_value"] >= min_usd][:limit]}
 
         # Check cache
-        cache_key = f"intelligence_large_tx_{user_id}_{min_usd}_{days}_{blockchain or 'all'}"
+        cache_key = f"intelligence_v2_large_tx_{user_id}_{min_usd}_{days}_{blockchain or 'all'}"
         cached = await get_cache(cache_key, user_id=user_id)
         if cached:
             return {"success": True, "transactions": cached}
