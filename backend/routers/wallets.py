@@ -1727,6 +1727,94 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
         raise HTTPException(status_code=500, detail=f"Failed to add wallet: {str(e)}")
 
 
+@router.delete("/stake-group/{stake_address}")
+async def delete_stake_group(stake_address: str, user_id: int = Depends(verify_session)):
+    """Delete all wallets belonging to a Cardano stake key group."""
+    from database import delete_wallet as db_delete_wallet
+
+    # Demo mode: block deletion
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        return {"message": "Demo mode: Not deleted", "deleted": 0, "demo_mode": True}
+
+    if not is_stake_address(stake_address):
+        raise HTTPException(status_code=400, detail="Invalid stake address")
+
+    # Get all Cardano wallets for this user
+    all_wallets = await get_all_wallets(user_id=user_id)
+    cardano_wallets = [w for w in all_wallets if w['blockchain'] == 'cardano']
+
+    # Resolve stake keys and find matches
+    wallets_to_delete = []
+    for wallet in cardano_wallets:
+        if wallet['address'].startswith('addr1'):
+            try:
+                wallet_stake = await cardano_service.get_stake_address(wallet['address'])
+                if wallet_stake == stake_address:
+                    wallets_to_delete.append(wallet)
+            except Exception:
+                continue
+
+    if not wallets_to_delete:
+        raise HTTPException(status_code=404, detail="No wallets found for this stake key")
+
+    deleted = 0
+    for wallet in wallets_to_delete:
+        await db_delete_wallet(wallet['id'])
+        remove_from_wallets_file(wallet['address'])
+        deleted += 1
+
+    return {"message": f"Deleted {deleted} wallet(s)", "deleted": deleted, "stake_address": stake_address}
+
+
+@router.put("/stake-group/{stake_address}/label")
+async def update_stake_group_label(stake_address: str, data: dict, user_id: int = Depends(verify_session)):
+    """Update the label for all wallets in a Cardano stake key group."""
+    import aiosqlite
+    from config import DATABASE_PATH
+
+    # Demo mode: block updates
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        return {"message": "Demo mode: Not updated", "demo_mode": True}
+
+    label = data.get('label', '').strip()
+    if not label:
+        raise HTTPException(status_code=400, detail="Label is required")
+
+    if not is_stake_address(stake_address):
+        raise HTTPException(status_code=400, detail="Invalid stake address")
+
+    # Get all Cardano wallets for this user
+    all_wallets = await get_all_wallets(user_id=user_id)
+    cardano_wallets = [w for w in all_wallets if w['blockchain'] == 'cardano']
+
+    # Resolve stake keys and find matches
+    wallet_ids = []
+    for wallet in cardano_wallets:
+        if wallet['address'].startswith('addr1'):
+            try:
+                wallet_stake = await cardano_service.get_stake_address(wallet['address'])
+                if wallet_stake == stake_address:
+                    wallet_ids.append(wallet['id'])
+            except Exception:
+                continue
+
+    if not wallet_ids:
+        raise HTTPException(status_code=404, detail="No wallets found for this stake key")
+
+    # Update label on all matching wallets
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        placeholders = ','.join('?' * len(wallet_ids))
+        await db.execute(
+            f"UPDATE wallets SET label = ? WHERE id IN ({placeholders})",
+            [label] + wallet_ids
+        )
+        await db.commit()
+
+    return {"message": "Label updated", "updated": len(wallet_ids), "label": label}
+
+
 @router.patch("/{address}")
 async def update_wallet(address: str, update: WalletUpdate, user_id: int = Depends(verify_session)):
     """Update wallet label."""

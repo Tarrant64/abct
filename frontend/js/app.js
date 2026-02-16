@@ -1545,6 +1545,40 @@ function renderWallets(wallets) {
 }
 
 // Render wallets grouped by stake key (Cardano) and individual (Bitcoin, Ethereum, Solana, Polygon, Base)
+// Populate chain filter tabs dynamically based on which chains have wallets
+function updateChainFilterTabs(chainData) {
+    const container = document.getElementById('selfCustodyChainTabs');
+    if (!container) return;
+
+    const chainDisplayNames = {
+        cardano: 'Cardano', bitcoin: 'Bitcoin', ethereum: 'Ethereum',
+        solana: 'Solana', polygon: 'Polygon', base: 'Base',
+        algorand: 'Algorand', bsc: 'BNB Chain', arbitrum: 'Arbitrum',
+        avalanche: 'Avalanche', tron: 'Tron', xrp: 'XRP',
+        hedera: 'Hedera', multiversx: 'MultiversX', sui: 'Sui',
+        aptos: 'Aptos', filecoin: 'Filecoin', litecoin: 'Litecoin',
+        dogecoin: 'Dogecoin', zcash: 'Zcash', tezos: 'Tezos',
+        stacks: 'Stacks', vechain: 'VeChain', cosmos: 'Cosmos',
+        near: 'NEAR', icp: 'ICP'
+    };
+
+    const activeChains = Object.entries(chainData)
+        .filter(([_, wallets]) => wallets && wallets.length > 0)
+        .map(([chain]) => chain);
+
+    if (activeChains.length <= 1) {
+        container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = '';
+    let html = '<button class="chain-tab active" data-chain="all" onclick="filterSelfCustodyByChain(\'all\')">All</button>';
+    activeChains.forEach(chain => {
+        html += `<button class="chain-tab" data-chain="${chain}" onclick="filterSelfCustodyByChain('${chain}')">${chainDisplayNames[chain] || chain}</button>`;
+    });
+    container.innerHTML = html;
+}
+
 function renderWalletsGrouped(cardanoStakeGroups, bitcoinWallets, ethereumWallets = [], solanaWallets = [], polygonWallets = [], baseWallets = [], algorandWallets = [], bscWallets = [], arbitrumWallets = [], avalancheWallets = [], tronWallets = []) {
     if (!walletsList) return;
 
@@ -1592,7 +1626,26 @@ function renderWalletsGrouped(cardanoStakeGroups, bitcoinWallets, ethereumWallet
                 <div class="wallet-group cardano collapsed ${walletCount === 1 ? 'single-wallet' : ''}" data-stake="${group.stake_address || 'none'}">
                     <div class="wallet-group-header">
                         <div class="group-info">
-                            <span class="group-label">Stake Key: <span class="blur-sensitive">${group.stake_address_short || 'No Stake Key'}</span></span>
+                            <span class="group-label">${group.label || 'Stake Key'}: <span class="blur-sensitive stake-key-short">${group.stake_address_short || 'No Stake Key'}</span></span>
+                            ${group.stake_address ? `<button class="copy-address-btn" data-address="${group.stake_address}" title="Copy stake key">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
+                            </button>` : ''}
+                            <button class="edit-group-label-btn" data-stake="${group.stake_address || 'none'}" title="Edit group name">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                </svg>
+                            </button>
+                            ${group.stake_address ? `<button class="delete-wallet-btn delete-group-btn" data-stake="${group.stake_address}" title="Delete all wallets in this group">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M3 6h18"></path>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
+                                    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
+                            </button>` : ''}
                             <span class="group-wallet-count">${walletCount} address${walletCount !== 1 ? 'es' : ''}</span>
                         </div>
                         <div class="group-balance">
@@ -1690,6 +1743,21 @@ function renderWalletsGrouped(cardanoStakeGroups, bitcoinWallets, ethereumWallet
     // Use innerHTML directly for internally generated HTML (not user input)
     walletsList.innerHTML = html;
 
+    // Populate dynamic chain filter tabs
+    updateChainFilterTabs({
+        cardano: cardanoStakeGroups,
+        bitcoin: bitcoinWallets,
+        ethereum: ethereumWallets,
+        solana: solanaWallets,
+        polygon: polygonWallets,
+        base: baseWallets,
+        algorand: algorandWallets,
+        bsc: bscWallets,
+        arbitrum: arbitrumWallets,
+        avalanche: avalancheWallets,
+        tron: tronWallets
+    });
+
     // Attach event listeners after DOM update
     attachDashboardWalletEventListeners();
 
@@ -1714,12 +1782,21 @@ function attachDashboardWalletEventListeners() {
         });
     });
 
-    // Edit label button listeners
+    // Edit label button listeners (individual wallets only, not grouped)
     document.querySelectorAll('.edit-label-btn').forEach(btn => {
         btn.addEventListener('click', function(event) {
             event.stopPropagation();
             const address = this.closest('[data-address]').dataset.address;
             editWalletLabel(address, this);
+        });
+    });
+
+    // Edit group label button listeners (stake key groups)
+    document.querySelectorAll('.edit-group-label-btn').forEach(btn => {
+        btn.addEventListener('click', function(event) {
+            event.stopPropagation();
+            const stakeAddress = this.dataset.stake;
+            editStakeGroupLabel(stakeAddress, this);
         });
     });
 
@@ -1732,12 +1809,21 @@ function attachDashboardWalletEventListeners() {
         });
     });
 
-    // Delete wallet button listeners
-    document.querySelectorAll('.delete-wallet-btn').forEach(btn => {
+    // Delete wallet button listeners (individual wallets)
+    document.querySelectorAll('.delete-wallet-btn:not(.delete-group-btn)').forEach(btn => {
         btn.addEventListener('click', function(event) {
             event.stopPropagation();
             const address = this.closest('[data-address]').dataset.address;
             deleteWallet(address);
+        });
+    });
+
+    // Delete stake group button listeners
+    document.querySelectorAll('.delete-group-btn').forEach(btn => {
+        btn.addEventListener('click', function(event) {
+            event.stopPropagation();
+            const stakeAddress = this.dataset.stake;
+            deleteStakeGroup(stakeAddress);
         });
     });
 
@@ -2130,7 +2216,7 @@ function renderSingleWallet(wallet, blockchain, isGrouped) {
     return `
         <div class="wallet-item ${blockchain} ${groupedClass}" data-address="${wallet.address}" data-wallet-id="${walletId}">
             <div class="wallet-info">
-                <div class="wallet-label-container">
+                ${!isGrouped ? `<div class="wallet-label-container">
                     <span class="wallet-label">${wallet.label || blockchain.charAt(0).toUpperCase() + blockchain.slice(1) + ' Wallet'}</span>
                     <button class="edit-label-btn" title="Edit wallet name">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2145,7 +2231,7 @@ function renderSingleWallet(wallet, blockchain, isGrouped) {
                             <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                         </svg>
                     </button>
-                </div>
+                </div>` : ''}
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <span class="wallet-address">${formatAddressDisplay(wallet.address, blockchain)}</span>
                     <button class="copy-address-btn" data-address="${wallet.address}" title="Copy full address">
@@ -4811,6 +4897,103 @@ async function deleteWallet(address) {
         console.error('Error deleting wallet:', error);
         showStatus('Failed to delete wallet', true);
     }
+}
+
+// Delete all wallets in a stake key group
+async function deleteStakeGroup(stakeAddress) {
+    if (window.isDemoMode && window.isDemoMode()) {
+        window.showDemoModeAlert();
+        return;
+    }
+
+    const group = document.querySelector(`.wallet-group[data-stake="${stakeAddress}"]`);
+    const walletCount = group ? group.querySelectorAll('.wallet-item').length : 0;
+    const shortStake = stakeAddress.length > 20 ? stakeAddress.slice(0, 12) + '...' + stakeAddress.slice(-8) : stakeAddress;
+
+    if (!confirm(`Delete all ${walletCount} wallet(s) under this stake key?\n\n${shortStake}\n\nThis will remove them from tracking and from wallets.txt.`)) {
+        return;
+    }
+
+    try {
+        showStatus('Deleting stake group...');
+        const response = await authFetch(`${API_BASE}/wallets/stake-group/${encodeURIComponent(stakeAddress)}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            showStatus(`Deleted ${data.deleted} wallet(s)`);
+            if (group) group.remove();
+            await loadPortfolio();
+        } else {
+            const error = await response.json();
+            showStatus(error.detail || 'Failed to delete stake group', true);
+        }
+    } catch (error) {
+        console.error('Error deleting stake group:', error);
+        showStatus('Failed to delete stake group', true);
+    }
+}
+
+// Edit stake group label (inline edit)
+async function editStakeGroupLabel(stakeAddress, button) {
+    const header = button.closest('.wallet-group-header');
+    const labelSpan = header.querySelector('.group-label');
+    // Extract just the label text (before the stake key short span)
+    const stakeKeySpan = labelSpan.querySelector('.stake-key-short');
+    const currentLabel = labelSpan.childNodes[0].textContent.replace(/:\s*$/, '').trim();
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = currentLabel === 'Stake Key' ? '' : currentLabel;
+    input.className = 'edit-label-input';
+    input.maxLength = 50;
+    input.placeholder = 'Enter group name...';
+
+    labelSpan.style.display = 'none';
+    button.style.display = 'none';
+    labelSpan.parentNode.insertBefore(input, labelSpan);
+    input.focus();
+    input.select();
+
+    const saveLabel = async () => {
+        const newLabel = input.value.trim();
+        if (newLabel && newLabel !== currentLabel) {
+            try {
+                const response = await authFetch(`${API_BASE}/wallets/stake-group/${encodeURIComponent(stakeAddress)}/label`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ label: newLabel })
+                });
+
+                if (response.ok) {
+                    // Update the label text node (keep the stake key span)
+                    labelSpan.childNodes[0].textContent = newLabel + ': ';
+                    showStatus('Group name updated');
+                } else {
+                    showStatus('Failed to update group name', true);
+                }
+            } catch (error) {
+                console.error('Error updating group label:', error);
+                showStatus('Failed to update group name', true);
+            }
+        }
+
+        input.remove();
+        labelSpan.style.display = '';
+        button.style.display = '';
+    };
+
+    input.addEventListener('blur', saveLabel);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            input.blur();
+        } else if (e.key === 'Escape') {
+            input.value = currentLabel;
+            input.blur();
+        }
+    });
 }
 
 // Event Listeners

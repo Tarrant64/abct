@@ -6,13 +6,13 @@
     <title>Assets - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771209521">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771215736">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1771209521"></script>
+    <script src="/static/js/session-auth.js?v=1771215736"></script>
     <style>
         .assets-page {
             max-width: 1400px;
@@ -852,34 +852,8 @@
                     <button class="section-refresh-btn" onclick="event.stopPropagation(); refreshWallets();" title="Refresh wallets">&#10227;</button>
                     <span class="collapse-icon">&#9660;</span>
                 </div>
-                <div class="chain-tabs" id="selfCustodyChainTabs">
-                    <button class="chain-tab active" data-chain="all" onclick="filterSelfCustodyByChain('all')">All</button>
-                    <button class="chain-tab" data-chain="cardano" onclick="filterSelfCustodyByChain('cardano')">Cardano</button>
-                    <button class="chain-tab" data-chain="bitcoin" onclick="filterSelfCustodyByChain('bitcoin')">Bitcoin</button>
-                    <button class="chain-tab" data-chain="ethereum" onclick="filterSelfCustodyByChain('ethereum')">Ethereum</button>
-                    <button class="chain-tab" data-chain="solana" onclick="filterSelfCustodyByChain('solana')">Solana</button>
-                    <button class="chain-tab" data-chain="polygon" onclick="filterSelfCustodyByChain('polygon')">Polygon</button>
-                    <button class="chain-tab" data-chain="base" onclick="filterSelfCustodyByChain('base')">Base</button>
-                    <button class="chain-tab" data-chain="algorand" onclick="filterSelfCustodyByChain('algorand')">Algorand</button>
-                    <button class="chain-tab" data-chain="bsc" onclick="filterSelfCustodyByChain('bsc')">BNB Chain</button>
-                    <button class="chain-tab" data-chain="arbitrum" onclick="filterSelfCustodyByChain('arbitrum')">Arbitrum</button>
-                    <button class="chain-tab" data-chain="avalanche" onclick="filterSelfCustodyByChain('avalanche')">Avalanche</button>
-                    <button class="chain-tab" data-chain="tron" onclick="filterSelfCustodyByChain('tron')">Tron</button>
-                    <button class="chain-tab" data-chain="xrp" onclick="filterSelfCustodyByChain('xrp')">XRP</button>
-                    <button class="chain-tab" data-chain="hedera" onclick="filterSelfCustodyByChain('hedera')">Hedera</button>
-                    <button class="chain-tab" data-chain="multiversx" onclick="filterSelfCustodyByChain('multiversx')">MultiversX</button>
-                    <button class="chain-tab" data-chain="sui" onclick="filterSelfCustodyByChain('sui')">Sui</button>
-                    <button class="chain-tab" data-chain="aptos" onclick="filterSelfCustodyByChain('aptos')">Aptos</button>
-                    <button class="chain-tab" data-chain="filecoin" onclick="filterSelfCustodyByChain('filecoin')">Filecoin</button>
-                    <button class="chain-tab" data-chain="litecoin" onclick="filterSelfCustodyByChain('litecoin')">Litecoin</button>
-                    <button class="chain-tab" data-chain="dogecoin" onclick="filterSelfCustodyByChain('dogecoin')">Dogecoin</button>
-                    <button class="chain-tab" data-chain="zcash" onclick="filterSelfCustodyByChain('zcash')">Zcash</button>
-                    <button class="chain-tab" data-chain="tezos" onclick="filterSelfCustodyByChain('tezos')">Tezos</button>
-                    <button class="chain-tab" data-chain="stacks" onclick="filterSelfCustodyByChain('stacks')">Stacks</button>
-                    <button class="chain-tab" data-chain="vechain" onclick="filterSelfCustodyByChain('vechain')">VeChain</button>
-                    <button class="chain-tab" data-chain="cosmos" onclick="filterSelfCustodyByChain('cosmos')">Cosmos</button>
-                    <button class="chain-tab" data-chain="near" onclick="filterSelfCustodyByChain('near')">NEAR</button>
-                    <button class="chain-tab" data-chain="icp" onclick="filterSelfCustodyByChain('icp')">ICP</button>
+                <div class="chain-tabs" id="selfCustodyChainTabs" style="display: none;">
+                    <!-- Populated dynamically by JS based on which chains have wallets -->
                 </div>
                 <div id="walletsList" class="wallets-list section-content">
                     <p class="loading-state">Loading wallet data...</p>
@@ -1360,8 +1334,8 @@ base:0x789..." oninput="previewImport()"></textarea>
         <p>ABCT - Assets | <span id="appVersion" style="opacity: 0.6;">v1.12.3 (BUILD 1771184565)</span></p>
     </footer>
 
-    <script src="/static/js/app.js?v=1771209521"></script>
-    <script src="/static/js/wallet-management.js?v=1771209521"></script>
+    <script src="/static/js/app.js?v=1771215736"></script>
+    <script src="/static/js/wallet-management.js?v=1771215736"></script>
     <script>
         // Assets page tab switching
         const ASSETS_TABS = ['wallets', 'exchanges', 'defi', 'governance', 'tokens'];

@@ -393,6 +393,7 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
                     stake_groups[stake_address] = {
                         'stake_address': stake_address,
                         'stake_address_short': f"{stake_address[:12]}...{stake_address[-8:]}",
+                        'label': None,
                         'wallets': [],
                         'total_ada': 0.0,
                         'total_assets': 0,
@@ -407,6 +408,7 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
                 stake_groups[f"no_stake_{wallet['address']}"] = {
                     'stake_address': None,
                     'stake_address_short': None,
+                    'label': wallet['label'],
                     'wallets': [wallet_summary],
                     'total_ada': balance,
                     'total_assets': len(assets),
@@ -606,6 +608,14 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
             summary['icp']['total_icp'] += balance
             summary['icp']['native_assets_value_usd'] += native_assets_value_usd
             summary['icp']['wallets'].append(wallet_summary)
+
+    # Derive group label from first wallet with a label
+    for group in stake_groups.values():
+        if not group['label']:
+            for w in group['wallets']:
+                if w.get('label'):
+                    group['label'] = w['label']
+                    break
 
     # Convert stake groups dict to list and round totals
     summary['cardano']['stake_groups'] = [

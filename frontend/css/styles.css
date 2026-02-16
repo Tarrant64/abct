@@ -4392,6 +4392,37 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     background-color: rgba(255, 71, 87, 0.1);
 }
 
+.edit-group-label-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: all 0.2s ease;
+}
+
+.wallet-group-header:hover .edit-group-label-btn {
+    opacity: 1;
+}
+
+.edit-group-label-btn:hover {
+    color: var(--text-primary);
+    background-color: var(--bg-secondary);
+}
+
+.wallet-group-header:hover .delete-group-btn {
+    opacity: 1;
+}
+
+.wallet-group-header:hover .copy-address-btn {
+    opacity: 0.6;
+}
+
 .edit-label-input {
     background-color: var(--bg-secondary);
     border: 1px solid var(--accent-cardano);
