@@ -10685,3 +10685,128 @@ body.privacy-mode a[data-href] {
     background: rgba(102, 126, 234, 0.15);
     color: #667eea;
 }
+
+/* ===========================
+   Sankey Flow Diagram
+   =========================== */
+
+.sankey-container {
+    position: relative;
+    width: 100%;
+    height: 400px;
+    overflow: hidden;
+    border-radius: 12px;
+}
+
+.sankey-svg {
+    display: block;
+}
+
+.sankey-subtitle {
+    font-size: 0.8em;
+    font-weight: 400;
+    opacity: 0.6;
+}
+
+.sankey-node {
+    transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+.sankey-node:hover {
+    filter: brightness(1.2);
+}
+
+.sankey-node-loading {
+    animation: sankeyPulse 1s ease-in-out infinite;
+}
+
+@keyframes sankeyPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.sankey-link {
+    transition: fill-opacity 0.3s ease;
+}
+
+.sankey-label-name,
+.sankey-label-value {
+    pointer-events: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.sankey-label-name {
+    font-weight: 600;
+}
+
+.sankey-label-value {
+    font-weight: 400;
+}
+
+.sankey-tooltip {
+    position: absolute;
+    background: var(--bg-card, #0f3460);
+    border: 1px solid var(--border-color, #2a2a4a);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: var(--text-primary, #eaeaea);
+    pointer-events: none;
+    z-index: 100;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: opacity 0.15s ease;
+}
+
+/* Dark mode glow on nodes */
+[data-theme="dark-mode"] .sankey-node:hover {
+    filter: brightness(1.2) drop-shadow(0 0 6px rgba(0, 210, 106, 0.3));
+}
+
+/* Light theme */
+[data-theme="light"] .sankey-tooltip {
+    background: #ffffff;
+    border-color: #e5e7eb;
+    color: #1a1a2e;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .sankey-node:hover {
+    filter: brightness(0.9);
+}
+
+/* Cypherpunk theme */
+[data-theme="cypherpunk1"] .sankey-node:hover {
+    filter: brightness(1.3) drop-shadow(0 0 8px rgba(10, 189, 198, 0.5));
+}
+
+[data-theme="cypherpunk1"] .sankey-tooltip {
+    border-color: rgba(10, 189, 198, 0.4);
+    box-shadow: 0 0 12px rgba(10, 189, 198, 0.2), 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Ocean depths theme */
+[data-theme="ocean-depths"] .sankey-node:hover {
+    filter: brightness(1.2) drop-shadow(0 0 6px rgba(0, 210, 255, 0.3));
+}
+
+/* Sunset horizon theme */
+[data-theme="sunset-horizon"] .sankey-node:hover {
+    filter: brightness(1.2) drop-shadow(0 0 6px rgba(255, 107, 107, 0.3));
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .sankey-container {
+        height: 320px;
+    }
+    .sankey-subtitle {
+        display: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .sankey-container {
+        height: 260px;
+    }
+}
