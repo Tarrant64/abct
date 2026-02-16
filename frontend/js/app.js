@@ -9371,11 +9371,14 @@ async function openAssetBreakdown(blockchain) {
         modal.classList.remove('hidden');
         chainName.textContent = `${blockchain.charAt(0).toUpperCase() + blockchain.slice(1)} Asset Breakdown`;
 
-        // Clear any existing chart
+        // Clear any existing doughnut chart
         if (assetBreakdownChart) {
             assetBreakdownChart.destroy();
             assetBreakdownChart = null;
         }
+
+        // Initialize modal price chart (slight delay for container to become visible)
+        setTimeout(() => initModalPriceChart(blockchain), 50);
 
         // Check cache for instant display
         const cachedData = assetBreakdownCache.get(blockchain, 'data');
@@ -9571,11 +9574,230 @@ function closeAssetBreakdownModal() {
         el.classList.remove('selected');
     });
 
-    // Destroy chart
+    // Destroy doughnut chart
     if (assetBreakdownChart) {
         assetBreakdownChart.destroy();
         assetBreakdownChart = null;
     }
+
+    // Destroy modal price chart
+    destroyModalPriceChart();
+}
+
+// ============================================================================
+// Modal Price Chart (TradingView Lightweight Charts inside Asset Breakdown Modal)
+// ============================================================================
+
+let modalPriceChart = null;
+let modalPriceChartSeries = null;
+let modalPriceChartBlockchain = null;
+let modalPriceChartTimeframe = '1D';
+let modalPriceChartResizeObserver = null;
+
+function initModalPriceChart(blockchain) {
+    const container = document.getElementById('modalPriceChart');
+    if (!container || !window.LightweightCharts) {
+        console.warn('Modal price chart container or LightweightCharts not available');
+        return;
+    }
+
+    // Destroy any existing instance
+    destroyModalPriceChart();
+
+    modalPriceChartBlockchain = blockchain;
+    modalPriceChartTimeframe = '1D';
+
+    // Reset timeframe button states
+    document.querySelectorAll('.modal-tf-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tf === '1D');
+    });
+
+    const theme = document.documentElement.getAttribute('data-theme') || 'dark-mode';
+    const colors = getModalPriceChartColors(theme);
+
+    modalPriceChart = LightweightCharts.createChart(container, {
+        layout: {
+            background: { color: colors.background },
+            textColor: colors.text
+        },
+        grid: {
+            vertLines: { color: colors.gridLines },
+            horzLines: { color: colors.gridLines }
+        },
+        crosshair: {
+            mode: LightweightCharts.CrosshairMode.Normal
+        },
+        rightPriceScale: {
+            borderColor: colors.border
+        },
+        timeScale: {
+            borderColor: colors.border,
+            timeVisible: true,
+            secondsVisible: false
+        },
+        width: container.clientWidth,
+        height: container.clientHeight
+    });
+
+    modalPriceChartSeries = modalPriceChart.addAreaSeries({
+        topColor: colors.areaTop,
+        bottomColor: colors.areaBottom,
+        lineColor: colors.lineColor,
+        lineWidth: 2
+    });
+
+    // Handle resize
+    modalPriceChartResizeObserver = new ResizeObserver(() => {
+        if (modalPriceChart && container) {
+            modalPriceChart.applyOptions({
+                width: container.clientWidth,
+                height: container.clientHeight
+            });
+        }
+    });
+    modalPriceChartResizeObserver.observe(container);
+
+    // Load initial data
+    loadModalPriceChartData(blockchain, '1D');
+}
+
+function getModalPriceChartColors(theme) {
+    // Reuse getPriceChartColors if available, otherwise define inline
+    if (typeof getPriceChartColors === 'function') {
+        return getPriceChartColors(theme);
+    }
+    const themeColors = {
+        'dark-mode': {
+            background: '#1a1a2e',
+            text: '#eaeaea',
+            gridLines: '#2a2a4a',
+            border: '#3a3a5a',
+            areaTop: 'rgba(0, 210, 106, 0.56)',
+            areaBottom: 'rgba(0, 210, 106, 0.04)',
+            lineColor: 'rgba(0, 210, 106, 1)'
+        },
+        'light': {
+            background: '#ffffff',
+            text: '#1a1a2e',
+            gridLines: '#e5e7eb',
+            border: '#d1d5db',
+            areaTop: 'rgba(0, 184, 148, 0.4)',
+            areaBottom: 'rgba(0, 184, 148, 0.05)',
+            lineColor: 'rgba(0, 184, 148, 1)'
+        },
+        'ocean-depths': {
+            background: '#0a1929',
+            text: '#b8e7fb',
+            gridLines: '#1e3a52',
+            border: '#2d5a7b',
+            areaTop: 'rgba(56, 189, 248, 0.56)',
+            areaBottom: 'rgba(56, 189, 248, 0.04)',
+            lineColor: 'rgba(56, 189, 248, 1)'
+        },
+        'sunset-horizon': {
+            background: '#1a0f0a',
+            text: '#ffd8b8',
+            gridLines: '#3d2415',
+            border: '#5d3a25',
+            areaTop: 'rgba(251, 146, 60, 0.56)',
+            areaBottom: 'rgba(251, 146, 60, 0.04)',
+            lineColor: 'rgba(251, 146, 60, 1)'
+        },
+        'cypherpunk': {
+            background: '#000000',
+            text: '#00ff41',
+            gridLines: '#003311',
+            border: '#005522',
+            areaTop: 'rgba(0, 255, 65, 0.56)',
+            areaBottom: 'rgba(0, 255, 65, 0.04)',
+            lineColor: 'rgba(0, 255, 65, 1)'
+        }
+    };
+    return themeColors[theme] || themeColors['dark-mode'];
+}
+
+async function loadModalPriceChartData(blockchain, timeframe) {
+    // Use the shared priceChartCache if available
+    const cacheKey = `${blockchain}_${timeframe}`;
+    if (typeof priceChartCache !== 'undefined' && priceChartCache[cacheKey]) {
+        updateModalChartDisplay(priceChartCache[cacheKey]);
+        return;
+    }
+
+    try {
+        const response = await authFetch(`${API_BASE}/portfolio/charts/blockchain/${blockchain}?timeframe=${timeframe}`);
+        if (!response.ok) {
+            console.warn(`Modal price chart: HTTP ${response.status} for ${blockchain} ${timeframe}`);
+            return;
+        }
+
+        const data = await response.json();
+        if (!data.data || data.data.length === 0) {
+            console.warn('Modal price chart: No data available');
+            return;
+        }
+
+        // Store in shared cache
+        if (typeof priceChartCache !== 'undefined') {
+            priceChartCache[cacheKey] = data;
+        }
+
+        updateModalChartDisplay(data);
+    } catch (error) {
+        console.error('Error loading modal price chart:', error);
+    }
+}
+
+function updateModalChartDisplay(data) {
+    // Update chart series
+    if (modalPriceChartSeries && data.data && data.data.length > 0) {
+        modalPriceChartSeries.setData(data.data);
+    }
+
+    // Update price and change display
+    const priceEl = document.getElementById('modalChartPrice');
+    if (priceEl) {
+        priceEl.textContent = formatUSD(data.current_price);
+    }
+
+    const changeEl = document.getElementById('modalChartChange');
+    if (changeEl) {
+        const change = data.change_24h || 0;
+        changeEl.textContent = `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`;
+        changeEl.className = `modal-chart-change ${change >= 0 ? 'positive' : 'negative'}`;
+    }
+
+    // Fit chart to data
+    if (modalPriceChart) {
+        modalPriceChart.timeScale().fitContent();
+    }
+}
+
+function selectModalTimeframe(timeframe) {
+    modalPriceChartTimeframe = timeframe;
+
+    // Update button states
+    document.querySelectorAll('.modal-tf-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tf === timeframe);
+    });
+
+    if (modalPriceChartBlockchain) {
+        loadModalPriceChartData(modalPriceChartBlockchain, timeframe);
+    }
+}
+
+function destroyModalPriceChart() {
+    if (modalPriceChartResizeObserver) {
+        modalPriceChartResizeObserver.disconnect();
+        modalPriceChartResizeObserver = null;
+    }
+    if (modalPriceChart) {
+        modalPriceChart.remove();
+        modalPriceChart = null;
+        modalPriceChartSeries = null;
+    }
+    modalPriceChartBlockchain = null;
+    modalPriceChartTimeframe = '1D';
 }
 
 // ============================================================================

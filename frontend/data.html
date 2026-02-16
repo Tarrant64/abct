@@ -6,7 +6,7 @@
     <title>Data & Analytics - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771280071">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771282067">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <!-- Chart.js for analytics -->
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
@@ -15,7 +15,7 @@
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1771280071"></script>
+    <script src="/static/js/session-auth.js?v=1771282067"></script>
     <style>
         /* Wallet Manager Styles */
         .wallet-manager {
@@ -1670,6 +1670,25 @@
                         </div>
                     </div>
 
+                    <!-- Market Price Chart -->
+                    <div class="modal-price-chart-section">
+                        <div class="modal-price-chart-header">
+                            <div class="modal-chart-title-wrapper">
+                                <span class="modal-chart-price" id="modalChartPrice">$0.00</span>
+                                <span class="modal-chart-change" id="modalChartChange">--</span>
+                            </div>
+                            <div class="modal-timeframe-selector">
+                                <button class="modal-tf-btn" data-tf="1H" onclick="selectModalTimeframe('1H')">1H</button>
+                                <button class="modal-tf-btn" data-tf="4H" onclick="selectModalTimeframe('4H')">4H</button>
+                                <button class="modal-tf-btn active" data-tf="1D" onclick="selectModalTimeframe('1D')">1D</button>
+                                <button class="modal-tf-btn" data-tf="7D" onclick="selectModalTimeframe('7D')">7D</button>
+                                <button class="modal-tf-btn" data-tf="3M" onclick="selectModalTimeframe('3M')">3M</button>
+                                <button class="modal-tf-btn" data-tf="1Y" onclick="selectModalTimeframe('1Y')">1Y</button>
+                            </div>
+                        </div>
+                        <div id="modalPriceChart" class="modal-price-chart-container"></div>
+                    </div>
+
                     <div class="breakdown-stats">
                         <div class="stat">
                             <span class="label">Your Holdings</span>
@@ -1950,17 +1969,17 @@
         }
     </script>
 
-    <script src="/static/js/app.js?v=1771280071"></script>
+    <script src="/static/js/app.js?v=1771282067"></script>
 
     <!-- Transaction scripts -->
-    <script src="/static/js/transactions.js?v=1771280071"></script>
-    <script src="/static/js/transaction-analytics.js?v=1771280071"></script>
+    <script src="/static/js/transactions.js?v=1771282067"></script>
+    <script src="/static/js/transaction-analytics.js?v=1771282067"></script>
     <!-- Advanced Analytics tab -->
-    <script src="/static/js/analytics-tab.js?v=1771280071"></script>
+    <script src="/static/js/analytics-tab.js?v=1771282067"></script>
     <!-- Sankey flow diagram -->
-    <script src="/static/js/sankey-chart.js?v=1771280071"></script>
+    <script src="/static/js/sankey-chart.js?v=1771282067"></script>
     <!-- Wallet Intelligence tab -->
-    <script src="/static/js/wallet-intelligence.js?v=1771280071"></script>
+    <script src="/static/js/wallet-intelligence.js?v=1771282067"></script>
 
     <script>
         // Main tab switching function
