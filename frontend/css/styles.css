@@ -4375,9 +4375,10 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     cursor: pointer;
     padding: 4px;
     border-radius: 4px;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
     opacity: 0;
     transition: all 0.2s ease;
     margin-left: 4px;
@@ -4399,9 +4400,10 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     cursor: pointer;
     padding: 4px;
     border-radius: 4px;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
     opacity: 0;
     transition: all 0.2s ease;
 }
@@ -4897,8 +4899,10 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
 
 .wallet-group-header .group-info {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 8px;
     flex: 1;
     min-width: 0;
 }
@@ -4907,11 +4911,17 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     font-weight: 600;
     font-size: 0.95rem;
     color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
 }
 
 .wallet-group-header .group-wallet-count {
     font-size: 0.8rem;
     color: var(--text-secondary);
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .wallet-group-header .group-balance {
@@ -8678,6 +8688,7 @@ body.privacy-mode a[data-href] {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
 }
 
 .copy-address-btn:hover {
