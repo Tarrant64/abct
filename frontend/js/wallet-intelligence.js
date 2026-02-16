@@ -91,9 +91,16 @@
                 authFetch(`/intelligence/activity-heatmap?${qs}`),
             ]);
 
-            const flowData = await flowResp.json();
-            const counterData = await counterResp.json();
-            const heatData = await heatResp.json();
+            // Check for non-JSON responses (e.g. 404 HTML or auth redirect)
+            for (const [name, resp] of [['flow', flowResp], ['counter', counterResp], ['heat', heatResp]]) {
+                if (!resp.ok) {
+                    console.error(`Intelligence ${name} endpoint returned ${resp.status}`);
+                }
+            }
+
+            const flowData = flowResp.ok ? await flowResp.json() : { success: false };
+            const counterData = counterResp.ok ? await counterResp.json() : { success: false, counterparties: [] };
+            const heatData = heatResp.ok ? await heatResp.json() : { success: false, heatmap: [] };
 
             // Check for empty state
             const hasData = flowData.success && (flowData.total_sent > 0 || flowData.total_received > 0);
