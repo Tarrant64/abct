@@ -4316,7 +4316,16 @@ async function refreshDepinCard(protocol, btn) {
         btn.disabled = true;
     }
 
+    // Show scanning state on card
+    if (cardEl) {
+        const msgEl = cardEl.querySelector('.card-timeout-msg, .card-loading-msg');
+        if (msgEl) msgEl.innerHTML = '<span class="depin-spinner"></span> Scanning staking data...';
+    }
+
     try {
+        // Clear staking cache first to ensure fresh Blockfrost scan
+        await authFetch(`${API_BASE}/cache/clear/staking-cache`, { method: 'POST' }).catch(() => {});
+
         const addrs = window._defiWalletAddresses || {};
         let endpoints = [];
 
@@ -4379,7 +4388,7 @@ async function refreshDepinCard(protocol, btn) {
                     ${rewardsUrl ? `<a href="${rewardsUrl}" target="_blank" rel="noopener" class="action-link">Rewards</a>` : ''}
                 </div>
             `);
-            cardEl.classList.remove('depin-timeout');
+            cardEl.classList.remove('depin-timeout', 'depin-no-data', 'depin-loading');
             showStatus(`${protocol} data loaded`);
         } else if (cardEl) {
             showStatus(`No ${protocol} data found`, true);

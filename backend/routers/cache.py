@@ -199,6 +199,28 @@ async def clear_portfolio_snapshots_cache(user_id: int = Depends(verify_session)
         raise HTTPException(status_code=500, detail=f"Failed to clear cache: {str(e)}")
 
 
+@router.post("/clear/staking-cache")
+async def clear_staking_cache(user_id: int = Depends(verify_session)):
+    """Clear staking and DeFi position caches (system-wide, not user-scoped)."""
+    import aiosqlite
+    from config import DATABASE_PATH
+
+    try:
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            cursor = await db.execute(
+                "DELETE FROM cache WHERE key LIKE 'staking_positions_%' OR key LIKE 'iagon_staking_%' OR key LIKE 'defi_summary_%'"
+            )
+            deleted = cursor.rowcount
+            await db.commit()
+
+        logger.info(f"Cleared {deleted} staking/DeFi cache entries")
+        return {"success": True, "message": f"Cleared {deleted} staking cache entries", "deleted": deleted}
+
+    except Exception as e:
+        logger.error(f"Error clearing staking cache: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to clear cache: {str(e)}")
+
+
 @router.post("/clear/api-cache")
 async def clear_api_cache(user_id: int = Depends(verify_session)):
     """Clear all API response caches."""
