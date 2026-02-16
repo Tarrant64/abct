@@ -7527,11 +7527,19 @@ async function loadV2BalanceHistory(range) {
 
     const chartCanvas = document.getElementById('v2HistoryChart');
     const emptyState = document.getElementById('v2ChartEmptyState');
+    const loadingState = document.getElementById('v2ChartLoadingState');
     const coverageText = document.getElementById('v2CoverageText');
+
+    // Show loading spinner (unless we have a cached result)
+    const cached = chartDataCache.get(range, v2ChartMode);
+    if (!cached && loadingState) {
+        if (emptyState) emptyState.style.display = 'none';
+        loadingState.style.display = 'flex';
+    }
 
     try {
         // Check client-side cache first
-        let result = chartDataCache.get(range, v2ChartMode);
+        let result = cached;
         if (!result) {
             let url = `${API_BASE}/portfolio/chart/unified?range=${range}`;
             if (v2ChartMode === 'by_chain') url += '&by_chain=true';
@@ -7546,6 +7554,9 @@ async function loadV2BalanceHistory(range) {
                 chartDataCache.set(range, v2ChartMode, result);
             }
         }
+
+        // Hide loading spinner
+        if (loadingState) loadingState.style.display = 'none';
 
         if (result.data && result.data.length > 0) {
             if (emptyState) emptyState.style.display = 'none';
@@ -7574,6 +7585,7 @@ async function loadV2BalanceHistory(range) {
         }
     } catch (error) {
         console.error('Error loading v2 balance history:', error);
+        if (loadingState) loadingState.style.display = 'none';
         if (emptyState) {
             emptyState.style.display = 'flex';
             setSafeHTML(emptyState, '<p>Error loading on-chain history.</p><button class="btn btn-primary" onclick="startBalanceCollection()">Collect Historical Balances</button>');
@@ -7874,9 +7886,11 @@ function renderV2ChartByChain(data, chainList, range) {
 
 async function startBalanceCollection() {
     const emptyState = document.getElementById('v2ChartEmptyState');
+    const loadingState = document.getElementById('v2ChartLoadingState');
     const progress = document.getElementById('v2CollectionProgress');
 
     if (emptyState) emptyState.style.display = 'none';
+    if (loadingState) loadingState.style.display = 'none';
     if (progress) progress.style.display = 'block';
 
     try {
