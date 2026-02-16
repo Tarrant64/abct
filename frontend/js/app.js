@@ -2919,11 +2919,11 @@ function renderDefiPositions(data) {
 
     // Governance links for each token
     const governanceLinks = {
-        'INDY': 'https://app.indigoprotocol.io/governance',
+        'INDY': 'https://app.indigoprotocol.io/earn',
         'LQ': 'https://app.liqwid.finance/agora',
         'MIN': 'https://app.minswap.org/governance',
         'SUNDAE': 'https://vote.sundaeswap.finance/',
-        'STRIKE': 'https://app.strike.finance/governance',
+        'STRIKE': 'https://app.strikefinance.org/perpetuals/ada',
         'WRT': 'https://app.wingriders.com/governance',
         'LENFI': 'https://app.lenfi.io/governance',
         'OPTIM': 'https://app.optim.finance/governance',
@@ -3055,11 +3055,11 @@ function renderDefiPositions(data) {
 
 // Governance links for DeFi protocols
 const GOVERNANCE_LINKS = {
-    'INDY': { url: 'https://app.indigoprotocol.io/governance', name: 'Indigo' },
+    'INDY': { url: 'https://app.indigoprotocol.io/earn', name: 'Indigo' },
     'LQ': { url: 'https://app.liqwid.finance/agora', name: 'Liqwid' },
     'MIN': { url: 'https://app.minswap.org/governance', name: 'Minswap' },
     'SUNDAE': { url: 'https://vote.sundaeswap.finance/', name: 'SundaeSwap' },
-    'STRIKE': { url: 'https://app.strike.finance/governance', name: 'Strike' },
+    'STRIKE': { url: 'https://app.strikefinance.org/perpetuals/ada', name: 'Strike' },
     'WRT': { url: 'https://app.wingriders.com/governance', name: 'WingRiders' },
     'LENFI': { url: 'https://app.lenfi.io/governance', name: 'Lenfi' },
     'OPTIM': { url: 'https://app.optim.finance/governance', name: 'Optim' },
@@ -3458,7 +3458,10 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
     // ========================================
     // SECTION 1: STAKED POSITIONS
     // ========================================
-    const protocols = Object.keys(allStaking);
+    // Separate DePIN protocols from staking protocols
+    const allProtocols = Object.keys(allStaking);
+    const depinProtocols = allProtocols.filter(p => allStaking[p].category === 'depin');
+    const protocols = allProtocols.filter(p => allStaking[p].category !== 'depin');
     const liquidStakingPositions = defiData.positions_by_category?.['Liquid Staking'] || [];
     const hasAdaDelegation = adaDelegation && adaDelegation.totalAda > 0;
     const hasStakedSection = protocols.length > 0 || hasAdaDelegation || liquidStakingPositions.length > 0;
@@ -3623,6 +3626,63 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
                     <div class="card-value">${usdValue > 0 ? formatUSDBlur(usdValue) : '--'}</div>
                 </div>
             `;
+        }
+
+        html += `</div></div>`;
+    }
+
+    // ========================================
+    // SECTION 2: DePIN (Decentralized Physical Infrastructure)
+    // ========================================
+    if (depinProtocols.length > 0) {
+        html += `<div class="defi-gov-subsection">
+            <div class="defi-gov-subsection-header">
+                <span class="subsection-icon">\uD83D\uDCE1</span>
+                <span class="subsection-title">DePIN</span>
+            </div>
+            <div class="defi-gov-cards">`;
+
+        for (const protocol of depinProtocols) {
+            const protocolData = allStaking[protocol];
+            const stakes = protocolData.staked;
+            const rewardsUrl = protocolData.rewards_url;
+            const stakingChain = protocolData.blockchain || 'cardano';
+            const chainBadge = getGovChainBadge(stakingChain);
+
+            for (const [token, data] of Object.entries(stakes)) {
+                const tokenPrice = prices[token] || 0;
+                const usdValue = data.amount * tokenPrice;
+                totalStakedValue += usdValue;
+                stakedCount++;
+
+                // Build pending rewards display
+                let pendingHtml = '';
+                const pendingRewards = protocolData.pending_rewards || 0;
+                const rewardToken = protocolData.reward_token || '';
+                if (pendingRewards > 0 && rewardToken) {
+                    pendingHtml = `<div class="staking-pending-compact">
+                        <span class="pending-item">${pendingRewards.toFixed(2)} ${rewardToken}</span>
+                    </div>`;
+                }
+
+                const tokenLogoUrl = data.logo_url || `https://img.logokit.com/crypto/${token}?token=pk_fr08287a4c625f400f32a9&size=32`;
+
+                html += `
+                    <div class="defi-gov-card staked">
+                        <div class="card-header">
+                            <span class="token-logo-wrap"><img src="${tokenLogoUrl}" alt="${token}" class="token-logo-staking" onerror="this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>${token.slice(0,3)}</span>'"></span>
+                            <span class="protocol-name">${chainBadge} ${protocol}</span>
+                            <span class="depin-badge">\uD83D\uDCE1 Mining</span>
+                        </div>
+                        <div class="card-amount">${formatCryptoBlur(data.amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4}), token)}</div>
+                        <div class="card-value">${formatUSDBlur(usdValue)}</div>
+                        ${pendingHtml ? `<div class="card-pending">Pending: ${pendingHtml}</div>` : ''}
+                        <div class="card-actions">
+                            ${rewardsUrl ? `<a href="${rewardsUrl}" target="_blank" rel="noopener" class="action-link">Rewards</a>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
         }
 
         html += `</div></div>`;
