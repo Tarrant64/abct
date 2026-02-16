@@ -1324,7 +1324,7 @@ class DeFiService:
             with_timeout(self.get_indigo_staking(address), "Indigo"),
             with_timeout(self.get_strike_staking(address), "Strike", timeout=20),
             with_timeout(self.get_liqwid_staking(address), "Liqwid", timeout=25),
-            with_timeout(self.get_iagon_staking(address), "Iagon", timeout=30),
+            with_timeout(self.get_iagon_staking(address), "Iagon", timeout=10),
             with_timeout(self.get_surf_lending_positions(address), "Surf"),
             return_exceptions=True
         )

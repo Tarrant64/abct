@@ -3575,6 +3575,15 @@ async function loadDefiGovernance(forceRefresh = false) {
         setCachedDefi({ defiData, allStaking, exchangeStablecoins, nativeStablecoins, adaDelegation });
         updateDefiTimestamp();
 
+        // Auto-refresh DePIN cards that timed out (fetch via dedicated endpoint in background)
+        for (const [protocol, data] of Object.entries(allStaking)) {
+            if (data.category === 'depin' && data.status === 'timeout') {
+                console.log(`[DePIN] ${protocol} timed out in batch — auto-refreshing via dedicated endpoint`);
+                const btn = document.querySelector(`#depin-card-${protocol} .card-refresh-btn`);
+                refreshDepinCard(protocol, btn);  // fire-and-forget, no await
+            }
+        }
+
     } catch (error) {
         console.error('Error loading DeFi & Governance:', error);
         // Only show error state if we had no cached data
@@ -9902,15 +9911,64 @@ async function initBlockchainsTab() {
     if (_blockchainsInitialized) return;
     _blockchainsInitialized = true;
 
-    // Fetch portfolio data for blockchain cards
-    try {
-        const resp = await authFetch(`${API_BASE}/portfolio/summary`);
-        if (resp.ok) {
-            const data = await resp.json();
-            renderBlockchainCards(data);
+    // Ensure prices and portfolio data are loaded (needed for all charts)
+    // On data.html these globals may not be populated yet
+    const needsPrices = !prices || !prices.ADA || prices.ADA === 0;
+    const needsPortfolio = !lastPortfolioData;
+
+    if (needsPrices || needsPortfolio) {
+        try {
+            // Load prices and portfolio summary in parallel
+            const [, summaryResp] = await Promise.all([
+                needsPrices ? loadPrices() : Promise.resolve(),
+                needsPortfolio ? authFetch(`${API_BASE}/portfolio/summary`) : Promise.resolve(null)
+            ]);
+            if (summaryResp && summaryResp.ok) {
+                const data = await summaryResp.json();
+                // Populate globals that getChainAllocations() depends on
+                lastPortfolioData = data;
+                walletTotals.ADA = data.cardano?.total_ada || 0;
+                walletTotals.BTC = data.bitcoin?.total_btc || 0;
+                walletTotals.ETH = data.ethereum?.total_eth || 0;
+                walletTotals.SOL = data.solana?.total_sol || 0;
+                walletTotals.MATIC = data.polygon?.total_matic || 0;
+                walletTotals.ETH_BASE = data.base?.total_eth || 0;
+                walletTotals.ALGO = data.algorand?.total_algo || 0;
+                walletTotals.BNB = data.bsc?.total_bnb || 0;
+                walletTotals.ETH_ARB = data.arbitrum?.total_eth || 0;
+                walletTotals.AVAX = data.avalanche?.total_avax || 0;
+                walletTotals.TRX = data.tron?.total_trx || 0;
+                walletTotals.XRP = data.xrp?.total_xrp || 0;
+                walletTotals.HBAR = data.hedera?.total_hbar || 0;
+                walletTotals.EGLD = data.multiversx?.total_egld || 0;
+                walletTotals.SUI = data.sui?.total_sui || 0;
+                walletTotals.APT = data.aptos?.total_apt || 0;
+                walletTotals.FIL = data.filecoin?.total_fil || 0;
+                walletTotals.LTC = data.litecoin?.total_ltc || 0;
+                walletTotals.DOGE = data.dogecoin?.total_doge || 0;
+                walletTotals.ZEC = data.zcash?.total_zec || 0;
+                walletTotals.XTZ = data.tezos?.total_xtz || 0;
+                walletTotals.STX = data.stacks?.total_stx || 0;
+                walletTotals.VET = data.vechain?.total_vet || 0;
+                walletTotals.ATOM = data.cosmos?.total_atom || 0;
+                walletTotals.NEAR = data.near?.total_near || 0;
+                walletTotals.ICP = data.icp?.total_icp || 0;
+                renderBlockchainCards(data);
+            }
+        } catch (e) {
+            console.warn('[Blockchains] Failed to load prices/portfolio:', e);
         }
-    } catch (e) {
-        console.warn('[Blockchains] Failed to load portfolio data:', e);
+    } else {
+        // Data already loaded (e.g. on index.html), just render cards
+        try {
+            const resp = await authFetch(`${API_BASE}/portfolio/summary`);
+            if (resp.ok) {
+                const data = await resp.json();
+                renderBlockchainCards(data);
+            }
+        } catch (e) {
+            console.warn('[Blockchains] Failed to load portfolio data:', e);
+        }
     }
 
     // Initialize Sankey flow diagram
