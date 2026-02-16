@@ -3335,7 +3335,22 @@ async function loadDefiGovernance(forceRefresh = false) {
         // Phase 2: Render with DeFi data (staking shows as loading if no cache)
         document.body.classList.remove('defi-loading');
         if (!cached) {
-            renderDefiGovernance({}, defiData, exchangeStablecoins, nativeStablecoins, null);
+            // Pre-seed DePIN loading placeholders so cards appear immediately
+            const initialStaking = {};
+            const govTokens = defiData.positions_by_category?.['Governance Tokens'] || [];
+            const hasIAG = govTokens.some(p => (p.token || p.asset_name) === 'IAG');
+            if (hasIAG || cardanoWallets.length > 0) {
+                initialStaking['Iagon'] = {
+                    staked: {},
+                    category: 'depin',
+                    status: 'loading',
+                    reward_token: 'IAG',
+                    rewards_url: 'https://iagon.com/staking',
+                    blockchain: 'cardano',
+                    total_positions: 0
+                };
+            }
+            renderDefiGovernance(initialStaking, defiData, exchangeStablecoins, nativeStablecoins, null);
         }
 
         // Show subtle updating indicator for staking section (only if no cache)
@@ -3778,6 +3793,23 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
             const chainBadge = getGovChainBadge(stakingChain);
             const refreshBtn = `<button class="card-refresh-btn" onclick="refreshDepinCard('${protocol}', this)" title="Refresh ${protocol}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>`;
 
+            // Loading state — show placeholder card with spinner
+            if (protocolData.status === 'loading') {
+                const fallbackToken = protocolData.reward_token || protocol;
+                const tokenLogoUrl = `https://img.logokit.com/crypto/${fallbackToken}?token=LOGOKIT_KEY_REMOVED&size=32`;
+                html += `
+                    <div class="defi-gov-card staked depin-loading" id="depin-card-${protocol}">
+                        <div class="card-header">
+                            <span class="token-logo-wrap"><img src="${tokenLogoUrl}" alt="${fallbackToken}" class="token-logo-staking" onerror="this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>${fallbackToken.slice(0,3)}</span>'"></span>
+                            <span class="protocol-name">${chainBadge} ${protocol}</span>
+                            <span class="depin-badge">\uD83D\uDCE1 Mining</span>
+                        </div>
+                        <div class="card-loading-msg"><span class="depin-spinner"></span> Scanning staking data...</div>
+                    </div>
+                `;
+                continue;
+            }
+
             // Timeout/error state — show placeholder card with retry
             if (protocolData.status === 'timeout') {
                 const fallbackToken = protocolData.reward_token || protocol;
@@ -3793,6 +3825,28 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
                         <div class="card-timeout-msg">Data unavailable — timed out</div>
                         <div class="card-actions">
                             <button class="action-link retry-link" onclick="refreshDepinCard('${protocol}', this)">Retry</button>
+                        </div>
+                    </div>
+                `;
+                continue;
+            }
+
+            // No staking found — show card with refresh option
+            if (protocolData.status === 'no_staking') {
+                const fallbackToken = protocolData.reward_token || protocol;
+                const tokenLogoUrl = `https://img.logokit.com/crypto/${fallbackToken}?token=LOGOKIT_KEY_REMOVED&size=32`;
+                html += `
+                    <div class="defi-gov-card staked depin-no-data" id="depin-card-${protocol}">
+                        <div class="card-header">
+                            <span class="token-logo-wrap"><img src="${tokenLogoUrl}" alt="${fallbackToken}" class="token-logo-staking" onerror="this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>${fallbackToken.slice(0,3)}</span>'"></span>
+                            <span class="protocol-name">${chainBadge} ${protocol}</span>
+                            <span class="depin-badge">\uD83D\uDCE1 Mining</span>
+                            ${refreshBtn}
+                        </div>
+                        <div class="card-timeout-msg">No staked ${fallbackToken} found</div>
+                        <div class="card-actions">
+                            <button class="action-link retry-link" onclick="refreshDepinCard('${protocol}', this)">Refresh</button>
+                            ${protocolData.rewards_url ? `<a href="${protocolData.rewards_url}" target="_blank" rel="noopener" class="action-link">Staking</a>` : ''}
                         </div>
                     </div>
                 `;

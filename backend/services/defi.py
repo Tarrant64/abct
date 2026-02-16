@@ -750,11 +750,11 @@ class DeFiService:
         """
         try:
             client = get_client("blockfrost", timeout=15.0)
-            # Get transactions for the address (limit to 3 pages = 300 txs max)
+            # Get ALL transactions for the address (no page limit — outer timeout protects us)
             all_txs = []
             page = 1
 
-            while page <= 3:
+            while True:
                 response = await client.get(
                     f"{BLOCKFROST_BASE_URL}/addresses/{address}/transactions",
                     headers=self.headers,
@@ -769,7 +769,11 @@ class DeFiService:
                     break
 
                 all_txs.extend(txs)
+                if len(txs) < 100:
+                    break  # Last page
                 page += 1
+
+            logger.info(f"[Iagon] Scanned {len(all_txs)} transactions across {page} pages for {address[:20]}...")
 
             if not all_txs:
                 return None
@@ -856,6 +860,9 @@ class DeFiService:
                     total_withdrawals += user_receives_iag
 
             net_staked = total_deposits - total_withdrawals
+
+            logger.info(f"[Iagon] {address[:20]}... deposits={total_deposits/1_000_000:.2f} IAG, "
+                         f"withdrawals={total_withdrawals/1_000_000:.2f} IAG, net={net_staked/1_000_000:.2f} IAG")
 
             if net_staked <= 0:
                 return None
@@ -1473,17 +1480,29 @@ class DeFiService:
             }
             staking['total_positions'] += iagon['position_count']
 
-        # If Iagon timed out/errored and no stale fallback, add placeholder
-        if 'Iagon' not in staking['protocols'] and 'Iagon' in timed_out:
-            staking['protocols']['Iagon'] = {
-                'staked': [],
-                'category': 'depin',
-                'status': 'timeout',
-                'reward_token': 'IAG',
-                'rewards_url': 'https://iagon.com/staking',
-                'blockchain': 'cardano',
-                'total_positions': 0,
-            }
+        # Always include Iagon in response so the DePIN card is always visible
+        if 'Iagon' not in staking['protocols']:
+            if 'Iagon' in timed_out:
+                staking['protocols']['Iagon'] = {
+                    'staked': [],
+                    'category': 'depin',
+                    'status': 'timeout',
+                    'reward_token': 'IAG',
+                    'rewards_url': 'https://iagon.com/staking',
+                    'blockchain': 'cardano',
+                    'total_positions': 0,
+                }
+            else:
+                # Scan completed but found no staked IAG — still show the card
+                staking['protocols']['Iagon'] = {
+                    'staked': [],
+                    'category': 'depin',
+                    'status': 'no_staking',
+                    'reward_token': 'IAG',
+                    'rewards_url': 'https://iagon.com/staking',
+                    'blockchain': 'cardano',
+                    'total_positions': 0,
+                }
 
         # Assemble Surf Lending
         if surf:

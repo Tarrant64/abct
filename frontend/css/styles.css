@@ -7227,6 +7227,34 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     animation: spin 1s linear infinite;
 }
 
+.defi-gov-card.depin-loading {
+    opacity: 0.7;
+}
+
+.defi-gov-card .card-loading-msg {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    padding: 8px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.depin-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--text-secondary);
+    border-top-color: var(--accent-success);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.defi-gov-card.depin-no-data {
+    opacity: 0.7;
+    border-style: dashed;
+}
+
 .defi-gov-card.depin-timeout {
     opacity: 0.7;
     border-style: dashed;
