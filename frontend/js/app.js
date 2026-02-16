@@ -3255,6 +3255,15 @@ async function loadDefiGovernance(forceRefresh = false) {
 
         // Cache < 2 min old: skip background refresh entirely (unless forced)
         if (!forceRefresh && cacheAge < 2 * 60 * 1000) {
+            // Ensure wallet addresses are available for per-card refresh buttons
+            if (!window._defiWalletAddresses) {
+                authFetch(`${API_BASE}/wallets`).then(r => r.json()).then(data => {
+                    window._defiWalletAddresses = {
+                        cardano: data.wallets.filter(w => w.blockchain === 'cardano').map(w => w.address),
+                        solana: data.wallets.filter(w => w.blockchain === 'solana').map(w => w.address)
+                    };
+                }).catch(() => {});
+            }
             return;
         }
     } else {
@@ -3459,6 +3468,10 @@ async function loadDefiGovernance(forceRefresh = false) {
                         allStaking[protocol].staked[stake.token].positions += stake.positions;
                         if (stake.logo_url && !allStaking[protocol].staked[stake.token].logo_url) {
                             allStaking[protocol].staked[stake.token].logo_url = stake.logo_url;
+                        }
+                        // Clear placeholder status when real staked data arrives
+                        if (stake.amount > 0 && allStaking[protocol].status) {
+                            allStaking[protocol].status = null;
                         }
                     }
 
@@ -3823,9 +3836,6 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
                             ${refreshBtn}
                         </div>
                         <div class="card-timeout-msg">Data unavailable — timed out</div>
-                        <div class="card-actions">
-                            <button class="action-link retry-link" onclick="refreshDepinCard('${protocol}', this)">Retry</button>
-                        </div>
                     </div>
                 `;
                 continue;
@@ -3845,7 +3855,6 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
                         </div>
                         <div class="card-timeout-msg">No staked ${fallbackToken} found</div>
                         <div class="card-actions">
-                            <button class="action-link retry-link" onclick="refreshDepinCard('${protocol}', this)">Refresh</button>
                             ${protocolData.rewards_url ? `<a href="${protocolData.rewards_url}" target="_blank" rel="noopener" class="action-link">Staking</a>` : ''}
                         </div>
                     </div>
