@@ -12,6 +12,12 @@
     let _chainFlowChart = null;
     let _currentDays = 365;
     let _currentChain = '';
+    let _allCounterparties = [];
+    let _cpPage = 1;
+    let _cpPageSize = 25;
+    let _allLargeTx = [];
+    let _ltPage = 1;
+    let _ltPageSize = 25;
 
     // Color palette
     const FLOW_COLORS = {
@@ -87,7 +93,7 @@
         try {
             const [flowResp, counterResp, heatResp] = await Promise.all([
                 authFetch(`/intelligence/flow-summary?${qs}`),
-                authFetch(`/intelligence/counterparties?${qs}`),
+                authFetch(`/intelligence/counterparties?${qs}&limit=200`),
                 authFetch(`/intelligence/activity-heatmap?${qs}`),
             ]);
 
@@ -134,6 +140,9 @@
             if (heatData.success) {
                 renderActivityHeatmap(heatData.heatmap || []);
             }
+
+            // Load large transactions with its own filters
+            loadLargeTransactions();
         } catch (err) {
             console.error('Intelligence tab load error:', err);
         }
@@ -150,8 +159,14 @@
         const netSub = document.getElementById('intelNetFlowSub');
 
         if (cpEl) cpEl.textContent = (data.unique_counterparties || 0).toLocaleString();
-        if (cexEl) cexEl.textContent = ((data.cex_deposits || 0) + (data.cex_withdrawals || 0)).toLocaleString();
-        if (cexSub) cexSub.textContent = `${data.cex_deposits || 0} deposits / ${data.cex_withdrawals || 0} withdrawals`;
+        const totalCex = (data.cex_deposits || 0) + (data.cex_withdrawals || 0);
+        if (cexEl) cexEl.textContent = totalCex.toLocaleString();
+        const exchangeTrades = data.exchange_trades || 0;
+        if (cexSub) {
+            let sub = `${data.cex_deposits || 0} deposits / ${data.cex_withdrawals || 0} withdrawals`;
+            if (exchangeTrades > 0) sub += ` (${exchangeTrades} exchange trades)`;
+            cexSub.textContent = sub;
+        }
         if (selfEl) selfEl.textContent = (data.self_transfers || 0).toLocaleString();
 
         if (netEl) {
@@ -348,11 +363,12 @@
         const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         let svg = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" style="display:block;max-width:100%;">`;
 
-        // Hour labels (top)
+        // Hour labels (top) — 12-hour format
         for (let h = 0; h < cols; h++) {
             if (h % 3 === 0) {
                 const x = labelWidth + h * (cellSize + cellGap) + cellSize / 2;
-                svg += `<text x="${x}" y="14" text-anchor="middle" fill="${opts.tickColor}" font-size="11" class="heatmap-axis-label">${h}h</text>`;
+                const label = formatHour12(h);
+                svg += `<text x="${x}" y="14" text-anchor="middle" fill="${opts.tickColor}" font-size="11" class="heatmap-axis-label">${label}</text>`;
             }
         }
 
@@ -391,7 +407,7 @@
         const tooltip = document.getElementById('intelHeatmapTooltip');
         if (!tooltip) return;
         const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        tooltip.textContent = `${dayNames[day]} ${hour}:00 UTC — ${count} transaction${count !== 1 ? 's' : ''}`;
+        tooltip.textContent = `${dayNames[day]} ${formatHour12(hour)} UTC — ${count} transaction${count !== 1 ? 's' : ''}`;
         tooltip.style.display = 'block';
 
         const rect = evt.target.getBoundingClientRect();
@@ -408,16 +424,26 @@
     // ---- Counterparties Table ----
 
     function renderCounterpartiesTable(counterparties) {
+        _allCounterparties = counterparties;
+        _cpPage = 1;
+        renderCounterpartiesPage();
+    }
+
+    function renderCounterpartiesPage() {
         const tbody = document.getElementById('intelCounterpartiesBody');
         if (!tbody) return;
 
-        if (!counterparties.length) {
+        if (!_allCounterparties.length) {
             tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#888;">No counterparty data found</td></tr>';
+            renderCpPagination();
             return;
         }
 
+        const start = (_cpPage - 1) * _cpPageSize;
+        const page = _allCounterparties.slice(start, start + _cpPageSize);
+
         let html = '';
-        for (const cp of counterparties) {
+        for (const cp of page) {
             const addr = cp.address || '';
             const truncated = addr.length > 16 ? addr.slice(0, 8) + '...' + addr.slice(-6) : addr;
             const badgeClass = cp.label_type === 'cex' ? 'cex' : cp.label_type === 'self' ? 'self' : 'unknown';
@@ -440,6 +466,161 @@
             </tr>`;
         }
         tbody.innerHTML = html;
+        renderCpPagination();
+    }
+
+    function renderCpPagination() {
+        const container = document.getElementById('intelCpPagination');
+        if (!container) return;
+
+        const total = _allCounterparties.length;
+        const totalPages = Math.max(1, Math.ceil(total / _cpPageSize));
+        const start = (_cpPage - 1) * _cpPageSize + 1;
+        const end = Math.min(_cpPage * _cpPageSize, total);
+
+        if (total === 0) {
+            container.innerHTML = '';
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="cp-pagination-controls">
+                <span class="cp-pagination-info">${start}-${end} of ${total}</span>
+                <button class="cp-page-btn" onclick="changeCpPage(-1)" ${_cpPage <= 1 ? 'disabled' : ''}>&laquo; Prev</button>
+                <span class="cp-page-num">Page ${_cpPage} / ${totalPages}</span>
+                <button class="cp-page-btn" onclick="changeCpPage(1)" ${_cpPage >= totalPages ? 'disabled' : ''}>Next &raquo;</button>
+            </div>
+        `;
+    }
+
+    window.changeCpPage = function(delta) {
+        const totalPages = Math.max(1, Math.ceil(_allCounterparties.length / _cpPageSize));
+        const newPage = _cpPage + delta;
+        if (newPage < 1 || newPage > totalPages) return;
+        _cpPage = newPage;
+        renderCounterpartiesPage();
+    };
+
+    window.changeCpPageSize = function(size) {
+        _cpPageSize = parseInt(size) || 25;
+        _cpPage = 1;
+        renderCounterpartiesPage();
+    };
+
+    // ---- Large Transactions ----
+
+    async function loadLargeTransactions() {
+        const minUsd = document.getElementById('largeTxMinUsd');
+        const daysEl = document.getElementById('largeTxDays');
+        const min = minUsd ? minUsd.value : 100;
+        const days = daysEl ? daysEl.value : 0;
+
+        const params = new URLSearchParams();
+        params.set('min_usd', min);
+        params.set('days', days);
+        params.set('limit', '200');
+        if (_currentChain) params.set('blockchain', _currentChain);
+
+        try {
+            const resp = await authFetch(`/intelligence/large-transactions?${params.toString()}`);
+            const ct = resp.headers.get('content-type') || '';
+            if (!resp.ok || !ct.includes('application/json')) {
+                console.error(`Large tx endpoint returned ${resp.status}: ${resp.url}`);
+                return;
+            }
+            const data = await resp.json();
+            if (data.success) {
+                _allLargeTx = data.transactions || [];
+                _ltPage = 1;
+                renderLargeTxPage();
+            }
+        } catch (err) {
+            console.error('Large transactions load error:', err);
+        }
+    }
+
+    function renderLargeTxPage() {
+        const tbody = document.getElementById('intelLargeTxBody');
+        if (!tbody) return;
+
+        if (!_allLargeTx.length) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#888;">No large transactions found</td></tr>';
+            renderLtPagination();
+            return;
+        }
+
+        const start = (_ltPage - 1) * _ltPageSize;
+        const page = _allLargeTx.slice(start, start + _ltPageSize);
+
+        let html = '';
+        for (const tx of page) {
+            const chain = (tx.blockchain || '').charAt(0).toUpperCase() + (tx.blockchain || '').slice(1);
+            const dirColor = tx.direction === 'sent' ? '#ef4444' : '#22c55e';
+            const dirArrow = tx.direction === 'sent' ? '&#8593; Sent' : '&#8595; Received';
+            const cpAddr = tx.counterparty || '';
+            const cpTrunc = cpAddr.length > 16 ? cpAddr.slice(0, 8) + '...' + cpAddr.slice(-6) : cpAddr;
+            const cpLabel = tx.counterparty_label || 'Unknown';
+            const txDate = tx.tx_time ? formatDate(tx.tx_time) : '--';
+            const hashShort = tx.tx_hash_short || (tx.tx_hash ? tx.tx_hash.slice(0, 10) + '...' : '--');
+
+            html += `<tr>
+                <td>${txDate}</td>
+                <td>${escapeHtml(chain)}</td>
+                <td style="color:${dirColor};font-weight:600">${dirArrow}</td>
+                <td>${escapeHtml(tx.token_symbol || '')}</td>
+                <td class="privacy-sensitive">${formatAmount(tx.amount, tx.token_symbol)}</td>
+                <td class="privacy-sensitive" style="font-weight:600">${formatUsd(tx.usd_value || 0)}</td>
+                <td><span class="counterparty-address" title="${escapeHtml(cpAddr)}">${escapeHtml(cpTrunc)}</span>
+                    ${cpLabel !== 'Unknown' ? `<span class="counterparty-badge ${cpLabel === 'Self' ? 'self' : 'cex'}" style="margin-left:4px;font-size:10px">${escapeHtml(cpLabel)}</span>` : ''}</td>
+                <td><span class="counterparty-address" title="${escapeHtml(tx.tx_hash || '')}">${escapeHtml(hashShort)}</span></td>
+            </tr>`;
+        }
+        tbody.innerHTML = html;
+        renderLtPagination();
+    }
+
+    function renderLtPagination() {
+        const container = document.getElementById('intelLargeTxPagination');
+        if (!container) return;
+
+        const total = _allLargeTx.length;
+        const totalPages = Math.max(1, Math.ceil(total / _ltPageSize));
+        const start = (_ltPage - 1) * _ltPageSize + 1;
+        const end = Math.min(_ltPage * _ltPageSize, total);
+
+        if (total === 0) {
+            container.innerHTML = '';
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="cp-pagination-controls">
+                <span class="cp-pagination-info">${start}-${end} of ${total}</span>
+                <button class="cp-page-btn" onclick="changeLtPage(-1)" ${_ltPage <= 1 ? 'disabled' : ''}>&laquo; Prev</button>
+                <span class="cp-page-num">Page ${_ltPage} / ${totalPages}</span>
+                <button class="cp-page-btn" onclick="changeLtPage(1)" ${_ltPage >= totalPages ? 'disabled' : ''}>Next &raquo;</button>
+            </div>
+        `;
+    }
+
+    window.changeLtPage = function(delta) {
+        const totalPages = Math.max(1, Math.ceil(_allLargeTx.length / _ltPageSize));
+        const newPage = _ltPage + delta;
+        if (newPage < 1 || newPage > totalPages) return;
+        _ltPage = newPage;
+        renderLargeTxPage();
+    };
+
+    window.changeLargeTxFilter = function() {
+        loadLargeTransactions();
+    };
+
+    function formatAmount(val, symbol) {
+        if (!val) return '0';
+        // Format based on value magnitude
+        if (val >= 1000) return val.toLocaleString(undefined, { maximumFractionDigits: 2 });
+        if (val >= 1) return val.toLocaleString(undefined, { maximumFractionDigits: 4 });
+        return val.toLocaleString(undefined, { maximumFractionDigits: 6 });
     }
 
     window.copyAddress = function(addr) {
@@ -475,6 +656,13 @@
         const div = document.createElement('div');
         div.textContent = str;
         return div.innerHTML;
+    }
+
+    function formatHour12(h) {
+        if (h === 0) return '12AM';
+        if (h < 12) return h + 'AM';
+        if (h === 12) return '12PM';
+        return (h - 12) + 'PM';
     }
 
     function interpolateColor(lowRgba, highRgba, t) {

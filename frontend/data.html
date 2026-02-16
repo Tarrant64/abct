@@ -6,7 +6,7 @@
     <title>Data & Analytics - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771267555">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771269957">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <!-- Chart.js for analytics -->
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
@@ -15,7 +15,7 @@
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1771267555"></script>
+    <script src="/static/js/session-auth.js?v=1771269957"></script>
     <style>
         /* Wallet Manager Styles */
         .wallet-manager {
@@ -1491,9 +1491,65 @@
                 <div class="intelligence-heatmap-tooltip" id="intelHeatmapTooltip" style="display:none;"></div>
             </div>
 
+            <!-- Large Transactions Table -->
+            <div class="intelligence-table-section" id="intelLargeTxSection">
+                <div class="intelligence-table-header">
+                    <h3 class="analytics-title">Large Transactions</h3>
+                    <div class="large-tx-filters">
+                        <label>Min $</label>
+                        <select id="largeTxMinUsd" onchange="changeLargeTxFilter()">
+                            <option value="100" selected>$100+</option>
+                            <option value="250">$250+</option>
+                            <option value="500">$500+</option>
+                            <option value="1000">$1,000+</option>
+                            <option value="2500">$2,500+</option>
+                            <option value="5000">$5,000+</option>
+                        </select>
+                        <label>Period</label>
+                        <select id="largeTxDays" onchange="changeLargeTxFilter()">
+                            <option value="0" selected>All Time</option>
+                            <option value="365">1 Year</option>
+                            <option value="180">6 Months</option>
+                            <option value="90">90 Days</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="table-scroll-wrapper">
+                    <table class="chain-financials-table" id="intelLargeTxTable">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Chain</th>
+                                <th>Direction</th>
+                                <th>Token</th>
+                                <th>Amount</th>
+                                <th>USD Value</th>
+                                <th>Counterparty</th>
+                                <th>Tx Hash</th>
+                            </tr>
+                        </thead>
+                        <tbody id="intelLargeTxBody">
+                            <tr><td colspan="8" style="text-align:center;color:#888;">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="intelLargeTxPagination" class="cp-pagination-wrapper"></div>
+            </div>
+
             <!-- Counterparties Table -->
             <div class="intelligence-table-section">
-                <h3 class="analytics-title">Top Counterparties</h3>
+                <div class="intelligence-table-header">
+                    <h3 class="analytics-title">Top Counterparties</h3>
+                    <div class="cp-page-size-select">
+                        <label>Show</label>
+                        <select onchange="changeCpPageSize(this.value)">
+                            <option value="25" selected>25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                        <label>per page</label>
+                    </div>
+                </div>
                 <div class="table-scroll-wrapper">
                     <table class="chain-financials-table" id="intelCounterpartiesTable">
                         <thead>
@@ -1513,6 +1569,7 @@
                         </tbody>
                     </table>
                 </div>
+                <div id="intelCpPagination" class="cp-pagination-wrapper"></div>
             </div>
 
             <!-- Empty state -->
@@ -1831,17 +1888,17 @@
         }
     </script>
 
-    <script src="/static/js/app.js?v=1771267555"></script>
+    <script src="/static/js/app.js?v=1771269957"></script>
 
     <!-- Transaction scripts -->
-    <script src="/static/js/transactions.js?v=1771267555"></script>
-    <script src="/static/js/transaction-analytics.js?v=1771267555"></script>
+    <script src="/static/js/transactions.js?v=1771269957"></script>
+    <script src="/static/js/transaction-analytics.js?v=1771269957"></script>
     <!-- Advanced Analytics tab -->
-    <script src="/static/js/analytics-tab.js?v=1771267555"></script>
+    <script src="/static/js/analytics-tab.js?v=1771269957"></script>
     <!-- Sankey flow diagram -->
-    <script src="/static/js/sankey-chart.js?v=1771267555"></script>
+    <script src="/static/js/sankey-chart.js?v=1771269957"></script>
     <!-- Wallet Intelligence tab -->
-    <script src="/static/js/wallet-intelligence.js?v=1771267555"></script>
+    <script src="/static/js/wallet-intelligence.js?v=1771269957"></script>
 
     <script>
         // Main tab switching function
