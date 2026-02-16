@@ -3255,6 +3255,15 @@ async function loadDefiGovernance(forceRefresh = false) {
 
         // Cache < 2 min old: skip background refresh entirely (unless forced)
         if (!forceRefresh && cacheAge < 2 * 60 * 1000) {
+            // Ensure wallet addresses are available for per-card refresh buttons
+            if (!window._defiWalletAddresses) {
+                authFetch(`${API_BASE}/wallets`).then(r => r.json()).then(data => {
+                    window._defiWalletAddresses = {
+                        cardano: data.wallets.filter(w => w.blockchain === 'cardano').map(w => w.address),
+                        solana: data.wallets.filter(w => w.blockchain === 'solana').map(w => w.address)
+                    };
+                }).catch(() => {});
+            }
             return;
         }
     } else {
@@ -3619,7 +3628,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
             <div class="defi-gov-subsection-header">
                 <span class="subsection-icon">🔒</span>
                 <span class="subsection-title">Staked Positions</span>
-                <button class="staking-refresh-btn" onclick="refreshStakingOnly(this)" title="Refresh staking data">
+                <button class="staking-refresh-btn" title="Refresh staking data">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                 </button>
             </div>
@@ -3734,7 +3743,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
                 html += `
                     <div class="defi-gov-card staked">
                         <div class="card-header">
-                            <span class="token-logo-wrap"><img src="${tokenLogoUrl}" alt="${token}" class="token-logo-staking" onerror="this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>${token.slice(0,3)}</span>'"></span>
+                            <span class="token-logo-wrap"><img src="${tokenLogoUrl}" alt="${token}" class="token-logo-staking"></span>
                             <span class="protocol-name">${chainBadge} ${protocol}</span>
                             <span class="staked-badge">Staked</span>
                         </div>
@@ -3795,7 +3804,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
             const rewardsUrl = protocolData.rewards_url;
             const stakingChain = protocolData.blockchain || 'cardano';
             const chainBadge = getGovChainBadge(stakingChain);
-            const refreshBtn = `<button class="card-refresh-btn" onclick="refreshDepinCard('${protocol}', this)" title="Refresh ${protocol}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>`;
+            const refreshBtn = `<button class="card-refresh-btn" data-protocol="${protocol}" title="Refresh ${protocol}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>`;
 
             // Loading state — show placeholder card with spinner
             if (protocolData.status === 'loading') {
@@ -3804,7 +3813,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
                 html += `
                     <div class="defi-gov-card staked depin-loading" id="depin-card-${protocol}">
                         <div class="card-header">
-                            <span class="token-logo-wrap"><img src="${tokenLogoUrl}" alt="${fallbackToken}" class="token-logo-staking" onerror="this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>${fallbackToken.slice(0,3)}</span>'"></span>
+                            <span class="token-logo-wrap"><img src="${tokenLogoUrl}" alt="${fallbackToken}" class="token-logo-staking"></span>
                             <span class="protocol-name">${chainBadge} ${protocol}</span>
                             <span class="depin-badge">\uD83D\uDCE1 Mining</span>
                         </div>
@@ -3821,7 +3830,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
                 html += `
                     <div class="defi-gov-card staked depin-timeout" id="depin-card-${protocol}">
                         <div class="card-header">
-                            <span class="token-logo-wrap"><img src="${tokenLogoUrl}" alt="${fallbackToken}" class="token-logo-staking" onerror="this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>${fallbackToken.slice(0,3)}</span>'"></span>
+                            <span class="token-logo-wrap"><img src="${tokenLogoUrl}" alt="${fallbackToken}" class="token-logo-staking"></span>
                             <span class="protocol-name">${chainBadge} ${protocol}</span>
                             <span class="depin-badge">\uD83D\uDCE1 Mining</span>
                             ${refreshBtn}
@@ -3839,7 +3848,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
                 html += `
                     <div class="defi-gov-card staked depin-no-data" id="depin-card-${protocol}">
                         <div class="card-header">
-                            <span class="token-logo-wrap"><img src="${tokenLogoUrl}" alt="${fallbackToken}" class="token-logo-staking" onerror="this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>${fallbackToken.slice(0,3)}</span>'"></span>
+                            <span class="token-logo-wrap"><img src="${tokenLogoUrl}" alt="${fallbackToken}" class="token-logo-staking"></span>
                             <span class="protocol-name">${chainBadge} ${protocol}</span>
                             <span class="depin-badge">\uD83D\uDCE1 Mining</span>
                             ${refreshBtn}
@@ -3875,7 +3884,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
                 html += `
                     <div class="defi-gov-card staked" id="depin-card-${protocol}">
                         <div class="card-header">
-                            <span class="token-logo-wrap"><img src="${tokenLogoUrl}" alt="${token}" class="token-logo-staking" onerror="this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>${token.slice(0,3)}</span>'"></span>
+                            <span class="token-logo-wrap"><img src="${tokenLogoUrl}" alt="${token}" class="token-logo-staking"></span>
                             <span class="protocol-name">${chainBadge} ${protocol}</span>
                             <span class="depin-badge">\uD83D\uDCE1 Mining</span>
                             ${refreshBtn}
@@ -4023,7 +4032,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
             const hiddenTotal = hiddenStables.reduce((sum, s) => sum + s.total, 0);
             html += `
                 <div class="hidden-stables-dropdown">
-                    <button class="hidden-stables-toggle" onclick="toggleHiddenStables(this)">
+                    <button class="hidden-stables-toggle">
                         <span class="toggle-icon">▶</span>
                         <span class="toggle-text">Hidden Stablecoins (${hiddenStables.length})</span>
                         <span class="toggle-value">~${formatUSDBlur(hiddenTotal)}</span>
@@ -4103,6 +4112,23 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
     }
 
     setSafeHTML(content, html);
+
+    // Attach click handlers (DOMPurify strips inline onclick/onerror attributes)
+    content.querySelectorAll('.card-refresh-btn[data-protocol]').forEach(btn => {
+        btn.addEventListener('click', () => refreshDepinCard(btn.dataset.protocol, btn));
+    });
+    content.querySelectorAll('.staking-refresh-btn').forEach(btn => {
+        btn.addEventListener('click', () => refreshStakingOnly(btn));
+    });
+    content.querySelectorAll('.hidden-stables-toggle').forEach(btn => {
+        btn.addEventListener('click', () => toggleHiddenStables(btn));
+    });
+    content.querySelectorAll('.token-logo-staking').forEach(img => {
+        img.addEventListener('error', function() {
+            const alt = this.alt || '';
+            this.parentElement.innerHTML = `<span class="logo-fallback">${alt.slice(0,3)}</span>`;
+        });
+    });
 
     // Update DeFi summary
     if (summary) {
@@ -4314,26 +4340,24 @@ async function refreshDepinCard(protocol, btn) {
     }
 
     try {
-        // Ensure wallet addresses are available (fetch if not cached)
-        if (!window._defiWalletAddresses) {
-            try {
-                const walletsResp = await authFetch(`${API_BASE}/wallets`);
-                const walletsData = await walletsResp.json();
-                window._defiWalletAddresses = {
-                    cardano: walletsData.wallets.filter(w => w.blockchain === 'cardano').map(w => w.address),
-                    solana: walletsData.wallets.filter(w => w.blockchain === 'solana').map(w => w.address)
-                };
-            } catch (e) {
-                console.error('[DePIN] Failed to fetch wallet addresses:', e);
-                showStatus('Failed to load wallet addresses', true);
-                return;
-            }
-        }
-
         // Clear staking cache first to ensure fresh Blockfrost scan
         await authFetch(`${API_BASE}/cache/clear/staking-cache`, { method: 'POST' }).catch(() => {});
 
-        const addrs = window._defiWalletAddresses;
+        // Ensure wallet addresses are available (may not be loaded yet from fire-and-forget fetch)
+        if (!window._defiWalletAddresses) {
+            try {
+                const r = await authFetch(`${API_BASE}/wallets`);
+                const data = await r.json();
+                window._defiWalletAddresses = {
+                    cardano: data.wallets.filter(w => w.blockchain === 'cardano').map(w => w.address),
+                    solana: data.wallets.filter(w => w.blockchain === 'solana').map(w => w.address)
+                };
+            } catch (e) {
+                console.error('Failed to fetch wallet addresses for refresh:', e);
+            }
+        }
+
+        const addrs = window._defiWalletAddresses || {};
         let endpoints = [];
 
         if (protocol === 'Iagon') {
@@ -4344,12 +4368,6 @@ async function refreshDepinCard(protocol, btn) {
             endpoints = (addrs.solana || []).map(addr =>
                 authFetch(`${API_BASE}/defi/helium/${addr}?refresh=true`).then(r => r.ok ? r.json() : null).catch(() => null)
             );
-        }
-
-        if (endpoints.length === 0) {
-            console.warn(`[DePIN] No ${protocol === 'Iagon' ? 'Cardano' : 'Solana'} wallets found`);
-            showStatus(`No wallets found for ${protocol}`, true);
-            return;
         }
 
         const results = await Promise.all(endpoints);
@@ -4380,7 +4398,7 @@ async function refreshDepinCard(protocol, btn) {
             const usdValue = totalAmount * tokenPrice;
             const chainBadge = getGovChainBadge(blockchain || 'cardano');
             const tokenLogoUrl = logoUrl || `https://img.logokit.com/crypto/${token}?token=LOGOKIT_KEY_REMOVED&size=32`;
-            const refreshBtnHtml = `<button class="card-refresh-btn" onclick="refreshDepinCard('${protocol}', this)" title="Refresh ${protocol}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>`;
+            const refreshBtnHtml = `<button class="card-refresh-btn" data-protocol="${protocol}" title="Refresh ${protocol}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>`;
 
             let pendingHtml = '';
             if (pendingRewards > 0 && rewardToken) {
@@ -4389,7 +4407,7 @@ async function refreshDepinCard(protocol, btn) {
 
             setSafeHTML(cardEl, `
                 <div class="card-header">
-                    <span class="token-logo-wrap"><img src="${tokenLogoUrl}" alt="${token}" class="token-logo-staking" onerror="this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>${token.slice(0,3)}</span>'"></span>
+                    <span class="token-logo-wrap"><img src="${tokenLogoUrl}" alt="${token}" class="token-logo-staking"></span>
                     <span class="protocol-name">${chainBadge} ${protocol}</span>
                     <span class="depin-badge">\uD83D\uDCE1 Mining</span>
                     ${refreshBtnHtml}
@@ -4401,6 +4419,12 @@ async function refreshDepinCard(protocol, btn) {
                     ${rewardsUrl ? `<a href="${rewardsUrl}" target="_blank" rel="noopener" class="action-link">Rewards</a>` : ''}
                 </div>
             `);
+            // Attach click handler (DOMPurify strips inline onclick)
+            const newBtn = cardEl.querySelector('.card-refresh-btn[data-protocol]');
+            if (newBtn) newBtn.addEventListener('click', () => refreshDepinCard(protocol, newBtn));
+            // Attach image error handler
+            const img = cardEl.querySelector('.token-logo-staking');
+            if (img) img.addEventListener('error', function() { this.parentElement.innerHTML = `<span class="logo-fallback">${token.slice(0,3)}</span>`; });
             cardEl.classList.remove('depin-timeout', 'depin-no-data', 'depin-loading');
             showStatus(`${protocol} data loaded`);
         } else if (cardEl) {
