@@ -11020,6 +11020,48 @@ body.privacy-mode a[data-href] {
     filter: brightness(1.2) drop-shadow(0 0 6px rgba(255, 107, 107, 0.3));
 }
 
+/* Expanded wallet node glow */
+.sankey-node-expanded {
+    filter: brightness(1.1);
+}
+
+[data-theme="dark-mode"] .sankey-node-expanded {
+    filter: brightness(1.1) drop-shadow(0 0 8px rgba(0, 210, 106, 0.4));
+}
+
+[data-theme="light"] .sankey-node-expanded {
+    filter: brightness(0.95) drop-shadow(0 0 6px rgba(0, 184, 148, 0.3));
+}
+
+[data-theme="cypherpunk1"] .sankey-node-expanded {
+    filter: brightness(1.2) drop-shadow(0 0 10px rgba(10, 189, 198, 0.5));
+}
+
+[data-theme="ocean-depths"] .sankey-node-expanded {
+    filter: brightness(1.1) drop-shadow(0 0 8px rgba(0, 210, 255, 0.4));
+}
+
+[data-theme="sunset-horizon"] .sankey-node-expanded {
+    filter: brightness(1.1) drop-shadow(0 0 8px rgba(255, 107, 107, 0.4));
+}
+
+/* Category breakdown bars */
+.sankey-category-bar {
+    transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+.sankey-category-bar:hover {
+    filter: brightness(1.15);
+}
+
+.sankey-category-label {
+    pointer-events: none;
+}
+
+.sankey-category-link {
+    transition: fill-opacity 0.3s ease;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .sankey-container {
