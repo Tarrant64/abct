@@ -1386,7 +1386,7 @@ async function loadPortfolioSummary() {
         if (window.portfolioSankey) {
             const allocs = getChainAllocations();
             const total = allocs.reduce((sum, a) => sum + a.usd, 0);
-            window.portfolioSankey.setData(total, allocs);
+            window.portfolioSankey.setData(total, allocs, lastPortfolioData, prices);
             window.portfolioSankey.render();
         }
 
@@ -10001,13 +10001,13 @@ async function initBlockchainsTab() {
         }
     }
 
-    // Initialize Sankey flow diagram
+    // Initialize Sankey flow diagram (3-column: Total → Chains → Wallets)
     if (typeof PortfolioSankey !== 'undefined' && document.getElementById('portfolioSankeyContainer')) {
         try {
             window.portfolioSankey = new PortfolioSankey('portfolioSankeyContainer');
             const allocs = getChainAllocations();
             const total = allocs.reduce((sum, a) => sum + a.usd, 0);
-            window.portfolioSankey.setData(total, allocs);
+            window.portfolioSankey.setData(total, allocs, lastPortfolioData, prices);
             window.portfolioSankey.render();
         } catch (e) {
             console.warn('[Sankey] Failed to initialize:', e);

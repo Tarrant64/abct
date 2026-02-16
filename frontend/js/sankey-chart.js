@@ -1,34 +1,37 @@
 // ===========================
 // Portfolio Flow Sankey Diagram
 // ===========================
-// Custom SVG-based Sankey chart for visualizing portfolio value flow
-// Total Portfolio → Chains → Asset Categories (on drill-down)
+// Custom SVG-based 3-column Sankey: Total Portfolio → Chains → Wallets
+// Click a chain to highlight its wallet flows
 
-const SANKEY_CATEGORY_COLORS = {
-    'Native':        null, // uses chain color
-    'DeFi':          '#00b894',
-    'Stablecoins':   '#0984e3',
-    'DePIN':         '#6c5ce7',
-    'NFTs':          '#e17055',
-    'Other Tokens':  '#fdcb6e'
-};
-
-const SANKEY_STABLECOINS = new Set([
-    'USDC', 'USDT', 'DAI', 'DJED', 'iUSD', 'USDM', 'BUSD', 'FRAX', 'TUSD', 'SHEN',
-    'USDD', 'PYUSD', 'LUSD', 'GUSD', 'RAI', 'SUSD', 'CRVUSD', 'GHO', 'DOLA'
-]);
-
-const SANKEY_DEPIN_TOKENS = new Set([
-    'IAG', 'HNT', 'MOBILE', 'IOT', 'FIL', 'AR', 'RNDR', 'THETA', 'TFUEL', 'ANKR',
-    'LPT', 'GRT', 'NOS'
-]);
-
-const SANKEY_DEFI_TOKENS = new Set([
-    'INDY', 'MIN', 'SUNDAE', 'LQ', 'LENFI', 'WRT', 'STRIKE', 'OPTIM', 'SPF', 'VYFI',
-    'AAVE', 'UNI', 'SUSHI', 'COMP', 'MKR', 'CRV', 'SNX', 'YFI', 'BAL', '1INCH',
-    'AGIX', 'JPGD', 'LIQD', 'RAY', 'SRM', 'ORCA', 'JUP', 'MNGO', 'CAKE', 'JOE',
-    'GMX', 'DYDX', 'PENDLE', 'MORPHO', 'EIGEN'
-]);
+const SANKEY_CHAIN_CONFIGS = [
+    { key: 'cardano',    label: 'Cardano',    color: '#0033ad', priceKey: 'ADA',   useStakeGroups: true },
+    { key: 'bitcoin',    label: 'Bitcoin',    color: '#f7931a', priceKey: 'BTC'   },
+    { key: 'ethereum',   label: 'Ethereum',   color: '#627eea', priceKey: 'ETH'   },
+    { key: 'solana',     label: 'Solana',     color: '#9945ff', priceKey: 'SOL'   },
+    { key: 'polygon',    label: 'Polygon',    color: '#8247e5', priceKey: 'MATIC' },
+    { key: 'base',       label: 'Base',       color: '#0052ff', priceKey: 'ETH'   },
+    { key: 'algorand',   label: 'Algorand',   color: '#00d2c2', priceKey: 'ALGO'  },
+    { key: 'bsc',        label: 'BNB Chain',  color: '#f3ba2f', priceKey: 'BNB'   },
+    { key: 'arbitrum',   label: 'Arbitrum',   color: '#28a0f0', priceKey: 'ETH'   },
+    { key: 'avalanche',  label: 'Avalanche',  color: '#e84142', priceKey: 'AVAX'  },
+    { key: 'tron',       label: 'Tron',       color: '#ff0013', priceKey: 'TRX'   },
+    { key: 'xrp',        label: 'XRP Ledger', color: '#23292f', priceKey: 'XRP'   },
+    { key: 'hedera',     label: 'Hedera',     color: '#3d3d3d', priceKey: 'HBAR'  },
+    { key: 'multiversx', label: 'MultiversX', color: '#23f7dd', priceKey: 'EGLD'  },
+    { key: 'sui',        label: 'Sui',        color: '#4da2ff', priceKey: 'SUI'   },
+    { key: 'aptos',      label: 'Aptos',      color: '#2ed8a3', priceKey: 'APT'   },
+    { key: 'filecoin',   label: 'Filecoin',   color: '#0090ff', priceKey: 'FIL'   },
+    { key: 'litecoin',   label: 'Litecoin',   color: '#345d9d', priceKey: 'LTC'   },
+    { key: 'dogecoin',   label: 'Dogecoin',   color: '#c2a633', priceKey: 'DOGE'  },
+    { key: 'zcash',      label: 'Zcash',      color: '#ecb244', priceKey: 'ZEC'   },
+    { key: 'tezos',      label: 'Tezos',      color: '#2c7df7', priceKey: 'XTZ'   },
+    { key: 'stacks',     label: 'Stacks',     color: '#5546ff', priceKey: 'STX'   },
+    { key: 'vechain',    label: 'VeChain',    color: '#15bdff', priceKey: 'VET'   },
+    { key: 'cosmos',     label: 'Cosmos',     color: '#2e3148', priceKey: 'ATOM'  },
+    { key: 'near',       label: 'NEAR',       color: '#00c08b', priceKey: 'NEAR'  },
+    { key: 'icp',        label: 'ICP',        color: '#29abe2', priceKey: 'ICP'   },
+];
 
 class PortfolioSankey {
     constructor(containerId) {
@@ -39,18 +42,16 @@ class PortfolioSankey {
         this.tooltip = null;
         this.totalValue = 0;
         this.chainAllocations = [];
-        this.expandedChain = null;
-        this.categoryData = null;
+        this.walletsByChain = {}; // { chainKey: [{label, usd, address}] }
+        this.highlightedChain = null;
         this.width = 0;
         this.height = 0;
-        this.animating = false;
 
         // Layout config
-        this.padding = { top: 20, right: 140, bottom: 20, left: 140 };
-        this.nodeWidth = 20;
-        this.nodeGap = 5;
-        this.minNodeHeight = 16;
-        this.columnGap = 0; // computed from width
+        this.padding = { top: 24, right: 140, bottom: 24, left: 140 };
+        this.nodeWidth = 22;
+        this.nodeGap = 6;
+        this.minNodeHeight = 18;
 
         this._createSVG();
         this._createTooltip();
@@ -73,18 +74,70 @@ class PortfolioSankey {
     }
 
     _setupResizeObserver() {
-        this._resizeObserver = new ResizeObserver(() => {
-            if (!this.animating) this.render();
-        });
+        this._resizeObserver = new ResizeObserver(() => this.render());
         this._resizeObserver.observe(this.container);
     }
 
-    setData(totalValue, chainAllocations) {
+    /**
+     * Set data for the 3-column Sankey.
+     * @param {number} totalValue - Total portfolio USD value
+     * @param {Array} chainAllocations - From getChainAllocations()
+     * @param {object} portfolioData - lastPortfolioData (optional, for wallet data)
+     * @param {object} priceData - global prices object (optional, for wallet USD calc)
+     */
+    setData(totalValue, chainAllocations, portfolioData, priceData) {
         this.totalValue = totalValue;
         this.chainAllocations = chainAllocations;
-        // Reset drill-down on data change
-        this.expandedChain = null;
-        this.categoryData = null;
+        this.highlightedChain = null;
+
+        // Extract wallet-level data from portfolio summary
+        this.walletsByChain = {};
+        if (portfolioData && priceData) {
+            this._extractWallets(portfolioData, priceData);
+        }
+    }
+
+    _extractWallets(portfolioData, prices) {
+        for (const cfg of SANKEY_CHAIN_CONFIGS) {
+            const chainData = portfolioData[cfg.key];
+            if (!chainData) continue;
+
+            const price = prices[cfg.priceKey] || 0;
+            const wallets = [];
+
+            if (cfg.useStakeGroups) {
+                // Cardano: use stake groups as wallet entries
+                const groups = chainData.stake_groups || [];
+                for (const group of groups) {
+                    const usd = (group.total_ada || 0) * price + (group.native_assets_value_usd || 0);
+                    if (usd > 0) {
+                        wallets.push({
+                            label: group.label || group.stake_address_short || 'Cardano Wallet',
+                            usd,
+                            address: group.stake_address || ''
+                        });
+                    }
+                }
+            } else {
+                const chainWallets = chainData.wallets || [];
+                for (const w of chainWallets) {
+                    const usd = (w.balance || 0) * price + (w.native_assets_value_usd || 0);
+                    if (usd > 0) {
+                        wallets.push({
+                            label: w.label || w.address_short || (cfg.label + ' Wallet'),
+                            usd,
+                            address: w.address || ''
+                        });
+                    }
+                }
+            }
+
+            if (wallets.length > 0) {
+                // Sort wallets within chain by value desc
+                wallets.sort((a, b) => b.usd - a.usd);
+                this.walletsByChain[cfg.key] = wallets;
+            }
+        }
     }
 
     render() {
@@ -97,9 +150,27 @@ class PortfolioSankey {
 
         const rect = this.container.getBoundingClientRect();
         this.width = rect.width;
-        this.height = Math.max(300, rect.height);
 
-        // Responsive padding — tighten on narrow screens
+        // Determine if we have wallet data (3 columns) or just chain data (2 columns)
+        const totalWallets = Object.values(this.walletsByChain).reduce((s, w) => s + w.length, 0);
+        this.hasWalletColumn = totalWallets >= 2;
+
+        // Dynamic height: scale with the tallest column's node count
+        const chainCount = this.chainAllocations.length;
+        const baseHeight = rect.height || 480;
+        let targetHeight = baseHeight;
+
+        if (this.hasWalletColumn) {
+            const walletHeightNeed = totalWallets * 30 + 60;
+            const chainHeightNeed = chainCount * 40 + 60;
+            targetHeight = Math.max(baseHeight, Math.max(walletHeightNeed, chainHeightNeed));
+            targetHeight = Math.min(targetHeight, 900);
+        }
+
+        this.height = Math.max(300, targetHeight);
+        this.container.style.height = this.height + 'px';
+
+        // Responsive padding
         if (this.width < 500) {
             this.padding.left = 70;
             this.padding.right = 70;
@@ -115,16 +186,19 @@ class PortfolioSankey {
         while (this.svg.firstChild) this.svg.removeChild(this.svg.firstChild);
         this.svg.setAttribute('viewBox', `0 0 ${this.width} ${this.height}`);
 
-        const columns = this._buildColumns();
-        const layout = this._computeLayout(columns);
+        const data = this._buildColumns();
+        const layout = this._computeLayout(data);
         this._drawLinks(layout);
         this._drawNodes(layout);
     }
 
-    // Build column data: [totalCol, chainsCol, (categoriesCol)]
+    // ===========================
+    // Data / Layout
+    // ===========================
+
     _buildColumns() {
-        // Group small chains into "Other"
-        const threshold = this.totalValue * 0.02;
+        // Group small chains into "Other" if many chains
+        const threshold = this.totalValue * 0.015;
         const mainChains = [];
         let otherValue = 0;
         let otherChains = [];
@@ -132,13 +206,13 @@ class PortfolioSankey {
         for (const alloc of this.chainAllocations) {
             if (alloc.usd < threshold && this.chainAllocations.length > 10) {
                 otherValue += alloc.usd;
-                otherChains.push(alloc.label);
+                otherChains.push(alloc);
             } else {
                 mainChains.push(alloc);
             }
         }
 
-        // Column 0: Total portfolio
+        // Column 0: Total Portfolio
         const col0 = [{
             id: 'total',
             label: 'Total Portfolio',
@@ -168,8 +242,8 @@ class PortfolioSankey {
             });
         }
 
-        // Links: Total → each chain
-        const links01 = col1.map(node => ({
+        // Links: Total → Chains
+        const links = col1.map(node => ({
             source: 'total',
             target: node.id,
             value: node.value,
@@ -177,40 +251,43 @@ class PortfolioSankey {
         }));
 
         const columns = [
-            { nodes: col0, x: 0 },
-            { nodes: col1, x: 0 }
+            { nodes: col0 },
+            { nodes: col1 }
         ];
-        let links = links01;
 
-        // Column 2: Categories (if drill-down active)
-        if (this.expandedChain && this.categoryData) {
+        // Column 2: Wallets (if wallet data available)
+        if (this.hasWalletColumn) {
             const col2 = [];
-            const links12 = [];
-            const chainNodeId = `chain-${this.expandedChain}`;
+            let walletIdx = 0;
 
-            for (const [category, value] of Object.entries(this.categoryData)) {
-                if (value <= 0) continue;
-                const chainNode = col1.find(n => n.id === chainNodeId);
-                const catColor = SANKEY_CATEGORY_COLORS[category] || (chainNode ? chainNode.color : '#888');
-                const nodeId = `cat-${category}`;
-                col2.push({
-                    id: nodeId,
-                    label: category,
-                    value: value,
-                    color: category === 'Native' ? (chainNode ? chainNode.color : '#888') : catColor,
-                    type: 'category'
-                });
-                links12.push({
-                    source: chainNodeId,
-                    target: nodeId,
-                    value: value,
-                    color: category === 'Native' ? (chainNode ? chainNode.color : '#888') : catColor
-                });
+            // Build wallet nodes in chain order (matching col1 order)
+            for (const chainNode of col1) {
+                const chainKey = chainNode.chain;
+                const wallets = this.walletsByChain[chainKey] || [];
+
+                for (const w of wallets) {
+                    const walletId = `wallet-${chainKey}-${walletIdx++}`;
+                    col2.push({
+                        id: walletId,
+                        label: w.label,
+                        value: w.usd,
+                        color: chainNode.color,
+                        type: 'wallet',
+                        chain: chainKey,
+                        address: w.address
+                    });
+
+                    links.push({
+                        source: chainNode.id,
+                        target: walletId,
+                        value: w.usd,
+                        color: chainNode.color
+                    });
+                }
             }
 
             if (col2.length > 0) {
-                columns.push({ nodes: col2, x: 0 });
-                links = links.concat(links12);
+                columns.push({ nodes: col2 });
             }
         }
 
@@ -220,7 +297,7 @@ class PortfolioSankey {
     _computeLayout({ columns, links }) {
         const numCols = columns.length;
         const usableW = this.width - this.padding.left - this.padding.right - this.nodeWidth * numCols;
-        this.columnGap = numCols > 1 ? usableW / (numCols - 1) : 0;
+        const columnGap = numCols > 1 ? usableW / (numCols - 1) : 0;
 
         const usableH = this.height - this.padding.top - this.padding.bottom;
 
@@ -233,20 +310,19 @@ class PortfolioSankey {
             const availH = usableH - totalGaps;
 
             let y = this.padding.top;
-            const x = this.padding.left + ci * (this.nodeWidth + this.columnGap);
+            const x = this.padding.left + ci * (this.nodeWidth + columnGap);
 
             for (const node of col.nodes) {
                 const proportion = colTotal > 0 ? node.value / colTotal : 0;
-                let h = Math.max(this.minNodeHeight, proportion * availH);
+                node.h = Math.max(this.minNodeHeight, proportion * availH);
                 node.x = x;
                 node.y = y;
                 node.w = this.nodeWidth;
-                node.h = h;
                 nodeMap[node.id] = node;
-                y += h + this.nodeGap;
+                y += node.h + this.nodeGap;
             }
 
-            // Adjust if overflow: scale down
+            // Scale down if overflow
             const totalH = y - this.nodeGap - this.padding.top;
             if (totalH > usableH) {
                 const scale = usableH / totalH;
@@ -259,8 +335,7 @@ class PortfolioSankey {
             }
         }
 
-        // Compute link positions using node source/target port tracking
-        // Track how much of each node's height has been allocated to links
+        // Resolve link positions using port tracking
         const sourcePortY = {};
         const targetPortY = {};
 
@@ -269,13 +344,11 @@ class PortfolioSankey {
             const tgt = nodeMap[link.target];
             if (!src || !tgt) return null;
 
-            // Source: allocate band proportional to link value
             if (!sourcePortY[link.source]) sourcePortY[link.source] = src.y;
             const srcBand = src.h * (link.value / (src.value || 1));
             const sy = sourcePortY[link.source];
             sourcePortY[link.source] += srcBand;
 
-            // Target: allocate band proportional to link value
             if (!targetPortY[link.target]) targetPortY[link.target] = tgt.y;
             const tgtBand = tgt.h * (link.value / (tgt.value || 1));
             const ty = targetPortY[link.target];
@@ -295,12 +368,15 @@ class PortfolioSankey {
         return { columns, links: resolvedLinks, nodeMap };
     }
 
+    // ===========================
+    // Drawing
+    // ===========================
+
     _drawLinks(layout) {
         const g = this._svgEl('g', { class: 'sankey-links' });
 
         for (const link of layout.links) {
             const midX = (link.x0 + link.x1) / 2;
-            // Band path using cubic Bezier
             const d = [
                 `M ${link.x0},${link.y0}`,
                 `C ${midX},${link.y0} ${midX},${link.y1} ${link.x1},${link.y1}`,
@@ -309,18 +385,28 @@ class PortfolioSankey {
                 'Z'
             ].join(' ');
 
+            // Determine if this link should be dimmed (chain highlight active)
+            let opacity = '0.18';
+            if (this.highlightedChain) {
+                const isChainLink = link.source === `chain-${this.highlightedChain}` ||
+                                    link.target === `chain-${this.highlightedChain}`;
+                // For Total→Chain links, highlight the selected chain
+                const isTotalToHighlighted = link.source === 'total' && link.target === `chain-${this.highlightedChain}`;
+                opacity = (isChainLink || isTotalToHighlighted) ? '0.35' : '0.05';
+            }
+
             const path = this._svgEl('path', {
                 d,
                 class: 'sankey-link',
                 fill: link.color,
-                'fill-opacity': '0.18',
+                'fill-opacity': opacity,
                 stroke: 'none',
                 'data-source': link.source,
                 'data-target': link.target
             });
 
             path.addEventListener('mouseenter', (e) => this._onLinkHover(e, link, layout));
-            path.addEventListener('mouseleave', () => this._onLinkLeave(layout));
+            path.addEventListener('mouseleave', () => this._onLinkLeave());
             path.addEventListener('mousemove', (e) => this._moveTooltip(e));
 
             g.appendChild(path);
@@ -334,7 +420,16 @@ class PortfolioSankey {
 
         for (const col of layout.columns) {
             for (const node of col.nodes) {
-                // Node rect
+                // Determine dim state
+                let nodeOpacity = '1';
+                if (this.highlightedChain) {
+                    if (node.type === 'chain' && node.chain !== this.highlightedChain) {
+                        nodeOpacity = '0.25';
+                    } else if (node.type === 'wallet' && node.chain !== this.highlightedChain) {
+                        nodeOpacity = '0.25';
+                    }
+                }
+
                 const rect = this._svgEl('rect', {
                     x: node.x,
                     y: node.y,
@@ -344,27 +439,22 @@ class PortfolioSankey {
                     ry: 4,
                     fill: node.color,
                     class: 'sankey-node',
-                    'data-id': node.id
+                    'data-id': node.id,
+                    opacity: nodeOpacity
                 });
 
-                // Dim non-expanded chains when drilled down
-                if (this.expandedChain && node.type === 'chain' && node.chain !== this.expandedChain) {
-                    rect.setAttribute('opacity', '0.35');
-                }
-
+                // Chain nodes are clickable for highlight toggle
                 if (node.type === 'chain' && node.chain !== 'other') {
                     rect.style.cursor = 'pointer';
                     rect.addEventListener('click', () => this._onChainClick(node));
                 }
 
                 rect.addEventListener('mouseenter', (e) => this._onNodeHover(e, node, layout));
-                rect.addEventListener('mouseleave', () => this._onNodeLeave(layout));
+                rect.addEventListener('mouseleave', () => this._onNodeLeave());
                 rect.addEventListener('mousemove', (e) => this._moveTooltip(e));
 
                 gNodes.appendChild(rect);
-
-                // Label
-                this._drawLabel(gLabels, node, layout.columns.length);
+                this._drawLabel(gLabels, node, layout.columns.length, nodeOpacity);
             }
         }
 
@@ -372,29 +462,30 @@ class PortfolioSankey {
         this.svg.appendChild(gLabels);
     }
 
-    _drawLabel(g, node, numCols) {
+    _drawLabel(g, node, numCols, nodeOpacity) {
         const isMobile = this.width < 480;
         const isSmall = this.width < 768;
 
-        // For small screens, skip value labels on tiny nodes
-        if (isMobile && node.h < 25) return;
+        // Skip labels on tiny nodes on mobile
+        if (isMobile && node.h < 22) return;
 
         const fontSize = isSmall ? 10 : 12;
         const valueFontSize = isSmall ? 9 : 11;
 
-        // Position label to the right of node for cols 0-1, left of node for last col
-        const isLastCol = node.type === 'category';
-        const isFirstCol = node.type === 'total';
+        // Label placement:
+        // Total (col 0): LEFT of node
+        // Chains (col 1): LEFT of node (space between Total and Chains)
+        // Wallets (col 2): RIGHT of node
         let textX, anchor;
 
-        if (isFirstCol) {
+        if (node.type === 'total') {
             textX = node.x - 8;
             anchor = 'end';
-        } else if (isLastCol) {
+        } else if (node.type === 'wallet') {
             textX = node.x + node.w + 8;
             anchor = 'start';
         } else {
-            // Chain column: label to right if 2 cols, left if 3 cols (drill-down)
+            // Chain column: left side if 3 cols, right side if 2 cols
             if (numCols > 2) {
                 textX = node.x - 8;
                 anchor = 'end';
@@ -406,10 +497,11 @@ class PortfolioSankey {
 
         const textY = node.y + node.h / 2;
 
-        // Name label
+        // Truncate long labels on small screens
         let labelText = node.label;
-        if (isSmall && labelText.length > 12) {
-            labelText = labelText.substring(0, 10) + '…';
+        const maxLen = isSmall ? 12 : (node.type === 'wallet' ? 20 : 15);
+        if (labelText.length > maxLen) {
+            labelText = labelText.substring(0, maxLen - 1) + '…';
         }
 
         const nameEl = this._svgEl('text', {
@@ -419,15 +511,10 @@ class PortfolioSankey {
             'dominant-baseline': node.h > 30 ? 'auto' : 'central',
             class: 'sankey-label-name',
             'font-size': fontSize,
-            fill: this._getTextColor()
+            fill: this._getTextColor(),
+            opacity: nodeOpacity
         });
         nameEl.textContent = labelText;
-
-        // Dim labels for non-expanded chains
-        if (this.expandedChain && node.type === 'chain' && node.chain !== this.expandedChain) {
-            nameEl.setAttribute('opacity', '0.35');
-        }
-
         g.appendChild(nameEl);
 
         // Value label (only if node tall enough)
@@ -439,14 +526,10 @@ class PortfolioSankey {
                 'dominant-baseline': 'auto',
                 class: 'sankey-label-value',
                 'font-size': valueFontSize,
-                fill: this._getSecondaryTextColor()
+                fill: this._getSecondaryTextColor(),
+                opacity: nodeOpacity
             });
             valEl.textContent = this._formatCompactUSD(node.value);
-
-            if (this.expandedChain && node.type === 'chain' && node.chain !== this.expandedChain) {
-                valEl.setAttribute('opacity', '0.35');
-            }
-
             g.appendChild(valEl);
         }
     }
@@ -455,107 +538,13 @@ class PortfolioSankey {
     // Interactions
     // ===========================
 
-    async _onChainClick(node) {
-        if (this.animating) return;
-
-        if (this.expandedChain === node.chain) {
-            // Collapse
-            this.expandedChain = null;
-            this.categoryData = null;
-            this.render();
-            return;
+    _onChainClick(node) {
+        if (this.highlightedChain === node.chain) {
+            this.highlightedChain = null;
+        } else {
+            this.highlightedChain = node.chain;
         }
-
-        // Expand: fetch category data
-        this.expandedChain = node.chain;
-        this.categoryData = null;
-
-        // Show loading state on the node
-        const nodeEl = this.svg.querySelector(`[data-id="chain-${node.chain}"]`);
-        if (nodeEl) nodeEl.classList.add('sankey-node-loading');
-
-        try {
-            const data = await this._fetchCategoryData(node.chain);
-            this.categoryData = data;
-        } catch (e) {
-            console.warn('[Sankey] Failed to fetch category data:', e);
-            this.expandedChain = null;
-        }
-
-        if (nodeEl) nodeEl.classList.remove('sankey-node-loading');
         this.render();
-    }
-
-    async _fetchCategoryData(chain) {
-        // Check assetBreakdownCache first (global from app.js)
-        if (typeof assetBreakdownCache !== 'undefined') {
-            const cached = assetBreakdownCache.get(chain, 'data');
-            if (cached && !assetBreakdownCache.isStale(chain, 'data')) {
-                return this._categorizeAssets(cached, chain);
-            }
-        }
-
-        // Fetch from API
-        const resp = await authFetch(`${API_BASE}/portfolio/assets/${chain}`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
-
-        // Cache it
-        if (typeof assetBreakdownCache !== 'undefined') {
-            assetBreakdownCache.set(chain, data, 'data');
-        }
-
-        return this._categorizeAssets(data, chain);
-    }
-
-    _categorizeAssets(data, chain) {
-        const categories = {};
-        const nativeSymbol = this._getNativeSymbol(chain);
-
-        // Native coin
-        if (data.native_coin && data.native_coin.value_usd > 0) {
-            categories['Native'] = (categories['Native'] || 0) + data.native_coin.value_usd;
-        }
-
-        // Tokens
-        if (data.tokens) {
-            for (const token of data.tokens) {
-                if (!token.value_usd || token.value_usd <= 0) continue;
-                const sym = (token.symbol || '').toUpperCase();
-
-                if (sym === nativeSymbol) {
-                    categories['Native'] = (categories['Native'] || 0) + token.value_usd;
-                } else if (SANKEY_STABLECOINS.has(sym)) {
-                    categories['Stablecoins'] = (categories['Stablecoins'] || 0) + token.value_usd;
-                } else if (SANKEY_DEPIN_TOKENS.has(sym)) {
-                    categories['DePIN'] = (categories['DePIN'] || 0) + token.value_usd;
-                } else if (SANKEY_DEFI_TOKENS.has(sym)) {
-                    categories['DeFi'] = (categories['DeFi'] || 0) + token.value_usd;
-                } else {
-                    categories['Other Tokens'] = (categories['Other Tokens'] || 0) + token.value_usd;
-                }
-            }
-        }
-
-        // NFTs
-        if (data.nfts && data.nfts.value_usd > 0) {
-            categories['NFTs'] = data.nfts.value_usd;
-        }
-
-        return categories;
-    }
-
-    _getNativeSymbol(chain) {
-        const map = {
-            cardano: 'ADA', bitcoin: 'BTC', ethereum: 'ETH', solana: 'SOL',
-            polygon: 'POL', base: 'ETH', algorand: 'ALGO', bsc: 'BNB',
-            arbitrum: 'ETH', avalanche: 'AVAX', tron: 'TRX', xrp: 'XRP',
-            hedera: 'HBAR', multiversx: 'EGLD', sui: 'SUI', aptos: 'APT',
-            filecoin: 'FIL', litecoin: 'LTC', dogecoin: 'DOGE', zcash: 'ZEC',
-            tezos: 'XTZ', stacks: 'STX', vechain: 'VET', cosmos: 'ATOM',
-            near: 'NEAR', icp: 'ICP'
-        };
-        return map[chain] || '';
     }
 
     _onNodeHover(e, node, layout) {
@@ -566,21 +555,41 @@ class PortfolioSankey {
             const tgt = el.getAttribute('data-target');
             if (src === node.id || tgt === node.id) {
                 el.setAttribute('fill-opacity', '0.4');
-            } else {
-                el.setAttribute('fill-opacity', '0.08');
+            } else if (!this.highlightedChain) {
+                el.setAttribute('fill-opacity', '0.06');
             }
         });
 
         // Tooltip
         const pct = this.totalValue > 0 ? ((node.value / this.totalValue) * 100).toFixed(1) : '0';
-        this.tooltip.innerHTML = `<strong>${this._escapeHTML(node.label)}</strong><br>${this._formatCompactUSD(node.value)} (${pct}%)`;
+        let tooltipHtml = `<strong>${this._escapeHTML(node.label)}</strong><br>${this._formatCompactUSD(node.value)} (${pct}%)`;
+
+        // For chain nodes, show wallet count
+        if (node.type === 'chain' && this.walletsByChain[node.chain]) {
+            const wCount = this.walletsByChain[node.chain].length;
+            tooltipHtml += `<br><span style="opacity:0.7">${wCount} wallet${wCount !== 1 ? 's' : ''}</span>`;
+        }
+
+        this.tooltip.innerHTML = tooltipHtml;
         this.tooltip.style.display = 'block';
         this._moveTooltip(e);
     }
 
-    _onNodeLeave(layout) {
+    _onNodeLeave() {
+        // Restore link opacities based on highlight state
         const linkEls = this.svg.querySelectorAll('.sankey-link');
-        linkEls.forEach(el => el.setAttribute('fill-opacity', '0.18'));
+        if (this.highlightedChain) {
+            linkEls.forEach(el => {
+                const src = el.getAttribute('data-source');
+                const tgt = el.getAttribute('data-target');
+                const isHighlighted = src === `chain-${this.highlightedChain}` ||
+                                      tgt === `chain-${this.highlightedChain}` ||
+                                      (src === 'total' && tgt === `chain-${this.highlightedChain}`);
+                el.setAttribute('fill-opacity', isHighlighted ? '0.35' : '0.05');
+            });
+        } else {
+            linkEls.forEach(el => el.setAttribute('fill-opacity', '0.18'));
+        }
         this.tooltip.style.display = 'none';
     }
 
@@ -589,8 +598,8 @@ class PortfolioSankey {
         linkEls.forEach(el => {
             if (el.getAttribute('data-source') === link.source && el.getAttribute('data-target') === link.target) {
                 el.setAttribute('fill-opacity', '0.4');
-            } else {
-                el.setAttribute('fill-opacity', '0.08');
+            } else if (!this.highlightedChain) {
+                el.setAttribute('fill-opacity', '0.06');
             }
         });
 
@@ -602,10 +611,8 @@ class PortfolioSankey {
         this._moveTooltip(e);
     }
 
-    _onLinkLeave(layout) {
-        const linkEls = this.svg.querySelectorAll('.sankey-link');
-        linkEls.forEach(el => el.setAttribute('fill-opacity', '0.18'));
-        this.tooltip.style.display = 'none';
+    _onLinkLeave() {
+        this._onNodeLeave(); // Same restore logic
     }
 
     _moveTooltip(e) {
@@ -613,7 +620,6 @@ class PortfolioSankey {
         let x = e.clientX - containerRect.left + 12;
         let y = e.clientY - containerRect.top - 10;
 
-        // Keep tooltip within container
         const tw = this.tooltip.offsetWidth || 150;
         if (x + tw > containerRect.width) x = x - tw - 24;
         if (y < 0) y = 10;
@@ -644,13 +650,11 @@ class PortfolioSankey {
     }
 
     _getTextColor() {
-        const theme = this._getTheme();
-        return theme === 'light' ? '#1a1a2e' : '#eaeaea';
+        return this._getTheme() === 'light' ? '#1a1a2e' : '#eaeaea';
     }
 
     _getSecondaryTextColor() {
-        const theme = this._getTheme();
-        return theme === 'light' ? '#6b7280' : '#a0a0a0';
+        return this._getTheme() === 'light' ? '#6b7280' : '#a0a0a0';
     }
 
     // ===========================
@@ -659,9 +663,7 @@ class PortfolioSankey {
 
     _svgEl(tag, attrs = {}) {
         const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
-        for (const [k, v] of Object.entries(attrs)) {
-            el.setAttribute(k, v);
-        }
+        for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
         return el;
     }
 
