@@ -335,6 +335,47 @@ async def get_helium_rewards(address: str, refresh: bool = False, user_id: int =
     return result
 
 
+@router.get("/iagon/{address}")
+async def get_iagon_staking_data(address: str, refresh: bool = False, user_id: int = Depends(verify_session)):
+    """Get Iagon staking positions for a Cardano wallet address."""
+    cache_key = f"iagon_staking_{address}"
+
+    if not refresh:
+        cached = await get_cache(cache_key)
+        if cached:
+            cached['from_cache'] = True
+            return cached
+
+    iagon = await defi_service.get_iagon_staking(address)
+
+    if not iagon:
+        return {"protocols": {}, "address": address, "message": "No Iagon staking found"}
+
+    logo_url = await defi_service._get_token_logo_url('IAG')
+
+    result = {
+        "protocols": {
+            "Iagon": {
+                "staked": [{
+                    "token": "IAG",
+                    "amount": iagon['total_staked_iag'],
+                    "positions": iagon['position_count'],
+                    "logo_url": logo_url
+                }],
+                "reward_token": "IAG",
+                "rewards_url": "https://iagon.com/staking",
+                "category": "depin",
+                "blockchain": "cardano",
+                "total_positions": iagon['position_count'],
+            }
+        }
+    }
+
+    result['from_cache'] = False
+    await set_cache(cache_key, result, CACHE_TTL_WARM)
+    return result
+
+
 @router.get("/chainlink/{address}")
 async def get_chainlink_staking_positions(address: str, user_id: int = Depends(verify_session)):
     """

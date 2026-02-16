@@ -3350,6 +3350,12 @@ async function loadDefiGovernance(forceRefresh = false) {
 
         // Phase 3b: Fetch Helium rewards for Solana wallets in parallel
         const solanaWallets = walletsData.wallets.filter(w => w.blockchain === 'solana');
+
+        // Store wallet addresses for per-card refresh
+        window._defiWalletAddresses = {
+            cardano: cardanoWallets.map(w => w.address),
+            solana: solanaWallets.map(w => w.address)
+        };
         if (solanaWallets.length > 0) {
             const heliumPromises = solanaWallets.map(wallet =>
                 authFetch(`${API_BASE}/defi/helium/${wallet.address}${refreshParam}`)
@@ -3644,11 +3650,33 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
 
         for (const protocol of depinProtocols) {
             const protocolData = allStaking[protocol];
-            const stakes = protocolData.staked;
             const rewardsUrl = protocolData.rewards_url;
             const stakingChain = protocolData.blockchain || 'cardano';
             const chainBadge = getGovChainBadge(stakingChain);
+            const refreshBtn = `<button class="card-refresh-btn" onclick="refreshDepinCard('${protocol}', this)" title="Refresh ${protocol}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>`;
 
+            // Timeout/error state — show placeholder card with retry
+            if (protocolData.status === 'timeout') {
+                const fallbackToken = protocolData.reward_token || protocol;
+                const tokenLogoUrl = `https://img.logokit.com/crypto/${fallbackToken}?token=pk_fr08287a4c625f400f32a9&size=32`;
+                html += `
+                    <div class="defi-gov-card staked depin-timeout" id="depin-card-${protocol}">
+                        <div class="card-header">
+                            <span class="token-logo-wrap"><img src="${tokenLogoUrl}" alt="${fallbackToken}" class="token-logo-staking" onerror="this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>${fallbackToken.slice(0,3)}</span>'"></span>
+                            <span class="protocol-name">${chainBadge} ${protocol}</span>
+                            <span class="depin-badge">\uD83D\uDCE1 Mining</span>
+                            ${refreshBtn}
+                        </div>
+                        <div class="card-timeout-msg">Data unavailable — timed out</div>
+                        <div class="card-actions">
+                            <button class="action-link retry-link" onclick="refreshDepinCard('${protocol}', this)">Retry</button>
+                        </div>
+                    </div>
+                `;
+                continue;
+            }
+
+            const stakes = protocolData.staked;
             for (const [token, data] of Object.entries(stakes)) {
                 const tokenPrice = prices[token] || 0;
                 const usdValue = data.amount * tokenPrice;
@@ -3668,11 +3696,12 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
                 const tokenLogoUrl = data.logo_url || `https://img.logokit.com/crypto/${token}?token=pk_fr08287a4c625f400f32a9&size=32`;
 
                 html += `
-                    <div class="defi-gov-card staked">
+                    <div class="defi-gov-card staked" id="depin-card-${protocol}">
                         <div class="card-header">
                             <span class="token-logo-wrap"><img src="${tokenLogoUrl}" alt="${token}" class="token-logo-staking" onerror="this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>${token.slice(0,3)}</span>'"></span>
                             <span class="protocol-name">${chainBadge} ${protocol}</span>
                             <span class="depin-badge">\uD83D\uDCE1 Mining</span>
+                            ${refreshBtn}
                         </div>
                         <div class="card-amount">${formatCryptoBlur(data.amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4}), token)}</div>
                         <div class="card-value">${formatUSDBlur(usdValue)}</div>
@@ -4092,6 +4121,93 @@ async function refreshStakingOnly(btn) {
     } catch (error) {
         console.error('Error refreshing staking:', error);
         showStatus('Failed to refresh staking', true);
+    } finally {
+        if (btn) {
+            btn.classList.remove('refreshing');
+            btn.disabled = false;
+        }
+    }
+}
+
+// Refresh a single DePIN protocol card (per-card retry)
+async function refreshDepinCard(protocol, btn) {
+    const cardEl = document.getElementById(`depin-card-${protocol}`);
+    if (btn) {
+        btn.classList.add('refreshing');
+        btn.disabled = true;
+    }
+
+    try {
+        const addrs = window._defiWalletAddresses || {};
+        let endpoints = [];
+
+        if (protocol === 'Iagon') {
+            endpoints = (addrs.cardano || []).map(addr =>
+                authFetch(`${API_BASE}/defi/iagon/${addr}?refresh=true`).then(r => r.ok ? r.json() : null).catch(() => null)
+            );
+        } else if (protocol === 'Helium') {
+            endpoints = (addrs.solana || []).map(addr =>
+                authFetch(`${API_BASE}/defi/helium/${addr}?refresh=true`).then(r => r.ok ? r.json() : null).catch(() => null)
+            );
+        }
+
+        const results = await Promise.all(endpoints);
+
+        // Aggregate results across wallets
+        let totalAmount = 0, pendingRewards = 0;
+        let rewardToken = '', rewardsUrl = '', token = '', logoUrl = '', blockchain = '';
+        let hasData = false;
+
+        for (const data of results) {
+            if (!data?.protocols?.[protocol]) continue;
+            hasData = true;
+            const pData = data.protocols[protocol];
+            rewardToken = pData.reward_token || rewardToken;
+            rewardsUrl = pData.rewards_url || rewardsUrl;
+            blockchain = pData.blockchain || blockchain;
+            pendingRewards += pData.pending_rewards || 0;
+
+            for (const stake of pData.staked || []) {
+                token = stake.token || token;
+                totalAmount += stake.amount || 0;
+                logoUrl = stake.logo_url || logoUrl;
+            }
+        }
+
+        if (hasData && cardEl) {
+            const tokenPrice = prices[token] || 0;
+            const usdValue = totalAmount * tokenPrice;
+            const chainBadge = getGovChainBadge(blockchain || 'cardano');
+            const tokenLogoUrl = logoUrl || `https://img.logokit.com/crypto/${token}?token=pk_fr08287a4c625f400f32a9&size=32`;
+            const refreshBtnHtml = `<button class="card-refresh-btn" onclick="refreshDepinCard('${protocol}', this)" title="Refresh ${protocol}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>`;
+
+            let pendingHtml = '';
+            if (pendingRewards > 0 && rewardToken) {
+                pendingHtml = `<div class="card-pending">Pending: <div class="staking-pending-compact"><span class="pending-item">${pendingRewards.toFixed(2)} ${rewardToken}</span></div></div>`;
+            }
+
+            setSafeHTML(cardEl, `
+                <div class="card-header">
+                    <span class="token-logo-wrap"><img src="${tokenLogoUrl}" alt="${token}" class="token-logo-staking" onerror="this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>${token.slice(0,3)}</span>'"></span>
+                    <span class="protocol-name">${chainBadge} ${protocol}</span>
+                    <span class="depin-badge">\uD83D\uDCE1 Mining</span>
+                    ${refreshBtnHtml}
+                </div>
+                <div class="card-amount">${formatCryptoBlur(totalAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4}), token)}</div>
+                <div class="card-value">${formatUSDBlur(usdValue)}</div>
+                ${pendingHtml}
+                <div class="card-actions">
+                    ${rewardsUrl ? `<a href="${rewardsUrl}" target="_blank" rel="noopener" class="action-link">Rewards</a>` : ''}
+                </div>
+            `);
+            cardEl.classList.remove('depin-timeout');
+            showStatus(`${protocol} data loaded`);
+        } else if (cardEl) {
+            showStatus(`No ${protocol} data found`, true);
+        }
+    } catch (error) {
+        console.error(`Error refreshing ${protocol}:`, error);
+        showStatus(`Failed to refresh ${protocol}`, true);
     } finally {
         if (btn) {
             btn.classList.remove('refreshing');

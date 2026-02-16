@@ -1300,12 +1300,16 @@ class DeFiService:
             'total_pending_rewards': {}
         }
 
+        # Track which protocols timed out vs returned no data
+        timed_out = set()
+
         # Per-protocol timeout wrapper (15s per protocol, 45s overall)
         async def with_timeout(coro, name, timeout=15):
             try:
                 return await asyncio.wait_for(coro, timeout=timeout)
             except asyncio.TimeoutError:
                 logger.warning(f"[Staking] {name} timed out after {timeout}s for {address[:20]}...")
+                timed_out.add(name)
                 return None
 
         # Phase 1: Fetch all protocol staking positions in parallel (15s each)
@@ -1330,6 +1334,7 @@ class DeFiService:
             liqwid = None
         if isinstance(iagon, Exception):
             logger.error(f"Iagon staking error for {address[:20]}: {iagon}")
+            timed_out.add('Iagon')
             iagon = None
         if isinstance(surf, Exception):
             logger.error(f"Surf staking error for {address[:20]}: {surf}")
@@ -1467,6 +1472,18 @@ class DeFiService:
                 'note': 'Old staking contract - position calculated from transaction history'
             }
             staking['total_positions'] += iagon['position_count']
+
+        # If Iagon timed out/errored and no stale fallback, add placeholder
+        if 'Iagon' not in staking['protocols'] and 'Iagon' in timed_out:
+            staking['protocols']['Iagon'] = {
+                'staked': [],
+                'category': 'depin',
+                'status': 'timeout',
+                'reward_token': 'IAG',
+                'rewards_url': 'https://iagon.com/staking',
+                'blockchain': 'cardano',
+                'total_positions': 0,
+            }
 
         # Assemble Surf Lending
         if surf:
