@@ -12,7 +12,7 @@ from typing import Dict, List, Optional
 
 from services.http_client import get_client
 from database import get_cache, set_cache
-from config import CACHE_TTL_WARM, CACHE_TTL_HOT, CMC_API_KEY, CMC_BASE_URL
+from config import CACHE_TTL_WARM, CACHE_TTL_HOT, CMC_BASE_URL
 
 logger = logging.getLogger(__name__)
 
@@ -265,7 +265,10 @@ class ChainAnalyticsService:
 
         cryptos = []
 
-        if not CMC_API_KEY:
+        # Load CMC key from database (user configures via Settings UI)
+        from database import get_api_key
+        cmc_key = await get_api_key("coinmarketcap")
+        if not cmc_key:
             logger.warning("Top cryptos requires CoinMarketCap API key — not configured")
             return {'cryptos': [], 'source': 'CMC', 'error': 'CoinMarketCap API key not configured'}
 
@@ -274,7 +277,7 @@ class ChainAnalyticsService:
             resp = await client.get(
                 f"{CMC_BASE_URL}/cryptocurrency/listings/latest",
                 params={'limit': limit, 'convert': 'USD'},
-                headers={'X-CMC_PRO_API_KEY': CMC_API_KEY, 'Accept': 'application/json'}
+                headers={'X-CMC_PRO_API_KEY': cmc_key, 'Accept': 'application/json'}
             )
             if resp.status_code == 200:
                 cmc_data = resp.json().get('data', [])
