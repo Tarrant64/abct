@@ -294,8 +294,12 @@
             var data = await resp.json();
 
             if (!data.success || !data.cryptos || data.cryptos.length === 0) {
+                var msg = data.error || 'Failed to load top cryptos';
+                if (msg.indexOf('not configured') !== -1) {
+                    msg = 'Requires CoinMarketCap API key. <a href="/settings.html#apis" style="color:#667eea;">Configure in Settings</a>';
+                }
                 document.getElementById('topCryptosTableBody').innerHTML =
-                    '<tr><td colspan="7" style="text-align:center;color:#888;padding:40px;">Failed to load top cryptos</td></tr>';
+                    '<tr><td colspan="7" style="text-align:center;color:#888;padding:40px;">' + msg + '</td></tr>';
                 return;
             }
 
