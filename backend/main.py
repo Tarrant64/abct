@@ -456,6 +456,15 @@ async def lifespan(app: FastAPI):
 
     _background_tasks.append(asyncio.create_task(restore_cloudflare_tunnel()))
 
+    # Clear stale streamgraph cache on startup (prevents serving old empty-chains responses)
+    try:
+        from database import clear_cache
+        for r in ('24h', '1w', '1m', '3m', '6m', '1y', 'all'):
+            await clear_cache(f"unified_chart_1_{r}_by_chain", user_id=1)
+        logger.info("Cleared streamgraph chart cache on startup")
+    except Exception as e:
+        logger.warning(f"Failed to clear streamgraph cache: {e}")
+
     # Backfill balance_history prices in background (enables streamgraph historical data)
     async def backfill_history_prices():
         try:
