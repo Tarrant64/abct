@@ -117,6 +117,16 @@ class GateService:
             "asset_count": len(assets)
         }
 
+    async def test_connection(self) -> dict:
+        """Test API connectivity with a lightweight authenticated request."""
+        try:
+            result = await self._make_request("/api/v4/spot/accounts")
+            if result is not None:
+                return {"success": True, "message": "Connected successfully"}
+            return {"success": False, "message": "Authentication failed or API unreachable"}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
 
 # Create singleton instance
 gate_service = GateService()

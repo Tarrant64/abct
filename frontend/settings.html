@@ -320,6 +320,37 @@
             font-size: 11px;
         }
 
+        .api-health {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+
+        .api-health.health-ok {
+            color: #10b981;
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .api-health.health-fail {
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .api-health.health-untested {
+            color: #6b7280;
+            background: rgba(107, 114, 128, 0.1);
+        }
+
+        .api-health-detail {
+            font-size: 11px;
+            color: #ef4444;
+            margin-top: 4px;
+        }
+
         .api-actions {
             display: flex;
             align-items: center;
@@ -5872,6 +5903,22 @@
             const statusText = api.configured ? 'Configured' : 'Not configured';
             const sourceText = api.source ? `(${api.source})` : '';
 
+            // Health badge for configured APIs
+            let healthBadge = '';
+            if (api.configured && api.last_test_status === 'ok') {
+                healthBadge = '<span class="api-health health-ok">Verified</span>';
+            } else if (api.configured && api.last_test_status === 'fail') {
+                healthBadge = '<span class="api-health health-fail">Failed</span>';
+            } else if (api.configured && !api.last_test_status) {
+                healthBadge = '<span class="api-health health-untested">Untested</span>';
+            }
+
+            // Health detail message for failed tests
+            let healthDetail = '';
+            if (api.configured && api.last_test_status === 'fail' && api.last_test_message) {
+                healthDetail = `<div class="api-health-detail">${api.last_test_message}</div>`;
+            }
+
             // Check if this API requires additional fields
             const requiresSecret = api.requires_secret || false;
             const requiresPassphrase = api.requires_passphrase || false;
@@ -5885,6 +5932,7 @@
                             <span class="api-badge ${api.required ? 'required' : 'optional'}">
                                 ${api.required ? 'Required' : 'Optional'}
                             </span>
+                            ${healthBadge}
                         </div>
                         <div class="api-description">${api.description}</div>
                         <div class="api-status">
@@ -5893,6 +5941,7 @@
                             <span class="api-source">${sourceText}</span>
                             <a href="${api.docs_url}" target="_blank" class="docs-link">Get API Key</a>
                         </div>
+                        ${healthDetail}
                     </div>
                     <div class="api-actions">
                         ${api.configured ? `
@@ -6110,7 +6159,14 @@
                     return; // Don't show success yet
                 }
 
-                showApiStatus('API credentials saved successfully', 'success');
+                // Show test result-aware status message
+                if (result.test_result && result.test_result.tested && !result.test_result.success) {
+                    showApiStatus(result.message || 'API saved but test failed — auto-disabled', 'error');
+                } else if (result.test_result && result.test_result.tested && result.test_result.success) {
+                    showApiStatus(result.message || 'API enabled and verified', 'success');
+                } else {
+                    showApiStatus(result.message || 'API credentials saved', 'success');
+                }
 
                 // Update the specific API item in place without reloading
                 await updateApiItem(apiId);
@@ -6167,7 +6223,10 @@
                         apiData.categories[currentCategory].apis[apiIndex] = {
                             ...apiData.categories[currentCategory].apis[apiIndex],
                             enabled: apiInfo.enabled,
-                            configured: apiInfo.configured
+                            configured: apiInfo.configured,
+                            last_test_status: apiInfo.last_test_status || null,
+                            last_test_message: apiInfo.last_test_message || null,
+                            last_tested_at: apiInfo.last_tested_at || null,
                         };
 
                         // Re-render the API item
@@ -6273,7 +6332,14 @@
                     return; // Don't show success yet
                 }
 
-                showApiStatus('Credentials uploaded successfully', 'success');
+                // Show test result-aware status message
+                if (result.test_result && result.test_result.tested && !result.test_result.success) {
+                    showApiStatus(result.message || 'Credentials uploaded but test failed — auto-disabled', 'error');
+                } else if (result.test_result && result.test_result.tested && result.test_result.success) {
+                    showApiStatus(result.message || 'Credentials uploaded and verified', 'success');
+                } else {
+                    showApiStatus(result.message || 'Credentials uploaded successfully', 'success');
+                }
 
                 // Update the specific API item in place without reloading
                 await updateApiItem(apiId);

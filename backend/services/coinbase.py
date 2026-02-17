@@ -629,6 +629,16 @@ class CoinbaseService:
             logger.error(f"Error fetching Coinbase transactions: {e}")
             return []
 
+    async def test_connection(self) -> dict:
+        """Test API connectivity with a lightweight authenticated request."""
+        try:
+            result = await self._make_request("GET", "/api/v3/brokerage/accounts", {"limit": "1"})
+            if result is not None:
+                return {"success": True, "message": "Connected successfully"}
+            return {"success": False, "message": "Authentication failed or API unreachable"}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
 
 # Singleton instance
 coinbase_service = CoinbaseService()

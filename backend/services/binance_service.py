@@ -423,6 +423,16 @@ class BinanceService:
         logger.info(f"Binance: fetched {len(all_withdrawals)} withdrawals")
         return all_withdrawals
 
+    async def test_connection(self) -> dict:
+        """Test API connectivity with a lightweight authenticated request."""
+        try:
+            result = await self._make_request("/api/v3/account")
+            if result is not None:
+                return {"success": True, "message": "Connected successfully"}
+            return {"success": False, "message": "Authentication failed or API unreachable"}
+        except Exception as e:
+            return {"success": False, "message": str(e)}
+
 
 # Create singleton instance
 binance_service = BinanceService()

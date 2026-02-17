@@ -120,6 +120,16 @@ async def lifespan(app: FastAPI):
         logger.warning(f"API key encryption migration failed: {e}")
         await log_service.warning("main", f"API key encryption migration failed: {e}")
 
+    # Run API health checks on startup (non-blocking, don't auto-disable)
+    logger.info("Running startup API health checks...")
+    try:
+        from services.api_health import run_startup_health_checks
+        await run_startup_health_checks()
+        await log_service.info("main", "Startup API health checks complete")
+    except Exception as e:
+        logger.warning(f"Startup API health checks failed: {e}")
+        await log_service.warning("main", f"Startup API health checks failed: {e}")
+
     # Clean up expired cache entries
     logger.info("Cleaning up expired cache entries...")
     try:

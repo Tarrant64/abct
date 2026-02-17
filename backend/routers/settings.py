@@ -17,7 +17,7 @@ import logging
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database import (
     get_all_api_settings, get_api_setting, save_api_setting, delete_api_setting,
-    update_api_enabled_status, get_api_key,
+    update_api_enabled_status, get_api_key, update_api_health,
     get_api_usage, get_all_api_usage, get_api_rate_limit, save_api_rate_limit,
     delete_api_rate_limit, get_all_api_rate_limits
 )
@@ -523,7 +523,10 @@ async def list_apis():
             "file_upload_hint": api_info.get('file_upload_hint'),
             "placeholder": api_info.get('placeholder'),
             "secret_placeholder": api_info.get('secret_placeholder'),
-            "pricing": api_info.get('pricing', 'unknown')
+            "pricing": api_info.get('pricing', 'unknown'),
+            "last_test_status": saved.get('last_test_status') if saved else None,
+            "last_test_message": saved.get('last_test_message') if saved else None,
+            "last_tested_at": saved.get('last_tested_at') if saved else None,
         })
 
     return {
@@ -566,7 +569,10 @@ async def get_api_status(api_id: str):
         "enabled": enabled,
         "configured": has_key,
         "key_preview": key_preview,
-        "source": source
+        "source": source,
+        "last_test_status": saved.get('last_test_status') if saved else None,
+        "last_test_message": saved.get('last_test_message') if saved else None,
+        "last_tested_at": saved.get('last_tested_at') if saved else None,
     }
 
 
@@ -587,10 +593,33 @@ async def enable_api(api_id: str, data: APIKeyUpdate, user_id: int = Depends(ver
     await save_api_setting(api_id, api_key, enabled=True, user_id=user_id,
                           api_secret=api_secret, api_passphrase=api_passphrase)
 
+    # Test the API key after saving
+    from services.api_health import run_api_test
+    test_result = await run_api_test(api_id, api_key, api_secret, api_passphrase)
+    await update_api_health(api_id, user_id, test_result)
+
+    api_name = API_REGISTRY[api_id]['name']
+
+    if test_result.get("tested") and not test_result.get("success"):
+        # Test failed — auto-disable the API
+        await update_api_enabled_status(api_id, False, user_id=user_id)
+        return {
+            "message": f"{api_name} API saved but test FAILED — auto-disabled. {test_result.get('message', '')}",
+            "api_id": api_id,
+            "enabled": False,
+            "test_result": test_result
+        }
+
+    if test_result.get("tested"):
+        msg = f"{api_name} API enabled and verified"
+    else:
+        msg = f"{api_name} API enabled (no test available)"
+
     return {
-        "message": f"{API_REGISTRY[api_id]['name']} API enabled",
+        "message": msg,
         "api_id": api_id,
-        "enabled": True
+        "enabled": True,
+        "test_result": test_result
     }
 
 
@@ -666,10 +695,25 @@ async def upload_api_file(api_id: str, file: UploadFile = File(...), user_id: in
     api_key_json = json.dumps(credentials)
     await save_api_setting(api_id, api_key_json, enabled=True, user_id=user_id)
 
+    # Test the API after saving
+    from services.api_health import run_api_test
+    test_result = await run_api_test(api_id, api_key_json)
+    await update_api_health(api_id, user_id, test_result)
+
+    if test_result.get("tested") and not test_result.get("success"):
+        await update_api_enabled_status(api_id, False, user_id=user_id)
+        return {
+            "message": f"{api_info['name']} credentials uploaded but test FAILED — auto-disabled. {test_result.get('message', '')}",
+            "api_id": api_id,
+            "enabled": False,
+            "test_result": test_result
+        }
+
     return {
-        "message": f"{api_info['name']} credentials uploaded successfully",
+        "message": f"{api_info['name']} credentials uploaded and verified",
         "api_id": api_id,
-        "enabled": True
+        "enabled": True,
+        "test_result": test_result
     }
 
 
@@ -685,62 +729,23 @@ async def test_api(api_id: str):
         return {
             "api_id": api_id,
             "success": False,
-            "error": "No API key configured"
+            "tested": True,
+            "message": "No API key configured"
         }
 
-    # Test based on API type
+    from services.api_health import run_api_test
+    test_result = await run_api_test(api_id)
+
+    # Store health result in DB (best-effort, need user_id)
     try:
-        if api_id == "blockfrost":
-            import httpx
-            client = get_client("api_test", timeout=30.0)
-            response = await client.get(
-                "https://cardano-mainnet.blockfrost.io/api/v0/health",
-                headers={"project_id": api_key},
-                timeout=10.0
-            )
-            success = response.status_code == 200
-            error = None if success else f"Status {response.status_code}"
+        from database import get_current_user_id
+        user_id = get_current_user_id()
+        if user_id:
+            await update_api_health(api_id, user_id, test_result)
+    except Exception:
+        pass
 
-        elif api_id == "alchemy":
-            import httpx
-            client = get_client("api_test", timeout=30.0)
-            response = await client.get(
-                f"https://eth-mainnet.g.alchemy.com/v2/{api_key}",
-                timeout=10.0
-            )
-            success = response.status_code == 200
-            error = None if success else f"Status {response.status_code}"
-
-        elif api_id == "helius":
-            import httpx
-            client = get_client("api_test", timeout=30.0)
-            response = await client.get(
-                f"https://api.helius.xyz/v0/addresses/11111111111111111111111111111111/balances?api-key={api_key}",
-                timeout=10.0
-            )
-            success = response.status_code == 200
-            error = None if success else f"Status {response.status_code}"
-
-        else:
-            # Generic - just confirm we have a key
-            return {
-                "api_id": api_id,
-                "success": True,
-                "message": "API key is configured (test not implemented for this API)"
-            }
-
-        return {
-            "api_id": api_id,
-            "success": success,
-            "error": error
-        }
-
-    except Exception as e:
-        return {
-            "api_id": api_id,
-            "success": False,
-            "error": str(e)
-        }
+    return {"api_id": api_id, **test_result}
 
 
 async def get_effective_api_key(api_id: str) -> str:

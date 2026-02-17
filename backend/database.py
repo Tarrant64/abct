@@ -646,6 +646,13 @@ async def init_db():
         except Exception:
             pass  # Column already exists
 
+        # Add API health check columns (migration)
+        for col in ('last_test_status', 'last_test_message', 'last_tested_at'):
+            try:
+                await db.execute(f"ALTER TABLE api_settings ADD COLUMN {col} TEXT")
+            except Exception:
+                pass  # Column already exists
+
         # API usage tracking table - stores API call counts per period (legacy aggregated view)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS api_usage (
@@ -2308,6 +2315,30 @@ async def get_api_key(api_name: str, user_id: int = None) -> str:
     if setting and setting.get('enabled') and setting.get('api_key'):
         return setting['api_key']
     return ""
+
+
+async def update_api_health(api_name: str, user_id: int, test_result: dict):
+    """Update health check columns for an API setting.
+
+    Args:
+        api_name: API name
+        user_id: User ID
+        test_result: Dict with 'success', 'message', and optionally 'tested' keys
+    """
+    status = "ok" if test_result.get("success") else "fail"
+    if not test_result.get("tested", True):
+        status = None  # No test available — don't store status
+
+    message = test_result.get("message", "")
+    now = datetime.now().isoformat()
+
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("""
+            UPDATE api_settings
+            SET last_test_status = ?, last_test_message = ?, last_tested_at = ?
+            WHERE user_id = ? AND api_name = ?
+        """, (status, message, now, user_id, api_name))
+        await db.commit()
 
 
 # ============ Security Settings Functions ============
