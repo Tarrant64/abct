@@ -37,8 +37,15 @@ LIQWID_LQ_TOKEN = "da8c30857834c6ae7203935b89278c532b3995245295456f993e1d244c51"
 FLOW_TOKEN_POLICY = "2d9db8a89f074aa045eab177f23a3395f62ced8b53499a9e4ad46c80"
 FLOW_ASSET = "2d9db8a89f074aa045eab177f23a3395f62ced8b53499a9e4ad46c80464c4f57"
 
-# Iagon staking contracts
-IAGON_OLD_STAKING_ADDRESS = "addr1v8ckrqqrj4u34sxt45vdu8s8nqq3lm3lc8s7su5nyzaq9tcqy2n8j"
+# Iagon staking contracts (addresses from DefiLlama adapter maintained by Iagon)
+IAGON_OLD_STAKING_ADDRESS = "addr1w9k25wa83tyfk5d26tgx4w99e5yhxd86hg33yl7x7ej7yusggvmu3"
+IAGON_OPERATOR_STAKING_ADDRESS = "addr1zxkrtm5fcf43ukp8w8kstt65kelawutmht4a0aezl06rp43y2c4s7gthspjk2c4557c9zltqcssl4qz7x5syzf7yknhqma7zxx"
+IAGON_DELEGATED_STAKING_ADDRESS = "addr1z8awewqwaek2m7w6c5vyycldf5tykw87w820da273a4smgpy2c4s7gthspjk2c4557c9zltqcssl4qz7x5syzf7yknhq6uv6j0"
+IAGON_BATCHER_ADDRESS = "addr1v8ckrqqrj4u34sxt45vdu8s8nqq3lm3lc8s7su5nyzaq9tcqy2n8j"  # Active batcher/aggregator
+IAGON_ALL_STAKING_ADDRESSES = {
+    IAGON_OLD_STAKING_ADDRESS, IAGON_OPERATOR_STAKING_ADDRESS,
+    IAGON_DELEGATED_STAKING_ADDRESS, IAGON_BATCHER_ADDRESS
+}
 IAGON_IAG_POLICY = "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114"
 IAGON_IAG_ASSET = "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
 
@@ -742,23 +749,45 @@ class DeFiService:
         """
         Get Iagon staking position for an address.
 
-        Iagon's old staking contract uses a pooled model without receipt tokens.
-        We calculate the net staking position from transaction history:
-        - Deposits: IAG sent from user to staking contract
-        - Withdrawals: IAG sent from staking contract to user
-        - Net staked = Deposits - Withdrawals
+        Checks all 3 Iagon staking contracts (old, operator, delegated).
+        Uses incremental scanning — caches last-scanned block height and
+        accumulated deposit/withdrawal totals so subsequent calls only
+        scan new transactions.
         """
+        from database import get_cache, set_cache
+
         try:
             client = get_client("blockfrost", timeout=15.0)
-            # Get ALL transactions for the address (no page limit — outer timeout protects us)
+
+            # Load incremental scan state from persistent cache (7-day TTL)
+            scan_key = f"iagon_scan_state_{address}"
+            scan_state = await get_cache(scan_key)
+
+            total_deposits = 0
+            total_withdrawals = 0
+            from_block = None
+
+            if scan_state:
+                total_deposits = scan_state.get('total_deposits', 0)
+                total_withdrawals = scan_state.get('total_withdrawals', 0)
+                from_block = scan_state.get('last_block_height')
+                logger.info(f"[Iagon] Resuming scan for {address[:20]}... from block {from_block}, "
+                           f"prior deposits={total_deposits/1_000_000:.2f}, withdrawals={total_withdrawals/1_000_000:.2f}")
+
+            # Fetch transactions (incremental if we have scan state)
             all_txs = []
             page = 1
 
             while True:
+                params = {"count": 100, "page": page, "order": "asc"}
+                if from_block:
+                    # Start from next block to avoid re-processing already-counted txs
+                    params["from"] = str(from_block + 1)
+
                 response = await client.get(
                     f"{BLOCKFROST_BASE_URL}/addresses/{address}/transactions",
                     headers=self.headers,
-                    params={"count": 100, "page": page, "order": "asc"}
+                    params=params
                 )
 
                 if response.status_code != 200:
@@ -773,15 +802,28 @@ class DeFiService:
                     break  # Last page
                 page += 1
 
-            logger.info(f"[Iagon] Scanned {len(all_txs)} transactions across {page} pages for {address[:20]}...")
+            logger.info(f"[Iagon] Scanned {len(all_txs)} {'new ' if from_block else ''}transactions "
+                       f"across {page} pages for {address[:20]}...")
 
-            if not all_txs:
+            # If incremental and no new txs, return cached result
+            if from_block and not all_txs:
+                net_staked = total_deposits - total_withdrawals
+                if net_staked <= 0:
+                    return None
+                return {
+                    'protocol': 'Iagon',
+                    'address': address,
+                    'total_staked_iag': net_staked / 1_000_000,
+                    'total_deposited': total_deposits / 1_000_000,
+                    'total_withdrawn': total_withdrawals / 1_000_000,
+                    'position_count': 1,
+                    'contract': 'multiple'
+                }
+
+            if not all_txs and not scan_state:
                 return None
 
-            total_deposits = 0
-            total_withdrawals = 0
-
-            # Fetch UTxOs in parallel batches (10 concurrent) instead of sequentially
+            # Fetch UTxOs in parallel batches (10 concurrent)
             sem = asyncio.Semaphore(10)
 
             async def fetch_tx_utxos(tx_hash):
@@ -800,64 +842,61 @@ class DeFiService:
                         logger.warning(f"[Iagon] UTxO fetch for tx {tx_hash[:16]} failed: {e}")
                         return None
 
-            utxo_results = await asyncio.gather(
-                *[fetch_tx_utxos(tx['tx_hash']) for tx in all_txs],
-                return_exceptions=True
-            )
+            if all_txs:
+                utxo_results = await asyncio.gather(
+                    *[fetch_tx_utxos(tx['tx_hash']) for tx in all_txs],
+                    return_exceptions=True
+                )
 
-            # Collect failed tx hashes for retry
-            failed_txs = []
-            successful_results = []
-            for i, tx_data in enumerate(utxo_results):
-                if isinstance(tx_data, Exception) or tx_data is None:
-                    failed_txs.append(all_txs[i]['tx_hash'])
-                else:
-                    successful_results.append(tx_data)
+                # Track last block for incremental scan
+                last_block = from_block or 0
 
-            # Retry failed UTxO fetches sequentially
-            if failed_txs:
-                logger.info(f"[Iagon] Retrying {len(failed_txs)}/{len(all_txs)} failed UTxO fetches sequentially...")
-                for tx_hash in failed_txs:
-                    try:
-                        result = await fetch_tx_utxos(tx_hash)
-                        if result:
-                            successful_results.append(result)
-                    except Exception as e:
-                        logger.warning(f"[Iagon] Retry tx {tx_hash[:16]} failed: {e}")
+                for i, tx_data in enumerate(utxo_results):
+                    if isinstance(tx_data, Exception) or tx_data is None:
+                        continue
 
-            for tx_data in successful_results:
+                    tx_block = all_txs[i].get('block_height', 0)
+                    if tx_block > last_block:
+                        last_block = tx_block
 
-                # Calculate IAG flows
-                user_sends_iag = 0
-                user_receives_iag = 0
-                contract_receives_iag = 0
-                contract_sends_iag = 0
+                    # Calculate IAG flows across ALL staking addresses
+                    user_sends_iag = 0
+                    user_receives_iag = 0
+                    contract_receives_iag = 0
+                    contract_sends_iag = 0
 
-                for inp in tx_data.get('inputs', []):
-                    for amt in inp.get('amount', []):
-                        if amt['unit'] == IAGON_IAG_ASSET:
-                            qty = int(amt['quantity'])
-                            if inp['address'] == address:
-                                user_sends_iag += qty
-                            elif inp['address'] == IAGON_OLD_STAKING_ADDRESS:
-                                contract_sends_iag += qty
+                    for inp in tx_data.get('inputs', []):
+                        for amt in inp.get('amount', []):
+                            if amt['unit'] == IAGON_IAG_ASSET:
+                                qty = int(amt['quantity'])
+                                if inp['address'] == address:
+                                    user_sends_iag += qty
+                                elif inp['address'] in IAGON_ALL_STAKING_ADDRESSES:
+                                    contract_sends_iag += qty
 
-                for out in tx_data.get('outputs', []):
-                    for amt in out.get('amount', []):
-                        if amt['unit'] == IAGON_IAG_ASSET:
-                            qty = int(amt['quantity'])
-                            if out['address'] == address:
-                                user_receives_iag += qty
-                            elif out['address'] == IAGON_OLD_STAKING_ADDRESS:
-                                contract_receives_iag += qty
+                    for out in tx_data.get('outputs', []):
+                        for amt in out.get('amount', []):
+                            if amt['unit'] == IAGON_IAG_ASSET:
+                                qty = int(amt['quantity'])
+                                if out['address'] == address:
+                                    user_receives_iag += qty
+                                elif out['address'] in IAGON_ALL_STAKING_ADDRESSES:
+                                    contract_receives_iag += qty
 
-                # Deposit: User sends IAG and contract receives it
-                if user_sends_iag > 0 and contract_receives_iag > 0:
-                    total_deposits += contract_receives_iag
+                    # Deposit: User sends IAG and contract receives it
+                    if user_sends_iag > 0 and contract_receives_iag > 0:
+                        total_deposits += contract_receives_iag
 
-                # Withdrawal: Contract sends IAG and user receives it
-                if contract_sends_iag > 0 and user_receives_iag > 0:
-                    total_withdrawals += user_receives_iag
+                    # Withdrawal: Contract sends IAG and user receives it
+                    if contract_sends_iag > 0 and user_receives_iag > 0:
+                        total_withdrawals += user_receives_iag
+
+                # Save scan state persistently (7-day TTL)
+                await set_cache(scan_key, {
+                    'total_deposits': total_deposits,
+                    'total_withdrawals': total_withdrawals,
+                    'last_block_height': last_block
+                }, ttl_seconds=604800)
 
             net_staked = total_deposits - total_withdrawals
 
@@ -874,7 +913,7 @@ class DeFiService:
                 'total_deposited': total_deposits / 1_000_000,
                 'total_withdrawn': total_withdrawals / 1_000_000,
                 'position_count': 1 if net_staked > 0 else 0,
-                'contract': IAGON_OLD_STAKING_ADDRESS
+                'contract': 'multiple'
             }
 
         except Exception as e:
@@ -1324,7 +1363,7 @@ class DeFiService:
             with_timeout(self.get_indigo_staking(address), "Indigo"),
             with_timeout(self.get_strike_staking(address), "Strike", timeout=20),
             with_timeout(self.get_liqwid_staking(address), "Liqwid", timeout=25),
-            with_timeout(self.get_iagon_staking(address), "Iagon", timeout=10),
+            with_timeout(self.get_iagon_staking(address), "Iagon", timeout=30),
             with_timeout(self.get_surf_lending_positions(address), "Surf"),
             return_exceptions=True
         )

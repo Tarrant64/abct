@@ -390,6 +390,88 @@ async def get_iagon_staking_data(address: str, refresh: bool = False, user_id: i
     return result
 
 
+@router.get("/iagon/debug/{address}")
+async def debug_iagon_staking(address: str, user_id: int = Depends(verify_session)):
+    """Debug endpoint to test Iagon staking scan with verbose output."""
+    from services.defi import (
+        IAGON_ALL_STAKING_ADDRESSES, IAGON_IAG_ASSET,
+        IAGON_OLD_STAKING_ADDRESS, IAGON_OPERATOR_STAKING_ADDRESS,
+        IAGON_DELEGATED_STAKING_ADDRESS, IAGON_BATCHER_ADDRESS
+    )
+    from services.http_client import get_client
+    from config import BLOCKFROST_API_KEY, BLOCKFROST_BASE_URL
+
+    headers = {"project_id": BLOCKFROST_API_KEY}
+    client = get_client("blockfrost", timeout=15.0)
+
+    # Check scan state cache
+    scan_state = await get_cache(f"iagon_scan_state_{address}")
+
+    # Fetch first 2 pages of transactions to sample
+    sample_txs = []
+    iag_related_txs = []
+    for page in [1, 2]:
+        resp = await client.get(
+            f"{BLOCKFROST_BASE_URL}/addresses/{address}/transactions",
+            headers=headers,
+            params={"count": 100, "page": page, "order": "desc"}
+        )
+        if resp.status_code == 200:
+            sample_txs.extend(resp.json())
+        else:
+            break
+
+    # Check a sample of recent txs for IAG involvement
+    sem = asyncio.Semaphore(5)
+    async def check_tx(tx):
+        async with sem:
+            r = await client.get(f"{BLOCKFROST_BASE_URL}/txs/{tx['tx_hash']}/utxos", headers=headers)
+            if r.status_code != 200:
+                return None
+            data = r.json()
+            has_iag = False
+            hits_contract = False
+            for side in ['inputs', 'outputs']:
+                for io in data.get(side, []):
+                    for amt in io.get('amount', []):
+                        if amt['unit'] == IAGON_IAG_ASSET:
+                            has_iag = True
+                    if io['address'] in IAGON_ALL_STAKING_ADDRESSES:
+                        hits_contract = True
+            if has_iag or hits_contract:
+                return {
+                    'tx_hash': tx['tx_hash'],
+                    'block_height': tx.get('block_height'),
+                    'has_iag': has_iag,
+                    'hits_staking_contract': hits_contract
+                }
+            return None
+
+    # Check up to 20 most recent txs
+    checks = await asyncio.gather(*[check_tx(tx) for tx in sample_txs[:20]], return_exceptions=True)
+    for c in checks:
+        if c and not isinstance(c, Exception):
+            iag_related_txs.append(c)
+
+    # Run the actual staking scan
+    staking_result = await defi_service.get_iagon_staking(address)
+
+    return {
+        "address": address,
+        "staking_addresses": {
+            "old": IAGON_OLD_STAKING_ADDRESS,
+            "operator": IAGON_OPERATOR_STAKING_ADDRESS,
+            "delegated": IAGON_DELEGATED_STAKING_ADDRESS,
+            "batcher": IAGON_BATCHER_ADDRESS
+        },
+        "iag_asset_id": IAGON_IAG_ASSET,
+        "scan_state_cached": scan_state,
+        "total_txs_sampled": len(sample_txs),
+        "iag_related_txs_in_sample": iag_related_txs,
+        "staking_result": staking_result
+    }
+
+
 @router.get("/chainlink/{address}")
 async def get_chainlink_staking_positions(address: str, user_id: int = Depends(verify_session)):
     """

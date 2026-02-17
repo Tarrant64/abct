@@ -208,7 +208,7 @@ async def clear_staking_cache(user_id: int = Depends(verify_session)):
     try:
         async with aiosqlite.connect(DATABASE_PATH) as db:
             cursor = await db.execute(
-                "DELETE FROM cache WHERE key LIKE 'staking_positions_%' OR key LIKE 'iagon_staking_%' OR key LIKE 'defi_summary_%'"
+                "DELETE FROM cache WHERE key LIKE 'staking_positions_%' OR key LIKE 'iagon_staking_%' OR key LIKE 'iagon_scan_state_%' OR key LIKE 'defi_summary_%'"
             )
             deleted = cursor.rowcount
             await db.commit()
