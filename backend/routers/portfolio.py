@@ -1043,7 +1043,7 @@ async def get_unified_chart(
         if not chain_rows:
             return {
                 "data": [],
-                "chain_list": [],
+                "chains": [],
                 "coverage": {"oldest_date": None, "newest_date": None, "total_days": 0}
             }
 
@@ -1066,7 +1066,7 @@ async def get_unified_chart(
         chain_list = sorted(chain_totals.keys(), key=lambda c: chain_totals[c], reverse=True)
 
         logger.info(f"Unified chart by_chain: {len(data)} points, {len(chain_list)} chains")
-        result = {"data": data, "chain_list": chain_list, "coverage": _compute_chart_coverage(data)}
+        result = {"data": data, "chains": chain_list, "coverage": _compute_chart_coverage(data)}
         await set_cache(cache_key, result, ttl_seconds=CACHE_TTL_WARM, user_id=user_id)
         return result
 

@@ -295,10 +295,10 @@ class BinanceUSService:
 
         all_deposits = []
         now_ms = int(time.time() * 1000)
-        one_year_ago_ms = now_ms - (365 * 24 * 60 * 60 * 1000)
+        history_start_ms = now_ms - (5 * 365 * 24 * 60 * 60 * 1000)  # 5 years back — grab all available
         window_ms = 90 * 24 * 60 * 60 * 1000
 
-        start_ms = one_year_ago_ms
+        start_ms = history_start_ms
         while start_ms < now_ms:
             end_ms = min(start_ms + window_ms, now_ms)
             offset = 0
@@ -355,10 +355,10 @@ class BinanceUSService:
 
         all_withdrawals = []
         now_ms = int(time.time() * 1000)
-        one_year_ago_ms = now_ms - (365 * 24 * 60 * 60 * 1000)
+        history_start_ms = now_ms - (5 * 365 * 24 * 60 * 60 * 1000)  # 5 years back — grab all available
         window_ms = 90 * 24 * 60 * 60 * 1000
 
-        start_ms = one_year_ago_ms
+        start_ms = history_start_ms
         while start_ms < now_ms:
             end_ms = min(start_ms + window_ms, now_ms)
             offset = 0
