@@ -8,6 +8,8 @@ import logging
 import time
 import hmac
 import hashlib
+import json
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 from urllib.parse import urlencode
 import sys
@@ -173,6 +175,228 @@ class BinanceUSService:
             "total_usd": 0,  # Will be calculated by router
             "asset_count": len(assets)
         }
+
+    # ── Full transaction history (DB-compatible format) ──────────────
+
+    async def get_all_transactions(self, user_id: int = None) -> List[Dict]:
+        """Fetch trades, deposits, and withdrawals in DB-compatible format.
+
+        Analogous to Coinbase get_all_v2_transactions.
+        Returns deduplicated list sorted by tx_time DESC.
+        """
+        if not self.is_configured():
+            return []
+
+        trades = await self._get_all_trade_history(user_id=user_id)
+
+        deposits = []
+        try:
+            deposits = await self.get_deposit_history(user_id=user_id)
+        except Exception as e:
+            logger.warning(f"Binance.US deposit history unavailable: {e}")
+
+        withdrawals = []
+        try:
+            withdrawals = await self.get_withdrawal_history(user_id=user_id)
+        except Exception as e:
+            logger.warning(f"Binance.US withdrawal history unavailable: {e}")
+
+        # Deduplicate by tx_id
+        seen = set()
+        combined = []
+        for tx in trades + deposits + withdrawals:
+            tid = tx.get("tx_id", "")
+            if tid and tid not in seen:
+                seen.add(tid)
+                combined.append(tx)
+
+        combined.sort(key=lambda x: x.get("tx_time", ""), reverse=True)
+        logger.info(f"Binance.US total transactions: {len(trades)} trades, {len(deposits)} deposits, {len(withdrawals)} withdrawals")
+        return combined
+
+    async def _get_all_trade_history(self, user_id: int = None) -> List[Dict]:
+        """Fetch all trades in the 17-field DB-compatible format."""
+        if not self.is_configured():
+            return []
+
+        try:
+            data = await self._make_request("/api/v3/account")
+            if not data:
+                return []
+
+            assets_with_balance = []
+            for balance in data.get("balances", []):
+                total = float(balance.get("free", 0)) + float(balance.get("locked", 0))
+                if total > 0 and balance["asset"] not in ("USD", "USDT", "USDC", "BUSD"):
+                    assets_with_balance.append((balance["asset"], total))
+
+            assets_with_balance.sort(key=lambda x: x[1], reverse=True)
+            assets_with_balance = assets_with_balance[:20]
+
+            all_trades = []
+            for asset, _ in assets_with_balance:
+                # Binance.US: USD first, then USDT, then BUSD
+                for quote in ("USD", "USDT", "BUSD"):
+                    symbol = f"{asset}{quote}"
+                    trades = await self._make_request("/api/v3/myTrades", {"symbol": symbol, "limit": 1000})
+                    if trades and isinstance(trades, list) and len(trades) > 0:
+                        for trade in trades:
+                            side = "buy" if trade.get("isBuyer") else "sell"
+                            all_trades.append({
+                                "tx_id": f"trade_{trade['id']}",
+                                "tx_type": side,
+                                "status": "completed",
+                                "tx_time": self._format_timestamp(trade.get("time", 0)),
+                                "amount": str(trade.get("qty", "0")),
+                                "token_symbol": asset,
+                                "native_amount": str(trade.get("quoteQty", "0")),
+                                "native_currency": quote,
+                                "fee": str(trade.get("commission", "0")),
+                                "fee_currency": trade.get("commissionAsset", ""),
+                                "from_address": "",
+                                "to_address": "",
+                                "network_hash": "",
+                                "metadata": json.dumps(trade),
+                            })
+                        break
+
+            logger.info(f"Binance.US: fetched {len(all_trades)} trades across {len(assets_with_balance)} assets")
+            return all_trades
+
+        except Exception as e:
+            logger.error(f"Error fetching Binance.US full trade history: {e}")
+            return []
+
+    async def get_deposit_history(self, user_id: int = None) -> List[Dict]:
+        """Fetch deposit history from /sapi/v1/capital/deposit/hisrec.
+
+        Binance.US may not support /sapi/ endpoints — caller wraps in try/except.
+        Uses 90-day windowing (Binance API limitation).
+        """
+        if not self.is_configured():
+            return []
+
+        all_deposits = []
+        now_ms = int(time.time() * 1000)
+        one_year_ago_ms = now_ms - (365 * 24 * 60 * 60 * 1000)
+        window_ms = 90 * 24 * 60 * 60 * 1000
+
+        start_ms = one_year_ago_ms
+        while start_ms < now_ms:
+            end_ms = min(start_ms + window_ms, now_ms)
+            offset = 0
+            while True:
+                params = {
+                    "startTime": start_ms,
+                    "endTime": end_ms,
+                    "limit": 1000,
+                    "offset": offset,
+                }
+                result = await self._make_request("/sapi/v1/capital/deposit/hisrec", params)
+                if result is None:
+                    return all_deposits
+                if not isinstance(result, list) or len(result) == 0:
+                    break
+
+                for dep in result:
+                    if dep.get("status") not in (1, 6):
+                        continue
+                    insert_time_ms = dep.get("insertTime", 0)
+                    all_deposits.append({
+                        "tx_id": f"dep_{dep.get('id', dep.get('txId', ''))}",
+                        "tx_type": "deposit",
+                        "status": "completed",
+                        "tx_time": self._format_timestamp(insert_time_ms),
+                        "amount": str(dep.get("amount", "0")),
+                        "token_symbol": dep.get("coin", ""),
+                        "native_amount": "",
+                        "native_currency": "USD",
+                        "fee": "",
+                        "fee_currency": "",
+                        "from_address": "",
+                        "to_address": dep.get("address", ""),
+                        "network_hash": dep.get("txId", ""),
+                        "metadata": json.dumps(dep),
+                    })
+
+                if len(result) < 1000:
+                    break
+                offset += len(result)
+
+            start_ms = end_ms
+
+        logger.info(f"Binance.US: fetched {len(all_deposits)} deposits")
+        return all_deposits
+
+    async def get_withdrawal_history(self, user_id: int = None) -> List[Dict]:
+        """Fetch withdrawal history from /sapi/v1/capital/withdraw/history.
+
+        Same 90-day windowing as deposits. applyTime is a datetime string.
+        """
+        if not self.is_configured():
+            return []
+
+        all_withdrawals = []
+        now_ms = int(time.time() * 1000)
+        one_year_ago_ms = now_ms - (365 * 24 * 60 * 60 * 1000)
+        window_ms = 90 * 24 * 60 * 60 * 1000
+
+        start_ms = one_year_ago_ms
+        while start_ms < now_ms:
+            end_ms = min(start_ms + window_ms, now_ms)
+            offset = 0
+            while True:
+                params = {
+                    "startTime": start_ms,
+                    "endTime": end_ms,
+                    "limit": 1000,
+                    "offset": offset,
+                }
+                result = await self._make_request("/sapi/v1/capital/withdraw/history", params)
+                if result is None:
+                    return all_withdrawals
+                if not isinstance(result, list) or len(result) == 0:
+                    break
+
+                for wd in result:
+                    if wd.get("status") != 6:
+                        continue
+
+                    apply_time = wd.get("applyTime", "")
+                    tx_time = ""
+                    if apply_time:
+                        try:
+                            dt = datetime.strptime(apply_time, "%Y-%m-%d %H:%M:%S")
+                            dt = dt.replace(tzinfo=timezone.utc)
+                            tx_time = dt.isoformat()
+                        except (ValueError, TypeError):
+                            tx_time = apply_time
+
+                    all_withdrawals.append({
+                        "tx_id": f"wd_{wd.get('id', '')}",
+                        "tx_type": "withdrawal",
+                        "status": "completed",
+                        "tx_time": tx_time,
+                        "amount": str(wd.get("amount", "0")),
+                        "token_symbol": wd.get("coin", ""),
+                        "native_amount": "",
+                        "native_currency": "USD",
+                        "fee": str(wd.get("transactionFee", "0")),
+                        "fee_currency": wd.get("coin", ""),
+                        "from_address": "",
+                        "to_address": wd.get("address", ""),
+                        "network_hash": wd.get("txId", ""),
+                        "metadata": json.dumps(wd),
+                    })
+
+                if len(result) < 1000:
+                    break
+                offset += len(result)
+
+            start_ms = end_ms
+
+        logger.info(f"Binance.US: fetched {len(all_withdrawals)} withdrawals")
+        return all_withdrawals
 
 
 # Create singleton instance

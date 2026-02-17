@@ -5390,6 +5390,64 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     flex-direction: column;
 }
 
+.exchange-assets .connected-state {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.connected-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--accent-success, #00d26a);
+    flex-shrink: 0;
+}
+
+.exchange-actions {
+    padding: 8px 20px 12px;
+    border-top: 1px solid var(--border-color);
+}
+
+.btn-exchange-sync {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-exchange-sync:hover:not(:disabled) {
+    color: var(--accent-success, #00d26a);
+    border-color: var(--accent-success, #00d26a);
+    background: rgba(0, 210, 106, 0.08);
+}
+
+.btn-exchange-sync:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.btn-exchange-sync .sync-icon {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.btn-exchange-sync .sync-icon.spinning {
+    display: inline-block;
+    animation: spin 1s linear infinite;
+}
+
 .exchange-asset-item {
     display: flex;
     justify-content: space-between;

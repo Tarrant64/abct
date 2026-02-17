@@ -371,7 +371,7 @@ async def process_exchange_portfolio(exchange_service, exchange_name: str, user_
 @router.get("/binance")
 async def get_binance_portfolio(user_id: int = Depends(verify_session), refresh: bool = Query(False)):
     """Get Binance portfolio with USD values."""
-    if not await binance_service.is_configured():
+    if not binance_service.is_configured():
         raise HTTPException(
             status_code=503,
             detail="Binance API not configured. Add BINANCE_API_KEY and BINANCE_API_SECRET to .env file."
@@ -382,7 +382,7 @@ async def get_binance_portfolio(user_id: int = Depends(verify_session), refresh:
 @router.get("/binance-us")
 async def get_binance_us_portfolio(user_id: int = Depends(verify_session), refresh: bool = Query(False)):
     """Get Binance.US portfolio with USD values."""
-    if not await binance_us_service.is_configured():
+    if not binance_us_service.is_configured():
         raise HTTPException(
             status_code=503,
             detail="Binance.US API not configured. Add BINANCE_US_API_KEY and BINANCE_US_API_SECRET to .env file."
@@ -393,7 +393,7 @@ async def get_binance_us_portfolio(user_id: int = Depends(verify_session), refre
 @router.get("/okx")
 async def get_okx_portfolio(user_id: int = Depends(verify_session), refresh: bool = Query(False)):
     """Get OKX portfolio with USD values."""
-    if not await okx_service.is_configured():
+    if not okx_service.is_configured():
         raise HTTPException(
             status_code=503,
             detail="OKX API not configured. Add OKX_API_KEY, OKX_API_SECRET, and OKX_API_PASSPHRASE to .env file."
@@ -404,7 +404,7 @@ async def get_okx_portfolio(user_id: int = Depends(verify_session), refresh: boo
 @router.get("/bitget")
 async def get_bitget_portfolio(user_id: int = Depends(verify_session), refresh: bool = Query(False)):
     """Get Bitget portfolio with USD values."""
-    if not await bitget_service.is_configured():
+    if not bitget_service.is_configured():
         raise HTTPException(
             status_code=503,
             detail="Bitget API not configured. Add BITGET_API_KEY, BITGET_API_SECRET, and BITGET_API_PASSPHRASE to .env file."
@@ -415,7 +415,7 @@ async def get_bitget_portfolio(user_id: int = Depends(verify_session), refresh: 
 @router.get("/gate")
 async def get_gate_portfolio(user_id: int = Depends(verify_session), refresh: bool = Query(False)):
     """Get Gate.io portfolio with USD values."""
-    if not await gate_service.is_configured():
+    if not gate_service.is_configured():
         raise HTTPException(
             status_code=503,
             detail="Gate.io API not configured. Add GATE_API_KEY and GATE_API_SECRET to .env file."
@@ -426,7 +426,7 @@ async def get_gate_portfolio(user_id: int = Depends(verify_session), refresh: bo
 @router.get("/kucoin")
 async def get_kucoin_portfolio(user_id: int = Depends(verify_session), refresh: bool = Query(False)):
     """Get KuCoin portfolio with USD values."""
-    if not await kucoin_service.is_configured():
+    if not kucoin_service.is_configured():
         raise HTTPException(
             status_code=503,
             detail="KuCoin API not configured. Add KUCOIN_API_KEY, KUCOIN_API_SECRET, and KUCOIN_API_PASSPHRASE to .env file."
@@ -621,9 +621,9 @@ def _map_v2_tx_type_to_side(tx_type: str, amount: str = "0") -> str:
         return "SEND"
     elif tx_type_lower == "receive":
         return "RECEIVE"
-    elif tx_type_lower in ("fiat_deposit",):
+    elif tx_type_lower in ("fiat_deposit", "deposit"):
         return "DEPOSIT"
-    elif tx_type_lower in ("fiat_withdrawal",):
+    elif tx_type_lower in ("fiat_withdrawal", "withdrawal"):
         return "WITHDRAWAL"
     elif tx_type_lower in ("staking_reward", "inflation_reward"):
         return "REWARD"
@@ -730,27 +730,41 @@ async def get_exchange_transactions(
             all_transactions.extend(coinbase_txs)
             exchange_counts["coinbase"] = len(coinbase_txs)
 
-    # --- Binance: still uses live API (no v2-style full history) ---
-    if (not exchange or exchange == "binance") and binance_service.is_configured():
-        try:
-            result = await binance_service.get_trade_history(user_id=user_id, limit=500)
-            filtered = _filter_by_cutoff(result, cutoff)
-            all_transactions.extend(filtered)
-            exchange_counts["binance"] = len(filtered)
-        except Exception as e:
-            logger.error(f"Error fetching binance transactions: {e}")
-            exchange_counts["binance"] = 0
+    # --- Binance: read from DB (full history) ---
+    if not exchange or exchange == "binance":
+        if binance_service.is_configured():
+            db_count = await transaction_history_service.get_exchange_transaction_count(user_id, "binance")
+            if db_count == 0 or refresh:
+                try:
+                    txs = await binance_service.get_all_transactions(user_id=user_id)
+                    await transaction_history_service.save_exchange_transactions(user_id, "binance", txs)
+                    logger.info(f"Auto-fetched {len(txs)} Binance transactions")
+                except Exception as e:
+                    logger.error(f"Error auto-fetching Binance transactions: {e}")
+            db_rows = await transaction_history_service.get_exchange_transactions(
+                user_id, days=days, exchange="binance"
+            )
+            binance_txs = [_db_tx_to_normalized(row) for row in db_rows]
+            all_transactions.extend(binance_txs)
+            exchange_counts["binance"] = len(binance_txs)
 
-    # --- Binance US: still uses live API ---
-    if (not exchange or exchange == "binance_us") and binance_us_service.is_configured():
-        try:
-            result = await binance_us_service.get_trade_history(user_id=user_id, limit=500)
-            filtered = _filter_by_cutoff(result, cutoff)
-            all_transactions.extend(filtered)
-            exchange_counts["binance_us"] = len(filtered)
-        except Exception as e:
-            logger.error(f"Error fetching binance_us transactions: {e}")
-            exchange_counts["binance_us"] = 0
+    # --- Binance.US: read from DB (full history) ---
+    if not exchange or exchange == "binance_us":
+        if binance_us_service.is_configured():
+            db_count = await transaction_history_service.get_exchange_transaction_count(user_id, "binance_us")
+            if db_count == 0 or refresh:
+                try:
+                    txs = await binance_us_service.get_all_transactions(user_id=user_id)
+                    await transaction_history_service.save_exchange_transactions(user_id, "binance_us", txs)
+                    logger.info(f"Auto-fetched {len(txs)} Binance.US transactions")
+                except Exception as e:
+                    logger.error(f"Error auto-fetching Binance.US transactions: {e}")
+            db_rows = await transaction_history_service.get_exchange_transactions(
+                user_id, days=days, exchange="binance_us"
+            )
+            binance_us_txs = [_db_tx_to_normalized(row) for row in db_rows]
+            all_transactions.extend(binance_us_txs)
+            exchange_counts["binance_us"] = len(binance_us_txs)
 
     # Sort by time descending
     all_transactions.sort(key=lambda x: x.get("time", ""), reverse=True)
@@ -809,6 +823,40 @@ async def refresh_exchange_transactions(
             except Exception as e:
                 logger.error(f"Error refreshing Coinbase transactions: {e}")
                 results["coinbase"] = {"error": str(e)}
+
+    if not exchange or exchange == "binance":
+        if binance_service.is_configured():
+            try:
+                txs = await binance_service.get_all_transactions(user_id=user_id)
+                inserted = await transaction_history_service.save_exchange_transactions(
+                    user_id, "binance", txs
+                )
+                total = await transaction_history_service.get_exchange_transaction_count(user_id, "binance")
+                results["binance"] = {
+                    "fetched": len(txs),
+                    "new": inserted,
+                    "total_stored": total,
+                }
+            except Exception as e:
+                logger.error(f"Error refreshing Binance transactions: {e}")
+                results["binance"] = {"error": str(e)}
+
+    if not exchange or exchange == "binance_us":
+        if binance_us_service.is_configured():
+            try:
+                txs = await binance_us_service.get_all_transactions(user_id=user_id)
+                inserted = await transaction_history_service.save_exchange_transactions(
+                    user_id, "binance_us", txs
+                )
+                total = await transaction_history_service.get_exchange_transaction_count(user_id, "binance_us")
+                results["binance_us"] = {
+                    "fetched": len(txs),
+                    "new": inserted,
+                    "total_stored": total,
+                }
+            except Exception as e:
+                logger.error(f"Error refreshing Binance.US transactions: {e}")
+                results["binance_us"] = {"error": str(e)}
 
     # Invalidate transaction and analytics caches
     await clear_cache("exchange_transactions_", user_id=user_id)

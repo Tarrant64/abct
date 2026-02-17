@@ -4636,8 +4636,17 @@ function renderAllExchanges(exchanges) {
             html += renderExchangeAssets(exchange.assets);
             html += '</div>';
         } else {
-            html += '<div class="exchange-assets"><p class="empty-state">No assets with value >= $1.00</p></div>';
+            html += '<div class="exchange-assets"><p class="empty-state connected-state"><span class="connected-dot"></span>Connected &mdash; no holdings above $1</p></div>';
         }
+
+        // Sync History button
+        html += `
+            <div class="exchange-actions">
+                <button class="btn-exchange-sync" onclick="syncExchangeHistory('${exchangeId}', this)" title="Fetch full transaction history from ${exchangeName}">
+                    <span class="sync-icon">&#8635;</span> Sync History
+                </button>
+            </div>
+        `;
 
         html += '</div>';
     }
@@ -4691,6 +4700,47 @@ function renderExchangeAssets(assets) {
     }
 
     return html;
+}
+
+// Sync exchange transaction history to DB
+async function syncExchangeHistory(exchangeId, btn) {
+    const origHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="sync-icon spinning">&#8635;</span> Syncing...';
+
+    try {
+        const response = await authFetch(`${API_BASE}/exchanges/transactions/refresh?exchange=${exchangeId}`, {
+            method: 'POST'
+        });
+
+        if (!response.ok) throw new Error('Refresh failed');
+
+        const data = await response.json();
+        const result = data.results?.[exchangeId];
+
+        if (result && !result.error) {
+            const msg = result.new > 0
+                ? `+${result.new} new (${result.total_stored} total)`
+                : `Up to date (${result.total_stored} stored)`;
+            btn.innerHTML = `<span class="sync-icon">&#10003;</span> ${msg}`;
+        } else if (result?.error) {
+            btn.innerHTML = '<span class="sync-icon">&#10007;</span> Error';
+        } else {
+            btn.innerHTML = '<span class="sync-icon">&#10003;</span> Done';
+        }
+
+        setTimeout(() => {
+            btn.innerHTML = origHTML;
+            btn.disabled = false;
+        }, 4000);
+    } catch (err) {
+        console.error('Sync exchange history error:', err);
+        btn.innerHTML = '<span class="sync-icon">&#10007;</span> Failed';
+        setTimeout(() => {
+            btn.innerHTML = origHTML;
+            btn.disabled = false;
+        }, 3000);
+    }
 }
 
 // Load NFTs
