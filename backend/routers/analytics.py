@@ -194,7 +194,7 @@ async def get_relative_strength(
 @router.get("/market/top-cryptos")
 async def get_top_cryptos(
     limit: int = Query(default=20, ge=5, le=100),
-    source: str = Query(default="cmc", regex="^(cmc|coingecko)$"),
+    source: str = Query(default="cmc", regex="^(cmc|coingecko|coinpaprika)$"),
     user_id: int = Depends(verify_session)
 ):
     """Get top cryptocurrencies by market cap. Source: 'cmc' or 'coingecko'"""

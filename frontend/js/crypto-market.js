@@ -204,10 +204,11 @@
         _cryptoPage = 1;
 
         // Update toggle buttons
-        var cmcBtn = document.getElementById('srcBtnCmc');
-        var cgBtn = document.getElementById('srcBtnCoingecko');
-        if (cmcBtn) cmcBtn.classList.toggle('active', source === 'cmc');
-        if (cgBtn) cgBtn.classList.toggle('active', source === 'coingecko');
+        document.querySelectorAll('.cm-source-btn').forEach(function(btn) {
+            btn.classList.remove('active');
+        });
+        var activeBtn = document.getElementById('srcBtn' + source.charAt(0).toUpperCase() + source.slice(1));
+        if (activeBtn) activeBtn.classList.add('active');
 
         // Show loading state
         var body = document.getElementById('topCryptosTableBody');
@@ -316,8 +317,11 @@
             if (!data.success || !data.cryptos || data.cryptos.length === 0) {
                 var msg = data.error || 'Failed to load top cryptos';
                 if (msg.indexOf('not configured') !== -1) {
-                    var keyName = _cryptoSource === 'cmc' ? 'CoinMarketCap' : 'CoinGecko';
-                    msg = 'Requires ' + keyName + ' API key. <a href="/settings.html#apis" style="color:#667eea;">Configure in Settings</a>';
+                    var sourceNames = {cmc: 'CoinMarketCap', coingecko: 'CoinGecko'};
+                    var keyName = sourceNames[_cryptoSource];
+                    if (keyName) {
+                        msg = 'Requires ' + keyName + ' API key. <a href="/settings.html#apis" style="color:#667eea;">Configure in Settings</a>';
+                    }
                 }
                 document.getElementById('topCryptosTableBody').innerHTML =
                     '<tr><td colspan="7" style="text-align:center;color:#888;padding:40px;">' + msg + '</td></tr>';

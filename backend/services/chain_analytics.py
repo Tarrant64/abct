@@ -257,7 +257,7 @@ class ChainAnalyticsService:
 
         Args:
             limit: Number of coins to return.
-            source: 'cmc' for CoinMarketCap, 'coingecko' for CoinGecko.
+            source: 'cmc', 'coingecko', or 'coinpaprika' (free, no key).
         """
         cache_key = f"analytics:market:top_cryptos:{source}:{limit}"
         cached = await get_cache(cache_key)
@@ -334,7 +334,37 @@ class ChainAnalyticsService:
             except Exception as e:
                 logger.warning(f"CoinGecko top cryptos failed: {e}")
 
-        display_source = 'CMC' if source == 'cmc' else 'CoinGecko'
+        elif source == "coinpaprika":
+            # CoinPaprika is free, no API key required
+            try:
+                client = get_client("coinpaprika", timeout=15.0)
+                resp = await client.get(
+                    "https://api.coinpaprika.com/v1/tickers",
+                    params={'quotes': 'USD'}
+                )
+                if resp.status_code == 200:
+                    tickers = resp.json()
+                    # Already sorted by rank, take top N
+                    for coin in tickers[:limit]:
+                        quote = coin.get('quotes', {}).get('USD', {})
+                        cryptos.append({
+                            'rank': coin.get('rank', 0),
+                            'name': coin.get('name', ''),
+                            'symbol': coin.get('symbol', ''),
+                            'price': quote.get('price', 0),
+                            'market_cap': quote.get('market_cap', 0),
+                            'change_24h': quote.get('percent_change_24h', 0),
+                            'change_7d': quote.get('percent_change_7d', 0),
+                            'volume_24h': quote.get('volume_24h', 0),
+                        })
+                    logger.info(f"Top cryptos loaded from CoinPaprika ({len(cryptos)} coins)")
+                else:
+                    logger.warning(f"CoinPaprika tickers returned {resp.status_code}")
+            except Exception as e:
+                logger.warning(f"CoinPaprika top cryptos failed: {e}")
+
+        source_names = {'cmc': 'CMC', 'coingecko': 'CoinGecko', 'coinpaprika': 'CoinPaprika'}
+        display_source = source_names.get(source, source)
         result = {'cryptos': cryptos, 'source': display_source}
         if cryptos:
             await set_cache(cache_key, result, CACHE_TTL_HOT)
