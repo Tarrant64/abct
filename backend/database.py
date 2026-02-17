@@ -3180,31 +3180,77 @@ async def get_unified_daily_totals(user_id: int, start_date: str = None,
 
 async def get_unified_daily_totals_by_chain(user_id: int, start_date: str = None,
                                              end_date: str = None) -> list:
-    """Get daily portfolio totals grouped by chain from wallet_daily_balances.
+    """Get daily portfolio totals grouped by chain.
 
+    Merges two sources:
+    1. wallet_daily_balances (recent, per-source) — primary
+    2. balance_history (historical, per-wallet with USD values) — fallback for older dates
+
+    NULL chains are mapped to descriptive labels based on source_type
+    (e.g. exchange → 'exchanges', nft → 'nfts').
     Returns one row per (date, chain) pair with summed value_usd.
     """
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
-        query = """
+
+        # --- Source 1: wallet_daily_balances (recent, granular) ---
+        wdb_query = """
             SELECT
                 wdb.date,
-                ws.chain,
+                COALESCE(ws.chain,
+                    CASE ws.source_type
+                        WHEN 'exchange' THEN 'exchanges'
+                        WHEN 'nft' THEN 'nfts'
+                        ELSE 'other'
+                    END
+                ) as chain,
                 SUM(wdb.value_usd) as value_usd
             FROM wallet_daily_balances wdb
             JOIN wallet_sources ws ON wdb.source_id = ws.id
             WHERE wdb.user_id = ? AND ws.is_active = 1
         """
-        params = [user_id]
+        wdb_params = [user_id]
         if start_date:
-            query += " AND wdb.date >= ?"
-            params.append(start_date)
+            wdb_query += " AND wdb.date >= ?"
+            wdb_params.append(start_date)
         if end_date:
-            query += " AND wdb.date <= ?"
-            params.append(end_date)
-        query += " GROUP BY wdb.date, ws.chain ORDER BY wdb.date ASC"
-        cursor = await db.execute(query, params)
-        return [dict(row) for row in await cursor.fetchall()]
+            wdb_query += " AND wdb.date <= ?"
+            wdb_params.append(end_date)
+        wdb_query += " GROUP BY wdb.date, chain ORDER BY wdb.date ASC"
+        cursor = await db.execute(wdb_query, wdb_params)
+        wdb_rows = [dict(row) for row in await cursor.fetchall()]
+
+        # Collect dates covered by wdb
+        wdb_dates = {row['date'] for row in wdb_rows}
+
+        # --- Source 2: balance_history (historical, has blockchain column) ---
+        bh_query = """
+            SELECT
+                balance_date as date,
+                blockchain as chain,
+                SUM(total_value_usd) as value_usd
+            FROM balance_history
+            WHERE user_id = ? AND total_value_usd > 0
+        """
+        bh_params = [user_id]
+        if start_date:
+            bh_query += " AND balance_date >= ?"
+            bh_params.append(start_date)
+        if end_date:
+            bh_query += " AND balance_date <= ?"
+            bh_params.append(end_date)
+        bh_query += " GROUP BY balance_date, blockchain ORDER BY balance_date ASC"
+        cursor = await db.execute(bh_query, bh_params)
+        bh_rows = [dict(row) for row in await cursor.fetchall()]
+
+        # Merge: wdb takes priority for overlapping dates
+        combined = list(wdb_rows)
+        for row in bh_rows:
+            if row['date'] not in wdb_dates:
+                combined.append(row)
+
+        combined.sort(key=lambda r: r['date'])
+        return combined
 
 
 async def get_wallet_source_daily_balances(source_id: int, start_date: str = None,

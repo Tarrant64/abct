@@ -18,11 +18,11 @@ class PortfolioStreamgraph {
         this.data = null;       // raw API response
         this.stackData = null;  // prepared stack output
         this.chains = [];       // ordered chain keys
-        this.activeRange = '3m';
+        this.activeRange = '1y';
         this.lockedChain = null; // click-locked highlight
         this.hoveredChain = null;
 
-        this.padding = { top: 20, right: 20, bottom: 32, left: 20 };
+        this.padding = { top: 20, right: 30, bottom: 32, left: 60 };
 
         this._createSVG();
         this._createTooltip();
@@ -88,8 +88,8 @@ class PortfolioStreamgraph {
             }
         }
 
-        if (!result || !result.data || result.data.length < 7) {
-            this._showEmpty('Not enough history data (need 7+ days)');
+        if (!result || !result.data || result.data.length < 2) {
+            this._showEmpty('Not enough history data (need 2+ days)');
             return;
         }
 
@@ -286,18 +286,27 @@ class PortfolioStreamgraph {
 
             if (maxHeight < minLabelHeight) continue;
 
-            const x = this._xScale(maxIdx);
+            let x = this._xScale(maxIdx);
             const yMid = (this._yScale(series[maxIdx][0]) + this._yScale(series[maxIdx][1])) / 2;
             const label = this._chainLabel(chain);
+
+            // Estimate text width and clamp to prevent edge clipping
+            const fontSize = maxHeight > 60 ? 13 : 11;
+            const estWidth = label.length * fontSize * 0.6;
+            let anchor = 'middle';
+            const minX = this.padding.left + estWidth / 2 + 4;
+            const maxX = this.width - this.padding.right - estWidth / 2 - 4;
+            if (x < minX) { x = this.padding.left + 4; anchor = 'start'; }
+            else if (x > maxX) { x = this.width - this.padding.right - 4; anchor = 'end'; }
 
             const text = this._svgEl('text', {
                 x: x,
                 y: yMid,
-                'text-anchor': 'middle',
+                'text-anchor': anchor,
                 'dominant-baseline': 'central',
                 class: 'stream-label',
                 fill: this._getLabelColor(chain),
-                'font-size': maxHeight > 60 ? '13' : '11',
+                'font-size': fontSize,
             });
             text.textContent = label;
             g.appendChild(text);
@@ -515,6 +524,9 @@ class PortfolioStreamgraph {
 
     _getStreamColor(chain) {
         if (chain === '_other') return '#666666';
+        if (chain === 'exchanges') return '#f0b429';  // gold
+        if (chain === 'nfts') return '#a855f7';       // purple
+        if (chain === 'other') return '#666666';
         // Use the global CHAIN_COLORS if available, otherwise Sankey configs
         if (typeof CHAIN_COLORS !== 'undefined' && CHAIN_COLORS[chain]) {
             return CHAIN_COLORS[chain];
@@ -553,6 +565,9 @@ class PortfolioStreamgraph {
 
     _chainLabel(chain) {
         if (chain === '_other') return 'Other';
+        if (chain === 'exchanges') return 'Exchanges';
+        if (chain === 'nfts') return 'NFTs';
+        if (chain === 'other') return 'Other';
         // Try Sankey configs for proper labels
         if (typeof SANKEY_CHAIN_CONFIGS !== 'undefined') {
             const cfg = SANKEY_CHAIN_CONFIGS.find(c => c.key === chain);
@@ -575,12 +590,16 @@ class PortfolioStreamgraph {
         }
         const date = new Date(dateStr + 'T12:00:00');
         const range = this.activeRange;
-        if (range === '1m') {
+        if (range === '1w' || range === '1m') {
             return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         }
-        if (range === '3m' || range === '6m') {
+        if (range === '3m') {
             return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         }
+        if (range === '6m') {
+            return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+        }
+        // 1y, all — month + year
         return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
     }
 

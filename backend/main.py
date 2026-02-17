@@ -456,6 +456,59 @@ async def lifespan(app: FastAPI):
 
     _background_tasks.append(asyncio.create_task(restore_cloudflare_tunnel()))
 
+    # Backfill balance_history prices in background (enables streamgraph historical data)
+    async def backfill_history_prices():
+        try:
+            from database import get_unpriced_date_ranges, update_balance_history_prices
+            from services.http_client import get_client, fetch_with_retry
+            from services.pricing import ASSET_TO_COINGECKO, COINGECKO_BASE_URL, pricing_service
+            from datetime import datetime as dt, timezone
+
+            unpriced = await get_unpriced_date_ranges(user_id=1)
+            if not unpriced:
+                logger.info("Balance history: all prices up to date")
+                return
+
+            for entry in unpriced:
+                symbol = entry['symbol']
+                cg_id = ASSET_TO_COINGECKO.get(symbol)
+                if not cg_id:
+                    continue
+                try:
+                    dt_min = dt.strptime(entry['min_date'], '%Y-%m-%d')
+                    dt_max = dt.strptime(entry['max_date'], '%Y-%m-%d')
+                    days = min((dt_max - dt_min).days + 2, 365)  # CoinGecko demo API max
+                except (ValueError, TypeError):
+                    days = 365
+
+                logger.info(f"Backfill: fetching {days}d of {symbol} prices")
+                try:
+                    client = get_client("coingecko_historical", timeout=30.0)
+                    cg_headers = await pricing_service._get_cg_headers()
+                    response = await fetch_with_retry(
+                        client, "GET",
+                        f"{COINGECKO_BASE_URL}/coins/{cg_id}/market_chart",
+                        params={'vs_currency': 'usd', 'days': days},
+                        headers=cg_headers,
+                    )
+                    if response.status_code == 200:
+                        data = response.json()
+                        price_map = {}
+                        for ts_ms, price in data.get('prices', []):
+                            date_str = dt.fromtimestamp(ts_ms / 1000, tz=timezone.utc).strftime('%Y-%m-%d')
+                            price_map[date_str] = price
+                        updated = await update_balance_history_prices(1, symbol, price_map)
+                        logger.info(f"Backfill: {symbol} — {updated} records updated with {len(price_map)} prices")
+                    else:
+                        logger.warning(f"Backfill: {symbol} API returned {response.status_code}")
+                    await asyncio.sleep(2)  # Rate limit courtesy
+                except Exception as e:
+                    logger.warning(f"Backfill: {symbol} failed: {e}")
+        except Exception as e:
+            logger.warning(f"Balance history price backfill failed: {e}")
+
+    _background_tasks.append(asyncio.create_task(backfill_history_prices()))
+
     yield
 
     # --- Graceful shutdown ---

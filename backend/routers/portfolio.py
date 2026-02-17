@@ -1053,7 +1053,7 @@ async def get_unified_chart(
         chain_totals = {}
         for row in chain_rows:
             d = row['date']
-            chain = row['chain'] or 'unknown'
+            chain = row['chain'] or 'other'
             val = row['value_usd'] or 0
             if d not in date_map:
                 date_map[d] = {"date": d, "total_value": 0, "chains": {}}
@@ -1256,6 +1256,86 @@ async def rebuild_wallet_history(
             "offchain": offchain_error,
         }
     }
+
+
+@router.post("/history/backfill-prices")
+async def backfill_history_prices(user_id: int = Depends(verify_session)):
+    """Backfill USD values in balance_history using CoinGecko historical prices.
+
+    Finds all balance_history rows where native_price_usd = 0 but native_amount > 0,
+    fetches daily prices from CoinGecko for each symbol, and updates the records.
+    This enables the streamgraph to show historical chain data going back years.
+    """
+    from database import get_unpriced_date_ranges, update_balance_history_prices
+    from services.http_client import get_client, fetch_with_retry
+    from services.pricing import ASSET_TO_COINGECKO, COINGECKO_BASE_URL, pricing_service
+    from datetime import datetime, timezone
+
+    unpriced = await get_unpriced_date_ranges(user_id)
+    if not unpriced:
+        return {"status": "nothing_to_backfill", "symbols": [], "updated": 0}
+
+    total_updated = 0
+    results = []
+
+    for entry in unpriced:
+        symbol = entry['symbol']
+        cg_id = ASSET_TO_COINGECKO.get(symbol)
+        if not cg_id:
+            results.append({"symbol": symbol, "status": "no_coingecko_mapping", "updated": 0})
+            continue
+
+        # Calculate days needed (CoinGecko demo API max = 365)
+        min_date = entry['min_date']
+        max_date = entry['max_date']
+        count = entry['count']
+        try:
+            dt_min = datetime.strptime(min_date, '%Y-%m-%d')
+            dt_max = datetime.strptime(max_date, '%Y-%m-%d')
+            days = min((dt_max - dt_min).days + 2, 365)
+        except (ValueError, TypeError):
+            days = 365
+
+        logger.info(f"Backfill: fetching {days} days of {symbol} ({cg_id}) prices ({min_date} to {max_date}, {count} records)")
+
+        try:
+            client = get_client("coingecko_historical", timeout=30.0)
+            cg_headers = await pricing_service._get_cg_headers()
+            response = await fetch_with_retry(
+                client, "GET",
+                f"{COINGECKO_BASE_URL}/coins/{cg_id}/market_chart",
+                params={'vs_currency': 'usd', 'days': days},
+                headers=cg_headers,
+            )
+
+            if response.status_code != 200:
+                results.append({"symbol": symbol, "status": f"api_error_{response.status_code}", "updated": 0})
+                continue
+
+            data = response.json()
+            prices = data.get('prices', [])
+
+            # Build date → price map (take last price for each day)
+            price_map = {}
+            for ts_ms, price in prices:
+                dt = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc)
+                date_str = dt.strftime('%Y-%m-%d')
+                price_map[date_str] = price
+
+            updated = await update_balance_history_prices(user_id, symbol, price_map)
+            total_updated += updated
+            results.append({"symbol": symbol, "status": "ok", "prices_fetched": len(price_map), "updated": updated})
+            logger.info(f"Backfill: {symbol} — {len(price_map)} prices fetched, {updated} records updated")
+
+        except Exception as e:
+            logger.error(f"Backfill: {symbol} failed: {e}")
+            results.append({"symbol": symbol, "status": f"error: {str(e)}", "updated": 0})
+
+    # Clear chart cache so new data shows up
+    for r in ('24h', '1w', '1m', '3m', '6m', '1y', 'all'):
+        await clear_cache(f"unified_chart_{user_id}_{r}_by_chain", user_id=user_id)
+
+    return {"status": "completed", "total_updated": total_updated, "symbols": results}
 
 
 @router.get("/v2/health")

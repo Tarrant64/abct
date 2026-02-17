@@ -10317,7 +10317,7 @@ async function initBlockchainsTab() {
     if (typeof PortfolioStreamgraph !== 'undefined' && document.getElementById('portfolioStreamContainer')) {
         try {
             window.portfolioStream = new PortfolioStreamgraph('portfolioStreamContainer');
-            window.portfolioStream.loadData('3m');
+            window.portfolioStream.loadData('1y');
         } catch (e) {
             console.warn('[Streamgraph] Failed to initialize:', e);
         }
