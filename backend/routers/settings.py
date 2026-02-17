@@ -328,7 +328,8 @@ API_REGISTRY = {
         "default_period": 60,
         "period_label": "minute",
         "rate_limit_note": "6,000 weight/min",
-        "rate_limit_type": "rate"
+        "rate_limit_type": "rate",
+        "requires_secret": True
     },
     "binance_us": {
         "name": "Binance.US",
@@ -343,7 +344,8 @@ API_REGISTRY = {
         "default_period": 60,
         "period_label": "minute",
         "rate_limit_note": "6,000 weight/min",
-        "rate_limit_type": "rate"
+        "rate_limit_type": "rate",
+        "requires_secret": True
     },
     "okx": {
         "name": "OKX",
