@@ -34,6 +34,13 @@
     var _chainsTvlSortCol = 'tvl';
     var _chainsTvlSortDir = 'desc';
 
+    // RWA
+    var _allRwa = [];
+    var _rwaPage = 1;
+    var _rwaPageSize = 10;
+    var _rwaSortCol = 'tvl';
+    var _rwaSortDir = 'desc';
+
     // ---- Formatting helpers (reuse global if available) ----
 
     function fmtCompactUSD(n) {
@@ -162,6 +169,15 @@
             }
             _chainsTvlPage = 1;
             renderChainsTvlTable();
+        } else if (table === 'rwa') {
+            if (_rwaSortCol === col) {
+                _rwaSortDir = _rwaSortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                _rwaSortCol = col;
+                _rwaSortDir = (col === 'name' || col === 'rank') ? 'asc' : 'desc';
+            }
+            _rwaPage = 1;
+            renderRwaTable();
         }
     };
 
@@ -178,6 +194,10 @@
             var maxPage = Math.ceil(_allChainsTvl.length / _chainsTvlPageSize);
             _chainsTvlPage = Math.max(1, Math.min(_chainsTvlPage + delta, maxPage));
             renderChainsTvlTable();
+        } else if (table === 'rwa') {
+            var maxPage = Math.ceil(_allRwa.length / _rwaPageSize);
+            _rwaPage = Math.max(1, Math.min(_rwaPage + delta, maxPage));
+            renderRwaTable();
         }
     };
 
@@ -195,6 +215,10 @@
             _chainsTvlPageSize = size;
             _chainsTvlPage = 1;
             renderChainsTvlTable();
+        } else if (table === 'rwa') {
+            _rwaPageSize = size;
+            _rwaPage = 1;
+            renderRwaTable();
         }
     };
 
@@ -325,15 +349,20 @@
                 }
                 document.getElementById('topCryptosTableBody').innerHTML =
                     '<tr><td colspan="7" style="text-align:center;color:#888;padding:40px;">' + msg + '</td></tr>';
-                // Clear pagination
+                // Clear pagination and heatmap
                 var pag = document.getElementById('topCryptosPagination');
                 if (pag) pag.innerHTML = '';
+                var hm = document.getElementById('cryptoHeatmapContainer');
+                if (hm) hm.innerHTML = '<div style="text-align:center;color:#888;padding:60px;">Heatmap requires top crypto data</div>';
                 return;
             }
 
             _allCryptos = data.cryptos;
 
             renderTopCryptosTable();
+
+            // Render heatmap with top cryptos data
+            renderCryptoHeatmap(_allCryptos);
         } catch (e) {
             console.error('Failed to load top cryptos:', e);
         }
@@ -624,7 +653,7 @@
 
     async function loadRwaData() {
         try {
-            var resp = await authFetch('/analytics/market/rwa?limit=15');
+            var resp = await authFetch('/analytics/market/rwa?limit=50');
             var data = await resp.json();
 
             if (!data.success) {
@@ -637,34 +666,110 @@
             var rwaTvlEl = document.getElementById('cmRwaTvl');
             if (rwaTvlEl) rwaTvlEl.textContent = fmtCompactUSD(data.total_rwa_tvl);
 
-            // Render table
-            renderRwaTable(data.protocols);
+            _allRwa = data.protocols || [];
+            renderRwaTable();
         } catch (e) {
             console.error('Failed to load RWA data:', e);
         }
     }
 
-    function renderRwaTable(protocols) {
+    function renderRwaTable() {
         var body = document.getElementById('rwaTableBody');
         if (!body) return;
 
-        if (!protocols || protocols.length === 0) {
+        if (!_allRwa || _allRwa.length === 0) {
             body.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;padding:40px;">No RWA protocol data available</td></tr>';
             return;
         }
 
-        body.innerHTML = protocols.map(function(p, i) {
+        var sorted = sortData(_allRwa, _rwaSortCol, _rwaSortDir);
+        var page = paginateData(sorted, _rwaPage, _rwaPageSize);
+
+        var rankOffset = (_rwaPage - 1) * _rwaPageSize;
+
+        body.innerHTML = page.map(function(p, i) {
             var chainStr = (p.chains || []).join(', ');
             var logoHtml = p.logo ? '<img src="' + p.logo + '" alt="" style="width:20px;height:20px;border-radius:50%;vertical-align:middle;margin-right:8px;">' : '';
 
             return '<tr>' +
-                '<td>' + (i + 1) + '</td>' +
+                '<td>' + (rankOffset + i + 1) + '</td>' +
                 '<td>' + logoHtml + '<strong>' + (p.name || '') + '</strong></td>' +
                 '<td class="privacy-sensitive">' + fmtCompactUSD(p.tvl) + '</td>' +
                 '<td>' + fmtChange(p.tvl_change_1d) + '</td>' +
                 '<td style="font-size:12px;color:#888;">' + chainStr + '</td>' +
                 '</tr>';
         }).join('');
+
+        updateSortHeaders('rwaTable', _rwaSortCol, _rwaSortDir);
+        renderPagination('rwaPagination', _rwaPage, _rwaPageSize, _allRwa.length, 'rwa');
+    }
+
+    // ---- Market Heatmap ----
+
+    function renderCryptoHeatmap(cryptos) {
+        var container = document.getElementById('cryptoHeatmapContainer');
+        if (!container) return;
+
+        if (!cryptos || cryptos.length === 0) {
+            container.innerHTML = '<div style="text-align:center;color:#888;padding:60px;">No heatmap data available</div>';
+            return;
+        }
+
+        // Map crypto data to the format expected by global layoutTreemapTiles
+        // It expects objects with value_usd for sizing
+        var tokens = cryptos.map(function(c) {
+            return {
+                symbol: c.symbol || '',
+                name: c.name || '',
+                value_usd: c.market_cap || 0,
+                change24h: c.change_24h || 0
+            };
+        }).filter(function(t) { return t.value_usd > 0; });
+
+        tokens.sort(function(a, b) { return b.value_usd - a.value_usd; });
+
+        var containerWidth = container.clientWidth || 800;
+        var totalHeight = 400;
+
+        // Use global squarified treemap layout from app.js
+        var tiles = layoutTreemapTiles(tokens, containerWidth, totalHeight);
+
+        var tilesHtml = '';
+        for (var i = 0; i < tiles.length; i++) {
+            var tile = tiles[i];
+            var bgColor = getHeatmapColor(tile.token.change24h);
+            var changeStr = (tile.token.change24h >= 0 ? '+' : '') + tile.token.change24h.toFixed(2) + '%';
+            var mcapStr = fmtCompactUSD(tile.token.value_usd);
+
+            // Size text based on tile area
+            var area = tile.w * tile.h;
+            var symbolSize, changeSize, mcapSize;
+            if (area > 40000) {
+                symbolSize = '1.8rem'; changeSize = '1.2rem'; mcapSize = '1rem';
+            } else if (area > 20000) {
+                symbolSize = '1.4rem'; changeSize = '1rem'; mcapSize = '0.85rem';
+            } else if (area > 8000) {
+                symbolSize = '1.1rem'; changeSize = '0.85rem'; mcapSize = '0.75rem';
+            } else if (area > 3000) {
+                symbolSize = '0.9rem'; changeSize = '0.75rem'; mcapSize = '0.65rem';
+            } else if (area > 1000) {
+                symbolSize = '0.75rem'; changeSize = '0.6rem'; mcapSize = '0';
+            } else {
+                symbolSize = '0.65rem'; changeSize = '0'; mcapSize = '0';
+            }
+
+            tilesHtml += '<div class="heatmap-tile" style="' +
+                'position:absolute;left:' + tile.x + 'px;top:' + tile.y + 'px;' +
+                'width:' + tile.w + 'px;height:' + tile.h + 'px;' +
+                'background:' + bgColor + ';" ' +
+                'title="' + tile.token.name + ' (' + tile.token.symbol + '): ' + mcapStr + ' (' + changeStr + ')">' +
+                '<span class="tile-symbol" style="font-size:' + symbolSize + '">' + tile.token.symbol + '</span>' +
+                (changeSize !== '0' ? '<span class="tile-change" style="font-size:' + changeSize + '">' + changeStr + '</span>' : '') +
+                (mcapSize !== '0' ? '<span class="tile-value" style="font-size:' + mcapSize + '">' + mcapStr + '</span>' : '') +
+                '</div>';
+        }
+
+        container.innerHTML = '<div style="position:relative;width:' + containerWidth + 'px;height:' + totalHeight + 'px;">' + tilesHtml + '</div>';
     }
 
 })();

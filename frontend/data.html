@@ -6,7 +6,7 @@
     <title>Data & Analytics - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771287739">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771290304">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <!-- Chart.js for analytics -->
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
@@ -15,7 +15,7 @@
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1771287739"></script>
+    <script src="/static/js/session-auth.js?v=1771290304"></script>
     <style>
         /* Wallet Manager Styles */
         .wallet-manager {
@@ -888,7 +888,7 @@
 
         <!-- Main Tab Navigation -->
         <div class="main-tab-nav">
-            <button class="main-tab-btn active" data-tab="blockchains" onclick="switchMainTab('blockchains')">Blockchains</button>
+            <button class="main-tab-btn active" data-tab="blockchains" onclick="switchMainTab('blockchains')">Your Blockchains</button>
             <button class="main-tab-btn" data-tab="activity" onclick="switchMainTab('activity')">Activity</button>
             <button class="main-tab-btn" data-tab="transactions" onclick="switchMainTab('transactions')">Transactions</button>
             <button class="main-tab-btn" data-tab="analytics" onclick="switchMainTab('analytics')">Analytics</button>
@@ -1613,6 +1613,23 @@
                 </div>
             </div>
 
+            <!-- Crypto Market Heatmap -->
+            <section class="analytics-section" style="margin-top: 24px;">
+                <div class="section-header-inline">
+                    <h2>Market Heatmap</h2>
+                    <div class="heatmap-legend" style="margin-left: auto;">
+                        <span class="heatmap-legend-item neg-heavy"></span><span>-10%</span>
+                        <span class="heatmap-legend-item neg-light"></span><span>-5%</span>
+                        <span class="heatmap-legend-item neutral"></span><span>0%</span>
+                        <span class="heatmap-legend-item pos-light"></span><span>+5%</span>
+                        <span class="heatmap-legend-item pos-heavy"></span><span>+10%</span>
+                    </div>
+                </div>
+                <div class="heatmap-container" id="cryptoHeatmapContainer" style="min-height: 350px;">
+                    <div style="text-align:center;color:#888;padding:60px;">Loading heatmap...</div>
+                </div>
+            </section>
+
             <!-- Top Cryptos by Market Cap -->
             <section class="analytics-section" style="margin-top: 24px;">
                 <div class="section-header-inline">
@@ -1732,14 +1749,23 @@
                 <div class="section-header-inline">
                     <h2>Real World Assets (RWA)</h2>
                 </div>
+                <div class="cm-table-controls">
+                    <label>Show</label>
+                    <select onchange="changeCmPageSize('rwa', this.value)">
+                        <option value="10" selected>10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                    </select>
+                    <label>per page</label>
+                </div>
                 <div class="table-responsive">
                     <table class="chain-financials-table" id="rwaTable">
                         <thead>
                             <tr>
-                                <th>#</th>
-                                <th>Protocol</th>
-                                <th>TVL</th>
-                                <th>1d Change</th>
+                                <th class="sortable" onclick="sortCryptoMarket('rwa','rank')">#<span class="sort-arrow">▲▼</span></th>
+                                <th class="sortable" onclick="sortCryptoMarket('rwa','name')">Protocol<span class="sort-arrow">▲▼</span></th>
+                                <th class="sortable" onclick="sortCryptoMarket('rwa','tvl')">TVL<span class="sort-arrow">▲▼</span></th>
+                                <th class="sortable" onclick="sortCryptoMarket('rwa','tvl_change_1d')">1d Change<span class="sort-arrow">▲▼</span></th>
                                 <th>Chains</th>
                             </tr>
                         </thead>
@@ -1748,6 +1774,7 @@
                         </tbody>
                     </table>
                 </div>
+                <div id="rwaPagination" class="cp-pagination-wrapper"></div>
             </section>
         </div>
         <!-- End Crypto Market Tab -->
@@ -2078,19 +2105,19 @@
         }
     </script>
 
-    <script src="/static/js/app.js?v=1771287739"></script>
+    <script src="/static/js/app.js?v=1771290304"></script>
 
     <!-- Transaction scripts -->
-    <script src="/static/js/transactions.js?v=1771287739"></script>
-    <script src="/static/js/transaction-analytics.js?v=1771287739"></script>
+    <script src="/static/js/transactions.js?v=1771290304"></script>
+    <script src="/static/js/transaction-analytics.js?v=1771290304"></script>
     <!-- Advanced Analytics tab -->
-    <script src="/static/js/analytics-tab.js?v=1771287739"></script>
+    <script src="/static/js/analytics-tab.js?v=1771290304"></script>
     <!-- Sankey flow diagram -->
-    <script src="/static/js/sankey-chart.js?v=1771287739"></script>
+    <script src="/static/js/sankey-chart.js?v=1771290304"></script>
     <!-- Wallet Intelligence tab -->
-    <script src="/static/js/wallet-intelligence.js?v=1771287739"></script>
+    <script src="/static/js/wallet-intelligence.js?v=1771290304"></script>
     <!-- Crypto Market tab -->
-    <script src="/static/js/crypto-market.js?v=1771287739"></script>
+    <script src="/static/js/crypto-market.js?v=1771290304"></script>
 
     <script>
         // Main tab switching function
