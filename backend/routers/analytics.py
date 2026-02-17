@@ -191,6 +191,20 @@ async def get_relative_strength(
 
 # ---- Crypto Market Data (Stablecoins, Chains TVL, RWA) ----
 
+@router.get("/market/top-cryptos")
+async def get_top_cryptos(
+    limit: int = Query(default=20, ge=5, le=100),
+    user_id: int = Depends(verify_session)
+):
+    """Get top cryptocurrencies by market cap (CMC preferred, CoinGecko fallback)"""
+    try:
+        data = await chain_analytics_service.get_top_cryptos(limit)
+        return {"success": True, **data}
+    except Exception as e:
+        logger.error(f"Error fetching top cryptos: {e}")
+        return {"success": False, "error": str(e), "cryptos": [], "source": "Unknown"}
+
+
 @router.get("/market/stablecoins")
 async def get_stablecoin_market(user_id: int = Depends(verify_session)):
     """Get top stablecoins by market cap from DefiLlama"""

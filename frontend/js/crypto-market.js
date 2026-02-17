@@ -1,6 +1,6 @@
 /**
  * Crypto Market Tab
- * Handles: stablecoin markets, chains by TVL, RWA protocols, global market overview.
+ * Handles: top cryptos, stablecoin markets, chains by TVL, RWA protocols, global market overview.
  * Data sourced from DefiLlama (free, no key) + CoinGecko/CMC for global metrics.
  */
 (function() {
@@ -9,6 +9,29 @@
     let _initialized = false;
     let _stablecoinChart = null;
     let _chainsTvlChart = null;
+
+    // ---- Pagination & sorting state ----
+
+    // Top cryptos
+    var _allCryptos = [];
+    var _cryptoPage = 1;
+    var _cryptoPageSize = 10;
+    var _cryptoSortCol = 'rank';
+    var _cryptoSortDir = 'asc';
+
+    // Stablecoins
+    var _allStablecoins = [];
+    var _stablePage = 1;
+    var _stablePageSize = 10;
+    var _stableSortCol = 'mcap';
+    var _stableSortDir = 'desc';
+
+    // Chains TVL
+    var _allChainsTvl = [];
+    var _chainsTvlPage = 1;
+    var _chainsTvlPageSize = 10;
+    var _chainsTvlSortCol = 'tvl';
+    var _chainsTvlSortDir = 'desc';
 
     // ---- Formatting helpers (reuse global if available) ----
 
@@ -21,6 +44,13 @@
         if (abs >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M';
         if (abs >= 1e3) return '$' + (n / 1e3).toFixed(1) + 'K';
         return '$' + n.toFixed(2);
+    }
+
+    function fmtPrice(n) {
+        if (n === null || n === undefined || isNaN(n)) return '--';
+        if (n >= 1) return '$' + Number(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        if (n >= 0.01) return '$' + n.toFixed(4);
+        return '$' + n.toFixed(6);
     }
 
     function fmtChange(pct) {
@@ -40,6 +70,132 @@
             tooltipBorder: isDark ? '#334155' : '#e5e7eb',
         };
     }
+
+    // ---- Generic sort & paginate helpers ----
+
+    function sortData(arr, col, dir) {
+        return arr.slice().sort(function(a, b) {
+            var va = a[col], vb = b[col];
+            // String compare for name/symbol/classification
+            if (typeof va === 'string' && typeof vb === 'string') {
+                return dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+            }
+            va = Number(va) || 0;
+            vb = Number(vb) || 0;
+            return dir === 'asc' ? va - vb : vb - va;
+        });
+    }
+
+    function paginateData(arr, page, pageSize) {
+        var start = (page - 1) * pageSize;
+        return arr.slice(start, start + pageSize);
+    }
+
+    function renderPagination(containerId, page, pageSize, totalItems, tableKey) {
+        var el = document.getElementById(containerId);
+        if (!el) return;
+
+        var totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+        if (totalItems <= pageSize) {
+            el.innerHTML = '';
+            return;
+        }
+
+        el.innerHTML = '<div class="cp-pagination-controls">' +
+            '<button class="cp-page-btn" onclick="changeCmPage(\'' + tableKey + '\', -1)"' + (page <= 1 ? ' disabled' : '') + '>&laquo; Prev</button>' +
+            '<span class="cp-page-num">Page ' + page + ' of ' + totalPages + '</span>' +
+            '<button class="cp-page-btn" onclick="changeCmPage(\'' + tableKey + '\', 1)"' + (page >= totalPages ? ' disabled' : '') + '>Next &raquo;</button>' +
+            '</div>';
+    }
+
+    function updateSortHeaders(tableId, sortCol, sortDir, colMap) {
+        var table = document.getElementById(tableId);
+        if (!table) return;
+        var headers = table.querySelectorAll('thead th.sortable');
+        headers.forEach(function(th) {
+            var arrow = th.querySelector('.sort-arrow');
+            if (!arrow) return;
+            // Find which col this th maps to by checking the onclick
+            var onclick = th.getAttribute('onclick') || '';
+            var match = onclick.match(/sortCryptoMarket\('[^']+','([^']+)'\)/);
+            if (match) {
+                var col = match[1];
+                th.classList.remove('sort-active');
+                if (col === sortCol) {
+                    th.classList.add('sort-active');
+                    arrow.textContent = sortDir === 'asc' ? '\u25B2' : '\u25BC';
+                } else {
+                    arrow.textContent = '\u25B2\u25BC';
+                }
+            }
+        });
+    }
+
+    // ---- Global sort/page handlers ----
+
+    window.sortCryptoMarket = function(table, col) {
+        if (table === 'cryptos') {
+            if (_cryptoSortCol === col) {
+                _cryptoSortDir = _cryptoSortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                _cryptoSortCol = col;
+                _cryptoSortDir = (col === 'name' || col === 'rank') ? 'asc' : 'desc';
+            }
+            _cryptoPage = 1;
+            renderTopCryptosTable();
+        } else if (table === 'stablecoins') {
+            if (_stableSortCol === col) {
+                _stableSortDir = _stableSortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                _stableSortCol = col;
+                _stableSortDir = (col === 'name' || col === 'rank') ? 'asc' : 'desc';
+            }
+            _stablePage = 1;
+            renderStablecoinTable();
+        } else if (table === 'chainsTvl') {
+            if (_chainsTvlSortCol === col) {
+                _chainsTvlSortDir = _chainsTvlSortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                _chainsTvlSortCol = col;
+                _chainsTvlSortDir = (col === 'name' || col === 'rank') ? 'asc' : 'desc';
+            }
+            _chainsTvlPage = 1;
+            renderChainsTvlTable();
+        }
+    };
+
+    window.changeCmPage = function(table, delta) {
+        if (table === 'cryptos') {
+            var maxPage = Math.ceil(_allCryptos.length / _cryptoPageSize);
+            _cryptoPage = Math.max(1, Math.min(_cryptoPage + delta, maxPage));
+            renderTopCryptosTable();
+        } else if (table === 'stablecoins') {
+            var maxPage = Math.ceil(_allStablecoins.length / _stablePageSize);
+            _stablePage = Math.max(1, Math.min(_stablePage + delta, maxPage));
+            renderStablecoinTable();
+        } else if (table === 'chainsTvl') {
+            var maxPage = Math.ceil(_allChainsTvl.length / _chainsTvlPageSize);
+            _chainsTvlPage = Math.max(1, Math.min(_chainsTvlPage + delta, maxPage));
+            renderChainsTvlTable();
+        }
+    };
+
+    window.changeCmPageSize = function(table, size) {
+        size = parseInt(size, 10) || 10;
+        if (table === 'cryptos') {
+            _cryptoPageSize = size;
+            _cryptoPage = 1;
+            renderTopCryptosTable();
+        } else if (table === 'stablecoins') {
+            _stablePageSize = size;
+            _stablePage = 1;
+            renderStablecoinTable();
+        } else if (table === 'chainsTvl') {
+            _chainsTvlPageSize = size;
+            _chainsTvlPage = 1;
+            renderChainsTvlTable();
+        }
+    };
 
     // ---- Lock / Unlock ----
 
@@ -91,6 +247,7 @@
 
         // Load all sections in parallel
         loadMarketOverview();
+        loadTopCryptos();
         loadStablecoinData();
         loadChainsTvl();
         loadRwaData();
@@ -129,6 +286,59 @@
         }
     }
 
+    // ---- Top Cryptos ----
+
+    async function loadTopCryptos() {
+        try {
+            var resp = await authFetch('/analytics/market/top-cryptos?limit=50');
+            var data = await resp.json();
+
+            if (!data.success || !data.cryptos || data.cryptos.length === 0) {
+                document.getElementById('topCryptosTableBody').innerHTML =
+                    '<tr><td colspan="7" style="text-align:center;color:#888;padding:40px;">Failed to load top cryptos</td></tr>';
+                return;
+            }
+
+            _allCryptos = data.cryptos;
+
+            // Show source badge
+            var sourceEl = document.getElementById('topCryptosSource');
+            if (sourceEl) sourceEl.textContent = 'via ' + (data.source || 'Unknown');
+
+            renderTopCryptosTable();
+        } catch (e) {
+            console.error('Failed to load top cryptos:', e);
+        }
+    }
+
+    function renderTopCryptosTable() {
+        var body = document.getElementById('topCryptosTableBody');
+        if (!body) return;
+
+        var sorted = sortData(_allCryptos, _cryptoSortCol, _cryptoSortDir);
+        var page = paginateData(sorted, _cryptoPage, _cryptoPageSize);
+
+        if (page.length === 0) {
+            body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#888;padding:40px;">No data</td></tr>';
+            return;
+        }
+
+        body.innerHTML = page.map(function(c) {
+            return '<tr>' +
+                '<td>' + (c.rank || '--') + '</td>' +
+                '<td><strong>' + (c.name || '') + '</strong> <span style="color:#888;">(' + (c.symbol || '') + ')</span></td>' +
+                '<td class="privacy-sensitive">' + fmtPrice(c.price) + '</td>' +
+                '<td>' + fmtChange(c.change_24h) + '</td>' +
+                '<td>' + fmtChange(c.change_7d) + '</td>' +
+                '<td class="privacy-sensitive">' + fmtCompactUSD(c.market_cap) + '</td>' +
+                '<td class="privacy-sensitive">' + fmtCompactUSD(c.volume_24h) + '</td>' +
+                '</tr>';
+        }).join('');
+
+        updateSortHeaders('topCryptosTable', _cryptoSortCol, _cryptoSortDir);
+        renderPagination('topCryptosPagination', _cryptoPage, _cryptoPageSize, _allCryptos.length, 'cryptos');
+    }
+
     // ---- Stablecoin Data ----
 
     async function loadStablecoinData() {
@@ -146,11 +356,13 @@
             const mcapEl = document.getElementById('cmStablecoinMcap');
             if (mcapEl) mcapEl.textContent = fmtCompactUSD(data.total_stablecoin_mcap);
 
-            // Render chart (top 10)
-            renderStablecoinChart(data.stablecoins.slice(0, 10));
+            _allStablecoins = data.stablecoins || [];
 
-            // Render table
-            renderStablecoinTable(data.stablecoins);
+            // Render chart (top 10 from full dataset)
+            renderStablecoinChart(_allStablecoins.slice(0, 10));
+
+            // Render paginated table
+            renderStablecoinTable();
         } catch (e) {
             console.error('Failed to load stablecoin data:', e);
         }
@@ -222,37 +434,46 @@
         });
     }
 
-    function renderStablecoinTable(stablecoins) {
-        const body = document.getElementById('stablecoinTableBody');
+    function renderStablecoinTable() {
+        var body = document.getElementById('stablecoinTableBody');
         if (!body) return;
 
-        if (!stablecoins || stablecoins.length === 0) {
+        if (!_allStablecoins || _allStablecoins.length === 0) {
             body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#888;padding:40px;">No stablecoin data available</td></tr>';
             return;
         }
 
-        body.innerHTML = stablecoins.map(function(s, i) {
+        var sorted = sortData(_allStablecoins, _stableSortCol, _stableSortDir);
+        var page = paginateData(sorted, _stablePage, _stablePageSize);
+
+        // Calculate the global rank offset for the current page
+        var rankOffset = (_stablePage - 1) * _stablePageSize;
+
+        body.innerHTML = page.map(function(s, i) {
             var chainStr = (s.chains || []).slice(0, 5).join(', ');
             if ((s.chains || []).length > 5) chainStr += '...';
             var priceStr = s.price !== null && s.price !== undefined ? '$' + Number(s.price).toFixed(4) : '--';
 
             return '<tr>' +
-                '<td>' + (i + 1) + '</td>' +
+                '<td>' + (rankOffset + i + 1) + '</td>' +
                 '<td><strong>' + (s.name || '') + '</strong> (' + (s.symbol || '') + ')</td>' +
                 '<td class="privacy-sensitive">' + fmtCompactUSD(s.mcap) + '</td>' +
                 '<td>' + fmtChange(s.mcap_change_7d) + '</td>' +
                 '<td>' + priceStr + '</td>' +
-                '<td>' + (s.peg_type || '--') + '</td>' +
+                '<td>' + (s.classification || '--') + '</td>' +
                 '<td style="font-size:12px;color:#888;">' + chainStr + '</td>' +
                 '</tr>';
         }).join('');
+
+        updateSortHeaders('stablecoinTable', _stableSortCol, _stableSortDir);
+        renderPagination('stablecoinPagination', _stablePage, _stablePageSize, _allStablecoins.length, 'stablecoins');
     }
 
     // ---- Chains by TVL ----
 
     async function loadChainsTvl() {
         try {
-            const resp = await authFetch('/analytics/market/chains-tvl?limit=25');
+            const resp = await authFetch('/analytics/market/chains-tvl?limit=50');
             const data = await resp.json();
 
             if (!data.success) {
@@ -261,11 +482,13 @@
                 return;
             }
 
-            // Render chart (top 15)
-            renderChainsTvlChart(data.chains.slice(0, 15));
+            _allChainsTvl = data.chains || [];
 
-            // Render table
-            renderChainsTvlTable(data.chains);
+            // Render chart (top 15 from full dataset)
+            renderChainsTvlChart(_allChainsTvl.slice(0, 15));
+
+            // Render paginated table
+            renderChainsTvlTable();
         } catch (e) {
             console.error('Failed to load chains TVL:', e);
         }
@@ -341,24 +564,32 @@
         });
     }
 
-    function renderChainsTvlTable(chains) {
+    function renderChainsTvlTable() {
         var body = document.getElementById('chainsTvlTableBody');
         if (!body) return;
 
-        if (!chains || chains.length === 0) {
+        if (!_allChainsTvl || _allChainsTvl.length === 0) {
             body.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;padding:40px;">No chain TVL data available</td></tr>';
             return;
         }
 
-        body.innerHTML = chains.map(function(c, i) {
+        var sorted = sortData(_allChainsTvl, _chainsTvlSortCol, _chainsTvlSortDir);
+        var page = paginateData(sorted, _chainsTvlPage, _chainsTvlPageSize);
+
+        var rankOffset = (_chainsTvlPage - 1) * _chainsTvlPageSize;
+
+        body.innerHTML = page.map(function(c, i) {
             return '<tr>' +
-                '<td>' + (i + 1) + '</td>' +
+                '<td>' + (rankOffset + i + 1) + '</td>' +
                 '<td><strong>' + (c.name || '') + '</strong></td>' +
                 '<td class="privacy-sensitive">' + fmtCompactUSD(c.tvl) + '</td>' +
                 '<td>' + fmtChange(c.tvl_change_1d) + '</td>' +
                 '<td>' + fmtChange(c.tvl_change_7d) + '</td>' +
                 '</tr>';
         }).join('');
+
+        updateSortHeaders('chainsTvlTable', _chainsTvlSortCol, _chainsTvlSortDir);
+        renderPagination('chainsTvlPagination', _chainsTvlPage, _chainsTvlPageSize, _allChainsTvl.length, 'chainsTvl');
     }
 
     // ---- RWA Protocols ----

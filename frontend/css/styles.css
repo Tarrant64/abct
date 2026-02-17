@@ -11432,6 +11432,27 @@ body.privacy-mode a[data-href] {
     font-weight: 600;
 }
 
+/* Crypto Market table controls (page size dropdown) */
+.cm-table-controls {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: var(--text-secondary, #888);
+}
+
+.cm-table-controls select {
+    background: var(--card-bg, #1a1a2e);
+    color: var(--text-primary, #e0e0e0);
+    border: 1px solid var(--border-color, #2a2a3e);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
 .large-tx-filters {
     display: flex;
     align-items: center;

@@ -6,7 +6,7 @@
     <title>Data & Analytics - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771286285">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771287739">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <!-- Chart.js for analytics -->
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
@@ -15,7 +15,7 @@
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1771286285"></script>
+    <script src="/static/js/session-auth.js?v=1771287739"></script>
     <style>
         /* Wallet Manager Styles */
         .wallet-manager {
@@ -1613,6 +1613,42 @@
                 </div>
             </div>
 
+            <!-- Top Cryptos by Market Cap -->
+            <section class="analytics-section" style="margin-top: 24px;">
+                <div class="section-header-inline">
+                    <h2>Top Cryptos by Market Cap</h2>
+                    <span id="topCryptosSource" style="font-size: 12px; color: #888; margin-left: 8px;"></span>
+                </div>
+                <div class="cm-table-controls">
+                    <label>Show</label>
+                    <select onchange="changeCmPageSize('cryptos', this.value)">
+                        <option value="10" selected>10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                    </select>
+                    <label>per page</label>
+                </div>
+                <div class="table-responsive">
+                    <table class="chain-financials-table" id="topCryptosTable">
+                        <thead>
+                            <tr>
+                                <th class="sortable" onclick="sortCryptoMarket('cryptos','rank')">#<span class="sort-arrow">▲</span></th>
+                                <th class="sortable" onclick="sortCryptoMarket('cryptos','name')">Name<span class="sort-arrow">▲▼</span></th>
+                                <th class="sortable" onclick="sortCryptoMarket('cryptos','price')">Price<span class="sort-arrow">▲▼</span></th>
+                                <th class="sortable" onclick="sortCryptoMarket('cryptos','change_24h')">24h Change<span class="sort-arrow">▲▼</span></th>
+                                <th class="sortable" onclick="sortCryptoMarket('cryptos','change_7d')">7d Change<span class="sort-arrow">▲▼</span></th>
+                                <th class="sortable" onclick="sortCryptoMarket('cryptos','market_cap')">Market Cap<span class="sort-arrow">▲▼</span></th>
+                                <th class="sortable" onclick="sortCryptoMarket('cryptos','volume_24h')">Volume 24h<span class="sort-arrow">▲▼</span></th>
+                            </tr>
+                        </thead>
+                        <tbody id="topCryptosTableBody">
+                            <tr><td colspan="7" style="text-align: center; color: #888; padding: 40px;">Loading top cryptos...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="topCryptosPagination" class="cp-pagination-wrapper"></div>
+            </section>
+
             <!-- Stablecoin Markets -->
             <section class="analytics-section" style="margin-top: 24px;">
                 <div class="section-header-inline">
@@ -1621,16 +1657,25 @@
                 <div class="analytics-chart-container" id="stablecoinChartContainer" style="display: none;">
                     <canvas id="stablecoinBarChart"></canvas>
                 </div>
-                <div class="table-responsive" style="margin-top: 16px;">
+                <div class="cm-table-controls" style="margin-top: 16px;">
+                    <label>Show</label>
+                    <select onchange="changeCmPageSize('stablecoins', this.value)">
+                        <option value="10" selected>10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                    </select>
+                    <label>per page</label>
+                </div>
+                <div class="table-responsive">
                     <table class="chain-financials-table" id="stablecoinTable">
                         <thead>
                             <tr>
-                                <th>#</th>
-                                <th>Name</th>
-                                <th>Market Cap</th>
-                                <th>7d Change</th>
-                                <th>Price</th>
-                                <th>Peg Type</th>
+                                <th class="sortable" onclick="sortCryptoMarket('stablecoins','rank')">#<span class="sort-arrow">▲▼</span></th>
+                                <th class="sortable" onclick="sortCryptoMarket('stablecoins','name')">Name<span class="sort-arrow">▲▼</span></th>
+                                <th class="sortable" onclick="sortCryptoMarket('stablecoins','mcap')">Market Cap<span class="sort-arrow">▲▼</span></th>
+                                <th class="sortable" onclick="sortCryptoMarket('stablecoins','mcap_change_7d')">7d Change<span class="sort-arrow">▲▼</span></th>
+                                <th class="sortable" onclick="sortCryptoMarket('stablecoins','price')">Price<span class="sort-arrow">▲▼</span></th>
+                                <th class="sortable" onclick="sortCryptoMarket('stablecoins','classification')">Classification<span class="sort-arrow">▲▼</span></th>
                                 <th>Chains</th>
                             </tr>
                         </thead>
@@ -1639,6 +1684,7 @@
                         </tbody>
                     </table>
                 </div>
+                <div id="stablecoinPagination" class="cp-pagination-wrapper"></div>
             </section>
 
             <!-- Chains by TVL -->
@@ -1649,15 +1695,24 @@
                 <div class="analytics-chart-container" id="chainsTvlChartContainer" style="display: none;">
                     <canvas id="chainsTvlBarChart"></canvas>
                 </div>
-                <div class="table-responsive" style="margin-top: 16px;">
+                <div class="cm-table-controls" style="margin-top: 16px;">
+                    <label>Show</label>
+                    <select onchange="changeCmPageSize('chainsTvl', this.value)">
+                        <option value="10" selected>10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                    </select>
+                    <label>per page</label>
+                </div>
+                <div class="table-responsive">
                     <table class="chain-financials-table" id="chainsTvlTable">
                         <thead>
                             <tr>
-                                <th>#</th>
-                                <th>Chain</th>
-                                <th>TVL</th>
-                                <th>1d Change</th>
-                                <th>7d Change</th>
+                                <th class="sortable" onclick="sortCryptoMarket('chainsTvl','rank')">#<span class="sort-arrow">▲▼</span></th>
+                                <th class="sortable" onclick="sortCryptoMarket('chainsTvl','name')">Chain<span class="sort-arrow">▲▼</span></th>
+                                <th class="sortable" onclick="sortCryptoMarket('chainsTvl','tvl')">TVL<span class="sort-arrow">▲▼</span></th>
+                                <th class="sortable" onclick="sortCryptoMarket('chainsTvl','tvl_change_1d')">1d Change<span class="sort-arrow">▲▼</span></th>
+                                <th class="sortable" onclick="sortCryptoMarket('chainsTvl','tvl_change_7d')">7d Change<span class="sort-arrow">▲▼</span></th>
                             </tr>
                         </thead>
                         <tbody id="chainsTvlTableBody">
@@ -1665,6 +1720,7 @@
                         </tbody>
                     </table>
                 </div>
+                <div id="chainsTvlPagination" class="cp-pagination-wrapper"></div>
             </section>
 
             <!-- RWA Protocols -->
@@ -2018,19 +2074,19 @@
         }
     </script>
 
-    <script src="/static/js/app.js?v=1771286285"></script>
+    <script src="/static/js/app.js?v=1771287739"></script>
 
     <!-- Transaction scripts -->
-    <script src="/static/js/transactions.js?v=1771286285"></script>
-    <script src="/static/js/transaction-analytics.js?v=1771286285"></script>
+    <script src="/static/js/transactions.js?v=1771287739"></script>
+    <script src="/static/js/transaction-analytics.js?v=1771287739"></script>
     <!-- Advanced Analytics tab -->
-    <script src="/static/js/analytics-tab.js?v=1771286285"></script>
+    <script src="/static/js/analytics-tab.js?v=1771287739"></script>
     <!-- Sankey flow diagram -->
-    <script src="/static/js/sankey-chart.js?v=1771286285"></script>
+    <script src="/static/js/sankey-chart.js?v=1771287739"></script>
     <!-- Wallet Intelligence tab -->
-    <script src="/static/js/wallet-intelligence.js?v=1771286285"></script>
+    <script src="/static/js/wallet-intelligence.js?v=1771287739"></script>
     <!-- Crypto Market tab -->
-    <script src="/static/js/crypto-market.js?v=1771286285"></script>
+    <script src="/static/js/crypto-market.js?v=1771287739"></script>
 
     <script>
         // Main tab switching function
