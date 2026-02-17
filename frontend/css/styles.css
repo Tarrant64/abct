@@ -11453,6 +11453,37 @@ body.privacy-mode a[data-href] {
     cursor: pointer;
 }
 
+/* Crypto Market source toggle (CMC / CoinGecko) */
+.cm-source-toggle {
+    display: flex;
+    gap: 0;
+    background: var(--card-bg, #1a1a2e);
+    border-radius: 8px;
+    padding: 3px;
+    margin-left: auto;
+}
+
+.cm-source-btn {
+    padding: 6px 14px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    background: transparent;
+    color: var(--text-secondary, #888);
+    transition: all 0.2s;
+}
+
+.cm-source-btn:hover {
+    color: var(--text-primary, #e0e0e0);
+}
+
+.cm-source-btn.active {
+    background: var(--accent-color, #667eea);
+    color: #fff;
+}
+
 .large-tx-filters {
     display: flex;
     align-items: center;

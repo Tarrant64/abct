@@ -18,6 +18,7 @@
     var _cryptoPageSize = 10;
     var _cryptoSortCol = 'rank';
     var _cryptoSortDir = 'asc';
+    var _cryptoSource = 'cmc'; // 'cmc' or 'coingecko'
 
     // Stablecoins
     var _allStablecoins = [];
@@ -197,6 +198,25 @@
         }
     };
 
+    window.switchCryptoSource = function(source) {
+        if (source === _cryptoSource) return;
+        _cryptoSource = source;
+        _cryptoPage = 1;
+
+        // Update toggle buttons
+        var cmcBtn = document.getElementById('srcBtnCmc');
+        var cgBtn = document.getElementById('srcBtnCoingecko');
+        if (cmcBtn) cmcBtn.classList.toggle('active', source === 'cmc');
+        if (cgBtn) cgBtn.classList.toggle('active', source === 'coingecko');
+
+        // Show loading state
+        var body = document.getElementById('topCryptosTableBody');
+        if (body) body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#888;padding:40px;">Loading...</td></tr>';
+
+        // Re-fetch from selected source
+        loadTopCryptos();
+    };
+
     // ---- Lock / Unlock ----
 
     window.checkCryptoMarketLock = async function() {
@@ -290,24 +310,24 @@
 
     async function loadTopCryptos() {
         try {
-            var resp = await authFetch('/analytics/market/top-cryptos?limit=50');
+            var resp = await authFetch('/analytics/market/top-cryptos?limit=50&source=' + _cryptoSource);
             var data = await resp.json();
 
             if (!data.success || !data.cryptos || data.cryptos.length === 0) {
                 var msg = data.error || 'Failed to load top cryptos';
                 if (msg.indexOf('not configured') !== -1) {
-                    msg = 'Requires CoinMarketCap API key. <a href="/settings.html#apis" style="color:#667eea;">Configure in Settings</a>';
+                    var keyName = _cryptoSource === 'cmc' ? 'CoinMarketCap' : 'CoinGecko';
+                    msg = 'Requires ' + keyName + ' API key. <a href="/settings.html#apis" style="color:#667eea;">Configure in Settings</a>';
                 }
                 document.getElementById('topCryptosTableBody').innerHTML =
                     '<tr><td colspan="7" style="text-align:center;color:#888;padding:40px;">' + msg + '</td></tr>';
+                // Clear pagination
+                var pag = document.getElementById('topCryptosPagination');
+                if (pag) pag.innerHTML = '';
                 return;
             }
 
             _allCryptos = data.cryptos;
-
-            // Show source badge
-            var sourceEl = document.getElementById('topCryptosSource');
-            if (sourceEl) sourceEl.textContent = 'via ' + (data.source || 'Unknown');
 
             renderTopCryptosTable();
         } catch (e) {

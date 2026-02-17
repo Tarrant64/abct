@@ -194,15 +194,16 @@ async def get_relative_strength(
 @router.get("/market/top-cryptos")
 async def get_top_cryptos(
     limit: int = Query(default=20, ge=5, le=100),
+    source: str = Query(default="cmc", regex="^(cmc|coingecko)$"),
     user_id: int = Depends(verify_session)
 ):
-    """Get top cryptocurrencies by market cap (CMC preferred, CoinGecko fallback)"""
+    """Get top cryptocurrencies by market cap. Source: 'cmc' or 'coingecko'"""
     try:
-        data = await chain_analytics_service.get_top_cryptos(limit)
+        data = await chain_analytics_service.get_top_cryptos(limit, source)
         return {"success": True, **data}
     except Exception as e:
         logger.error(f"Error fetching top cryptos: {e}")
-        return {"success": False, "error": str(e), "cryptos": [], "source": "Unknown"}
+        return {"success": False, "error": str(e), "cryptos": [], "source": source}
 
 
 @router.get("/market/stablecoins")

@@ -252,54 +252,90 @@ class ChainAnalyticsService:
         return 0
 
 
-    async def get_top_cryptos(self, limit: int = 20) -> Dict:
-        """Get top cryptocurrencies by market cap from CoinMarketCap only.
+    async def get_top_cryptos(self, limit: int = 20, source: str = "cmc") -> Dict:
+        """Get top cryptocurrencies by market cap.
 
-        CMC is the only trusted source for top-N rankings.
-        CoinGecko has bad data in the top 10 (e.g. FIGR_HELOC).
+        Args:
+            limit: Number of coins to return.
+            source: 'cmc' for CoinMarketCap, 'coingecko' for CoinGecko.
         """
-        cache_key = f"analytics:market:top_cryptos:{limit}"
+        cache_key = f"analytics:market:top_cryptos:{source}:{limit}"
         cached = await get_cache(cache_key)
         if cached:
             return cached
 
+        from database import get_api_key
+
         cryptos = []
 
-        # Load CMC key from database (user configures via Settings UI)
-        from database import get_api_key
-        cmc_key = await get_api_key("coinmarketcap")
-        if not cmc_key:
-            logger.warning("Top cryptos requires CoinMarketCap API key — not configured")
-            return {'cryptos': [], 'source': 'CMC', 'error': 'CoinMarketCap API key not configured'}
+        if source == "cmc":
+            cmc_key = await get_api_key("coinmarketcap")
+            if not cmc_key:
+                return {'cryptos': [], 'source': 'CMC', 'error': 'CoinMarketCap API key not configured'}
+            try:
+                client = get_client("coinmarketcap", timeout=10.0)
+                resp = await client.get(
+                    f"{CMC_BASE_URL}/cryptocurrency/listings/latest",
+                    params={'limit': limit, 'convert': 'USD'},
+                    headers={'X-CMC_PRO_API_KEY': cmc_key, 'Accept': 'application/json'}
+                )
+                if resp.status_code == 200:
+                    for coin in resp.json().get('data', []):
+                        quote = coin.get('quote', {}).get('USD', {})
+                        cryptos.append({
+                            'rank': coin.get('cmc_rank', 0),
+                            'name': coin.get('name', ''),
+                            'symbol': coin.get('symbol', ''),
+                            'price': quote.get('price', 0),
+                            'market_cap': quote.get('market_cap', 0),
+                            'change_24h': quote.get('percent_change_24h', 0),
+                            'change_7d': quote.get('percent_change_7d', 0),
+                            'volume_24h': quote.get('volume_24h', 0),
+                        })
+                    logger.info(f"Top cryptos loaded from CMC ({len(cryptos)} coins)")
+                else:
+                    logger.warning(f"CMC listings returned {resp.status_code}")
+            except Exception as e:
+                logger.warning(f"CMC top cryptos failed: {e}")
 
-        try:
-            client = get_client("coinmarketcap", timeout=10.0)
-            resp = await client.get(
-                f"{CMC_BASE_URL}/cryptocurrency/listings/latest",
-                params={'limit': limit, 'convert': 'USD'},
-                headers={'X-CMC_PRO_API_KEY': cmc_key, 'Accept': 'application/json'}
-            )
-            if resp.status_code == 200:
-                cmc_data = resp.json().get('data', [])
-                for coin in cmc_data:
-                    quote = coin.get('quote', {}).get('USD', {})
-                    cryptos.append({
-                        'rank': coin.get('cmc_rank', 0),
-                        'name': coin.get('name', ''),
-                        'symbol': coin.get('symbol', ''),
-                        'price': quote.get('price', 0),
-                        'market_cap': quote.get('market_cap', 0),
-                        'change_24h': quote.get('percent_change_24h', 0),
-                        'change_7d': quote.get('percent_change_7d', 0),
-                        'volume_24h': quote.get('volume_24h', 0),
-                    })
-                logger.info(f"Top cryptos loaded from CMC ({len(cryptos)} coins)")
-            else:
-                logger.warning(f"CMC listings returned {resp.status_code}")
-        except Exception as e:
-            logger.warning(f"CMC top cryptos failed: {e}")
+        elif source == "coingecko":
+            cg_key = await get_api_key("coingecko")
+            if not cg_key:
+                return {'cryptos': [], 'source': 'CoinGecko', 'error': 'CoinGecko API key not configured'}
+            try:
+                client = get_client("coingecko", timeout=10.0)
+                resp = await client.get(
+                    "https://api.coingecko.com/api/v3/coins/markets",
+                    params={
+                        'vs_currency': 'usd',
+                        'order': 'market_cap_desc',
+                        'per_page': limit,
+                        'page': 1,
+                        'sparkline': 'false',
+                        'price_change_percentage': '24h,7d'
+                    },
+                    headers={"x-cg-demo-api-key": cg_key}
+                )
+                if resp.status_code == 200:
+                    for i, coin in enumerate(resp.json()):
+                        cryptos.append({
+                            'rank': coin.get('market_cap_rank', i + 1),
+                            'name': coin.get('name', ''),
+                            'symbol': (coin.get('symbol', '') or '').upper(),
+                            'price': coin.get('current_price', 0),
+                            'market_cap': coin.get('market_cap', 0),
+                            'change_24h': coin.get('price_change_percentage_24h', 0),
+                            'change_7d': coin.get('price_change_percentage_7d_in_currency', 0),
+                            'volume_24h': coin.get('total_volume', 0),
+                        })
+                    logger.info(f"Top cryptos loaded from CoinGecko ({len(cryptos)} coins)")
+                else:
+                    logger.warning(f"CoinGecko markets returned {resp.status_code}")
+            except Exception as e:
+                logger.warning(f"CoinGecko top cryptos failed: {e}")
 
-        result = {'cryptos': cryptos, 'source': 'CMC'}
+        display_source = 'CMC' if source == 'cmc' else 'CoinGecko'
+        result = {'cryptos': cryptos, 'source': display_source}
         if cryptos:
             await set_cache(cache_key, result, CACHE_TTL_HOT)
         return result
