@@ -11213,6 +11213,178 @@ body.privacy-mode a[data-href] {
     }
 }
 
+/* ===========================
+   Portfolio Streamgraph
+   =========================== */
+
+.stream-chart-section {
+    overflow: visible;
+}
+
+.stream-chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.stream-subtitle {
+    font-size: 0.8em;
+    font-weight: 400;
+    opacity: 0.6;
+}
+
+.stream-range-buttons {
+    display: flex;
+    gap: 6px;
+}
+
+.stream-range-btn {
+    padding: 4px 12px;
+    border: 1px solid var(--border-color, #2a2a4a);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary, #a0a0a0);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.stream-range-btn:hover {
+    border-color: var(--accent-color, #00d26a);
+    color: var(--accent-color, #00d26a);
+}
+
+.stream-range-btn.active {
+    background: var(--accent-color, #00d26a);
+    border-color: var(--accent-color, #00d26a);
+    color: #fff;
+}
+
+[data-theme="light"] .stream-range-btn {
+    border-color: #e5e7eb;
+    color: #6b7280;
+}
+
+[data-theme="light"] .stream-range-btn:hover {
+    border-color: #00b894;
+    color: #00b894;
+}
+
+[data-theme="light"] .stream-range-btn.active {
+    background: #00b894;
+    border-color: #00b894;
+    color: #fff;
+}
+
+.stream-container {
+    position: relative;
+    width: 100%;
+    height: 420px;
+    overflow: visible;
+    border-radius: 12px;
+}
+
+.stream-svg {
+    display: block;
+}
+
+.stream-path {
+    transition: fill-opacity 0.3s ease, stroke 0.2s ease;
+    cursor: pointer;
+}
+
+.stream-label {
+    pointer-events: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-weight: 600;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.stream-axis-label {
+    pointer-events: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.stream-crosshair {
+    pointer-events: none;
+}
+
+.stream-tooltip {
+    position: absolute;
+    background: var(--bg-card, #0f3460);
+    border: 1px solid var(--border-color, #2a2a4a);
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: var(--text-primary, #eaeaea);
+    pointer-events: none;
+    z-index: 100;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: opacity 0.15s ease;
+}
+
+/* Dark mode glow on stream hover */
+[data-theme="dark-mode"] .stream-path:hover {
+    filter: brightness(1.15) drop-shadow(0 0 4px rgba(0, 210, 106, 0.2));
+}
+
+/* Light theme */
+[data-theme="light"] .stream-tooltip {
+    background: #ffffff;
+    border-color: #e5e7eb;
+    color: #1a1a2e;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .stream-label {
+    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.6);
+}
+
+/* Cypherpunk theme */
+[data-theme="cypherpunk1"] .stream-path:hover {
+    filter: brightness(1.2) drop-shadow(0 0 6px rgba(10, 189, 198, 0.4));
+}
+
+[data-theme="cypherpunk1"] .stream-tooltip {
+    border-color: rgba(10, 189, 198, 0.4);
+    box-shadow: 0 0 12px rgba(10, 189, 198, 0.2), 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Ocean depths theme */
+[data-theme="ocean-depths"] .stream-path:hover {
+    filter: brightness(1.15) drop-shadow(0 0 4px rgba(0, 210, 255, 0.3));
+}
+
+/* Sunset horizon theme */
+[data-theme="sunset-horizon"] .stream-path:hover {
+    filter: brightness(1.15) drop-shadow(0 0 4px rgba(255, 107, 107, 0.3));
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .stream-container {
+        height: 320px;
+    }
+    .stream-subtitle {
+        display: none;
+    }
+    .stream-chart-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+@media (max-width: 480px) {
+    .stream-container {
+        height: 260px;
+    }
+}
+
 /* ================================================
    WALLET INTELLIGENCE TAB
    ================================================ */

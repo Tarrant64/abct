@@ -232,6 +232,11 @@ function changeTheme(themeName) {
         window.portfolioSankey.updateTheme();
     }
 
+    // Re-render Streamgraph with new theme colors
+    if (window.portfolioStream) {
+        window.portfolioStream.updateTheme();
+    }
+
     // Re-render intelligence tab with new theme colors
     if (typeof updateIntelligenceTheme === 'function') {
         updateIntelligenceTheme();
@@ -1388,6 +1393,11 @@ async function loadPortfolioSummary() {
             const total = allocs.reduce((sum, a) => sum + a.usd, 0);
             window.portfolioSankey.setData(total, allocs, lastPortfolioData, prices);
             window.portfolioSankey.render();
+        }
+
+        // Refresh streamgraph with current range
+        if (window.portfolioStream) {
+            window.portfolioStream.loadData(window.portfolioStream.activeRange);
         }
 
         // Update wallets section summary - overlapping chain icons
@@ -10233,6 +10243,16 @@ async function initBlockchainsTab() {
             window.portfolioSankey.render();
         } catch (e) {
             console.warn('[Sankey] Failed to initialize:', e);
+        }
+    }
+
+    // Initialize Streamgraph (chain history over time)
+    if (typeof PortfolioStreamgraph !== 'undefined' && document.getElementById('portfolioStreamContainer')) {
+        try {
+            window.portfolioStream = new PortfolioStreamgraph('portfolioStreamContainer');
+            window.portfolioStream.loadData('3m');
+        } catch (e) {
+            console.warn('[Streamgraph] Failed to initialize:', e);
         }
     }
 
