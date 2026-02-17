@@ -371,7 +371,16 @@ class NFTSchedulerService:
     async def stop(self):
         """Stop the background scheduler."""
         if self.scheduler:
-            self.scheduler.shutdown()
+            try:
+                loop = asyncio.get_event_loop()
+                await asyncio.wait_for(
+                    loop.run_in_executor(None, self.scheduler.shutdown),
+                    timeout=3.0
+                )
+            except asyncio.TimeoutError:
+                logger.warning("NFT scheduler shutdown timed out after 3s, forcing")
+            except Exception as e:
+                logger.warning(f"Error during NFT scheduler shutdown: {e}")
             self.scheduler = None
             logger.info("NFT Scheduler stopped")
 

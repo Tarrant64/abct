@@ -317,9 +317,12 @@ async def lifespan(app: FastAPI):
             # Mark overall ready once NFT prices are done (last task)
             startup_status["ready"] = True
 
+    # Track all background tasks for graceful cancellation on shutdown
+    _background_tasks = []
+
     # Start background tasks (non-blocking) — V1 snapshot tasks removed (V2 only)
-    asyncio.create_task(warm_caches_background())
-    asyncio.create_task(collect_nft_prices_background())
+    _background_tasks.append(asyncio.create_task(warm_caches_background()))
+    _background_tasks.append(asyncio.create_task(collect_nft_prices_background()))
 
     # Seed wallet_sources and start off-chain collector (V2 per-wallet balances)
     async def offchain_collector_startup():
@@ -353,6 +356,9 @@ async def lifespan(app: FastAPI):
                 await offchain_collector.collect_all_users()
                 logger.info("Periodic off-chain collector: Collection complete")
                 await log_service.info("main", "Periodic off-chain collector: Collection complete")
+            except asyncio.CancelledError:
+                logger.info("Periodic off-chain collector cancelled (shutdown)")
+                raise
             except Exception as e:
                 logger.error(f"Periodic off-chain collector error: {e}")
                 await log_service.error("main", f"Periodic off-chain collector error: {e}")
@@ -382,9 +388,9 @@ async def lifespan(app: FastAPI):
             logger.warning(f"Startup materialization failed: {e}")
             await log_service.warning("main", f"Startup materialization failed: {e}")
 
-    asyncio.create_task(offchain_collector_startup())
-    asyncio.create_task(periodic_offchain_collector())
-    asyncio.create_task(materialize_on_startup())
+    _background_tasks.append(asyncio.create_task(offchain_collector_startup()))
+    _background_tasks.append(asyncio.create_task(periodic_offchain_collector()))
+    _background_tasks.append(asyncio.create_task(materialize_on_startup()))
     logger.info("Off-chain collector + startup materialization started (V2 only)")
 
     # Initialize and optionally start NFT background scheduler
@@ -438,27 +444,49 @@ async def lifespan(app: FastAPI):
             logger.warning(f"Cloudflare tunnel auto-restore failed: {e}")
             await log_service.warning("main", f"Cloudflare tunnel auto-restore failed: {e}")
 
-    asyncio.create_task(restore_cloudflare_tunnel())
+    _background_tasks.append(asyncio.create_task(restore_cloudflare_tunnel()))
 
     yield
 
-    # Shutdown: Stop V2 auto-collect schedulers
+    # --- Graceful shutdown ---
+    logger.info("Shutdown initiated...")
+
+    # 1. Cancel all tracked background tasks first
+    logger.info(f"Cancelling {len(_background_tasks)} background tasks...")
+    for task in _background_tasks:
+        if not task.done():
+            task.cancel()
+    if _background_tasks:
+        await asyncio.gather(*_background_tasks, return_exceptions=True)
+    _background_tasks.clear()
+    logger.info("Background tasks cancelled")
+
+    # 2. Shut down services with an overall timeout
+    async def _shutdown_services():
+        # Stop V2 auto-collect schedulers
+        try:
+            from engine.orchestrator import backfill_orchestrator as bo
+            for uid in list(bo._auto_collect_tasks.keys()):
+                await bo.stop_auto_collect(uid)
+            logger.info("V2 auto-collect schedulers stopped")
+        except Exception as e:
+            logger.warning(f"Error stopping V2 auto-collect: {e}")
+
+        # Stop NFT scheduler
+        logger.info("Shutting down NFT scheduler...")
+        await nft_scheduler.stop()
+
+        # Close all shared HTTP clients
+        logger.info("Closing shared HTTP clients...")
+        from services.http_client import close_all
+        await close_all()
+
     try:
-        from engine.orchestrator import backfill_orchestrator as bo
-        for uid in list(bo._auto_collect_tasks.keys()):
-            await bo.stop_auto_collect(uid)
-        logger.info("V2 auto-collect schedulers stopped")
-    except Exception as e:
-        logger.warning(f"Error stopping V2 auto-collect: {e}")
+        await asyncio.wait_for(_shutdown_services(), timeout=10.0)
+    except asyncio.TimeoutError:
+        logger.warning("Shutdown timed out after 10s, forcing exit")
 
-    # Shutdown: Stop NFT scheduler
-    logger.info("Shutting down NFT scheduler...")
-    await nft_scheduler.stop()
-
-    # Shutdown: Close all shared HTTP clients
-    logger.info("Closing shared HTTP clients...")
-    from services.http_client import close_all
-    await close_all()
+    logger.info("Shutdown complete")
 
 app = FastAPI(
     title="ABCT - A Better Crypto Tracker",

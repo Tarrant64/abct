@@ -132,12 +132,15 @@ async def close_all():
     Close all persistent HTTP clients.
 
     Call this during application shutdown to release connections cleanly.
+    Each client gets a 2-second timeout to prevent blocking shutdown.
     """
     client_names = list(_clients.keys())
     for name in client_names:
         try:
-            await _clients[name].aclose()
+            await asyncio.wait_for(_clients[name].aclose(), timeout=2.0)
             logger.debug(f"Closed HTTP client '{name}'")
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout closing HTTP client '{name}', skipping")
         except Exception as e:
             logger.warning(f"Error closing HTTP client '{name}': {e}")
     _clients.clear()
