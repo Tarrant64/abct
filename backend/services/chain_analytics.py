@@ -489,6 +489,75 @@ class ChainAnalyticsService:
             logger.warning(f"DefiLlama all chains TVL fetch failed: {e}")
             return {"total_tvl": 0, "chains": []}
 
+    async def get_chains_tvl_history_multi(self, limit: int = 10, days: int = 90) -> Dict:
+        """Get historical TVL for top N chains (for stacked area chart)."""
+        cache_key = f"analytics:market:chains_tvl_history:{limit}:{days}"
+        cached = await get_cache(cache_key)
+        if cached:
+            return cached
+
+        try:
+            # First get current top chains to know which ones to fetch history for
+            chains_data = await self.get_all_chains_tvl(limit)
+            chain_names = [c['name'] for c in chains_data.get('chains', [])[:limit]]
+
+            if not chain_names:
+                return {"chains": [], "series": []}
+
+            # Fetch history for each chain in parallel
+            async def fetch_history(name):
+                slug = name
+                if name == 'BSC':
+                    slug = 'Binance'
+                try:
+                    resp = await self.client.get(f"{DEFILLAMA_BASE}/v2/historicalChainTvl/{slug}")
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        # Take last N days
+                        points = data[-days:] if len(data) > days else data
+                        return name, [{'date': d.get('date', 0), 'tvl': d.get('tvl', 0)} for d in points]
+                except Exception as e:
+                    logger.debug(f"History fetch failed for {name}: {e}")
+                return name, []
+
+            results = await asyncio.gather(*[fetch_history(n) for n in chain_names], return_exceptions=True)
+
+            # Build aligned series: find common dates, fill gaps with 0
+            chain_series = {}
+            all_dates = set()
+            for item in results:
+                if isinstance(item, Exception):
+                    continue
+                name, points = item
+                if points:
+                    chain_series[name] = {p['date']: p['tvl'] for p in points}
+                    all_dates.update(p['date'] for p in points)
+
+            if not all_dates:
+                return {"chains": [], "series": []}
+
+            sorted_dates = sorted(all_dates)
+            # Sample to ~90 points max to keep payload reasonable
+            if len(sorted_dates) > 90:
+                step = len(sorted_dates) // 90
+                sorted_dates = sorted_dates[::step]
+
+            series = []
+            for d in sorted_dates:
+                point = {'date': d}
+                for name in chain_names:
+                    if name in chain_series:
+                        point[name] = chain_series[name].get(d, 0)
+                series.append(point)
+
+            result = {'chains': [n for n in chain_names if n in chain_series], 'series': series}
+            await set_cache(cache_key, result, CACHE_TTL_WARM)
+            return result
+
+        except Exception as e:
+            logger.warning(f"Multi-chain TVL history fetch failed: {e}")
+            return {"chains": [], "series": []}
+
     async def get_rwa_protocols(self, limit: int = 15) -> Dict:
         """Get RWA (Real World Asset) protocols from DefiLlama."""
         cache_key = f"analytics:market:rwa:{limit}"

@@ -231,6 +231,21 @@ async def get_all_chains_tvl(
         return {"success": False, "error": str(e), "total_tvl": 0, "chains": []}
 
 
+@router.get("/market/chains-tvl-history")
+async def get_chains_tvl_history(
+    limit: int = Query(default=10, ge=5, le=20),
+    days: int = Query(default=90, ge=7, le=365),
+    user_id: int = Depends(verify_session)
+):
+    """Get historical TVL for top chains (stacked area chart)"""
+    try:
+        data = await chain_analytics_service.get_chains_tvl_history_multi(limit, days)
+        return {"success": True, **data}
+    except Exception as e:
+        logger.error(f"Error fetching chains TVL history: {e}")
+        return {"success": False, "error": str(e), "chains": [], "series": []}
+
+
 @router.get("/market/rwa")
 async def get_rwa_protocols(
     limit: int = Query(default=15, ge=5, le=50),

@@ -9,6 +9,9 @@
     let _initialized = false;
     let _stablecoinChart = null;
     let _chainsTvlChart = null;
+    let _chainsTvlAreaChart = null;
+    var _chainChartMode = 'bar'; // 'bar' or 'area'
+    var _chainsTvlHistoryLoaded = false;
 
     // ---- Pagination & sorting state ----
 
@@ -240,6 +243,34 @@
 
         // Re-fetch from selected source
         loadTopCryptos();
+    };
+
+    window.switchChainChart = function(mode) {
+        if (mode === _chainChartMode) return;
+        _chainChartMode = mode;
+
+        // Update toggle buttons
+        var barBtn = document.getElementById('chainChartBar');
+        var areaBtn = document.getElementById('chainChartArea');
+        if (barBtn) barBtn.classList.toggle('active', mode === 'bar');
+        if (areaBtn) areaBtn.classList.toggle('active', mode === 'area');
+
+        var barContainer = document.getElementById('chainsTvlChartContainer');
+        var areaContainer = document.getElementById('chainsTvlAreaContainer');
+
+        if (mode === 'bar') {
+            if (barContainer) barContainer.style.display = 'block';
+            if (areaContainer) areaContainer.style.display = 'none';
+        } else {
+            if (barContainer) barContainer.style.display = 'none';
+            if (areaContainer) areaContainer.style.display = 'block';
+
+            // Lazy-load area chart data on first switch
+            if (!_chainsTvlHistoryLoaded) {
+                _chainsTvlHistoryLoaded = true;
+                loadChainsTvlHistory();
+            }
+        }
     };
 
     // ---- Lock / Unlock ----
@@ -647,6 +678,153 @@
 
         updateSortHeaders('chainsTvlTable', _chainsTvlSortCol, _chainsTvlSortDir);
         renderPagination('chainsTvlPagination', _chainsTvlPage, _chainsTvlPageSize, _allChainsTvl.length, 'chainsTvl');
+    }
+
+    // ---- Chains TVL Area Chart (historical) ----
+
+    async function loadChainsTvlHistory() {
+        var container = document.getElementById('chainsTvlAreaContainer');
+        if (!container) return;
+
+        // Show loading
+        var canvas = document.getElementById('chainsTvlAreaChart');
+        if (canvas) canvas.style.opacity = '0.3';
+
+        try {
+            var resp = await authFetch('/analytics/market/chains-tvl-history?limit=10&days=90');
+            var data = await resp.json();
+
+            if (!data.success || !data.series || data.series.length === 0) {
+                container.innerHTML = '<div style="text-align:center;color:#888;padding:60px;">Failed to load historical TVL data</div>';
+                return;
+            }
+
+            renderChainsTvlAreaChart(data.chains, data.series);
+        } catch (e) {
+            console.error('Failed to load chains TVL history:', e);
+            container.innerHTML = '<div style="text-align:center;color:#888;padding:60px;">Error loading historical data</div>';
+        }
+    }
+
+    function renderChainsTvlAreaChart(chainNames, series) {
+        var container = document.getElementById('chainsTvlAreaContainer');
+        var canvas = document.getElementById('chainsTvlAreaChart');
+        if (!container || !canvas) return;
+
+        if (_chainsTvlAreaChart) {
+            _chainsTvlAreaChart.destroy();
+            _chainsTvlAreaChart = null;
+        }
+
+        container.style.display = 'block';
+        canvas.style.opacity = '1';
+        var opts = getChartOpts();
+
+        // Build labels (dates)
+        var labels = series.map(function(s) {
+            var d = new Date(s.date * 1000);
+            return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        });
+
+        // Color palette for chains
+        var palette = [
+            'rgba(99, 102, 241, 0.7)',   // Indigo
+            'rgba(59, 130, 246, 0.7)',   // Blue
+            'rgba(34, 211, 238, 0.7)',   // Cyan
+            'rgba(16, 185, 129, 0.7)',   // Emerald
+            'rgba(245, 158, 11, 0.7)',   // Amber
+            'rgba(239, 68, 68, 0.7)',    // Red
+            'rgba(168, 85, 247, 0.7)',   // Purple
+            'rgba(236, 72, 153, 0.7)',   // Pink
+            'rgba(20, 184, 166, 0.7)',   // Teal
+            'rgba(249, 115, 22, 0.7)',   // Orange
+        ];
+        var borderPalette = [
+            'rgb(99, 102, 241)',
+            'rgb(59, 130, 246)',
+            'rgb(34, 211, 238)',
+            'rgb(16, 185, 129)',
+            'rgb(245, 158, 11)',
+            'rgb(239, 68, 68)',
+            'rgb(168, 85, 247)',
+            'rgb(236, 72, 153)',
+            'rgb(20, 184, 166)',
+            'rgb(249, 115, 22)',
+        ];
+
+        // Build datasets (one per chain, stacked)
+        var datasets = chainNames.map(function(name, idx) {
+            return {
+                label: name,
+                data: series.map(function(s) { return s[name] || 0; }),
+                fill: true,
+                backgroundColor: palette[idx % palette.length],
+                borderColor: borderPalette[idx % borderPalette.length],
+                borderWidth: 1,
+                pointRadius: 0,
+                pointHitRadius: 10,
+                tension: 0.3,
+            };
+        });
+
+        _chainsTvlAreaChart = new Chart(canvas.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            color: opts.tickColor,
+                            usePointStyle: true,
+                            pointStyle: 'rectRounded',
+                            padding: 12,
+                            font: { size: 11 }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: opts.tooltipBg,
+                        borderColor: opts.tooltipBorder,
+                        borderWidth: 1,
+                        titleColor: opts.tickColor,
+                        bodyColor: opts.tickColor,
+                        callbacks: {
+                            label: function(ctx) {
+                                return ctx.dataset.label + ': ' + fmtCompactUSD(ctx.parsed.y);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { color: opts.gridColor },
+                        ticks: {
+                            color: opts.tickColor,
+                            maxTicksLimit: 12,
+                            font: { size: 10 }
+                        }
+                    },
+                    y: {
+                        stacked: true,
+                        grid: { color: opts.gridColor },
+                        ticks: {
+                            color: opts.tickColor,
+                            callback: function(v) { return fmtCompactUSD(v); }
+                        }
+                    }
+                }
+            }
+        });
     }
 
     // ---- RWA Protocols ----
