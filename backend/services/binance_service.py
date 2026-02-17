@@ -32,8 +32,23 @@ class BinanceService:
         self.api_secret = BINANCE_API_SECRET
 
     def is_configured(self) -> bool:
-        """Check if Binance API is properly configured."""
+        """Check if Binance API is properly configured (sync, checks cached keys)."""
         return bool(self.api_key and self.api_secret)
+
+    async def ensure_configured(self) -> bool:
+        """Load API keys from DB if not set from env vars, then check."""
+        if not self.api_key or not self.api_secret:
+            try:
+                from database import get_api_setting
+                setting = await get_api_setting("binance")
+                if setting:
+                    if setting.get("api_key"):
+                        self.api_key = setting["api_key"]
+                    if setting.get("api_secret"):
+                        self.api_secret = setting["api_secret"]
+            except Exception as e:
+                logger.debug(f"Could not load Binance keys from DB: {e}")
+        return self.is_configured()
 
     def _generate_signature(self, query_string: str) -> str:
         """Generate HMAC SHA256 signature for Binance API."""
@@ -45,6 +60,8 @@ class BinanceService:
 
     async def _make_request(self, endpoint: str, params: dict = None) -> Optional[dict]:
         """Make an authenticated request to the Binance API."""
+        if not self.is_configured():
+            await self.ensure_configured()
         if not self.is_configured():
             logger.warning("Binance API not configured")
             return None

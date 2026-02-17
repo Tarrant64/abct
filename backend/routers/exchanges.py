@@ -78,11 +78,11 @@ async def get_exchange_status():
                 "name": "Coinbase"
             },
             "binance": {
-                "configured": binance_service.is_configured(),
+                "configured": await binance_service.ensure_configured(),
                 "name": "Binance"
             },
             "binance_us": {
-                "configured": binance_us_service.is_configured(),
+                "configured": await binance_us_service.ensure_configured(),
                 "name": "Binance.US"
             },
             "okx": {
@@ -371,7 +371,7 @@ async def process_exchange_portfolio(exchange_service, exchange_name: str, user_
 @router.get("/binance")
 async def get_binance_portfolio(user_id: int = Depends(verify_session), refresh: bool = Query(False)):
     """Get Binance portfolio with USD values."""
-    if not binance_service.is_configured():
+    if not await binance_service.ensure_configured():
         raise HTTPException(
             status_code=503,
             detail="Binance API not configured. Add BINANCE_API_KEY and BINANCE_API_SECRET to .env file."
@@ -382,7 +382,7 @@ async def get_binance_portfolio(user_id: int = Depends(verify_session), refresh:
 @router.get("/binance-us")
 async def get_binance_us_portfolio(user_id: int = Depends(verify_session), refresh: bool = Query(False)):
     """Get Binance.US portfolio with USD values."""
-    if not binance_us_service.is_configured():
+    if not await binance_us_service.ensure_configured():
         raise HTTPException(
             status_code=503,
             detail="Binance.US API not configured. Add BINANCE_US_API_KEY and BINANCE_US_API_SECRET to .env file."
@@ -495,7 +495,7 @@ async def get_all_exchanges(user_id: int = Depends(verify_session), refresh: boo
             })
 
     # Binance
-    if binance_service.is_configured():
+    if await binance_service.ensure_configured():
         try:
             data = await get_binance_portfolio(user_id=user_id, refresh=refresh)
             all_exchanges.append(data)
@@ -513,7 +513,7 @@ async def get_all_exchanges(user_id: int = Depends(verify_session), refresh: boo
             })
 
     # Binance.US
-    if binance_us_service.is_configured():
+    if await binance_us_service.ensure_configured():
         try:
             data = await get_binance_us_portfolio(user_id=user_id, refresh=refresh)
             all_exchanges.append(data)
@@ -732,7 +732,7 @@ async def get_exchange_transactions(
 
     # --- Binance: read from DB (full history) ---
     if not exchange or exchange == "binance":
-        if binance_service.is_configured():
+        if await binance_service.ensure_configured():
             db_count = await transaction_history_service.get_exchange_transaction_count(user_id, "binance")
             if db_count == 0 or refresh:
                 try:
@@ -750,7 +750,7 @@ async def get_exchange_transactions(
 
     # --- Binance.US: read from DB (full history) ---
     if not exchange or exchange == "binance_us":
-        if binance_us_service.is_configured():
+        if await binance_us_service.ensure_configured():
             db_count = await transaction_history_service.get_exchange_transaction_count(user_id, "binance_us")
             if db_count == 0 or refresh:
                 try:
@@ -825,7 +825,7 @@ async def refresh_exchange_transactions(
                 results["coinbase"] = {"error": str(e)}
 
     if not exchange or exchange == "binance":
-        if binance_service.is_configured():
+        if await binance_service.ensure_configured():
             try:
                 txs = await binance_service.get_all_transactions(user_id=user_id)
                 inserted = await transaction_history_service.save_exchange_transactions(
@@ -842,7 +842,7 @@ async def refresh_exchange_transactions(
                 results["binance"] = {"error": str(e)}
 
     if not exchange or exchange == "binance_us":
-        if binance_us_service.is_configured():
+        if await binance_us_service.ensure_configured():
             try:
                 txs = await binance_us_service.get_all_transactions(user_id=user_id)
                 inserted = await transaction_history_service.save_exchange_transactions(

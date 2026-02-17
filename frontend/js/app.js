@@ -4621,6 +4621,9 @@ function renderAllExchanges(exchanges) {
                 <div class="exchange-header">
                     ${logoUrl ? `<img src="${logoUrl}" alt="${exchangeName}" class="exchange-logo" onerror="this.outerHTML='<span class=\\'exchange-icon ${exchangeId}\\'>${fallback}</span>'">` : `<span class="exchange-icon ${exchangeId}">${fallback}</span>`}
                     <span class="exchange-name">${exchangeName}</span>
+                    <button class="btn-exchange-sync" onclick="event.stopPropagation(); syncExchangeHistory('${exchangeId}', this)" title="Fetch full transaction history from ${exchangeName}">
+                        <span class="sync-icon">&#8635;</span> Sync History
+                    </button>
                     <span class="exchange-value">${formatUSDBlur(exchange.total_usd || 0)}</span>
                 </div>
         `;
@@ -4638,15 +4641,6 @@ function renderAllExchanges(exchanges) {
         } else {
             html += '<div class="exchange-assets"><p class="empty-state connected-state"><span class="connected-dot"></span>Connected &mdash; no holdings above $1</p></div>';
         }
-
-        // Sync History button
-        html += `
-            <div class="exchange-actions">
-                <button class="btn-exchange-sync" onclick="syncExchangeHistory('${exchangeId}', this)" title="Fetch full transaction history from ${exchangeName}">
-                    <span class="sync-icon">&#8635;</span> Sync History
-                </button>
-            </div>
-        `;
 
         html += '</div>';
     }
@@ -5313,8 +5307,7 @@ async function refreshExchanges() {
     }
 
     try {
-        // Force refresh by adding refresh=true parameter
-        const response = await authFetch(`${API_BASE}/exchanges/coinbase?refresh=true`);
+        const response = await authFetch(`${API_BASE}/exchanges/all?refresh=true`);
 
         if (!response.ok) {
             throw new Error('Failed to fetch exchange data');
@@ -5326,12 +5319,15 @@ async function refreshExchanges() {
         const exchangesSummary = document.getElementById('exchangesSummary');
         if (exchangesSummary) {
             setSafeHTML(exchangesSummary, `
-                <span class="exchange-count">${data.asset_count || 0} assets</span>
+                <span class="exchange-count">${data.exchange_count || 0} exchange${data.exchange_count !== 1 ? 's' : ''} · ${data.total_assets || 0} assets</span>
                 <span class="exchange-total">${formatUSD(data.total_usd || 0)}</span>
             `);
         }
 
-        renderExchangeAssets(data);
+        const exchangesList = document.getElementById('exchangesList');
+        if (exchangesList) {
+            renderAllExchanges(data.exchanges);
+        }
         updateTotalPortfolioValue();
         showStatus('Exchange data refreshed');
     } catch (error) {
