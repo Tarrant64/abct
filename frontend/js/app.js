@@ -4619,9 +4619,9 @@ function renderAllExchanges(exchanges) {
         html += `
             <div class="exchange-section" data-exchange="${exchangeId}">
                 <div class="exchange-header">
-                    ${logoUrl ? `<img src="${logoUrl}" alt="${exchangeName}" class="exchange-logo" onerror="this.outerHTML='<span class=\\'exchange-icon ${exchangeId}\\'>${fallback}</span>'">` : `<span class="exchange-icon ${exchangeId}">${fallback}</span>`}
+                    ${logoUrl ? `<img src="${logoUrl}" alt="${exchangeName}" class="exchange-logo" data-fallback="${fallback}" data-exchange-class="${exchangeId}">` : `<span class="exchange-icon ${exchangeId}">${fallback}</span>`}
                     <span class="exchange-name">${exchangeName}</span>
-                    <button class="btn-exchange-sync" onclick="event.stopPropagation(); syncExchangeHistory('${exchangeId}', this)" title="Fetch full transaction history from ${exchangeName}">
+                    <button class="btn-exchange-sync" data-exchange-sync="${exchangeId}" title="Fetch full transaction history from ${exchangeName}">
                         <span class="sync-icon">&#8635;</span> Sync History
                     </button>
                     <span class="exchange-value">${formatUSDBlur(exchange.total_usd || 0)}</span>
@@ -4646,6 +4646,27 @@ function renderAllExchanges(exchanges) {
     }
 
     setSafeHTML(exchangesList, html);
+
+    // Attach event listeners after DOMPurify rendering (inline handlers are stripped)
+    exchangesList.querySelectorAll('[data-exchange-sync]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            syncExchangeHistory(btn.getAttribute('data-exchange-sync'), btn);
+        });
+    });
+    exchangesList.querySelectorAll('img.exchange-logo[data-fallback]').forEach(img => {
+        img.addEventListener('error', () => {
+            const fallback = img.getAttribute('data-fallback');
+            const cls = img.getAttribute('data-exchange-class');
+            const span = document.createElement('span');
+            span.className = `exchange-icon ${cls}`;
+            span.textContent = fallback;
+            img.replaceWith(span);
+        });
+    });
+    exchangesList.querySelectorAll('img.asset-logo').forEach(img => {
+        img.addEventListener('error', () => { img.style.display = 'none'; });
+    });
 }
 
 // Render exchange assets (helper function)
@@ -4679,7 +4700,7 @@ function renderExchangeAssets(assets) {
         html += `
             <div class="exchange-asset-item">
                 <div class="asset-info">
-                    <img src="${tokenLogoUrl}" alt="${asset.currency}" class="asset-logo" onerror="this.style.display='none'">
+                    <img src="${tokenLogoUrl}" alt="${asset.currency}" class="asset-logo">
                     <div class="asset-text-info">
                         <span class="asset-currency">${asset.currency}</span>
                         <span class="asset-name-small">${asset.name !== asset.currency ? asset.name : ''}</span>
