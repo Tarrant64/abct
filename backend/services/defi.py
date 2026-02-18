@@ -775,6 +775,8 @@ class DeFiService:
             client = get_client("blockfrost", timeout=15.0)
 
             # Load incremental scan state from persistent cache (7-day TTL)
+            # Version marker: bump when calculation logic changes to invalidate stale data
+            SCAN_STATE_VERSION = 2  # v2: net-flow calculation instead of gross-flow
             scan_key = f"iagon_scan_state_{address}"
             scan_state = await get_cache(scan_key)
 
@@ -782,12 +784,14 @@ class DeFiService:
             total_withdrawals = 0
             from_block = None
 
-            if scan_state:
+            if scan_state and scan_state.get('version') == SCAN_STATE_VERSION:
                 total_deposits = scan_state.get('total_deposits', 0)
                 total_withdrawals = scan_state.get('total_withdrawals', 0)
                 from_block = scan_state.get('last_block_height')
                 logger.info(f"[Iagon] Resuming scan for {address[:20]}... from block {from_block}, "
                            f"prior deposits={total_deposits/1_000_000:.2f}, withdrawals={total_withdrawals/1_000_000:.2f}")
+            elif scan_state:
+                logger.info(f"[Iagon] Discarding stale v{scan_state.get('version', 1)} scan state for {address[:20]}... (need v{SCAN_STATE_VERSION})")
 
             # Fetch transactions (incremental if we have scan state)
             all_txs = []
@@ -898,16 +902,22 @@ class DeFiService:
                                 elif out['address'] in IAGON_ALL_STAKING_ADDRESSES:
                                     contract_receives_iag += qty
 
-                    # Deposit: User sends IAG and contract receives it
-                    if user_sends_iag > 0 and contract_receives_iag > 0:
-                        total_deposits += contract_receives_iag
+                    # Use NET flows to avoid overcounting from Cardano UTxO recirculation.
+                    # On Cardano, every contract interaction spends + recreates the UTxO,
+                    # so the contract's full balance flows through as both input and output.
+                    # Only the DELTA matters.
+                    net_to_contract = contract_receives_iag - contract_sends_iag
 
-                    # Withdrawal: Contract sends IAG and user receives it
-                    if contract_sends_iag > 0 and user_receives_iag > 0:
-                        total_withdrawals += user_receives_iag
+                    if net_to_contract > 0:
+                        # IAG flowed INTO the contract (deposit or stake increase)
+                        total_deposits += net_to_contract
+                    elif net_to_contract < 0:
+                        # IAG flowed OUT of the contract (withdrawal or rewards claim)
+                        total_withdrawals += abs(net_to_contract)
 
                 # Save scan state persistently (7-day TTL)
                 await set_cache(scan_key, {
+                    'version': SCAN_STATE_VERSION,
                     'total_deposits': total_deposits,
                     'total_withdrawals': total_withdrawals,
                     'last_block_height': last_block
