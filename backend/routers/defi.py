@@ -91,28 +91,18 @@ async def get_staking_positions(address: str, refresh: bool = False, user_id: in
     if not refresh:
         cached = await get_cache(cache_key)
         if cached:
-            # Only force refresh if Iagon is completely missing (old cache format)
-            protocols = cached.get('protocols', {})
-            if protocols and 'Iagon' not in protocols:
-                logger.info(f"[Staking] Cache for {address[:20]} missing Iagon — forcing refresh")
-                refresh = True
-            else:
-                cached['from_cache'] = True
-                return cached
+            cached['from_cache'] = True
+            return cached
 
     if not refresh:
         # Fresh cache miss — try stale fallback so frontend gets instant data
         stale_data, stale_expires = await get_stale_cache(cache_key)
         if stale_data:
-            protocols = stale_data.get('protocols', {})
-            if protocols and 'Iagon' not in protocols:
-                logger.info(f"[Staking] Stale cache for {address[:20]} missing Iagon — skipping")
-            else:
-                cached_at = (datetime.fromisoformat(stale_expires) - timedelta(seconds=STAKING_CACHE_TTL)).isoformat()
-                stale_data['from_cache'] = True
-                stale_data['stale'] = True
-                stale_data['cached_at'] = cached_at
-                return stale_data
+            cached_at = (datetime.fromisoformat(stale_expires) - timedelta(seconds=STAKING_CACHE_TTL)).isoformat()
+            stale_data['from_cache'] = True
+            stale_data['stale'] = True
+            stale_data['cached_at'] = cached_at
+            return stale_data
 
     # Fetch previous result for protocol-level merge on timeout
     previous_result = None
@@ -149,10 +139,7 @@ async def get_staking_positions(address: str, refresh: bool = False, user_id: in
                 existing['from_cache'] = True
                 return existing
 
-        # Use shorter TTL if Iagon timed out so it auto-retries sooner (1hr vs 24hr)
-        iagon_ok = result.get('protocols', {}).get('Iagon', {}).get('status') is None
-        cache_ttl = STAKING_CACHE_TTL if iagon_ok else CACHE_TTL_WARM
-        await set_cache(cache_key, result, cache_ttl)
+        await set_cache(cache_key, result, STAKING_CACHE_TTL)
 
     return result
 
