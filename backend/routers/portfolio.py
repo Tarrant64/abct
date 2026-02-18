@@ -977,24 +977,39 @@ async def get_portfolio_history(
 @router.get("/totals")
 async def get_portfolio_totals(user_id: int = Depends(verify_session)):
     """
-    Get portfolio value breakdown from wallet_daily_balances (V2).
+    Get portfolio value breakdown.
 
-    Returns component totals (staking, defi, exchange, NFTs) from the latest
-    date in wallet_daily_balances without making any external API calls.
+    Staking and DeFi values are computed LIVE from cached positions (so
+    the overview always reflects current data). Exchange and NFT values
+    come from wallet_daily_balances (updated by offchain collector).
     """
     from database import get_unified_daily_totals
+    from services.offchain_helpers import get_staking_value, get_defi_value
 
     rows = await get_unified_daily_totals(user_id)
-    if not rows:
-        return {
-            "staking_usd": 0, "defi_usd": 0, "exchange_usd": 0,
-            "nft_usd": 0, "tracked_tokens_usd": 0, "snapshot_time": None
-        }
+    latest = rows[-1] if rows else {}
 
-    latest = rows[-1]  # Most recent date
+    # Staking and DeFi: compute live from cached positions instead of
+    # relying on the database (which may be stale if collector hasn't run).
+    prices = {}
+    try:
+        prices = await pricing_service.get_all_tracked_prices()
+    except Exception:
+        pass
+
+    staking_usd = await get_staking_value(prices, user_id=user_id)
+    defi_usd = await get_defi_value(prices, user_id=user_id)
+
+    # Fall back to database values if live computation returns 0
+    # (e.g., caches are empty but database has historical data)
+    if staking_usd == 0:
+        staking_usd = float(latest.get('staking_value', 0) or 0)
+    if defi_usd == 0:
+        defi_usd = float(latest.get('defi_value', 0) or 0)
+
     return {
-        "staking_usd": float(latest.get('staking_value', 0) or 0),
-        "defi_usd": float(latest.get('defi_value', 0) or 0),
+        "staking_usd": staking_usd,
+        "defi_usd": defi_usd,
         "exchange_usd": float(latest.get('exchange_value', 0) or 0),
         "nft_usd": float(latest.get('nft_value', 0) or 0),
         "tracked_tokens_usd": 0,
