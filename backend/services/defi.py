@@ -49,6 +49,10 @@ IAGON_ALL_STAKING_ADDRESSES = {
 IAGON_IAG_POLICY = "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114"
 IAGON_IAG_ASSET = "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114494147"
 
+# Global semaphore to limit concurrent Iagon scans (each scan makes many Blockfrost calls).
+# Without this, 44+ wallets scanning simultaneously overwhelms Blockfrost rate limits.
+_iagon_scan_semaphore = asyncio.Semaphore(3)
+
 logger = logging.getLogger(__name__)
 
 # Known DeFi Protocol Policy IDs and Token Information
@@ -753,7 +757,18 @@ class DeFiService:
         Uses incremental scanning — caches last-scanned block height and
         accumulated deposit/withdrawal totals so subsequent calls only
         scan new transactions.
+
+        Uses a global semaphore (_iagon_scan_semaphore) to limit concurrent
+        scans — each scan makes many Blockfrost API calls and running 44+
+        in parallel overwhelms rate limits.
         """
+        from database import get_cache, set_cache
+
+        async with _iagon_scan_semaphore:
+            return await self._get_iagon_staking_inner(address)
+
+    async def _get_iagon_staking_inner(self, address: str) -> Optional[Dict]:
+        """Inner implementation of Iagon staking scan (called under semaphore)."""
         from database import get_cache, set_cache
 
         try:
@@ -823,8 +838,8 @@ class DeFiService:
             if not all_txs and not scan_state:
                 return None
 
-            # Fetch UTxOs in parallel batches (10 concurrent)
-            sem = asyncio.Semaphore(10)
+            # Fetch UTxOs in parallel batches (5 concurrent to respect Blockfrost limits)
+            sem = asyncio.Semaphore(5)
 
             async def fetch_tx_utxos(tx_hash):
                 async with sem:
@@ -1363,7 +1378,7 @@ class DeFiService:
             with_timeout(self.get_indigo_staking(address), "Indigo"),
             with_timeout(self.get_strike_staking(address), "Strike", timeout=20),
             with_timeout(self.get_liqwid_staking(address), "Liqwid", timeout=25),
-            with_timeout(self.get_iagon_staking(address), "Iagon", timeout=30),
+            with_timeout(self.get_iagon_staking(address), "Iagon", timeout=60),
             with_timeout(self.get_surf_lending_positions(address), "Surf"),
             return_exceptions=True
         )
