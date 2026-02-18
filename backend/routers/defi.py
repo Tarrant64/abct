@@ -27,6 +27,12 @@ router = APIRouter(prefix="/defi", tags=["defi"])
 STAKING_CACHE_TTL = CACHE_TTL_COLD  # 24 hours
 DEFI_SUMMARY_CACHE_TTL = CACHE_TTL_COLD  # 24 hours
 
+# Global semaphore to limit concurrent staking scans.
+# Each scan hits Blockfrost for multiple protocols. With 44+ wallets scanning
+# simultaneously, 176+ concurrent Blockfrost calls cause rate limiting and timeouts,
+# progressively degrading cached data on each refresh.
+_staking_scan_semaphore = asyncio.Semaphore(5)
+
 
 @router.get("/protocols")
 async def list_supported_protocols(user_id: int = Depends(verify_session)):
@@ -114,14 +120,38 @@ async def get_staking_positions(address: str, refresh: bool = False, user_id: in
     if stale_data and stale_data.get('protocols'):
         previous_result = stale_data
 
-    result = await defi_service.get_all_staking_positions(address, previous_result=previous_result)
+    # Limit concurrent staking scans to prevent Blockfrost overload
+    async with _staking_scan_semaphore:
+        result = await defi_service.get_all_staking_positions(address, previous_result=previous_result)
 
     if result:
         result['from_cache'] = False
         result['cached_at'] = datetime.now().isoformat()
-        # Use shorter TTL if Iagon timed out so it auto-retries sooner (10 min vs 24 hr)
+
+        # Don't overwrite cache with a degraded result (fewer protocols with data).
+        # This prevents progressive data loss when Blockfrost is overloaded.
+        existing = await get_cache(cache_key)
+        if existing:
+            existing_data_count = sum(
+                1 for p in existing.get('protocols', {}).values()
+                if p.get('staked') and len(p['staked']) > 0
+            )
+            new_data_count = sum(
+                1 for p in result.get('protocols', {}).values()
+                if p.get('staked') and len(p['staked']) > 0
+            )
+            if new_data_count < existing_data_count:
+                logger.warning(
+                    f"[Staking] Skipping cache update for {address[:20]}... — "
+                    f"new result has {new_data_count} active protocols vs {existing_data_count} cached"
+                )
+                # Return the existing better cache instead
+                existing['from_cache'] = True
+                return existing
+
+        # Use shorter TTL if Iagon timed out so it auto-retries sooner (1hr vs 24hr)
         iagon_ok = result.get('protocols', {}).get('Iagon', {}).get('status') is None
-        cache_ttl = STAKING_CACHE_TTL if iagon_ok else CACHE_TTL_WARM  # 24hr if good, 1hr if degraded
+        cache_ttl = STAKING_CACHE_TTL if iagon_ok else CACHE_TTL_WARM
         await set_cache(cache_key, result, cache_ttl)
 
     return result
