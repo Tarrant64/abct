@@ -424,9 +424,10 @@ async def get_iagon_staking_data(address: str, refresh: bool = False, user_id: i
 async def debug_iagon_staking(address: str, user_id: int = Depends(verify_session)):
     """Debug endpoint to test Iagon staking scan with verbose output."""
     from services.defi import (
-        IAGON_ALL_STAKING_ADDRESSES, IAGON_IAG_ASSET,
-        IAGON_OLD_STAKING_ADDRESS, IAGON_OPERATOR_STAKING_ADDRESS,
-        IAGON_DELEGATED_STAKING_ADDRESS, IAGON_BATCHER_ADDRESS
+        IAGON_ALL_STAKING_ADDRESSES, IAGON_STAKING_CONTRACT_ADDRESSES,
+        IAGON_IAG_ASSET, IAGON_OLD_STAKING_ADDRESS,
+        IAGON_OPERATOR_STAKING_ADDRESS, IAGON_DELEGATED_STAKING_ADDRESS,
+        IAGON_BATCHER_ADDRESS
     )
     from services.http_client import get_client
     from config import BLOCKFROST_API_KEY, BLOCKFROST_BASE_URL
@@ -451,7 +452,7 @@ async def debug_iagon_staking(address: str, user_id: int = Depends(verify_sessio
         else:
             break
 
-    # Check a sample of recent txs for IAG involvement
+    # Check a sample of recent txs for IAG involvement with detailed flow info
     sem = asyncio.Semaphore(5)
     async def check_tx(tx):
         async with sem:
@@ -461,19 +462,51 @@ async def debug_iagon_staking(address: str, user_id: int = Depends(verify_sessio
             data = r.json()
             has_iag = False
             hits_contract = False
-            for side in ['inputs', 'outputs']:
-                for io in data.get(side, []):
-                    for amt in io.get('amount', []):
-                        if amt['unit'] == IAGON_IAG_ASSET:
-                            has_iag = True
-                    if io['address'] in IAGON_ALL_STAKING_ADDRESSES:
-                        hits_contract = True
+            user_sends = 0
+            user_receives = 0
+            contract_sends = 0
+            contract_receives = 0
+            staking_output = 0  # IAG in staking contract outputs (not batcher)
+
+            for inp in data.get('inputs', []):
+                for amt in inp.get('amount', []):
+                    if amt['unit'] == IAGON_IAG_ASSET:
+                        has_iag = True
+                        qty = int(amt['quantity']) / 1_000_000
+                        if inp['address'] == address:
+                            user_sends += qty
+                        elif inp['address'] in IAGON_ALL_STAKING_ADDRESSES:
+                            contract_sends += qty
+                if inp['address'] in IAGON_ALL_STAKING_ADDRESSES:
+                    hits_contract = True
+
+            for out in data.get('outputs', []):
+                for amt in out.get('amount', []):
+                    if amt['unit'] == IAGON_IAG_ASSET:
+                        has_iag = True
+                        qty = int(amt['quantity']) / 1_000_000
+                        if out['address'] == address:
+                            user_receives += qty
+                        elif out['address'] in IAGON_ALL_STAKING_ADDRESSES:
+                            contract_receives += qty
+                        if out['address'] in IAGON_STAKING_CONTRACT_ADDRESSES:
+                            staking_output += qty
+                if out['address'] in IAGON_ALL_STAKING_ADDRESSES:
+                    hits_contract = True
+
             if has_iag or hits_contract:
+                net_to_contract = contract_receives - contract_sends
+                tx_type = "deposit" if net_to_contract > 0.001 else ("withdrawal/reward_claim" if net_to_contract < -0.001 else "neutral")
                 return {
                     'tx_hash': tx['tx_hash'],
                     'block_height': tx.get('block_height'),
-                    'has_iag': has_iag,
-                    'hits_staking_contract': hits_contract
+                    'type': tx_type,
+                    'user_sends_iag': round(user_sends, 6),
+                    'user_receives_iag': round(user_receives, 6),
+                    'contract_sends_iag': round(contract_sends, 6),
+                    'contract_receives_iag': round(contract_receives, 6),
+                    'net_to_contract': round(net_to_contract, 6),
+                    'staking_contract_output_iag': round(staking_output, 6),
                 }
             return None
 
