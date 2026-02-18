@@ -782,27 +782,27 @@ class DeFiService:
 
             # Load incremental scan state from persistent cache (7-day TTL)
             # Version marker: bump when calculation logic changes to invalidate stale data
-            SCAN_STATE_VERSION = 3  # v3: contract output snapshot instead of flow tracking
+            SCAN_STATE_VERSION = 4  # v4: staking-contract-only flow tracking (excludes batcher rewards)
             scan_key = f"iagon_scan_state_{address}"
             scan_state = await get_cache(scan_key)
 
-            # Contract output snapshot: the IAG sitting in staking contract outputs
-            # from the most recent transaction. This directly reflects the user's
-            # current staked amount without being affected by reward claims.
-            last_contract_output_iag = 0
-            last_contract_output_block = 0
-            total_deposits = 0  # informational only
-            total_withdrawals = 0  # informational only
+            # Track flows through STAKING CONTRACTS ONLY (not batcher).
+            # Key insight from on-chain analysis:
+            #   - Principal deposits/withdrawals go through staking contract addresses
+            #   - Reward claims go through the batcher ONLY
+            # By ignoring batcher-only flows, we get accurate staked = deposits - withdrawals.
+            staking_deposits = 0
+            staking_withdrawals = 0
+            total_rewards = 0  # informational: batcher-only outflows (reward claims)
             from_block = None
 
             if scan_state and scan_state.get('version') == SCAN_STATE_VERSION:
-                last_contract_output_iag = scan_state.get('last_contract_output_iag', 0)
-                last_contract_output_block = scan_state.get('last_contract_output_block', 0)
-                total_deposits = scan_state.get('total_deposits', 0)
-                total_withdrawals = scan_state.get('total_withdrawals', 0)
+                staking_deposits = scan_state.get('staking_deposits', 0)
+                staking_withdrawals = scan_state.get('staking_withdrawals', 0)
+                total_rewards = scan_state.get('total_rewards', 0)
                 from_block = scan_state.get('last_block_height')
                 logger.info(f"[Iagon] Resuming scan for {address[:20]}... from block {from_block}, "
-                           f"snapshot={last_contract_output_iag/1_000_000:.2f} IAG")
+                           f"staked={(staking_deposits - staking_withdrawals)/1_000_000:.2f} IAG")
             elif scan_state:
                 logger.info(f"[Iagon] Discarding stale v{scan_state.get('version', 1)} scan state for {address[:20]}... (need v{SCAN_STATE_VERSION})")
 
@@ -839,14 +839,16 @@ class DeFiService:
 
             # If incremental and no new txs, return cached result
             if from_block and not all_txs:
-                if last_contract_output_iag <= 0:
+                net_staked = staking_deposits - staking_withdrawals
+                if net_staked <= 0:
                     return None
                 return {
                     'protocol': 'Iagon',
                     'address': address,
-                    'total_staked_iag': last_contract_output_iag / 1_000_000,
-                    'total_deposited': total_deposits / 1_000_000,
-                    'total_withdrawn': total_withdrawals / 1_000_000,
+                    'total_staked_iag': net_staked / 1_000_000,
+                    'total_deposited': staking_deposits / 1_000_000,
+                    'total_withdrawn': staking_withdrawals / 1_000_000,
+                    'total_rewards_claimed': total_rewards / 1_000_000,
                     'position_count': 1,
                     'contract': 'multiple'
                 }
@@ -890,22 +892,21 @@ class DeFiService:
                     if tx_block > last_block:
                         last_block = tx_block
 
-                    # Calculate IAG flows and contract output snapshot
-                    user_sends_iag = 0
+                    # Calculate IAG flows separately for staking contracts vs batcher
+                    staking_receives = 0  # IAG received by staking contracts
+                    staking_sends = 0     # IAG sent from staking contracts
+                    batcher_receives = 0  # IAG received by batcher
+                    batcher_sends = 0     # IAG sent from batcher
                     user_receives_iag = 0
-                    contract_receives_iag = 0
-                    contract_sends_iag = 0
-                    # IAG in staking contract OUTPUTS (snapshot of current stake)
-                    staking_contract_output_iag = 0
 
                     for inp in tx_data.get('inputs', []):
                         for amt in inp.get('amount', []):
                             if amt['unit'] == IAGON_IAG_ASSET:
                                 qty = int(amt['quantity'])
-                                if inp['address'] == address:
-                                    user_sends_iag += qty
-                                elif inp['address'] in IAGON_ALL_STAKING_ADDRESSES:
-                                    contract_sends_iag += qty
+                                if inp['address'] in IAGON_STAKING_CONTRACT_ADDRESSES:
+                                    staking_sends += qty
+                                elif inp['address'] == IAGON_BATCHER_ADDRESS:
+                                    batcher_sends += qty
 
                     for out in tx_data.get('outputs', []):
                         for amt in out.get('amount', []):
@@ -913,61 +914,49 @@ class DeFiService:
                                 qty = int(amt['quantity'])
                                 if out['address'] == address:
                                     user_receives_iag += qty
-                                elif out['address'] in IAGON_ALL_STAKING_ADDRESSES:
-                                    contract_receives_iag += qty
-                                # Track IAG in actual staking contract outputs (not batcher)
-                                if out['address'] in IAGON_STAKING_CONTRACT_ADDRESSES:
-                                    staking_contract_output_iag += qty
+                                elif out['address'] in IAGON_STAKING_CONTRACT_ADDRESSES:
+                                    staking_receives += qty
+                                elif out['address'] == IAGON_BATCHER_ADDRESS:
+                                    batcher_receives += qty
 
-                    # Track deposit/withdrawal flows (informational)
-                    net_to_contract = contract_receives_iag - contract_sends_iag
-                    if net_to_contract > 0:
-                        total_deposits += net_to_contract
-                    elif net_to_contract < 0:
-                        total_withdrawals += abs(net_to_contract)
+                    # Track staking contract flows (principal deposits/withdrawals)
+                    net_to_staking = staking_receives - staking_sends
+                    if net_to_staking > 0:
+                        staking_deposits += net_to_staking
+                    elif net_to_staking < 0:
+                        staking_withdrawals += abs(net_to_staking)
 
-                    # Update contract output snapshot if this tx involves staking contracts.
-                    # The staking contract output IAG directly reflects the user's current
-                    # staked amount — immune to reward claim overcounting because rewards
-                    # leave the contract output while the principal stays.
-                    tx_involves_staking = (contract_sends_iag > 0 or contract_receives_iag > 0)
-                    if tx_involves_staking:
-                        tx_block = all_txs[i].get('block_height', 0)
-                        if tx_block >= last_contract_output_block:
-                            last_contract_output_iag = staking_contract_output_iag
-                            last_contract_output_block = tx_block
+                    # Track batcher-only flows as reward claims (informational)
+                    if staking_sends == 0 and staking_receives == 0:
+                        net_batcher = batcher_receives - batcher_sends
+                        if net_batcher < 0 and user_receives_iag > 0:
+                            total_rewards += user_receives_iag
 
                 # Save scan state persistently (7-day TTL)
                 await set_cache(scan_key, {
                     'version': SCAN_STATE_VERSION,
-                    'last_contract_output_iag': last_contract_output_iag,
-                    'last_contract_output_block': last_contract_output_block,
-                    'total_deposits': total_deposits,
-                    'total_withdrawals': total_withdrawals,
+                    'staking_deposits': staking_deposits,
+                    'staking_withdrawals': staking_withdrawals,
+                    'total_rewards': total_rewards,
                     'last_block_height': last_block
                 }, ttl_seconds=604800)
 
-            staked_iag = last_contract_output_iag
+            net_staked = staking_deposits - staking_withdrawals
 
-            # Fallback: if no staking contract output was seen (e.g., user only deposited
-            # via batcher and hasn't interacted with staking contract directly yet),
-            # use net deposit flow as estimate
-            if staked_iag <= 0 and total_deposits > total_withdrawals:
-                staked_iag = total_deposits - total_withdrawals
-                logger.info(f"[Iagon] {address[:20]}... using deposit flow fallback: {staked_iag/1_000_000:.2f} IAG")
-            else:
-                logger.info(f"[Iagon] {address[:20]}... staked={staked_iag/1_000_000:.2f} IAG (contract output snapshot), "
-                             f"deposits={total_deposits/1_000_000:.2f}, withdrawals={total_withdrawals/1_000_000:.2f}")
+            logger.info(f"[Iagon] {address[:20]}... staked={net_staked/1_000_000:.2f} IAG "
+                         f"(deposits={staking_deposits/1_000_000:.2f}, withdrawals={staking_withdrawals/1_000_000:.2f}, "
+                         f"rewards_claimed={total_rewards/1_000_000:.2f})")
 
-            if staked_iag <= 0:
+            if net_staked <= 0:
                 return None
 
             return {
                 'protocol': 'Iagon',
                 'address': address,
-                'total_staked_iag': staked_iag / 1_000_000,
-                'total_deposited': total_deposits / 1_000_000,
-                'total_withdrawn': total_withdrawals / 1_000_000,
+                'total_staked_iag': net_staked / 1_000_000,
+                'total_deposited': staking_deposits / 1_000_000,
+                'total_withdrawn': staking_withdrawals / 1_000_000,
+                'total_rewards_claimed': total_rewards / 1_000_000,
                 'position_count': 1,
                 'contract': 'multiple'
             }

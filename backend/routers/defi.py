@@ -464,9 +464,10 @@ async def debug_iagon_staking(address: str, user_id: int = Depends(verify_sessio
             hits_contract = False
             user_sends = 0
             user_receives = 0
-            contract_sends = 0
-            contract_receives = 0
-            staking_output = 0  # IAG in staking contract outputs (not batcher)
+            staking_sends = 0
+            staking_receives = 0
+            batcher_sends = 0
+            batcher_receives = 0
 
             for inp in data.get('inputs', []):
                 for amt in inp.get('amount', []):
@@ -475,8 +476,10 @@ async def debug_iagon_staking(address: str, user_id: int = Depends(verify_sessio
                         qty = int(amt['quantity']) / 1_000_000
                         if inp['address'] == address:
                             user_sends += qty
-                        elif inp['address'] in IAGON_ALL_STAKING_ADDRESSES:
-                            contract_sends += qty
+                        elif inp['address'] in IAGON_STAKING_CONTRACT_ADDRESSES:
+                            staking_sends += qty
+                        elif inp['address'] == IAGON_BATCHER_ADDRESS:
+                            batcher_sends += qty
                 if inp['address'] in IAGON_ALL_STAKING_ADDRESSES:
                     hits_contract = True
 
@@ -487,26 +490,33 @@ async def debug_iagon_staking(address: str, user_id: int = Depends(verify_sessio
                         qty = int(amt['quantity']) / 1_000_000
                         if out['address'] == address:
                             user_receives += qty
-                        elif out['address'] in IAGON_ALL_STAKING_ADDRESSES:
-                            contract_receives += qty
-                        if out['address'] in IAGON_STAKING_CONTRACT_ADDRESSES:
-                            staking_output += qty
+                        elif out['address'] in IAGON_STAKING_CONTRACT_ADDRESSES:
+                            staking_receives += qty
+                        elif out['address'] == IAGON_BATCHER_ADDRESS:
+                            batcher_receives += qty
                 if out['address'] in IAGON_ALL_STAKING_ADDRESSES:
                     hits_contract = True
 
             if has_iag or hits_contract:
-                net_to_contract = contract_receives - contract_sends
-                tx_type = "deposit" if net_to_contract > 0.001 else ("withdrawal/reward_claim" if net_to_contract < -0.001 else "neutral")
+                net_staking = staking_receives - staking_sends
+                net_batcher = batcher_receives - batcher_sends
+                # Classify: staking contract flow = deposit/withdrawal, batcher-only = reward
+                if net_staking > 0.001:
+                    tx_type = "deposit"
+                elif net_staking < -0.001:
+                    tx_type = "withdrawal"
+                elif net_batcher < -0.001 and user_receives > 0:
+                    tx_type = "reward_claim"
+                else:
+                    tx_type = "neutral"
                 return {
                     'tx_hash': tx['tx_hash'],
                     'block_height': tx.get('block_height'),
                     'type': tx_type,
                     'user_sends_iag': round(user_sends, 6),
                     'user_receives_iag': round(user_receives, 6),
-                    'contract_sends_iag': round(contract_sends, 6),
-                    'contract_receives_iag': round(contract_receives, 6),
-                    'net_to_contract': round(net_to_contract, 6),
-                    'staking_contract_output_iag': round(staking_output, 6),
+                    'staking_net': round(net_staking, 6),
+                    'batcher_net': round(net_batcher, 6),
                 }
             return None
 
