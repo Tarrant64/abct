@@ -4962,6 +4962,11 @@ async function refreshBalances() {
         // await loadNativeAssets(); // Now in Self-Custody Wallets
         await loadExchangeData();
         await loadDefiGovernance();
+        // On overview page, loadDefiGovernance returns early (no UI element),
+        // so refresh snapshot totals for staking/defi values
+        if (!document.getElementById('defiGovernanceContent')) {
+            await loadPortfolioTotals();
+        }
         loadNFTs();
 
     } catch (error) {
@@ -7984,8 +7989,8 @@ async function loadV2BalanceHistory(range) {
             if (emptyState) emptyState.style.display = 'none';
             if (chartCanvas) chartCanvas.style.display = 'block';
 
-            if (v2ChartMode === 'by_chain' && result.chain_list) {
-                renderV2ChartByChain(result.data, result.chain_list, range);
+            if (v2ChartMode === 'by_chain' && result.chains) {
+                renderV2ChartByChain(result.data, result.chains, range);
             } else {
                 renderV2Chart(result.data, range);
             }

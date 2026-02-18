@@ -189,6 +189,23 @@ class TransactionHistoryService:
                 }
             return None
 
+    async def _get_highest_block(self, user_id: int, wallet_id: int, blockchain: str) -> Optional[int]:
+        """Get the highest block number from existing transactions for incremental EVM fetching."""
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            cursor = await db.execute("""
+                SELECT MAX(json_extract(metadata, '$.block_number'))
+                FROM transaction_history
+                WHERE user_id = ? AND wallet_id = ? AND blockchain = ?
+                AND metadata IS NOT NULL AND metadata != ''
+            """, (user_id, wallet_id, blockchain))
+            row = await cursor.fetchone()
+            if row and row[0]:
+                try:
+                    return int(row[0])
+                except (ValueError, TypeError):
+                    return None
+            return None
+
     async def fetch_transactions(
         self,
         user_id: int,
@@ -271,26 +288,32 @@ class TransactionHistoryService:
             logger.info(f"Fetching transactions for {chain} wallet {address[:12]}...")
 
             try:
-                # Check existing transaction bounds for smart fetching
+                # For EVM chains: use block-based incremental fetching
+                startblock = 0
+                evm_chains = {'ethereum', 'polygon', 'base', 'bsc', 'arbitrum', 'avalanche'}
+                if chain in evm_chains:
+                    highest_block = await self._get_highest_block(user_id, wallet_id, chain)
+                    if highest_block:
+                        startblock = highest_block + 1
+                        logger.info(f"Incremental EVM fetch from block {startblock}")
+
+                # Check existing transaction bounds for smart fetching (non-EVM)
                 bounds = await self.get_transaction_bounds(user_id, wallet_id, chain)
                 if bounds:
                     newest = bounds['newest']
                     oldest = bounds['oldest']
                     logger.info(f"Existing transactions: newest={newest}, oldest={oldest}")
-                    logger.info("Fetching only new transactions since last fetch")
 
                 transactions = await self._fetch_blockchain_transactions(
-                    chain, address, days
+                    chain, address, days, startblock=startblock
                 )
 
                 if transactions:
-                    # Filter out transactions we already have (if bounds exist)
-                    if bounds:
-                        # Convert newest to comparable format
+                    # For non-EVM chains, filter by date (EVM uses startblock instead)
+                    if bounds and chain not in evm_chains:
                         newest_dt = datetime.fromisoformat(bounds['newest']) if isinstance(bounds['newest'], str) else bounds['newest']
 
                         original_count = len(transactions)
-                        # Keep only transactions newer than what we have
                         transactions = [tx for tx in transactions if self._is_transaction_newer(tx, newest_dt, chain)]
                         logger.info(f"Filtered {original_count - len(transactions)} duplicate transactions")
 
@@ -320,7 +343,8 @@ class TransactionHistoryService:
         self,
         blockchain: str,
         address: str,
-        days: int
+        days: int,
+        startblock: int = 0
     ) -> List[dict]:
         """
         Fetch transactions from blockchain-specific service.
@@ -329,25 +353,28 @@ class TransactionHistoryService:
             blockchain: Blockchain name
             address: Wallet address
             days: Number of days of history
+            startblock: Block number to start from (EVM chains only, 0 for full history)
 
         Returns:
             List of raw transactions from blockchain API
         """
-        limit = min(100, days * 20)  # Estimate ~20 txs per day max
+        # EVM chains support paginated fetching via Etherscan (up to 10k per page).
+        # Non-EVM chains keep the old conservative limit.
+        evm_chains = {'ethereum', 'polygon', 'base', 'bsc', 'arbitrum', 'avalanche'}
+        if blockchain in evm_chains:
+            limit = 10000
+        else:
+            limit = min(500, days * 20)
 
         try:
             if blockchain == 'cardano':
                 return await self._fetch_cardano_transactions(address, limit)
-            elif blockchain == 'ethereum':
-                return await self._fetch_ethereum_transactions(address, limit)
+            elif blockchain in evm_chains:
+                return await self._fetch_evm_transactions(blockchain, address, limit, startblock)
             elif blockchain == 'bitcoin':
                 return await self._fetch_bitcoin_transactions(address, limit)
             elif blockchain == 'solana':
                 return await self._fetch_solana_transactions(address, limit)
-            elif blockchain == 'polygon':
-                return await self._fetch_polygon_transactions(address, limit)
-            elif blockchain == 'base':
-                return await self._fetch_base_transactions(address, limit)
             else:
                 logger.warning(f"Unsupported blockchain: {blockchain}")
                 return []
@@ -423,11 +450,16 @@ class TransactionHistoryService:
             logger.error(f"Error fetching Cardano transactions: {e}")
             return []
 
-    async def _fetch_ethereum_transactions(self, address: str, limit: int) -> List[dict]:
-        """Fetch Ethereum transactions via Etherscan."""
-        txs = await etherscan_service.get_transactions('ethereum', address, limit)
-        token_txs = await etherscan_service.get_token_transfers('ethereum', address, limit)
+    async def _fetch_evm_transactions(self, chain: str, address: str, limit: int,
+                                       startblock: int = 0) -> List[dict]:
+        """Fetch EVM transactions via Etherscan-compatible API with full pagination."""
+        txs = await etherscan_service.get_transactions(chain, address, limit, startblock=startblock)
+        token_txs = await etherscan_service.get_token_transfers(chain, address, limit, startblock=startblock)
         return txs + token_txs
+
+    async def _fetch_ethereum_transactions(self, address: str, limit: int) -> List[dict]:
+        """Fetch Ethereum transactions via Etherscan (legacy wrapper)."""
+        return await self._fetch_evm_transactions('ethereum', address, limit)
 
     async def _fetch_bitcoin_transactions(self, address: str, limit: int) -> List[dict]:
         """
@@ -540,16 +572,12 @@ class TransactionHistoryService:
             return []
 
     async def _fetch_polygon_transactions(self, address: str, limit: int) -> List[dict]:
-        """Fetch Polygon transactions via Polygonscan."""
-        txs = await etherscan_service.get_transactions('polygon', address, limit)
-        token_txs = await etherscan_service.get_token_transfers('polygon', address, limit)
-        return txs + token_txs
+        """Fetch Polygon transactions via Polygonscan (legacy wrapper)."""
+        return await self._fetch_evm_transactions('polygon', address, limit)
 
     async def _fetch_base_transactions(self, address: str, limit: int) -> List[dict]:
-        """Fetch Base transactions via Basescan."""
-        txs = await etherscan_service.get_transactions('base', address, limit)
-        token_txs = await etherscan_service.get_token_transfers('base', address, limit)
-        return txs + token_txs
+        """Fetch Base transactions via Basescan (legacy wrapper)."""
+        return await self._fetch_evm_transactions('base', address, limit)
 
     async def normalize_transaction(
         self,
@@ -569,7 +597,7 @@ class TransactionHistoryService:
             Normalized transaction dict or None if invalid
         """
         try:
-            if blockchain in ['ethereum', 'polygon', 'base']:
+            if blockchain in ['ethereum', 'polygon', 'base', 'bsc', 'arbitrum', 'avalanche']:
                 return await self._normalize_evm_transaction(raw_tx, wallet_address, blockchain)
             elif blockchain == 'cardano':
                 return await self._normalize_cardano_transaction(raw_tx, wallet_address)
@@ -602,16 +630,16 @@ class TransactionHistoryService:
         token_name = tx.get('tokenName', tx.get('token_name', None))
 
         # If no token info, it's native currency
+        native_defaults = {
+            'ethereum': ('ETH', 'Ethereum'),
+            'polygon': ('MATIC', 'Polygon'),
+            'base': ('ETH', 'Base ETH'),
+            'bsc': ('BNB', 'BNB'),
+            'arbitrum': ('ETH', 'Arbitrum ETH'),
+            'avalanche': ('AVAX', 'Avalanche'),
+        }
         if not token_symbol:
-            if blockchain == 'ethereum':
-                token_symbol = 'ETH'
-                token_name = 'Ethereum'
-            elif blockchain == 'polygon':
-                token_symbol = 'MATIC'
-                token_name = 'Polygon'
-            elif blockchain == 'base':
-                token_symbol = 'ETH'
-                token_name = 'Base ETH'
+            token_symbol, token_name = native_defaults.get(blockchain, ('ETH', blockchain.title()))
 
         # Extract amount
         amount = tx.get('value', 0)

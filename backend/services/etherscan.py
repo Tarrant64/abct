@@ -15,6 +15,7 @@ Provides:
 Uses persistent database caching to reduce API calls.
 """
 
+import asyncio
 import httpx
 import logging
 from typing import Dict, List, Optional
@@ -186,44 +187,71 @@ class EtherscanService(APIKeyManager):
         except (ValueError, TypeError):
             return None
 
-    async def get_transactions(self, chain: str, address: str, limit: int = 50) -> List[dict]:
+    async def get_transactions(self, chain: str, address: str, limit: int = 10000,
+                               startblock: int = 0) -> List[dict]:
         """
-        Get transaction history for an address.
+        Get full transaction history for an address with auto-pagination.
+
+        Fetches up to `limit` transactions, paginating through Etherscan API
+        in ascending order to get complete history from oldest to newest.
 
         Args:
             chain: Chain name
             address: Wallet address
-            limit: Maximum number of transactions
+            limit: Maximum total transactions to fetch (default 10000)
+            startblock: Block number to start from (0 for full history)
 
         Returns:
             List of transactions
         """
         chain_config = self._get_chain_config(chain)
-        logger.info(f"Fetching {chain} transactions for {address[:10]}... (using {chain_config['explorer_name']})")
+        logger.info(f"Fetching {chain} transactions for {address[:10]}... "
+                     f"(using {chain_config['explorer_name']}, startblock={startblock})")
 
-        params = {
-            'module': 'account',
-            'action': 'txlist',
-            'address': address,
-            'startblock': 0,
-            'endblock': 99999999,
-            'page': 1,
-            'offset': limit,
-            'sort': 'desc'
-        }
+        all_transactions = []
+        page = 1
+        page_size = 10000  # Etherscan max per page
 
-        data = await self._make_request(chain, params)
-        if not data:
-            logger.warning(f"No data returned from {chain_config['explorer_name']} for {address[:10]}")
-            return []
+        while len(all_transactions) < limit:
+            params = {
+                'module': 'account',
+                'action': 'txlist',
+                'address': address,
+                'startblock': startblock,
+                'endblock': 99999999,
+                'page': page,
+                'offset': page_size,
+                'sort': 'asc'
+            }
 
-        transactions = data.get('result', [])
-        if not isinstance(transactions, list):
-            logger.warning(f"Invalid result format from {chain_config['explorer_name']}: {type(transactions)}")
-            return []
+            data = await self._make_request(chain, params)
+            if not data:
+                break
 
-        logger.info(f"Successfully fetched {len(transactions)} transactions from {chain_config['explorer_name']}")
-        return [self._parse_transaction(tx, chain) for tx in transactions]
+            transactions = data.get('result', [])
+            if not isinstance(transactions, list) or len(transactions) == 0:
+                break
+
+            all_transactions.extend(transactions)
+            logger.info(f"Page {page}: fetched {len(transactions)} transactions "
+                        f"(total so far: {len(all_transactions)})")
+
+            # If we got fewer than page_size, we've reached the end
+            if len(transactions) < page_size:
+                break
+
+            page += 1
+            # Safety: max 5 pages (50k transactions) to avoid runaway loops
+            if page > 5:
+                logger.warning(f"Hit pagination limit (5 pages) for {address[:10]}")
+                break
+
+            # Rate limit: Etherscan free tier allows 5 calls/sec
+            await asyncio.sleep(0.25)
+
+        logger.info(f"Successfully fetched {len(all_transactions)} total transactions "
+                     f"from {chain_config['explorer_name']}")
+        return [self._parse_transaction(tx, chain) for tx in all_transactions[:limit]]
 
     def _parse_transaction(self, tx: dict, chain: str) -> dict:
         """Parse a transaction into a standard format."""
@@ -247,44 +275,65 @@ class EtherscanService(APIKeyManager):
             'chain': chain
         }
 
-    async def get_token_transfers(self, chain: str, address: str, limit: int = 50) -> List[dict]:
+    async def get_token_transfers(self, chain: str, address: str, limit: int = 10000,
+                                   startblock: int = 0) -> List[dict]:
         """
-        Get ERC-20 token transfer history for an address.
+        Get full ERC-20 token transfer history for an address with auto-pagination.
 
         Args:
             chain: Chain name
             address: Wallet address
-            limit: Maximum number of transfers
+            limit: Maximum total transfers to fetch (default 10000)
+            startblock: Block number to start from (0 for full history)
 
         Returns:
             List of token transfers
         """
         chain_config = self._get_chain_config(chain)
-        logger.info(f"Fetching {chain} token transfers for {address[:10]}... (using {chain_config['explorer_name']})")
+        logger.info(f"Fetching {chain} token transfers for {address[:10]}... "
+                     f"(using {chain_config['explorer_name']}, startblock={startblock})")
 
-        params = {
-            'module': 'account',
-            'action': 'tokentx',
-            'address': address,
-            'startblock': 0,
-            'endblock': 99999999,
-            'page': 1,
-            'offset': limit,
-            'sort': 'desc'
-        }
+        all_transfers = []
+        page = 1
+        page_size = 10000
 
-        data = await self._make_request(chain, params)
-        if not data:
-            logger.warning(f"No data returned from {chain_config['explorer_name']} token transfers for {address[:10]}")
-            return []
+        while len(all_transfers) < limit:
+            params = {
+                'module': 'account',
+                'action': 'tokentx',
+                'address': address,
+                'startblock': startblock,
+                'endblock': 99999999,
+                'page': page,
+                'offset': page_size,
+                'sort': 'asc'
+            }
 
-        transfers = data.get('result', [])
-        if not isinstance(transfers, list):
-            logger.warning(f"Invalid token transfer result format from {chain_config['explorer_name']}: {type(transfers)}")
-            return []
+            data = await self._make_request(chain, params)
+            if not data:
+                break
 
-        logger.info(f"Successfully fetched {len(transfers)} token transfers from {chain_config['explorer_name']}")
-        return [self._parse_token_transfer(tx, chain) for tx in transfers]
+            transfers = data.get('result', [])
+            if not isinstance(transfers, list) or len(transfers) == 0:
+                break
+
+            all_transfers.extend(transfers)
+            logger.info(f"Page {page}: fetched {len(transfers)} token transfers "
+                        f"(total so far: {len(all_transfers)})")
+
+            if len(transfers) < page_size:
+                break
+
+            page += 1
+            if page > 5:
+                logger.warning(f"Hit pagination limit (5 pages) for token transfers {address[:10]}")
+                break
+
+            await asyncio.sleep(0.25)
+
+        logger.info(f"Successfully fetched {len(all_transfers)} total token transfers "
+                     f"from {chain_config['explorer_name']}")
+        return [self._parse_token_transfer(tx, chain) for tx in all_transfers[:limit]]
 
     def _parse_token_transfer(self, tx: dict, chain: str) -> dict:
         """Parse a token transfer into a standard format."""
