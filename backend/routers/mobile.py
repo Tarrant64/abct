@@ -112,18 +112,41 @@ CHAIN_ICON_URLS = {
     "ethereum": "https://cryptologos.cc/logos/ethereum-eth-logo.png",
     "solana": "https://cryptologos.cc/logos/solana-sol-logo.png",
     "polygon": "https://cryptologos.cc/logos/polygon-matic-logo.png",
-    "base": "https://cryptologos.cc/logos/base-base-logo.png",
+    "base": "https://avatars.githubusercontent.com/u/108554348?s=32",
     "algorand": "https://cryptologos.cc/logos/algorand-algo-logo.png",
     "bsc": "https://cryptologos.cc/logos/bnb-bnb-logo.png",
-    "arbitrum": "https://cryptologos.cc/logos/arbitrum-arb-logo.png",
+    "arbitrum": "https://avatars.githubusercontent.com/u/119917794?s=32",
     "avalanche": "https://cryptologos.cc/logos/avalanche-avax-logo.png",
     "tron": "https://cryptologos.cc/logos/tron-trx-logo.png",
+    "xrp": "https://cryptologos.cc/logos/xrp-xrp-logo.png",
+    "hedera": "https://cryptologos.cc/logos/hedera-hbar-logo.png",
+    "multiversx": "https://cryptologos.cc/logos/multiversx-egld-logo.png",
+    "sui": "https://cryptologos.cc/logos/sui-sui-logo.png",
+    "aptos": "https://cryptologos.cc/logos/aptos-apt-logo.png",
+    "filecoin": "https://cryptologos.cc/logos/filecoin-fil-logo.png",
+    "litecoin": "https://cryptologos.cc/logos/litecoin-ltc-logo.png",
+    "dogecoin": "https://cryptologos.cc/logos/dogecoin-doge-logo.png",
+    "zcash": "https://cryptologos.cc/logos/zcash-zec-logo.png",
+    "tezos": "https://cryptologos.cc/logos/tezos-xtz-logo.png",
+    "stacks": "https://cryptologos.cc/logos/stacks-stx-logo.png",
+    "vechain": "https://cryptologos.cc/logos/vechain-vet-logo.png",
+    "cosmos": "https://cryptologos.cc/logos/cosmos-atom-logo.png",
+    "near": "https://cryptologos.cc/logos/near-protocol-near-logo.png",
+    "icp": "https://cryptologos.cc/logos/internet-computer-icp-logo.png",
 }
 
 
 def _map_mobile_range_to_portfolio_range(range_value: str) -> str:
     range_map = {"7d": "1w", "4w": "1m", "3m": "3m", "1y": "1y", "all": "all"}
     return range_map.get(range_value, "1w")
+
+
+def _compute_chart_coverage(data: list) -> dict:
+    """Compute coverage stats from chart data points."""
+    if not data:
+        return {"oldest_date": None, "newest_date": None, "total_days": 0}
+    dates = [p['date'] for p in data]
+    return {"oldest_date": min(dates), "newest_date": max(dates), "total_days": len(dates)}
 
 
 def _compute_value_summary(values: List[float]) -> Dict[str, float]:
@@ -349,7 +372,7 @@ async def get_mobile_portfolio_summary(
     # Get prices for native coins
     all_prices = await pricing_service.get_all_tracked_prices()
 
-    # All blockchains supported by portfolio summary
+    # All blockchains supported by portfolio summary (must match portfolio.py)
     symbol_map = {
         'cardano': ('ADA', 'total_ada'),
         'bitcoin': ('BTC', 'total_btc'),
@@ -362,6 +385,21 @@ async def get_mobile_portfolio_summary(
         'arbitrum': ('ETH', 'total_eth'),
         'avalanche': ('AVAX', 'total_avax'),
         'tron': ('TRX', 'total_trx'),
+        'xrp': ('XRP', 'total_xrp'),
+        'hedera': ('HBAR', 'total_hbar'),
+        'multiversx': ('EGLD', 'total_egld'),
+        'sui': ('SUI', 'total_sui'),
+        'aptos': ('APT', 'total_apt'),
+        'filecoin': ('FIL', 'total_fil'),
+        'litecoin': ('LTC', 'total_ltc'),
+        'dogecoin': ('DOGE', 'total_doge'),
+        'zcash': ('ZEC', 'total_zec'),
+        'tezos': ('XTZ', 'total_xtz'),
+        'stacks': ('STX', 'total_stx'),
+        'vechain': ('VET', 'total_vet'),
+        'cosmos': ('ATOM', 'total_atom'),
+        'near': ('NEAR', 'total_near'),
+        'icp': ('ICP', 'total_icp'),
     }
 
     for blockchain in symbol_map:
@@ -539,7 +577,27 @@ async def get_mobile_wallets(
                 'ethereum': {'symbol': 'ETH', 'decimals': 18},
                 'solana': {'symbol': 'SOL', 'decimals': 9},
                 'polygon': {'symbol': 'POL', 'decimals': 18},
-                'base': {'symbol': 'ETH', 'decimals': 18}
+                'base': {'symbol': 'ETH', 'decimals': 18},
+                'algorand': {'symbol': 'ALGO', 'decimals': 6},
+                'bsc': {'symbol': 'BNB', 'decimals': 18},
+                'arbitrum': {'symbol': 'ETH', 'decimals': 18},
+                'avalanche': {'symbol': 'AVAX', 'decimals': 18},
+                'tron': {'symbol': 'TRX', 'decimals': 6},
+                'xrp': {'symbol': 'XRP', 'decimals': 6},
+                'hedera': {'symbol': 'HBAR', 'decimals': 8},
+                'multiversx': {'symbol': 'EGLD', 'decimals': 18},
+                'sui': {'symbol': 'SUI', 'decimals': 9},
+                'aptos': {'symbol': 'APT', 'decimals': 8},
+                'filecoin': {'symbol': 'FIL', 'decimals': 18},
+                'litecoin': {'symbol': 'LTC', 'decimals': 8},
+                'dogecoin': {'symbol': 'DOGE', 'decimals': 8},
+                'zcash': {'symbol': 'ZEC', 'decimals': 8},
+                'tezos': {'symbol': 'XTZ', 'decimals': 6},
+                'stacks': {'symbol': 'STX', 'decimals': 6},
+                'vechain': {'symbol': 'VET', 'decimals': 18},
+                'cosmos': {'symbol': 'ATOM', 'decimals': 6},
+                'near': {'symbol': 'NEAR', 'decimals': 24},
+                'icp': {'symbol': 'ICP', 'decimals': 8},
             }
 
             config = blockchain_config.get(wallet['blockchain'], {'symbol': 'UNKNOWN', 'decimals': 0})
@@ -639,7 +697,27 @@ async def get_mobile_wallet_detail(
         'ethereum': 'ETH',
         'solana': 'SOL',
         'polygon': 'POL',
-        'base': 'ETH'
+        'base': 'ETH',
+        'algorand': 'ALGO',
+        'bsc': 'BNB',
+        'arbitrum': 'ETH',
+        'avalanche': 'AVAX',
+        'tron': 'TRX',
+        'xrp': 'XRP',
+        'hedera': 'HBAR',
+        'multiversx': 'EGLD',
+        'sui': 'SUI',
+        'aptos': 'APT',
+        'filecoin': 'FIL',
+        'litecoin': 'LTC',
+        'dogecoin': 'DOGE',
+        'zcash': 'ZEC',
+        'tezos': 'XTZ',
+        'stacks': 'STX',
+        'vechain': 'VET',
+        'cosmos': 'ATOM',
+        'near': 'NEAR',
+        'icp': 'ICP',
     }
 
     symbol = blockchain_symbols.get(wallet['blockchain'], 'UNKNOWN')

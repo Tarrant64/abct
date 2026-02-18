@@ -33,6 +33,8 @@ async def init_nft_image_db():
                 width INTEGER,
                 height INTEGER,
                 thumbnail_data BLOB,
+                mobile_data BLOB,
+                mobile_format TEXT,
                 fetch_status TEXT DEFAULT 'pending',
                 error_message TEXT,
                 fetched_at TIMESTAMP,
@@ -60,6 +62,16 @@ async def init_nft_image_db():
             CREATE INDEX IF NOT EXISTS idx_nft_images_status_chain
             ON nft_images(fetch_status, blockchain)
         """)
+
+        # Migration: add mobile_data and mobile_format columns to existing databases
+        try:
+            await db.execute("ALTER TABLE nft_images ADD COLUMN mobile_data BLOB")
+        except Exception:
+            pass  # Column already exists
+        try:
+            await db.execute("ALTER TABLE nft_images ADD COLUMN mobile_format TEXT")
+        except Exception:
+            pass  # Column already exists
 
         # Configuration table for image caching settings
         await db.execute("""
@@ -168,6 +180,8 @@ async def save_nft_image(
     width: int = None,
     height: int = None,
     thumbnail_data: bytes = None,
+    mobile_data: bytes = None,
+    mobile_format: str = None,
     fetch_status: str = 'pending',
     error_message: str = None
 ) -> int:
@@ -179,9 +193,9 @@ async def save_nft_image(
         cursor = await db.execute("""
             INSERT INTO nft_images (
                 asset_id, blockchain, image_url, image_data, image_format,
-                image_size, width, height, thumbnail_data, fetch_status,
-                error_message, fetched_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                image_size, width, height, thumbnail_data, mobile_data,
+                mobile_format, fetch_status, error_message, fetched_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(asset_id, blockchain) DO UPDATE SET
                 image_url = COALESCE(excluded.image_url, nft_images.image_url),
                 image_data = COALESCE(excluded.image_data, nft_images.image_data),
@@ -190,14 +204,16 @@ async def save_nft_image(
                 width = COALESCE(excluded.width, nft_images.width),
                 height = COALESCE(excluded.height, nft_images.height),
                 thumbnail_data = COALESCE(excluded.thumbnail_data, nft_images.thumbnail_data),
+                mobile_data = COALESCE(excluded.mobile_data, nft_images.mobile_data),
+                mobile_format = COALESCE(excluded.mobile_format, nft_images.mobile_format),
                 fetch_status = excluded.fetch_status,
                 error_message = excluded.error_message,
                 fetched_at = COALESCE(excluded.fetched_at, nft_images.fetched_at),
                 updated_at = excluded.updated_at
         """, (
             asset_id, blockchain, image_url, image_data, image_format,
-            image_size, width, height, thumbnail_data, fetch_status,
-            error_message, fetched_at, datetime.now()
+            image_size, width, height, thumbnail_data, mobile_data,
+            mobile_format, fetch_status, error_message, fetched_at, datetime.now()
         ))
         await db.commit()
         return cursor.lastrowid
@@ -234,6 +250,19 @@ async def get_nft_thumbnail_data(asset_id: str, blockchain: str) -> tuple:
         cursor = await db.execute("""
             SELECT thumbnail_data, image_format FROM nft_images
             WHERE asset_id = ? AND blockchain = ? AND thumbnail_data IS NOT NULL
+        """, (asset_id, blockchain))
+        row = await cursor.fetchone()
+        if row:
+            return row[0], row[1]
+        return None, None
+
+
+async def get_nft_mobile_data(asset_id: str, blockchain: str) -> tuple:
+    """Get just the mobile image data and format for serving."""
+    async with aiosqlite.connect(NFT_IMAGE_DB_PATH) as db:
+        cursor = await db.execute("""
+            SELECT mobile_data, mobile_format FROM nft_images
+            WHERE asset_id = ? AND blockchain = ? AND mobile_data IS NOT NULL
         """, (asset_id, blockchain))
         row = await cursor.fetchone()
         if row:
@@ -296,7 +325,9 @@ async def get_image_cache_stats() -> dict:
                 blockchain,
                 fetch_status,
                 COUNT(*) as count,
-                SUM(COALESCE(image_size, 0)) as total_size
+                SUM(COALESCE(image_size, 0)) as total_size,
+                SUM(COALESCE(LENGTH(mobile_data), 0)) as mobile_size,
+                SUM(CASE WHEN mobile_data IS NOT NULL THEN 1 ELSE 0 END) as mobile_count
             FROM nft_images
             GROUP BY blockchain, fetch_status
         """)
@@ -305,20 +336,31 @@ async def get_image_cache_stats() -> dict:
         by_chain = {}
         total_images = 0
         total_size = 0
+        total_mobile_size = 0
+        total_mobile_count = 0
 
         for row in rows:
             chain = row['blockchain']
             status = row['fetch_status']
             count = row['count']
             size = row['total_size'] or 0
+            m_size = row['mobile_size'] or 0
+            m_count = row['mobile_count'] or 0
 
             if chain not in by_chain:
-                by_chain[chain] = {'fetched': 0, 'pending': 0, 'failed': 0, 'skipped': 0, 'size_bytes': 0}
+                by_chain[chain] = {
+                    'fetched': 0, 'pending': 0, 'failed': 0, 'skipped': 0,
+                    'size_bytes': 0, 'mobile_size_bytes': 0, 'mobile_count': 0
+                }
 
             by_chain[chain][status] = count
             if status == 'fetched':
                 by_chain[chain]['size_bytes'] = size
+                by_chain[chain]['mobile_size_bytes'] = m_size
+                by_chain[chain]['mobile_count'] = m_count
                 total_size += size
+                total_mobile_size += m_size
+                total_mobile_count += m_count
             total_images += count
 
         # Database file size
@@ -330,6 +372,9 @@ async def get_image_cache_stats() -> dict:
             'total_images': total_images,
             'total_size_bytes': total_size,
             'total_size_mb': round(total_size / (1024 * 1024), 2),
+            'mobile_size_bytes': total_mobile_size,
+            'mobile_size_mb': round(total_mobile_size / (1024 * 1024), 2),
+            'mobile_count': total_mobile_count,
             'database_size_mb': round(db_size / (1024 * 1024), 2),
             'by_chain': by_chain
         }

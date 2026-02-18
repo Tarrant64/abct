@@ -1581,7 +1581,7 @@ async def get_cached_image(blockchain: str, asset_id: str):
     return Response(
         content=image_data,
         media_type=content_type,
-        headers={'Cache-Control': 'max-age=86400'}  # Cache for 1 day
+        headers={'Cache-Control': 'max-age=604800'}  # Cache for 7 days
     )
 
 
@@ -1598,7 +1598,7 @@ async def get_cached_thumbnail(blockchain: str, asset_id: str):
         return Response(
             content=thumbnail_data,
             media_type='image/jpeg',
-            headers={'Cache-Control': 'max-age=86400'}
+            headers={'Cache-Control': 'max-age=604800'}
         )
 
     # Fall back to full image
@@ -1619,7 +1619,45 @@ async def get_cached_thumbnail(blockchain: str, asset_id: str):
     return Response(
         content=image_data,
         media_type=content_type,
-        headers={'Cache-Control': 'max-age=86400'}
+        headers={'Cache-Control': 'max-age=604800'}
+    )
+
+
+@router.get("/images/{blockchain}/{asset_id}/mobile")
+async def get_cached_mobile_image(blockchain: str, asset_id: str):
+    """
+    Get a cached mobile-optimized NFT image (400x400 WebP).
+    Falls back to full image if mobile version not available.
+    """
+    mobile_data, mobile_format = await nft_image_service.get_mobile(asset_id, blockchain)
+
+    if mobile_data:
+        content_type = 'image/webp' if mobile_format == 'webp' else f'image/{mobile_format}'
+        return Response(
+            content=mobile_data,
+            media_type=content_type,
+            headers={'Cache-Control': 'max-age=604800'}
+        )
+
+    # Fall back to full image
+    image_data, image_format = await nft_image_service.get_image(asset_id, blockchain)
+
+    if not image_data:
+        raise HTTPException(status_code=404, detail="Image not cached")
+
+    content_types = {
+        'jpeg': 'image/jpeg',
+        'png': 'image/png',
+        'gif': 'image/gif',
+        'webp': 'image/webp',
+        'svg': 'image/svg+xml'
+    }
+    content_type = content_types.get(image_format, 'application/octet-stream')
+
+    return Response(
+        content=image_data,
+        media_type=content_type,
+        headers={'Cache-Control': 'max-age=604800'}
     )
 
 
@@ -1643,6 +1681,8 @@ async def get_cached_image_info(blockchain: str, asset_id: str):
         'width': image_info['width'],
         'height': image_info['height'],
         'has_thumbnail': image_info['thumbnail_data'] is not None,
+        'has_mobile': image_info.get('mobile_data') is not None,
+        'mobile_format': image_info.get('mobile_format'),
         'fetch_status': image_info['fetch_status'],
         'error_message': image_info['error_message'],
         'fetched_at': image_info['fetched_at']
@@ -1688,6 +1728,24 @@ async def process_pending_images(
     Fetches images that were registered but not yet downloaded.
     """
     result = await nft_image_service.process_pending(
+        blockchain=blockchain,
+        limit=limit,
+        max_concurrent=max_concurrent
+    )
+    return result
+
+
+@router.post("/images/backfill-mobile")
+async def backfill_mobile_images(
+    blockchain: Optional[str] = None,
+    limit: int = 500,
+    max_concurrent: int = 5
+):
+    """
+    Generate mobile-optimized images for existing cached images that don't have one.
+    Reads existing full-size image_data and creates 400x400 WebP mobile versions.
+    """
+    result = await nft_image_service.backfill_mobile_images(
         blockchain=blockchain,
         limit=limit,
         max_concurrent=max_concurrent
@@ -2068,7 +2126,8 @@ async def get_cache_task_status(user_id: int = Depends(verify_session), blockcha
 async def get_nfts_with_images(
     user_id: int = Depends(verify_session),
     blockchain: Optional[str] = None,
-    group_by_collection: bool = False
+    group_by_collection: bool = False,
+    include_thumbnails: Optional[str] = None
 ):
     """
     Get all NFTs that have cached images for the NFT Wall display.
@@ -2077,10 +2136,11 @@ async def get_nfts_with_images(
     Args:
         blockchain: Optional chain filter. If not provided, returns all chains.
         group_by_collection: If True, groups NFTs by collection with count badges.
+        include_thumbnails: Set to "base64" to embed thumbnail data URIs inline.
     """
     # Check cache first (30 second TTL for wall display)
     from database import get_cache, set_cache
-    cache_key = f"nft_wall_{blockchain or 'all'}_{group_by_collection}"
+    cache_key = f"nft_wall_{blockchain or 'all'}_{group_by_collection}_{include_thumbnails or 'none'}"
     cached_response = await get_cache(cache_key, user_id=user_id)
     if cached_response:
         return cached_response
@@ -2119,6 +2179,7 @@ async def get_nfts_with_images(
                 'collection': collection,
                 'image_url': nft['image'],  # SVG path
                 'thumbnail_url': nft['image'],  # Same for demo
+                'mobile_url': None,
                 'floor_price': floor_price,
                 'floor_price_usd': nft['price_ada'] * 0.33,  # Keep USD consistent
                 'native_symbol': symbol,
@@ -2163,7 +2224,8 @@ async def get_nfts_with_images(
     from config import NFT_IMAGE_DB_PATH
     async with aiosqlite.connect(NFT_IMAGE_DB_PATH) as db:
         cursor = await db.execute("""
-            SELECT asset_id, blockchain, image_format, width, height
+            SELECT asset_id, blockchain, image_format, width, height,
+                   mobile_data IS NOT NULL as has_mobile, mobile_format
             FROM nft_images
             WHERE fetch_status = 'fetched' AND image_data IS NOT NULL
         """)
@@ -2174,7 +2236,9 @@ async def get_nfts_with_images(
             cached_images[key] = {
                 'format': row[2],
                 'width': row[3],
-                'height': row[4]
+                'height': row[4],
+                'has_mobile': bool(row[5]),
+                'mobile_format': row[6]
             }
 
     # Get prices in parallel
@@ -2215,6 +2279,7 @@ async def get_nfts_with_images(
                     'policy_id': policy_id, 'collection_id': policy_id,
                     'image_url': f"/nfts/images/cardano/{asset_id}",
                     'thumbnail_url': f"/nfts/images/cardano/{asset_id}/thumbnail",
+                    'mobile_url': f"/nfts/images/cardano/{asset_id}/mobile" if cached_images[key].get('has_mobile') else None,
                     'floor_price': nft.get('price_ada'),
                     'floor_price_usd': (nft.get('price_ada') or 0) * prices['ada'],
                     'native_symbol': 'ADA', 'image_info': cached_images[key]
@@ -2238,6 +2303,7 @@ async def get_nfts_with_images(
                     'collection_id': nft.get('contract_address'),
                     'image_url': f"/nfts/images/ethereum/{asset_id}",
                     'thumbnail_url': f"/nfts/images/ethereum/{asset_id}/thumbnail",
+                    'mobile_url': f"/nfts/images/ethereum/{asset_id}/mobile" if cached_images[key].get('has_mobile') else None,
                     'floor_price': floor_eth, 'floor_price_usd': floor_eth * prices['eth'],
                     'native_symbol': 'ETH', 'image_info': cached_images[key]
                 })
@@ -2259,6 +2325,7 @@ async def get_nfts_with_images(
                     'collection': nft.get('collection', {}).get('name', 'Unknown Collection'),
                     'image_url': f"/nfts/images/solana/{asset_id}",
                     'thumbnail_url': f"/nfts/images/solana/{asset_id}/thumbnail",
+                    'mobile_url': f"/nfts/images/solana/{asset_id}/mobile" if cached_images[key].get('has_mobile') else None,
                     'floor_price': floor_sol, 'floor_price_usd': floor_sol * prices['sol'],
                     'native_symbol': 'SOL', 'image_info': cached_images[key]
                 })
@@ -2280,6 +2347,7 @@ async def get_nfts_with_images(
                     'collection': nft.get('collection', {}).get('name', 'Unknown Collection'),
                     'image_url': f"/nfts/images/polygon/{asset_id}",
                     'thumbnail_url': f"/nfts/images/polygon/{asset_id}/thumbnail",
+                    'mobile_url': f"/nfts/images/polygon/{asset_id}/mobile" if cached_images[key].get('has_mobile') else None,
                     'floor_price': floor_matic, 'floor_price_usd': floor_matic * prices['matic'],
                     'native_symbol': 'POL', 'image_info': cached_images[key]
                 })
@@ -2301,6 +2369,7 @@ async def get_nfts_with_images(
                     'collection': nft.get('collection', {}).get('name', 'Unknown Collection'),
                     'image_url': f"/nfts/images/base/{asset_id}",
                     'thumbnail_url': f"/nfts/images/base/{asset_id}/thumbnail",
+                    'mobile_url': f"/nfts/images/base/{asset_id}/mobile" if cached_images[key].get('has_mobile') else None,
                     'floor_price': floor_eth, 'floor_price_usd': floor_eth * prices['eth'],
                     'native_symbol': 'ETH', 'image_info': cached_images[key]
                 })
@@ -2335,6 +2404,16 @@ async def get_nfts_with_images(
         if chain not in by_chain:
             by_chain[chain] = 0
         by_chain[chain] += 1
+
+    # Embed base64 thumbnails if requested (opt-in for mobile clients)
+    if include_thumbnails == 'base64' and all_nfts:
+        import base64
+        from nft_image_database import get_nft_thumbnail_data
+        for nft in all_nfts:
+            thumb_data, thumb_fmt = await get_nft_thumbnail_data(nft['asset_id'], nft['blockchain'])
+            if thumb_data:
+                b64 = base64.b64encode(thumb_data).decode('ascii')
+                nft['thumbnail_base64'] = f"data:image/jpeg;base64,{b64}"
 
     # Group by collection if requested
     if group_by_collection:

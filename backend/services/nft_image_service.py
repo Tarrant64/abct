@@ -16,6 +16,7 @@ from config import (
     NFT_IMAGE_DB_PATH,
     NFT_IMAGE_MAX_SIZE_MB,
     NFT_IMAGE_THUMBNAIL_SIZE,
+    NFT_IMAGE_MOBILE_SIZE,
     IPFS_GATEWAYS
 )
 from nft_image_database import (
@@ -27,6 +28,7 @@ from nft_image_database import (
     get_nft_image,
     get_nft_image_data,
     get_nft_thumbnail_data,
+    get_nft_mobile_data,
     get_pending_images,
     update_image_status,
     get_image_cache_stats,
@@ -53,6 +55,7 @@ class NFTImageService:
         self._http_client: Optional[httpx.AsyncClient] = None
         self.max_size_bytes = NFT_IMAGE_MAX_SIZE_MB * 1024 * 1024
         self.thumbnail_size = NFT_IMAGE_THUMBNAIL_SIZE
+        self.mobile_size = NFT_IMAGE_MOBILE_SIZE
 
     async def initialize(self):
         """Initialize the service and database."""
@@ -320,6 +323,31 @@ class NFTImageService:
             logger.warning(f"Failed to generate thumbnail: {e}")
             return None
 
+    def _generate_mobile_image(self, image_data: bytes, image_format: str) -> Tuple[Optional[bytes], Optional[str]]:
+        """Generate a mobile-optimized image (400x400 WebP)."""
+        if not PILLOW_AVAILABLE:
+            return None, None
+
+        if image_format == 'svg':
+            return None, None
+
+        try:
+            img = Image.open(BytesIO(image_data))
+
+            # Preserve RGBA transparency in WebP
+            if img.mode not in ('RGBA', 'RGB'):
+                img = img.convert('RGBA') if 'transparency' in img.info or img.mode == 'P' else img.convert('RGB')
+
+            img.thumbnail((self.mobile_size, self.mobile_size), Image.Resampling.LANCZOS)
+
+            output = BytesIO()
+            img.save(output, format='WEBP', quality=80, method=4)
+            return output.getvalue(), 'webp'
+
+        except Exception as e:
+            logger.warning(f"Failed to generate mobile image: {e}")
+            return None, None
+
     def _get_image_dimensions(self, image_data: bytes, image_format: str) -> Tuple[Optional[int], Optional[int]]:
         """Get image dimensions."""
         if not PILLOW_AVAILABLE or image_format == 'svg':
@@ -451,11 +479,14 @@ class NFTImageService:
         # Get dimensions
         width, height = self._get_image_dimensions(image_data, image_format)
 
-        # Generate thumbnail
+        # Generate thumbnail and mobile image
         config = await get_image_cache_config()
         thumbnail_data = None
+        mobile_data = None
+        mobile_format = None
         if config.get('generate_thumbnails', True):
             thumbnail_data = self._generate_thumbnail(image_data, image_format)
+            mobile_data, mobile_format = self._generate_mobile_image(image_data, image_format)
 
         # Save to database
         await save_nft_image(
@@ -467,6 +498,8 @@ class NFTImageService:
             width=width,
             height=height,
             thumbnail_data=thumbnail_data,
+            mobile_data=mobile_data,
+            mobile_format=mobile_format,
             fetch_status='fetched'
         )
 
@@ -477,7 +510,8 @@ class NFTImageService:
             'format': image_format,
             'size_bytes': len(image_data),
             'dimensions': f"{width}x{height}" if width and height else None,
-            'has_thumbnail': thumbnail_data is not None
+            'has_thumbnail': thumbnail_data is not None,
+            'has_mobile': mobile_data is not None
         }
 
     async def batch_cache_images(
@@ -542,6 +576,11 @@ class NFTImageService:
         await self.initialize()
         return await get_nft_thumbnail_data(asset_id, blockchain)
 
+    async def get_mobile(self, asset_id: str, blockchain: str) -> Tuple[Optional[bytes], Optional[str]]:
+        """Get cached mobile-optimized image data."""
+        await self.initialize()
+        return await get_nft_mobile_data(asset_id, blockchain)
+
     async def has_image(self, asset_id: str, blockchain: str) -> bool:
         """Check if an image is cached."""
         await self.initialize()
@@ -567,6 +606,65 @@ class NFTImageService:
         """Get images that are pending fetch."""
         await self.initialize()
         return await get_pending_images(blockchain, limit)
+
+    async def backfill_mobile_images(
+        self,
+        blockchain: str = None,
+        limit: int = 500,
+        max_concurrent: int = 5
+    ) -> dict:
+        """Generate mobile images for existing cached images that don't have one."""
+        await self.initialize()
+
+        import aiosqlite
+        from config import NFT_IMAGE_DB_PATH
+
+        # Find rows with image_data but no mobile_data
+        async with aiosqlite.connect(NFT_IMAGE_DB_PATH) as db:
+            if blockchain:
+                cursor = await db.execute("""
+                    SELECT asset_id, blockchain, image_data, image_format
+                    FROM nft_images
+                    WHERE fetch_status = 'fetched'
+                      AND image_data IS NOT NULL
+                      AND mobile_data IS NULL
+                      AND blockchain = ?
+                    LIMIT ?
+                """, (blockchain, limit))
+            else:
+                cursor = await db.execute("""
+                    SELECT asset_id, blockchain, image_data, image_format
+                    FROM nft_images
+                    WHERE fetch_status = 'fetched'
+                      AND image_data IS NOT NULL
+                      AND mobile_data IS NULL
+                    LIMIT ?
+                """, (limit,))
+            rows = await cursor.fetchall()
+
+        results = {'processed': 0, 'generated': 0, 'skipped': 0, 'total_eligible': len(rows)}
+        semaphore = asyncio.Semaphore(max_concurrent)
+
+        async def process_one(row):
+            async with semaphore:
+                asset_id, chain, image_data, image_format = row
+                results['processed'] += 1
+
+                mobile_data, mobile_format = self._generate_mobile_image(image_data, image_format)
+                if mobile_data:
+                    await save_nft_image(
+                        asset_id=asset_id,
+                        blockchain=chain,
+                        mobile_data=mobile_data,
+                        mobile_format=mobile_format,
+                        fetch_status='fetched'
+                    )
+                    results['generated'] += 1
+                else:
+                    results['skipped'] += 1
+
+        await asyncio.gather(*[process_one(row) for row in rows])
+        return results
 
     async def process_pending(self, blockchain: str = None, limit: int = 50, max_concurrent: int = 5) -> dict:
         """Process pending images in the queue."""
