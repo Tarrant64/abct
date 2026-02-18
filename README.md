@@ -189,7 +189,7 @@ Built with [FastAPI](https://fastapi.tiangolo.com/), [Chart.js](https://www.char
 **Ethereum & EVM**: [Alchemy](https://www.alchemy.com/), [Etherscan](https://etherscan.io/), [Basescan](https://basescan.org/), [Polygonscan](https://polygonscan.com/)
 **Solana**: [Helius](https://www.helius.dev/) · **Bitcoin**: [Blockstream](https://blockstream.info/) · **Algorand**: [Pera Wallet](https://developer.perawallet.app/), [Tatum](https://tatum.io/)
 **Pricing**: [CoinGecko](https://www.coingecko.com/), [CoinMarketCap](https://coinmarketcap.com/), [DefiLlama](https://defillama.com/), [Coinbase](https://www.coinbase.com/)
-**Logos**: [LogoKit](https://logokit.com/), [Logostream](https://logostream.io)
+**Logos**: [LogoKit](https://logokit.com/), [Logostream](https://logostream.dev)
 **Exchanges**: [Coinbase CDP](https://www.coinbase.com/cloud), [Binance](https://www.binance.com/), [OKX](https://www.okx.com/), [Bitget](https://www.bitget.com/), [Gate.io](https://www.gate.io/), [KuCoin](https://www.kucoin.com/)
 **Privacy**: [Midnight Network](https://midnight.network/) (NIGHT token support)
 
