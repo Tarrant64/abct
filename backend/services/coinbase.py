@@ -289,6 +289,9 @@ class CoinbaseService:
         logger.info(f"Coinbase: Processing {len(accounts)} accounts")
         total_value = 0.0
         assets = []
+        # Track v3 balances by currency for staked-balance merge
+        v3_balances = {}
+
         for account in accounts:
             try:
                 currency = account.get('currency', 'UNKNOWN')
@@ -301,6 +304,7 @@ class CoinbaseService:
                 held = float(hold_bal.get('value', 0))
 
                 total_balance = available + held
+                v3_balances[currency] = v3_balances.get(currency, 0) + total_balance
 
                 # Skip if no balance at all
                 if total_balance <= 0:
@@ -330,6 +334,65 @@ class CoinbaseService:
             except Exception as e:
                 logger.error(f"Error processing Coinbase account: {e}")
                 continue
+
+        # --- Merge staked balances from v2 API ---
+        # v3 brokerage doesn't expose staked assets (e.g. "Staked SOL").
+        # Fetch v2 accounts to find staked balances missing from v3.
+        try:
+            v2_accounts = await self.get_v2_accounts(user_id=user_id)
+
+            # Sum v2 balances per currency
+            v2_balances = {}
+            for acc in v2_accounts:
+                try:
+                    cur_obj = acc.get('currency', {})
+                    code = cur_obj.get('code') if isinstance(cur_obj, dict) else cur_obj
+                    if not code:
+                        continue
+                    bal = float(acc.get('balance', {}).get('amount', 0))
+                    if bal > 0:
+                        v2_balances[code] = v2_balances.get(code, 0) + bal
+                except (ValueError, TypeError):
+                    continue
+
+            # For each currency where v2 total > v3 total, add the difference
+            for currency, v2_total in v2_balances.items():
+                v3_total = v3_balances.get(currency, 0)
+                staked_amount = v2_total - v3_total
+
+                if staked_amount < 0.000001:
+                    continue  # No meaningful staked balance
+
+                # Check if this currency already exists in assets
+                existing = next((a for a in assets if a['currency'] == currency), None)
+
+                if existing:
+                    # Add staked balance to existing asset
+                    existing['balance'] += staked_amount
+                    existing['staked_balance'] = staked_amount
+                    logger.info(f"Coinbase: Added {staked_amount:.6f} staked {currency} to existing balance")
+                else:
+                    # Create new asset entry for staked-only currency
+                    asset_data = {
+                        'currency': currency,
+                        'name': f"Staked {currency}",
+                        'balance': staked_amount,
+                        'available_balance': 0,
+                        'hold_balance': 0,
+                        'staked_balance': staked_amount,
+                        'uuid': '',
+                        'value_usd': 0.0,
+                        'needs_price': True,
+                    }
+                    if currency == 'USD':
+                        asset_data['value_usd'] = staked_amount
+                        total_value += staked_amount
+                        del asset_data['needs_price']
+                    assets.append(asset_data)
+                    logger.info(f"Coinbase: Added new staked asset: {staked_amount:.6f} {currency}")
+
+        except Exception as e:
+            logger.warning(f"Coinbase: Failed to fetch v2 staked balances: {e}")
 
         logger.info(f"Coinbase: Returning {len(assets)} assets with total USD ${total_value:.2f}")
         return {
