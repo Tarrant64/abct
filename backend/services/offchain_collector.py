@@ -41,14 +41,71 @@ class OffchainCollector:
             self._nft_service = nft_service
         return self._nft_service
 
+    async def _get_fresh_exchange_value(self, exchange_name: str, prices: dict, user_id: int) -> float:
+        """Get exchange value, fetching live data if cache is expired."""
+        from database import get_cache
+
+        # Try cache first (populated by recent user activity or prior refresh)
+        cache_key = f"{exchange_name}_portfolio"
+        cached = await get_cache(cache_key, user_id=user_id)
+
+        if cached and 'total_usd' in cached:
+            return float(cached['total_usd'])
+
+        if cached and 'assets' in cached:
+            total = 0.0
+            for asset in cached['assets']:
+                currency = asset.get('currency', '').upper()
+                balance = float(asset.get('balance', 0))
+                if balance > 0:
+                    p = prices.get(currency, {})
+                    price = p.get('usd', 0) if isinstance(p, dict) else 0
+                    total += balance * price
+            return total
+
+        # Cache miss — fetch live from the exchange API
+        try:
+            from routers.exchanges import process_exchange_portfolio
+            import importlib
+
+            service_map = {
+                'binance': ('services.binance', 'binance_service'),
+                'binance_us': ('services.binance_us', 'binance_us_service'),
+                'okx': ('services.okx', 'okx_service'),
+                'bitget': ('services.bitget', 'bitget_service'),
+                'gate': ('services.gate', 'gate_service'),
+                'kucoin': ('services.kucoin', 'kucoin_service'),
+            }
+
+            if exchange_name == 'coinbase':
+                # Coinbase uses a different service method (get_portfolio_balances)
+                from services.coinbase import coinbase_service
+                if not await coinbase_service.is_configured(user_id=user_id):
+                    return 0.0
+                portfolio = await coinbase_service.get_portfolio_balances(user_id=user_id)
+                return float(portfolio.get('total_usd', 0))
+
+            entry = service_map.get(exchange_name)
+            if not entry:
+                logger.debug(f"Offchain collector: no service for {exchange_name}")
+                return 0.0
+
+            module = importlib.import_module(entry[0])
+            service = getattr(module, entry[1])
+            result = await process_exchange_portfolio(service, exchange_name, user_id, refresh=True)
+            return float(result.get('total_usd', 0))
+        except Exception as e:
+            logger.warning(f"Offchain collector: live fetch for {exchange_name} failed: {e}")
+            return 0.0
+
     async def collect_for_user(self, user_id: int):
         """Collect all off-chain balances for a user and write to wallet_daily_balances."""
         from database import (
             get_wallet_sources, upsert_wallet_daily_balance,
-            get_all_wallets, get_cache
+            get_all_wallets,
         )
         from services.offchain_helpers import (
-            get_staking_value, get_defi_value, get_nft_value, get_exchange_value
+            get_staking_value, get_defi_value, get_nft_value,
         )
 
         today = datetime.now(CT_TIMEZONE).strftime('%Y-%m-%d')
@@ -61,20 +118,9 @@ class OffchainCollector:
         for source in exchange_sources:
             try:
                 exchange_name = source['source_key']
-                cache_key = f"{exchange_name}_portfolio"
-                cached = await get_cache(cache_key, user_id=user_id)
-                value_usd = 0.0
-                if cached and 'total_usd' in cached:
-                    value_usd = float(cached['total_usd'])
-                elif cached and 'assets' in cached:
-                    # Calculate from assets
-                    for asset in cached['assets']:
-                        currency = asset.get('currency', '').upper()
-                        balance = float(asset.get('balance', 0))
-                        if balance > 0:
-                            p = prices.get(currency, {})
-                            price = p.get('usd', 0) if isinstance(p, dict) else 0
-                            value_usd += balance * price
+                value_usd = await self._get_fresh_exchange_value(
+                    exchange_name, prices, user_id
+                )
 
                 await upsert_wallet_daily_balance(
                     user_id=user_id,

@@ -117,6 +117,15 @@
             });
         });
 
+        // Sync button listeners
+        const syncButtons = document.querySelectorAll('.wallet-sync-btn');
+        syncButtons.forEach(btn => {
+            btn.addEventListener('click', function(event) {
+                event.stopPropagation();
+                syncWalletBalance(this.dataset.syncAddress, this);
+            });
+        });
+
         // Delete button listeners
         const deleteButtons = document.querySelectorAll('.wallet-delete-btn');
         console.log('Found', deleteButtons.length, 'delete buttons');
@@ -256,6 +265,7 @@
                     <div class="unit">${getUnitDisplay(wallet.balance_unit)}</div>
                 </div>
                 <div class="wallet-actions">
+                    <button class="btn btn-secondary btn-small wallet-sync-btn" data-sync-address="${wallet.address}" title="Refresh balance">&#8635;</button>
                     <button class="btn btn-secondary btn-small wallet-edit-btn" data-wallet-id="${wallet.id}" data-wallet-address="${wallet.address}" data-wallet-label="${wallet.label || ''}">
                         Edit
                     </button>
@@ -354,6 +364,43 @@
             'MATIC': 'POL'
         };
         return units[unit] || unit;
+    }
+
+    // Sync a single wallet's balance
+    async function syncWalletBalance(address, btn) {
+        const origText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '⟳';
+        btn.style.animation = 'spin 1s linear infinite';
+
+        try {
+            const response = await authFetch(`/wallets/${address}/refresh`, { method: 'POST' });
+            if (!response.ok) throw new Error('Refresh failed');
+
+            const data = await response.json();
+            if (data.success) {
+                // Update balance in-place
+                const walletItem = btn.closest('.wallet-item');
+                if (walletItem) {
+                    const amountEl = walletItem.querySelector('.wallet-balance .amount');
+                    if (amountEl && data.balance !== undefined) {
+                        amountEl.textContent = formatBalance(data.balance, data.unit);
+                    }
+                }
+                btn.textContent = '✓';
+            } else {
+                btn.textContent = '✗';
+            }
+        } catch (err) {
+            console.error('Sync wallet error:', err);
+            btn.textContent = '✗';
+        } finally {
+            btn.style.animation = '';
+            setTimeout(() => {
+                btn.textContent = origText;
+                btn.disabled = false;
+            }, 3000);
+        }
     }
 
     // Format address: first 8 chars + "..." + last 4 chars

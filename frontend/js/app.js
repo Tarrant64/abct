@@ -1855,6 +1855,14 @@ function attachDashboardWalletEventListeners() {
         });
     });
 
+    // Wallet sync button listeners
+    document.querySelectorAll('.btn-wallet-sync[data-wallet-sync]').forEach(btn => {
+        btn.addEventListener('click', function(event) {
+            event.stopPropagation();
+            syncSingleWallet(this.dataset.walletSync, this);
+        });
+    });
+
     // Assets toggle listeners (expand to show individual assets)
     document.querySelectorAll('.assets-toggle').forEach(toggle => {
         toggle.addEventListener('click', async function(event) {
@@ -1863,6 +1871,61 @@ function attachDashboardWalletEventListeners() {
             await toggleDashboardWalletAssets(walletId);
         });
     });
+}
+
+// Sync a single wallet's balance from the blockchain
+async function syncSingleWallet(address, btn) {
+    const origHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="sync-icon spinning">&#8635;</span>';
+
+    // Map unit to price key
+    const unitToPriceKey = { ADA: 'ADA', BTC: 'BTC', ETH: 'ETH', SOL: 'SOL', MATIC: 'MATIC', POL: 'MATIC', ALGO: 'ALGO', BNB: 'BNB', AVAX: 'AVAX', TRX: 'TRX' };
+
+    try {
+        const response = await authFetch(`${API_BASE}/wallets/${address}/refresh`, {
+            method: 'POST'
+        });
+
+        if (!response.ok) throw new Error('Refresh failed');
+
+        const data = await response.json();
+
+        if (data.success) {
+            // Update the wallet card in-place
+            const walletItem = btn.closest('.wallet-item');
+            if (walletItem) {
+                const amountEl = walletItem.querySelector('.wallet-balance .amount');
+                const usdEl = walletItem.querySelector('.wallet-balance .amount-usd');
+
+                if (amountEl && data.balance !== undefined) {
+                    setSafeHTML(amountEl, formatCryptoBlur(data.balance, data.unit));
+                }
+                if (usdEl && data.balance !== undefined) {
+                    const priceKey = unitToPriceKey[data.unit] || data.unit;
+                    const price = prices[priceKey] || 0;
+                    const usdValue = parseFloat(data.balance) * price;
+                    setSafeHTML(usdEl, formatUSDBlur(usdValue));
+                }
+            }
+
+            btn.innerHTML = '<span class="sync-icon">&#10003;</span>';
+        } else {
+            btn.innerHTML = '<span class="sync-icon">&#10007;</span>';
+        }
+
+        setTimeout(() => {
+            btn.innerHTML = origHTML;
+            btn.disabled = false;
+        }, 3000);
+    } catch (err) {
+        console.error('Sync wallet error:', err);
+        btn.innerHTML = '<span class="sync-icon">&#10007;</span>';
+        setTimeout(() => {
+            btn.innerHTML = origHTML;
+            btn.disabled = false;
+        }, 3000);
+    }
 }
 
 // Toggle wallet assets display on dashboard
@@ -2267,6 +2330,9 @@ function renderSingleWallet(wallet, blockchain, isGrouped) {
                             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                         </svg>
+                    </button>
+                    <button class="btn-wallet-sync" data-wallet-sync="${wallet.address}" title="Refresh balance">
+                        <span class="sync-icon">&#8635;</span>
                     </button>
                 </div>
                 ${explorerLinks}
@@ -4621,8 +4687,8 @@ function renderAllExchanges(exchanges) {
                 <div class="exchange-header">
                     ${logoUrl ? `<img src="${logoUrl}" alt="${exchangeName}" class="exchange-logo" data-fallback="${fallback}" data-exchange-class="${exchangeId}">` : `<span class="exchange-icon ${exchangeId}">${fallback}</span>`}
                     <span class="exchange-name">${exchangeName}</span>
-                    <button class="btn-exchange-sync" data-exchange-sync="${exchangeId}" title="Fetch full transaction history from ${exchangeName}">
-                        <span class="sync-icon">&#8635;</span> Sync History
+                    <button class="btn-exchange-sync" data-exchange-sync="${exchangeId}" title="Refresh balances from ${exchangeName}">
+                        <span class="sync-icon">&#8635;</span> Sync
                     </button>
                     <span class="exchange-value">${formatUSDBlur(exchange.total_usd || 0)}</span>
                 </div>
@@ -4651,7 +4717,7 @@ function renderAllExchanges(exchanges) {
     exchangesList.querySelectorAll('[data-exchange-sync]').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
-            syncExchangeHistory(btn.getAttribute('data-exchange-sync'), btn);
+            syncExchangeBalance(btn.getAttribute('data-exchange-sync'), btn);
         });
     });
     exchangesList.querySelectorAll('img.exchange-logo[data-fallback]').forEach(img => {
@@ -4717,45 +4783,76 @@ function renderExchangeAssets(assets) {
     return html;
 }
 
-// Sync exchange transaction history to DB
-async function syncExchangeHistory(exchangeId, btn) {
+// Sync exchange balances (force refresh from API)
+async function syncExchangeBalance(exchangeId, btn) {
     const origHTML = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<span class="sync-icon spinning">&#8635;</span> Syncing...';
 
+    // Map exchangeId to route segment (underscore → hyphen for URL)
+    const routeName = exchangeId.replace(/_/g, '-');
+
     try {
-        const response = await authFetch(`${API_BASE}/exchanges/transactions/refresh?exchange=${exchangeId}`, {
-            method: 'POST'
-        });
+        const response = await authFetch(`${API_BASE}/exchanges/${routeName}?refresh=true`);
 
         if (!response.ok) throw new Error('Refresh failed');
 
         const data = await response.json();
-        const result = data.results?.[exchangeId];
 
-        if (result && !result.error) {
-            const msg = result.new > 0
-                ? `+${result.new} new (${result.total_stored} total)`
-                : `Up to date (${result.total_stored} stored)`;
-            btn.innerHTML = `<span class="sync-icon">&#10003;</span> ${msg}`;
-        } else if (result?.error) {
-            btn.innerHTML = '<span class="sync-icon">&#10007;</span> Error';
-        } else {
-            btn.innerHTML = '<span class="sync-icon">&#10003;</span> Done';
-        }
+        // Update the exchange card in-place
+        updateExchangeCardInPlace(exchangeId, data);
 
+        // Recalculate exchangeTotals from all visible cards
+        recalcExchangeTotals();
+        updateTotalPortfolioValue();
+
+        btn.innerHTML = '<span class="sync-icon">&#10003;</span> Done';
         setTimeout(() => {
             btn.innerHTML = origHTML;
             btn.disabled = false;
-        }, 4000);
+        }, 3000);
     } catch (err) {
-        console.error('Sync exchange history error:', err);
+        console.error('Sync exchange balance error:', err);
         btn.innerHTML = '<span class="sync-icon">&#10007;</span> Failed';
         setTimeout(() => {
             btn.innerHTML = origHTML;
             btn.disabled = false;
         }, 3000);
     }
+}
+
+// Update a single exchange card's value and assets in-place
+function updateExchangeCardInPlace(exchangeId, data) {
+    const card = document.querySelector(`.exchange-section[data-exchange="${exchangeId}"]`);
+    if (!card) return;
+
+    // Update total value
+    const valueEl = card.querySelector('.exchange-value');
+    if (valueEl) {
+        setSafeHTML(valueEl, formatUSDBlur(data.total_usd || 0));
+    }
+
+    // Update assets list
+    const assetsEl = card.querySelector('.exchange-assets');
+    if (assetsEl && data.assets && data.assets.length > 0) {
+        setSafeHTML(assetsEl, renderExchangeAssets(data.assets));
+        // Re-attach error handlers for asset logos (DOMPurify strips onerror)
+        assetsEl.querySelectorAll('img.asset-logo').forEach(img => {
+            img.addEventListener('error', () => { img.style.display = 'none'; });
+        });
+    } else if (assetsEl && (!data.assets || data.assets.length === 0)) {
+        setSafeHTML(assetsEl, '<p class="empty-state connected-state"><span class="connected-dot"></span>Connected &mdash; no holdings above $1</p>');
+    }
+}
+
+// Recalculate exchangeTotals.usd from visible exchange cards
+function recalcExchangeTotals() {
+    let total = 0;
+    document.querySelectorAll('.exchange-section .exchange-value').forEach(el => {
+        const text = el.textContent.replace(/[^0-9.]/g, '');
+        total += parseFloat(text) || 0;
+    });
+    exchangeTotals.usd = total;
 }
 
 // Load NFTs

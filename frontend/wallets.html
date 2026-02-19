@@ -6,14 +6,14 @@
     <title>Wallets & Transactions - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771297558">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771510004">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <!-- Chart.js for analytics -->
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1771297558"></script>
+    <script src="/static/js/session-auth.js?v=1771510004"></script>
     <style>
         /* Wallet Manager Styles */
         .wallet-manager {
@@ -1774,6 +1774,14 @@ base:0x789..." oninput="previewImport()"></textarea>
                 });
             });
 
+            // Sync button listeners
+            document.querySelectorAll('.wallet-sync-btn').forEach(btn => {
+                btn.addEventListener('click', function(event) {
+                    event.stopPropagation();
+                    syncWalletBalance(this.dataset.syncAddress, this);
+                });
+            });
+
             // Delete button listeners
             const deleteButtons = document.querySelectorAll('.wallet-delete-btn');
             console.log('Found', deleteButtons.length, 'delete buttons');
@@ -1913,6 +1921,7 @@ base:0x789..." oninput="previewImport()"></textarea>
                         <div class="unit">${getUnitDisplay(wallet.balance_unit)}</div>
                     </div>
                     <div class="wallet-actions">
+                        <button class="btn btn-secondary btn-small wallet-sync-btn" data-sync-address="${wallet.address}" title="Refresh balance">&#8635;</button>
                         <button class="btn btn-secondary btn-small wallet-edit-btn" data-wallet-id="${wallet.id}" data-wallet-address="${wallet.address}" data-wallet-label="${wallet.label || ''}">
                             Edit
                         </button>
@@ -2011,6 +2020,41 @@ base:0x789..." oninput="previewImport()"></textarea>
                 'MATIC': 'POL'
             };
             return units[unit] || unit;
+        }
+
+        async function syncWalletBalance(address, btn) {
+            const origText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '⟳';
+            btn.style.animation = 'spin 1s linear infinite';
+
+            try {
+                const response = await authFetch(`/wallets/${address}/refresh`, { method: 'POST' });
+                if (!response.ok) throw new Error('Refresh failed');
+
+                const data = await response.json();
+                if (data.success) {
+                    const walletItem = btn.closest('.wallet-item');
+                    if (walletItem) {
+                        const amountEl = walletItem.querySelector('.wallet-balance .amount');
+                        if (amountEl && data.balance !== undefined) {
+                            amountEl.textContent = formatBalance(data.balance, data.unit);
+                        }
+                    }
+                    btn.textContent = '✓';
+                } else {
+                    btn.textContent = '✗';
+                }
+            } catch (err) {
+                console.error('Sync wallet error:', err);
+                btn.textContent = '✗';
+            } finally {
+                btn.style.animation = '';
+                setTimeout(() => {
+                    btn.textContent = origText;
+                    btn.disabled = false;
+                }, 3000);
+            }
         }
 
         // Format address with chain identifier + dots + last chars
@@ -2936,11 +2980,11 @@ base:0x789..." oninput="previewImport()"></textarea>
         // Waffle menu toggle
     </script>
 
-    <script src="/static/js/app.js?v=1771297558"></script>
+    <script src="/static/js/app.js?v=1771510004"></script>
 
     <!-- Transaction scripts -->
-    <script src="/static/js/transactions.js?v=1771297558"></script>
-    <script src="/static/js/transaction-analytics.js?v=1771297558"></script>
+    <script src="/static/js/transactions.js?v=1771510004"></script>
+    <script src="/static/js/transaction-analytics.js?v=1771510004"></script>
 
     <script>
         // Main tab switching function
