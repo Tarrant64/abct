@@ -40,6 +40,7 @@ let walletTotals = { ADA: 0, BTC: 0, ETH: 0, SOL: 0, MATIC: 0, ETH_BASE: 0, ALGO
 let stakingTotals = {}; // { 'INDY': 1234.56, 'STRIKE': 789.01, etc. }
 let defiTotals = {}; // DeFi tokens held in wallets (governance tokens, stablecoins, etc.)
 let exchangeTotals = { usd: 0 }; // Total USD value from exchanges
+let exchangeStakedAssets = []; // Staked assets from exchanges (display-only, not added to staking totals)
 let snapshotTotals = { staking: 0, defi: 0, trackedTokens: 0 }; // From latest snapshot (dashboard only)
 let nftTotals = { cardano: 0, ethereum: 0, solana: 0, polygon: 0, base: 0, algorand: 0, bsc: 0, arbitrum: 0, avalanche: 0 }; // NFT values by chain
 let nftCounts = { cardano: 0, ethereum: 0, solana: 0, polygon: 0, base: 0, algorand: 0, bsc: 0, arbitrum: 0, avalanche: 0 }; // NFT counts by chain
@@ -2849,8 +2850,8 @@ function renderStakingPositions(allStaking) {
     const protocols = Object.keys(allStaking);
     const stakingSummary = document.getElementById('stakingSummary');
 
-    if (protocols.length === 0) {
-        setSafeHTML(stakingPositions, '<p class="empty-state">No staked positions found in DeFi protocols.</p>');
+    if (protocols.length === 0 && exchangeStakedAssets.length === 0) {
+        setSafeHTML(stakingPositions, '<p class="empty-state">No staked positions found.</p>');
         if (stakingSummary) {
             setSafeHTML(stakingSummary, '<span class="staking-status">No positions</span>');
         }
@@ -3030,10 +3031,50 @@ function renderStakingPositions(allStaking) {
         }
     }
 
+    // Add exchange staked assets (display-only, already counted in exchange totals)
+    let exchangeStakedCount = 0;
+    if (exchangeStakedAssets.length > 0) {
+        for (const staked of exchangeStakedAssets) {
+            const usdValue = staked.usd_value || 0;
+            totalStakingValue += usdValue;
+            exchangeStakedCount++;
+
+            const apyBadge = staked.apy > 0
+                ? `<span class="staking-badge apy">${(staked.apy * 100).toFixed(2)}% APY</span>` : '';
+
+            html += `
+                <div class="staking-card exchange-staked" data-protocol="${staked.exchangeName}">
+                    <div class="staking-card-header">
+                        <span class="staking-protocol">${staked.exchangeName}</span>
+                        <div class="staking-badges">
+                            <span class="staking-badge exchange">Exchange Staked</span>
+                            ${apyBadge}
+                        </div>
+                    </div>
+                    <div class="staking-amount">${blurValue(staked.staked_balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6}))}</div>
+                    <div class="staking-token">${staked.currency}</div>
+                    <div class="staking-usd">${formatUSDBlur(usdValue)}</div>
+                    <div class="staking-details">
+                        Custodial staking via ${staked.exchangeName}
+                        <span class="exchange-staked-note">(included in exchange total)</span>
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    // Build summary counts
+    const totalSources = protocols.length + (exchangeStakedCount > 0 ? 1 : 0);
+    const sourceLabel = protocols.length > 0 && exchangeStakedCount > 0
+        ? `${protocols.length} protocol${protocols.length !== 1 ? 's' : ''} + ${exchangeStakedCount} exchange`
+        : exchangeStakedCount > 0
+            ? `${exchangeStakedCount} exchange staked`
+            : `${protocols.length} protocol${protocols.length !== 1 ? 's' : ''}`;
+
     // Update section summary
     if (stakingSummary) {
         let summaryHtml = `
-            <span class="staking-status">${protocols.length} protocol${protocols.length !== 1 ? 's' : ''}</span>
+            <span class="staking-status">${sourceLabel}</span>
             <span class="staking-total">${formatUSDBlur(totalStakingValue)}</span>
         `;
         if (totalPendingValue > 0) {
@@ -3724,7 +3765,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
     const protocols = allProtocols.filter(p => allStaking[p].category !== 'depin');
     const liquidStakingPositions = defiData.positions_by_category?.['Liquid Staking'] || [];
     const hasAdaDelegation = adaDelegation && adaDelegation.totalAda > 0;
-    const hasStakedSection = protocols.length > 0 || hasAdaDelegation || liquidStakingPositions.length > 0;
+    const hasStakedSection = protocols.length > 0 || hasAdaDelegation || liquidStakingPositions.length > 0 || exchangeStakedAssets.length > 0;
 
     if (hasStakedSection) {
         html += `<div class="defi-gov-subsection">
@@ -3884,6 +3925,31 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
                     </div>
                     <div class="card-amount">${formatCryptoBlur(formattedQty, displayName)}</div>
                     <div class="card-value">${usdValue > 0 ? formatUSDBlur(usdValue) : '--'}</div>
+                </div>
+            `;
+        }
+
+        // --- Exchange Staked Cards ---
+        for (const staked of exchangeStakedAssets) {
+            const usdValue = staked.usd_value || 0;
+            totalStakedValue += usdValue;
+            stakedCount++;
+
+            const tokenLogoUrl = `https://img.logokit.com/crypto/${staked.currency}?token=LOGOKIT_KEY_REMOVED&size=32`;
+            const apyBadge = staked.apy > 0
+                ? `<span class="apy-badge">${(staked.apy * 100).toFixed(2)}% APY</span>` : '';
+
+            html += `
+                <div class="defi-gov-card staked exchange-staked">
+                    <div class="card-header">
+                        <span class="token-logo-wrap"><img src="${tokenLogoUrl}" alt="${staked.currency}" class="token-logo-staking"></span>
+                        <span class="protocol-name">${staked.exchangeName}</span>
+                        <span class="exchange-staked-badge">Exchange Staked</span>
+                        ${apyBadge}
+                    </div>
+                    <div class="card-amount">${formatCryptoBlur(staked.staked_balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6}), staked.currency)}</div>
+                    <div class="card-value">${formatUSDBlur(usdValue)}</div>
+                    <div class="card-note">Included in exchange total</div>
                 </div>
             `;
         }
@@ -4570,6 +4636,37 @@ async function refreshDepinCard(protocol, btn) {
     }
 }
 
+// Extract staked assets from exchange data for display in staking section
+function extractExchangeStakedAssets(exchanges) {
+    exchangeStakedAssets = [];
+    if (!exchanges) return;
+
+    const exchangeNameMap = {
+        'coinbase': 'Coinbase', 'binance': 'Binance', 'binance_us': 'Binance.US',
+        'okx': 'OKX', 'bitget': 'Bitget', 'gate': 'Gate.io', 'kucoin': 'KuCoin'
+    };
+
+    for (const exchange of exchanges) {
+        if (!exchange.assets) continue;
+        const name = exchangeNameMap[exchange.exchange] || exchange.exchange;
+
+        for (const asset of exchange.assets) {
+            if (asset.staked_balance && asset.staked_balance > 0) {
+                const price = asset.price || 0;
+                exchangeStakedAssets.push({
+                    exchange: exchange.exchange,
+                    exchangeName: name,
+                    currency: asset.currency,
+                    staked_balance: asset.staked_balance,
+                    usd_value: asset.staked_balance * price,
+                    price: price,
+                    apy: asset.staking_apy || 0
+                });
+            }
+        }
+    }
+}
+
 // Load exchange portfolio data
 async function loadExchangeData() {
     const exchangesList = document.getElementById('exchangesList');
@@ -4606,6 +4703,9 @@ async function loadExchangeData() {
 
         // Store exchange total for portfolio calculation
         exchangeTotals.usd = data.total_usd || 0;
+
+        // Extract staked assets for display in staking section
+        extractExchangeStakedAssets(data.exchanges);
 
         // Update summary
         if (exchangesSummary) {
@@ -4801,6 +4901,23 @@ async function syncExchangeBalance(exchangeId, btn) {
 
         // Update the exchange card in-place
         updateExchangeCardInPlace(exchangeId, data);
+
+        // Update staked assets for this exchange
+        exchangeStakedAssets = exchangeStakedAssets.filter(a => a.exchange !== exchangeId);
+        if (data.assets) {
+            const nameMap = { 'coinbase': 'Coinbase', 'binance': 'Binance', 'binance_us': 'Binance.US', 'okx': 'OKX', 'bitget': 'Bitget', 'gate': 'Gate.io', 'kucoin': 'KuCoin' };
+            const name = nameMap[exchangeId] || exchangeId;
+            for (const asset of data.assets) {
+                if (asset.staked_balance && asset.staked_balance > 0) {
+                    const price = asset.price || 0;
+                    exchangeStakedAssets.push({
+                        exchange: exchangeId, exchangeName: name, currency: asset.currency,
+                        staked_balance: asset.staked_balance, usd_value: asset.staked_balance * price,
+                        price: price, apy: asset.staking_apy || 0
+                    });
+                }
+            }
+        }
 
         // Recalculate exchangeTotals from all visible cards
         recalcExchangeTotals();
@@ -5438,6 +5555,9 @@ async function refreshExchanges() {
 
         const data = await response.json();
         exchangeTotals.usd = data.total_usd || 0;
+
+        // Extract staked assets for display in staking section
+        extractExchangeStakedAssets(data.exchanges);
 
         const exchangesSummary = document.getElementById('exchangesSummary');
         if (exchangesSummary) {

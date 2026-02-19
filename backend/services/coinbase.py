@@ -341,8 +341,9 @@ class CoinbaseService:
         try:
             v2_accounts = await self.get_v2_accounts(user_id=user_id)
 
-            # Sum v2 balances per currency
+            # Sum v2 balances per currency and collect APY
             v2_balances = {}
+            v2_apy = {}  # Staking APY per currency from v2 rewards
             for acc in v2_accounts:
                 try:
                     cur_obj = acc.get('currency', {})
@@ -352,6 +353,18 @@ class CoinbaseService:
                     bal = float(acc.get('balance', {}).get('amount', 0))
                     if bal > 0:
                         v2_balances[code] = v2_balances.get(code, 0) + bal
+                    # Extract staking APY from currency rewards or account rewards
+                    if code not in v2_apy:
+                        rewards = None
+                        if isinstance(cur_obj, dict):
+                            rewards = cur_obj.get('rewards')
+                        if not rewards:
+                            rewards = acc.get('rewards')
+                        if rewards and rewards.get('apy'):
+                            try:
+                                v2_apy[code] = float(rewards['apy'])
+                            except (ValueError, TypeError):
+                                pass
                 except (ValueError, TypeError):
                     continue
 
@@ -370,6 +383,8 @@ class CoinbaseService:
                     # Add staked balance to existing asset
                     existing['balance'] += staked_amount
                     existing['staked_balance'] = staked_amount
+                    if currency in v2_apy:
+                        existing['staking_apy'] = v2_apy[currency]
                     logger.info(f"Coinbase: Added {staked_amount:.6f} staked {currency} to existing balance")
                 else:
                     # Create new asset entry for staked-only currency
@@ -384,6 +399,8 @@ class CoinbaseService:
                         'value_usd': 0.0,
                         'needs_price': True,
                     }
+                    if currency in v2_apy:
+                        asset_data['staking_apy'] = v2_apy[currency]
                     if currency == 'USD':
                         asset_data['value_usd'] = staked_amount
                         total_value += staked_amount
@@ -427,7 +444,7 @@ class CoinbaseService:
             # Convert to standardized format
             standardized_assets = []
             for asset in portfolio.get('assets', []):
-                standardized_assets.append({
+                std = {
                     'currency': asset['currency'],
                     'name': asset.get('name', asset['currency']),
                     'balance': asset['balance'],
@@ -436,7 +453,12 @@ class CoinbaseService:
                     'value_usd': asset.get('value_usd', 0.0),
                     'uuid': asset.get('uuid', ''),
                     'needs_price': asset.get('needs_price', asset.get('value_usd', 0.0) == 0)
-                })
+                }
+                if asset.get('staked_balance'):
+                    std['staked_balance'] = asset['staked_balance']
+                if asset.get('staking_apy'):
+                    std['staking_apy'] = asset['staking_apy']
+                standardized_assets.append(std)
 
             return {
                 'exchange': 'coinbase',

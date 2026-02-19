@@ -7030,6 +7030,31 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     color: #000;
 }
 
+.staking-badge.exchange {
+    background-color: #3b82f6;
+    color: #fff;
+}
+
+.staking-badge.apy {
+    background-color: #10b981;
+    color: #000;
+}
+
+.staking-card.exchange-staked {
+    border-left-color: #3b82f6;
+}
+
+.staking-card.exchange-staked .staking-amount {
+    color: #3b82f6;
+}
+
+.exchange-staked-note {
+    color: var(--text-muted, var(--text-secondary));
+    font-size: 0.75rem;
+    font-style: italic;
+    margin-left: 6px;
+}
+
 /* APY display */
 .staking-apy {
     margin-top: 8px;
@@ -7387,6 +7412,36 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     text-transform: uppercase;
     white-space: nowrap;
     flex-shrink: 0;
+}
+
+.defi-gov-card .exchange-staked-badge {
+    background-color: #3b82f6;
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.defi-gov-card .apy-badge {
+    background-color: #10b981;
+    color: #000;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.defi-gov-card .card-note {
+    font-size: 0.7rem;
+    color: var(--text-muted, var(--text-secondary));
+    font-style: italic;
+    margin-top: 4px;
 }
 
 .defi-gov-card .card-refresh-btn {
