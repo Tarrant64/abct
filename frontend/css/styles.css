@@ -10078,17 +10078,18 @@ body.privacy-mode a[data-href] {
 
 .period-buttons {
     display: flex;
-    gap: 12px;
+    gap: 4px;
     flex-wrap: wrap;
+    margin-left: 16px;
 }
 
 .period-btn {
-    padding: 10px 20px;
+    padding: 6px 14px;
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
+    border-radius: 6px;
     color: var(--text-secondary);
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.3s ease;
@@ -10106,6 +10107,90 @@ body.privacy-mode a[data-href] {
     color: #ffffff;
     font-weight: 600;
     box-shadow: 0 0 15px rgba(0, 210, 106, 0.3);
+}
+
+/* Section Info Tooltips */
+.section-info-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    font-style: italic;
+    font-family: Georgia, serif;
+    cursor: help;
+    margin-left: 8px;
+    position: relative;
+    flex-shrink: 0;
+    transition: all 0.2s;
+}
+
+.section-info-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: var(--accent, #00d26a);
+    color: var(--text-primary);
+}
+
+.section-info-btn .info-tooltip {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-card, #1e293b);
+    border: 1px solid var(--border-color, #334155);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    font-weight: 400;
+    font-style: normal;
+    font-family: inherit;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    white-space: normal;
+    width: 260px;
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    pointer-events: none;
+}
+
+.section-info-btn:hover .info-tooltip {
+    display: block;
+}
+
+.section-info-btn .info-tooltip::before {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-bottom-color: var(--border-color, #334155);
+}
+
+[data-theme="light"] .section-info-btn {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="light"] .section-info-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .section-info-btn .info-tooltip {
+    background: #fff;
+    border-color: #e5e7eb;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .section-info-btn .info-tooltip::before {
+    border-bottom-color: #e5e7eb;
 }
 
 /* Analytics Chart Container */
@@ -10293,12 +10378,44 @@ body.privacy-mode a[data-href] {
     padding: 16px 20px;
 }
 
+.utility-card-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .utility-card-header h3 {
     margin: 0 0 12px 0;
     font-size: 14px;
     color: var(--text-secondary, #888);
     text-transform: uppercase;
     letter-spacing: 0.5px;
+}
+
+.mover-sort-btn {
+    margin-left: auto;
+    margin-bottom: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: var(--text-secondary, #888);
+    font-size: 12px;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.mover-sort-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
+.mover-sort-btn.asc {
+    color: var(--accent-success, #10b981);
+}
+
+.mover-sort-btn.desc {
+    color: var(--accent-danger, #ef4444);
 }
 
 .gas-price-grid {

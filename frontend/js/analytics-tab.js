@@ -13,6 +13,8 @@
     let _feeHistoryChart = null;
     let _selectedChainFilter = 'all';
     let _tradfiData = null;
+    let _moversData = null; // Cached top movers for re-sorting
+    let _moverSortDir = 'desc'; // 'desc' = biggest drops first, 'asc' = biggest gains first, null = default
 
     // Asset display colors (matches CHAIN_COLORS from transaction-analytics.js)
     const ASSET_COLORS = {
@@ -557,36 +559,59 @@
             const data = await resp.json();
 
             if (!data.success || !data.movers || data.movers.length === 0) {
-                // Fallback: try old trending endpoint
                 loadTrendingFallback();
                 return;
             }
 
             container.style.display = '';
-            const listEl = document.getElementById('trendingCoinsList');
-            if (!listEl) return;
-
-            listEl.innerHTML = data.movers.slice(0, 10).map((coin, i) => {
-                const thumb = coin.image ? `<img src="${coin.image}" alt="" style="width:20px;height:20px;border-radius:50%;margin-right:8px;vertical-align:middle;">` : '';
-                const changeVal = coin.change_24h || 0;
-                const changeClass = changeVal >= 0 ? 'positive' : 'negative';
-                const changeSign = changeVal >= 0 ? '+' : '';
-                const priceStr = coin.price ? '$' + coin.price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: coin.price < 1 ? 6 : 2}) : '';
-
-                return `<div class="trending-coin-item">
-                    <span class="trending-rank">#${i + 1}</span>
-                    ${thumb}
-                    <span class="trending-name">${coin.name || ''}</span>
-                    <span class="trending-symbol">${coin.symbol || ''}</span>
-                    <span class="trending-price">${priceStr}</span>
-                    <span class="change-indicator ${changeClass}" style="margin-left:auto;font-weight:600;">${changeSign}${changeVal.toFixed(2)}%</span>
-                </div>`;
-            }).join('');
+            _moversData = data.movers.slice(0, 10);
+            renderMovers();
         } catch (e) {
             console.error('Failed to load top movers:', e);
             loadTrendingFallback();
         }
     }
+
+    function renderMovers() {
+        const listEl = document.getElementById('trendingCoinsList');
+        if (!listEl || !_moversData) return;
+
+        let sorted = [..._moversData];
+        if (_moverSortDir === 'desc') {
+            sorted.sort((a, b) => Math.abs(b.change_24h || 0) - Math.abs(a.change_24h || 0));
+        } else if (_moverSortDir === 'asc') {
+            sorted.sort((a, b) => Math.abs(a.change_24h || 0) - Math.abs(b.change_24h || 0));
+        }
+
+        listEl.innerHTML = sorted.map((coin, i) => {
+            const thumb = coin.image ? `<img src="${coin.image}" alt="" style="width:20px;height:20px;border-radius:50%;margin-right:8px;vertical-align:middle;">` : '';
+            const changeVal = coin.change_24h || 0;
+            const changeClass = changeVal >= 0 ? 'positive' : 'negative';
+            const changeSign = changeVal >= 0 ? '+' : '';
+            const priceStr = coin.price ? '$' + coin.price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: coin.price < 1 ? 6 : 2}) : '';
+
+            return `<div class="trending-coin-item">
+                <span class="trending-rank">#${i + 1}</span>
+                ${thumb}
+                <span class="trending-name">${coin.name || ''}</span>
+                <span class="trending-symbol">${coin.symbol || ''}</span>
+                <span class="trending-price">${priceStr}</span>
+                <span class="change-indicator ${changeClass}" style="margin-left:auto;font-weight:600;">${changeSign}${changeVal.toFixed(2)}%</span>
+            </div>`;
+        }).join('');
+    }
+
+    window.toggleMoverSort = function() {
+        const btn = document.getElementById('moverSortBtn');
+        if (_moverSortDir === 'desc') {
+            _moverSortDir = 'asc';
+            if (btn) { btn.textContent = '▲'; btn.className = 'mover-sort-btn asc'; btn.title = 'Sorted: smallest change first'; }
+        } else {
+            _moverSortDir = 'desc';
+            if (btn) { btn.textContent = '▼'; btn.className = 'mover-sort-btn desc'; btn.title = 'Sorted: largest change first'; }
+        }
+        renderMovers();
+    };
 
     async function loadTrendingFallback() {
         const container = document.getElementById('trendingCoinsCard');

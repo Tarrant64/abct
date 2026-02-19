@@ -6,7 +6,7 @@
     <title>Data & Analytics - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771510004">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771531886">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <!-- Chart.js for analytics -->
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
@@ -19,7 +19,7 @@
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1771510004"></script>
+    <script src="/static/js/session-auth.js?v=1771531886"></script>
     <style>
         /* Wallet Manager Styles */
         .wallet-manager {
@@ -1180,7 +1180,7 @@
                 <!-- Gas Tracker Card -->
                 <div class="analytics-utility-card" id="gasTrackerCard" style="display: none;">
                     <div class="utility-card-header">
-                        <h3>ETH Gas Prices</h3>
+                        <h3>ETH Gas Prices</h3><span class="section-info-btn">i<span class="info-tooltip">Current Ethereum network gas fees. Lower gas = cheaper transactions. Safe is slowest, Fast is quickest confirmation.</span></span>
                     </div>
                     <div class="gas-price-grid">
                         <div class="gas-tier">
@@ -1201,7 +1201,8 @@
                 <!-- Top Movers Card -->
                 <div class="analytics-utility-card" id="trendingCoinsCard" style="display: none;">
                     <div class="utility-card-header">
-                        <h3>Top Movers (24h)</h3>
+                        <h3>Top Movers (24h)</h3><span class="section-info-btn">i<span class="info-tooltip">Cryptocurrencies with the largest price changes in the last 24 hours from your portfolio holdings.</span></span>
+                        <button class="mover-sort-btn" id="moverSortBtn" onclick="toggleMoverSort()" title="Sort by percentage">▼</button>
                     </div>
                     <div id="trendingCoinsList" class="trending-coins-list">
                     </div>
@@ -1211,7 +1212,7 @@
             <!-- Portfolio vs BTC -->
             <section class="analytics-section" id="portfolioBtcSection">
                 <div class="section-header-inline">
-                    <h2>Portfolio vs BTC</h2>
+                    <h2>Portfolio vs BTC</h2><span class="section-info-btn">i<span class="info-tooltip">Your portfolio holdings expressed in BTC value, showing how each asset compares to Bitcoin as a unit of account.</span></span>
                 </div>
                 <div class="table-responsive">
                     <table class="chain-financials-table" id="portfolioBtcTable">
@@ -1234,7 +1235,7 @@
             <!-- Relative Strength Chart -->
             <section class="analytics-section" id="relativeStrengthSection">
                 <div class="section-header-inline">
-                    <h2>Relative Strength</h2>
+                    <h2>Relative Strength</h2><span class="section-info-btn">i<span class="info-tooltip">Compares price performance of major assets over time, normalized to a common starting point. Shows which assets are outperforming or underperforming relative to each other.</span></span>
                     <div class="period-buttons">
                         <button class="period-btn" onclick="changeRelativeStrengthPeriod(7)">7D</button>
                         <button class="period-btn active" onclick="changeRelativeStrengthPeriod(30)">30D</button>
@@ -1253,7 +1254,7 @@
             <!-- Cross-Asset Comparison Table -->
             <section class="analytics-section" id="crossAssetSection">
                 <div class="section-header-inline">
-                    <h2>Cross-Asset Comparison</h2>
+                    <h2>Cross-Asset Comparison</h2><span class="section-info-btn">i<span class="info-tooltip">Side-by-side comparison of major blockchain assets across key metrics: price changes, total value locked, fees generated, and DEX trading volume.</span></span>
                 </div>
                 <div class="table-responsive">
                     <table class="chain-financials-table" id="crossAssetTable">
@@ -1278,7 +1279,7 @@
             <!-- Network Health & Economics -->
             <section class="analytics-section" id="networkHealthSection">
                 <div class="section-header-inline">
-                    <h2>Network Health & Economics</h2>
+                    <h2>Network Health &amp; Economics</h2><span class="section-info-btn">i<span class="info-tooltip">On-chain financial metrics for each blockchain network: TVL (total value locked in DeFi), daily fees, revenue, and DEX trading volume. Filter by chain to see fee history.</span></span>
                 </div>
 
                 <!-- Chain Filter Tabs -->
@@ -1636,7 +1637,7 @@
             <!-- Crypto Market Heatmap -->
             <section class="analytics-section" style="margin-top: 24px;">
                 <div class="section-header-inline">
-                    <h2>Market Heatmap</h2>
+                    <h2>Market Heatmap</h2><span class="section-info-btn">i<span class="info-tooltip">Visual overview of 24-hour price changes for top cryptocurrencies. Green = price up, Red = price down. Tile size reflects market cap.</span></span>
                     <div class="heatmap-legend" style="margin-left: auto;">
                         <span class="heatmap-legend-item neg-heavy"></span><span>-10%</span>
                         <span class="heatmap-legend-item neg-light"></span><span>-5%</span>
@@ -1653,7 +1654,7 @@
             <!-- Top Cryptos by Market Cap -->
             <section class="analytics-section" style="margin-top: 24px;">
                 <div class="section-header-inline">
-                    <h2>Top Cryptos by Market Cap</h2>
+                    <h2>Top Cryptos by Market Cap</h2><span class="section-info-btn">i<span class="info-tooltip">Ranked list of cryptocurrencies by total market capitalization. Switch between data sources: CoinMarketCap, CoinGecko, or CoinPaprika.</span></span>
                     <div class="cm-source-toggle">
                         <button class="cm-source-btn active" id="srcBtnCmc" onclick="switchCryptoSource('cmc')">CMC</button>
                         <button class="cm-source-btn" id="srcBtnCoingecko" onclick="switchCryptoSource('coingecko')">CoinGecko</button>
@@ -1693,10 +1694,17 @@
             <!-- Stablecoin Markets -->
             <section class="analytics-section" style="margin-top: 24px;">
                 <div class="section-header-inline">
-                    <h2>Stablecoin Markets</h2>
+                    <h2>Stablecoin Markets</h2><span class="section-info-btn">i<span class="info-tooltip">Stablecoins ranked by market capitalization. Stablecoins are cryptocurrencies pegged to a fiat currency like USD. Toggle between bar and area chart views.</span></span>
+                    <div class="cm-source-toggle">
+                        <button class="cm-source-btn active" id="stableChartBar" onclick="switchStablecoinChart('bar')">Bar</button>
+                        <button class="cm-source-btn" id="stableChartArea" onclick="switchStablecoinChart('area')">Area</button>
+                    </div>
                 </div>
                 <div class="analytics-chart-container" id="stablecoinChartContainer" style="display: none;">
                     <canvas id="stablecoinBarChart"></canvas>
+                </div>
+                <div class="analytics-chart-container" id="stablecoinAreaContainer" style="display: none; height: 400px;">
+                    <canvas id="stablecoinAreaChart"></canvas>
                 </div>
                 <div class="cm-table-controls" style="margin-top: 16px;">
                     <label>Show</label>
@@ -1731,7 +1739,7 @@
             <!-- Chains by TVL -->
             <section class="analytics-section" style="margin-top: 24px;">
                 <div class="section-header-inline">
-                    <h2>Chains by TVL</h2>
+                    <h2>Chains by TVL</h2><span class="section-info-btn">i<span class="info-tooltip">Blockchain networks ranked by Total Value Locked (TVL) — the total amount of assets deposited in DeFi protocols on each chain.</span></span>
                     <div class="cm-source-toggle">
                         <button class="cm-source-btn active" id="chainChartBar" onclick="switchChainChart('bar')">Bar</button>
                         <button class="cm-source-btn" id="chainChartArea" onclick="switchChainChart('area')">Area</button>
@@ -1774,7 +1782,7 @@
             <!-- RWA Protocols -->
             <section class="analytics-section" style="margin-top: 24px;">
                 <div class="section-header-inline">
-                    <h2>Real World Assets (RWA)</h2>
+                    <h2>Real World Assets (RWA)</h2><span class="section-info-btn">i<span class="info-tooltip">Protocols that tokenize real-world assets (bonds, real estate, commodities) on blockchain. TVL represents the total value of tokenized assets.</span></span>
                 </div>
                 <div class="cm-table-controls">
                     <label>Show</label>
@@ -2132,21 +2140,21 @@
         }
     </script>
 
-    <script src="/static/js/app.js?v=1771510004"></script>
+    <script src="/static/js/app.js?v=1771531886"></script>
 
     <!-- Transaction scripts -->
-    <script src="/static/js/transactions.js?v=1771510004"></script>
-    <script src="/static/js/transaction-analytics.js?v=1771510004"></script>
+    <script src="/static/js/transactions.js?v=1771531886"></script>
+    <script src="/static/js/transaction-analytics.js?v=1771531886"></script>
     <!-- Advanced Analytics tab -->
-    <script src="/static/js/analytics-tab.js?v=1771510004"></script>
+    <script src="/static/js/analytics-tab.js?v=1771531886"></script>
     <!-- Sankey flow diagram -->
-    <script src="/static/js/sankey-chart.js?v=1771510004"></script>
+    <script src="/static/js/sankey-chart.js?v=1771531886"></script>
     <!-- Streamgraph (chain history) -->
-    <script src="/static/js/stream-chart.js?v=1771510004"></script>
+    <script src="/static/js/stream-chart.js?v=1771531886"></script>
     <!-- Wallet Intelligence tab -->
-    <script src="/static/js/wallet-intelligence.js?v=1771510004"></script>
+    <script src="/static/js/wallet-intelligence.js?v=1771531886"></script>
     <!-- Crypto Market tab -->
-    <script src="/static/js/crypto-market.js?v=1771510004"></script>
+    <script src="/static/js/crypto-market.js?v=1771531886"></script>
 
     <script>
         // Main tab switching function

@@ -8,6 +8,8 @@
 
     let _initialized = false;
     let _stablecoinChart = null;
+    let _stablecoinAreaChart = null;
+    var _stableChartMode = 'bar'; // 'bar' or 'area'
     let _chainsTvlChart = null;
     let _chainsTvlAreaChart = null;
     var _chainChartMode = 'bar'; // 'bar' or 'area'
@@ -521,6 +523,129 @@
             }
         });
     }
+
+    function renderStablecoinAreaChart(stablecoins) {
+        var container = document.getElementById('stablecoinAreaContainer');
+        var canvas = document.getElementById('stablecoinAreaChart');
+        if (!container || !canvas) return;
+
+        if (_stablecoinAreaChart) {
+            _stablecoinAreaChart.destroy();
+            _stablecoinAreaChart = null;
+        }
+
+        container.style.display = 'block';
+        var opts = getChartOpts();
+
+        // Build a treemap-like stacked bar showing proportional market share
+        var labels = stablecoins.map(function(s) { return s.symbol || s.name; });
+        var values = stablecoins.map(function(s) { return s.mcap; });
+        var total = values.reduce(function(sum, v) { return sum + v; }, 0);
+        var pcts = values.map(function(v) { return total > 0 ? (v / total * 100) : 0; });
+
+        var colors = [
+            'rgba(38, 161, 123, 0.8)', 'rgba(39, 117, 202, 0.8)', 'rgba(240, 185, 11, 0.8)',
+            'rgba(0, 211, 149, 0.8)', 'rgba(99, 102, 241, 0.8)', 'rgba(59, 130, 246, 0.8)',
+            'rgba(34, 211, 238, 0.8)', 'rgba(167, 139, 250, 0.8)', 'rgba(251, 146, 60, 0.8)',
+            'rgba(148, 163, 184, 0.8)'
+        ];
+        var borderColors = [
+            '#26a17b', '#2775ca', '#f0b90b', '#00d395', '#6366f1',
+            '#3b82f6', '#22d3ee', '#a78bfa', '#fb923c', '#94a3b8'
+        ];
+
+        // Stacked horizontal bar (single row, multiple datasets)
+        var datasets = labels.map(function(label, i) {
+            return {
+                label: label + ' (' + pcts[i].toFixed(1) + '%)',
+                data: [pcts[i]],
+                backgroundColor: colors[i % colors.length],
+                borderColor: borderColors[i % borderColors.length],
+                borderWidth: 1,
+                barPercentage: 1.0,
+                categoryPercentage: 1.0
+            };
+        });
+
+        _stablecoinAreaChart = new Chart(canvas.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: ['Market Share'],
+                datasets: datasets
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        stacked: true,
+                        max: 100,
+                        grid: { color: opts.gridColor },
+                        ticks: {
+                            color: opts.tickColor,
+                            callback: function(v) { return v + '%'; }
+                        }
+                    },
+                    y: {
+                        stacked: true,
+                        display: false
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        labels: {
+                            color: opts.tickColor,
+                            usePointStyle: true,
+                            pointStyle: 'rectRounded',
+                            padding: 12,
+                            font: { size: 11 }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: opts.tooltipBg,
+                        borderColor: opts.tooltipBorder,
+                        borderWidth: 1,
+                        titleColor: opts.tickColor,
+                        bodyColor: opts.tickColor,
+                        callbacks: {
+                            label: function(ctx) {
+                                var idx = ctx.datasetIndex;
+                                return labels[idx] + ': ' + fmtCompactUSD(values[idx]) + ' (' + pcts[idx].toFixed(1) + '%)';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    window.switchStablecoinChart = function(mode) {
+        if (mode === _stableChartMode) return;
+        _stableChartMode = mode;
+
+        var barBtn = document.getElementById('stableChartBar');
+        var areaBtn = document.getElementById('stableChartArea');
+        if (barBtn) barBtn.classList.toggle('active', mode === 'bar');
+        if (areaBtn) areaBtn.classList.toggle('active', mode === 'area');
+
+        var barContainer = document.getElementById('stablecoinChartContainer');
+        var areaContainer = document.getElementById('stablecoinAreaContainer');
+
+        if (mode === 'bar') {
+            if (barContainer) barContainer.style.display = 'block';
+            if (areaContainer) areaContainer.style.display = 'none';
+        } else {
+            if (barContainer) barContainer.style.display = 'none';
+            if (areaContainer) areaContainer.style.display = 'block';
+            // Render area chart from existing data
+            if (_allStablecoins && _allStablecoins.length > 0) {
+                renderStablecoinAreaChart(_allStablecoins.slice(0, 10));
+            }
+        }
+    };
 
     function renderStablecoinTable() {
         var body = document.getElementById('stablecoinTableBody');

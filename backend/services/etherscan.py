@@ -89,6 +89,7 @@ class EtherscanService(APIKeyManager):
         super().__init__(api_name='etherscan', env_var='ETHERSCAN_API_KEY')
         self._cache: Dict[str, dict] = {}
         self._cache_ttl = timedelta(minutes=5)
+        self._has_api_key: Optional[bool] = None  # Cached key status
 
     async def is_configured(self) -> bool:
         """Check if the API key is configured."""
@@ -103,6 +104,9 @@ class EtherscanService(APIKeyManager):
         """
         Make a request to the Etherscan-compatible API.
 
+        Works with or without an API key. Without a key, Etherscan allows
+        ~1 request per 5 seconds (vs 5/sec with a free key).
+
         Args:
             chain: Chain name ('ethereum', 'base', 'polygon')
             params: API parameters
@@ -110,17 +114,23 @@ class EtherscanService(APIKeyManager):
         Returns:
             API response data or None if error
         """
-        if not await self.is_configured():
-            logger.warning("Etherscan API key not configured")
-            return None
-
         chain_config = self._get_chain_config(chain)
         if not chain_config:
             logger.error(f"Unknown chain: {chain}")
             return None
 
-        # Add API key to params
-        params['apikey'] = await self.get_api_key()
+        # Add API key if available; works without one at reduced rate
+        api_key = await self.get_api_key()
+        if api_key:
+            params['apikey'] = api_key
+            if self._has_api_key is None:
+                self._has_api_key = True
+        else:
+            if self._has_api_key is None:
+                logger.info(f"No Etherscan API key configured — using keyless rate limit (slower)")
+                self._has_api_key = False
+            # Keyless rate limit: ~1 req per 5 seconds
+            await asyncio.sleep(5)
 
         try:
             client = get_client("etherscan", timeout=30.0)
@@ -205,6 +215,9 @@ class EtherscanService(APIKeyManager):
             List of transactions
         """
         chain_config = self._get_chain_config(chain)
+        if not chain_config:
+            logger.error(f"Unknown chain for transactions: {chain}")
+            return []
         logger.info(f"Fetching {chain} transactions for {address[:10]}... "
                      f"(using {chain_config['explorer_name']}, startblock={startblock})")
 
@@ -290,6 +303,9 @@ class EtherscanService(APIKeyManager):
             List of token transfers
         """
         chain_config = self._get_chain_config(chain)
+        if not chain_config:
+            logger.error(f"Unknown chain for token transfers: {chain}")
+            return []
         logger.info(f"Fetching {chain} token transfers for {address[:10]}... "
                      f"(using {chain_config['explorer_name']}, startblock={startblock})")
 
