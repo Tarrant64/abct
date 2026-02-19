@@ -234,6 +234,35 @@ class CoinbaseService:
 
         return accounts
 
+    async def get_v2_accounts(self, user_id: int = None) -> List[dict]:
+        """
+        Get all accounts via the v2 API (includes more account types than v3).
+        Paginates through all results using next_uri.
+        """
+        all_accounts = []
+        path = "/v2/accounts"
+        params = {"limit": 100}
+
+        while True:
+            data = await self._make_request("GET", path, params, user_id=user_id)
+            if not data:
+                break
+
+            all_accounts.extend(data.get("data", []))
+
+            pagination = data.get("pagination", {})
+            next_uri = pagination.get("next_uri")
+            if not next_uri:
+                break
+
+            from urllib.parse import urlparse, parse_qs
+            parsed = urlparse(next_uri)
+            path = parsed.path
+            qs = parse_qs(parsed.query)
+            params = {k: v[0] for k, v in qs.items()} if qs else None
+
+        return all_accounts
+
     async def get_portfolio(self, user_id: int = None) -> Dict[str, any]:
         """
         Get portfolio summary with all asset balances.

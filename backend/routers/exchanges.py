@@ -950,3 +950,77 @@ async def get_analytics_by_exchange(
 
     await set_cache(cache_key, result, CACHE_TTL_WARM, user_id=user_id)
     return result
+
+
+@router.get("/coinbase/diagnostic")
+async def coinbase_account_diagnostic(user_id: int = Depends(verify_session)):
+    """
+    Diagnostic endpoint: dump all raw Coinbase accounts from both v3 and v2 APIs.
+    Useful for investigating staked assets, missing balances, etc.
+    """
+    if not await coinbase_service.is_configured(user_id=user_id):
+        raise HTTPException(status_code=503, detail="Coinbase API not configured")
+
+    # Fetch v3 brokerage accounts (what we currently use)
+    v3_accounts = await coinbase_service.get_accounts(user_id=user_id)
+
+    # Fetch v2 accounts (broader account types)
+    v2_accounts = await coinbase_service.get_v2_accounts(user_id=user_id)
+
+    # Summarize v3: only accounts with any balance
+    v3_summary = []
+    for acc in v3_accounts:
+        avail = float(acc.get("available_balance", {}).get("value", 0))
+        hold = float(acc.get("hold", {}).get("value", 0))
+        if avail > 0 or hold > 0:
+            v3_summary.append({
+                "currency": acc.get("currency"),
+                "name": acc.get("name"),
+                "type": acc.get("type"),
+                "available": avail,
+                "hold": hold,
+                "total": avail + hold,
+                "uuid": acc.get("uuid"),
+                "platform": acc.get("platform"),
+            })
+
+    # Summarize v2: only accounts with any balance
+    v2_summary = []
+    for acc in v2_accounts:
+        balance = acc.get("balance", {})
+        amount = float(balance.get("amount", 0))
+        native = acc.get("native_balance", {})
+        native_amount = float(native.get("amount", 0))
+        if amount != 0 or native_amount != 0:
+            v2_summary.append({
+                "currency": acc.get("currency", {}).get("code") if isinstance(acc.get("currency"), dict) else acc.get("currency"),
+                "name": acc.get("name"),
+                "type": acc.get("type"),
+                "balance": amount,
+                "balance_currency": balance.get("currency"),
+                "native_balance": native_amount,
+                "native_currency": native.get("currency"),
+                "id": acc.get("id"),
+                "raw_currency_obj": acc.get("currency") if isinstance(acc.get("currency"), dict) else None,
+            })
+
+    # Find SOL specifically in both APIs
+    v3_sol = [a for a in v3_accounts if (a.get("currency") or "").upper() == "SOL"]
+    v2_sol = [a for a in v2_accounts
+              if (isinstance(a.get("currency"), dict) and a["currency"].get("code", "").upper() == "SOL")
+              or (isinstance(a.get("currency"), str) and a["currency"].upper() == "SOL")]
+
+    return {
+        "v3_brokerage": {
+            "total_accounts": len(v3_accounts),
+            "with_balance": len(v3_summary),
+            "accounts": v3_summary,
+            "sol_raw": v3_sol,
+        },
+        "v2_accounts": {
+            "total_accounts": len(v2_accounts),
+            "with_balance": len(v2_summary),
+            "accounts": v2_summary,
+            "sol_raw": v2_sol,
+        },
+    }
