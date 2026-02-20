@@ -147,6 +147,15 @@
             object-fit: cover;
         }
 
+        .nft-image {
+            opacity: 0;
+            transition: opacity 0.15s ease-in;
+        }
+
+        .nft-image.loaded {
+            opacity: 1;
+        }
+
         .nft-card .image-container .loading {
             color: var(--text-secondary);
             font-size: 0.9rem;
@@ -1049,6 +1058,10 @@
         let groupedNfts = [];
         let currentChain = 'all';
         let isGroupedView = true;  // Default to grouped view
+        const BATCH_SIZE = 36;
+        let renderedCount = 0;
+        let currentNftsToShow = [];
+        let currentGroupsToShow = [];
 
         // Format USD value
         function formatUSD(value) {
@@ -1188,15 +1201,15 @@
             const grid = document.getElementById('nftGrid');
 
             // Filter by chain
-            const nftsToShow = currentChain === 'all'
+            currentNftsToShow = currentChain === 'all'
                 ? allNfts
                 : allNfts.filter(n => n.blockchain === currentChain);
 
-            const groupsToShow = currentChain === 'all'
+            currentGroupsToShow = currentChain === 'all'
                 ? groupedNfts
                 : groupedNfts.filter(g => g.blockchain === currentChain);
 
-            if (nftsToShow.length === 0) {
+            if (currentNftsToShow.length === 0) {
                 const chainName = currentChain === 'all' ? 'any blockchain' : currentChain.charAt(0).toUpperCase() + currentChain.slice(1);
                 setSafeHTML(grid, `
                     <div class="empty-state">
@@ -1205,30 +1218,23 @@
                         <p style="margin-top: 15px;">Click the <strong>"Cache Images"</strong> button above to download and display your NFT images.</p>
                     </div>
                 `);
-
                 return;
             }
 
-            // Render grouped or ungrouped view
-            if (isGroupedView && groupsToShow.length > 0) {
-                renderGroupedNfts(groupsToShow);
-            } else {
-                renderUngroupedNfts(nftsToShow);
-            }
+            // Reset pagination and clear grid
+            renderedCount = 0;
+            grid.innerHTML = '';
+            renderNextBatch();
         }
 
-        // Render ungrouped NFTs
-        function renderUngroupedNfts(nftsToShow) {
-            const grid = document.getElementById('nftGrid');
-
-            setSafeHTML(grid, nftsToShow.map(nft => `
+        // Generate card HTML for a single ungrouped NFT
+        function generateNftCardHTML(nft) {
+            const imgSrc = nft.mobile_url || nft.thumbnail_url;
+            return `
                 <div class="nft-card" data-asset-id="${nft.asset_id}" data-blockchain="${nft.blockchain}">
                     <div class="image-container">
                         <span class="chain-badge ${nft.blockchain}">${nft.blockchain}</span>
-                        <img class="nft-image" src="${nft.thumbnail_url}"
-                             alt="${nft.name}"
-                             loading="lazy"
-                             onerror="this.parentElement.innerHTML='<span class=\\'chain-badge ${nft.blockchain}\\'>${nft.blockchain}</span><div class=\\'no-image-placeholder\\'><div class=\\'nft-text\\'>NFT</div><div class=\\'no-cache-text\\'>No cached image found</div></div>';">
+                        <img class="nft-image" src="${imgSrc}" alt="${escapeHtml(nft.name)}">
                     </div>
                     <div class="nft-info">
                         <div class="nft-name">${escapeHtml(nft.name)}</div>
@@ -1239,55 +1245,78 @@
                         </div>
                     </div>
                 </div>
-            `).join(''));
-
-            // Attach click listeners after rendering (DOMPurify strips onclick)
-            attachNftCardListeners();
+            `;
         }
 
-        // Render grouped NFTs
-        function renderGroupedNfts(groupsToShow) {
-            const grid = document.getElementById('nftGrid');
-
-            setSafeHTML(grid, groupsToShow.map(group => {
-                const rep = group.representative_nft;
-                return `
-                    <div class="nft-card" data-asset-id="${rep.asset_id}" data-blockchain="${rep.blockchain}">
-                        <div class="image-container">
-                            ${group.count > 1 ? `<span class="collection-count-badge">${group.count} NFTs</span>` : ''}
-                            <span class="chain-badge ${rep.blockchain}">${rep.blockchain}</span>
-                            <img class="nft-image" src="${rep.thumbnail_url}"
-                                 alt="${rep.name}"
-                                 loading="lazy"
-                                 onerror="this.parentElement.innerHTML='<span class=\\'chain-badge ${rep.blockchain}\\'>${rep.blockchain}</span><div class=\\'no-image-placeholder\\'><div class=\\'nft-text\\'>NFT</div><div class=\\'no-cache-text\\'>No cached image found</div></div>';">
-                        </div>
-                        <div class="nft-info">
-                            <div class="nft-name">${escapeHtml(group.collection_name)}</div>
-                            <div class="nft-collection">${group.count} NFT${group.count > 1 ? 's' : ''}</div>
-                            <div class="nft-price">
-                                <span class="native nft-value">Collection</span>
-                                <span class="usd nft-value">${formatUSD(group.total_floor_price_usd)}</span>
-                            </div>
+        // Generate card HTML for a grouped collection
+        function generateGroupCardHTML(group) {
+            const rep = group.representative_nft;
+            const imgSrc = rep.mobile_url || rep.thumbnail_url;
+            return `
+                <div class="nft-card" data-asset-id="${rep.asset_id}" data-blockchain="${rep.blockchain}">
+                    <div class="image-container">
+                        ${group.count > 1 ? `<span class="collection-count-badge">${group.count} NFTs</span>` : ''}
+                        <span class="chain-badge ${rep.blockchain}">${rep.blockchain}</span>
+                        <img class="nft-image" src="${imgSrc}" alt="${escapeHtml(rep.name)}">
+                    </div>
+                    <div class="nft-info">
+                        <div class="nft-name">${escapeHtml(group.collection_name)}</div>
+                        <div class="nft-collection">${group.count} NFT${group.count > 1 ? 's' : ''}</div>
+                        <div class="nft-price">
+                            <span class="native nft-value">Collection</span>
+                            <span class="usd nft-value">${formatUSD(group.total_floor_price_usd)}</span>
                         </div>
                     </div>
-                `;
-            }).join(''));
-
-            // Attach click listeners after rendering (DOMPurify strips onclick)
-            attachNftCardListeners();
+                </div>
+            `;
         }
 
-        // Attach click listeners to NFT cards
-        function attachNftCardListeners() {
-            document.querySelectorAll('.nft-card').forEach(card => {
-                card.addEventListener('click', (e) => {
-                    const assetId = card.getAttribute('data-asset-id');
-                    const blockchain = card.getAttribute('data-blockchain');
-                    if (assetId && blockchain) {
-                        openDetailModal(assetId, blockchain);
-                    }
+        // Render next batch of cards (scroll pagination)
+        function renderNextBatch() {
+            const grid = document.getElementById('nftGrid');
+            const isGrouped = isGroupedView && currentGroupsToShow.length > 0;
+            const items = isGrouped ? currentGroupsToShow : currentNftsToShow;
+
+            // Remove existing load-more indicator
+            const existingIndicator = document.getElementById('loadMoreIndicator');
+            if (existingIndicator) existingIndicator.remove();
+
+            const batch = items.slice(renderedCount, renderedCount + BATCH_SIZE);
+            if (batch.length === 0) return;
+
+            const batchHTML = batch.map(item =>
+                isGrouped ? generateGroupCardHTML(item) : generateNftCardHTML(item)
+            ).join('');
+
+            // Sanitize into temp container, then append to grid
+            const temp = document.createElement('div');
+            setSafeHTML(temp, batchHTML);
+
+            // Attach image load/error listeners (DOMPurify strips inline handlers)
+            temp.querySelectorAll('.nft-image').forEach(img => {
+                img.addEventListener('load', () => img.classList.add('loaded'));
+                img.addEventListener('error', function() {
+                    const container = this.parentElement;
+                    const blockchain = this.closest('.nft-card')?.getAttribute('data-blockchain') || '';
+                    container.innerHTML = '<span class="chain-badge ' + blockchain + '">' + blockchain + '</span><div class="no-image-placeholder"><div class="nft-text">NFT</div><div class="no-cache-text">No cached image found</div></div>';
                 });
             });
+
+            // Move children to grid
+            while (temp.firstChild) {
+                grid.appendChild(temp.firstChild);
+            }
+
+            renderedCount += batch.length;
+
+            // Show load-more indicator if more items remain
+            if (renderedCount < items.length) {
+                const indicator = document.createElement('div');
+                indicator.id = 'loadMoreIndicator';
+                indicator.style.cssText = 'text-align: center; padding: 20px; color: var(--text-secondary); font-size: 0.9rem; grid-column: 1 / -1;';
+                indicator.textContent = 'Showing ' + renderedCount + ' of ' + items.length + ' — scroll for more';
+                grid.appendChild(indicator);
+            }
         }
 
         // Escape HTML to prevent XSS
@@ -1613,6 +1642,27 @@
 
             // Check background status every 30 seconds
             setInterval(checkBackgroundStatus, 30000);
+
+            // Event delegation for NFT card clicks (avoids re-attaching per batch)
+            document.getElementById('nftGrid').addEventListener('click', (e) => {
+                const card = e.target.closest('.nft-card');
+                if (card) {
+                    const assetId = card.getAttribute('data-asset-id');
+                    const blockchain = card.getAttribute('data-blockchain');
+                    if (assetId && blockchain) {
+                        openDetailModal(assetId, blockchain);
+                    }
+                }
+            });
+
+            // Scroll-based pagination — load more cards when near bottom
+            window.addEventListener('scroll', () => {
+                const scrollBottom = window.innerHeight + window.scrollY;
+                const docHeight = document.documentElement.scrollHeight;
+                if (docHeight - scrollBottom < 700) {
+                    renderNextBatch();
+                }
+            });
         });
     </script>
 
