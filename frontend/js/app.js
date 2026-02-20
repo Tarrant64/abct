@@ -9357,13 +9357,18 @@ function initGlobalSearch() {
     const container = document.createElement('div');
     container.className = 'global-search-container';
     container.innerHTML = `
-        <div class="global-search-expanded" id="globalSearchBar">
+        <button class="global-search-btn" id="globalSearchBtn" title="Search (Ctrl+K)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+        </button>
+        <div class="global-search-bar" id="globalSearchBar">
             <input type="text" class="global-search-input" id="globalSearchInput"
                    placeholder="Search tokens, wallets, pages..." autocomplete="off" />
-            <button class="global-search-toggle" id="globalSearchToggle" title="Search">
+            <button class="global-search-close" id="globalSearchClose" title="Close">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="11" cy="11" r="8"/>
-                    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
             </button>
         </div>
@@ -9377,18 +9382,20 @@ function initGlobalSearch() {
         controls.appendChild(container);
     }
 
+    const btn = document.getElementById('globalSearchBtn');
     const bar = document.getElementById('globalSearchBar');
     const input = document.getElementById('globalSearchInput');
-    const toggle = document.getElementById('globalSearchToggle');
+    const closeBtn = document.getElementById('globalSearchClose');
     const results = document.getElementById('globalSearchResults');
 
-    toggle.addEventListener('click', (e) => {
+    btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (_searchOpen) {
-            closeSearch();
-        } else {
-            openSearch();
-        }
+        openSearch();
+    });
+
+    closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeSearch();
     });
 
     input.addEventListener('input', () => {
@@ -9423,13 +9430,15 @@ function initGlobalSearch() {
 
     function openSearch() {
         _searchOpen = true;
+        btn.style.display = 'none';
         bar.classList.add('open');
-        setTimeout(() => input.focus(), 150);
+        setTimeout(() => input.focus(), 50);
     }
 
     function closeSearch() {
         _searchOpen = false;
         bar.classList.remove('open');
+        btn.style.display = '';
         results.classList.remove('visible');
         input.value = '';
     }
