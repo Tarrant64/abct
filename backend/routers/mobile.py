@@ -413,19 +413,23 @@ async def get_mobile_portfolio_summary(
         # Get price and calculate value
         price_data = all_prices.get(symbol, {})
         price_usd = price_data.get('usd', 0)
-        value_usd = native_amount * price_usd
+        native_coin_value = native_amount * price_usd
+        native_tokens_value = chain_data.get('native_assets_value_usd', 0)
 
-        # Add native assets value (tokens)
-        value_usd += chain_data.get('native_assets_value_usd', 0)
+        # self_custody_value tracks native coin value only (tokens are in tracked_tokens)
+        # Per-chain display includes both for full picture
+        display_value = native_coin_value + native_tokens_value
+        self_custody_value += native_coin_value
 
-        if value_usd > 0:
-            self_custody_value += value_usd
+        if display_value > 0 or native_coin_value > 0:
             native_totals[symbol.lower()] = native_amount
 
             blockchain_summaries.append({
                 "name": blockchain,
                 "symbol": symbol,
-                "value_usd": round(value_usd, 2),
+                "value_usd": round(display_value, 2),
+                "native_coin_value_usd": round(native_coin_value, 2),
+                "native_tokens_value_usd": round(native_tokens_value, 2),
                 "native_amount": round(native_amount, 8),
                 "native_price_usd": round(price_usd, 2),
                 "wallet_count": chain_data.get('wallet_count', 0),
@@ -436,13 +440,15 @@ async def get_mobile_portfolio_summary(
     exchanges_value = exchange_summary.get('total_usd', 0)
     nfts_value = nft_summary.get('total_value_usd', 0)
 
-    # Staking/DeFi/tracked tokens from latest snapshot (matches web dashboard logic)
+    # Staking/DeFi/tracked tokens/custom tokens from live computation (matches web dashboard)
     staking_value = snapshot_totals.get('staking_usd', 0) or 0
     defi_value = snapshot_totals.get('defi_usd', 0) or 0
     tracked_tokens_value = snapshot_totals.get('tracked_tokens_usd', 0) or 0
+    custom_tokens_value = snapshot_totals.get('custom_tokens_usd', 0) or 0
 
-    # Calculate total
-    total_value_usd = self_custody_value + exchanges_value + nfts_value + staking_value + defi_value + tracked_tokens_value
+    # Calculate total (matches web: coins + tracked tokens + custom tokens + staking + defi + exchanges + NFTs)
+    total_value_usd = (self_custody_value + tracked_tokens_value + custom_tokens_value +
+                       exchanges_value + nfts_value + staking_value + defi_value)
 
     # Calculate percentages
     for blockchain_summary in blockchain_summaries:
@@ -481,6 +487,10 @@ async def get_mobile_portfolio_summary(
             "tracked_tokens": {
                 "value_usd": round(tracked_tokens_value, 2),
                 "percentage": round((tracked_tokens_value / total_value_usd * 100) if total_value_usd > 0 else 0, 1)
+            },
+            "custom_tokens": {
+                "value_usd": round(custom_tokens_value, 2),
+                "percentage": round((custom_tokens_value / total_value_usd * 100) if total_value_usd > 0 else 0, 1)
             }
         },
         "blockchains": blockchain_summaries,

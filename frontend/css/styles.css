@@ -86,69 +86,70 @@
 
 /* Cypherpunk 1 Theme - Neon cyberpunk palette */
 [data-theme="cypherpunk1"] {
-    --bg-primary: #050510;
-    --bg-secondary: #0a0a1a;
-    --bg-card: #12122a;
-    --text-primary: #e0f7fa;
-    --text-secondary: #80deea;
-    --accent-cardano: #ea00d9;
-    --accent-bitcoin: #ea00d9;
-    --accent-ethereum: #0abdc6;
-    --accent-success: #0abdc6;
-    --accent-error: #ea00d9;
-    --border-color: #711c91;
-    --chart-line: #ea00d9;
-    --chart-fill: rgba(234, 0, 217, 0.15);
-    --gradient-card: linear-gradient(135deg, #1a0a2e 0%, #711c91 50%, #050510 100%);
-    --gradient-header: linear-gradient(135deg, #0a0a1a 0%, #711c91 100%);
+    --bg-primary: #030308;
+    --bg-secondary: #08081a;
+    --bg-card: #0c0c24;
+    --text-primary: #e0f0ff;
+    --text-secondary: #8ec8ff;
+    --accent-cardano: #d946ef;
+    --accent-bitcoin: #00d4ff;
+    --accent-ethereum: #00d4ff;
+    --accent-success: #00d4ff;
+    --accent-error: #d946ef;
+    --border-color: #7c3aed;
+    --chart-line: #00d4ff;
+    --chart-fill: rgba(0, 212, 255, 0.12);
+    --gradient-card: linear-gradient(135deg, #0c0024 0%, #1a0a3a 50%, #030308 100%);
+    --gradient-header: linear-gradient(135deg, #08081a 0%, #1a0a3a 100%);
 }
 
 /* Cypherpunk 1 specific overrides for neon glow effects */
 
 /* Title Glow Effect */
 [data-theme="cypherpunk1"] header h1 {
-    background: linear-gradient(135deg, #0abdc6 0%, #ea00d9 50%, #711c91 100%);
+    background: linear-gradient(135deg, #00d4ff 0%, #d946ef 50%, #7c3aed 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
     text-shadow: none;
-    filter: drop-shadow(0 0 20px rgba(10, 189, 198, 0.8)) drop-shadow(0 0 40px rgba(234, 0, 217, 0.6));
+    filter: drop-shadow(0 0 20px rgba(0, 212, 255, 0.8)) drop-shadow(0 0 40px rgba(234, 0, 217, 0.6));
     animation: titleGlow 3s ease-in-out infinite alternate;
 }
 
 @keyframes titleGlow {
-    0% { filter: drop-shadow(0 0 20px rgba(10, 189, 198, 0.8)) drop-shadow(0 0 40px rgba(234, 0, 217, 0.4)); }
-    100% { filter: drop-shadow(0 0 30px rgba(234, 0, 217, 0.8)) drop-shadow(0 0 50px rgba(10, 189, 198, 0.6)); }
+    0% { filter: drop-shadow(0 0 20px rgba(0, 212, 255, 0.8)) drop-shadow(0 0 40px rgba(234, 0, 217, 0.4)); }
+    100% { filter: drop-shadow(0 0 30px rgba(234, 0, 217, 0.8)) drop-shadow(0 0 50px rgba(0, 212, 255, 0.6)); }
 }
 
 /* Glassmorphism Base - Vibrant Glassy Effect */
 [data-theme="cypherpunk1"] .total-portfolio-card {
-    background: linear-gradient(135deg, rgba(26, 10, 46, 0.85) 0%, rgba(45, 27, 78, 0.75) 50%, rgba(10, 10, 26, 0.9) 100%);
+    background: linear-gradient(135deg, rgba(12, 0, 36, 0.9) 0%, rgba(20, 8, 50, 0.8) 50%, rgba(3, 3, 8, 0.95) 100%);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     box-shadow:
-        0 0 40px rgba(234, 0, 217, 0.5),
-        0 0 80px rgba(113, 28, 145, 0.3),
-        inset 0 1px 0 rgba(255, 255, 255, 0.1),
+        0 0 30px rgba(0, 212, 255, 0.3),
+        0 0 60px rgba(124, 58, 237, 0.2),
+        0 0 100px rgba(217, 70, 239, 0.1),
+        inset 0 1px 0 rgba(0, 212, 255, 0.1),
         inset 0 -1px 0 rgba(0, 0, 0, 0.3);
-    border: 1px solid rgba(234, 0, 217, 0.4);
+    border: 1px solid rgba(0, 212, 255, 0.3);
 }
 
 [data-theme="cypherpunk1"] .total-value {
-    text-shadow: 0 0 30px rgba(10, 189, 198, 1), 0 0 60px rgba(10, 189, 198, 0.5);
+    text-shadow: 0 0 30px rgba(0, 212, 255, 1), 0 0 60px rgba(0, 212, 255, 0.5);
 }
 
 [data-theme="cypherpunk1"] .top-holding-item {
-    background: rgba(234, 0, 217, 0.15);
-    border: 1px solid rgba(234, 0, 217, 0.3);
+    background: rgba(0, 212, 255, 0.08);
+    border: 1px solid rgba(0, 212, 255, 0.2);
 }
 
 [data-theme="cypherpunk1"] .portfolio-card-right {
-    border-left-color: rgba(234, 0, 217, 0.3);
+    border-left-color: rgba(124, 58, 237, 0.3);
 }
 
 [data-theme="cypherpunk1"] .portfolio-divider {
-    background: rgba(234, 0, 217, 0.3);
+    background: rgba(124, 58, 237, 0.3);
 }
 
 /* Glassy Summary Cards */
@@ -157,39 +158,40 @@
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     box-shadow:
-        0 0 25px rgba(113, 28, 145, 0.5),
+        0 0 25px rgba(124, 58, 237, 0.5),
         0 8px 32px rgba(0, 0, 0, 0.4),
         inset 0 1px 0 rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(113, 28, 145, 0.5);
+    border: 1px solid rgba(124, 58, 237, 0.5);
 }
 
 [data-theme="cypherpunk1"] .summary-card.cardano {
-    border-top-color: #ea00d9;
+    border-top-color: #d946ef;
 }
 
 [data-theme="cypherpunk1"] .wallet-item.cardano {
-    border-left-color: #ea00d9;
+    border-left-color: #d946ef;
 }
 
 [data-theme="cypherpunk1"] .summary-card.solana {
-    border-top-color: #0abdc6;
+    border-top-color: #00d4ff;
 }
 
 [data-theme="cypherpunk1"] .wallet-item.solana {
-    border-left-color: #0abdc6;
+    border-left-color: #00d4ff;
 }
 
 [data-theme="cypherpunk1"] .summary-card.base {
-    border-top-color: #0abdc6;
+    border-top-color: #00d4ff;
 }
 
 [data-theme="cypherpunk1"] .wallet-item.base {
-    border-left-color: #0abdc6;
+    border-left-color: #00d4ff;
 }
 
 [data-theme="cypherpunk1"] .chain-tab.active {
-    background-color: #ea00d9;
-    border-color: #ea00d9;
+    background-color: #00d4ff;
+    border-color: #00d4ff;
+    color: #030308;
 }
 
 /* Cache indicator */
@@ -200,44 +202,46 @@
 }
 
 [data-theme="cypherpunk1"] .btn-primary {
-    background: linear-gradient(135deg, #ea00d9 0%, #711c91 100%);
-    box-shadow: 0 0 15px rgba(234, 0, 217, 0.4);
+    background: linear-gradient(135deg, #00d4ff 0%, #7c3aed 100%);
+    box-shadow: 0 0 15px rgba(0, 212, 255, 0.3);
 }
 
 [data-theme="cypherpunk1"] .btn-primary:hover {
-    background: linear-gradient(135deg, #711c91 0%, #ea00d9 100%);
-    box-shadow: 0 0 25px rgba(234, 0, 217, 0.6);
+    background: linear-gradient(135deg, #7c3aed 0%, #d946ef 100%);
+    box-shadow: 0 0 25px rgba(217, 70, 239, 0.5);
 }
 
 [data-theme="cypherpunk1"] .btn-refresh-small {
-    border-color: rgba(10, 189, 198, 0.5);
+    border-color: rgba(0, 212, 255, 0.5);
 }
 
 [data-theme="cypherpunk1"] .btn-refresh-small:hover {
-    background-color: rgba(10, 189, 198, 0.2);
-    box-shadow: 0 0 10px rgba(10, 189, 198, 0.3);
+    background-color: rgba(0, 212, 255, 0.2);
+    box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
 }
 
 [data-theme="cypherpunk1"] .btn-privacy.active {
-    background-color: #ea00d9;
-    border-color: #ea00d9;
+    background-color: #00d4ff;
+    border-color: #00d4ff;
 }
 
 [data-theme="cypherpunk1"] .toggle-option.active {
-    background-color: #ea00d9;
-    box-shadow: 0 0 10px rgba(234, 0, 217, 0.5);
+    background-color: #7c3aed;
+    box-shadow: 0 0 10px rgba(124, 58, 237, 0.5);
 }
 
 [data-theme="cypherpunk1"] .range-btn.active {
-    background-color: #ea00d9;
-    border-color: #ea00d9;
-    box-shadow: 0 0 10px rgba(234, 0, 217, 0.5);
+    background-color: #00d4ff;
+    border-color: #00d4ff;
+    color: #030308;
+    box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
 }
 
 [data-theme="cypherpunk1"] .source-tab.active {
-    background-color: #ea00d9;
-    border-color: #ea00d9;
-    box-shadow: 0 0 10px rgba(234, 0, 217, 0.5);
+    background-color: #00d4ff;
+    border-color: #00d4ff;
+    color: #030308;
+    box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
 }
 
 /* Glassy Staking Cards */
@@ -245,27 +249,27 @@
     background: linear-gradient(135deg, rgba(10, 26, 36, 0.8) 0%, rgba(18, 18, 42, 0.75) 100%);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
-    border-left: 3px solid #0abdc6;
-    border-top: 1px solid rgba(10, 189, 198, 0.3);
-    border-right: 1px solid rgba(10, 189, 198, 0.3);
-    border-bottom: 1px solid rgba(10, 189, 198, 0.3);
+    border-left: 3px solid #00d4ff;
+    border-top: 1px solid rgba(0, 212, 255, 0.3);
+    border-right: 1px solid rgba(0, 212, 255, 0.3);
+    border-bottom: 1px solid rgba(0, 212, 255, 0.3);
     box-shadow:
-        0 0 25px rgba(10, 189, 198, 0.35),
+        0 0 25px rgba(0, 212, 255, 0.35),
         inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 /* Glassy NFT Collections */
 [data-theme="cypherpunk1"] .nft-collection {
-    background: linear-gradient(135deg, rgba(26, 10, 46, 0.8) 0%, rgba(18, 18, 42, 0.75) 100%);
+    background: linear-gradient(135deg, rgba(12, 0, 36, 0.8) 0%, rgba(8, 8, 26, 0.75) 100%);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
-    border-left: 3px solid #ea00d9;
-    border-top: 1px solid rgba(234, 0, 217, 0.3);
-    border-right: 1px solid rgba(234, 0, 217, 0.3);
-    border-bottom: 1px solid rgba(234, 0, 217, 0.3);
+    border-left: 3px solid #d946ef;
+    border-top: 1px solid rgba(217, 70, 239, 0.25);
+    border-right: 1px solid rgba(217, 70, 239, 0.25);
+    border-bottom: 1px solid rgba(217, 70, 239, 0.25);
     box-shadow:
-        0 0 20px rgba(234, 0, 217, 0.3),
-        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        0 0 20px rgba(217, 70, 239, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 /* Glassy Wallet Items */
@@ -280,9 +284,9 @@
     background: linear-gradient(135deg, rgba(26, 10, 46, 0.75) 0%, rgba(18, 18, 42, 0.7) 100%);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
-    border: 1px solid rgba(113, 28, 145, 0.4);
+    border: 1px solid rgba(124, 58, 237, 0.4);
     box-shadow:
-        0 0 18px rgba(113, 28, 145, 0.3),
+        0 0 18px rgba(124, 58, 237, 0.3),
         inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
@@ -292,28 +296,31 @@
     background: linear-gradient(135deg, rgba(18, 18, 42, 0.7) 0%, rgba(10, 10, 26, 0.75) 100%);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(113, 28, 145, 0.3);
-    box-shadow: 0 0 12px rgba(113, 28, 145, 0.2);
+    border: 1px solid rgba(124, 58, 237, 0.3);
+    box-shadow: 0 0 12px rgba(124, 58, 237, 0.2);
 }
 
 [data-theme="cypherpunk1"] header {
-    border-bottom-color: #711c91;
+    border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+    box-shadow: 0 2px 20px rgba(0, 212, 255, 0.1);
 }
 
 [data-theme="cypherpunk1"] footer {
-    border-top-color: #711c91;
+    border-top: 1px solid rgba(124, 58, 237, 0.2);
+    box-shadow: 0 -2px 20px rgba(124, 58, 237, 0.1);
 }
 
 /* Glassy Chart Container */
 [data-theme="cypherpunk1"] .history-chart-container {
-    background: linear-gradient(180deg, rgba(10, 10, 26, 0.85) 0%, rgba(18, 18, 42, 0.8) 100%);
+    background: linear-gradient(180deg, rgba(3, 3, 8, 0.9) 0%, rgba(8, 8, 26, 0.85) 100%);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(113, 28, 145, 0.5);
+    border: 1px solid rgba(0, 212, 255, 0.2);
     box-shadow:
-        0 0 35px rgba(113, 28, 145, 0.4),
-        inset 0 0 60px rgba(0, 0, 0, 0.4),
-        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        0 0 30px rgba(0, 212, 255, 0.15),
+        0 0 60px rgba(124, 58, 237, 0.1),
+        inset 0 0 60px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(0, 212, 255, 0.05);
 }
 
 /* Glassy Section Headers */
@@ -321,9 +328,9 @@
     background: linear-gradient(135deg, rgba(18, 18, 42, 0.75) 0%, rgba(26, 10, 46, 0.65) 100%);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(113, 28, 145, 0.4);
+    border: 1px solid rgba(124, 58, 237, 0.4);
     box-shadow:
-        0 0 15px rgba(113, 28, 145, 0.3),
+        0 0 15px rgba(124, 58, 237, 0.3),
         inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
@@ -337,9 +344,9 @@
     background: linear-gradient(135deg, rgba(18, 18, 42, 0.8) 0%, rgba(10, 10, 26, 0.85) 100%);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
-    border: 1px solid rgba(113, 28, 145, 0.4);
+    border: 1px solid rgba(124, 58, 237, 0.4);
     box-shadow:
-        0 0 20px rgba(113, 28, 145, 0.35),
+        0 0 20px rgba(124, 58, 237, 0.35),
         inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
@@ -356,9 +363,9 @@
     background: linear-gradient(135deg, rgba(10, 26, 36, 0.8) 0%, rgba(18, 18, 42, 0.75) 100%);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
-    border: 1px solid rgba(10, 189, 198, 0.4);
+    border: 1px solid rgba(0, 212, 255, 0.4);
     box-shadow:
-        0 0 20px rgba(10, 189, 198, 0.25),
+        0 0 20px rgba(0, 212, 255, 0.25),
         inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
@@ -1438,16 +1445,16 @@ html[data-theme="sunset-horizon"]::-webkit-scrollbar-thumb:active { background: 
 html[data-theme="sunset-horizon"] { scrollbar-color: #5c2a5c #1a0a1a; }
 
 /* Cypherpunk 1 */
-html[data-theme="cypherpunk1"]::-webkit-scrollbar-track { background: #050510; }
+html[data-theme="cypherpunk1"]::-webkit-scrollbar-track { background: #030308; }
 html[data-theme="cypherpunk1"]::-webkit-scrollbar-thumb {
-    border-color: #050510;
-    background: linear-gradient(180deg, #ea00d9 0%, #711c91 50%, #0abdc6 100%);
+    border-color: #030308;
+    background: linear-gradient(180deg, #00d4ff 0%, #7c3aed 50%, #d946ef 100%);
 }
 html[data-theme="cypherpunk1"]::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(180deg, #ea00d9 0%, #9a2cc1 50%, #0abdc6 100%);
+    background: linear-gradient(180deg, #00d4ff 0%, #8b5cf6 50%, #d946ef 100%);
 }
-html[data-theme="cypherpunk1"]::-webkit-scrollbar-thumb:active { background: #ea00d9; }
-html[data-theme="cypherpunk1"] { scrollbar-color: #711c91 #050510; }
+html[data-theme="cypherpunk1"]::-webkit-scrollbar-thumb:active { background: #00d4ff; }
+html[data-theme="cypherpunk1"] { scrollbar-color: #7c3aed #030308; }
 
 /* Cypher */
 html[data-theme="cypher"]::-webkit-scrollbar-track { background: #000000; }
@@ -1977,12 +1984,12 @@ main {
 
 /* Cypherpunk1 nav */
 [data-theme="cypherpunk1"] .main-nav {
-    background: rgba(10, 15, 10, 0.85);
-    border-color: rgba(0, 255, 65, 0.1);
+    background: rgba(5, 5, 16, 0.9);
+    border-color: rgba(0, 212, 255, 0.15);
 }
 
 [data-theme="cypherpunk1"] .nav-item.active {
-    background: rgba(0, 255, 65, 0.15);
+    background: rgba(0, 212, 255, 0.15);
 }
 
 /* Cypher nav */
@@ -2182,17 +2189,17 @@ a.btn:active {
 
 /* Cypherpunk Glassy Buttons */
 [data-theme="cypherpunk1"] .btn-secondary {
-    background: linear-gradient(135deg, rgba(18, 18, 42, 0.8) 0%, rgba(26, 10, 46, 0.7) 100%);
+    background: linear-gradient(135deg, rgba(8, 8, 26, 0.8) 0%, rgba(12, 0, 36, 0.7) 100%);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(113, 28, 145, 0.5);
-    box-shadow: 0 0 10px rgba(113, 28, 145, 0.2);
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    box-shadow: 0 0 10px rgba(0, 212, 255, 0.1);
 }
 
 [data-theme="cypherpunk1"] .btn-secondary:hover {
-    background: linear-gradient(135deg, rgba(26, 10, 46, 0.9) 0%, rgba(45, 27, 78, 0.8) 100%);
-    box-shadow: 0 0 20px rgba(234, 0, 217, 0.4);
-    border-color: rgba(234, 0, 217, 0.6);
+    background: linear-gradient(135deg, rgba(12, 0, 36, 0.9) 0%, rgba(20, 8, 50, 0.8) 100%);
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+    border-color: rgba(0, 212, 255, 0.5);
 }
 
 /* Status Bar */
@@ -2247,14 +2254,14 @@ a.btn:active {
 
 /* Cypherpunk startup indicator */
 [data-theme="cypherpunk1"] .startup-indicator {
-    background: linear-gradient(135deg, rgba(10, 189, 198, 0.1) 0%, rgba(234, 0, 217, 0.05) 100%);
-    border-color: rgba(10, 189, 198, 0.4);
-    color: #0abdc6;
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(234, 0, 217, 0.05) 100%);
+    border-color: rgba(0, 212, 255, 0.4);
+    color: #00d4ff;
 }
 
 [data-theme="cypherpunk1"] .spinner-small {
-    border-color: rgba(10, 189, 198, 0.3);
-    border-top-color: #0abdc6;
+    border-color: rgba(0, 212, 255, 0.3);
+    border-top-color: #00d4ff;
 }
 
 /* Summary Section */
@@ -6870,17 +6877,18 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
 
 /* Cypherpunk modal styling */
 [data-theme="cypherpunk1"] .modal-content {
-    box-shadow: 0 0 40px rgba(234, 0, 217, 0.3), 0 20px 60px rgba(0, 0, 0, 0.5);
-    border-color: #711c91;
+    box-shadow: 0 0 40px rgba(0, 212, 255, 0.2), 0 0 80px rgba(124, 58, 237, 0.15), 0 20px 60px rgba(0, 0, 0, 0.5);
+    border-color: rgba(0, 212, 255, 0.3);
 }
 
 [data-theme="cypherpunk1"] .modal-notice {
-    border-left-color: #ea00d9;
+    border-left-color: #00d4ff;
 }
 
 [data-theme="cypherpunk1"] .add-tab.active {
-    background-color: #ea00d9;
-    border-color: #ea00d9;
+    background-color: #00d4ff;
+    border-color: #00d4ff;
+    color: #030308;
 }
 
 /* Empty State */
@@ -11396,12 +11404,12 @@ body.privacy-mode a[data-href] {
 
 /* Cypherpunk theme */
 [data-theme="cypherpunk1"] .sankey-node:hover {
-    filter: brightness(1.3) drop-shadow(0 0 8px rgba(10, 189, 198, 0.5));
+    filter: brightness(1.3) drop-shadow(0 0 8px rgba(0, 212, 255, 0.5));
 }
 
 [data-theme="cypherpunk1"] .sankey-tooltip {
-    border-color: rgba(10, 189, 198, 0.4);
-    box-shadow: 0 0 12px rgba(10, 189, 198, 0.2), 0 4px 12px rgba(0, 0, 0, 0.4);
+    border-color: rgba(0, 212, 255, 0.4);
+    box-shadow: 0 0 12px rgba(0, 212, 255, 0.2), 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 /* Ocean depths theme */
@@ -11428,7 +11436,7 @@ body.privacy-mode a[data-href] {
 }
 
 [data-theme="cypherpunk1"] .sankey-node-expanded {
-    filter: brightness(1.2) drop-shadow(0 0 10px rgba(10, 189, 198, 0.5));
+    filter: brightness(1.2) drop-shadow(0 0 10px rgba(0, 212, 255, 0.5));
 }
 
 [data-theme="ocean-depths"] .sankey-node-expanded {
@@ -11606,12 +11614,12 @@ body.privacy-mode a[data-href] {
 
 /* Cypherpunk theme */
 [data-theme="cypherpunk1"] .stream-path:hover {
-    filter: brightness(1.2) drop-shadow(0 0 6px rgba(10, 189, 198, 0.4));
+    filter: brightness(1.2) drop-shadow(0 0 6px rgba(0, 212, 255, 0.4));
 }
 
 [data-theme="cypherpunk1"] .stream-tooltip {
-    border-color: rgba(10, 189, 198, 0.4);
-    box-shadow: 0 0 12px rgba(10, 189, 198, 0.2), 0 4px 12px rgba(0, 0, 0, 0.4);
+    border-color: rgba(0, 212, 255, 0.4);
+    box-shadow: 0 0 12px rgba(0, 212, 255, 0.2), 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 /* Ocean depths theme */

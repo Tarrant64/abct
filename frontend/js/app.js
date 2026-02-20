@@ -505,15 +505,19 @@ function updateTotalPortfolioValue() {
 
     if (!totalValueEl) return;
 
-    // Calculate wallet value
-    const adaWalletValue = walletTotals.ADA * (prices.ADA || 0);
-    const btcWalletValue = walletTotals.BTC * (prices.BTC || 0);
-    const ethWalletValue = walletTotals.ETH * (prices.ETH || 0);
-    const solWalletValue = walletTotals.SOL * (prices.SOL || 0);
-    const maticWalletValue = walletTotals.MATIC * (prices.MATIC || 0);
-    const baseEthWalletValue = walletTotals.ETH_BASE * (prices.ETH || 0);  // Base uses ETH
-    const algoWalletValue = walletTotals.ALGO * (prices.ALGO || 0);
-    const walletsTotal = adaWalletValue + btcWalletValue + ethWalletValue + solWalletValue + maticWalletValue + baseEthWalletValue + algoWalletValue;
+    // Calculate wallet value (all chains)
+    const walletPriceMap = {
+        ADA: 'ADA', BTC: 'BTC', ETH: 'ETH', SOL: 'SOL', MATIC: 'MATIC',
+        ETH_BASE: 'ETH', ALGO: 'ALGO', BNB: 'BNB', ETH_ARB: 'ETH',
+        AVAX: 'AVAX', TRX: 'TRX', XRP: 'XRP', HBAR: 'HBAR', EGLD: 'EGLD',
+        SUI: 'SUI', APT: 'APT', FIL: 'FIL', LTC: 'LTC', DOGE: 'DOGE',
+        ZEC: 'ZEC', XTZ: 'XTZ', STX: 'STX', VET: 'VET', ATOM: 'ATOM',
+        NEAR: 'NEAR', ICP: 'ICP'
+    };
+    let walletsTotal = 0;
+    for (const [walletKey, priceKey] of Object.entries(walletPriceMap)) {
+        walletsTotal += (walletTotals[walletKey] || 0) * (prices[priceKey] || 0);
+    }
 
     // Calculate staking value — use per-token totals if loaded (assets page), else snapshot USD
     let stakingTotal = 0;
@@ -7580,13 +7584,18 @@ function updateChartCategories() {
 // Helper functions to get current portfolio values for chart
 function getCurrentPortfolioTotal() {
     // Calculate current total from in-memory data (same logic as updateTotalPortfolioValue)
-    const adaWalletValue = walletTotals.ADA * (prices.ADA || 0);
-    const btcWalletValue = walletTotals.BTC * (prices.BTC || 0);
-    const ethWalletValue = walletTotals.ETH * (prices.ETH || 0);
-    const solWalletValue = walletTotals.SOL * (prices.SOL || 0);
-    const maticWalletValue = walletTotals.MATIC * (prices.MATIC || 0);
-    const baseEthWalletValue = walletTotals.ETH_BASE * (prices.ETH || 0);
-    const walletsTotal = adaWalletValue + btcWalletValue + ethWalletValue + solWalletValue + maticWalletValue + baseEthWalletValue;
+    const walletPriceMap = {
+        ADA: 'ADA', BTC: 'BTC', ETH: 'ETH', SOL: 'SOL', MATIC: 'MATIC',
+        ETH_BASE: 'ETH', ALGO: 'ALGO', BNB: 'BNB', ETH_ARB: 'ETH',
+        AVAX: 'AVAX', TRX: 'TRX', XRP: 'XRP', HBAR: 'HBAR', EGLD: 'EGLD',
+        SUI: 'SUI', APT: 'APT', FIL: 'FIL', LTC: 'LTC', DOGE: 'DOGE',
+        ZEC: 'ZEC', XTZ: 'XTZ', STX: 'STX', VET: 'VET', ATOM: 'ATOM',
+        NEAR: 'NEAR', ICP: 'ICP'
+    };
+    let walletsTotal = 0;
+    for (const [walletKey, priceKey] of Object.entries(walletPriceMap)) {
+        walletsTotal += (walletTotals[walletKey] || 0) * (prices[priceKey] || 0);
+    }
 
     let stakingTotal = 0;
     for (const [token, amount] of Object.entries(stakingTotals)) {
@@ -7608,13 +7617,18 @@ function getCurrentPortfolioTotal() {
 
 function getCurrentPortfolioBreakdown() {
     // Return breakdown for chart (matches snapshot format)
-    const adaWalletValue = walletTotals.ADA * (prices.ADA || 0);
-    const btcWalletValue = walletTotals.BTC * (prices.BTC || 0);
-    const ethWalletValue = walletTotals.ETH * (prices.ETH || 0);
-    const solWalletValue = walletTotals.SOL * (prices.SOL || 0);
-    const maticWalletValue = walletTotals.MATIC * (prices.MATIC || 0);
-    const baseEthWalletValue = walletTotals.ETH_BASE * (prices.ETH || 0);
-    const walletsTotal = adaWalletValue + btcWalletValue + ethWalletValue + solWalletValue + maticWalletValue + baseEthWalletValue;
+    const walletPriceMap = {
+        ADA: 'ADA', BTC: 'BTC', ETH: 'ETH', SOL: 'SOL', MATIC: 'MATIC',
+        ETH_BASE: 'ETH', ALGO: 'ALGO', BNB: 'BNB', ETH_ARB: 'ETH',
+        AVAX: 'AVAX', TRX: 'TRX', XRP: 'XRP', HBAR: 'HBAR', EGLD: 'EGLD',
+        SUI: 'SUI', APT: 'APT', FIL: 'FIL', LTC: 'LTC', DOGE: 'DOGE',
+        ZEC: 'ZEC', XTZ: 'XTZ', STX: 'STX', VET: 'VET', ATOM: 'ATOM',
+        NEAR: 'NEAR', ICP: 'ICP'
+    };
+    let walletsTotal = 0;
+    for (const [walletKey, priceKey] of Object.entries(walletPriceMap)) {
+        walletsTotal += (walletTotals[walletKey] || 0) * (prices[priceKey] || 0);
+    }
 
     let stakingTotal = 0;
     for (const [token, amount] of Object.entries(stakingTotals)) {
@@ -7774,18 +7788,18 @@ function getChartColors() {
 
     if (theme === 'cypherpunk1') {
         return { ...shared,
-            lineColor: '#ea00d9',
-            fillColor: 'rgba(234, 0, 217, 0.12)',
-            pointColor: '#ea00d9',
-            pointBorderColor: '#050510',
-            gridColor: 'rgba(113, 28, 145, 0.3)',
-            tickColor: '#80deea',
-            tooltipBg: '#12122a',
-            tooltipTitle: '#e0f7fa',
-            tooltipBody: '#0abdc6',
-            tooltipBorder: '#711c91',
-            crosshairColor: 'rgba(113, 28, 145, 0.5)',
-            gradientStops: ['#ff00ff', '#ea00d9', '#0abdc6', '#00ff9f']
+            lineColor: '#00d4ff',
+            fillColor: 'rgba(0, 212, 255, 0.12)',
+            pointColor: '#00d4ff',
+            pointBorderColor: '#030308',
+            gridColor: 'rgba(124, 58, 237, 0.2)',
+            tickColor: '#8ec8ff',
+            tooltipBg: '#0c0c24',
+            tooltipTitle: '#e0f0ff',
+            tooltipBody: '#00d4ff',
+            tooltipBorder: '#7c3aed',
+            crosshairColor: 'rgba(0, 212, 255, 0.4)',
+            gradientStops: ['#00d4ff', '#7c3aed', '#d946ef', '#00d4ff']
         };
     }
 
@@ -10010,6 +10024,15 @@ function getModalPriceChartColors(theme) {
             areaTop: 'rgba(0, 255, 65, 0.56)',
             areaBottom: 'rgba(0, 255, 65, 0.04)',
             lineColor: 'rgba(0, 255, 65, 1)'
+        },
+        'cypherpunk1': {
+            background: '#030308',
+            text: '#8ec8ff',
+            gridLines: '#1a0a3a',
+            border: '#7c3aed',
+            areaTop: 'rgba(0, 212, 255, 0.5)',
+            areaBottom: 'rgba(0, 212, 255, 0.04)',
+            lineColor: 'rgba(0, 212, 255, 1)'
         }
     };
     return themeColors[theme] || themeColors['dark-mode'];
@@ -10977,21 +11000,20 @@ function generateChartColors(count) {
             '#560bad'  // Deep purple
         ];
     } else if (theme === 'cypherpunk1') {
-        // Cypherpunk - Diverse neon cyberpunk palette
-        // Varied neons: magentas, cyans, purples, greens, blues for maximum contrast
+        // Cypherpunk - Neon cyan/magenta/violet palette
         baseColors = [
-            '#ea00d9', // Neon magenta (primary accent)
-            '#0abdc6', // Electric cyan (success accent)
-            '#7d00ff', // Neon purple
-            '#00ff9f', // Neon mint green
-            '#ff0080', // Hot pink
-            '#00e5ff', // Bright cyan
-            '#b300ff', // Purple
-            '#00ff41', // Matrix green
-            '#ff1493', // Deep pink
-            '#00ffff', // Aqua cyan
-            '#9d00ff', // Violet
-            '#39ff14', // Neon lime
+            '#00d4ff', // Electric cyan (primary)
+            '#d946ef', // Neon magenta
+            '#7c3aed', // Vibrant violet
+            '#06b6d4', // Deep cyan
+            '#a855f7', // Purple
+            '#ec4899', // Pink
+            '#0ea5e9', // Sky blue
+            '#8b5cf6', // Indigo
+            '#f472b6', // Light pink
+            '#22d3ee', // Bright teal
+            '#c084fc', // Lavender
+            '#818cf8', // Periwinkle
         ];
     } else {
         // Default - Balanced professional palette
@@ -11043,16 +11065,16 @@ function generateCategoryColors(count) {
             'Other': '#6c757d'                // Gray
         };
     } else if (theme === 'cypherpunk1') {
-        // Cypherpunk - Diverse neon colors for each category
+        // Cypherpunk - Neon cyan/magenta/violet category palette
         categoryColors = {
-            'Layer 1 (L1)': '#ea00d9',        // Neon magenta (primary accent)
-            'Decentralized Finance (DeFi)': '#0abdc6', // Electric cyan (success)
-            'Cardano Ecosystem': '#7d00ff',   // Neon purple
-            'Infrastructure': '#00ff9f',       // Neon mint green
-            'Stablecoins': '#00e5ff',         // Bright cyan
-            'Meme': '#ff0080',                // Hot pink
-            'Gaming': '#00ff41',              // Matrix green
-            'Other': '#808080'                // Gray
+            'Layer 1 (L1)': '#00d4ff',        // Electric cyan
+            'Decentralized Finance (DeFi)': '#d946ef', // Neon magenta
+            'Cardano Ecosystem': '#7c3aed',   // Vibrant violet
+            'Infrastructure': '#06b6d4',       // Deep cyan
+            'Stablecoins': '#a855f7',         // Purple
+            'Meme': '#ec4899',                // Pink
+            'Gaming': '#0ea5e9',              // Sky blue
+            'Other': '#64748b'                // Slate gray
         };
     } else {
         // Default - Balanced professional palette
@@ -11207,6 +11229,15 @@ function getPriceChartColors(theme) {
             areaTop: 'rgba(0, 255, 65, 0.56)',
             areaBottom: 'rgba(0, 255, 65, 0.04)',
             lineColor: 'rgba(0, 255, 65, 1)'
+        },
+        'cypherpunk1': {
+            background: '#030308',
+            text: '#8ec8ff',
+            gridLines: '#1a0a3a',
+            border: '#7c3aed',
+            areaTop: 'rgba(0, 212, 255, 0.5)',
+            areaBottom: 'rgba(0, 212, 255, 0.04)',
+            lineColor: 'rgba(0, 212, 255, 1)'
         }
     };
 

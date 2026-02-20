@@ -22,12 +22,12 @@ function getPriceChartThemeColors(theme) {
             areaBottom: 'rgba(76, 175, 80, 0.0)',
         },
         'cypherpunk1': {
-            background: '#050510',
-            text: '#80deea',
-            gridLines: 'rgba(113, 28, 145, 0.3)',
-            lineColor: '#ea00d9',
-            areaTop: 'rgba(234, 0, 217, 0.4)',
-            areaBottom: 'rgba(234, 0, 217, 0.0)',
+            background: '#030308',
+            text: '#8ec8ff',
+            gridLines: 'rgba(124, 58, 237, 0.2)',
+            lineColor: '#00d4ff',
+            areaTop: 'rgba(0, 212, 255, 0.4)',
+            areaBottom: 'rgba(0, 212, 255, 0.0)',
         },
         'ocean-depths': {
             background: '#0a1929',

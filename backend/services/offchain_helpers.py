@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 async def get_staking_value(prices: dict, user_id: int = None) -> float:
-    """Get total staking value from cached data."""
+    """Get total staking value from cached data (including pending rewards)."""
     try:
         from database import get_cache, get_all_wallets
 
@@ -30,7 +30,7 @@ async def get_staking_value(prices: dict, user_id: int = None) -> float:
                     cached = await get_cache(cache_key)
                 if not cached:
                     continue
-                # Cache structure: {protocols: {ProtocolName: {staked: [{token, amount}]}}}
+                # Cache structure: {protocols: {ProtocolName: {staked: [{token, amount}], reward_token, pending_rewards}}}
                 for protocol_name, protocol_data in (cached.get('protocols') or {}).items():
                     for stake in (protocol_data.get('staked') or []):
                         amount = float(stake.get('amount', 0))
@@ -38,6 +38,13 @@ async def get_staking_value(prices: dict, user_id: int = None) -> float:
                         price_data = prices.get(token, {})
                         price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
                         total_usd += amount * price
+                    # Include pending rewards (matches web dashboard logic)
+                    reward_token = protocol_data.get('reward_token')
+                    pending_rewards = float(protocol_data.get('pending_rewards', 0))
+                    if reward_token and pending_rewards > 0:
+                        price_data = prices.get(reward_token, {})
+                        price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
+                        total_usd += pending_rewards * price
 
         return total_usd
     except Exception as e:

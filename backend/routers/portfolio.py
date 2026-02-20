@@ -982,9 +982,15 @@ async def get_portfolio_totals(user_id: int = Depends(verify_session)):
     Staking and DeFi values are computed LIVE from cached positions (so
     the overview always reflects current data). Exchange and NFT values
     come from wallet_daily_balances (updated by offchain collector).
+    Tracked tokens and custom tokens are computed live from DB + prices.
     """
-    from database import get_unified_daily_totals
+    from database import get_unified_daily_totals, get_all_custom_tokens
     from services.offchain_helpers import get_staking_value, get_defi_value
+
+    cache_key = f"portfolio_totals_{user_id}"
+    cached = await get_cache(cache_key, user_id=user_id)
+    if cached:
+        return cached
 
     rows = await get_unified_daily_totals(user_id)
     latest = rows[-1] if rows else {}
@@ -1007,14 +1013,82 @@ async def get_portfolio_totals(user_id: int = Depends(verify_session)):
     if defi_usd == 0:
         defi_usd = float(latest.get('defi_value', 0) or 0)
 
-    return {
+    # Tracked tokens: compute from tracked native assets × current prices
+    tracked_tokens_usd = 0.0
+    try:
+        tracked_tokens = await get_tracked_tokens()
+        tracked_ids = {t['asset_id'] for t in tracked_tokens}
+        if tracked_ids:
+            # Get all native assets from all wallets for this user
+            wallets = await get_all_wallets(user_id=user_id)
+            wallet_assets = await asyncio.gather(
+                *[get_wallet_assets(w['id']) for w in wallets]
+            )
+            all_assets = []
+            for wallet, assets in zip(wallets, wallet_assets):
+                for asset in assets:
+                    asset['blockchain'] = wallet['blockchain']
+                    all_assets.append(asset)
+
+            # Sum tracked, non-DeFi token values
+            asset_totals = {}
+            for asset in all_assets:
+                aid = asset.get('asset_id', '')
+                if aid not in tracked_ids:
+                    continue
+                if aid not in asset_totals:
+                    asset_totals[aid] = {
+                        'quantity_raw': 0,
+                        'decimals': int(asset.get('decimals') or 0),
+                        'ticker': asset.get('ticker'),
+                        'policy_id': asset.get('policy_id', ''),
+                    }
+                asset_totals[aid]['quantity_raw'] += float(asset.get('quantity') or 0)
+
+            for aid, data in asset_totals.items():
+                decimals = data['decimals']
+                human_qty = data['quantity_raw'] / (10 ** decimals) if decimals > 0 else data['quantity_raw']
+                ticker = (data.get('ticker') or '').upper()
+                if not ticker:
+                    continue
+                price_info = prices.get(ticker, {})
+                price = price_info.get('usd', 0) if isinstance(price_info, dict) else 0
+                if price > 0:
+                    policy_id = data.get('policy_id', '')
+                    is_defi = policy_id in DEFI_PROTOCOLS
+                    if not is_defi:
+                        tracked_tokens_usd += human_qty * price
+    except Exception as e:
+        logging.debug(f"Could not compute tracked tokens value: {e}")
+
+    # Custom tokens: compute from user's custom token entries × current prices
+    custom_tokens_usd = 0.0
+    try:
+        custom_tokens = await get_all_custom_tokens(user_id=user_id)
+        for token in custom_tokens:
+            if token.get('include_in_total', 1) != 1:
+                continue
+            ticker = (token.get('ticker') or '').upper()
+            quantity = float(token.get('quantity', 0))
+            if ticker and ticker in prices:
+                price = prices[ticker].get('usd', 0) if isinstance(prices[ticker], dict) else 0
+                custom_tokens_usd += quantity * price
+            elif token.get('price_usd'):
+                custom_tokens_usd += quantity * float(token['price_usd'])
+    except Exception as e:
+        logging.debug(f"Could not compute custom tokens value: {e}")
+
+    result = {
         "staking_usd": staking_usd,
         "defi_usd": defi_usd,
         "exchange_usd": float(latest.get('exchange_value', 0) or 0),
         "nft_usd": float(latest.get('nft_value', 0) or 0),
-        "tracked_tokens_usd": 0,
+        "tracked_tokens_usd": tracked_tokens_usd,
+        "custom_tokens_usd": custom_tokens_usd,
         "snapshot_time": latest.get('date')
     }
+    await set_cache(cache_key, result, ttl_seconds=CACHE_TTL_HOT, user_id=user_id)
+    return result
 
 
 @router.get("/chart/unified")

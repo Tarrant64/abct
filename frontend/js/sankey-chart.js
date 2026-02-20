@@ -895,7 +895,7 @@ class PortfolioSankey {
     _getAccentColor() {
         const theme = this._getTheme();
         if (theme === 'light') return '#00b894';
-        if (theme === 'cypherpunk1') return '#0abdc6';
+        if (theme === 'cypherpunk1') return '#00d4ff';
         if (theme === 'ocean-depths') return '#00d2ff';
         if (theme === 'sunset-horizon') return '#ff6b6b';
         return '#00d26a'; // dark-mode default
@@ -932,7 +932,7 @@ class PortfolioSankey {
 
             case 'cypherpunk1':
                 // Subtle neon cyan tint for cyberpunk cohesion
-                return this._blendColors(baseColor, '#0abdc6', 0.12);
+                return this._blendColors(baseColor, '#00d4ff', 0.12);
 
             case 'ocean-depths':
                 // Subtle deep blue tint
