@@ -822,6 +822,12 @@ async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "service": "ABCT"}
 
+@app.get("/api/config/public")
+async def public_config():
+    """Public config values needed by frontend (no auth required)."""
+    from config import LOGOKIT_API_KEY
+    return {"logokit_token": LOGOKIT_API_KEY}
+
 @app.get("/api/startup-status")
 async def get_startup_status():
     """Get startup status for background tasks."""

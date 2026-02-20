@@ -168,6 +168,8 @@ test-abct-backup*.json
 deploy.sh
 run.sh
 stop.sh
+*-unraid.sh
+install-unraid.sh
 
 # Test scripts (local only)
 test_*.sh
@@ -194,6 +196,26 @@ RELEASE_NOTES_*.md
 GITHUB_RELEASE_*.md
 *_FEATURE_COMPLETE.md
 POST_DEPLOYMENT*.md
+*_UPDATE.md
+*_PLAN.md
+*_OPTIONS.md
+DEPLOYMENT_*.md
+*_COMPLETE.md
+*_TODO.md
+*_QUICK_REFERENCE.md
+*_QUICK_START.md
+*_GUIDE.md
+*_EXAMPLES.md
+*_RESEARCH.md
+*_THROTTLING.md
+
+# Security audit implementation docs (keep local only)
+sec/*.md
+!sec/.gitignore
+
+# Backend dev docs (keep local only)
+backend/DEMO_MODE*.md
+backend/MULTIUSER*.md
 
 # Planning and status documents (root level)
 DASHV2_STATUS.md

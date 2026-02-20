@@ -245,7 +245,7 @@ curl http://your-server:8081/api/status | jq '.apis'
 2. **On New Docker Server:**
    ```bash
    # SSH to server
-   ssh root@YOUR_SERVER_IP
+   ssh root@<YOUR_SERVER_IP>
 
    # Copy API keys from password manager
    # Edit docker run command with -e flags
@@ -260,7 +260,7 @@ curl http://your-server:8081/api/status | jq '.apis'
 
 3. **Verify in Web UI:**
    ```
-   http://YOUR_SERVER_IP:8081/apis.html
+   http://<YOUR_SERVER_IP>:8081/apis.html
    # Check all APIs show green checkmarks
    ```
 

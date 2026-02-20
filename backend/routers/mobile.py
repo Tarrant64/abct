@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Import existing routers and services
 from routers import portfolio, wallets, exchanges, defi, nfts
 from services.pricing import pricing_service
+from services.logokit_service import logokit_service
 from services.cardano import cardano_service
 from database import (
     get_all_wallets,
@@ -746,7 +747,7 @@ async def get_mobile_wallet_detail(
                 "price_native": round(asset.get('price_native', 0), 8) if asset.get('price_native') else None,
                 "price_usd": round(asset.get('price_usd', 0), 6) if asset.get('price_usd') else None,
                 "value_usd": round(asset.get('total_value_usd', 0), 2),
-                "logo_url": f"https://img.logokit.com/crypto/{asset.get('ticker', 'UNKNOWN')}?size=32"
+                "logo_url": logokit_service.get_crypto_logo_url(asset.get('ticker', 'UNKNOWN'), size=32)
             })
 
     return {
@@ -856,7 +857,7 @@ async def get_mobile_exchange_detail(
             "usd_value": round(asset.get('usd_value', 0), 2),
             "usd_price": round(asset.get('price', 0), 6),
             "change_24h": 0,  # Not available from exchanges
-            "logo_url": f"https://img.logokit.com/crypto/{asset.get('currency', 'UNKNOWN')}?size=32"
+            "logo_url": logokit_service.get_crypto_logo_url(asset.get('currency', 'UNKNOWN'), size=32)
         })
 
     return {

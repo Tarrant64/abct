@@ -43,7 +43,7 @@ ALPHAVANTAGE_API_KEY = os.getenv("ALPHAVANTAGE_API_KEY", "")
 CHARLI3_API_KEY = os.getenv("CHARLI3_API_KEY", "")
 
 # LogoKit API Configuration
-LOGOKIT_API_KEY = os.getenv('LOGOKIT_API_KEY', 'LOGOKIT_KEY_REMOVED')
+LOGOKIT_API_KEY = os.getenv('LOGOKIT_API_KEY', '')
 LOGOKIT_BASE_URL = 'https://img.logokit.com'
 
 # Coinbase CDP API Key (loaded from JSON file)

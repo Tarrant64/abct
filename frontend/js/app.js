@@ -93,6 +93,25 @@ function setSafeText(element, text) {
 // LOGOKIT API INTEGRATION
 // ============================================================================
 
+// Cached LogoKit token — loaded from backend /api/config/public on init
+let _logokitToken = '';
+
+/**
+ * Fetch the LogoKit publishable token from the backend.
+ * Called once on page load; result is cached in _logokitToken.
+ */
+async function initLogokitToken() {
+    try {
+        const resp = await fetch(`${API_BASE}/api/config/public`);
+        if (resp.ok) {
+            const data = await resp.json();
+            _logokitToken = data.logokit_token || '';
+        }
+    } catch (e) {
+        // Fail silently — logos will load without token (may hit rate limits)
+    }
+}
+
 /**
  * Get LogoKit URL for a token symbol (client-side helper).
  *
@@ -101,8 +120,9 @@ function setSafeText(element, text) {
  * @returns {string} LogoKit CDN URL
  */
 function getLogoKitUrl(symbol, size = 64) {
-    const apiKey = 'LOGOKIT_KEY_REMOVED'; // Publishable token (safe for frontend)
-    return `https://img.logokit.com/crypto/${symbol.toUpperCase()}?token=${apiKey}${size ? `&size=${size}` : ''}`;
+    const tokenParam = _logokitToken ? `?token=${_logokitToken}` : '';
+    const sizeParam = size ? `${tokenParam ? '&' : '?'}size=${size}` : '';
+    return `https://img.logokit.com/crypto/${symbol.toUpperCase()}${tokenParam}${sizeParam}`;
 }
 
 /**
@@ -1635,7 +1655,7 @@ function renderWalletsGrouped(cardanoStakeGroups, bitcoinWallets, ethereumWallet
             <div class="blockchain-section cardano collapsed" data-chain="cardano">
                 <div class="blockchain-section-header">
                     <div class="blockchain-info">
-                        <img src="https://img.logokit.com/crypto/ADA?token=LOGOKIT_KEY_REMOVED&size=24" alt="Cardano" class="blockchain-logo-small" onerror="this.style.display='none'">
+                        <img src="${getLogoKitUrl('ADA', 24)}" alt="Cardano" class="blockchain-logo-small" onerror="this.style.display='none'">
                         <span class="blockchain-name">Cardano</span>
                         <span class="blockchain-stats">${cardanoStakeGroups.length} stake key${cardanoStakeGroups.length !== 1 ? 's' : ''} · ${totalCardanoAssets} asset${totalCardanoAssets !== 1 ? 's' : ''}</span>
                     </div>
@@ -1722,22 +1742,22 @@ function renderWalletsGrouped(cardanoStakeGroups, bitcoinWallets, ethereumWallet
 
         // Blockchain logo mapping
         const logoMap = {
-            'bitcoin': 'https://img.logokit.com/crypto/BTC?token=LOGOKIT_KEY_REMOVED&size=24',
-            'ethereum': 'https://img.logokit.com/crypto/ETH?token=LOGOKIT_KEY_REMOVED&size=24',
-            'solana': 'https://img.logokit.com/crypto/SOL?token=LOGOKIT_KEY_REMOVED&size=24',
-            'polygon': 'https://img.logokit.com/crypto/MATIC?token=LOGOKIT_KEY_REMOVED&size=24',
+            'bitcoin': getLogoKitUrl('BTC', 24),
+            'ethereum': getLogoKitUrl('ETH', 24),
+            'solana': getLogoKitUrl('SOL', 24),
+            'polygon': getLogoKitUrl('MATIC', 24),
             'base': 'https://avatars.githubusercontent.com/u/108554348?s=24',
-            'algorand': 'https://img.logokit.com/crypto/ALGO?token=LOGOKIT_KEY_REMOVED&size=24',
-            'bsc': 'https://img.logokit.com/crypto/BNB?token=LOGOKIT_KEY_REMOVED&size=24',
-            'arbitrum': 'https://img.logokit.com/crypto/ARB?token=LOGOKIT_KEY_REMOVED&size=24',
-            'avalanche': 'https://img.logokit.com/crypto/AVAX?token=LOGOKIT_KEY_REMOVED&size=24',
-            'tron': 'https://img.logokit.com/crypto/TRX?token=LOGOKIT_KEY_REMOVED&size=24',
-            'xrp': 'https://img.logokit.com/crypto/XRP?token=LOGOKIT_KEY_REMOVED&size=24',
-            'hedera': 'https://img.logokit.com/crypto/HBAR?token=LOGOKIT_KEY_REMOVED&size=24',
-            'multiversx': 'https://img.logokit.com/crypto/EGLD?token=LOGOKIT_KEY_REMOVED&size=24',
-            'sui': 'https://img.logokit.com/crypto/SUI?token=LOGOKIT_KEY_REMOVED&size=24',
-            'aptos': 'https://img.logokit.com/crypto/APT?token=LOGOKIT_KEY_REMOVED&size=24',
-            'filecoin': 'https://img.logokit.com/crypto/FIL?token=LOGOKIT_KEY_REMOVED&size=24'
+            'algorand': getLogoKitUrl('ALGO', 24),
+            'bsc': getLogoKitUrl('BNB', 24),
+            'arbitrum': getLogoKitUrl('ARB', 24),
+            'avalanche': getLogoKitUrl('AVAX', 24),
+            'tron': getLogoKitUrl('TRX', 24),
+            'xrp': getLogoKitUrl('XRP', 24),
+            'hedera': getLogoKitUrl('HBAR', 24),
+            'multiversx': getLogoKitUrl('EGLD', 24),
+            'sui': getLogoKitUrl('SUI', 24),
+            'aptos': getLogoKitUrl('APT', 24),
+            'filecoin': getLogoKitUrl('FIL', 24)
         };
         const logoUrl = logoMap[blockchain] || '';
 
@@ -3824,7 +3844,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
             html += `
                 <div class="defi-gov-card staked">
                     <div class="card-header">
-                        <span class="token-logo-wrap"><img src="https://img.logokit.com/crypto/ADA?token=LOGOKIT_KEY_REMOVED&size=32" alt="ADA" class="token-logo-staking" onerror="this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>ADA</span>'"></span>
+                        <span class="token-logo-wrap"><img src="${getLogoKitUrl('ADA', 32)}" alt="ADA" class="token-logo-staking" onerror="this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>ADA</span>'"></span>
                         <span class="protocol-name"><span class="chain-badge cardano" title="Cardano">ADA</span> ADA Delegation</span>
                         <span class="liquid-badge">\uD83D\uDCA7 Liquid</span>
                     </div>
@@ -3886,7 +3906,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
                 const chainBadge = getGovChainBadge(stakingChain);
 
                 // Use backend logo URL or fallback to LogoKit
-                const tokenLogoUrl = data.logo_url || `https://img.logokit.com/crypto/${token}?token=LOGOKIT_KEY_REMOVED&size=32`;
+                const tokenLogoUrl = data.logo_url || getLogoKitUrl(token, 32);
 
                 html += `
                     <div class="defi-gov-card staked">
@@ -3915,7 +3935,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
             totalStakedValue += usdValue;
             stakedCount++;
 
-            const tokenLogoUrl = `https://img.logokit.com/crypto/${displayName}?token=LOGOKIT_KEY_REMOVED&size=32`;
+            const tokenLogoUrl = getLogoKitUrl(displayName, 32);
             const lsChain = pos.blockchain || 'cardano';
             const chainBadge = getGovChainBadge(lsChain);
             const formattedQty = (pos.quantity || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4});
@@ -3939,7 +3959,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
             totalStakedValue += usdValue;
             stakedCount++;
 
-            const tokenLogoUrl = `https://img.logokit.com/crypto/${staked.currency}?token=LOGOKIT_KEY_REMOVED&size=32`;
+            const tokenLogoUrl = getLogoKitUrl(staked.currency, 32);
             const apyBadge = staked.apy > 0
                 ? `<span class="apy-badge">${(staked.apy * 100).toFixed(2)}% APY</span>` : '';
 
@@ -3982,7 +4002,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
             // Loading state — show placeholder card with spinner
             if (protocolData.status === 'loading') {
                 const fallbackToken = protocolData.reward_token || protocol;
-                const tokenLogoUrl = `https://img.logokit.com/crypto/${fallbackToken}?token=LOGOKIT_KEY_REMOVED&size=32`;
+                const tokenLogoUrl = getLogoKitUrl(fallbackToken, 32);
                 html += `
                     <div class="defi-gov-card staked depin-loading" id="depin-card-${protocol}">
                         <div class="card-header">
@@ -3999,7 +4019,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
             // Timeout/error state — show placeholder card with retry
             if (protocolData.status === 'timeout') {
                 const fallbackToken = protocolData.reward_token || protocol;
-                const tokenLogoUrl = `https://img.logokit.com/crypto/${fallbackToken}?token=LOGOKIT_KEY_REMOVED&size=32`;
+                const tokenLogoUrl = getLogoKitUrl(fallbackToken, 32);
                 html += `
                     <div class="defi-gov-card staked depin-timeout" id="depin-card-${protocol}">
                         <div class="card-header">
@@ -4017,7 +4037,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
             // No staking found — show card with refresh option
             if (protocolData.status === 'no_staking') {
                 const fallbackToken = protocolData.reward_token || protocol;
-                const tokenLogoUrl = `https://img.logokit.com/crypto/${fallbackToken}?token=LOGOKIT_KEY_REMOVED&size=32`;
+                const tokenLogoUrl = getLogoKitUrl(fallbackToken, 32);
                 html += `
                     <div class="defi-gov-card staked depin-no-data" id="depin-card-${protocol}">
                         <div class="card-header">
@@ -4052,7 +4072,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
                     </div>`;
                 }
 
-                const tokenLogoUrl = data.logo_url || `https://img.logokit.com/crypto/${token}?token=LOGOKIT_KEY_REMOVED&size=32`;
+                const tokenLogoUrl = data.logo_url || getLogoKitUrl(token, 32);
 
                 html += `
                     <div class="defi-gov-card staked" id="depin-card-${protocol}">
@@ -4181,7 +4201,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
             const breakdown = breakdownParts.join(' · ');
 
             // Get token logo with fallback
-            const stableLogoUrl = `https://img.logokit.com/crypto/${symbol}?token=LOGOKIT_KEY_REMOVED&size=32`;
+            const stableLogoUrl = getLogoKitUrl(symbol, 32);
 
             html += `
                 <div class="defi-gov-line stable-line">
@@ -4220,7 +4240,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
                     .join('');
 
                 // Get token logo with fallback
-                const hiddenStableLogoUrl = `https://img.logokit.com/crypto/${symbol}?token=LOGOKIT_KEY_REMOVED&size=32`;
+                const hiddenStableLogoUrl = getLogoKitUrl(symbol, 32);
 
                 html += `
                     <div class="defi-gov-line stable-line hidden-stable">
@@ -4378,7 +4398,7 @@ function renderGovernanceContent(defiData, allStaking = {}) {
             governanceTokenCount++;
 
             const govInfo = GOVERNANCE_LINKS[t.token];
-            const tokenLogoUrl = t.logo_url || `https://img.logokit.com/crypto/${t.token}?token=LOGOKIT_KEY_REMOVED&size=32`;
+            const tokenLogoUrl = t.logo_url || getLogoKitUrl(t.token, 32);
             const totalFormatted = t.total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
             // Show breakdown if both wallet and staked exist
@@ -4578,7 +4598,7 @@ async function refreshDepinCard(protocol, btn) {
             const tokenPrice = prices[token] || 0;
             const usdValue = totalAmount * tokenPrice;
             const chainBadge = getGovChainBadge(blockchain || 'cardano');
-            const tokenLogoUrl = logoUrl || `https://img.logokit.com/crypto/${token}?token=LOGOKIT_KEY_REMOVED&size=32`;
+            const tokenLogoUrl = logoUrl || getLogoKitUrl(token, 32);
             const refreshBtnHtml = `<button class="card-refresh-btn" data-protocol="${protocol}" title="Refresh ${protocol}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>`;
 
             let pendingHtml = '';
@@ -4865,7 +4885,7 @@ function renderExchangeAssets(assets) {
         const holdInfo = held > 0 ? `<span class="hold-indicator" title="In open orders">(${formatBalance(held)} in orders)</span>` : '';
 
         // Get token logo with fallback
-        const tokenLogoUrl = `https://img.logokit.com/crypto/${asset.currency}?token=LOGOKIT_KEY_REMOVED&size=32`;
+        const tokenLogoUrl = getLogoKitUrl(asset.currency, 32);
 
         html += `
             <div class="exchange-asset-item">
@@ -9582,6 +9602,9 @@ function initGlobalSearch() {
 
 // Initial load
 document.addEventListener('DOMContentLoaded', async () => {
+    // Load LogoKit token from backend (non-blocking, must be early)
+    initLogokitToken();
+
     // Load saved theme preference
     loadSavedTheme();
 
@@ -10991,7 +11014,7 @@ function renderCoinLegend(coins, colors) {
         // Use logo_url from backend data, or fallback to LogoKit for "Other" case
         const tokenLogoUrl = coin.logo_url || (
             coin.symbol !== 'Other'
-                ? `https://img.logokit.com/crypto/${coin.symbol}?token=LOGOKIT_KEY_REMOVED&size=32`
+                ? getLogoKitUrl(coin.symbol, 32)
                 : ''
         );
 
