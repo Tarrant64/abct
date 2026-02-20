@@ -433,6 +433,7 @@ async def get_mobile_portfolio_summary(
                 "native_tokens_value_usd": round(native_tokens_value, 2),
                 "native_amount": round(native_amount, 8),
                 "native_price_usd": round(price_usd, 2),
+                "price_change_24h": round(price_data.get('usd_24h_change', 0) or 0, 2),
                 "wallet_count": chain_data.get('wallet_count', 0),
                 "percentage": 0  # Calculated later
             })
@@ -925,7 +926,8 @@ async def get_mobile_defi_staking(user_id: int = Depends(verify_session)):
                         "rewards_lifetime": round(rewards_ada, 2),
                         "rewards_usd": round(rewards_usd, 2),
                         "apy": 4.5,  # Approximate Cardano APY
-                        "active": True
+                        "active": True,
+                        "logo_url": logokit_service.get_crypto_logo_url("ADA", size=32)
                     })
         except Exception as e:
             logger.warning(f"Could not get staking info for wallet {wallet['id']}: {e}")
@@ -957,7 +959,8 @@ async def get_mobile_defi_staking(user_id: int = Depends(verify_session)):
                     "rewards_amount": 0,  # Not available in DeFi summary
                     "rewards_usd": 0,
                     "apy": 0,  # Not available in DeFi summary
-                    "active": True
+                    "active": True,
+                    "logo_url": logokit_service.get_crypto_logo_url(token.upper(), size=32)
                 })
 
     return {
