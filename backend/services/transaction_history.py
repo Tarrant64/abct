@@ -38,6 +38,23 @@ from services.http_client import get_client
 logger = logging.getLogger(__name__)
 
 
+async def _syslog(level: str, msg: str, exc: Exception = None, **extra):
+    """Write to the system logs page (LoggingService) at the given level."""
+    try:
+        from services.logging_service import get_logging_service
+        svc = get_logging_service()
+        if level == "error":
+            await svc.error("transactions", msg, exc_info=exc, **extra)
+        elif level == "warning":
+            await svc.warning("transactions", msg, exc_info=exc, **extra)
+        elif level == "info":
+            await svc.info("transactions", msg, **extra)
+        else:
+            await svc.debug("transactions", msg, **extra)
+    except Exception:
+        pass  # Never let logging break the flow
+
+
 class TransactionHistoryService:
     """Fetch and normalize transactions from all blockchains."""
 
@@ -111,6 +128,8 @@ class TransactionHistoryService:
                 user_id, chain=blockchain, min_time=min_time, limit=5000
             )
             if not events:
+                chain_label = blockchain or "all chains"
+                await _syslog("info", f"V2 events query: 0 events for {chain_label} (days={days})")
                 return []
 
             # Group events by tx_id, take the primary event per tx
@@ -159,10 +178,11 @@ class TransactionHistoryService:
                     'wallet_name': None,
                 })
 
-            logger.info(f"V2 engine: converted {len(transactions)} events to transaction format")
+            await _syslog("info", f"V2 events: converted {len(transactions)} events "
+                          f"({len(events)} raw) to transaction format")
             return transactions
         except Exception as e:
-            logger.debug(f"V2 engine events query failed: {e}")
+            await _syslog("error", f"V2 events query failed: {e}", exc=e)
             return []
 
     async def get_transaction_bounds(self, user_id: int, wallet_id: int, blockchain: str) -> Optional[dict]:
@@ -229,6 +249,8 @@ class TransactionHistoryService:
             Dict with counts of transactions fetched per blockchain
         """
         # Try V2 engine indexing to populate engine_events
+        chain_label = blockchain or "all chains"
+        await _syslog("info", f"Transaction fetch started: {chain_label}, days={days}")
         try:
             from engine.orchestrator import backfill_orchestrator
             from engine.models import BackfillRequest, ChainId, WorkDomain
@@ -241,6 +263,9 @@ class TransactionHistoryService:
             if wallet_ids:
                 selected = [w for w in selected if w['id'] in wallet_ids]
 
+            if not selected:
+                await _syslog("warning", f"No wallets found for {chain_label}")
+
             chains = set()
             for w in selected:
                 c = w.get('blockchain', '').lower()
@@ -250,6 +275,8 @@ class TransactionHistoryService:
                     pass
 
             if chains:
+                await _syslog("info", f"V2 engine: starting backfill for {[c.value for c in chains]} "
+                              f"({len(selected)} wallets)")
                 request = BackfillRequest(
                     chains=list(chains),
                     wallet_ids=wallet_ids,
@@ -257,9 +284,16 @@ class TransactionHistoryService:
                 )
                 backfill_id = await backfill_orchestrator.plan_backfill(user_id, request)
                 await backfill_orchestrator.run_backfill(backfill_id)
-                logger.info(f"V2 engine indexing triggered for transaction fetch: backfill={backfill_id}")
+
+                # Report V2 results
+                event_count = await engine_db.get_event_count(user_id, blockchain)
+                await _syslog("info", f"V2 engine: backfill {backfill_id} complete, "
+                              f"{event_count} engine_events for {chain_label}")
+            else:
+                await _syslog("warning", f"V2 engine: no valid chains resolved from wallets")
         except Exception as e:
-            logger.debug(f"V2 engine indexing for transactions skipped: {e}")
+            await _syslog("error", f"V2 engine failed for {chain_label}: {e}", exc=e)
+            logger.error(f"V2 engine indexing for transactions failed: {e}")
 
         start_time = datetime.utcnow() - timedelta(days=days)
 
@@ -334,9 +368,11 @@ class TransactionHistoryService:
                         logger.info(f"No new transactions found for {chain} wallet")
 
             except Exception as e:
+                await _syslog("error", f"V1 fetch failed for {chain}: {e}", exc=e)
                 logger.error(f"Error fetching {chain} transactions: {e}")
                 continue
 
+        await _syslog("info", f"Transaction fetch complete: {counts or 'no new txs'}")
         return counts
 
     async def _fetch_blockchain_transactions(
@@ -376,10 +412,10 @@ class TransactionHistoryService:
             elif blockchain == 'solana':
                 return await self._fetch_solana_transactions(address, limit)
             else:
-                logger.warning(f"Unsupported blockchain: {blockchain}")
+                await _syslog("warning", f"V1: unsupported blockchain '{blockchain}'")
                 return []
         except Exception as e:
-            logger.error(f"Error fetching {blockchain} transactions: {e}")
+            await _syslog("error", f"V1 API call failed for {blockchain}: {e}", exc=e)
             return []
 
     async def _fetch_cardano_transactions(self, address: str, limit: int) -> List[dict]:

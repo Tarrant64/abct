@@ -20,6 +20,23 @@ from services.api_key_manager import APIKeyManager
 
 logger = logging.getLogger(__name__)
 
+
+async def _syslog(level: str, msg: str, **extra):
+    """Write to the system logs page (LoggingService)."""
+    try:
+        from services.logging_service import get_logging_service
+        svc = get_logging_service()
+        if level == "error":
+            await svc.error("evm-indexer", msg, **extra)
+        elif level == "warning":
+            await svc.warning("evm-indexer", msg, **extra)
+        elif level == "info":
+            await svc.info("evm-indexer", msg, **extra)
+        else:
+            await svc.debug("evm-indexer", msg, **extra)
+    except Exception:
+        pass
+
 # Chain-specific configurations matching existing etherscan_service.py
 CHAIN_CONFIGS: Dict[str, Dict] = {
     "ethereum": {
@@ -53,19 +70,28 @@ class EvmIndexer(TxIndexer):
                     cursor_end: Optional[str] = None) -> List[TxIndexEntry]:
         config = CHAIN_CONFIGS.get(self.chain.value)
         if not config:
-            logger.error(f"No EVM config for chain {self.chain.value}")
+            await _syslog("error", f"No EVM config for chain {self.chain.value}")
             return []
 
         api_key = await _etherscan_keys.get_api_key()
         if not api_key:
-            logger.warning(f"No Etherscan API key for {self.chain.value} indexing")
+            await _syslog("error", f"No Etherscan API key configured — "
+                          f"cannot index {self.chain.value} transactions")
             return []
 
         client = get_client(config["client_name"], timeout=30.0)
         entries: List[TxIndexEntry] = []
 
-        start_block = int(cursor_start) if cursor_start else 0
-        end_block = int(cursor_end) if cursor_end else 99999999
+        # cursor_start/end may be block numbers (int-parseable) or ISO date strings
+        # from incremental backfills. For EVM we need block numbers; default to full range.
+        try:
+            start_block = int(cursor_start) if cursor_start else 0
+        except (ValueError, TypeError):
+            start_block = 0  # ISO date string from orchestrator — fetch all blocks
+        try:
+            end_block = int(cursor_end) if cursor_end else 99999999
+        except (ValueError, TypeError):
+            end_block = 99999999
 
         # Collect raw Etherscan data for pre-hydration
         normal_txs: Dict[str, Dict] = {}   # tx_hash -> Etherscan txlist dict
@@ -90,11 +116,17 @@ class EvmIndexer(TxIndexer):
                 client, "GET", config["base_url"], params=params,
             )
             if resp.status_code != 200:
+                await _syslog("error", f"Etherscan txlist API returned {resp.status_code} "
+                              f"for {self.chain.value}")
                 break
 
             data = resp.json()
             result = data.get("result", [])
-            if not isinstance(result, list) or not result:
+            # Etherscan returns error string in "result" on failure
+            if isinstance(result, str):
+                await _syslog("warning", f"Etherscan txlist: {data.get('message', '')} — {result}")
+                break
+            if not result:
                 break
 
             for tx in result:
@@ -133,11 +165,15 @@ class EvmIndexer(TxIndexer):
                 client, "GET", config["base_url"], params=params,
             )
             if resp.status_code != 200:
+                await _syslog("warning", f"Etherscan txlistinternal API returned {resp.status_code} "
+                              f"for {self.chain.value}")
                 break
 
             data = resp.json()
             result = data.get("result", [])
-            if not isinstance(result, list) or not result:
+            if isinstance(result, str):
+                break  # Error string, not a list — skip silently (internal txs are optional)
+            if not result:
                 break
 
             seen_txids = {e.tx_id for e in entries}
@@ -181,11 +217,16 @@ class EvmIndexer(TxIndexer):
                 client, "GET", config["base_url"], params=params,
             )
             if resp.status_code != 200:
+                await _syslog("warning", f"Etherscan tokentx API returned {resp.status_code} "
+                              f"for {self.chain.value}")
                 break
 
             data = resp.json()
             result = data.get("result", [])
-            if not isinstance(result, list) or not result:
+            if isinstance(result, str):
+                await _syslog("warning", f"Etherscan tokentx: {data.get('message', '')} — {result}")
+                break
+            if not result:
                 break
 
             seen_txids = {e.tx_id for e in entries}
@@ -213,8 +254,10 @@ class EvmIndexer(TxIndexer):
         # ── Pre-hydrate: store Etherscan data as engine_tx_raw ───────────
         await self._pre_hydrate(normal_txs, token_txs)
 
-        logger.info(f"EVM({self.chain.value}) indexed {len(entries)} txs for "
-                     f"{account_id[:12]}... (pre-hydrated {len(normal_txs | token_txs)} tx_raw)")
+        hydrated_count = len(set(normal_txs.keys()) | set(token_txs.keys()))
+        await _syslog("info", f"EVM({self.chain.value}) indexed {len(entries)} txs for "
+                       f"{account_id[:12]}... (pre-hydrated {hydrated_count} tx_raw, "
+                       f"{len(normal_txs)} normal, {len(token_txs)} token)")
         return entries
 
     # ------------------------------------------------------------------

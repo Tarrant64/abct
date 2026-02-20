@@ -161,6 +161,17 @@ class WorkUnitScheduler:
                 error_message=str(e)[:500]
             )
             logger.error(f"Work unit {wu_id} failed with {provider.name}: {e}")
+            # Surface permanent failures to system logs
+            if new_status == 'failed':
+                try:
+                    from services.logging_service import get_logging_service
+                    svc = get_logging_service()
+                    domain = work_unit.get('domain', '?')
+                    chain = work_unit.get('chain', '?')
+                    await svc.error("engine", f"Work unit permanently failed: "
+                                    f"{domain}/{chain} — {str(e)[:200]}")
+                except Exception:
+                    pass
             return False
 
     async def run_backfill(self, backfill_id: int, max_concurrent: int = 5):

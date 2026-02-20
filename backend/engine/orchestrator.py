@@ -52,6 +52,23 @@ from engine.enrichment.price_enricher import price_enricher
 logger = logging.getLogger(__name__)
 
 
+async def _syslog(level: str, msg: str, exc: Exception = None, **extra):
+    """Write to the system logs page (LoggingService)."""
+    try:
+        from services.logging_service import get_logging_service
+        svc = get_logging_service()
+        if level == "error":
+            await svc.error("engine", msg, exc_info=exc, **extra)
+        elif level == "warning":
+            await svc.warning("engine", msg, exc_info=exc, **extra)
+        elif level == "info":
+            await svc.info("engine", msg, **extra)
+        else:
+            await svc.debug("engine", msg, **extra)
+    except Exception:
+        pass
+
+
 class BackfillOrchestrator:
     """Coordinates the full ingestion pipeline."""
 
@@ -243,6 +260,7 @@ class BackfillOrchestrator:
             logger.info(f"Backfill {backfill_id}: created {len(work_units)} initial work units")
 
         except Exception as e:
+            await _syslog("error", f"Backfill {backfill_id} planning failed: {e}", exc=e)
             logger.error(f"Backfill {backfill_id} planning failed: {e}")
             await engine_db.update_backfill(
                 backfill_id, status='failed', error_message=str(e)[:500]
@@ -272,8 +290,15 @@ class BackfillOrchestrator:
 
             # Phase 1: Run index work units
             if "index" in domains:
+                await _syslog("info", f"Backfill {backfill_id}: starting INDEX phase (chains={chains})")
                 logger.info(f"Backfill {backfill_id}: starting INDEX phase")
                 await self.scheduler.run_backfill(backfill_id, max_concurrent=5)
+
+                # Report index results
+                idx_stats = await engine_db.get_work_unit_stats(backfill_id)
+                idx_info = idx_stats.get('index', {})
+                await _syslog("info", f"Backfill {backfill_id}: INDEX done — "
+                              f"{idx_info.get('done', 0)} ok, {idx_info.get('failed', 0)} failed")
 
                 # After indexing, generate hydrate work units from discovered tx IDs
                 if "hydrate" in domains:
@@ -281,8 +306,14 @@ class BackfillOrchestrator:
 
             # Phase 2: Run hydrate work units
             if "hydrate" in domains:
+                await _syslog("info", f"Backfill {backfill_id}: starting HYDRATE phase")
                 logger.info(f"Backfill {backfill_id}: starting HYDRATE phase")
                 await self.scheduler.run_backfill(backfill_id, max_concurrent=5)
+
+                hyd_stats = await engine_db.get_work_unit_stats(backfill_id)
+                hyd_info = hyd_stats.get('hydrate', {})
+                await _syslog("info", f"Backfill {backfill_id}: HYDRATE done — "
+                              f"{hyd_info.get('done', 0)} ok, {hyd_info.get('failed', 0)} failed")
 
                 # After hydration, generate normalize work units
                 if "normalize" in domains:
@@ -290,8 +321,14 @@ class BackfillOrchestrator:
 
             # Phase 3: Run normalize work units
             if "normalize" in domains:
+                await _syslog("info", f"Backfill {backfill_id}: starting NORMALIZE phase")
                 logger.info(f"Backfill {backfill_id}: starting NORMALIZE phase")
                 await self.scheduler.run_backfill(backfill_id, max_concurrent=10)
+
+                norm_stats = await engine_db.get_work_unit_stats(backfill_id)
+                norm_info = norm_stats.get('normalize', {})
+                await _syslog("info", f"Backfill {backfill_id}: NORMALIZE done — "
+                              f"{norm_info.get('done', 0)} ok, {norm_info.get('failed', 0)} failed")
 
                 # After normalization, generate enrich work units
                 if "enrich_price" in domains:
@@ -339,9 +376,12 @@ class BackfillOrchestrator:
                 })
                 await engine_db.update_scheduler_run(run_id, status='completed', summary=summary)
 
+            await _syslog("info", f"Backfill {backfill_id} completed: {done}/{total} work units done, "
+                          f"{failed} failed, {event_count} total events")
             logger.info(f"Backfill {backfill_id} completed: {done}/{total} done, {failed} failed")
 
         except Exception as e:
+            await _syslog("error", f"Backfill {backfill_id} pipeline error: {e}", exc=e)
             logger.error(f"Backfill {backfill_id} pipeline error: {e}")
             await engine_db.update_backfill(
                 backfill_id, status='failed', error_message=str(e)[:500]
@@ -534,6 +574,7 @@ class BackfillOrchestrator:
         chain = ChainId(work_unit['chain'])
         indexer = self._indexers.get(chain)
         if not indexer:
+            await _syslog("warning", f"No indexer for chain {work_unit['chain']}")
             return False
 
         entries = await indexer.index(
@@ -556,7 +597,13 @@ class BackfillOrchestrator:
             })
         await engine_db.upsert_tx_index_batch(batch)
 
-        logger.debug(f"Indexed {len(entries)} txs for {work_unit['chain']}:{work_unit['account_id'][:12]}...")
+        if entries:
+            await _syslog("info", f"Indexed {len(entries)} txs for "
+                          f"{work_unit['chain']}:{work_unit['account_id'][:12]}...")
+        else:
+            await _syslog("warning", f"Indexed 0 txs for "
+                          f"{work_unit['chain']}:{work_unit['account_id'][:12]}... "
+                          f"(API may have returned empty)")
         return True
 
     async def _execute_hydrate(self, work_unit: Dict, provider: Provider) -> bool:
@@ -564,17 +611,20 @@ class BackfillOrchestrator:
         chain = ChainId(work_unit['chain'])
         hydrator = self._hydrators.get(chain)
         if not hydrator:
+            await _syslog("warning", f"No hydrator for chain {work_unit['chain']}")
             return False
 
         tx_id = work_unit['account_id']  # For hydrate, account_id holds the tx_id
 
-        # Check if already hydrated
+        # Check if already hydrated (pre-hydration from indexer)
         existing = await engine_db.get_tx_raw(chain.value, tx_id)
         if existing:
             return True
 
         raw_data = await hydrator.hydrate(tx_id)
         if raw_data is None:
+            await _syslog("warning", f"Hydration returned None for {chain.value}:{tx_id[:16]}... "
+                          f"(RPC unavailable?)")
             return False
 
         await engine_db.upsert_tx_raw(chain.value, tx_id, raw_data, provider.name)
@@ -585,6 +635,7 @@ class BackfillOrchestrator:
         chain = ChainId(work_unit['chain'])
         normalizer = self._normalizers.get(chain)
         if not normalizer:
+            await _syslog("warning", f"No normalizer for chain {work_unit['chain']}")
             return False
 
         tx_id = work_unit.get('cursor_start', '')
@@ -593,6 +644,7 @@ class BackfillOrchestrator:
         # Get raw transaction data
         raw = await engine_db.get_tx_raw(chain.value, tx_id)
         if not raw:
+            await _syslog("warning", f"No raw data for normalize: {chain.value}:{tx_id[:16]}...")
             return False
 
         events = await normalizer.normalize(

@@ -128,10 +128,19 @@ async def _background_fetch_task(user_id: int, days: int, blockchain: Optional[s
         logger.info(f"Background fetch completed for user {user_id}: {counts}")
 
     except Exception as e:
+        import traceback as tb_mod
         logger.error(f"Background fetch failed for user {user_id}: {e}")
         background_tasks[user_id]['status'] = 'failed'
         background_tasks[user_id]['message'] = f'Error: {str(e)}'
         background_tasks[user_id]['error'] = str(e)
+        # Surface to system logs page
+        try:
+            from services.logging_service import get_logging_service
+            svc = get_logging_service()
+            await svc.error("transactions", f"Background fetch failed: {e}",
+                           traceback=tb_mod.format_exc())
+        except Exception:
+            pass
 
 
 @router.post("/refresh/start")
