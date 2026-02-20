@@ -434,6 +434,30 @@ async def upsert_tx_raw(chain: str, tx_id: str, raw_data: Dict[str, Any], provid
         await db.commit()
 
 
+async def upsert_tx_raw_batch(entries: List[Dict[str, Any]]):
+    """Batch insert or replace raw transaction data.
+
+    Each entry must have: chain, tx_id, raw_data (dict), provider (str).
+    """
+    if not entries:
+        return
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        rows = []
+        for e in entries:
+            raw = e['raw_data']
+            rows.append((
+                e['chain'], e['tx_id'],
+                json.dumps(raw) if isinstance(raw, dict) else raw,
+                e['provider'],
+            ))
+        await db.executemany(
+            """INSERT OR REPLACE INTO engine_tx_raw (chain, tx_id, raw_data, provider)
+               VALUES (?, ?, ?, ?)""",
+            rows
+        )
+        await db.commit()
+
+
 async def get_tx_raw(chain: str, tx_id: str) -> Optional[Dict[str, Any]]:
     """Get raw transaction data if already hydrated."""
     async with aiosqlite.connect(str(DATABASE_PATH)) as db:

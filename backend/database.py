@@ -1013,6 +1013,50 @@ async def init_db():
         """)
 
         # ============================================================================
+        # ON-CHAIN TRANSACTION HISTORY (V1 chain-specific fetchers)
+        # ============================================================================
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS transaction_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                wallet_id INTEGER NOT NULL,
+                blockchain TEXT NOT NULL,
+                tx_hash TEXT NOT NULL,
+                tx_time TIMESTAMP,
+                direction TEXT,
+                amount TEXT,
+                token_symbol TEXT,
+                token_name TEXT,
+                from_address TEXT,
+                to_address TEXT,
+                fee TEXT,
+                status TEXT DEFAULT 'confirmed',
+                metadata TEXT,
+                fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, wallet_id, blockchain, tx_hash, token_symbol),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (wallet_id) REFERENCES wallets(id) ON DELETE CASCADE
+            )
+        """)
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_txhist_user
+            ON transaction_history(user_id)
+        """)
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_txhist_wallet
+            ON transaction_history(wallet_id)
+        """)
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_txhist_time
+            ON transaction_history(tx_time DESC)
+        """)
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_txhist_blockchain
+            ON transaction_history(user_id, blockchain)
+        """)
+
+        # ============================================================================
         # EXCHANGE TRANSACTIONS (CEX full history: buys, sells, sends, receives, etc.)
         # ============================================================================
         await db.execute("""
