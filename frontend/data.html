@@ -1060,7 +1060,7 @@
         <div id="activityTab" class="main-tab-content">
             <section class="analytics-section">
                 <div class="section-header-inline">
-                    <h2>Transaction Activity by Blockchain</h2>
+                    <h2>Transaction Activity by Blockchain</h2><span class="section-info-btn">i<span class="info-tooltip">Bar chart showing your transaction count over time grouped by blockchain. Use the time period buttons to adjust the range.</span></span>
                 </div>
 
                 <!-- Time Period Controls -->
@@ -1103,7 +1103,7 @@
             <!-- CEX Transaction Activity Section -->
             <section class="analytics-section" style="margin-top: 24px;">
                 <div class="section-header-inline">
-                    <h2>Transaction Activity by Exchange</h2>
+                    <h2>Transaction Activity by Exchange</h2><span class="section-info-btn">i<span class="info-tooltip">Bar chart showing your exchange trade counts over time. Requires exchange API keys to be configured in Settings.</span></span>
                 </div>
 
                 <!-- Loading Indicator -->
@@ -1341,7 +1341,7 @@
             <!-- Blockchain Cards Grid -->
             <section>
                 <div class="section-header-inline">
-                    <h2>Blockchain Overview</h2>
+                    <h2>Blockchain Overview</h2><span class="section-info-btn">i<span class="info-tooltip">Summary cards for each blockchain in your portfolio showing total value, number of wallets, and asset count per chain.</span></span>
                 </div>
                 <div class="summary-cards" id="blockchainCards">
                     <!-- Dynamically populated by renderBlockchainCards() -->
@@ -1351,7 +1351,7 @@
             <!-- Portfolio Flow Sankey -->
             <section style="margin-top: 30px;" id="portfolioFlowSection" class="hidden">
                 <div class="analytics-chart-container">
-                    <h3 class="analytics-title">Portfolio Flow<span class="sankey-subtitle"> — click chains or wallets to explore flows</span></h3>
+                    <h3 class="analytics-title">Portfolio Flow<span class="section-info-btn">i<span class="info-tooltip">Sankey diagram showing how value flows between your blockchains, wallets, and assets. Click any chain or wallet node to drill into its flows.</span></span></h3>
                     <div id="portfolioSankeyContainer" class="sankey-container"></div>
                 </div>
             </section>
@@ -1360,7 +1360,7 @@
             <section style="margin-top: 30px;" id="portfolioStreamSection" class="hidden">
                 <div class="analytics-chart-container stream-chart-section">
                     <div class="stream-chart-header">
-                        <h3 class="analytics-title">Portfolio History by Chain<span class="stream-subtitle"> — hover or click a stream to explore</span></h3>
+                        <h3 class="analytics-title">Portfolio History by Chain<span class="section-info-btn">i<span class="info-tooltip">Stacked area chart showing your portfolio value over time broken down by blockchain. Hover to see values, click a stream to isolate that chain.</span></span></h3>
                         <div class="stream-range-buttons">
                             <button class="stream-range-btn" data-range="1m" onclick="window.portfolioStream?.loadData('1m')">1M</button>
                             <button class="stream-range-btn" data-range="3m" onclick="window.portfolioStream?.loadData('3m')">3M</button>
@@ -1376,7 +1376,7 @@
             <!-- Coin Allocation -->
             <section style="margin-top: 30px;">
                 <div class="analytics-chart-container">
-                    <h3 class="analytics-title">Coin Allocation<span class="analytics-refresh-indicator" id="coinRefreshIndicator" title="Refreshing data..."></span></h3>
+                    <h3 class="analytics-title">Coin Allocation<span class="section-info-btn">i<span class="info-tooltip">Donut chart showing the percentage breakdown of your portfolio by individual cryptocurrency. Click a segment to see details.</span></span><span class="analytics-refresh-indicator" id="coinRefreshIndicator" title="Refreshing data..."></span></h3>
                     <div class="analytics-content">
                         <div class="analytics-loading-overlay" id="coinAllocationLoading">
                             <div class="loading-spinner"></div>
@@ -1394,7 +1394,7 @@
             <!-- Category Allocation -->
             <section style="margin-top: 30px;">
                 <div class="analytics-chart-container">
-                    <h3 class="analytics-title">Asset Allocation by Category<span class="analytics-refresh-indicator" id="categoryRefreshIndicator" title="Refreshing data..."></span></h3>
+                    <h3 class="analytics-title">Asset Allocation by Category<span class="section-info-btn">i<span class="info-tooltip">Donut chart grouping your holdings by asset category: Layer 1s, DeFi tokens, stablecoins, NFTs, exchange balances, and more.</span></span><span class="analytics-refresh-indicator" id="categoryRefreshIndicator" title="Refreshing data..."></span></h3>
                     <div class="analytics-content">
                         <div class="analytics-loading-overlay" id="categoryAllocationLoading">
                             <div class="loading-spinner"></div>
@@ -1413,7 +1413,7 @@
             <section style="margin-top: 30px;" id="heatmapSection">
                 <div class="heatmap-slide-inner">
                     <div class="heatmap-slide-header">
-                        <h3 class="analytics-title">Portfolio Heatmap</h3>
+                        <h3 class="analytics-title">Portfolio Heatmap<span class="section-info-btn">i<span class="info-tooltip">Visual grid of your holdings colored by 24-hour price change. Green = up, Red = down. Tile size reflects position value in your portfolio.</span></span></h3>
                         <div class="heatmap-legend">
                             <span class="heatmap-legend-item neg-heavy"></span><span>-10%</span>
                             <span class="heatmap-legend-item neg-light"></span><span>-5%</span>
@@ -1476,13 +1476,13 @@
             <!-- Charts Row -->
             <div class="intelligence-charts-row">
                 <div class="intelligence-chart-card">
-                    <h3 class="analytics-title">Flow Overview</h3>
+                    <h3 class="analytics-title">Flow Overview<span class="section-info-btn">i<span class="info-tooltip">Doughnut chart summarizing the total USD value sent vs received across all your wallets and chains.</span></span></h3>
                     <div class="intelligence-chart-wrap">
                         <canvas id="intelFlowDoughnut"></canvas>
                     </div>
                 </div>
                 <div class="intelligence-chart-card">
-                    <h3 class="analytics-title">Chain Flow Direction</h3>
+                    <h3 class="analytics-title">Chain Flow Direction<span class="section-info-btn">i<span class="info-tooltip">Horizontal bar chart comparing inflows vs outflows for each blockchain, showing which chains are net senders or receivers.</span></span></h3>
                     <div class="intelligence-chart-wrap">
                         <canvas id="intelChainFlowBars"></canvas>
                     </div>
@@ -1491,7 +1491,7 @@
 
             <!-- Activity Heatmap -->
             <div class="intelligence-heatmap-section">
-                <h3 class="analytics-title">Activity Heatmap</h3>
+                <h3 class="analytics-title">Activity Heatmap<span class="section-info-btn">i<span class="info-tooltip">Grid showing when you transact most frequently by day of week and hour (UTC). Darker cells = more transactions at that time.</span></span></h3>
                 <p class="analytics-subtitle">Transaction frequency by day of week and hour (UTC)</p>
                 <div class="intelligence-heatmap-container" id="intelHeatmapContainer">
                     <!-- SVG heatmap rendered by JS -->
@@ -1502,7 +1502,7 @@
             <!-- Large Transactions Table -->
             <div class="intelligence-table-section" id="intelLargeTxSection">
                 <div class="intelligence-table-header">
-                    <h3 class="analytics-title">Large Transactions</h3>
+                    <h3 class="analytics-title">Large Transactions<span class="section-info-btn">i<span class="info-tooltip">Table of your highest-value transactions. Filter by minimum USD amount, time period, chain, direction, and token.</span></span></h3>
                     <div class="large-tx-filters">
                         <label>Min $</label>
                         <select id="largeTxMinUsd" onchange="changeLargeTxFilter()">
@@ -1557,7 +1557,7 @@
             <!-- Counterparties Table -->
             <div class="intelligence-table-section">
                 <div class="intelligence-table-header">
-                    <h3 class="analytics-title">Top Counterparties</h3>
+                    <h3 class="analytics-title">Top Counterparties<span class="section-info-btn">i<span class="info-tooltip">Addresses you interact with most frequently, ranked by transaction count. Shows total volume sent to and received from each counterparty.</span></span></h3>
                     <div class="cp-page-size-select">
                         <label>Show</label>
                         <select onchange="changeCpPageSize(this.value)">

@@ -120,15 +120,18 @@ async def lifespan(app: FastAPI):
         logger.warning(f"API key encryption migration failed: {e}")
         await log_service.warning("main", f"API key encryption migration failed: {e}")
 
-    # Run API health checks on startup (non-blocking, don't auto-disable)
-    logger.info("Running startup API health checks...")
-    try:
-        from services.api_health import run_startup_health_checks
-        await run_startup_health_checks()
-        await log_service.info("main", "Startup API health checks complete")
-    except Exception as e:
-        logger.warning(f"Startup API health checks failed: {e}")
-        await log_service.warning("main", f"Startup API health checks failed: {e}")
+    # API health checks run in background (don't block startup)
+    async def _run_health_checks_background():
+        try:
+            from services.api_health import run_startup_health_checks
+            await asyncio.wait_for(run_startup_health_checks(), timeout=60.0)
+            await log_service.info("main", "Startup API health checks complete")
+        except asyncio.TimeoutError:
+            logger.warning("Startup API health checks timed out after 60s, skipping")
+            await log_service.warning("main", "Startup API health checks timed out")
+        except Exception as e:
+            logger.warning(f"Startup API health checks failed: {e}")
+            await log_service.warning("main", f"Startup API health checks failed: {e}")
 
     # Clean up expired cache entries
     logger.info("Cleaning up expired cache entries...")
@@ -157,68 +160,66 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"DeFi cache cleanup failed: {e}")
 
-    # Seed missing logos for known DeFi governance tokens
-    logger.info("Checking DeFi token logos...")
-    try:
-        import aiosqlite
-        from config import DATABASE_PATH
-        from services.defi import DEFI_PROTOCOLS
-        from services.http_client import get_client
+    # Seed missing logos for known DeFi governance tokens (background, don't block startup)
+    async def _seed_defi_logos_background():
+        try:
+            import aiosqlite
+            from config import DATABASE_PATH
+            from services.defi import DEFI_PROTOCOLS
+            from services.http_client import get_client
 
-        tokens_needing_logos = []
-        async with aiosqlite.connect(DATABASE_PATH) as db:
-            for pid, info in DEFI_PROTOCOLS.items():
-                token = info.get('token')
-                if not token or info.get('type') != 'governance':
-                    continue
-                async with db.execute(
-                    "SELECT logo_url FROM token_metadata WHERE policy_id = ? AND logo_url IS NOT NULL AND logo_url != '' LIMIT 1",
-                    (pid,)
-                ) as cursor:
-                    row = await cursor.fetchone()
-                    if not row:
-                        # Also check by ticker
-                        async with db.execute(
-                            "SELECT logo_url FROM token_metadata WHERE ticker = ? AND logo_url IS NOT NULL AND logo_url != '' LIMIT 1",
-                            (token,)
-                        ) as cursor2:
-                            row2 = await cursor2.fetchone()
-                            if not row2:
-                                token_name_hex = token.encode('utf-8').hex()
-                                tokens_needing_logos.append((pid, token, token_name_hex))
+            tokens_needing_logos = []
+            async with aiosqlite.connect(DATABASE_PATH) as db:
+                for pid, info in DEFI_PROTOCOLS.items():
+                    token = info.get('token')
+                    if not token or info.get('type') != 'governance':
+                        continue
+                    async with db.execute(
+                        "SELECT logo_url FROM token_metadata WHERE policy_id = ? AND logo_url IS NOT NULL AND logo_url != '' LIMIT 1",
+                        (pid,)
+                    ) as cursor:
+                        row = await cursor.fetchone()
+                        if not row:
+                            async with db.execute(
+                                "SELECT logo_url FROM token_metadata WHERE ticker = ? AND logo_url IS NOT NULL AND logo_url != '' LIMIT 1",
+                                (token,)
+                            ) as cursor2:
+                                row2 = await cursor2.fetchone()
+                                if not row2:
+                                    token_name_hex = token.encode('utf-8').hex()
+                                    tokens_needing_logos.append((pid, token, token_name_hex))
 
-        if tokens_needing_logos:
-            logger.info(f"Seeding logos for {len(tokens_needing_logos)} DeFi tokens: {[t[1] for t in tokens_needing_logos]}")
-            client = get_client("cardano_token_registry", timeout=10)
-            for pid, token, hex_name in tokens_needing_logos:
-                try:
-                    registry_url = f"https://raw.githubusercontent.com/cardano-foundation/cardano-token-registry/master/mappings/{pid}{hex_name}.json"
-                    resp = await client.get(registry_url)
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        logo_b64 = data.get("logo", {}).get("value", "")
-                        if logo_b64:
-                            logo_data_uri = f"data:image/png;base64,{logo_b64}"
-                            async with aiosqlite.connect(DATABASE_PATH) as db:
-                                # Update existing entry or insert new one
-                                await db.execute(
-                                    """INSERT INTO token_metadata (asset_id, policy_id, ticker, logo_url, updated_at)
-                                       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-                                       ON CONFLICT(asset_id) DO UPDATE SET logo_url = ?, updated_at = CURRENT_TIMESTAMP""",
-                                    (f"{pid}{hex_name}", pid, token, logo_data_uri, logo_data_uri)
-                                )
-                                await db.commit()
-                            logger.info(f"Seeded logo for {token} ({len(logo_data_uri)} chars)")
+            if tokens_needing_logos:
+                logger.info(f"Seeding logos for {len(tokens_needing_logos)} DeFi tokens: {[t[1] for t in tokens_needing_logos]}")
+                client = get_client("cardano_token_registry", timeout=10)
+                for pid, token, hex_name in tokens_needing_logos:
+                    try:
+                        registry_url = f"https://raw.githubusercontent.com/cardano-foundation/cardano-token-registry/master/mappings/{pid}{hex_name}.json"
+                        resp = await client.get(registry_url)
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            logo_b64 = data.get("logo", {}).get("value", "")
+                            if logo_b64:
+                                logo_data_uri = f"data:image/png;base64,{logo_b64}"
+                                async with aiosqlite.connect(DATABASE_PATH) as db:
+                                    await db.execute(
+                                        """INSERT INTO token_metadata (asset_id, policy_id, ticker, logo_url, updated_at)
+                                           VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                                           ON CONFLICT(asset_id) DO UPDATE SET logo_url = ?, updated_at = CURRENT_TIMESTAMP""",
+                                        (f"{pid}{hex_name}", pid, token, logo_data_uri, logo_data_uri)
+                                    )
+                                    await db.commit()
+                                logger.info(f"Seeded logo for {token} ({len(logo_data_uri)} chars)")
+                            else:
+                                logger.debug(f"No logo in Token Registry for {token}")
                         else:
-                            logger.debug(f"No logo in Token Registry for {token}")
-                    else:
-                        logger.debug(f"Token Registry returned {resp.status_code} for {token}")
-                except Exception as e:
-                    logger.debug(f"Could not seed logo for {token}: {e}")
-        else:
-            logger.info("All DeFi token logos already cached")
-    except Exception as e:
-        logger.warning(f"DeFi logo seeding failed: {e}")
+                            logger.debug(f"Token Registry returned {resp.status_code} for {token}")
+                    except Exception as e:
+                        logger.debug(f"Could not seed logo for {token}: {e}")
+            else:
+                logger.info("All DeFi token logos already cached")
+        except Exception as e:
+            logger.warning(f"DeFi logo seeding failed: {e}")
 
     # Clean up old API call logs (keep last 7 days)
     logger.info("Cleaning up old API call logs...")
@@ -333,6 +334,8 @@ async def lifespan(app: FastAPI):
     # Start background tasks (non-blocking) — V1 snapshot tasks removed (V2 only)
     _background_tasks.append(asyncio.create_task(warm_caches_background()))
     _background_tasks.append(asyncio.create_task(collect_nft_prices_background()))
+    _background_tasks.append(asyncio.create_task(_run_health_checks_background()))
+    _background_tasks.append(asyncio.create_task(_seed_defi_logos_background()))
 
     # Seed wallet_sources and start off-chain collector (V2 per-wallet balances)
     async def offchain_collector_startup():
@@ -347,10 +350,14 @@ async def lifespan(app: FastAPI):
             logger.info(f"Wallet sources seeded for {len(non_demo)} user(s)")
             await log_service.info("main", f"Wallet sources seeded for {len(non_demo)} user(s)")
 
-            # Initial off-chain collection
-            await offchain_collector.collect_all_users()
-            logger.info("Initial off-chain collection complete")
-            await log_service.info("main", "Initial off-chain collection complete")
+            # Initial off-chain collection (with timeout to prevent hang)
+            try:
+                await asyncio.wait_for(offchain_collector.collect_all_users(), timeout=120.0)
+                logger.info("Initial off-chain collection complete")
+                await log_service.info("main", "Initial off-chain collection complete")
+            except asyncio.TimeoutError:
+                logger.warning("Initial off-chain collection timed out after 120s, continuing")
+                await log_service.warning("main", "Initial off-chain collection timed out")
         except Exception as e:
             logger.warning(f"Off-chain collector startup failed: {e}")
             await log_service.warning("main", f"Off-chain collector startup failed: {e}")
@@ -363,9 +370,11 @@ async def lifespan(app: FastAPI):
                 await asyncio.sleep(2 * 3600)
                 logger.info("Periodic off-chain collector: Starting collection...")
                 await log_service.info("main", "Periodic off-chain collector: Starting collection")
-                await offchain_collector.collect_all_users()
+                await asyncio.wait_for(offchain_collector.collect_all_users(), timeout=300.0)
                 logger.info("Periodic off-chain collector: Collection complete")
                 await log_service.info("main", "Periodic off-chain collector: Collection complete")
+            except asyncio.TimeoutError:
+                logger.warning("Periodic off-chain collector timed out after 5min")
             except asyncio.CancelledError:
                 logger.info("Periodic off-chain collector cancelled (shutdown)")
                 raise
@@ -388,12 +397,16 @@ async def lifespan(app: FastAPI):
                 event_count = await engine_db.get_event_count(uid)
                 if event_count > 0:
                     logger.info(f"Startup materialize: user {uid} has {event_count} engine_events, materializing...")
-                    await materializer.materialize_onchain(uid)
+                    await asyncio.wait_for(materializer.materialize_onchain(uid), timeout=180.0)
                 else:
-                    # No engine_events — try V1 balance_history migration
                     logger.info(f"Startup materialize: user {uid} has 0 engine_events, trying V1 balance_history...")
-                    await materializer.materialize_onchain_from_v1_balance_history(uid)
+                    await asyncio.wait_for(
+                        materializer.materialize_onchain_from_v1_balance_history(uid), timeout=120.0
+                    )
                 logger.info(f"Startup materialize: user {uid} complete")
+        except asyncio.TimeoutError:
+            logger.warning("Startup materialization timed out, will complete on next cycle")
+            await log_service.warning("main", "Startup materialization timed out")
         except Exception as e:
             logger.warning(f"Startup materialization failed: {e}")
             await log_service.warning("main", f"Startup materialization failed: {e}")
@@ -456,14 +469,18 @@ async def lifespan(app: FastAPI):
 
     _background_tasks.append(asyncio.create_task(restore_cloudflare_tunnel()))
 
-    # Clear stale streamgraph cache on startup (prevents serving old empty-chains responses)
+    # Clear all chart caches on startup (ensures fresh data after materialization)
     try:
-        from database import clear_cache
-        for r in ('24h', '1w', '1m', '3m', '6m', '1y', 'all'):
-            await clear_cache(f"unified_chart_1_{r}_by_chain", user_id=1)
-        logger.info("Cleared streamgraph chart cache on startup")
+        from database import clear_cache, get_all_users
+        users = await get_all_users()
+        for user in users:
+            uid = user['id']
+            for r in ('24h', '1w', '1m', '3m', '6m', '1y', 'all'):
+                await clear_cache(f"unified_chart_{uid}_{r}", user_id=uid)
+                await clear_cache(f"unified_chart_{uid}_{r}_by_chain", user_id=uid)
+        logger.info("Cleared all chart caches on startup")
     except Exception as e:
-        logger.warning(f"Failed to clear streamgraph cache: {e}")
+        logger.warning(f"Failed to clear chart cache: {e}")
 
     # Backfill balance_history prices in background (enables streamgraph historical data)
     async def backfill_history_prices():
@@ -523,13 +540,19 @@ async def lifespan(app: FastAPI):
     # --- Graceful shutdown ---
     logger.info("Shutdown initiated...")
 
-    # 1. Cancel all tracked background tasks first
+    # 1. Cancel all tracked background tasks first (with timeout)
     logger.info(f"Cancelling {len(_background_tasks)} background tasks...")
     for task in _background_tasks:
         if not task.done():
             task.cancel()
     if _background_tasks:
-        await asyncio.gather(*_background_tasks, return_exceptions=True)
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*_background_tasks, return_exceptions=True),
+                timeout=8.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Background task cancellation timed out after 8s, continuing shutdown")
     _background_tasks.clear()
     logger.info("Background tasks cancelled")
 
