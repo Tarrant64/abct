@@ -118,6 +118,7 @@ class PortfolioStreamgraph {
         this._drawTimeAxis(plotW, plotH);
         this._drawLabels(plotW, plotH);
         this._drawCrosshairLine(plotH);
+        this._renderLegend();
     }
 
     updateTheme() {
@@ -376,6 +377,45 @@ class PortfolioStreamgraph {
     }
 
     // ===========================
+    // Legend
+    // ===========================
+
+    _renderLegend() {
+        const legendEl = document.getElementById('portfolioStreamLegend');
+        if (!legendEl || !this.chains || this.chains.length === 0) return;
+
+        legendEl.innerHTML = '';
+        for (const chain of this.chains) {
+            const color = this._getStreamColor(chain);
+            const label = this._chainLabel(chain);
+            const isActive = this.lockedChain === chain;
+
+            const item = document.createElement('button');
+            item.className = 'stream-legend-item' + (isActive ? ' active' : '');
+            item.setAttribute('data-chain', chain);
+
+            const dot = document.createElement('span');
+            dot.className = 'stream-legend-dot';
+            dot.style.backgroundColor = color;
+            if (isActive) dot.style.boxShadow = `0 0 6px ${color}`;
+
+            const text = document.createElement('span');
+            text.className = 'stream-legend-label';
+            text.textContent = label;
+
+            item.appendChild(dot);
+            item.appendChild(text);
+
+            item.addEventListener('click', () => {
+                this._onStreamClick(chain);
+                this._renderLegend();
+            });
+
+            legendEl.appendChild(item);
+        }
+    }
+
+    // ===========================
     // Interactions
     // ===========================
 
@@ -435,6 +475,15 @@ class PortfolioStreamgraph {
                 path.setAttribute('stroke-width', '0');
             }
         });
+
+        // Sync legend active states
+        const legendEl = document.getElementById('portfolioStreamLegend');
+        if (legendEl) {
+            legendEl.querySelectorAll('.stream-legend-item').forEach(item => {
+                const c = item.getAttribute('data-chain');
+                item.classList.toggle('active', c === this.lockedChain);
+            });
+        }
     }
 
     _showTooltip(e, chain) {
