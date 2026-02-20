@@ -820,6 +820,7 @@ async def get_all_native_assets(user_id: int = Depends(verify_session), refresh:
             data['price_usd'] = price
             data['value_usd'] = value_usd
             data['price_source'] = price_info.get('source')
+            data['price_change_24h'] = price_info.get('usd_24h_change', 0)
             total_value_usd += value_usd
             valuable_assets.append(data)
 
@@ -889,6 +890,7 @@ async def _enrich_cached_assets_with_prices(cached_data: dict) -> dict:
             asset['price_usd'] = price
             asset['value_usd'] = value_usd
             asset['price_source'] = price_info.get('source')
+            asset['price_change_24h'] = price_info.get('usd_24h_change', 0)
             total_value_usd += value_usd
             valuable_assets.append(asset)
 

@@ -138,7 +138,7 @@ CHAIN_ICON_URLS = {
 
 
 def _map_mobile_range_to_portfolio_range(range_value: str) -> str:
-    range_map = {"7d": "1w", "4w": "1m", "3m": "3m", "1y": "1y", "all": "all"}
+    range_map = {"1h": "24h", "24h": "24h", "7d": "1w", "4w": "1m", "3m": "3m", "1y": "1y", "all": "all"}
     return range_map.get(range_value, "1w")
 
 
@@ -1289,7 +1289,7 @@ async def get_mobile_portfolio_history(
     """
     try:
         # Map mobile ranges to unified endpoint ranges
-        range_map = {"7d": "1w", "4w": "1m", "3m": "3m", "1y": "1y", "all": "all"}
+        range_map = {"1h": "24h", "24h": "24h", "7d": "1w", "4w": "1m", "3m": "3m", "1y": "1y", "all": "all"}
         unified_range = range_map.get(range, "1w")
 
         # Call unified chart endpoint
@@ -1398,13 +1398,14 @@ async def fetch_ohlcv_coingecko(symbol: str, days: int) -> Optional[List[List]]:
         return None
 
 
-async def fetch_ohlcv_binance(symbol: str, limit: int = 168) -> Optional[List[Dict]]:
+async def fetch_ohlcv_binance(symbol: str, limit: int = 168, interval: str = "1h") -> Optional[List[Dict]]:
     """
     Fetch OHLCV data from Binance public API.
 
     Args:
         symbol: Cryptocurrency symbol (BTC, ETH, etc.)
         limit: Number of candlesticks (max 1000)
+        interval: Candle interval (1h, 1d, etc.)
 
     Returns:
         List of OHLCV data points or None if failed
@@ -1419,7 +1420,7 @@ async def fetch_ohlcv_binance(symbol: str, limit: int = 168) -> Optional[List[Di
             "https://api.binance.com/api/v3/klines",
             params={
                 "symbol": pair,
-                "interval": "1h",
+                "interval": interval,
                 "limit": limit
             }
         )
@@ -1447,12 +1448,13 @@ async def fetch_ohlcv_binance(symbol: str, limit: int = 168) -> Optional[List[Di
         return None
 
 
-async def fetch_ohlcv_coinbase(symbol: str) -> Optional[List[Dict]]:
+async def fetch_ohlcv_coinbase(symbol: str, period: str = "week") -> Optional[List[Dict]]:
     """
     Fetch historic rates from Coinbase public API.
 
     Args:
         symbol: Cryptocurrency symbol (BTC, ETH, etc.)
+        period: Time period (day, week, month, year)
 
     Returns:
         List of price data points or None if failed
@@ -1462,7 +1464,7 @@ async def fetch_ohlcv_coinbase(symbol: str) -> Optional[List[Dict]]:
         response = await client.get(
             f"https://api.coinbase.com/v2/prices/{symbol.upper()}-USD/historic",
             params={
-                "period": "week"
+                "period": period
             }
         )
 
@@ -1521,6 +1523,7 @@ async def get_mobile_price_chart(
     range_to_days = {
         "1h": 1,
         "24h": 1,
+        "1d": 1,
         "7d": 7,
         "30d": 30,
         "90d": 90,
@@ -1550,25 +1553,35 @@ async def get_mobile_price_chart(
         # Fallback to Binance
         logger.info(f"CoinGecko failed, trying Binance for {symbol}")
 
-        # Calculate limit based on range
+        # Calculate limit and interval based on range
+        # For 90d+ use daily candles to stay within Binance's 1000-candle limit
+        binance_interval = "1d" if days >= 90 else "1h"
         limit_map = {
             "1h": 12,
             "24h": 24,
+            "1d": 24,
             "7d": 168,
             "30d": 720,
-            "90d": 1000,
-            "1y": 1000
+            "90d": 90,
+            "1y": 365,
+            "all": 365
         }
         limit = limit_map.get(range, 168)
 
-        formatted_data = await fetch_ohlcv_binance(symbol, limit)
+        formatted_data = await fetch_ohlcv_binance(symbol, limit, interval=binance_interval)
 
         if formatted_data:
             logger.info(f"Fetched {len(formatted_data)} OHLCV points from Binance for {symbol}")
         else:
             # Final fallback to Coinbase
             logger.info(f"Binance failed, trying Coinbase for {symbol}")
-            formatted_data = await fetch_ohlcv_coinbase(symbol)
+            coinbase_period_map = {
+                "1h": "day", "24h": "day", "1d": "day",
+                "7d": "week", "30d": "month",
+                "90d": "year", "1y": "year", "all": "year"
+            }
+            coinbase_period = coinbase_period_map.get(range, "week")
+            formatted_data = await fetch_ohlcv_coinbase(symbol, period=coinbase_period)
 
             if formatted_data:
                 logger.info(f"Fetched {len(formatted_data)} points from Coinbase for {symbol}")
