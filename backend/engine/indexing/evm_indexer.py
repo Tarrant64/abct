@@ -63,6 +63,25 @@ _etherscan_keys = APIKeyManager("etherscan", "ETHERSCAN_API_KEY")
 # ERC-20 Transfer(address,address,uint256) event signature
 _TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 
+# Shared rate limiter: Etherscan free tier = 5 calls/sec with key, 1/5sec without.
+# Use a lock + sleep to serialize calls across all concurrent indexer instances.
+_api_lock = asyncio.Lock()
+_MIN_CALL_INTERVAL = 0.35  # seconds between calls (~2.8/sec, safe margin for 3/sec limit)
+_last_call_time = 0.0
+
+
+async def _rate_limited_get(client, url, params):
+    """Make an Etherscan API call with global rate limiting."""
+    global _last_call_time
+    async with _api_lock:
+        now = asyncio.get_event_loop().time()
+        wait = _MIN_CALL_INTERVAL - (now - _last_call_time)
+        if wait > 0:
+            await asyncio.sleep(wait)
+        resp = await fetch_with_retry(client, "GET", url, params=params)
+        _last_call_time = asyncio.get_event_loop().time()
+        return resp
+
 
 class EvmIndexer(TxIndexer):
     provider_name = "etherscan"
@@ -118,9 +137,7 @@ class EvmIndexer(TxIndexer):
                 "apikey": api_key,
             }
 
-            resp = await fetch_with_retry(
-                client, "GET", config["base_url"], params=params,
-            )
+            resp = await _rate_limited_get(client, config["base_url"], params)
             if resp.status_code != 200:
                 await _syslog("error", f"Etherscan txlist API returned {resp.status_code} "
                               f"for {self.chain.value}")
@@ -150,7 +167,6 @@ class EvmIndexer(TxIndexer):
             if len(result) < 1000:
                 break
             page += 1
-            await asyncio.sleep(0.25)
 
         # ── Fetch internal transactions ──────────────────────────────────
         page = 1
@@ -168,9 +184,7 @@ class EvmIndexer(TxIndexer):
                 "apikey": api_key,
             }
 
-            resp = await fetch_with_retry(
-                client, "GET", config["base_url"], params=params,
-            )
+            resp = await _rate_limited_get(client, config["base_url"], params)
             if resp.status_code != 200:
                 await _syslog("warning", f"Etherscan txlistinternal API returned {resp.status_code} "
                               f"for {self.chain.value}")
@@ -203,7 +217,6 @@ class EvmIndexer(TxIndexer):
             if len(result) < 1000:
                 break
             page += 1
-            await asyncio.sleep(0.25)
 
         # ── Fetch ERC-20 token transfers ─────────────────────────────────
         page = 1
@@ -221,9 +234,7 @@ class EvmIndexer(TxIndexer):
                 "apikey": api_key,
             }
 
-            resp = await fetch_with_retry(
-                client, "GET", config["base_url"], params=params,
-            )
+            resp = await _rate_limited_get(client, config["base_url"], params)
             if resp.status_code != 200:
                 await _syslog("warning", f"Etherscan tokentx API returned {resp.status_code} "
                               f"for {self.chain.value}")
@@ -257,7 +268,6 @@ class EvmIndexer(TxIndexer):
             if len(result) < 1000:
                 break
             page += 1
-            await asyncio.sleep(0.25)
 
         # ── Pre-hydrate: store Etherscan data as engine_tx_raw ───────────
         await self._pre_hydrate(normal_txs, token_txs)

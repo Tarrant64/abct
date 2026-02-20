@@ -131,6 +131,8 @@ class EtherscanService(APIKeyManager):
             await asyncio.sleep(5)
 
         try:
+            # Rate limit: Etherscan free tier = 5 calls/sec with key
+            await asyncio.sleep(0.35)
             client = get_client("etherscan", timeout=30.0)
             response = await client.get(
                 chain_config['base_url'],
