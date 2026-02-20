@@ -41,6 +41,7 @@ CMC_API_KEY = os.getenv("CMC_API_KEY", "")
 GRAPH_API_KEY = os.getenv("GRAPH_API_KEY", "")
 ALPHAVANTAGE_API_KEY = os.getenv("ALPHAVANTAGE_API_KEY", "")
 CHARLI3_API_KEY = os.getenv("CHARLI3_API_KEY", "")
+ANKR_API_KEY = os.getenv("ANKR_API_KEY", "")
 
 # LogoKit API Configuration
 LOGOKIT_API_KEY = os.getenv('LOGOKIT_API_KEY', '')

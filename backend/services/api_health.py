@@ -37,6 +37,7 @@ API_HEALTH_TESTS = {
 
     # URL-embedded key + JSON-RPC: ("json_rpc", url_with_{key}_placeholder)
     "alchemy":       ("json_rpc", "https://eth-mainnet.g.alchemy.com/v2/{key}"),
+    "ankr":          ("json_rpc", "https://rpc.ankr.com/multichain/{key}"),
 
     # Exchange services: ("service", module_attr_name)
     "binance":       ("service", "binance_service"),

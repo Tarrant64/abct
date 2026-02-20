@@ -165,11 +165,20 @@ def create_default_registry() -> ProviderRegistry:
     registry.register(Provider(
         name="alchemy",
         chains=evm_chains,
-        domains={WorkDomain.HYDRATE},
-        priority=55,
+        domains={WorkDomain.INDEX, WorkDomain.HYDRATE},
+        priority=70,
         max_concurrency=5,
         requests_per_second=10.0,
         burst_size=20,
+    ))
+    registry.register(Provider(
+        name="ankr",
+        chains=evm_chains,
+        domains={WorkDomain.INDEX},
+        priority=40,
+        max_concurrency=2,
+        requests_per_second=3.0,
+        burst_size=5,
     ))
     registry.register(Provider(
         name="public_rpc_evm",

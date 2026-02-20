@@ -35,6 +35,8 @@ from engine.expansion.solana_expander import SolanaExpander
 from engine.indexing.cardano_indexer import CardanoIndexer
 from engine.indexing.bitcoin_indexer import BitcoinIndexer
 from engine.indexing.evm_indexer import EvmIndexer
+from engine.indexing.alchemy_evm_indexer import AlchemyEvmIndexer
+from engine.indexing.ankr_evm_indexer import AnkrEvmIndexer
 from engine.indexing.solana_indexer import SolanaIndexer
 
 from engine.hydration.cardano_hydrator import CardanoHydrator
@@ -100,14 +102,26 @@ class BackfillOrchestrator:
             ChainId.SOLANA: SolanaExpander(),
         }
 
-        # Register indexers
+        # Register indexers (keyed by provider name for multi-provider dispatch)
         self._indexers = {
-            ChainId.CARDANO: CardanoIndexer(),
-            ChainId.BITCOIN: BitcoinIndexer(),
-            ChainId.ETHEREUM: EvmIndexer(ChainId.ETHEREUM),
-            ChainId.POLYGON: EvmIndexer(ChainId.POLYGON),
-            ChainId.BASE: EvmIndexer(ChainId.BASE),
-            ChainId.SOLANA: SolanaIndexer(),
+            "blockfrost": {ChainId.CARDANO: CardanoIndexer()},
+            "blockstream": {ChainId.BITCOIN: BitcoinIndexer()},
+            "etherscan": {
+                ChainId.ETHEREUM: EvmIndexer(ChainId.ETHEREUM),
+                ChainId.POLYGON: EvmIndexer(ChainId.POLYGON),
+                ChainId.BASE: EvmIndexer(ChainId.BASE),
+            },
+            "alchemy": {
+                ChainId.ETHEREUM: AlchemyEvmIndexer(ChainId.ETHEREUM),
+                ChainId.POLYGON: AlchemyEvmIndexer(ChainId.POLYGON),
+                ChainId.BASE: AlchemyEvmIndexer(ChainId.BASE),
+            },
+            "ankr": {
+                ChainId.ETHEREUM: AnkrEvmIndexer(ChainId.ETHEREUM),
+                ChainId.POLYGON: AnkrEvmIndexer(ChainId.POLYGON),
+                ChainId.BASE: AnkrEvmIndexer(ChainId.BASE),
+            },
+            "helius": {ChainId.SOLANA: SolanaIndexer()},
         }
 
         # Register hydrators
@@ -570,12 +584,29 @@ class BackfillOrchestrator:
     # =========================================================================
 
     async def _execute_index(self, work_unit: Dict, provider: Provider) -> bool:
-        """Execute an indexing work unit."""
+        """Execute an indexing work unit using the provider-keyed indexer."""
         chain = ChainId(work_unit['chain'])
-        indexer = self._indexers.get(chain)
+
+        # Provider-keyed dispatch
+        indexer = None
+        provider_indexers = self._indexers.get(provider.name, {})
+        if isinstance(provider_indexers, dict):
+            indexer = provider_indexers.get(chain)
+
+        # Fallback: scan all providers for one that has this chain
+        if not indexer:
+            for prov_name, prov_indexers in self._indexers.items():
+                if isinstance(prov_indexers, dict) and chain in prov_indexers:
+                    indexer = prov_indexers[chain]
+                    logger.info(f"INDEX fallback: {provider.name} -> {prov_name} for {chain.value}")
+                    break
+
         if not indexer:
             await _syslog("warning", f"No indexer for chain {work_unit['chain']}")
             return False
+
+        await _syslog("debug", f"Indexing {chain.value}:{work_unit['account_id'][:12]}... "
+                      f"via {provider.name}")
 
         entries = await indexer.index(
             user_id=work_unit['user_id'],

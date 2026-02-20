@@ -132,7 +132,7 @@ class EvmIndexer(TxIndexer):
                 "startblock": start_block,
                 "endblock": end_block,
                 "page": page,
-                "offset": 1000,
+                "offset": 10000,
                 "sort": "asc",
                 "apikey": api_key,
             }
@@ -164,7 +164,7 @@ class EvmIndexer(TxIndexer):
                 ))
                 normal_txs[tx_hash] = tx
 
-            if len(result) < 1000:
+            if len(result) < 10000:
                 break
             page += 1
 
@@ -179,7 +179,7 @@ class EvmIndexer(TxIndexer):
                 "startblock": start_block,
                 "endblock": end_block,
                 "page": page,
-                "offset": 1000,
+                "offset": 10000,
                 "sort": "asc",
                 "apikey": api_key,
             }
@@ -214,7 +214,7 @@ class EvmIndexer(TxIndexer):
                 if txid and txid not in normal_txs:
                     normal_txs[txid] = tx
 
-            if len(result) < 1000:
+            if len(result) < 10000:
                 break
             page += 1
 
@@ -229,7 +229,7 @@ class EvmIndexer(TxIndexer):
                 "startblock": start_block,
                 "endblock": end_block,
                 "page": page,
-                "offset": 1000,
+                "offset": 10000,
                 "sort": "asc",
                 "apikey": api_key,
             }
@@ -265,7 +265,7 @@ class EvmIndexer(TxIndexer):
                     ))
                     seen_txids.add(txid)
 
-            if len(result) < 1000:
+            if len(result) < 10000:
                 break
             page += 1
 
