@@ -9443,6 +9443,24 @@ function initGlobalSearch() {
         input.value = '';
     }
 
+    function searchResultItem(href, iconHtml, name, sub) {
+        return `<a class="search-result-item" href="${href}" data-search-nav="${href}">
+            <div class="search-result-icon">${iconHtml}</div>
+            <div class="search-result-text">
+                <div class="search-result-name">${typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(name) : name}</div>
+                <div class="search-result-sub">${typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(sub) : sub}</div>
+            </div>
+            <span class="search-result-arrow">&rsaquo;</span>
+        </a>`;
+    }
+
+    const ICON_TOKEN = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M6 12h12"/></svg>';
+    const ICON_WALLET = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M16 14h2"/></svg>';
+    const ICON_DEFI = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>';
+    const ICON_STAKING = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="10"/></svg>';
+    const ICON_EXCHANGE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>';
+    const ICON_PAGE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+
     async function runSearch(query) {
         const q = query.toLowerCase();
 
@@ -9456,15 +9474,17 @@ function initGlobalSearch() {
             p.keywords.some(k => k.includes(q))
         ).slice(0, 3);
 
-        // Search backend (tokens + wallets)
-        let tokens = [];
-        let wallets = [];
+        // Search backend (tokens, wallets, defi, staking, exchanges)
+        let tokens = [], walletResults = [], defiResults = [], stakingResults = [], exchangeResults = [];
         try {
             const resp = await authFetch(`/search?q=${encodeURIComponent(query)}`);
             if (resp.ok) {
                 const data = await resp.json();
                 tokens = data.tokens || [];
-                wallets = data.wallets || [];
+                walletResults = data.wallets || [];
+                defiResults = data.defi || [];
+                stakingResults = data.staking || [];
+                exchangeResults = data.exchanges || [];
             }
         } catch (e) {
             console.warn('[Search] Backend error:', e);
@@ -9477,50 +9497,58 @@ function initGlobalSearch() {
             html += '<div class="search-category-label">Tokens</div>';
             for (const t of tokens) {
                 const logoHtml = t.logo_url
-                    ? `<img src="${DOMPurify.sanitize(t.logo_url)}" alt="" />`
-                    : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M6 12h12"/></svg>';
+                    ? `<img src="${typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(t.logo_url) : t.logo_url}" alt="" />`
+                    : ICON_TOKEN;
                 const val = t.total_value_usd ? `$${Number(t.total_value_usd).toLocaleString(undefined, {maximumFractionDigits: 2})}` : '';
-                html += `<a class="search-result-item" href="/assets.html" data-search-nav="/assets.html">
-                    <div class="search-result-icon">${logoHtml}</div>
-                    <div class="search-result-text">
-                        <div class="search-result-name">${DOMPurify.sanitize(t.ticker || t.name)}</div>
-                        <div class="search-result-sub">${DOMPurify.sanitize(t.blockchain || '')}${val ? ' &middot; ' + val : ''}</div>
-                    </div>
-                    <span class="search-result-arrow">&rsaquo;</span>
-                </a>`;
+                const sub = (t.blockchain || '') + (val ? ' \u00b7 ' + val : '');
+                html += searchResultItem('/assets.html', logoHtml, t.ticker || t.name, sub);
             }
         }
 
-        if (wallets.length > 0) {
+        if (defiResults.length > 0) {
+            html += '<div class="search-category-label">DeFi / Governance</div>';
+            for (const d of defiResults) {
+                const logoHtml = d.logo_url
+                    ? `<img src="${typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(d.logo_url) : d.logo_url}" alt="" />`
+                    : ICON_DEFI;
+                const sub = d.protocol + (d.type ? ' \u00b7 ' + d.type : '') + (d.quantity ? ' \u00b7 ' + d.quantity : '');
+                html += searchResultItem('/assets.html#defiTab', logoHtml, d.token || d.name, sub);
+            }
+        }
+
+        if (stakingResults.length > 0) {
+            html += '<div class="search-category-label">Staking</div>';
+            for (const s of stakingResults) {
+                const logoHtml = s.logo_url
+                    ? `<img src="${typeof DOMPurify !== 'undefined' ? DOMPurify.sanitize(s.logo_url) : s.logo_url}" alt="" />`
+                    : ICON_STAKING;
+                const sub = s.protocol + (s.quantity ? ' \u00b7 ' + s.quantity : '');
+                html += searchResultItem('/assets.html#defiTab', logoHtml, s.token || s.name, sub);
+            }
+        }
+
+        if (exchangeResults.length > 0) {
+            html += '<div class="search-category-label">Exchanges</div>';
+            for (const ex of exchangeResults) {
+                const val = ex.usd_value ? `$${Number(ex.usd_value).toLocaleString(undefined, {maximumFractionDigits: 2})}` : '';
+                const sub = ex.exchange + (val ? ' \u00b7 ' + val : '');
+                html += searchResultItem('/assets.html#exchangesTab', ICON_EXCHANGE, ex.currency, sub);
+            }
+        }
+
+        if (walletResults.length > 0) {
             html += '<div class="search-category-label">Wallets</div>';
-            for (const w of wallets) {
+            for (const w of walletResults) {
                 const addr = w.address.length > 20 ? w.address.slice(0, 10) + '...' + w.address.slice(-8) : w.address;
-                html += `<a class="search-result-item" href="/data.html" data-search-nav="/data.html">
-                    <div class="search-result-icon">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M16 14h2"/></svg>
-                    </div>
-                    <div class="search-result-text">
-                        <div class="search-result-name">${DOMPurify.sanitize(w.label || addr)}</div>
-                        <div class="search-result-sub">${DOMPurify.sanitize(w.blockchain)} &middot; ${DOMPurify.sanitize(addr)}</div>
-                    </div>
-                    <span class="search-result-arrow">&rsaquo;</span>
-                </a>`;
+                const sub = w.blockchain + ' \u00b7 ' + addr;
+                html += searchResultItem('/data.html', ICON_WALLET, w.label || addr, sub);
             }
         }
 
         if (pageResults.length > 0) {
             html += '<div class="search-category-label">Pages</div>';
             for (const p of pageResults) {
-                html += `<a class="search-result-item" href="${p.url}" data-search-nav="${p.url}">
-                    <div class="search-result-icon">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                    </div>
-                    <div class="search-result-text">
-                        <div class="search-result-name">${p.name}</div>
-                        <div class="search-result-sub">${p.url}</div>
-                    </div>
-                    <span class="search-result-arrow">&rsaquo;</span>
-                </a>`;
+                html += searchResultItem(p.url, ICON_PAGE, p.name, p.url);
             }
         }
 
