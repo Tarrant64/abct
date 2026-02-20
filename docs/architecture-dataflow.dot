@@ -1,0 +1,227 @@
+digraph ABCT_DataFlow {
+    // === GLOBAL SETTINGS ===
+    rankdir=LR;
+    splines=true;
+    nodesep=0.6;
+    ranksep=1.5;
+    pad=0.6;
+    fontname="Helvetica Neue";
+    fontsize=11;
+    bgcolor="#0B1120";
+
+    // Title
+    labelloc="t";
+    label=<<FONT FACE="Helvetica Neue" POINT-SIZE="20" COLOR="#E2E8F0"><B>ABCT</B></FONT><BR/><FONT FACE="Helvetica Neue" POINT-SIZE="12" COLOR="#64748B">Data Flow &amp; Pricing Pipeline</FONT>>;
+
+    // Node defaults
+    node [
+        shape=box,
+        style="rounded,filled",
+        fontname="Helvetica Neue",
+        fontsize=10,
+        fontcolor="#E2E8F0",
+        fillcolor="#1E293B",
+        color="#334155",
+        penwidth=2,
+        margin="0.25,0.12"
+    ];
+
+    edge [
+        fontname="Helvetica Neue",
+        fontsize=8,
+        fontcolor="#94A3B8",
+        color="#334155",
+        penwidth=1.5,
+        arrowsize=0.7
+    ];
+
+    // ========== REQUEST FLOW ==========
+    subgraph cluster_request {
+        label=<<FONT FACE="Helvetica Neue" POINT-SIZE="11" COLOR="#A78BFA"><B>REQUEST FLOW</B></FONT>>;
+        style="rounded,filled";
+        fillcolor="#1A1033";
+        color="#A78BFA";
+        penwidth=2;
+        margin=15;
+
+        req_client [
+            label=<<FONT POINT-SIZE="11"><B>Client Request</B></FONT>>,
+            color="#A78BFA", fillcolor="#1E1040"
+        ];
+
+        req_nginx [
+            label=<<FONT POINT-SIZE="11"><B>Nginx :80</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">Route matching</FONT>>,
+            color="#10B981", fillcolor="#0D2818"
+        ];
+
+        req_static [
+            label=<<FONT POINT-SIZE="11"><B>Static Files</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">HTML/JS/CSS</FONT>>,
+            color="#7C3AED", fillcolor="#1E1040"
+        ];
+
+        req_api [
+            label=<<FONT POINT-SIZE="11"><B>FastAPI :8000</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">API endpoints</FONT>>,
+            color="#34D399", fillcolor="#0D2818"
+        ];
+
+        req_rate [
+            label=<<FONT POINT-SIZE="11"><B>Rate Limiter</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">slowapi</FONT>>,
+            color="#EF4444", fillcolor="#1C0D0D"
+        ];
+
+        req_auth [
+            label=<<FONT POINT-SIZE="11"><B>Auth Check</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">Session validation</FONT>>,
+            color="#EF4444", fillcolor="#1C0D0D"
+        ];
+
+        req_demo [
+            label=<<FONT POINT-SIZE="11"><B>Demo Detection</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">Fake data path</FONT>>,
+            color="#6B7280", fillcolor="#1E1E1E"
+        ];
+
+        req_router [
+            label=<<FONT POINT-SIZE="11"><B>Router</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">Endpoint handler</FONT>>,
+            color="#34D399", fillcolor="#0D2818"
+        ];
+
+        req_client -> req_nginx [color="#A78BFA", label="  HTTP/S  "];
+        req_nginx -> req_static [color="#7C3AED", label="  non-API path  "];
+        req_nginx -> req_api [color="#34D399", label="  /api/* path  "];
+        req_api -> req_rate [color="#EF4444"];
+        req_rate -> req_auth [color="#EF4444"];
+        req_auth -> req_demo [color="#6B7280"];
+        req_demo -> req_router [color="#34D399"];
+    }
+
+    // ========== PRICING FALLBACK CHAIN ==========
+    subgraph cluster_pricing {
+        label=<<FONT FACE="Helvetica Neue" POINT-SIZE="11" COLOR="#EC4899"><B>PRICING FALLBACK CHAIN</B></FONT>>;
+        style="rounded,filled";
+        fillcolor="#1C0D1A";
+        color="#EC4899";
+        penwidth=2;
+        margin=15;
+
+        p_request [
+            label=<<FONT POINT-SIZE="11"><B>Price Request</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">pricing.py</FONT>>,
+            color="#EC4899", fillcolor="#1C0D1A"
+        ];
+
+        p_cache [
+            label=<<FONT POINT-SIZE="11"><B>Cache Check</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">TTL: 5 min (HOT)</FONT>>,
+            color="#F59E0B", fillcolor="#1A1508"
+        ];
+
+        p_cg [
+            label=<<FONT POINT-SIZE="12" COLOR="#10B981"><B>1. CoinGecko</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">Primary source</FONT>>,
+            color="#10B981", fillcolor="#0D2818"
+        ];
+
+        p_cmc [
+            label=<<FONT POINT-SIZE="12" COLOR="#3B82F6"><B>2. CoinMarketCap</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">Secondary</FONT>>,
+            color="#3B82F6", fillcolor="#0D1525"
+        ];
+
+        p_cb [
+            label=<<FONT POINT-SIZE="12" COLOR="#F59E0B"><B>3. Coinbase</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">Spot prices (free)</FONT>>,
+            color="#F59E0B", fillcolor="#1A1508"
+        ];
+
+        p_dl [
+            label=<<FONT POINT-SIZE="12" COLOR="#8B5CF6"><B>4. DefiLlama</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">Universal fallback</FONT>>,
+            color="#8B5CF6", fillcolor="#150D2E"
+        ];
+
+        p_tt [
+            label=<<FONT POINT-SIZE="10" COLOR="#06B6D4"><B>TapTools</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">Cardano-only bonus</FONT>>,
+            color="#06B6D4", fillcolor="#0D1B22"
+        ];
+
+        p_stale [
+            label=<<FONT POINT-SIZE="11" COLOR="#EF4444"><B>Stale Cache</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">Last resort backup</FONT>>,
+            color="#EF4444", fillcolor="#1C0D0D"
+        ];
+
+        p_request -> p_cache [color="#EC4899"];
+        p_cache -> p_cg [color="#10B981", label="  miss  ", fontcolor="#10B981"];
+        p_cg -> p_cmc [color="#3B82F6", label="  fail/429  ", fontcolor="#EF4444", style=dashed];
+        p_cmc -> p_cb [color="#F59E0B", label="  fail  ", fontcolor="#EF4444", style=dashed];
+        p_cb -> p_dl [color="#8B5CF6", label="  fail  ", fontcolor="#EF4444", style=dashed];
+        p_dl -> p_stale [color="#EF4444", label="  all fail  ", fontcolor="#EF4444", style=dashed];
+        p_cg -> p_tt [color="#06B6D4", label="  ADA tokens  ", fontcolor="#06B6D4", style=dashed];
+    }
+
+    // ========== CACHE TIERS ==========
+    subgraph cluster_cache {
+        label=<<FONT FACE="Helvetica Neue" POINT-SIZE="11" COLOR="#F59E0B"><B>CACHE TTL TIERS</B></FONT>>;
+        style="rounded,filled";
+        fillcolor="#1A1508";
+        color="#D97706";
+        penwidth=2;
+        margin=15;
+
+        c_hot [
+            label=<<FONT POINT-SIZE="11" COLOR="#EF4444"><B>HOT - 5 min</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">Prices, exchange data, balances</FONT>>,
+            color="#EF4444", fillcolor="#1C0D0D"
+        ];
+
+        c_warm [
+            label=<<FONT POINT-SIZE="11" COLOR="#F59E0B"><B>WARM - 1 hour</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">Analytics, charts, breakdowns</FONT>>,
+            color="#F59E0B", fillcolor="#1A1508"
+        ];
+
+        c_cold [
+            label=<<FONT POINT-SIZE="11" COLOR="#3B82F6"><B>COLD - 24 hours</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">NFT data, DeFi positions</FONT>>,
+            color="#3B82F6", fillcolor="#0D1525"
+        ];
+
+        c_persist [
+            label=<<FONT POINT-SIZE="11" COLOR="#8B5CF6"><B>PERSISTENT - 7 days</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">Portfolio summary snapshots</FONT>>,
+            color="#8B5CF6", fillcolor="#150D2E"
+        ];
+
+        c_hot -> c_warm [style=invis];
+        c_warm -> c_cold [style=invis];
+        c_cold -> c_persist [style=invis];
+    }
+
+    // ========== WALLET BALANCE FLOW ==========
+    subgraph cluster_wallet {
+        label=<<FONT FACE="Helvetica Neue" POINT-SIZE="11" COLOR="#06B6D4"><B>WALLET BALANCE FLOW</B></FONT>>;
+        style="rounded,filled";
+        fillcolor="#0D1B22";
+        color="#06B6D4";
+        penwidth=2;
+        margin=15;
+
+        w_add [
+            label=<<FONT POINT-SIZE="11"><B>Add Wallet</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">Address + blockchain type</FONT>>,
+            color="#A78BFA", fillcolor="#1E1040"
+        ];
+
+        w_detect [
+            label=<<FONT POINT-SIZE="11"><B>Chain Detection</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">Route to service</FONT>>,
+            color="#06B6D4", fillcolor="#0D1B22"
+        ];
+
+        w_fetch [
+            label=<<FONT POINT-SIZE="11"><B>Fetch Balances</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">Chain-specific API</FONT>>,
+            color="#10B981", fillcolor="#0D2818"
+        ];
+
+        w_price [
+            label=<<FONT POINT-SIZE="11"><B>Price Lookup</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">Batch pricing</FONT>>,
+            color="#EC4899", fillcolor="#1C0D1A"
+        ];
+
+        w_store [
+            label=<<FONT POINT-SIZE="11"><B>Store &amp; Cache</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">SQLite + response</FONT>>,
+            color="#EF4444", fillcolor="#1C0D0D"
+        ];
+
+        w_add -> w_detect [color="#06B6D4"];
+        w_detect -> w_fetch [color="#10B981"];
+        w_fetch -> w_price [color="#EC4899"];
+        w_price -> w_store [color="#EF4444"];
+    }
+}

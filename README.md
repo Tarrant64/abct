@@ -3,7 +3,7 @@
 Personal multi-chain portfolio tracker built Cardano-first.
 
 ![Version](https://img.shields.io/badge/version-1.12.3-brightgreen.svg)
-![Build](https://img.shields.io/badge/build-1771184565-blue.svg)
+![Build](https://img.shields.io/badge/build-1771554807-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.109-teal.svg)
@@ -130,7 +130,7 @@ HELIUS_API_KEY=your_key_here         # Solana
 ABCT_REQUIRE_AUTH=false              # Set to false for localhost-only
 ```
 
-Exchange API keys can be configured in the Settings page or via `.env` — see [Exchange Integration Guide](docs/docs/Exchange-Integration.md) for setup instructions.
+Exchange API keys can be configured in the Settings page or via `.env` — see [Exchange Integration Guide](docs/Exchange-Integration.md) for setup instructions.
 
 All API keys should be **read-only**. Never grant withdrawal or trading permissions.
 
@@ -168,7 +168,7 @@ See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
 - **[Architecture](docs/ARCHITECTURE.md)** — System design overview
 - **[Docker Deployment](docs/DOCKER_DEPLOYMENT.md)** — Complete multi-platform Docker setup
-- **[Exchange Integration](docs/docs/Exchange-Integration.md)** — Setup for 7 supported exchanges
+- **[Exchange Integration](docs/Exchange-Integration.md)** — Setup for 7 supported exchanges
 - **[Backup & Restore](docs/BACKUP_RESTORE_GUIDE.md)** — Configuration management
 - **[Security Guide](SECURITY.md)** — Security best practices
 - **[API Providers](docs/API_PROVIDERS.md)** — API provider details and rate limits
@@ -205,5 +205,5 @@ For detailed API information including rate limits and pricing, see [API Provide
 
 ---
 
-**Current Version:** v1.12.3 (BUILD 1771184565)
-**Last Updated:** February 15, 2026
+**Current Version:** v1.12.3 (BUILD 1771554807)
+**Last Updated:** February 19, 2026

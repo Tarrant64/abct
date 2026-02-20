@@ -591,7 +591,7 @@ class SnapshotService:
                 # Tracked tokens would need their own historical price data
                 # Use stored value as fallback
                 tracked_tokens_value = sf(s.get('tracked_tokens_value_usd'))
-            except:
+            except Exception:
                 tracked_tokens_value = sf(s.get('tracked_tokens_value_usd'))
 
             # Calculate total with recalculated values

@@ -14,12 +14,13 @@ import os
 from typing import Optional
 from datetime import datetime
 
-from fastapi import APIRouter, Query, HTTPException, Request
+from fastapi import APIRouter, Query, HTTPException, Request, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.logging_service import get_logging_service, LogLevel
+from auth_utils import verify_session
 
 router = APIRouter(prefix="/logs", tags=["logs"])
 
@@ -37,7 +38,8 @@ async def get_logs(
     level: Optional[str] = Query(None, description="Filter by log level (ERROR, WARNING, INFO, DEBUG)"),
     source: Optional[str] = Query(None, description="Filter by source component"),
     start_time: Optional[str] = Query(None, description="Filter by start time (ISO format)"),
-    end_time: Optional[str] = Query(None, description="Filter by end time (ISO format)")
+    end_time: Optional[str] = Query(None, description="Filter by end time (ISO format)"),
+    user_id: int = Depends(verify_session)
 ):
     """
     Get logs from database with filtering and pagination.
@@ -87,7 +89,8 @@ async def get_logs(
 async def get_recent_logs(
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of logs to return"),
     level: Optional[str] = Query(None, description="Filter by log level"),
-    source: Optional[str] = Query(None, description="Filter by source component")
+    source: Optional[str] = Query(None, description="Filter by source component"),
+    user_id: int = Depends(verify_session)
 ):
     """
     Get recent logs from in-memory buffer.
@@ -121,7 +124,7 @@ async def get_recent_logs(
 
 
 @router.get("/stream")
-async def stream_logs(request: Request):
+async def stream_logs(request: Request, user_id: int = Depends(verify_session)):
     """
     Server-Sent Events endpoint for real-time log streaming.
 
@@ -178,7 +181,7 @@ async def stream_logs(request: Request):
 
 
 @router.get("/stats")
-async def get_log_stats():
+async def get_log_stats(user_id: int = Depends(verify_session)):
     """
     Get logging statistics.
 
@@ -195,7 +198,7 @@ async def get_log_stats():
 
 
 @router.delete("")
-async def clear_logs(data: ClearLogsRequest):
+async def clear_logs(data: ClearLogsRequest, user_id: int = Depends(verify_session)):
     """
     Clear logs from database and/or buffer.
 
@@ -234,7 +237,8 @@ async def clear_logs(data: ClearLogsRequest):
 @router.post("/test")
 async def create_test_log(
     level: str = Query("INFO", description="Log level to test"),
-    message: str = Query("Test log message", description="Message to log")
+    message: str = Query("Test log message", description="Message to log"),
+    user_id: int = Depends(verify_session)
 ):
     """
     Create a test log entry.

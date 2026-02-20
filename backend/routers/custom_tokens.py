@@ -233,7 +233,7 @@ async def lookup_cardano_token(policy_id: str, asset_name: str = "") -> dict:
                     prices = await pricing_service.get_all_tracked_prices()
                     if ticker.upper() in prices:
                         token_info['price_usd'] = prices[ticker.upper()].get('usd', 0)
-                except:
+                except Exception:
                     pass
 
             return token_info
@@ -263,7 +263,7 @@ async def get_token(token_id: int, user_id: int = Depends(verify_session)):
                 token['current_price'] = prices[ticker].get('usd', 0)
                 quantity = float(token.get('quantity', 0))
                 token['value_usd'] = quantity * token['current_price']
-        except:
+        except Exception:
             pass
 
     return token

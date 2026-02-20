@@ -8246,7 +8246,8 @@ async function loadV2BalanceHistory(range) {
         if (loadingState) loadingState.style.display = 'none';
         if (emptyState) {
             emptyState.style.display = 'flex';
-            setSafeHTML(emptyState, '<p>Error loading on-chain history.</p><button class="btn btn-primary" onclick="startBalanceCollection()">Collect Historical Balances</button>');
+            setSafeHTML(emptyState, '<p>Error loading on-chain history.</p><button class="btn btn-primary" data-action="collect">Collect Historical Balances</button>');
+            emptyState.querySelector('[data-action="collect"]')?.addEventListener('click', startBalanceCollection);
         }
     }
 }
@@ -8569,7 +8570,8 @@ async function startBalanceCollection() {
         if (progress) progress.style.display = 'none';
         if (emptyState) {
             emptyState.style.display = 'flex';
-            setSafeHTML(emptyState, '<p>Error starting collection.</p><button class="btn btn-primary" onclick="startBalanceCollection()">Retry</button>');
+            setSafeHTML(emptyState, '<p>Error starting collection.</p><button class="btn btn-primary" data-action="collect">Retry</button>');
+            emptyState.querySelector('[data-action="collect"]')?.addEventListener('click', startBalanceCollection);
         }
     }
 }
@@ -8610,7 +8612,8 @@ function pollV2CollectionStatus() {
                 if (emptyState) {
                     emptyState.style.display = 'flex';
                     const msg = data.status === 'cancelled' ? 'Collection cancelled.' : (data.error_message || 'Collection failed.');
-                    setSafeHTML(emptyState, '<p>' + msg + '</p><button class="btn btn-primary" onclick="startBalanceCollection()">Retry</button>');
+                    setSafeHTML(emptyState, '<p>' + msg + '</p><button class="btn btn-primary" data-action="collect">Retry</button>');
+                    emptyState.querySelector('[data-action="collect"]')?.addEventListener('click', startBalanceCollection);
                 }
             }
         } catch (error) {

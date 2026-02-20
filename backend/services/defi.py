@@ -334,7 +334,7 @@ class DeFiService:
                     # Decode asset name
                     try:
                         asset_name = bytes.fromhex(asset_name_hex).decode('utf-8') if asset_name_hex else ""
-                    except:
+                    except Exception:
                         asset_name = asset_name_hex
 
                     # Check if it's a known DeFi token

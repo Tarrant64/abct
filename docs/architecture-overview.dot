@@ -1,0 +1,311 @@
+digraph ABCT_Overview {
+    // === GLOBAL SETTINGS ===
+    rankdir=TB;
+    splines=true;
+    nodesep=1.0;
+    ranksep=1.2;
+    pad=0.8;
+    fontname="Helvetica Neue";
+    fontsize=11;
+    bgcolor="#0B1120";
+    compound=true;
+
+    // Title
+    labelloc="t";
+    label=<<FONT FACE="Helvetica Neue" POINT-SIZE="22" COLOR="#E2E8F0"><B>ABCT</B></FONT><BR/><FONT FACE="Helvetica Neue" POINT-SIZE="13" COLOR="#64748B">A Better Crypto Tracker  |  System Architecture</FONT><BR/><FONT FACE="Helvetica Neue" POINT-SIZE="10" COLOR="#475569">v1.12.3  |  26 Blockchains  |  7 Exchanges  |  Multi-User  |  Docker</FONT>>;
+
+    // Node defaults
+    node [
+        shape=box,
+        style="rounded,filled",
+        fontname="Helvetica Neue",
+        fontsize=10,
+        fontcolor="#E2E8F0",
+        fillcolor="#1E293B",
+        color="#334155",
+        penwidth=2,
+        margin="0.3,0.15"
+    ];
+
+    edge [
+        fontname="Helvetica Neue",
+        fontsize=8,
+        fontcolor="#94A3B8",
+        color="#334155",
+        penwidth=1.5,
+        arrowsize=0.7
+    ];
+
+    // ========== USER LAYER ==========
+    subgraph cluster_user {
+        label=<<FONT FACE="Helvetica Neue" POINT-SIZE="11" COLOR="#A78BFA"><B>CLIENT</B></FONT>>;
+        style="rounded,filled";
+        fillcolor="#1A1033";
+        color="#A78BFA";
+        penwidth=2;
+        margin=20;
+
+        browser [
+            label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="12"><B>Web Browser</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Desktop &amp; Mobile Web</FONT></TD></TR></TABLE>>,
+            color="#A78BFA",
+            fillcolor="#1E1040"
+        ];
+
+        mobile_app [
+            label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="12"><B>Mobile App</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">iOS / Android (Flutter)</FONT></TD></TR></TABLE>>,
+            color="#A78BFA",
+            fillcolor="#1E1040"
+        ];
+    }
+
+    // ========== DOCKER CONTAINER ==========
+    subgraph cluster_docker {
+        label=<<FONT FACE="Helvetica Neue" POINT-SIZE="11" COLOR="#64748B"><B>DOCKER CONTAINER</B></FONT><BR/><FONT FACE="Helvetica Neue" POINT-SIZE="9" COLOR="#475569">abct-dashboard</FONT>>;
+        style="rounded,filled";
+        fillcolor="#0F172A";
+        color="#1E293B";
+        penwidth=2;
+        margin=25;
+
+        // --- Nginx ---
+        nginx [
+            label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="12"><B>Nginx</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Reverse Proxy :80</FONT></TD></TR></TABLE>>,
+            color="#10B981",
+            fillcolor="#0D2818"
+        ];
+
+        // --- Frontend ---
+        subgraph cluster_frontend {
+            label=<<FONT FACE="Helvetica Neue" POINT-SIZE="11" COLOR="#A78BFA"><B>FRONTEND</B></FONT>>;
+            style="rounded,filled";
+            fillcolor="#150D2E";
+            color="#7C3AED";
+            penwidth=1.5;
+            margin=15;
+
+            fe_pages [
+                label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11"><B>19 HTML Pages</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Dashboard | Wallets | NFTs | Transactions</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Settings | Security | Backup | Logs | ...</FONT></TD></TR></TABLE>>,
+                color="#7C3AED",
+                fillcolor="#1E1040"
+            ];
+
+            fe_js [
+                label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11"><B>Client Logic</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">app.js | transactions.js | session-auth.js</FONT></TD></TR></TABLE>>,
+                color="#7C3AED",
+                fillcolor="#1E1040"
+            ];
+
+            fe_css [
+                label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11"><B>Theme System</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">5 Themes | CSS Custom Properties</FONT></TD></TR></TABLE>>,
+                color="#7C3AED",
+                fillcolor="#1E1040"
+            ];
+        }
+
+        // --- Backend Core ---
+        subgraph cluster_backend {
+            label=<<FONT FACE="Helvetica Neue" POINT-SIZE="11" COLOR="#34D399"><B>BACKEND</B></FONT><BR/><FONT FACE="Helvetica Neue" POINT-SIZE="9" COLOR="#475569">FastAPI + Uvicorn :8000</FONT>>;
+            style="rounded,filled";
+            fillcolor="#0D1F17";
+            color="#059669";
+            penwidth=1.5;
+            margin=15;
+
+            // Middleware
+            middleware [
+                label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11"><B>Middleware</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Auth | Demo Mode | Rate Limit | Size Limit | GZip</FONT></TD></TR></TABLE>>,
+                color="#EF4444",
+                fillcolor="#1C0D0D"
+            ];
+
+            // API Routers
+            routers [
+                label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11"><B>27 API Routers</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">/wallets | /portfolio | /transactions | /nfts</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">/prices | /exchanges | /defi | /analytics</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">/mobile | /intelligence | /engine | /auth | ...</FONT></TD></TR></TABLE>>,
+                color="#34D399",
+                fillcolor="#0D2818"
+            ];
+        }
+
+        // --- Service Layer ---
+        subgraph cluster_services {
+            label=<<FONT FACE="Helvetica Neue" POINT-SIZE="11" COLOR="#F59E0B"><B>SERVICES LAYER</B></FONT>>;
+            style="rounded,filled";
+            fillcolor="#1A1508";
+            color="#D97706";
+            penwidth=1.5;
+            margin=15;
+
+            svc_blockchain [
+                label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11" COLOR="#06B6D4"><B>Blockchain Services</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">26 chains: Cardano, Bitcoin, Ethereum,</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Solana, Polygon, Base, Tron, XRP, ...</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">+ Generic EVM (BSC/Arbitrum/Avalanche)</FONT></TD></TR></TABLE>>,
+                color="#06B6D4",
+                fillcolor="#0D1B22"
+            ];
+
+            svc_nft [
+                label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11" COLOR="#F59E0B"><B>NFT Services</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Cardano | Ethereum | Solana | Algorand</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Image Cache | Scheduler | NMKR | NFTcdn</FONT></TD></TR></TABLE>>,
+                color="#F59E0B",
+                fillcolor="#1A1508"
+            ];
+
+            svc_exchange [
+                label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11" COLOR="#3B82F6"><B>Exchange Services</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Coinbase | Binance | Binance.US</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">OKX | Bitget | Gate.io | KuCoin</FONT></TD></TR></TABLE>>,
+                color="#3B82F6",
+                fillcolor="#0D1525"
+            ];
+
+            svc_pricing [
+                label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11" COLOR="#EC4899"><B>Pricing Engine</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">4-tier fallback chain</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">CoinGecko &#8594; CMC &#8594; Coinbase &#8594; DefiLlama</FONT></TD></TR></TABLE>>,
+                color="#EC4899",
+                fillcolor="#1C0D1A"
+            ];
+
+            svc_support [
+                label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11" COLOR="#8B5CF6"><B>Support Services</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Snapshots | Analytics | Chain Analytics</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">TradFi | Offchain | Balance History</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Logging | SSL | API Health | Logos</FONT></TD></TR></TABLE>>,
+                color="#8B5CF6",
+                fillcolor="#150D2E"
+            ];
+
+            svc_demo [
+                label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11" COLOR="#6B7280"><B>Demo Services</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Wallets | NFTs | Transactions</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">DeFi | Exchanges | Prices</FONT></TD></TR></TABLE>>,
+                color="#6B7280",
+                fillcolor="#1E1E1E"
+            ];
+        }
+
+        // --- HTTP Client Pool ---
+        http_pool [
+            label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11"><B>HTTP Client Pool</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">30+ named persistent connections</FONT></TD></TR></TABLE>>,
+            color="#10B981",
+            fillcolor="#0D2818"
+        ];
+
+        // --- Data Storage ---
+        subgraph cluster_data {
+            label=<<FONT FACE="Helvetica Neue" POINT-SIZE="11" COLOR="#EF4444"><B>DATA STORAGE</B></FONT>>;
+            style="rounded,filled";
+            fillcolor="#1C0D0D";
+            color="#991B1B";
+            penwidth=1.5;
+            margin=15;
+
+            sqlite [
+                label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11"><B>SQLite (WAL)</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">portfolio.db + nft_images.db</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Users | Wallets | Cache | Sessions</FONT></TD></TR></TABLE>>,
+                shape=cylinder,
+                color="#EF4444",
+                fillcolor="#1C0D0D"
+            ];
+
+            certs [
+                label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11"><B>Certificates</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">SSL/TLS certs</FONT></TD></TR></TABLE>>,
+                shape=folder,
+                color="#EF4444",
+                fillcolor="#1C0D0D"
+            ];
+        }
+    }
+
+    // ========== EXTERNAL APIs ==========
+    subgraph cluster_external {
+        label=<<FONT FACE="Helvetica Neue" POINT-SIZE="11" COLOR="#F97316"><B>EXTERNAL APIs</B></FONT>>;
+        style="rounded,filled";
+        fillcolor="#1A1008";
+        color="#C2410C";
+        penwidth=2;
+        margin=20;
+
+        ext_cardano [
+            label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11" COLOR="#06B6D4"><B>Cardano</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Blockfrost | Maestro</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">TapTools | Koios | CExplorer</FONT></TD></TR></TABLE>>,
+            color="#06B6D4",
+            fillcolor="#0D1B22"
+        ];
+
+        ext_evm [
+            label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11" COLOR="#3B82F6"><B>EVM Chains</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Alchemy | Etherscan | Polygonscan</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Basescan | BscScan | Arbiscan | Snowscan</FONT></TD></TR></TABLE>>,
+            color="#3B82F6",
+            fillcolor="#0D1525"
+        ];
+
+        ext_other [
+            label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11" COLOR="#10B981"><B>Other Chains</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Blockstream | Helius | XRPL | TronGrid</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Mirror Node | MultiversX | Sui RPC</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">BlockCypher | Hiro | VeBlocks | ...</FONT></TD></TR></TABLE>>,
+            color="#10B981",
+            fillcolor="#0D2818"
+        ];
+
+        ext_pricing [
+            label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11" COLOR="#EC4899"><B>Pricing APIs</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">CoinGecko | CoinMarketCap</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Coinbase | DefiLlama</FONT></TD></TR></TABLE>>,
+            color="#EC4899",
+            fillcolor="#1C0D1A"
+        ];
+
+        ext_exchange [
+            label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11" COLOR="#F59E0B"><B>Exchange APIs</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Coinbase CDP | Binance | OKX</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Bitget | Gate.io | KuCoin</FONT></TD></TR></TABLE>>,
+            color="#F59E0B",
+            fillcolor="#1A1508"
+        ];
+
+        ext_nft [
+            label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11" COLOR="#F97316"><B>NFT / Visual</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Moralis | NMKR | NFTcdn</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">LogoKit | Logostream</FONT></TD></TR></TABLE>>,
+            color="#F97316",
+            fillcolor="#1A1008"
+        ];
+    }
+
+    // ========== SECURITY ==========
+    subgraph cluster_security {
+        label=<<FONT FACE="Helvetica Neue" POINT-SIZE="11" COLOR="#64748B"><B>SECURITY</B></FONT>>;
+        style="rounded,filled";
+        fillcolor="#111318";
+        color="#475569";
+        penwidth=2;
+        margin=15;
+
+        sec [
+            label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11"><B>Security Pipeline</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Pre-push Audit | Git Hooks</FONT></TD></TR></TABLE>>,
+            color="#64748B",
+            fillcolor="#1E1E1E"
+        ];
+    }
+
+    // ========== CONNECTIONS ==========
+
+    // Client to Nginx
+    browser -> nginx [color="#A78BFA", label="  HTTP/S  ", fontcolor="#A78BFA"];
+    mobile_app -> nginx [color="#A78BFA", label="  REST API  ", fontcolor="#A78BFA"];
+
+    // Nginx to Frontend/Backend
+    nginx -> fe_pages [color="#7C3AED", label="  Static  ", fontcolor="#7C3AED"];
+    nginx -> routers [color="#34D399", label="  Proxy  ", fontcolor="#34D399"];
+
+    // Frontend to Backend
+    fe_js -> routers [color="#34D399", label="  JSON  ", fontcolor="#34D399", style=dashed];
+
+    // Backend internal flow
+    routers -> middleware [color="#EF4444", dir=both, style=dashed, label="  filter  ", fontcolor="#EF4444"];
+    routers -> svc_blockchain [color="#06B6D4"];
+    routers -> svc_nft [color="#F59E0B"];
+    routers -> svc_exchange [color="#3B82F6"];
+    routers -> svc_pricing [color="#EC4899"];
+    routers -> svc_support [color="#8B5CF6"];
+    middleware -> svc_demo [color="#6B7280", label="  demo user  ", fontcolor="#6B7280"];
+
+    // Services to HTTP Pool
+    svc_blockchain -> http_pool [color="#06B6D4", style=dashed];
+    svc_nft -> http_pool [color="#F59E0B", style=dashed];
+    svc_exchange -> http_pool [color="#3B82F6", style=dashed];
+    svc_pricing -> http_pool [color="#EC4899", style=dashed];
+
+    // Services to Storage
+    routers -> sqlite [color="#EF4444", style=dashed, label="  cache/data  ", fontcolor="#EF4444"];
+    svc_support -> sqlite [color="#EF4444", style=dashed];
+
+    // HTTP Pool to External APIs
+    http_pool -> ext_cardano [color="#06B6D4", label="  HTTPS  ", fontcolor="#06B6D4"];
+    http_pool -> ext_evm [color="#3B82F6", label="  HTTPS  ", fontcolor="#3B82F6"];
+    http_pool -> ext_other [color="#10B981", label="  HTTPS  ", fontcolor="#10B981"];
+    http_pool -> ext_pricing [color="#EC4899", label="  HTTPS  ", fontcolor="#EC4899"];
+    http_pool -> ext_exchange [color="#F59E0B", label="  HTTPS  ", fontcolor="#F59E0B"];
+    http_pool -> ext_nft [color="#F97316", label="  HTTPS  ", fontcolor="#F97316"];
+
+    // Security
+    sec -> routers [color="#64748B", style=dotted, label="  scans  ", fontcolor="#64748B"];
+}

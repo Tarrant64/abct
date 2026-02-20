@@ -6,7 +6,7 @@
 +-----------------------------------------------------------------------------------+
 |                              ABCT System (v1.12.3)                                 |
 |                         Multi-User Portfolio Tracker                              |
-|                              BUILD 1771184565                                     |
+|                              BUILD 1771554807                                     |
 +-----------------------------------------------------------------------------------+
 
                                    +-----------------+
@@ -422,7 +422,7 @@ Shared persistent `httpx.AsyncClient` instances via `get_client(name, timeout)`:
 - **Cache Busting**: Build version system (v=1770726755) for immediate updates
 
 ### External Services (35 providers)
-- **Cardano**: Blockfrost, CExplorer, TapTools, Koios
+- **Cardano**: Blockfrost, CExplorer, TapTools, Koios, Maestro (fallback)
 - **Bitcoin**: Blockstream
 - **EVM**: Etherscan, Alchemy, Polygonscan, Basescan, BscScan, Arbiscan, Snowscan
 - **Solana**: Helius
@@ -543,7 +543,9 @@ ABCT/
 │   │   ├── demo.py                 # Demo mode
 │   │   ├── nmkr.py                 # NMKR minting
 │   │   ├── cloudflare.py           # Cloudflare tunnel
-│   │   └── mobile.py               # Mobile API
+│   │   ├── mobile.py               # Mobile API
+│   │   ├── analytics.py            # Analytics endpoints
+│   │   └── intelligence.py         # Intelligence endpoints
 │   ├── engine/                     # V2 Ingestion Engine (v1.5.0+)
 │   │   ├── models.py               # ChainId, WorkUnit, CanonicalEvent
 │   │   ├── db.py                   # 8 engine_* tables
@@ -556,7 +558,7 @@ ABCT/
 │   │   ├── positions/              # Stage F (2 stubs)
 │   │   ├── providers/              # Registry + Provider dataclass
 │   │   └── scheduler/              # Scheduler + TokenBucket + CircuitBreaker
-│   ├── services/                   # 50+ business logic services
+│   ├── services/                   # 75+ business logic services
 │   │   ├── http_client.py          # Shared HTTP client pool
 │   │   ├── api_key_manager.py      # Dynamic API key management
 │   │   ├── pricing.py              # 5-source pricing fallback
@@ -584,9 +586,19 @@ ABCT/
 │   │   ├── cosmos.py              # Cosmos (Cosmos LCD/PublicNode)
 │   │   ├── near.py                # NEAR (NEAR RPC + NearBlocks API)
 │   │   ├── icp.py                 # ICP (Rosetta API)
+│   │   ├── helium.py              # Helium (DePIN tracking)
+│   │   ├── charli3.py             # Charli3 oracle service
+│   │   ├── tradfi_data.py         # TradFi data integration
+│   │   ├── chain_analytics.py     # Chain analytics service
+│   │   ├── offchain_collector.py  # Off-chain data collector
+│   │   ├── nftcdn.py              # NFT CDN image service
+│   │   ├── balance_history.py     # Balance history service
+│   │   ├── api_health.py          # API health monitoring
+│   │   ├── rate_limit_tracker.py  # Rate limit tracking
+│   │   ├── known_addresses.py     # Known address labels
 │   │   └── ...                     # Exchange, NFT, demo services
 │   └── middleware/                 # Security middleware
-├── frontend/                      # HTML/CSS/JS (17 pages)
+├── frontend/                      # HTML/CSS/JS (19 pages)
 │   ├── index.html                 # Dashboard
 │   ├── wallets.html               # Wallet management
 │   ├── assets.html                # Asset breakdown
@@ -595,6 +607,9 @@ ABCT/
 │   ├── settings.html              # Consolidated settings
 │   ├── system.html                # System management
 │   ├── login.html                 # Login
+│   ├── api-help.html              # API help documentation
+│   ├── dashv2.html                # Dashboard V2
+│   ├── data.html                  # Data management
 │   └── css/styles.css             # 5 themes, 7000+ lines
 ├── data/
 │   └── portfolio.db               # SQLite (includes engine_* tables)

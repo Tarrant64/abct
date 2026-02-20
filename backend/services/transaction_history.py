@@ -646,7 +646,7 @@ class TransactionHistoryService:
         if isinstance(amount, str):
             try:
                 amount = float(amount)
-            except:
+            except Exception:
                 amount = 0
 
         # Calculate fee
@@ -743,7 +743,7 @@ class TransactionHistoryService:
                                 try:
                                     token_name = bytes.fromhex(asset_name_hex).decode('utf-8')
                                     token_symbol = token_name[:10]  # Truncate if too long
-                                except:
+                                except Exception:
                                     token_symbol = 'TOKEN'
 
             # Get sender addresses

@@ -285,10 +285,10 @@ class SolanaService(APIKeyManager):
             return info.get('tokens', [])
         return []
 
-    def get_rate_limit_status(self) -> dict:
+    async def get_rate_limit_status(self) -> dict:
         """Get current rate limit status."""
         return {
-            'configured': self.is_configured(),
+            'configured': await self.is_configured(),
             'cache_size': len(self._balance_cache),
             'cache_ttl_minutes': self._cache_ttl.total_seconds() / 60
         }

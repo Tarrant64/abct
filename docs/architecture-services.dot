@@ -1,0 +1,260 @@
+digraph ABCT_Services {
+    // === GLOBAL SETTINGS ===
+    rankdir=TB;
+    splines=true;
+    nodesep=0.8;
+    ranksep=1.2;
+    pad=0.8;
+    fontname="Helvetica Neue";
+    fontsize=10;
+    bgcolor="#0B1120";
+
+    // Title
+    labelloc="t";
+    label=<<FONT FACE="Helvetica Neue" POINT-SIZE="22" COLOR="#E2E8F0"><B>ABCT</B></FONT><BR/><FONT FACE="Helvetica Neue" POINT-SIZE="13" COLOR="#64748B">Blockchain &amp; Service Map</FONT><BR/><FONT FACE="Helvetica Neue" POINT-SIZE="10" COLOR="#475569">26 Chains  |  7 Exchanges  |  4 NFT Chains  |  80+ Services</FONT>>;
+
+    // Node defaults
+    node [
+        shape=plain,
+        fontname="Helvetica Neue",
+        fontsize=9,
+        fontcolor="#E2E8F0"
+    ];
+
+    edge [
+        fontname="Helvetica Neue",
+        fontsize=8,
+        fontcolor="#94A3B8",
+        color="#334155",
+        penwidth=1.5,
+        arrowsize=0.6
+    ];
+
+    // ========== ROUTER HUB ==========
+    hub [label=<
+        <TABLE BGCOLOR="#0D2818" BORDER="2" CELLBORDER="0" CELLSPACING="6" CELLPADDING="8" COLOR="#34D399" STYLE="ROUNDED">
+            <TR><TD COLSPAN="3"><FONT POINT-SIZE="14" COLOR="#34D399"><B>FastAPI Router Hub</B></FONT></TD></TR>
+            <TR>
+                <TD BGCOLOR="#112F1E"><FONT POINT-SIZE="9" COLOR="#94A3B8">/wallets</FONT></TD>
+                <TD BGCOLOR="#112F1E"><FONT POINT-SIZE="9" COLOR="#94A3B8">/portfolio</FONT></TD>
+                <TD BGCOLOR="#112F1E"><FONT POINT-SIZE="9" COLOR="#94A3B8">/transactions</FONT></TD>
+            </TR>
+            <TR>
+                <TD BGCOLOR="#112F1E"><FONT POINT-SIZE="9" COLOR="#94A3B8">/nfts</FONT></TD>
+                <TD BGCOLOR="#112F1E"><FONT POINT-SIZE="9" COLOR="#94A3B8">/exchanges</FONT></TD>
+                <TD BGCOLOR="#112F1E"><FONT POINT-SIZE="9" COLOR="#94A3B8">/prices</FONT></TD>
+            </TR>
+            <TR>
+                <TD BGCOLOR="#112F1E"><FONT POINT-SIZE="9" COLOR="#94A3B8">/defi</FONT></TD>
+                <TD BGCOLOR="#112F1E"><FONT POINT-SIZE="9" COLOR="#94A3B8">/analytics</FONT></TD>
+                <TD BGCOLOR="#112F1E"><FONT POINT-SIZE="9" COLOR="#94A3B8">/mobile</FONT></TD>
+            </TR>
+            <TR>
+                <TD BGCOLOR="#112F1E"><FONT POINT-SIZE="9" COLOR="#94A3B8">/auth</FONT></TD>
+                <TD BGCOLOR="#112F1E"><FONT POINT-SIZE="9" COLOR="#94A3B8">/settings</FONT></TD>
+                <TD BGCOLOR="#112F1E"><FONT POINT-SIZE="9" COLOR="#94A3B8">+16 more</FONT></TD>
+            </TR>
+        </TABLE>
+    >];
+
+    // ========== L1 MAJOR CHAINS ==========
+    chains_l1 [label=<
+        <TABLE BGCOLOR="#0D1B22" BORDER="2" CELLBORDER="0" CELLSPACING="5" CELLPADDING="6" COLOR="#06B6D4" STYLE="ROUNDED">
+            <TR><TD COLSPAN="3"><FONT POINT-SIZE="12" COLOR="#22D3EE"><B>L1 Major Chains</B></FONT></TD></TR>
+            <TR>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#F59E0B"><B>Bitcoin</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Blockstream | Mempool</FONT></TD>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#627EEA"><B>Ethereum</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Alchemy | Etherscan</FONT></TD>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#0088FF"><B>Cardano</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Blockfrost | Maestro</FONT></TD>
+            </TR>
+            <TR>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#9945FF"><B>Solana</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Helius RPC</FONT></TD>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#4DA2FF"><B>XRP</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">XRPL Cluster</FONT></TD>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#EF4444"><B>Tron</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">TronGrid (free)</FONT></TD>
+            </TR>
+        </TABLE>
+    >];
+
+    // ========== EVM COMPATIBLE ==========
+    chains_evm [label=<
+        <TABLE BGCOLOR="#0D1020" BORDER="2" CELLBORDER="0" CELLSPACING="5" CELLPADDING="6" COLOR="#4338CA" STYLE="ROUNDED">
+            <TR><TD COLSPAN="5"><FONT POINT-SIZE="12" COLOR="#818CF8"><B>EVM Compatible</B></FONT><BR/><FONT POINT-SIZE="8" COLOR="#475569">All via Alchemy + *scan explorers</FONT></TD></TR>
+            <TR>
+                <TD BGCOLOR="#111530"><FONT COLOR="#8247E5"><B>Polygon</B></FONT></TD>
+                <TD BGCOLOR="#111530"><FONT COLOR="#0052FF"><B>Base</B></FONT></TD>
+                <TD BGCOLOR="#111530"><FONT COLOR="#F3BA2F"><B>BSC</B></FONT></TD>
+                <TD BGCOLOR="#111530"><FONT COLOR="#28A0F0"><B>Arbitrum</B></FONT></TD>
+                <TD BGCOLOR="#111530"><FONT COLOR="#E84142"><B>Avalanche</B></FONT></TD>
+            </TR>
+        </TABLE>
+    >];
+
+    // ========== ALT L1 CHAINS ==========
+    chains_alt [label=<
+        <TABLE BGCOLOR="#0D1B22" BORDER="2" CELLBORDER="0" CELLSPACING="5" CELLPADDING="6" COLOR="#0D9488" STYLE="ROUNDED">
+            <TR><TD COLSPAN="4"><FONT POINT-SIZE="12" COLOR="#2DD4BF"><B>Alt L1 Chains</B></FONT></TD></TR>
+            <TR>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#00C2B0"><B>Algorand</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Pera | Tatum</FONT></TD>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#00ADEF"><B>Hedera</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Mirror Node</FONT></TD>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#23F7DD"><B>MultiversX</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">API</FONT></TD>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#4DA2FF"><B>Sui</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">RPC</FONT></TD>
+            </TR>
+            <TR>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#2DD4BF"><B>Aptos</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">API</FONT></TD>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#6F7390"><B>Cosmos</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">PublicNode</FONT></TD>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#00EC97"><B>NEAR</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">RPC</FONT></TD>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#29ABE2"><B>ICP</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Rosetta</FONT></TD>
+            </TR>
+        </TABLE>
+    >];
+
+    // ========== OTHER CHAINS ==========
+    chains_other [label=<
+        <TABLE BGCOLOR="#111318" BORDER="2" CELLBORDER="0" CELLSPACING="5" CELLPADDING="6" COLOR="#475569" STYLE="ROUNDED">
+            <TR><TD COLSPAN="4"><FONT POINT-SIZE="12" COLOR="#94A3B8"><B>Other Chains</B></FONT></TD></TR>
+            <TR>
+                <TD BGCOLOR="#191C22"><FONT COLOR="#A6A9AA"><B>Litecoin</B></FONT></TD>
+                <TD BGCOLOR="#191C22"><FONT COLOR="#C3A634"><B>Dogecoin</B></FONT></TD>
+                <TD BGCOLOR="#191C22"><FONT COLOR="#F4B728"><B>Zcash</B></FONT></TD>
+                <TD BGCOLOR="#191C22"><FONT COLOR="#2C7DF7"><B>Tezos</B></FONT></TD>
+            </TR>
+            <TR>
+                <TD BGCOLOR="#191C22"><FONT COLOR="#5546FF"><B>Stacks</B></FONT></TD>
+                <TD BGCOLOR="#191C22"><FONT COLOR="#15BDFF"><B>VeChain</B></FONT></TD>
+                <TD BGCOLOR="#191C22"><FONT COLOR="#0090FF"><B>Filecoin</B></FONT></TD>
+                <TD BGCOLOR="#191C22"><FONT COLOR="#474DFF"><B>Helium</B></FONT></TD>
+            </TR>
+        </TABLE>
+    >];
+
+    // ========== NFT SERVICES ==========
+    nfts [label=<
+        <TABLE BGCOLOR="#1A1508" BORDER="2" CELLBORDER="0" CELLSPACING="5" CELLPADDING="6" COLOR="#D97706" STYLE="ROUNDED">
+            <TR><TD COLSPAN="3"><FONT POINT-SIZE="12" COLOR="#F59E0B"><B>NFT Services</B></FONT></TD></TR>
+            <TR>
+                <TD BGCOLOR="#231C0A"><FONT COLOR="#0088FF"><B>Cardano</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">NMKR | NFTcdn</FONT></TD>
+                <TD BGCOLOR="#231C0A"><FONT COLOR="#627EEA"><B>Ethereum</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Alchemy NFT</FONT></TD>
+                <TD BGCOLOR="#231C0A"><FONT COLOR="#9945FF"><B>Solana</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Helius DAS</FONT></TD>
+            </TR>
+            <TR>
+                <TD BGCOLOR="#231C0A"><FONT COLOR="#00C2B0"><B>Algorand</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">ARC-3/69</FONT></TD>
+                <TD BGCOLOR="#231C0A"><FONT COLOR="#F59E0B"><B>Image Cache</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Thumbnails</FONT></TD>
+                <TD BGCOLOR="#231C0A"><FONT COLOR="#F59E0B"><B>Scheduler</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Background</FONT></TD>
+            </TR>
+        </TABLE>
+    >];
+
+    // ========== EXCHANGE SERVICES ==========
+    exchanges [label=<
+        <TABLE BGCOLOR="#0D1525" BORDER="2" CELLBORDER="0" CELLSPACING="5" CELLPADDING="6" COLOR="#2563EB" STYLE="ROUNDED">
+            <TR><TD COLSPAN="4"><FONT POINT-SIZE="12" COLOR="#3B82F6"><B>Exchange Services</B></FONT><BR/><FONT POINT-SIZE="8" COLOR="#475569">7 Platforms</FONT></TD></TR>
+            <TR>
+                <TD BGCOLOR="#111D35"><FONT COLOR="#0052FF"><B>Coinbase</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">CDP OAuth</FONT></TD>
+                <TD BGCOLOR="#111D35"><FONT COLOR="#F3BA2F"><B>Binance</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Global</FONT></TD>
+                <TD BGCOLOR="#111D35"><FONT COLOR="#F3BA2F"><B>Binance.US</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">US variant</FONT></TD>
+                <TD BGCOLOR="#111D35"><FONT COLOR="#94A3B8"><B>OKX</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Multi-asset</FONT></TD>
+            </TR>
+            <TR>
+                <TD BGCOLOR="#111D35"><FONT COLOR="#00D4AA"><B>Bitget</B></FONT></TD>
+                <TD BGCOLOR="#111D35"><FONT COLOR="#2354E6"><B>Gate.io</B></FONT></TD>
+                <TD BGCOLOR="#111D35"><FONT COLOR="#24AE8F"><B>KuCoin</B></FONT></TD>
+                <TD></TD>
+            </TR>
+        </TABLE>
+    >];
+
+    // ========== PRICING ENGINE ==========
+    pricing [label=<
+        <TABLE BGCOLOR="#1C0D1A" BORDER="2" CELLBORDER="0" CELLSPACING="5" CELLPADDING="6" COLOR="#BE185D" STYLE="ROUNDED">
+            <TR><TD COLSPAN="3"><FONT POINT-SIZE="12" COLOR="#EC4899"><B>Pricing Engine</B></FONT><BR/><FONT POINT-SIZE="8" COLOR="#475569">4-tier fallback chain</FONT></TD></TR>
+            <TR>
+                <TD BGCOLOR="#2A1226"><FONT COLOR="#10B981"><B>1. CoinGecko</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Primary source</FONT></TD>
+                <TD BGCOLOR="#2A1226"><FONT COLOR="#3B82F6"><B>2. CoinMarketCap</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Secondary</FONT></TD>
+                <TD BGCOLOR="#2A1226"><FONT COLOR="#F59E0B"><B>3. Coinbase</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Spot prices (free)</FONT></TD>
+            </TR>
+            <TR>
+                <TD BGCOLOR="#2A1226"><FONT COLOR="#8B5CF6"><B>4. DefiLlama</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Universal fallback</FONT></TD>
+                <TD BGCOLOR="#2A1226"><FONT COLOR="#06B6D4"><B>TapTools</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Cardano bonus</FONT></TD>
+                <TD></TD>
+            </TR>
+        </TABLE>
+    >];
+
+    // ========== SUPPORT SERVICES ==========
+    support [label=<
+        <TABLE BGCOLOR="#150D2E" BORDER="2" CELLBORDER="0" CELLSPACING="5" CELLPADDING="6" COLOR="#7C3AED" STYLE="ROUNDED">
+            <TR><TD COLSPAN="4"><FONT POINT-SIZE="12" COLOR="#8B5CF6"><B>Support Services</B></FONT></TD></TR>
+            <TR>
+                <TD BGCOLOR="#1D1040"><FONT COLOR="#8B5CF6"><B>Snapshots</B></FONT></TD>
+                <TD BGCOLOR="#1D1040"><FONT COLOR="#8B5CF6"><B>Transactions</B></FONT></TD>
+                <TD BGCOLOR="#1D1040"><FONT COLOR="#8B5CF6"><B>Analytics</B></FONT></TD>
+                <TD BGCOLOR="#1D1040"><FONT COLOR="#8B5CF6"><B>TradFi</B></FONT></TD>
+            </TR>
+            <TR>
+                <TD BGCOLOR="#1D1040"><FONT COLOR="#8B5CF6"><B>Offchain</B></FONT></TD>
+                <TD BGCOLOR="#1D1040"><FONT COLOR="#10B981"><B>API Health</B></FONT></TD>
+                <TD BGCOLOR="#1D1040"><FONT COLOR="#F97316"><B>Logos</B></FONT></TD>
+                <TD BGCOLOR="#1D1040"><FONT COLOR="#8B5CF6"><B>Balance History</B></FONT></TD>
+            </TR>
+        </TABLE>
+    >];
+
+    // ========== DEMO SERVICES ==========
+    demo [label=<
+        <TABLE BGCOLOR="#111318" BORDER="2" CELLBORDER="0" CELLSPACING="5" CELLPADDING="6" COLOR="#475569" STYLE="ROUNDED">
+            <TR><TD COLSPAN="3"><FONT POINT-SIZE="12" COLOR="#64748B"><B>Demo Mode</B></FONT></TD></TR>
+            <TR>
+                <TD BGCOLOR="#191C22"><FONT COLOR="#94A3B8"><B>Wallets</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">91 tokens</FONT></TD>
+                <TD BGCOLOR="#191C22"><FONT COLOR="#94A3B8"><B>NFTs</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">76 items</FONT></TD>
+                <TD BGCOLOR="#191C22"><FONT COLOR="#94A3B8"><B>Transactions</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">1,500 txns</FONT></TD>
+            </TR>
+            <TR>
+                <TD BGCOLOR="#191C22"><FONT COLOR="#94A3B8"><B>DeFi</B></FONT></TD>
+                <TD BGCOLOR="#191C22"><FONT COLOR="#94A3B8"><B>Exchanges</B></FONT></TD>
+                <TD BGCOLOR="#191C22"><FONT COLOR="#94A3B8"><B>Prices</B></FONT></TD>
+            </TR>
+        </TABLE>
+    >];
+
+    // ========== INFRASTRUCTURE ==========
+    infra [label=<
+        <TABLE BGCOLOR="#0D2818" BORDER="2" CELLBORDER="0" CELLSPACING="5" CELLPADDING="6" COLOR="#059669" STYLE="ROUNDED">
+            <TR><TD COLSPAN="3"><FONT POINT-SIZE="12" COLOR="#10B981"><B>Infrastructure</B></FONT></TD></TR>
+            <TR>
+                <TD BGCOLOR="#113822"><FONT COLOR="#10B981"><B>HTTP Pool</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">30+ clients</FONT></TD>
+                <TD BGCOLOR="#113822"><FONT COLOR="#EF4444"><B>SQLite (WAL)</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">portfolio.db</FONT></TD>
+                <TD BGCOLOR="#113822"><FONT COLOR="#F59E0B"><B>NFT Image DB</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">nft_images.db</FONT></TD>
+            </TR>
+            <TR>
+                <TD BGCOLOR="#113822"><FONT COLOR="#EF4444"><B>API Key Manager</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Encrypted storage</FONT></TD>
+                <TD BGCOLOR="#113822"><FONT COLOR="#F59E0B"><B>Rate Tracker</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Per-API limits</FONT></TD>
+                <TD></TD>
+            </TR>
+        </TABLE>
+    >];
+
+    // ========== LAYOUT CONNECTIONS ==========
+
+    // Row 1: Hub to blockchain groups
+    hub -> chains_l1 [color="#06B6D4", label="  /wallets  "];
+    hub -> chains_evm [color="#818CF8", label="  /wallets  "];
+
+    // Force L1 and EVM side by side
+    {rank=same; chains_l1; chains_evm}
+
+    // Row 2: Alt + Other chains
+    chains_l1 -> chains_alt [style=invis];
+    chains_evm -> chains_other [style=invis];
+    {rank=same; chains_alt; chains_other}
+
+    // Row 3: NFTs + Exchanges + Pricing
+    hub -> nfts [color="#F59E0B", label="  /nfts  "];
+    hub -> exchanges [color="#3B82F6", label="  /exchanges  "];
+    hub -> pricing [color="#EC4899", label="  /prices  "];
+    {rank=same; nfts; exchanges; pricing}
+
+    // Row 4: Support + Demo + Infra
+    nfts -> support [style=invis];
+    exchanges -> demo [style=invis];
+    pricing -> infra [style=invis];
+    {rank=same; support; demo; infra}
+}

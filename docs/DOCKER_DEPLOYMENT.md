@@ -133,7 +133,7 @@ services:
       - HELIUS_API_KEY=
 
       # ============================================
-      # NFT Background Scheduler (v0.9.0+)
+      # NFT Background Scheduler (v1.12.3+)
       # ============================================
       - NFT_SCHEDULER_ENABLED=false
       - NFT_UPDATE_INTERVAL_MINUTES=15
@@ -141,7 +141,7 @@ services:
       - NFT_MAX_DAILY_CALLS=95
 
       # ============================================
-      # Authentication (v0.10.0+)
+      # Authentication (v1.12.3+)
       # ============================================
       - ABCT_REQUIRE_AUTH=false
       # - ABCT_ADMIN_USER=admin
@@ -995,7 +995,7 @@ docker run --rm \
   ubuntu tar xzf /backup/abct-backup-20260127.tar.gz -C /
 ```
 
-#### Method 2: Application-Level Backup (v0.10.0+)
+#### Method 2: Application-Level Backup (v1.12.3+)
 
 Use ABCT's built-in backup feature:
 
@@ -1288,7 +1288,7 @@ Response:
 ```json
 {
   "status": "healthy",
-  "version": "0.10.0",
+  "version": "1.12.3",
   "uptime": 3600
 }
 ```
@@ -1643,7 +1643,7 @@ BIND_PORT=8000
 ---
 
 **Document Version:** 1.0
-**ABCT Version:** 0.10.0
+**ABCT Version:** 1.12.3
 **Last Updated:** January 2026
 **Author:** ABCT Team
 

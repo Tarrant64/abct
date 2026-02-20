@@ -4,12 +4,13 @@ NFT Background Scheduler API Router
 Provides endpoints for controlling and monitoring the NFT background scheduler.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional, List
 import logging
 
 from services.nft_scheduler import nft_scheduler
+from auth_utils import verify_session
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ class RegisterCollectionsBatchRequest(BaseModel):
 
 
 @router.get("/status")
-async def get_scheduler_status():
+async def get_scheduler_status(user_id: int = Depends(verify_session)):
     """
     Get detailed NFT scheduler status.
 
@@ -53,7 +54,7 @@ async def get_scheduler_status():
 
 
 @router.post("/enable")
-async def enable_scheduler():
+async def enable_scheduler(user_id: int = Depends(verify_session)):
     """
     Enable the NFT background scheduler.
 
@@ -73,7 +74,7 @@ async def enable_scheduler():
 
 
 @router.post("/disable")
-async def disable_scheduler():
+async def disable_scheduler(user_id: int = Depends(verify_session)):
     """
     Disable the NFT background scheduler.
 
@@ -93,7 +94,7 @@ async def disable_scheduler():
 
 
 @router.post("/trigger")
-async def trigger_update():
+async def trigger_update(user_id: int = Depends(verify_session)):
     """
     Manually trigger an NFT floor price update cycle.
 
@@ -137,7 +138,7 @@ async def trigger_update():
 
 
 @router.post("/register")
-async def register_collection(request: RegisterCollectionRequest):
+async def register_collection(request: RegisterCollectionRequest, user_id: int = Depends(verify_session)):
     """
     Register a new NFT collection for tracking.
 
@@ -169,7 +170,7 @@ async def register_collection(request: RegisterCollectionRequest):
 
 
 @router.post("/register-batch")
-async def register_collections_batch(request: RegisterCollectionsBatchRequest):
+async def register_collections_batch(request: RegisterCollectionsBatchRequest, user_id: int = Depends(verify_session)):
     """
     Register multiple NFT collections at once.
 
@@ -209,7 +210,8 @@ async def register_collections_batch(request: RegisterCollectionsBatchRequest):
 async def list_tracked_collections(
     limit: int = 50,
     offset: int = 0,
-    stale_only: bool = False
+    stale_only: bool = False,
+    user_id: int = Depends(verify_session)
 ):
     """
     List all collections being tracked by the scheduler.

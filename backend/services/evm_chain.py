@@ -593,12 +593,12 @@ class EVMChainService(APIKeyManager):
         self.last_nft_refresh = None
         self._db_cache_loaded = False
 
-    def get_status(self) -> dict:
+    async def get_status(self) -> dict:
         """Get service status."""
         return {
             'chain': self.chain_name,
             'name': self.config['name'],
-            'configured': self.is_configured(),
+            'configured': await self.is_configured(),
             'cached_balances': len(self._balance_cache),
             'cached_nfts': len(self._nft_cache),
             'cached_collections': len(self._collection_cache),

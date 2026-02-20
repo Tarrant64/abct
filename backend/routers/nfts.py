@@ -200,7 +200,7 @@ async def refresh_nfts(user_id: int = Depends(verify_session)):
 @router.get("/status")
 async def get_nft_status():
     """Get NFT service status including API configuration."""
-    return nft_service.get_status()
+    return await nft_service.get_status()
 
 
 @router.get("/prices/status")
@@ -362,7 +362,7 @@ async def refresh_ethereum_nfts(user_id: int = Depends(verify_session)):
 @router.get("/ethereum/status")
 async def get_ethereum_nft_status():
     """Get Ethereum NFT service status including API configuration."""
-    return ethereum_nft_service.get_status()
+    return await ethereum_nft_service.get_status()
 
 
 # ============================================================================
@@ -493,7 +493,7 @@ async def refresh_solana_nfts(user_id: int = Depends(verify_session)):
 @router.get("/solana/status")
 async def get_solana_nft_status():
     """Get Solana NFT service status including API configuration."""
-    return solana_nft_service.get_status()
+    return await solana_nft_service.get_status()
 
 
 # ============================================================================
@@ -645,7 +645,7 @@ async def refresh_polygon_nfts(user_id: int = Depends(verify_session)):
 @router.get("/polygon/status")
 async def get_polygon_nft_status():
     """Get Polygon NFT service status including API configuration."""
-    return polygon_service.get_status()
+    return await polygon_service.get_status()
 
 
 # ============================================================================
@@ -776,7 +776,7 @@ async def refresh_base_nfts(user_id: int = Depends(verify_session)):
 @router.get("/base/status")
 async def get_base_nft_status():
     """Get Base NFT service status including API configuration."""
-    return base_service.get_status()
+    return await base_service.get_status()
 
 
 # ============================================================================
@@ -2782,7 +2782,7 @@ async def get_nft_wall_details(
                     if decoded_name and decoded_name.isprintable():
                         fallback_name = decoded_name
                         logger.info(f"Decoded hex NFT name: {fallback_name}")
-                except:
+                except Exception:
                     pass
 
         # For Book.io NFTs, prefer collection name as NFT name if no good NFT name found

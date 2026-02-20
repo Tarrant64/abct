@@ -531,24 +531,24 @@ async def init_db():
         # Add track_for_pricing column if it doesn't exist (migration)
         try:
             await db.execute("ALTER TABLE token_metadata ADD COLUMN track_for_pricing INTEGER DEFAULT 0")
-        except:
+        except Exception:
             pass  # Column already exists
 
         # Add Solana columns to portfolio_snapshots if they don't exist (migration)
         try:
             await db.execute("ALTER TABLE portfolio_snapshots ADD COLUMN sol_amount REAL DEFAULT 0")
-        except:
+        except Exception:
             pass  # Column already exists
 
         try:
             await db.execute("ALTER TABLE portfolio_snapshots ADD COLUMN sol_price REAL DEFAULT 0")
-        except:
+        except Exception:
             pass  # Column already exists
 
         # Add tracked tokens value column (migration)
         try:
             await db.execute("ALTER TABLE portfolio_snapshots ADD COLUMN tracked_tokens_value_usd REAL DEFAULT 0")
-        except:
+        except Exception:
             pass  # Column already exists
 
         # Migration: Change UNIQUE constraint from (user_id, snapshot_date) to (user_id, snapshot_time)

@@ -292,7 +292,7 @@ class CardanoService:
                         # Try to decode asset name from hex
                         try:
                             asset_name = bytes.fromhex(asset_name_hex).decode('utf-8')
-                        except:
+                        except Exception:
                             asset_name = asset_name_hex
 
                         native_assets.append({
@@ -497,7 +497,7 @@ class CardanoService:
                     if isinstance(decimals, str):
                         try:
                             decimals = int(decimals)
-                        except:
+                        except Exception:
                             decimals = 0
 
                     asset['decimals'] = decimals

@@ -2041,7 +2041,7 @@ async def toggle_asset_ignore(asset_id: int, user_id: int = Depends(verify_sessi
 @router.get("/solana/status")
 async def get_solana_api_status(user_id: int = Depends(verify_session)):
     """Get Solana API (Helius) status and cache info."""
-    return solana_service.get_rate_limit_status()
+    return await solana_service.get_rate_limit_status()
 
 
 @router.post("/solana/clear-cache")

@@ -94,7 +94,7 @@ class NFTService:
         self._rate_limit_reset = datetime.now() + timedelta(hours=24)
         logger.warning("TapTools API rate limit reached (100/day). Using cached data.")
 
-    def get_status(self) -> dict:
+    async def get_status(self) -> dict:
         """Get NFT service status."""
         rate_limit_info = None
         if self.is_rate_limited():
@@ -104,17 +104,15 @@ class NFTService:
         metadata_sources = []
         if nftcdn_service:
             try:
-                import asyncio
-                if asyncio.run(nftcdn_service.is_configured()):
+                if await nftcdn_service.is_configured():
                     metadata_sources.append("NFT CDN")
-            except:
+            except Exception:
                 pass
         if nmkr_service:
             try:
-                import asyncio
-                if asyncio.run(nmkr_service.is_configured()):
+                if await nmkr_service.is_configured():
                     metadata_sources.append("NMKR")
-            except:
+            except Exception:
                 pass
         metadata_sources.append("Blockfrost")  # Always available as fallback
 
@@ -609,7 +607,7 @@ class NFTService:
                 try:
                     self.collection_cache[policy_id] = await self._fetch_from_blockfrost(policy_id)
                     self.collection_cache[policy_id]['cached_at'] = datetime.now()
-                except:
+                except Exception:
                     self.collection_cache[policy_id] = {
                         'found': False,
                         'error': str(e),

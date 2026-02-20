@@ -37,7 +37,7 @@ FROM python:3.11-slim
 # Docker metadata labels (OCI standard + unRAID compatibility)
 LABEL org.opencontainers.image.title="ABCT - A Better Crypto Tracker"
 LABEL org.opencontainers.image.description="Multi-chain cryptocurrency portfolio tracker supporting Cardano, Ethereum, Bitcoin, Solana, Polygon, and Base"
-LABEL org.opencontainers.image.version="1.0.0"
+LABEL org.opencontainers.image.version="1.12.3"
 LABEL org.opencontainers.image.vendor="ABCT Project"
 LABEL org.opencontainers.image.authors="Chris Catalano"
 LABEL org.opencontainers.image.url="https://github.com/Tarrant64/abct"
