@@ -117,13 +117,15 @@ NEAR_RPC_URL = "https://rpc.mainnet.near.org"
 NEARBLOCKS_API_URL = "https://api.nearblocks.io/v1"
 ICP_ROSETTA_URL = "https://rosetta-api.internetcomputer.org"
 
-# Etherscan API endpoints (same format works for Basescan, Polygonscan, etc.)
-ETHERSCAN_BASE_URL = "https://api.etherscan.io/api"
-BASESCAN_BASE_URL = "https://api.basescan.org/api"
-POLYGONSCAN_BASE_URL = "https://api.polygonscan.com/api"
-BSCSCAN_BASE_URL = "https://api.bscscan.com/api"
-ARBISCAN_BASE_URL = "https://api.arbiscan.io/api"
-SNOWSCAN_BASE_URL = "https://api.snowscan.xyz/api"
+# Etherscan V2 unified API (single endpoint, chain selected by chainid param)
+ETHERSCAN_V2_URL = "https://api.etherscan.io/v2/api"
+# Legacy aliases (deprecated — use ETHERSCAN_V2_URL + chainid instead)
+ETHERSCAN_BASE_URL = ETHERSCAN_V2_URL
+BASESCAN_BASE_URL = ETHERSCAN_V2_URL
+POLYGONSCAN_BASE_URL = ETHERSCAN_V2_URL
+BSCSCAN_BASE_URL = ETHERSCAN_V2_URL
+ARBISCAN_BASE_URL = ETHERSCAN_V2_URL
+SNOWSCAN_BASE_URL = ETHERSCAN_V2_URL
 
 # CoinMarketCap API
 CMC_BASE_URL = "https://pro-api.coinmarketcap.com/v1"

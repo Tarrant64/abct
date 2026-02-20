@@ -37,18 +37,23 @@ async def _syslog(level: str, msg: str, **extra):
     except Exception:
         pass
 
-# Chain-specific configurations matching existing etherscan_service.py
+# Etherscan V2 unified API — single endpoint with chainid parameter
+ETHERSCAN_V2_URL = "https://api.etherscan.io/v2/api"
+
 CHAIN_CONFIGS: Dict[str, Dict] = {
     "ethereum": {
-        "base_url": "https://api.etherscan.io/api",
+        "base_url": ETHERSCAN_V2_URL,
+        "chainid": 1,
         "client_name": "etherscan",
     },
     "polygon": {
-        "base_url": "https://api.polygonscan.com/api",
+        "base_url": ETHERSCAN_V2_URL,
+        "chainid": 137,
         "client_name": "etherscan",
     },
     "base": {
-        "base_url": "https://api.basescan.org/api",
+        "base_url": ETHERSCAN_V2_URL,
+        "chainid": 8453,
         "client_name": "etherscan",
     },
 }
@@ -101,6 +106,7 @@ class EvmIndexer(TxIndexer):
         page = 1
         while True:
             params = {
+                "chainid": config["chainid"],
                 "module": "account",
                 "action": "txlist",
                 "address": account_id,
@@ -150,6 +156,7 @@ class EvmIndexer(TxIndexer):
         page = 1
         while True:
             params = {
+                "chainid": config["chainid"],
                 "module": "account",
                 "action": "txlistinternal",
                 "address": account_id,
@@ -202,6 +209,7 @@ class EvmIndexer(TxIndexer):
         page = 1
         while True:
             params = {
+                "chainid": config["chainid"],
                 "module": "account",
                 "action": "tokentx",
                 "address": account_id,

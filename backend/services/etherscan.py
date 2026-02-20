@@ -30,13 +30,8 @@ from services.http_client import get_client
 
 logger = logging.getLogger(__name__)
 
-# API Base URLs for different chains
-ETHERSCAN_BASE_URL = "https://api.etherscan.io/api"
-BASESCAN_BASE_URL = "https://api.basescan.org/api"
-POLYGONSCAN_BASE_URL = "https://api.polygonscan.com/api"
-BSCSCAN_BASE_URL = "https://api.bscscan.com/api"
-ARBISCAN_BASE_URL = "https://api.arbiscan.io/api"
-SNOWSCAN_BASE_URL = "https://api.snowscan.xyz/api"
+# Etherscan V2 unified API — single endpoint with chainid parameter
+ETHERSCAN_V2_URL = "https://api.etherscan.io/v2/api"
 
 # Cache settings
 ETHERSCAN_CACHE_TTL = 300  # 5 minutes for transaction data
@@ -45,40 +40,40 @@ ETHERSCAN_CACHE_TTL = 300  # 5 minutes for transaction data
 class EtherscanService(APIKeyManager):
     """Service for fetching EVM blockchain data from Etherscan-compatible APIs."""
 
-    # Chain configurations
+    # Chain configurations — all use Etherscan V2 unified endpoint
     CHAINS = {
         'ethereum': {
-            'base_url': ETHERSCAN_BASE_URL,
+            'base_url': ETHERSCAN_V2_URL,
             'chain_id': 1,
             'native_symbol': 'ETH',
             'explorer_name': 'Etherscan'
         },
         'base': {
-            'base_url': BASESCAN_BASE_URL,
+            'base_url': ETHERSCAN_V2_URL,
             'chain_id': 8453,
             'native_symbol': 'ETH',
             'explorer_name': 'Basescan'
         },
         'polygon': {
-            'base_url': POLYGONSCAN_BASE_URL,
+            'base_url': ETHERSCAN_V2_URL,
             'chain_id': 137,
             'native_symbol': 'MATIC',
             'explorer_name': 'Polygonscan'
         },
         'bsc': {
-            'base_url': BSCSCAN_BASE_URL,
+            'base_url': ETHERSCAN_V2_URL,
             'chain_id': 56,
             'native_symbol': 'BNB',
             'explorer_name': 'BscScan'
         },
         'arbitrum': {
-            'base_url': ARBISCAN_BASE_URL,
+            'base_url': ETHERSCAN_V2_URL,
             'chain_id': 42161,
             'native_symbol': 'ETH',
             'explorer_name': 'Arbiscan'
         },
         'avalanche': {
-            'base_url': SNOWSCAN_BASE_URL,
+            'base_url': ETHERSCAN_V2_URL,
             'chain_id': 43114,
             'native_symbol': 'AVAX',
             'explorer_name': 'Snowscan'
@@ -118,6 +113,9 @@ class EtherscanService(APIKeyManager):
         if not chain_config:
             logger.error(f"Unknown chain: {chain}")
             return None
+
+        # V2 API requires chainid parameter
+        params['chainid'] = chain_config['chain_id']
 
         # Add API key if available; works without one at reduced rate
         api_key = await self.get_api_key()

@@ -32,7 +32,7 @@ API_HEALTH_TESTS = {
     "alphavantage":  ("query", "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=AAPL&apikey={key}"),
 
     # Query-param: ("query", url_with_{key}_placeholder)
-    "etherscan":     ("query", "https://api.etherscan.io/api?module=stats&action=ethprice&apikey={key}"),
+    "etherscan":     ("query", "https://api.etherscan.io/v2/api?chainid=1&module=stats&action=ethprice&apikey={key}"),
     "helius":        ("query", "https://api.helius.xyz/v0/addresses/11111111111111111111111111111111/balances?api-key={key}"),
 
     # URL-embedded key + JSON-RPC: ("json_rpc", url_with_{key}_placeholder)
