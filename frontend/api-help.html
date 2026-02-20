@@ -7,86 +7,56 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
     <link rel="stylesheet" href="/static/css/styles.css?v=1771554807">
+    <!-- DOMPurify for XSS protection -->
+    <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
     <script src="/static/js/session-auth.js?v=1771554807"></script>
     <style>
-        /* Custom Redoc theming to match ABCT */
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: var(--bg-primary, #1a1a2e);
+        /* Redoc container fills remaining space below header */
+        .api-help-content {
+            padding: 0 20px;
         }
 
-        .api-help-container {
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
+        .api-help-breadcrumb {
+            padding: 12px 10px;
+            font-size: 13px;
+            color: var(--text-secondary);
         }
 
-        .api-help-header {
-            background: var(--gradient-header, linear-gradient(135deg, #16213e 0%, #0f3460 100%));
-            padding: 20px 30px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-shrink: 0;
-        }
-
-        .api-help-header h1 {
-            margin: 0;
-            font-size: 1.5rem;
-            color: var(--text-primary, #eaeaea);
-        }
-
-        .back-link {
+        .api-help-breadcrumb a {
             color: var(--accent-success, #00d26a);
             text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 8px;
             font-weight: 600;
             transition: opacity 0.2s;
         }
 
-        .back-link:hover {
+        .api-help-breadcrumb a:hover {
             opacity: 0.8;
         }
 
+        .api-help-breadcrumb svg {
+            vertical-align: middle;
+            margin-right: 4px;
+        }
+
         #redoc-container {
-            flex: 1;
-            overflow: auto;
+            min-height: calc(100vh - 200px);
         }
 
         /* Redoc theme customization */
         redoc {
-            /* Text colors */
             --text-color: #eaeaea;
             --text-secondary: #a0a0a0;
-
-            /* Background colors */
             --background-color: #1a1a2e;
             --right-panel-background-color: #16213e;
-
-            /* Accent color */
             --accent-color: #00d26a;
-
-            /* Menu colors */
             --menu-background-color: #0f3460;
             --menu-text-color: #eaeaea;
-
-            /* Code blocks */
             --code-background-color: #0f3460;
             --code-text-color: #00d26a;
-
-            /* Links */
             --link-color: #00d26a;
             --link-hover-color: #00ff7f;
-
-            /* Borders */
             --border-color: #2a2a4a;
-
-            /* Typography */
             --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             --font-size: 15px;
         }
@@ -96,53 +66,87 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100%;
+            height: 300px;
             color: var(--text-secondary);
             font-size: 1.2rem;
         }
 
         /* Mobile responsive */
         @media (max-width: 768px) {
-            .api-help-header {
-                padding: 15px 20px;
-            }
-
-            .api-help-header h1 {
-                font-size: 1.2rem;
+            .api-help-content {
+                padding: 0 10px;
             }
         }
     </style>
-    <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
-    <script>
-        // XSS Protection - Safe HTML rendering
-        function setSafeHTML(element, html) {
-            if (!element) return;
-            if (typeof DOMPurify !== 'undefined') {
-                element.innerHTML = DOMPurify.sanitize(html);
-            } else {
-                console.warn('DOMPurify not loaded, falling back to textContent');
-                element.textContent = html;
-            }
-        }
-    </script>
 </head>
 <body>
-    <div class="api-help-container">
-        <div class="api-help-header">
-            <h1>📚 ABCT API Reference</h1>
-            <a href="/apis.html" class="back-link">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M19 12H5M12 19l-7-7 7-7"/>
-                </svg>
-                Back to API Configuration
-            </a>
-        </div>
-
-        <div id="redoc-container">
-            <div class="loading-state">
-                <span>Loading API documentation...</span>
+    <div class="container">
+        <header>
+            <nav class="main-nav">
+                <a href="/" class="nav-item">Overview</a>
+                <a href="/assets.html" class="nav-item">Assets</a>
+                <a href="/nfts.html" class="nav-item">NFTs</a>
+                <a href="/data.html" class="nav-item">Data & Analytics</a>
+            </nav>
+            <div class="header-right-controls">
+                <div class="user-avatar-container">
+                    <button class="user-avatar-btn" onclick="toggleUserMenu()">
+                        <div class="avatar-circle" id="userAvatar">?</div>
+                    </button>
+                    <div class="user-menu-dropdown" id="userMenu">
+                        <div class="user-menu-header">
+                            <span id="userMenuName">User</span>
+                        </div>
+                        <div class="user-menu-divider"></div>
+                        <a href="/settings.html" class="user-menu-item">Settings</a>
+                        <a href="/help.html" class="user-menu-item">Help & Guide</a>
+                        <div class="user-menu-divider"></div>
+                        <button class="user-menu-item" onclick="togglePrivacyMode()">
+                            Privacy Mode <span class="privacy-indicator" id="privacyIndicator">OFF</span>
+                        </button>
+                        <div class="user-menu-theme-row">
+                            <span>Theme</span>
+                            <select id="themeSelect" onchange="changeTheme(this.value)" title="Select theme">
+                                <option value="dark-mode">Dark Mode</option>
+                                <option value="light">Light</option>
+                                <option value="cypherpunk1">Cypherpunk 1</option>
+                                <option value="ocean-depths">Ocean Depths</option>
+                                <option value="sunset-horizon">Sunset Horizon</option>
+                                <option value="cypher">Cypher</option>
+                                <option value="cypher2">Cypher2</option>
+                                <option value="cypher3">Cypher3</option>
+                            </select>
+                        </div>
+                        <div class="user-menu-divider"></div>
+                        <button class="user-menu-item" id="changePasswordMenuItem" onclick="showChangePasswordModal()">Change Password</button>
+                        <button class="user-menu-item user-menu-logout" onclick="logout()">Logout</button>
+                    </div>
+                </div>
             </div>
-        </div>
+        </header>
+
+        <main>
+            <div class="api-help-content">
+                <div class="api-help-breadcrumb">
+                    <a href="/settings.html#apis">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M19 12H5M12 19l-7-7 7-7"/>
+                        </svg>
+                        Back to API Configuration
+                    </a>
+                </div>
+
+                <div id="redoc-container">
+                    <div class="loading-state">
+                        <span>Loading API documentation...</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>ABCT - API Reference | <span id="appVersion" style="opacity: 0.6;">v1.12.3 (BUILD 1771554807)</span></p>
+        </footer>
     </div>
 
     <!-- Redoc Standalone -->
@@ -150,24 +154,18 @@
     <script>
         // Initialize Redoc with custom theme
         Redoc.init('/openapi.json', {
-            scrollYOffset: 80, // Account for header height
+            scrollYOffset: 80,
             hideDownloadButton: false,
             disableSearch: false,
             theme: {
                 colors: {
-                    primary: {
-                        main: '#00d26a'
-                    },
-                    success: {
-                        main: '#00d26a'
-                    },
+                    primary: { main: '#00d26a' },
+                    success: { main: '#00d26a' },
                     text: {
                         primary: '#eaeaea',
                         secondary: '#a0a0a0'
                     },
-                    background: {
-                        main: '#1a1a2e'
-                    },
+                    background: { main: '#1a1a2e' },
                     border: {
                         dark: '#2a2a4a',
                         light: '#3a3a5a'
@@ -201,16 +199,7 @@
             pathInMiddlePanel: true,
             menuToggle: true
         }, document.getElementById('redoc-container'));
-
-        // Load saved theme preference and apply
-        function loadSavedTheme() {
-            const savedTheme = localStorage.getItem('abct-theme') || 'default';
-            document.documentElement.setAttribute('data-theme', savedTheme);
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            loadSavedTheme();
-        });
     </script>
+    <script src="/static/js/app.js?v=1771554807"></script>
 </body>
 </html>

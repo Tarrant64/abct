@@ -9328,6 +9328,218 @@ function updateDemoProgress(percent) {
 }
 
 // ============================================================================
+// GLOBAL SEARCH
+// ============================================================================
+
+const SEARCH_PAGE_INDEX = [
+    { name: 'Dashboard',     url: '/',                       keywords: ['dashboard','overview','portfolio','total','home'] },
+    { name: 'Assets',        url: '/assets.html',            keywords: ['assets','tokens','holdings','coins','governance'] },
+    { name: 'Wallets',       url: '/data.html',              keywords: ['wallets','addresses','manage'] },
+    { name: 'NFTs',          url: '/nfts.html',              keywords: ['nft','nfts','collectibles','gallery'] },
+    { name: 'Data & Analytics', url: '/data.html',           keywords: ['data','analytics','transactions','charts','history'] },
+    { name: 'Staking/DeFi',  url: '/assets.html#defiTab',   keywords: ['staking','defi','yield','rewards','indigo'] },
+    { name: 'Exchanges',     url: '/assets.html#exchangesTab', keywords: ['exchange','binance','coinbase','okx','kucoin','kraken'] },
+    { name: 'Settings',      url: '/settings.html',          keywords: ['settings','preferences','configuration'] },
+    { name: 'Security',      url: '/settings.html#security', keywords: ['security','password','auth','login'] },
+    { name: 'API Keys',      url: '/settings.html#apis',     keywords: ['api','keys','coingecko','moralis','etherscan'] },
+    { name: 'Help',          url: '/help.html',              keywords: ['help','guide','faq','documentation'] },
+    { name: 'Logs',          url: '/settings.html#logs',     keywords: ['logs','activity','debug'] },
+    { name: 'Backup',        url: '/settings.html#backup',   keywords: ['backup','export','import','restore'] },
+];
+
+let _searchDebounce = null;
+let _searchOpen = false;
+
+function initGlobalSearch() {
+    const controls = document.querySelector('.header-right-controls');
+    if (!controls) return;
+
+    const container = document.createElement('div');
+    container.className = 'global-search-container';
+    container.innerHTML = `
+        <div class="global-search-expanded" id="globalSearchBar">
+            <input type="text" class="global-search-input" id="globalSearchInput"
+                   placeholder="Search tokens, wallets, pages..." autocomplete="off" />
+            <button class="global-search-toggle" id="globalSearchToggle" title="Search">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"/>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+            </button>
+        </div>
+        <div class="global-search-results" id="globalSearchResults"></div>
+    `;
+
+    const avatar = controls.querySelector('.user-avatar-container');
+    if (avatar) {
+        controls.insertBefore(container, avatar);
+    } else {
+        controls.appendChild(container);
+    }
+
+    const bar = document.getElementById('globalSearchBar');
+    const input = document.getElementById('globalSearchInput');
+    const toggle = document.getElementById('globalSearchToggle');
+    const results = document.getElementById('globalSearchResults');
+
+    toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (_searchOpen) {
+            closeSearch();
+        } else {
+            openSearch();
+        }
+    });
+
+    input.addEventListener('input', () => {
+        const q = input.value.trim();
+        if (q.length < 2) {
+            results.classList.remove('visible');
+            return;
+        }
+        clearTimeout(_searchDebounce);
+        _searchDebounce = setTimeout(() => runSearch(q), 300);
+    });
+
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeSearch();
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (_searchOpen && !container.contains(e.target)) {
+            closeSearch();
+        }
+    });
+
+    // Keyboard shortcut: Ctrl/Cmd + K
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+            e.preventDefault();
+            if (_searchOpen) closeSearch(); else openSearch();
+        }
+    });
+
+    function openSearch() {
+        _searchOpen = true;
+        bar.classList.add('open');
+        setTimeout(() => input.focus(), 150);
+    }
+
+    function closeSearch() {
+        _searchOpen = false;
+        bar.classList.remove('open');
+        results.classList.remove('visible');
+        input.value = '';
+    }
+
+    async function runSearch(query) {
+        const q = query.toLowerCase();
+
+        // Show spinner
+        results.innerHTML = '<div class="search-spinner"></div>';
+        results.classList.add('visible');
+
+        // Search pages locally (instant)
+        const pageResults = SEARCH_PAGE_INDEX.filter(p =>
+            p.name.toLowerCase().includes(q) ||
+            p.keywords.some(k => k.includes(q))
+        ).slice(0, 3);
+
+        // Search backend (tokens + wallets)
+        let tokens = [];
+        let wallets = [];
+        try {
+            const resp = await authFetch(`/search?q=${encodeURIComponent(query)}`);
+            if (resp.ok) {
+                const data = await resp.json();
+                tokens = data.tokens || [];
+                wallets = data.wallets || [];
+            }
+        } catch (e) {
+            console.warn('[Search] Backend error:', e);
+        }
+
+        // Build results HTML
+        let html = '';
+
+        if (tokens.length > 0) {
+            html += '<div class="search-category-label">Tokens</div>';
+            for (const t of tokens) {
+                const logoHtml = t.logo_url
+                    ? `<img src="${DOMPurify.sanitize(t.logo_url)}" alt="" />`
+                    : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M6 12h12"/></svg>';
+                const val = t.total_value_usd ? `$${Number(t.total_value_usd).toLocaleString(undefined, {maximumFractionDigits: 2})}` : '';
+                html += `<a class="search-result-item" href="/assets.html" data-search-nav="/assets.html">
+                    <div class="search-result-icon">${logoHtml}</div>
+                    <div class="search-result-text">
+                        <div class="search-result-name">${DOMPurify.sanitize(t.ticker || t.name)}</div>
+                        <div class="search-result-sub">${DOMPurify.sanitize(t.blockchain || '')}${val ? ' &middot; ' + val : ''}</div>
+                    </div>
+                    <span class="search-result-arrow">&rsaquo;</span>
+                </a>`;
+            }
+        }
+
+        if (wallets.length > 0) {
+            html += '<div class="search-category-label">Wallets</div>';
+            for (const w of wallets) {
+                const addr = w.address.length > 20 ? w.address.slice(0, 10) + '...' + w.address.slice(-8) : w.address;
+                html += `<a class="search-result-item" href="/data.html" data-search-nav="/data.html">
+                    <div class="search-result-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M16 14h2"/></svg>
+                    </div>
+                    <div class="search-result-text">
+                        <div class="search-result-name">${DOMPurify.sanitize(w.label || addr)}</div>
+                        <div class="search-result-sub">${DOMPurify.sanitize(w.blockchain)} &middot; ${DOMPurify.sanitize(addr)}</div>
+                    </div>
+                    <span class="search-result-arrow">&rsaquo;</span>
+                </a>`;
+            }
+        }
+
+        if (pageResults.length > 0) {
+            html += '<div class="search-category-label">Pages</div>';
+            for (const p of pageResults) {
+                html += `<a class="search-result-item" href="${p.url}" data-search-nav="${p.url}">
+                    <div class="search-result-icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    </div>
+                    <div class="search-result-text">
+                        <div class="search-result-name">${p.name}</div>
+                        <div class="search-result-sub">${p.url}</div>
+                    </div>
+                    <span class="search-result-arrow">&rsaquo;</span>
+                </a>`;
+            }
+        }
+
+        if (!html) {
+            html = '<div class="search-no-results">No results found</div>';
+        }
+
+        if (typeof DOMPurify !== 'undefined') {
+            results.innerHTML = DOMPurify.sanitize(html, { ADD_ATTR: ['data-search-nav'] });
+        } else {
+            results.innerHTML = html;
+        }
+
+        // Attach click handlers (DOMPurify strips inline handlers)
+        results.querySelectorAll('[data-search-nav]').forEach(el => {
+            el.addEventListener('click', (e) => {
+                e.preventDefault();
+                const url = el.getAttribute('data-search-nav');
+                closeSearch();
+                window.location.href = url;
+            });
+        });
+
+        results.classList.add('visible');
+    }
+}
+
+// ============================================================================
 // INITIALIZATION
 // ============================================================================
 
@@ -9338,6 +9550,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Initialize privacy mode from localStorage
     initializePrivacyMode();
+
+    // Initialize global search in header
+    initGlobalSearch();
 
     // Show last known portfolio total instantly (before any API calls)
     restoreCachedPortfolioTotal();
