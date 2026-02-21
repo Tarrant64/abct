@@ -435,7 +435,8 @@ async def get_mobile_portfolio_summary(
                 "native_price_usd": round(price_usd, 2),
                 "price_change_24h": round(price_data.get('usd_24h_change', 0) or 0, 2),
                 "wallet_count": chain_data.get('wallet_count', 0),
-                "percentage": 0  # Calculated later
+                "percentage": 0,  # Calculated later
+                "image_url": logokit_service.get_crypto_logo_url(symbol, size=64),
             })
 
     # Get component values
@@ -480,6 +481,7 @@ async def get_mobile_portfolio_summary(
                 "price_change_24h": bs['price_change_24h'],
                 "wallet_count": bs['wallet_count'],
                 "percentage": 0,
+                "image_url": bs.get('image_url', logokit_service.get_crypto_logo_url(sym, size=64)),
             }
 
     # Merge staking positions into top_holdings (per-token breakdown)
@@ -513,6 +515,7 @@ async def get_mobile_portfolio_summary(
                                 "price_change_24h": round((price_data.get('usd_24h_change', 0) or 0) if isinstance(price_data, dict) else 0, 2),
                                 "wallet_count": 0,
                                 "percentage": 0,
+                                "image_url": logokit_service.get_crypto_logo_url(token, size=64),
                             }
                     # Add pending rewards
                     reward_token = protocol_data.get('reward_token')
@@ -535,6 +538,7 @@ async def get_mobile_portfolio_summary(
                                 "price_change_24h": round((price_data.get('usd_24h_change', 0) or 0) if isinstance(price_data, dict) else 0, 2),
                                 "wallet_count": 0,
                                 "percentage": 0,
+                                "image_url": logokit_service.get_crypto_logo_url(rt, size=64),
                             }
     except Exception as e:
         logger.debug(f"Could not aggregate staking for top holdings: {e}")
