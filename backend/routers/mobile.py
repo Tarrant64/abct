@@ -140,7 +140,7 @@ CHAIN_ICON_URLS = {
 async def _fetch_asset_sparklines(symbols: list, max_points: int = 24) -> dict:
     """Fetch 7-day sparkline price data from CoinGecko for a list of symbols.
 
-    Returns dict mapping symbol -> list of floats (downsampled to max_points).
+    Returns dict mapping symbol -> {sparkline_7d, sparkline_24h, cg_image_url}.
     """
     from services.pricing import ASSET_TO_COINGECKO
     from services.http_client import get_client
@@ -172,14 +172,29 @@ async def _fetch_asset_sparklines(symbols: list, max_points: int = 24) -> dict:
         sparklines = {}
         for coin in response.json():
             raw = coin.get('sparkline_in_7d', {}).get('price', [])
+            cg_image_url = coin.get('image', '')
             if not raw:
+                # Still capture the image URL even without sparkline data
+                for sym, cg_id in symbol_to_id.items():
+                    if cg_id == coin['id']:
+                        sparklines[sym] = {
+                            'sparkline_7d': [],
+                            'sparkline_24h': [],
+                            'cg_image_url': cg_image_url,
+                        }
                 continue
-            # Downsample to max_points for compact watch transfer
+            # Downsample full range to max_points for 7D
             step = max(1, len(raw) // max_points)
-            sampled = raw[::step]
+            sampled_7d = raw[::step]
+            # Last 24 hourly points for 24H chart (CoinGecko returns ~168 hourly points)
+            sampled_24h = raw[-24:] if len(raw) >= 24 else raw
             for sym, cg_id in symbol_to_id.items():
                 if cg_id == coin['id']:
-                    sparklines[sym] = [round(v, 2) for v in sampled]
+                    sparklines[sym] = {
+                        'sparkline_7d': [round(v, 2) for v in sampled_7d],
+                        'sparkline_24h': [round(v, 2) for v in sampled_24h],
+                        'cg_image_url': cg_image_url,
+                    }
         return sparklines
     except Exception as e:
         logger.debug(f"Failed to fetch asset sparklines: {e}")
@@ -605,7 +620,12 @@ async def get_mobile_portfolio_summary(
     try:
         sparklines = await _fetch_asset_sparklines(top_symbols)
         for h in top_holdings[:8]:
-            h['sparkline_7d'] = sparklines.get(h['symbol'], [])
+            asset_data = sparklines.get(h['symbol'], {})
+            h['sparkline_7d'] = asset_data.get('sparkline_7d', [])
+            h['sparkline_24h'] = asset_data.get('sparkline_24h', [])
+            cg_url = asset_data.get('cg_image_url', '')
+            if cg_url:
+                h['watch_image_url'] = cg_url
     except Exception as e:
         logger.debug(f"Could not fetch sparklines for top holdings: {e}")
 
