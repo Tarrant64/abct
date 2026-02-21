@@ -1033,20 +1033,24 @@ async function loadStakingTotalsForOverview() {
         if (cardanoWallets.length === 0) return;
 
         const newTotals = {};
-        for (const wallet of cardanoWallets) {
-            try {
-                const resp = await authFetch(`${API_BASE}/defi/staking/${wallet.address}`);
-                const data = await resp.json();
-                for (const [protocol, pData] of Object.entries(data.protocols || {})) {
-                    for (const stake of (pData.staked || [])) {
-                        const token = stake.token || 'ADA';
-                        newTotals[token] = (newTotals[token] || 0) + (stake.amount || 0);
-                    }
-                    if (pData.reward_token && pData.pending_rewards > 0) {
-                        newTotals[pData.reward_token] = (newTotals[pData.reward_token] || 0) + pData.pending_rewards;
-                    }
+        const results = await Promise.all(
+            cardanoWallets.map(wallet =>
+                authFetch(`${API_BASE}/defi/staking/${wallet.address}`)
+                    .then(r => r.json())
+                    .catch(() => null)
+            )
+        );
+        for (const data of results) {
+            if (!data) continue;
+            for (const [protocol, pData] of Object.entries(data.protocols || {})) {
+                for (const stake of (pData.staked || [])) {
+                    const token = stake.token || 'ADA';
+                    newTotals[token] = (newTotals[token] || 0) + (stake.amount || 0);
                 }
-            } catch (e) { /* skip individual wallet errors */ }
+                if (pData.reward_token && pData.pending_rewards > 0) {
+                    newTotals[pData.reward_token] = (newTotals[pData.reward_token] || 0) + pData.pending_rewards;
+                }
+            }
         }
 
         if (Object.keys(newTotals).length > 0) {
@@ -9705,6 +9709,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error('[Overview] Failed to load portfolio summary:', e);
         }
 
+        // Fire chart + holdings immediately (no longer gated by background batch)
+        loadV2BalanceHistory('1w');
+        loadAllHoldings();
+
         // Background updates - load exchange data + remaining data
         Promise.allSettled([
             loadExchangeData(),
@@ -9717,15 +9725,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             loadStakingTotalsForOverview()
         ]).then(() => {
             console.log('[Overview] Background data loading complete');
-            // Start Cardano SSE price stream after initial load
             initCardanoPriceStream();
             updateTotalPortfolioValue();
-            // V2 on-chain history is now the default
-            loadV2BalanceHistory('1w');
             checkV2CollectionStatus();
             preFetchAssetBreakdowns();
-            // Load all-holdings after exchange/defi data is cached
-            loadAllHoldings();
         });
     } else if (isAssetsPage) {
         // ASSETS PAGE: Load prices, portfolio summary (renders wallets), then exchanges/defi/tokens

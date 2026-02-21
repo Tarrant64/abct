@@ -963,10 +963,11 @@ _PRICE_SYMBOL = {
 async def _fetch_sparklines_and_images(symbols: list) -> tuple[dict, dict]:
     """Fetch 7-day sparkline data AND image URLs from CoinGecko for multiple coins.
 
-    Returns (sparklines_dict, images_dict).
+    Returns (sparklines_dict, images_dict). Cached for 1 hour (CACHE_TTL_WARM).
     """
     from services.pricing import ASSET_TO_COINGECKO
     from services.http_client import get_client
+    import hashlib
 
     # Map symbols → CoinGecko IDs
     symbol_to_id = {}
@@ -978,6 +979,14 @@ async def _fetch_sparklines_and_images(symbols: list) -> tuple[dict, dict]:
 
     if not symbol_to_id:
         return {}, {}
+
+    # Check cache (1-hour TTL — sparklines are 7-day data, don't change fast)
+    sorted_syms = sorted(symbol_to_id.keys())
+    cache_hash = hashlib.md5(",".join(sorted_syms).encode()).hexdigest()[:12]
+    sparkline_cache_key = f"sparklines_images_{cache_hash}"
+    cached = await get_cache(sparkline_cache_key)
+    if cached:
+        return cached.get('sparklines', {}), cached.get('images', {})
 
     cg_ids = list(set(symbol_to_id.values()))
 
@@ -1006,6 +1015,7 @@ async def _fetch_sparklines_and_images(symbols: list) -> tuple[dict, dict]:
                             sparklines[sym] = sparkline[::step]
                         if image_url:
                             images[sym] = image_url
+            await set_cache(sparkline_cache_key, {'sparklines': sparklines, 'images': images}, ttl_seconds=CACHE_TTL_WARM)
             return sparklines, images
         else:
             logger.warning(f"CoinGecko sparkline fetch returned {response.status_code}")
@@ -1060,6 +1070,13 @@ async def get_all_holdings(
     Includes 7-day sparkline price data for charting.
     """
     from database import get_all_wallets
+
+    # Check cache first (5-min HOT TTL)
+    cache_key = f"all_holdings_{user_id}"
+    if not refresh:
+        cached = await get_cache(cache_key, user_id=user_id)
+        if cached:
+            return cached
 
     # Fetch primary data sources in parallel
     summary, assets_data, all_prices, wallets = await asyncio.gather(
@@ -1208,11 +1225,13 @@ async def get_all_holdings(
         # Allocation percentage
         h['allocation_pct'] = round((h['value_usd'] / total_value * 100) if total_value > 0 else 0, 2)
 
-    return {
+    result = {
         'holdings': sorted_holdings,
         'total_value_usd': round(total_value, 2),
         'count': len(sorted_holdings),
     }
+    await set_cache(cache_key, result, ttl_seconds=CACHE_TTL_HOT, user_id=user_id)
+    return result
 
 
 @router.get("/debug-holding/{symbol}")
@@ -2612,10 +2631,12 @@ async def get_portfolio_analytics(user_id: int = Depends(verify_session)):
     if cached:
         return cached
 
-    # Get all portfolio data
-    summary = await get_portfolio_summary(user_id=user_id)
-    assets_data = await get_all_native_assets(user_id=user_id)
-    all_prices = await pricing_service.get_all_tracked_prices()
+    # Get all portfolio data in parallel
+    summary, assets_data, all_prices = await asyncio.gather(
+        get_portfolio_summary(user_id=user_id),
+        get_all_native_assets(user_id=user_id),
+        pricing_service.get_all_tracked_prices(),
+    )
 
     # Token category mapping
     TOKEN_CATEGORIES = {
