@@ -1122,6 +1122,10 @@ async def get_all_holdings(
         # Skip if already counted as L1 chain
         if ticker in holdings or ticker in _PRICE_SYMBOL.values():
             continue
+        # Skip DeFi governance tokens — they're counted in step 3 (DeFi summary)
+        # to avoid double-counting the same wallet UTXOs
+        if asset.get('is_defi_token'):
+            continue
 
         holdings[ticker] = {
             'symbol': ticker,
@@ -1196,6 +1200,118 @@ async def get_all_holdings(
         'holdings': sorted_holdings,
         'total_value_usd': round(total_value, 2),
         'count': len(sorted_holdings),
+    }
+
+
+@router.get("/debug-holding/{symbol}")
+async def debug_holding(
+    symbol: str,
+    user_id: int = Depends(verify_session),
+):
+    """
+    Diagnostic: show where a specific symbol's balances come from (per source, per wallet).
+    Temporary endpoint — remove after debugging.
+    """
+    from database import get_all_wallets
+    symbol = symbol.upper()
+    sources = []
+
+    summary, assets_data, all_prices, wallets = await asyncio.gather(
+        get_portfolio_summary(user_id=user_id, refresh=False),
+        get_all_native_assets(user_id=user_id, refresh=False),
+        pricing_service.get_all_tracked_prices(),
+        get_all_wallets(user_id=user_id),
+    )
+
+    # 1. L1 chains
+    for chain_key, (sym, name, amount_field) in _CHAIN_MAP.items():
+        price_sym = _PRICE_SYMBOL.get(sym, sym)
+        if price_sym == symbol or sym == symbol:
+            chain_data = summary.get(chain_key, {})
+            amount = chain_data.get(amount_field, 0)
+            if amount > 0:
+                sources.append({
+                    'source': 'L1 chain',
+                    'chain': chain_key,
+                    'amount': amount,
+                    'detail': f"{amount_field} from portfolio summary",
+                })
+
+    # 2. Native tokens (valuable_assets)
+    for asset in assets_data.get('valuable_assets', []):
+        ticker = (asset.get('ticker') or asset.get('asset_name', '')).upper()
+        if ticker != symbol:
+            continue
+        sources.append({
+            'source': 'native_token',
+            'amount': asset.get('total_quantity', 0),
+            'value_usd': asset.get('value_usd', 0),
+            'is_defi_token': asset.get('is_defi_token', False),
+            'wallet_count': asset.get('wallet_count', 0),
+            'detail': f"From get_all_native_assets (is_defi_token={asset.get('is_defi_token', False)})",
+        })
+
+    # 3. DeFi summary
+    defi_data = await get_cache(f"defi_summary_{user_id}")
+    if defi_data and defi_data.get('all_positions'):
+        for pos in defi_data['all_positions']:
+            token = (pos.get('token') or '').upper()
+            if token != symbol:
+                continue
+            sources.append({
+                'source': 'defi_summary',
+                'amount': pos.get('quantity', 0),
+                'protocol': pos.get('protocol', ''),
+                'detail': f"From defi_summary_{user_id} cache",
+            })
+
+    # 4. Staking positions per Cardano wallet
+    cardano_wallets = [w for w in wallets if w['blockchain'] == 'cardano']
+    for w in cardano_wallets:
+        addr = w['address']
+        cached = await get_cache(f"staking_positions_{addr}")
+        if not cached or not cached.get('protocols'):
+            continue
+        for protocol_name, protocol_data in cached['protocols'].items():
+            for stake in (protocol_data.get('staked') or []):
+                token = (stake.get('token') or 'ADA').upper()
+                if token != symbol:
+                    continue
+                sources.append({
+                    'source': 'staking',
+                    'protocol': protocol_name,
+                    'wallet': addr[:20] + '...',
+                    'amount': float(stake.get('amount', 0)),
+                    'detail': f"Staked in {protocol_name}",
+                })
+
+    # 5. Exchange assets
+    exchange_names = ['coinbase', 'binance', 'binance_us', 'okx', 'bitget', 'gate', 'kucoin']
+    for name in exchange_names:
+        exc_data = await get_cache(f"{name}_portfolio", user_id=user_id)
+        if not exc_data or not exc_data.get('assets'):
+            continue
+        for asset in exc_data['assets']:
+            currency = (asset.get('currency') or '').upper()
+            if currency != symbol:
+                continue
+            sources.append({
+                'source': 'exchange',
+                'exchange': name,
+                'amount': float(asset.get('balance', 0)),
+                'price': float(asset.get('price', 0)),
+                'detail': f"From {name} portfolio cache",
+            })
+
+    total = sum(s.get('amount', 0) for s in sources)
+    price_info = all_prices.get(symbol, {})
+
+    return {
+        'symbol': symbol,
+        'sources': sources,
+        'total_amount': total,
+        'price_usd': price_info.get('usd', 0),
+        'total_value_usd': total * price_info.get('usd', 0),
     }
 
 

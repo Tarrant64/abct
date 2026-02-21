@@ -9835,7 +9835,8 @@ function renderAllHoldings(holdings, container) {
         const symbol = h.symbol || '?';
         const name = h.name || symbol;
         const letter = symbol.charAt(0).toUpperCase();
-        const logoUrl = h.logo_url || '';
+        // Use frontend's getLogoKitUrl (has API token) — proven across dashboard
+        const logoUrl = getLogoKitUrl(symbol);
         const amount = h.amount || 0;
         const price = h.price_usd || 0;
         const value = h.value_usd || 0;
