@@ -4760,6 +4760,206 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     }
 }
 
+/* ===== All Holdings Overview Table (Overview page) ===== */
+.holdings-overview-section {
+    margin-top: 20px;
+}
+
+.holdings-overview-section .section-header-inline {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.holdings-count {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+}
+
+.holdings-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 0;
+    color: var(--text-secondary);
+}
+
+.holdings-overview-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.holdings-overview-table thead {
+    border-bottom: 2px solid rgba(52, 152, 219, 0.3);
+}
+
+.holdings-overview-table th {
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+}
+
+.holdings-overview-table th:hover {
+    color: var(--text-primary);
+}
+
+.holdings-overview-table th .sort-arrow {
+    font-size: 0.7rem;
+    margin-left: 3px;
+    opacity: 0.5;
+}
+
+.holdings-overview-table th.sorted .sort-arrow {
+    opacity: 1;
+    color: var(--accent-color);
+}
+
+.holdings-overview-table th.text-right,
+.holdings-overview-table td.text-right {
+    text-align: right;
+}
+
+.holdings-overview-table tbody tr {
+    border-bottom: 1px solid var(--bg-secondary);
+    transition: background-color 0.15s ease;
+}
+
+.holdings-overview-table tbody tr:hover {
+    background: rgba(52, 152, 219, 0.05);
+}
+
+.holdings-overview-table td {
+    padding: 10px 12px;
+    color: var(--text-primary);
+    vertical-align: middle;
+}
+
+/* Name cell with logo */
+.holding-name-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.holding-logo {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--bg-secondary);
+}
+
+.holding-logo-fallback {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-success, #27ae60), var(--accent-color, #3498db));
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+
+.holding-name-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.holding-name-text .holding-ticker {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.holding-name-text .holding-full-name {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 160px;
+}
+
+/* Amount cell */
+.holding-amount {
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    font-size: 0.85rem;
+}
+
+/* Price change */
+.holding-change {
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.holding-change.positive {
+    color: var(--accent-success, #27ae60);
+}
+
+.holding-change.negative {
+    color: #e74c3c;
+}
+
+.holding-change.neutral {
+    color: var(--text-secondary);
+}
+
+/* Sparkline canvas */
+.holding-sparkline,
+.holding-sparkline-slot {
+    width: 100px;
+    height: 32px;
+    display: block;
+}
+
+/* Price & total */
+.holding-price,
+.holding-total {
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+.holding-total {
+    font-weight: 600;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .holdings-overview-table {
+        font-size: 0.8rem;
+    }
+
+    .holdings-overview-table th,
+    .holdings-overview-table td {
+        padding: 8px 6px;
+    }
+
+    .holding-sparkline {
+        display: none;
+    }
+
+    .holding-name-text .holding-full-name {
+        max-width: 100px;
+    }
+}
+
 .wallet-item .wallet-balance {
     text-align: right;
 }

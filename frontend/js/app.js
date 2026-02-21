@@ -9664,7 +9664,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             loadPortfolioAnalytics(true),
             load7DayPortfolioChange(),
             load7DayTransactionCount(),
-            loadGlobalMarketCap()
+            loadGlobalMarketCap(),
+            loadAllHoldings()
         ]).then(() => {
             console.log('[Overview] Background data loading complete');
             // Start Cardano SSE price stream after initial load
@@ -9738,6 +9739,243 @@ const assetBreakdownCache = {
         this.defiLlama = {};
     }
 };
+
+// ========================================
+// ALL HOLDINGS OVERVIEW (Overview page)
+// ========================================
+
+let _holdingsSortField = 'value_usd';
+let _holdingsSortAsc = false;
+let _holdingsData = null;
+
+async function loadAllHoldings() {
+    const section = document.getElementById('holdingsOverviewSection');
+    if (!section) return;
+
+    const body = document.getElementById('holdingsOverviewBody');
+    const loading = document.getElementById('holdingsLoading');
+    const countEl = document.getElementById('holdingsCount');
+
+    try {
+        if (loading) loading.style.display = 'flex';
+        const response = await authFetch(`${API_BASE}/portfolio/all-holdings`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        _holdingsData = data;
+
+        if (countEl) {
+            countEl.textContent = `${data.count} asset${data.count !== 1 ? 's' : ''}`;
+        }
+
+        renderAllHoldings(data.holdings, body);
+    } catch (e) {
+        console.error('[Holdings] Failed to load all holdings:', e);
+        if (body) {
+            setSafeHTML(body, '<p style="text-align:center;color:var(--text-secondary);padding:20px 0;">Failed to load assets.</p>');
+        }
+    }
+}
+
+function renderAllHoldings(holdings, container) {
+    if (!holdings || holdings.length === 0) {
+        setSafeHTML(container, '<p style="text-align:center;color:var(--text-secondary);padding:20px 0;">No assets found.</p>');
+        return;
+    }
+
+    // Sort
+    const sorted = [...holdings].sort((a, b) => {
+        let va, vb;
+        switch (_holdingsSortField) {
+            case 'name':
+                va = (a.symbol || '').toLowerCase();
+                vb = (b.symbol || '').toLowerCase();
+                return _holdingsSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+            case 'amount':
+                va = a.amount || 0;
+                vb = b.amount || 0;
+                break;
+            case 'price_change_24h':
+                va = a.price_change_24h || 0;
+                vb = b.price_change_24h || 0;
+                break;
+            case 'price_usd':
+                va = a.price_usd || 0;
+                vb = b.price_usd || 0;
+                break;
+            case 'value_usd':
+            default:
+                va = a.value_usd || 0;
+                vb = b.value_usd || 0;
+                break;
+        }
+        return _holdingsSortAsc ? va - vb : vb - va;
+    });
+
+    const arrow = (field) => {
+        if (_holdingsSortField !== field) return '<span class="sort-arrow"></span>';
+        return `<span class="sort-arrow">${_holdingsSortAsc ? '▲' : '▼'}</span>`;
+    };
+    const cls = (field) => _holdingsSortField === field ? 'sorted' : '';
+
+    let html = `
+        <div class="assets-table-wrapper">
+            <table class="holdings-overview-table">
+                <thead>
+                    <tr>
+                        <th class="${cls('name')}" data-sort="name">Name ${arrow('name')}</th>
+                        <th class="text-right ${cls('amount')}" data-sort="amount">Amount ${arrow('amount')}</th>
+                        <th class="text-right ${cls('price_change_24h')}" data-sort="price_change_24h">24h ${arrow('price_change_24h')}</th>
+                        <th data-sort="">Price Graph</th>
+                        <th class="text-right ${cls('price_usd')}" data-sort="price_usd">Price ${arrow('price_usd')}</th>
+                        <th class="text-right ${cls('value_usd')}" data-sort="value_usd">Total ${arrow('value_usd')}</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+    for (const h of sorted) {
+        const symbol = h.symbol || '?';
+        const name = h.name || symbol;
+        const letter = symbol.charAt(0).toUpperCase();
+        const logoUrl = h.logo_url || '';
+        const amount = h.amount || 0;
+        const price = h.price_usd || 0;
+        const value = h.value_usd || 0;
+        const change = h.price_change_24h || 0;
+
+        const changeClass = change > 0 ? 'positive' : change < 0 ? 'negative' : 'neutral';
+        const changeSign = change > 0 ? '+' : '';
+
+        // Format amount
+        let amountStr;
+        if (amount >= 1000000) {
+            amountStr = (amount / 1000000).toFixed(2) + 'M';
+        } else if (amount >= 10000) {
+            amountStr = amount.toLocaleString('en-US', { maximumFractionDigits: 2 });
+        } else if (amount >= 1) {
+            amountStr = amount.toLocaleString('en-US', { maximumFractionDigits: 4 });
+        } else {
+            amountStr = amount.toLocaleString('en-US', { maximumFractionDigits: 6 });
+        }
+
+        // Format price
+        let priceStr;
+        if (price >= 1) {
+            priceStr = '$' + price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        } else if (price >= 0.01) {
+            priceStr = '$' + price.toFixed(4);
+        } else if (price > 0) {
+            priceStr = '$' + price.toFixed(6);
+        } else {
+            priceStr = '--';
+        }
+
+        const valueStr = formatUSD(value);
+
+        // Logo: image with data-fallback for error handling after setSafeHTML
+        const logoHtml = logoUrl
+            ? `<img src="${logoUrl}" alt="${symbol}" class="holding-logo" data-fallback="${letter}">`
+            : `<div class="holding-logo-fallback">${letter}</div>`;
+
+        html += `
+                    <tr>
+                        <td>
+                            <div class="holding-name-cell">
+                                ${logoHtml}
+                                <div class="holding-name-text">
+                                    <span class="holding-ticker">${symbol}</span>
+                                    <span class="holding-full-name">${name}</span>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="text-right"><span class="holding-amount">${blurValue(amountStr)}</span></td>
+                        <td class="text-right"><span class="holding-change ${changeClass}">${changeSign}${change.toFixed(2)}%</span></td>
+                        <td><div class="holding-sparkline-slot" data-symbol="${symbol}"></div></td>
+                        <td class="text-right"><span class="holding-price">${blurValue(priceStr)}</span></td>
+                        <td class="text-right"><span class="holding-total">${blurValue(valueStr)}</span></td>
+                    </tr>`;
+    }
+
+    html += `
+                </tbody>
+            </table>
+        </div>`;
+
+    setSafeHTML(container, html);
+
+    // Post-render: attach image error handlers (DOMPurify strips onerror)
+    container.querySelectorAll('img.holding-logo[data-fallback]').forEach(img => {
+        img.addEventListener('error', () => {
+            const letter = img.getAttribute('data-fallback') || '?';
+            const fallback = document.createElement('div');
+            fallback.className = 'holding-logo-fallback';
+            fallback.textContent = letter;
+            img.replaceWith(fallback);
+        });
+    });
+
+    // Post-render: attach sort header click handlers
+    container.querySelectorAll('.holdings-overview-table th[data-sort]').forEach(th => {
+        const field = th.getAttribute('data-sort');
+        if (!field) return;
+        th.addEventListener('click', () => {
+            if (_holdingsSortField === field) {
+                _holdingsSortAsc = !_holdingsSortAsc;
+            } else {
+                _holdingsSortField = field;
+                _holdingsSortAsc = field === 'name'; // A-Z default for name
+            }
+            renderAllHoldings(_holdingsData.holdings, container);
+        });
+    });
+
+    // Post-render: draw sparklines
+    drawAllSparklines(sorted, container);
+}
+
+function drawAllSparklines(holdings, container) {
+    for (const h of holdings) {
+        const sparkline = h.sparkline_7d;
+        if (!sparkline || sparkline.length < 2) continue;
+
+        const slot = container.querySelector(`.holding-sparkline-slot[data-symbol="${h.symbol}"]`);
+        if (!slot) continue;
+
+        // Create canvas dynamically (DOMPurify strips <canvas>)
+        const canvas = document.createElement('canvas');
+        canvas.className = 'holding-sparkline';
+        slot.replaceWith(canvas);
+
+        // Need a frame for offsetWidth/Height to resolve
+        requestAnimationFrame(() => {
+            const dpr = window.devicePixelRatio || 1;
+            const cw = canvas.offsetWidth || 100;
+            const ch = canvas.offsetHeight || 32;
+            canvas.width = cw * dpr;
+            canvas.height = ch * dpr;
+
+            const ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
+
+            const min = Math.min(...sparkline);
+            const max = Math.max(...sparkline);
+            const range = max - min || 1;
+
+            const up = sparkline[sparkline.length - 1] >= sparkline[0];
+            ctx.strokeStyle = up ? '#27ae60' : '#e74c3c';
+            ctx.lineWidth = 1.5;
+            ctx.lineJoin = 'round';
+
+            ctx.beginPath();
+            for (let i = 0; i < sparkline.length; i++) {
+                const x = (i / (sparkline.length - 1)) * cw;
+                const y = ch - ((sparkline[i] - min) / range) * (ch - 4) - 2;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+        });
+    }
+}
 
 // Pre-fetch all blockchain breakdowns for instant modal opening
 async function preFetchAssetBreakdowns() {

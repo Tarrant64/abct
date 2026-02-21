@@ -918,6 +918,230 @@ async def _enrich_cached_assets_with_prices(cached_data: dict) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# Unified All-Holdings endpoint
+# ---------------------------------------------------------------------------
+
+# Chain key → (symbol, display name, amount field)
+_CHAIN_MAP = {
+    'cardano':    ('ADA',  'Cardano',    'total_ada'),
+    'bitcoin':    ('BTC',  'Bitcoin',    'total_btc'),
+    'ethereum':   ('ETH',  'Ethereum',   'total_eth'),
+    'solana':     ('SOL',  'Solana',     'total_sol'),
+    'polygon':    ('POL',  'Polygon',    'total_matic'),
+    'base':       ('ETH_BASE', 'Base',   'total_eth'),
+    'algorand':   ('ALGO', 'Algorand',   'total_algo'),
+    'bsc':        ('BNB',  'BNB Chain',  'total_bnb'),
+    'arbitrum':   ('ETH_ARB', 'Arbitrum','total_eth'),
+    'avalanche':  ('AVAX', 'Avalanche',  'total_avax'),
+    'tron':       ('TRX',  'Tron',       'total_trx'),
+    'xrp':        ('XRP',  'XRP',        'total_xrp'),
+    'hedera':     ('HBAR', 'Hedera',     'total_hbar'),
+    'multiversx': ('EGLD', 'MultiversX', 'total_egld'),
+    'sui':        ('SUI',  'Sui',        'total_sui'),
+    'aptos':      ('APT',  'Aptos',      'total_apt'),
+    'filecoin':   ('FIL',  'Filecoin',   'total_fil'),
+    'litecoin':   ('LTC',  'Litecoin',   'total_ltc'),
+    'dogecoin':   ('DOGE', 'Dogecoin',   'total_doge'),
+    'zcash':      ('ZEC',  'Zcash',      'total_zec'),
+    'tezos':      ('XTZ',  'Tezos',      'total_xtz'),
+    'stacks':     ('STX',  'Stacks',     'total_stx'),
+    'vechain':    ('VET',  'VeChain',    'total_vet'),
+    'cosmos':     ('ATOM', 'Cosmos',     'total_atom'),
+    'near':       ('NEAR', 'NEAR',       'total_near'),
+    'icp':        ('ICP',  'Internet Computer', 'total_icp'),
+}
+
+# Price lookup symbol for chains that use a different price key
+_PRICE_SYMBOL = {
+    'ETH_BASE': 'ETH',
+    'ETH_ARB': 'ETH',
+    'POL': 'MATIC',
+}
+
+
+async def _fetch_sparklines(symbols: list) -> dict:
+    """Fetch 7-day sparkline data from CoinGecko for multiple coins."""
+    from services.pricing import ASSET_TO_COINGECKO
+    from services.http_client import get_client
+
+    # Map symbols → CoinGecko IDs
+    symbol_to_id = {}
+    for sym in symbols:
+        price_sym = _PRICE_SYMBOL.get(sym, sym)
+        cg_id = ASSET_TO_COINGECKO.get(price_sym)
+        if cg_id:
+            symbol_to_id[sym] = cg_id
+
+    if not symbol_to_id:
+        return {}
+
+    id_to_symbol = {v: k for k, v in symbol_to_id.items()}
+    cg_ids = list(set(symbol_to_id.values()))
+
+    try:
+        client = get_client("coingecko", timeout=30.0)
+        response = await client.get(
+            "https://api.coingecko.com/api/v3/coins/markets",
+            params={
+                "vs_currency": "usd",
+                "ids": ",".join(cg_ids),
+                "sparkline": "true",
+                "per_page": 250,
+                "page": 1
+            }
+        )
+        if response.status_code == 200:
+            result = {}
+            for coin in response.json():
+                sparkline = coin.get('sparkline_in_7d', {}).get('price', [])
+                if sparkline:
+                    # Downsample to ~50 points for compact response
+                    step = max(1, len(sparkline) // 50)
+                    sampled = sparkline[::step]
+                    # Map CoinGecko ID back to all symbols that use it
+                    for sym, cg_id in symbol_to_id.items():
+                        if cg_id == coin['id']:
+                            result[sym] = sampled
+            return result
+        else:
+            logger.warning(f"CoinGecko sparkline fetch returned {response.status_code}")
+    except Exception as e:
+        logger.warning(f"Failed to fetch sparklines: {e}")
+    return {}
+
+
+@router.get("/all-holdings")
+async def get_all_holdings(
+    user_id: int = Depends(verify_session),
+    refresh: bool = Query(False, description="Force refresh"),
+):
+    """
+    Unified list of all holdings: L1 chains + native tokens + DeFi positions.
+
+    Merges quantities for the same token across sources (e.g. staked + unstaked INDY).
+    Includes 7-day sparkline price data for charting.
+    """
+    # Fetch all data sources in parallel
+    summary, assets_data, all_prices = await asyncio.gather(
+        get_portfolio_summary(user_id=user_id, refresh=refresh),
+        get_all_native_assets(user_id=user_id, refresh=refresh),
+        pricing_service.get_all_tracked_prices(),
+    )
+
+    # Try to get DeFi data from cache (non-blocking)
+    defi_data = await get_cache(f"defi_summary_{user_id}")
+
+    # Build unified holdings map keyed by symbol
+    holdings = {}
+
+    # --- 1. L1 chain holdings ---
+    for chain_key, (symbol, name, amount_field) in _CHAIN_MAP.items():
+        chain_data = summary.get(chain_key, {})
+        amount = chain_data.get(amount_field, 0)
+        if amount <= 0:
+            continue
+
+        price_sym = _PRICE_SYMBOL.get(symbol, symbol)
+        price_info = all_prices.get(price_sym, {})
+        price = price_info.get('usd', 0)
+
+        holdings[symbol] = {
+            'symbol': price_sym,
+            'name': name,
+            'amount': amount,
+            'price_usd': price,
+            'value_usd': amount * price,
+            'price_change_24h': price_info.get('usd_24h_change', 0),
+            'wallet_count': chain_data.get('wallet_count', 0),
+            'logo_url': logokit_service.get_crypto_logo_url(price_sym, size=64),
+            'source': 'chain',
+        }
+
+    # --- 2. Native tokens (valuable only — already have prices) ---
+    for asset in assets_data.get('valuable_assets', []):
+        ticker = (asset.get('ticker') or asset.get('asset_name', '')).upper()
+        if not ticker:
+            continue
+        # Skip if already counted as L1 chain
+        if ticker in holdings or ticker in _PRICE_SYMBOL.values():
+            continue
+
+        holdings[ticker] = {
+            'symbol': ticker,
+            'name': asset.get('asset_name', ticker),
+            'amount': asset.get('total_quantity', 0),
+            'price_usd': asset.get('price_usd') or 0,
+            'value_usd': asset.get('value_usd') or 0,
+            'price_change_24h': asset.get('price_change_24h', 0),
+            'wallet_count': asset.get('wallet_count', 0),
+            'logo_url': asset.get('logo_url') or logokit_service.get_crypto_logo_url(ticker, size=64),
+            'source': 'token',
+        }
+
+    # --- 3. DeFi positions (aggregate by token symbol) ---
+    if defi_data and defi_data.get('all_positions'):
+        for pos in defi_data['all_positions']:
+            token = (pos.get('token') or '').upper()
+            if not token:
+                continue
+
+            quantity = pos.get('quantity', 0)
+            if quantity <= 0:
+                continue
+
+            if token in holdings:
+                # Add DeFi quantity to existing holding
+                holdings[token]['amount'] += quantity
+                price = holdings[token]['price_usd']
+                holdings[token]['value_usd'] = holdings[token]['amount'] * price
+                # Prefer protocol name if current name is just the ticker
+                protocol = pos.get('protocol', '')
+                if protocol and holdings[token]['name'] == token:
+                    holdings[token]['name'] = protocol
+                if not holdings[token].get('logo_url') and pos.get('logo_url'):
+                    holdings[token]['logo_url'] = pos['logo_url']
+            else:
+                # New holding from DeFi only
+                price_info = all_prices.get(token, {})
+                price = price_info.get('usd', 0)
+                if price <= 0:
+                    continue
+                holdings[token] = {
+                    'symbol': token,
+                    'name': pos.get('protocol', token),
+                    'amount': quantity,
+                    'price_usd': price,
+                    'value_usd': quantity * price,
+                    'price_change_24h': price_info.get('usd_24h_change', 0),
+                    'wallet_count': pos.get('wallet_count', 0),
+                    'logo_url': pos.get('logo_url') or logokit_service.get_crypto_logo_url(token, size=64),
+                    'source': 'defi',
+                }
+
+    # Sort by value descending
+    sorted_holdings = sorted(
+        holdings.values(),
+        key=lambda x: x.get('value_usd', 0),
+        reverse=True
+    )
+
+    total_value = sum(h.get('value_usd', 0) for h in sorted_holdings)
+
+    # Fetch sparklines for all symbols
+    sparklines = await _fetch_sparklines(list(holdings.keys()))
+    for h in sorted_holdings:
+        # Look up by the internal key (e.g. ETH_BASE) or by symbol
+        key = next((k for k, v in holdings.items() if v is h), h['symbol'])
+        h['sparkline_7d'] = sparklines.get(key, [])
+
+    return {
+        'holdings': sorted_holdings,
+        'total_value_usd': round(total_value, 2),
+        'count': len(sorted_holdings),
+    }
+
+
 @router.get("/history")
 async def get_portfolio_history(
     user_id: int = Depends(verify_session),
