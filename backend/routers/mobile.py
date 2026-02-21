@@ -137,6 +137,55 @@ CHAIN_ICON_URLS = {
 }
 
 
+async def _fetch_asset_sparklines(symbols: list, max_points: int = 24) -> dict:
+    """Fetch 7-day sparkline price data from CoinGecko for a list of symbols.
+
+    Returns dict mapping symbol -> list of floats (downsampled to max_points).
+    """
+    from services.pricing import ASSET_TO_COINGECKO
+    from services.http_client import get_client
+
+    symbol_to_id = {}
+    for sym in symbols:
+        cg_id = ASSET_TO_COINGECKO.get(sym)
+        if cg_id:
+            symbol_to_id[sym] = cg_id
+
+    if not symbol_to_id:
+        return {}
+
+    try:
+        client = get_client("coingecko", timeout=30.0)
+        response = await client.get(
+            "https://api.coingecko.com/api/v3/coins/markets",
+            params={
+                "vs_currency": "usd",
+                "ids": ",".join(set(symbol_to_id.values())),
+                "sparkline": "true",
+                "per_page": 250,
+                "page": 1
+            }
+        )
+        if response.status_code != 200:
+            return {}
+
+        sparklines = {}
+        for coin in response.json():
+            raw = coin.get('sparkline_in_7d', {}).get('price', [])
+            if not raw:
+                continue
+            # Downsample to max_points for compact watch transfer
+            step = max(1, len(raw) // max_points)
+            sampled = raw[::step]
+            for sym, cg_id in symbol_to_id.items():
+                if cg_id == coin['id']:
+                    sparklines[sym] = [round(v, 2) for v in sampled]
+        return sparklines
+    except Exception as e:
+        logger.debug(f"Failed to fetch asset sparklines: {e}")
+        return {}
+
+
 def _map_mobile_range_to_portfolio_range(range_value: str) -> str:
     range_map = {"24h": "24h", "7d": "1w", "4w": "1m", "3m": "3m", "1y": "1y", "all": "all"}
     return range_map.get(range_value, "1w")
@@ -550,6 +599,15 @@ async def get_mobile_portfolio_summary(
         h['native_amount'] = round(h['native_amount'], 8)
         h['percentage'] = round((h['value_usd'] / total_value_usd * 100) if total_value_usd > 0 else 0, 1)
     top_holdings.sort(key=lambda x: x['value_usd'], reverse=True)
+
+    # Fetch 7-day sparkline data for top holdings (for watchOS charts)
+    top_symbols = [h['symbol'] for h in top_holdings[:8]]
+    try:
+        sparklines = await _fetch_asset_sparklines(top_symbols)
+        for h in top_holdings[:8]:
+            h['sparkline_7d'] = sparklines.get(h['symbol'], [])
+    except Exception as e:
+        logger.debug(f"Could not fetch sparklines for top holdings: {e}")
 
     result = {
         "total_value_usd": round(total_value_usd, 2),
