@@ -1024,6 +1024,41 @@ async function loadPortfolioTotals() {
     }
 }
 
+// Lightweight staking fetch for Overview page (populates stakingTotals without rendering UI)
+async function loadStakingTotalsForOverview() {
+    try {
+        const walletsResponse = await authFetch(`${API_BASE}/wallets`);
+        const walletsData = await walletsResponse.json();
+        const cardanoWallets = walletsData.wallets.filter(w => w.blockchain === 'cardano');
+        if (cardanoWallets.length === 0) return;
+
+        const newTotals = {};
+        for (const wallet of cardanoWallets) {
+            try {
+                const resp = await authFetch(`${API_BASE}/defi/staking/${wallet.address}`);
+                const data = await resp.json();
+                for (const [protocol, pData] of Object.entries(data.protocols || {})) {
+                    for (const stake of (pData.staked || [])) {
+                        const token = stake.token || 'ADA';
+                        newTotals[token] = (newTotals[token] || 0) + (stake.amount || 0);
+                    }
+                    if (pData.reward_token && pData.pending_rewards > 0) {
+                        newTotals[pData.reward_token] = (newTotals[pData.reward_token] || 0) + pData.pending_rewards;
+                    }
+                }
+            } catch (e) { /* skip individual wallet errors */ }
+        }
+
+        if (Object.keys(newTotals).length > 0) {
+            stakingTotals = newTotals;
+            console.log('[Overview] Staking totals loaded:', stakingTotals);
+            updateTotalPortfolioValue();
+        }
+    } catch (e) {
+        console.debug('[Overview] Could not load staking totals:', e);
+    }
+}
+
 // DOM Elements
 const refreshBtn = document.getElementById('refreshBtn');
 const statusBar = document.getElementById('statusBar');
@@ -9634,6 +9669,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize portfolio history chart range buttons
     initHistoryRangeButtons();
 
+    // Initialize holdings column settings button
+    const holdingsSettingsBtn = document.getElementById('holdingsSettingsBtn');
+    if (holdingsSettingsBtn) {
+        holdingsSettingsBtn.addEventListener('click', toggleHoldingsSettings);
+        holdingsSettingsBtn._listenerAdded = true;
+    }
+
     // Initialize token form handler
     const tokenForm = document.getElementById('addTokenForm');
     if (tokenForm) {
@@ -9671,7 +9713,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             loadPortfolioAnalytics(true),
             load7DayPortfolioChange(),
             load7DayTransactionCount(),
-            loadGlobalMarketCap()
+            loadGlobalMarketCap(),
+            loadStakingTotalsForOverview()
         ]).then(() => {
             console.log('[Overview] Background data loading complete');
             // Start Cardano SSE price stream after initial load
@@ -10094,14 +10137,16 @@ function renderAllHoldings(holdings, container) {
     };
     const cls = (field) => _holdingsSortField === field ? 'sorted' : '';
 
-    // Build header from column config
+    // Build header from column config (with drag handles for reorder)
     let headerHtml = '';
-    for (const col of columns) {
+    for (let ci = 0; ci < columns.length; ci++) {
+        const col = columns[ci];
         const align = col.id === 'name' ? '' : 'text-right';
         const sortAttr = col.sortable ? `data-sort="${col.id}"` : 'data-sort=""';
         const sortCls = col.sortable ? cls(col.id) : '';
         const sortArrow = col.sortable ? ' ' + arrow(col.id) : '';
-        headerHtml += `<th class="${`${align} ${sortCls}`.trim()}" ${sortAttr}>${col.label}${sortArrow}</th>`;
+        const dragHandle = col.fixed ? '' : `<span class="th-drag-handle" data-col-idx="${ci}" draggable="true" title="Drag to reorder">⠿</span>`;
+        headerHtml += `<th class="${`${align} ${sortCls}`.trim()}" ${sortAttr} data-col-id="${col.id}">${col.label}${sortArrow}${dragHandle}</th>`;
     }
 
     let html = `
@@ -10138,13 +10183,60 @@ function renderAllHoldings(holdings, container) {
     container.querySelectorAll('.holdings-overview-table th[data-sort]').forEach(th => {
         const field = th.getAttribute('data-sort');
         if (!field) return;
-        th.addEventListener('click', () => {
+        th.addEventListener('click', (e) => {
+            // Don't sort when clicking the drag handle
+            if (e.target.classList.contains('th-drag-handle')) return;
             if (_holdingsSortField === field) {
                 _holdingsSortAsc = !_holdingsSortAsc;
             } else {
                 _holdingsSortField = field;
                 _holdingsSortAsc = field === 'name'; // A-Z default for name
             }
+            renderAllHoldings(_holdingsData.holdings, container);
+        });
+    });
+
+    // Post-render: attach column drag handles for reordering
+    let _dragColIdx = null;
+    container.querySelectorAll('.th-drag-handle').forEach(handle => {
+        handle.addEventListener('dragstart', (e) => {
+            _dragColIdx = parseInt(handle.dataset.colIdx);
+            e.dataTransfer.effectAllowed = 'move';
+            handle.closest('th').classList.add('col-dragging');
+        });
+        handle.addEventListener('dragend', () => {
+            _dragColIdx = null;
+            container.querySelectorAll('.col-dragging, .col-drag-over').forEach(el => {
+                el.classList.remove('col-dragging', 'col-drag-over');
+            });
+        });
+    });
+    container.querySelectorAll('.holdings-overview-table th[data-col-id]').forEach(th => {
+        th.addEventListener('dragover', (e) => {
+            if (_dragColIdx === null) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            th.classList.add('col-drag-over');
+        });
+        th.addEventListener('dragleave', () => th.classList.remove('col-drag-over'));
+        th.addEventListener('drop', (e) => {
+            e.preventDefault();
+            th.classList.remove('col-drag-over');
+            if (_dragColIdx === null) return;
+            const config = getHoldingsColumnConfig();
+            const visibleCols = config.filter(c => c.visible);
+            const targetColId = th.dataset.colId;
+            const targetCol = visibleCols.find(c => c.id === targetColId);
+            if (!targetCol || targetCol.fixed) return;
+            const fromCol = visibleCols[_dragColIdx];
+            if (!fromCol || fromCol.fixed) return;
+            // Find indices in full config array
+            const fromFullIdx = config.indexOf(fromCol);
+            const toFullIdx = config.indexOf(targetCol);
+            if (fromFullIdx === toFullIdx) return;
+            config.splice(fromFullIdx, 1);
+            config.splice(toFullIdx, 0, fromCol);
+            saveHoldingsColumnConfig();
             renderAllHoldings(_holdingsData.holdings, container);
         });
     });

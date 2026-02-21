@@ -4893,6 +4893,30 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     border-color: var(--accent-color, #00d26a);
 }
 
+/* Table header drag handles for column reordering */
+.th-drag-handle {
+    display: inline-block;
+    cursor: grab;
+    color: var(--text-secondary);
+    opacity: 0.4;
+    font-size: 0.75rem;
+    margin-left: 6px;
+    vertical-align: middle;
+    user-select: none;
+    transition: opacity 0.2s;
+    letter-spacing: -1px;
+}
+.th-drag-handle:hover {
+    opacity: 1;
+    color: var(--accent-color, #00d26a);
+}
+.holdings-overview-table th.col-dragging {
+    opacity: 0.4;
+}
+.holdings-overview-table th.col-drag-over {
+    border-right: 2px solid var(--accent-color, #00d26a);
+}
+
 .holdings-loading {
     display: flex;
     flex-direction: column;
