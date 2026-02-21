@@ -138,7 +138,7 @@ CHAIN_ICON_URLS = {
 
 
 def _map_mobile_range_to_portfolio_range(range_value: str) -> str:
-    range_map = {"1h": "24h", "24h": "24h", "7d": "1w", "4w": "1m", "3m": "3m", "1y": "1y", "all": "all"}
+    range_map = {"24h": "24h", "7d": "1w", "4w": "1m", "3m": "3m", "1y": "1y", "all": "all"}
     return range_map.get(range_value, "1w")
 
 
@@ -1289,7 +1289,7 @@ async def get_mobile_portfolio_history(
     """
     try:
         # Map mobile ranges to unified endpoint ranges
-        range_map = {"1h": "24h", "24h": "24h", "7d": "1w", "4w": "1m", "3m": "3m", "1y": "1y", "all": "all"}
+        range_map = {"24h": "24h", "7d": "1w", "4w": "1m", "3m": "3m", "1y": "1y", "all": "all"}
         unified_range = range_map.get(range, "1w")
 
         # Call unified chart endpoint

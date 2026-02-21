@@ -1514,7 +1514,7 @@ async def get_unified_chart(
         return await _get_demo_unified_chart(range)
 
     range_to_days = {
-        '24h': 1, '1w': 7, '1m': 30, '3m': 90,
+        '24h': 3, '1w': 7, '1m': 30, '3m': 90,
         '6m': 180, '1y': 365, 'all': 3650,
     }
     days = range_to_days.get(range, 7)
@@ -1916,7 +1916,7 @@ async def get_wallet_chart(
         raise HTTPException(status_code=404, detail="Wallet source not found")
 
     range_to_days = {
-        '24h': 1, '1w': 7, '1m': 30, '3m': 90,
+        '24h': 3, '1w': 7, '1m': 30, '3m': 90,
         '6m': 180, '1y': 365, 'all': 3650,
     }
     days = range_to_days.get(range, 7)
@@ -1976,7 +1976,7 @@ async def _get_demo_unified_chart(range_str: str) -> dict:
     from services.demo_data_generator import generate_portfolio_history
 
     range_to_days = {
-        '24h': 1, '1w': 7, '1m': 30, '3m': 90,
+        '24h': 3, '1w': 7, '1m': 30, '3m': 90,
         '6m': 180, '1y': 365, 'all': 3650,
     }
     days = range_to_days.get(range_str, 7)
