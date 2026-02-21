@@ -1011,26 +1011,82 @@ async def _fetch_sparklines(symbols: list) -> dict:
     return {}
 
 
+def _merge_holding(holdings: dict, key: str, amount: float, price: float,
+                    all_prices: dict, name: str = '', logo_url: str = '',
+                    source: str = 'unknown'):
+    """Merge a token amount into the unified holdings map."""
+    if amount <= 0:
+        return
+    price_sym = _PRICE_SYMBOL.get(key, key)
+    if key in holdings:
+        holdings[key]['amount'] += amount
+        p = holdings[key]['price_usd']
+        holdings[key]['value_usd'] = holdings[key]['amount'] * p
+        if not holdings[key].get('logo_url') and logo_url:
+            holdings[key]['logo_url'] = logo_url
+    else:
+        if price <= 0:
+            price_info = all_prices.get(price_sym, {})
+            price = price_info.get('usd', 0)
+            if price <= 0:
+                return
+        price_info = all_prices.get(price_sym, {})
+        holdings[key] = {
+            'symbol': price_sym,
+            'name': name or key,
+            'amount': amount,
+            'price_usd': price,
+            'value_usd': amount * price,
+            'price_change_24h': price_info.get('usd_24h_change', 0),
+            'wallet_count': 0,
+            'logo_url': logo_url or logokit_service.get_crypto_logo_url(price_sym, size=64),
+            'source': source,
+        }
+
+
 @router.get("/all-holdings")
 async def get_all_holdings(
     user_id: int = Depends(verify_session),
     refresh: bool = Query(False, description="Force refresh"),
 ):
     """
-    Unified list of all holdings: L1 chains + native tokens + DeFi positions.
+    Unified list of ALL holdings: L1 chains, native tokens, DeFi positions,
+    staking positions, and exchange assets.
 
     Merges quantities for the same token across sources (e.g. staked + unstaked INDY).
     Includes 7-day sparkline price data for charting.
     """
-    # Fetch all data sources in parallel
-    summary, assets_data, all_prices = await asyncio.gather(
+    from database import get_all_wallets
+
+    # Fetch primary data sources in parallel
+    summary, assets_data, all_prices, wallets = await asyncio.gather(
         get_portfolio_summary(user_id=user_id, refresh=refresh),
         get_all_native_assets(user_id=user_id, refresh=refresh),
         pricing_service.get_all_tracked_prices(),
+        get_all_wallets(user_id=user_id),
     )
 
-    # Try to get DeFi data from cache (non-blocking)
+    # Fetch DeFi summary (try cache first, then call endpoint directly)
     defi_data = await get_cache(f"defi_summary_{user_id}")
+    if not defi_data:
+        try:
+            from routers.defi import get_defi_summary
+            defi_data = await get_defi_summary(user_id=user_id, refresh=False)
+        except Exception as e:
+            logger.warning(f"[All Holdings] DeFi summary fetch failed: {e}")
+            defi_data = None
+
+    # Fetch staking positions for all Cardano wallets
+    cardano_addrs = [w['address'] for w in wallets if w['blockchain'] == 'cardano']
+    staking_caches = await asyncio.gather(*[
+        get_cache(f"staking_positions_{addr}") for addr in cardano_addrs
+    ]) if cardano_addrs else []
+
+    # Fetch exchange data from cache
+    exchange_names = ['coinbase', 'binance', 'binance_us', 'okx', 'bitget', 'gate', 'kucoin']
+    exchange_caches = await asyncio.gather(*[
+        get_cache(f"{name}_portfolio", user_id=user_id) for name in exchange_names
+    ])
 
     # Build unified holdings map keyed by symbol
     holdings = {}
@@ -1079,45 +1135,47 @@ async def get_all_holdings(
             'source': 'token',
         }
 
-    # --- 3. DeFi positions (aggregate by token symbol) ---
+    # --- 3. DeFi governance tokens (from wallet UTXOs) ---
     if defi_data and defi_data.get('all_positions'):
         for pos in defi_data['all_positions']:
             token = (pos.get('token') or '').upper()
             if not token:
                 continue
+            _merge_holding(
+                holdings, token, pos.get('quantity', 0), 0,
+                all_prices, name=pos.get('protocol', token),
+                logo_url=pos.get('logo_url', ''), source='defi',
+            )
 
-            quantity = pos.get('quantity', 0)
-            if quantity <= 0:
+    # --- 4. Staking positions (INDY, STRIKE, LQ, IAG, ADA in Surf, etc.) ---
+    for cached in staking_caches:
+        if not cached or not cached.get('protocols'):
+            continue
+        for protocol_name, protocol_data in cached['protocols'].items():
+            for stake in (protocol_data.get('staked') or []):
+                token = (stake.get('token') or 'ADA').upper()
+                amount = float(stake.get('amount', 0))
+                _merge_holding(
+                    holdings, token, amount, 0,
+                    all_prices, name=protocol_name,
+                    logo_url=stake.get('logo_url', ''), source='staking',
+                )
+
+    # --- 5. Exchange assets (Coinbase, Binance, OKX, etc.) ---
+    for exc_data in exchange_caches:
+        if not exc_data or not exc_data.get('assets'):
+            continue
+        for asset in exc_data['assets']:
+            currency = (asset.get('currency') or '').upper()
+            if not currency:
                 continue
-
-            if token in holdings:
-                # Add DeFi quantity to existing holding
-                holdings[token]['amount'] += quantity
-                price = holdings[token]['price_usd']
-                holdings[token]['value_usd'] = holdings[token]['amount'] * price
-                # Prefer protocol name if current name is just the ticker
-                protocol = pos.get('protocol', '')
-                if protocol and holdings[token]['name'] == token:
-                    holdings[token]['name'] = protocol
-                if not holdings[token].get('logo_url') and pos.get('logo_url'):
-                    holdings[token]['logo_url'] = pos['logo_url']
-            else:
-                # New holding from DeFi only
-                price_info = all_prices.get(token, {})
-                price = price_info.get('usd', 0)
-                if price <= 0:
-                    continue
-                holdings[token] = {
-                    'symbol': token,
-                    'name': pos.get('protocol', token),
-                    'amount': quantity,
-                    'price_usd': price,
-                    'value_usd': quantity * price,
-                    'price_change_24h': price_info.get('usd_24h_change', 0),
-                    'wallet_count': pos.get('wallet_count', 0),
-                    'logo_url': pos.get('logo_url') or logokit_service.get_crypto_logo_url(token, size=64),
-                    'source': 'defi',
-                }
+            balance = float(asset.get('balance', 0))
+            price = float(asset.get('price', 0))
+            _merge_holding(
+                holdings, currency, balance, price,
+                all_prices, name=asset.get('name', currency),
+                source='exchange',
+            )
 
     # Sort by value descending
     sorted_holdings = sorted(
@@ -1131,7 +1189,6 @@ async def get_all_holdings(
     # Fetch sparklines for all symbols
     sparklines = await _fetch_sparklines(list(holdings.keys()))
     for h in sorted_holdings:
-        # Look up by the internal key (e.g. ETH_BASE) or by symbol
         key = next((k for k, v in holdings.items() if v is h), h['symbol'])
         h['sparkline_7d'] = sparklines.get(key, [])
 

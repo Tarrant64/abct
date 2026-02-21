@@ -9664,8 +9664,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             loadPortfolioAnalytics(true),
             load7DayPortfolioChange(),
             load7DayTransactionCount(),
-            loadGlobalMarketCap(),
-            loadAllHoldings()
+            loadGlobalMarketCap()
         ]).then(() => {
             console.log('[Overview] Background data loading complete');
             // Start Cardano SSE price stream after initial load
@@ -9674,9 +9673,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             // V2 on-chain history is now the default
             loadV2BalanceHistory('1w');
             checkV2CollectionStatus();
-            loadV2Schedule();
-            loadV2LastRun();
             preFetchAssetBreakdowns();
+            // Load all-holdings after exchange/defi data is cached
+            loadAllHoldings();
         });
     } else if (isAssetsPage) {
         // ASSETS PAGE: Load prices, portfolio summary (renders wallets), then exchanges/defi/tokens
