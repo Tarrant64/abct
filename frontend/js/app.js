@@ -482,10 +482,13 @@ function renderBlockchainCards(portfolioData) {
             details += `<span id="${chain}DynNfts"></span>`;
         }
 
+        // Logo: prefer CoinGecko image, then custom logoUrl, then LogoKit
+        const logoSrc = pd?.image || cfg.logoUrl || getLogoKitUrl(cfg.logo, 32);
+
         html += `
             <div class="summary-card ${chain} clickable" data-chain="${chain}">
                 <div class="card-header">
-                    <img src="${cfg.logoUrl ? cfg.logoUrl + '?s=32' : getLogoKitUrl(cfg.logo, 32)}" alt="${cfg.name}" class="blockchain-logo">
+                    <img src="${logoSrc}" alt="${cfg.name}" class="blockchain-logo">
                     <span>${cfg.name}</span>
                     <div class="price-info">
                         <span class="token-price" id="${chain}DynPrice">${priceStr}</span>

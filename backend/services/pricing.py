@@ -364,6 +364,7 @@ class PricingService:
                             'total_supply': coin.get('total_supply'),
                             'circulating_supply': coin.get('circulating_supply'),
                             'max_supply': coin.get('max_supply'),
+                            'image': coin.get('image', ''),
                             'source': 'CoinGecko',
                             'updated_at': datetime.now().isoformat()
                         }
