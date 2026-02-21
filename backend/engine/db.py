@@ -887,6 +887,27 @@ async def upsert_token_info(chain: str, asset_id: str, symbol: Optional[str] = N
         await db.commit()
 
 
+async def get_coingecko_id_by_symbol(symbol: str, chain: Optional[str] = None) -> Optional[str]:
+    """Look up a CoinGecko ID from engine_token_info by symbol.
+
+    Searches across all chains unless a specific chain is provided.
+    Returns the first matching coingecko_id or None.
+    """
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        if chain:
+            cursor = await db.execute(
+                "SELECT coingecko_id FROM engine_token_info WHERE symbol = ? AND chain = ? AND coingecko_id IS NOT NULL LIMIT 1",
+                (symbol.upper(), chain)
+            )
+        else:
+            cursor = await db.execute(
+                "SELECT coingecko_id FROM engine_token_info WHERE symbol = ? AND coingecko_id IS NOT NULL LIMIT 1",
+                (symbol.upper(),)
+            )
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+
 async def get_all_token_info(chain: Optional[str] = None) -> List[Dict[str, Any]]:
     """Get all token info records, optionally filtered by chain."""
     async with aiosqlite.connect(str(DATABASE_PATH)) as db:

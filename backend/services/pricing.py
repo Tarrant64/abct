@@ -855,5 +855,63 @@ class PricingService:
         return self.cache.copy()
 
 
+async def resolve_coingecko_id(symbol: str, blockchain: Optional[str] = None) -> Optional[str]:
+    """Resolve a CoinGecko ID for a given symbol.
+
+    Resolution chain:
+    1. ASSET_TO_COINGECKO dict (static mapping)
+    2. engine_token_info DB (wallet-discovered tokens)
+    3. CoinGecko /search API (persisted for future lookups)
+    """
+    upper = symbol.upper()
+
+    # 1. Static mapping
+    cg_id = ASSET_TO_COINGECKO.get(upper)
+    if cg_id:
+        return cg_id
+
+    # 2. Engine token info DB
+    try:
+        from engine import db as engine_db
+        cg_id = await engine_db.get_coingecko_id_by_symbol(upper, chain=blockchain)
+        if cg_id:
+            return cg_id
+    except Exception as e:
+        logger.debug(f"Engine DB lookup failed for {upper}: {e}")
+
+    # 3. CoinGecko /search API
+    try:
+        client = get_client("coingecko", timeout=15.0)
+        cg_headers = await pricing_service._get_cg_headers()
+        response = await client.get(
+            f"{COINGECKO_BASE_URL}/search",
+            params={"query": upper},
+            headers=cg_headers
+        )
+        if response.status_code == 200:
+            data = response.json()
+            for coin in data.get("coins", []):
+                if coin.get("symbol", "").upper() == upper:
+                    cg_id = coin["id"]
+                    # Persist to engine_token_info for future lookups
+                    try:
+                        chain_for_db = blockchain or "unknown"
+                        from engine import db as engine_db
+                        await engine_db.upsert_token_info(
+                            chain=chain_for_db,
+                            asset_id=f"search:{upper}",
+                            symbol=upper,
+                            coingecko_id=cg_id
+                        )
+                        logger.info(f"Resolved and cached CoinGecko ID for {upper}: {cg_id}")
+                    except Exception:
+                        pass
+                    return cg_id
+    except Exception as e:
+        logger.warning(f"CoinGecko search failed for {upper}: {e}")
+
+    return None
+
+
 # Singleton instance
 pricing_service = PricingService()

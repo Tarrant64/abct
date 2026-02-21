@@ -7111,6 +7111,374 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     margin-left: 10px;
 }
 
+/* ============================================================================
+   ASSET DETAIL MODAL (per-asset chart + enriched data)
+   ============================================================================ */
+
+.modal-content.asset-detail-modal {
+    width: 90%;
+    max-width: 800px;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 32px;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1001;
+}
+
+.asset-detail-modal .modal-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 10;
+    font-size: 1.8rem;
+}
+
+/* Header: Logo + Name + Price */
+.asset-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.asset-detail-identity {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.asset-detail-logo {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.asset-detail-name {
+    margin: 0;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.asset-detail-symbol {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    margin-right: 8px;
+}
+
+.asset-detail-rank {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.asset-detail-price-block {
+    text-align: right;
+}
+
+.asset-detail-price {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: block;
+}
+
+.asset-detail-change {
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.asset-detail-change.positive { color: var(--accent-success, #27ae60); }
+.asset-detail-change.negative { color: var(--accent-error, #e74c3c); }
+.asset-detail-change.neutral  { color: var(--text-secondary); }
+
+/* Price Change Pills */
+.asset-detail-change-pills {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.change-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    background: var(--bg-secondary);
+    font-size: 0.8rem;
+}
+
+.change-pill .pill-label {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.change-pill .pill-value {
+    font-weight: 600;
+}
+
+.change-pill.positive .pill-value { color: var(--accent-success, #27ae60); }
+.change-pill.negative .pill-value { color: var(--accent-error, #e74c3c); }
+.change-pill.neutral .pill-value  { color: var(--text-secondary); }
+
+/* Chart Section */
+.asset-detail-chart-section {
+    margin-bottom: 20px;
+}
+
+.asset-detail-tf-selector {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.asset-tf-btn {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.asset-tf-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--accent-color);
+}
+
+.asset-tf-btn.active {
+    background: var(--accent-color);
+    color: #fff;
+    border-color: var(--accent-color);
+}
+
+.asset-detail-chart-container {
+    width: 100%;
+    height: 280px;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* Market Data Grid */
+.asset-detail-market-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.market-stat {
+    background: var(--bg-secondary);
+    padding: 12px;
+    border-radius: 10px;
+    text-align: center;
+}
+
+.market-stat .stat-label {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.market-stat .stat-value {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Section titles */
+.asset-detail-section-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 0 10px 0;
+}
+
+/* Supply Bar */
+.asset-detail-supply {
+    margin-bottom: 20px;
+}
+
+.supply-bar-wrapper {
+    background: var(--bg-secondary);
+    padding: 12px 16px;
+    border-radius: 10px;
+}
+
+.supply-bar-track {
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.supply-bar-fill {
+    height: 100%;
+    background: var(--accent-color);
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+.supply-bar-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+/* ATH / ATL Cards */
+.asset-detail-ath-atl {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.ath-atl-card {
+    background: var(--bg-secondary);
+    padding: 12px 16px;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.ath-atl-label {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.ath-atl-value {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.ath-atl-date {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}
+
+.ath-atl-change {
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.ath-atl-change.positive { color: var(--accent-success, #27ae60); }
+.ath-atl-change.negative { color: var(--accent-error, #e74c3c); }
+
+/* Your Holdings */
+.asset-detail-holdings {
+    margin-bottom: 20px;
+}
+
+.your-holdings-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.your-holding-stat {
+    background: var(--bg-secondary);
+    padding: 12px;
+    border-radius: 10px;
+    text-align: center;
+}
+
+.your-holding-stat .stat-label {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.your-holding-stat .stat-value {
+    display: block;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Description */
+.asset-detail-desc-text {
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* Clickable holdings rows */
+.holdings-overview-table tbody tr {
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.holdings-overview-table tbody tr:hover {
+    background-color: rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="light"] .holdings-overview-table tbody tr:hover {
+    background-color: rgba(0, 0, 0, 0.03);
+}
+
+/* Asset Detail Modal Responsive */
+@media (max-width: 768px) {
+    .modal-content.asset-detail-modal {
+        max-width: 95%;
+        padding: 20px;
+    }
+
+    .asset-detail-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .asset-detail-price-block {
+        text-align: left;
+    }
+
+    .asset-detail-market-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .asset-detail-ath-atl {
+        grid-template-columns: 1fr;
+    }
+
+    .your-holdings-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .asset-detail-chart-container {
+        height: 220px;
+    }
+}
+
 /* Responsive Design for Asset Breakdown Modal */
 @media (max-width: 768px) {
     .modal-content.asset-breakdown-modal {

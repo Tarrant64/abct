@@ -9641,6 +9641,290 @@ function initGlobalSearch() {
 }
 
 // ============================================================================
+// ASSET DETAIL MODAL (per-asset chart + enriched token data)
+// ============================================================================
+
+let _assetDetailChart = null;
+let _assetDetailChartSeries = null;
+let _assetDetailResizeObserver = null;
+let _assetDetailTimeframe = '7D';
+let _assetDetailCurrentSymbol = null;
+let _assetDetailCurrentCgId = null;
+
+function openAssetDetail(symbol, cgId, holdingData) {
+    const modal = document.getElementById('assetDetailModal');
+    if (!modal) return;
+
+    _assetDetailCurrentSymbol = symbol;
+    _assetDetailCurrentCgId = cgId || null;
+    _assetDetailTimeframe = '7D';
+
+    // Show modal
+    modal.classList.remove('hidden');
+
+    // Reset timeframe buttons
+    modal.querySelectorAll('.asset-tf-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tf === '7D');
+    });
+
+    // Instant: populate from holdingData (zero latency)
+    const logoEl = document.getElementById('assetDetailLogo');
+    const nameEl = document.getElementById('assetDetailName');
+    const symbolEl = document.getElementById('assetDetailSymbol');
+    const priceEl = document.getElementById('assetDetailPrice');
+    const changeEl = document.getElementById('assetDetailChange24h');
+    const amountEl = document.getElementById('assetDetailAmount');
+    const valueEl = document.getElementById('assetDetailValue');
+    const allocEl = document.getElementById('assetDetailAlloc');
+
+    if (logoEl) {
+        logoEl.src = holdingData.logo_url || getLogoKitUrl(symbol);
+        logoEl.alt = symbol;
+        logoEl.onerror = function() {
+            this.style.display = 'none';
+        };
+    }
+    if (nameEl) nameEl.textContent = holdingData.name || symbol;
+    if (symbolEl) symbolEl.textContent = symbol;
+    if (priceEl) priceEl.textContent = holdingData.price_usd ? formatUSD(holdingData.price_usd) : '--';
+
+    const change24h = holdingData.price_change_24h || 0;
+    if (changeEl) {
+        const sign = change24h > 0 ? '+' : '';
+        changeEl.textContent = `${sign}${change24h.toFixed(2)}%`;
+        changeEl.className = 'asset-detail-change ' + (change24h > 0 ? 'positive' : change24h < 0 ? 'negative' : 'neutral');
+    }
+
+    // Your Holdings (instant from click data)
+    if (amountEl) {
+        const amt = holdingData.amount || 0;
+        amountEl.textContent = blurValue(amt >= 1 ? amt.toLocaleString('en-US', { maximumFractionDigits: 4 }) : amt.toLocaleString('en-US', { maximumFractionDigits: 6 }));
+    }
+    if (valueEl) valueEl.textContent = blurValue(formatUSD(holdingData.value_usd || 0));
+    if (allocEl) allocEl.textContent = holdingData.allocation_pct ? holdingData.allocation_pct.toFixed(2) + '%' : '--';
+
+    // Reset sections that need API data
+    document.getElementById('assetDetailRank').textContent = '';
+    document.getElementById('assetDetailMcap').textContent = holdingData.market_cap ? _formatCompactNumber(holdingData.market_cap) : '--';
+    document.getElementById('assetDetailVolume').textContent = holdingData.volume_24h ? _formatCompactNumber(holdingData.volume_24h) : '--';
+    document.getElementById('assetDetailHigh').textContent = '--';
+    document.getElementById('assetDetailLow').textContent = '--';
+    document.getElementById('assetDetailSupplySection').style.display = 'none';
+    document.getElementById('assetDetailAthAtl').style.display = 'none';
+    document.getElementById('assetDetailDescSection').style.display = 'none';
+
+    // Reset change pills
+    ['assetChange1h', 'assetChange24h', 'assetChange7d', 'assetChange30d'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.querySelector('.pill-value').textContent = '--';
+            el.className = 'change-pill neutral';
+        }
+    });
+
+    // Init chart after small delay (let modal render)
+    setTimeout(() => {
+        initAssetDetailChart();
+        loadAssetChartData(symbol, cgId, '7D');
+    }, 50);
+
+    // Fetch enriched detail in parallel
+    fetchAssetDetail(symbol, cgId);
+}
+
+function initAssetDetailChart() {
+    const container = document.getElementById('assetDetailChart');
+    if (!container || !window.LightweightCharts) return;
+
+    destroyAssetDetailChart();
+
+    const theme = document.documentElement.getAttribute('data-theme') || 'dark-mode';
+    const colors = getModalPriceChartColors(theme);
+
+    _assetDetailChart = LightweightCharts.createChart(container, {
+        layout: {
+            background: { color: colors.background },
+            textColor: colors.text
+        },
+        grid: {
+            vertLines: { color: colors.gridLines },
+            horzLines: { color: colors.gridLines }
+        },
+        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+        rightPriceScale: { borderColor: colors.border },
+        timeScale: {
+            borderColor: colors.border,
+            timeVisible: true,
+            secondsVisible: false
+        },
+        width: container.clientWidth,
+        height: container.clientHeight
+    });
+
+    _assetDetailChartSeries = _assetDetailChart.addAreaSeries({
+        topColor: colors.areaTop,
+        bottomColor: colors.areaBottom,
+        lineColor: colors.lineColor,
+        lineWidth: 2
+    });
+
+    _assetDetailResizeObserver = new ResizeObserver(() => {
+        if (_assetDetailChart && container) {
+            _assetDetailChart.applyOptions({
+                width: container.clientWidth,
+                height: container.clientHeight
+            });
+        }
+    });
+    _assetDetailResizeObserver.observe(container);
+}
+
+async function loadAssetChartData(symbol, cgId, timeframe) {
+    if (!_assetDetailChartSeries) return;
+
+    const params = new URLSearchParams({ symbol, timeframe });
+    if (cgId) params.set('coingecko_id', cgId);
+
+    try {
+        const response = await authFetch(`${API_BASE}/portfolio/charts/asset?${params}`);
+        if (!response.ok) return;
+        const data = await response.json();
+
+        if (data.data && data.data.length > 0) {
+            _assetDetailChartSeries.setData(data.data);
+            _assetDetailChart.timeScale().fitContent();
+        }
+
+        // Update CG ID if resolved by backend
+        if (data.coingecko_id && !_assetDetailCurrentCgId) {
+            _assetDetailCurrentCgId = data.coingecko_id;
+        }
+    } catch (e) {
+        console.warn('[AssetDetail] Chart data fetch failed:', e);
+    }
+}
+
+async function fetchAssetDetail(symbol, cgId) {
+    const params = new URLSearchParams({ symbol });
+    if (cgId) params.set('coingecko_id', cgId);
+
+    try {
+        const response = await authFetch(`${API_BASE}/portfolio/asset-detail?${params}`);
+        if (!response.ok) return;
+        const d = await response.json();
+
+        // Update header with richer data
+        if (d.name) document.getElementById('assetDetailName').textContent = d.name;
+        if (d.image) {
+            const logo = document.getElementById('assetDetailLogo');
+            if (logo) { logo.src = d.image; logo.style.display = ''; }
+        }
+        if (d.market_cap_rank) {
+            document.getElementById('assetDetailRank').textContent = `#${d.market_cap_rank}`;
+        }
+        if (d.current_price) {
+            document.getElementById('assetDetailPrice').textContent = formatUSD(d.current_price);
+        }
+
+        // Market data
+        if (d.market_cap) document.getElementById('assetDetailMcap').textContent = _formatCompactNumber(d.market_cap);
+        if (d.total_volume) document.getElementById('assetDetailVolume').textContent = _formatCompactNumber(d.total_volume);
+        if (d.high_24h) document.getElementById('assetDetailHigh').textContent = formatUSD(d.high_24h);
+        if (d.low_24h) document.getElementById('assetDetailLow').textContent = formatUSD(d.low_24h);
+
+        // Price change pills
+        _setChangePill('assetChange1h', d.price_change_1h);
+        _setChangePill('assetChange24h', d.price_change_24h);
+        _setChangePill('assetChange7d', d.price_change_7d);
+        _setChangePill('assetChange30d', d.price_change_30d);
+
+        // Supply
+        if (d.circulating_supply || d.total_supply || d.max_supply) {
+            document.getElementById('assetDetailSupplySection').style.display = '';
+            const circ = d.circulating_supply || 0;
+            const max = d.max_supply || d.total_supply || 0;
+            const pct = max > 0 ? Math.min((circ / max) * 100, 100) : 0;
+            document.getElementById('assetDetailSupplyBar').style.width = pct.toFixed(1) + '%';
+            document.getElementById('assetDetailCirculating').textContent = `Circulating: ${_formatCompactNumber(circ)}`;
+            document.getElementById('assetDetailMaxSupply').textContent = max > 0 ? `Max: ${_formatCompactNumber(max)}` : 'Max: ∞';
+        }
+
+        // ATH / ATL
+        if (d.ath || d.atl) {
+            document.getElementById('assetDetailAthAtl').style.display = '';
+            document.getElementById('assetDetailAth').textContent = d.ath ? formatUSD(d.ath) : '--';
+            document.getElementById('assetDetailAthDate').textContent = d.ath_date ? new Date(d.ath_date).toLocaleDateString() : '';
+            const athChange = d.ath_change_pct || 0;
+            const athEl = document.getElementById('assetDetailAthChange');
+            athEl.textContent = `${athChange > 0 ? '+' : ''}${athChange.toFixed(1)}%`;
+            athEl.className = 'ath-atl-change ' + (athChange >= 0 ? 'positive' : 'negative');
+
+            document.getElementById('assetDetailAtl').textContent = d.atl ? formatUSD(d.atl) : '--';
+            document.getElementById('assetDetailAtlDate').textContent = d.atl_date ? new Date(d.atl_date).toLocaleDateString() : '';
+            const atlChange = d.atl_change_pct || 0;
+            const atlEl = document.getElementById('assetDetailAtlChange');
+            atlEl.textContent = `+${atlChange.toFixed(1)}%`;
+            atlEl.className = 'ath-atl-change positive';
+        }
+
+        // Description
+        if (d.description) {
+            document.getElementById('assetDetailDescSection').style.display = '';
+            document.getElementById('assetDetailDesc').textContent = d.description;
+        }
+
+    } catch (e) {
+        console.warn('[AssetDetail] Detail fetch failed:', e);
+    }
+}
+
+function _setChangePill(elementId, value) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    const val = value || 0;
+    const pillValue = el.querySelector('.pill-value');
+    if (pillValue) {
+        const sign = val > 0 ? '+' : '';
+        pillValue.textContent = `${sign}${val.toFixed(2)}%`;
+    }
+    el.className = 'change-pill ' + (val > 0 ? 'positive' : val < 0 ? 'negative' : 'neutral');
+}
+
+function selectAssetTimeframe(tf) {
+    if (!_assetDetailCurrentSymbol) return;
+    _assetDetailTimeframe = tf;
+
+    // Update button states
+    document.querySelectorAll('.asset-tf-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tf === tf);
+    });
+
+    // Re-fetch chart only (detail stays)
+    loadAssetChartData(_assetDetailCurrentSymbol, _assetDetailCurrentCgId, tf);
+}
+
+function closeAssetDetailModal() {
+    const modal = document.getElementById('assetDetailModal');
+    if (modal) modal.classList.add('hidden');
+    destroyAssetDetailChart();
+    _assetDetailCurrentSymbol = null;
+    _assetDetailCurrentCgId = null;
+}
+
+function destroyAssetDetailChart() {
+    if (_assetDetailResizeObserver) {
+        _assetDetailResizeObserver.disconnect();
+        _assetDetailResizeObserver = null;
+    }
+    if (_assetDetailChart) {
+        _assetDetailChart.remove();
+        _assetDetailChart = null;
+        _assetDetailChartSeries = null;
+    }
+}
+
+
+// ============================================================================
 // INITIALIZATION
 // ============================================================================
 
@@ -9685,6 +9969,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (tokenForm) {
         tokenForm.addEventListener('submit', handleTokenFormSubmit);
     }
+
+    // Asset Detail Modal event listeners
+    const assetDetailOverlay = document.getElementById('assetDetailOverlay');
+    if (assetDetailOverlay) assetDetailOverlay.addEventListener('click', closeAssetDetailModal);
+    const assetDetailCloseBtn = document.getElementById('assetDetailCloseBtn');
+    if (assetDetailCloseBtn) assetDetailCloseBtn.addEventListener('click', closeAssetDetailModal);
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            const modal = document.getElementById('assetDetailModal');
+            if (modal && !modal.classList.contains('hidden')) closeAssetDetailModal();
+        }
+    });
+    document.querySelectorAll('.asset-tf-btn').forEach(btn => {
+        btn.addEventListener('click', () => selectAssetTimeframe(btn.dataset.tf));
+    });
 
     // ========================================
     // PAGE-SPECIFIC DATA LOADING
@@ -10161,7 +10460,9 @@ function renderAllHoldings(holdings, container) {
 
     // Build rows from column config
     for (const h of sorted) {
-        html += '<tr>';
+        const sym = h.symbol || '';
+        const cgId = h.coingecko_id || '';
+        html += `<tr data-symbol="${sym}" data-cg-id="${cgId}">`;
         for (const col of columns) {
             html += _holdingCellHtml(col.id, h);
         }
@@ -10247,6 +10548,18 @@ function renderAllHoldings(holdings, container) {
 
     // Post-render: draw sparklines
     drawAllSparklines(sorted, container);
+
+    // Post-render: attach row click handlers for asset detail modal
+    container.querySelectorAll('.holdings-overview-table tbody tr[data-symbol]').forEach(tr => {
+        tr.addEventListener('click', (e) => {
+            // Don't open modal when clicking links or buttons
+            if (e.target.closest('a, button')) return;
+            const sym = tr.dataset.symbol;
+            const cgId = tr.dataset.cgId || null;
+            const holding = sorted.find(h => h.symbol === sym);
+            if (holding) openAssetDetail(sym, cgId, holding);
+        });
+    });
 }
 
 function drawAllSparklines(holdings, container) {

@@ -1211,6 +1211,7 @@ async def get_all_holdings(
     total_value = sum(h.get('value_usd', 0) for h in sorted_holdings)
 
     # Fetch sparklines + CoinGecko image URLs
+    from services.pricing import ASSET_TO_COINGECKO
     sparklines, cg_images = await _fetch_sparklines_and_images(list(holdings.keys()))
     for h in sorted_holdings:
         key = next((k for k, v in holdings.items() if v is h), h['symbol'])
@@ -1224,6 +1225,9 @@ async def get_all_holdings(
         h['volume_24h'] = price_info.get('volume_24h', 0) or 0
         # Allocation percentage
         h['allocation_pct'] = round((h['value_usd'] / total_value * 100) if total_value > 0 else 0, 2)
+        # CoinGecko ID for per-asset charting (static lookup, zero API calls)
+        price_sym = _PRICE_SYMBOL.get(key, h['symbol'])
+        h['coingecko_id'] = ASSET_TO_COINGECKO.get(price_sym)
 
     result = {
         'holdings': sorted_holdings,
@@ -3431,3 +3435,179 @@ async def _get_demo_blockchain_breakdown(blockchain: str) -> dict:
         'nfts': {'count': 0, 'value_usd': 0, 'percentage': 0},
         'demo_mode': True,
     }
+
+
+# ============================================================================
+# PER-ASSET CHART & DETAIL ENDPOINTS
+# ============================================================================
+
+@router.get("/charts/asset")
+async def get_asset_chart(
+    symbol: str = Query(..., description="Token symbol (e.g. BTC, ADA, INDY)"),
+    coingecko_id: str = Query(None, description="CoinGecko ID (optional, will resolve if missing)"),
+    blockchain: str = Query(None, description="Blockchain hint for resolution"),
+    timeframe: str = Query("7D", description="1D, 7D, 1M, 3M, 1Y"),
+    user_id: int = Depends(verify_session),
+):
+    """Per-asset price chart data (TradingView-compatible)."""
+    from services.pricing import pricing_service, resolve_coingecko_id, ASSET_TO_COINGECKO
+
+    symbol = symbol.upper()
+
+    # Map timeframe to days
+    tf_days = {'1D': 1, '7D': 7, '1M': 30, '3M': 90, '1Y': 365}
+    days = tf_days.get(timeframe, 7)
+
+    # Check cache
+    cache_key = f"asset_chart_{symbol}_{timeframe}"
+    cached = await get_cache(cache_key, user_id=user_id)
+    if cached:
+        return cached
+
+    # Resolve CoinGecko ID
+    cg_id = coingecko_id or ASSET_TO_COINGECKO.get(symbol)
+    if not cg_id:
+        cg_id = await resolve_coingecko_id(symbol, blockchain)
+
+    if not cg_id:
+        return {"data": [], "symbol": symbol, "error": "Could not resolve CoinGecko ID"}
+
+    # Use existing get_historical_prices (Charli3 → DefiLlama → CoinGecko fallback)
+    historical = await pricing_service.get_historical_prices([symbol], days=days)
+    points = historical.get(symbol, [])
+
+    # Format for TradingView lightweight-charts
+    chart_data = []
+    for pt in points:
+        time_val = pt.get('time')
+        price = pt.get('price', 0)
+        if not time_val or not price:
+            continue
+        chart_data.append({'time': time_val, 'value': price})
+
+    # Get current price and 24h change from cache
+    current_price = 0
+    change_24h = 0
+    price_info = pricing_service.cache.get(symbol, {})
+    if price_info:
+        current_price = price_info.get('usd', 0)
+        change_24h = price_info.get('usd_24h_change', 0)
+
+    result = {
+        'data': chart_data,
+        'symbol': symbol,
+        'coingecko_id': cg_id,
+        'current_price': current_price,
+        'change_24h': change_24h,
+        'timeframe': timeframe,
+    }
+    await set_cache(cache_key, result, ttl_seconds=CACHE_TTL_WARM, user_id=user_id)
+    return result
+
+
+@router.get("/asset-detail")
+async def get_asset_detail(
+    symbol: str = Query(..., description="Token symbol"),
+    coingecko_id: str = Query(None, description="CoinGecko ID (optional)"),
+    user_id: int = Depends(verify_session),
+):
+    """Enriched token metadata from CoinGecko with fallback to price cache."""
+    from services.pricing import pricing_service, resolve_coingecko_id, ASSET_TO_COINGECKO, COINGECKO_BASE_URL
+    from services.http_client import get_client
+
+    symbol = symbol.upper()
+
+    # Check cache
+    cache_key = f"asset_detail_{symbol}"
+    cached = await get_cache(cache_key, user_id=user_id)
+    if cached:
+        return cached
+
+    # Resolve CoinGecko ID
+    cg_id = coingecko_id or ASSET_TO_COINGECKO.get(symbol)
+    if not cg_id:
+        cg_id = await resolve_coingecko_id(symbol)
+
+    result = {
+        'symbol': symbol,
+        'coingecko_id': cg_id,
+        'partial': False,
+    }
+
+    if cg_id:
+        try:
+            client = get_client("coingecko", timeout=20.0)
+            cg_headers = await pricing_service._get_cg_headers()
+            response = await client.get(
+                f"{COINGECKO_BASE_URL}/coins/{cg_id}",
+                params={
+                    'localization': 'false',
+                    'tickers': 'false',
+                    'community_data': 'false',
+                    'developer_data': 'false',
+                    'sparkline': 'false',
+                },
+                headers=cg_headers,
+            )
+
+            if response.status_code == 200:
+                coin = response.json()
+                market = coin.get('market_data', {})
+
+                result.update({
+                    'name': coin.get('name', symbol),
+                    'image': coin.get('image', {}).get('large', ''),
+                    'description': (coin.get('description', {}).get('en', '') or '')[:500],
+                    'market_cap_rank': coin.get('market_cap_rank'),
+                    'links': {
+                        'homepage': (coin.get('links', {}).get('homepage', [None]) or [None])[0],
+                        'twitter': coin.get('links', {}).get('twitter_screen_name'),
+                        'subreddit': coin.get('links', {}).get('subreddit_url'),
+                    },
+                    'current_price': market.get('current_price', {}).get('usd', 0),
+                    'market_cap': market.get('market_cap', {}).get('usd', 0),
+                    'total_volume': market.get('total_volume', {}).get('usd', 0),
+                    'high_24h': market.get('high_24h', {}).get('usd', 0),
+                    'low_24h': market.get('low_24h', {}).get('usd', 0),
+                    'price_change_1h': market.get('price_change_percentage_1h_in_currency', {}).get('usd', 0),
+                    'price_change_24h': market.get('price_change_percentage_24h', 0),
+                    'price_change_7d': market.get('price_change_percentage_7d', 0),
+                    'price_change_30d': market.get('price_change_percentage_30d', 0),
+                    'circulating_supply': market.get('circulating_supply'),
+                    'total_supply': market.get('total_supply'),
+                    'max_supply': market.get('max_supply'),
+                    'ath': market.get('ath', {}).get('usd', 0),
+                    'ath_date': market.get('ath_date', {}).get('usd'),
+                    'ath_change_pct': market.get('ath_change_percentage', {}).get('usd', 0),
+                    'atl': market.get('atl', {}).get('usd', 0),
+                    'atl_date': market.get('atl_date', {}).get('usd'),
+                    'atl_change_pct': market.get('atl_change_percentage', {}).get('usd', 0),
+                })
+
+                await set_cache(cache_key, result, ttl_seconds=CACHE_TTL_WARM, user_id=user_id)
+                return result
+
+            elif response.status_code == 429:
+                logger.warning(f"CoinGecko rate limited for asset detail {symbol}")
+            else:
+                logger.warning(f"CoinGecko /coins/{cg_id} returned {response.status_code}")
+
+        except Exception as e:
+            logger.warning(f"CoinGecko asset detail failed for {symbol}: {e}")
+
+    # Fallback: use in-memory price cache
+    price_info = pricing_service.cache.get(symbol, {})
+    result.update({
+        'partial': True,
+        'name': symbol,
+        'current_price': price_info.get('usd', 0),
+        'price_change_24h': price_info.get('usd_24h_change', 0),
+        'market_cap': price_info.get('market_cap', 0),
+        'total_volume': price_info.get('volume_24h', 0),
+        'circulating_supply': price_info.get('circulating_supply'),
+        'total_supply': price_info.get('total_supply'),
+        'max_supply': price_info.get('max_supply'),
+    })
+
+    await set_cache(cache_key, result, ttl_seconds=CACHE_TTL_WARM, user_id=user_id)
+    return result
