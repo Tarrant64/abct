@@ -9753,7 +9753,6 @@ async function loadAllHoldings() {
 
     const body = document.getElementById('holdingsOverviewBody');
     const loading = document.getElementById('holdingsLoading');
-    const countEl = document.getElementById('holdingsCount');
 
     try {
         if (loading) loading.style.display = 'flex';
@@ -9762,8 +9761,15 @@ async function loadAllHoldings() {
         const data = await response.json();
         _holdingsData = data;
 
-        if (countEl) {
-            countEl.textContent = `${data.count} asset${data.count !== 1 ? 's' : ''}`;
+        // Show toggle if there are any zero-balance holdings
+        const hasZero = data.holdings.some(h => (h.value_usd || 0) <= 0);
+        const toggleWrap = document.getElementById('zeroBalanceToggle');
+        if (toggleWrap) toggleWrap.style.display = hasZero ? '' : 'none';
+
+        const checkbox = document.getElementById('showZeroBalances');
+        if (checkbox && !checkbox._holdingsListenerAdded) {
+            checkbox.addEventListener('change', () => renderAllHoldings(_holdingsData.holdings, body));
+            checkbox._holdingsListenerAdded = true;
         }
 
         renderAllHoldings(data.holdings, body);
@@ -9781,8 +9787,17 @@ function renderAllHoldings(holdings, container) {
         return;
     }
 
+    // Filter out zero-balance holdings unless toggle is checked
+    const showZero = document.getElementById('showZeroBalances')?.checked || false;
+    const filtered = showZero ? holdings : holdings.filter(h => (h.value_usd || 0) > 0);
+
+    if (filtered.length === 0) {
+        setSafeHTML(container, '<p style="text-align:center;color:var(--text-secondary);padding:20px 0;">No assets with value found.</p>');
+        return;
+    }
+
     // Sort
-    const sorted = [...holdings].sort((a, b) => {
+    const sorted = [...filtered].sort((a, b) => {
         let va, vb;
         switch (_holdingsSortField) {
             case 'name':

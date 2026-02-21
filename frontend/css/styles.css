@@ -4768,13 +4768,23 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
 .holdings-overview-section .section-header-inline {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 12px;
 }
 
-.holdings-count {
-    font-size: 0.85rem;
+.holdings-overview-section .toggle-label {
+    font-size: 0.8rem;
     color: var(--text-secondary);
-    font-weight: 400;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+}
+
+.holdings-overview-section .toggle-label input[type="checkbox"] {
+    accent-color: var(--accent-color, #00d26a);
+    cursor: pointer;
 }
 
 .holdings-loading {
