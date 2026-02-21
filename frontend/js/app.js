@@ -9731,23 +9731,24 @@ document.addEventListener('DOMContentLoaded', async () => {
             preFetchAssetBreakdowns();
         });
     } else if (isAssetsPage) {
-        // ASSETS PAGE: Load prices, portfolio summary (renders wallets), then exchanges/defi/tokens
+        // ASSETS PAGE: Load prices + portfolio summary in parallel, then background updates
         try {
-            await loadPrices();
+            await Promise.all([
+                loadPrices(),
+                loadPortfolioSummary()
+            ]);
         } catch (e) {
-            console.error('[Assets] Failed to load prices:', e);
-        }
-        try {
-            await loadPortfolioSummary();
-        } catch (e) {
-            console.error('[Assets] Failed to load portfolio summary:', e);
+            console.error('[Assets] Failed to load prices/summary:', e);
         }
 
+        // Fire pre-fetch immediately (doesn't depend on exchange/defi data)
+        preFetchAssetBreakdowns();
+
+        // Background updates
         Promise.allSettled([
             loadExchangeData(),
             loadDefiGovernance(),
-            loadCustomTokens(),
-            preFetchAssetBreakdowns()
+            loadCustomTokens()
         ]).then(() => {
             console.log('[Assets] Data loading complete');
         });

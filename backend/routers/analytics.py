@@ -77,6 +77,15 @@ async def get_chain_fees_history(
 async def get_market_summary(user_id: int = Depends(verify_session)):
     """Get combined crypto market summary: market cap, BTC dominance, total TVL, total DEX volume"""
     try:
+        from database import get_cache, set_cache
+        from config import CACHE_TTL_HOT
+
+        # Check cache first (5-minute HOT TTL)
+        cache_key = "market_summary"
+        cached = await get_cache(cache_key)
+        if cached:
+            return cached
+
         from services.http_client import get_client
         from config import CMC_API_KEY, CMC_BASE_URL
         import asyncio
@@ -127,7 +136,7 @@ async def get_market_summary(user_id: int = Depends(verify_session)):
             fetch_global(), fetch_tvl(), fetch_dex_volume()
         )
 
-        return {
+        result = {
             "success": True,
             "total_market_cap_usd": global_data.get("total_market_cap", {}).get("usd", 0),
             "market_cap_change_24h": global_data.get("market_cap_change_percentage_24h_usd", 0),
@@ -135,6 +144,8 @@ async def get_market_summary(user_id: int = Depends(verify_session)):
             "total_defi_tvl": total_tvl,
             "total_dex_volume_24h": dex_volume,
         }
+        await set_cache(cache_key, result, ttl_seconds=CACHE_TTL_HOT)
+        return result
     except Exception as e:
         logger.error(f"Error fetching market summary: {e}")
         return {"success": False, "error": str(e)}

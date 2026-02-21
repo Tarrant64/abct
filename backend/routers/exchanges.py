@@ -471,136 +471,54 @@ async def get_all_exchanges(user_id: int = Depends(verify_session), refresh: boo
             "demo_mode": True
         }
 
-    # List of all exchanges
-    all_exchanges = []
-    total_usd = 0
-    total_assets = 0
-
-    # Coinbase
-    if await coinbase_service.is_configured():
+    # Fetch all configured exchanges in parallel
+    async def _fetch_exchange(name, display_name, check_configured, fetch_data):
+        """Fetch a single exchange portfolio, returning data or None if not configured."""
         try:
-            data = await get_coinbase_portfolio(user_id=user_id, refresh=refresh)
-            all_exchanges.append(data)
-            total_usd += data.get("total_usd", 0)
-            total_assets += data.get("asset_count", 0)
+            configured = check_configured()
+            if asyncio.iscoroutine(configured):
+                configured = await configured
+            if not configured:
+                return None
+            return await fetch_data()
         except Exception as e:
-            all_exchanges.append({
-                "exchange": "coinbase",
-                "name": "Coinbase",
+            return {
+                "exchange": name,
+                "name": display_name,
                 "error": str(e),
                 "configured": True,
                 "assets": [],
                 "total_usd": 0,
                 "asset_count": 0
-            })
+            }
 
-    # Binance
-    if await binance_service.ensure_configured():
-        try:
-            data = await get_binance_portfolio(user_id=user_id, refresh=refresh)
-            all_exchanges.append(data)
-            total_usd += data.get("total_usd", 0)
-            total_assets += data.get("asset_count", 0)
-        except Exception as e:
-            all_exchanges.append({
-                "exchange": "binance",
-                "name": "Binance",
-                "error": str(e),
-                "configured": True,
-                "assets": [],
-                "total_usd": 0,
-                "asset_count": 0
-            })
+    results = await asyncio.gather(
+        _fetch_exchange("coinbase", "Coinbase",
+                        coinbase_service.is_configured,
+                        lambda: get_coinbase_portfolio(user_id=user_id, refresh=refresh)),
+        _fetch_exchange("binance", "Binance",
+                        binance_service.ensure_configured,
+                        lambda: get_binance_portfolio(user_id=user_id, refresh=refresh)),
+        _fetch_exchange("binance_us", "Binance.US",
+                        binance_us_service.ensure_configured,
+                        lambda: get_binance_us_portfolio(user_id=user_id, refresh=refresh)),
+        _fetch_exchange("okx", "OKX",
+                        okx_service.is_configured,
+                        lambda: get_okx_portfolio(user_id=user_id, refresh=refresh)),
+        _fetch_exchange("bitget", "Bitget",
+                        bitget_service.is_configured,
+                        lambda: get_bitget_portfolio(user_id=user_id, refresh=refresh)),
+        _fetch_exchange("gate", "Gate.io",
+                        gate_service.is_configured,
+                        lambda: get_gate_portfolio(user_id=user_id, refresh=refresh)),
+        _fetch_exchange("kucoin", "KuCoin",
+                        kucoin_service.is_configured,
+                        lambda: get_kucoin_portfolio(user_id=user_id, refresh=refresh)),
+    )
 
-    # Binance.US
-    if await binance_us_service.ensure_configured():
-        try:
-            data = await get_binance_us_portfolio(user_id=user_id, refresh=refresh)
-            all_exchanges.append(data)
-            total_usd += data.get("total_usd", 0)
-            total_assets += data.get("asset_count", 0)
-        except Exception as e:
-            all_exchanges.append({
-                "exchange": "binance_us",
-                "name": "Binance.US",
-                "error": str(e),
-                "configured": True,
-                "assets": [],
-                "total_usd": 0,
-                "asset_count": 0
-            })
-
-    # OKX
-    if okx_service.is_configured():
-        try:
-            data = await get_okx_portfolio(user_id=user_id, refresh=refresh)
-            all_exchanges.append(data)
-            total_usd += data.get("total_usd", 0)
-            total_assets += data.get("asset_count", 0)
-        except Exception as e:
-            all_exchanges.append({
-                "exchange": "okx",
-                "name": "OKX",
-                "error": str(e),
-                "configured": True,
-                "assets": [],
-                "total_usd": 0,
-                "asset_count": 0
-            })
-
-    # Bitget
-    if bitget_service.is_configured():
-        try:
-            data = await get_bitget_portfolio(user_id=user_id, refresh=refresh)
-            all_exchanges.append(data)
-            total_usd += data.get("total_usd", 0)
-            total_assets += data.get("asset_count", 0)
-        except Exception as e:
-            all_exchanges.append({
-                "exchange": "bitget",
-                "name": "Bitget",
-                "error": str(e),
-                "configured": True,
-                "assets": [],
-                "total_usd": 0,
-                "asset_count": 0
-            })
-
-    # Gate.io
-    if gate_service.is_configured():
-        try:
-            data = await get_gate_portfolio(user_id=user_id, refresh=refresh)
-            all_exchanges.append(data)
-            total_usd += data.get("total_usd", 0)
-            total_assets += data.get("asset_count", 0)
-        except Exception as e:
-            all_exchanges.append({
-                "exchange": "gate",
-                "name": "Gate.io",
-                "error": str(e),
-                "configured": True,
-                "assets": [],
-                "total_usd": 0,
-                "asset_count": 0
-            })
-
-    # KuCoin
-    if kucoin_service.is_configured():
-        try:
-            data = await get_kucoin_portfolio(user_id=user_id, refresh=refresh)
-            all_exchanges.append(data)
-            total_usd += data.get("total_usd", 0)
-            total_assets += data.get("asset_count", 0)
-        except Exception as e:
-            all_exchanges.append({
-                "exchange": "kucoin",
-                "name": "KuCoin",
-                "error": str(e),
-                "configured": True,
-                "assets": [],
-                "total_usd": 0,
-                "asset_count": 0
-            })
+    all_exchanges = [r for r in results if r is not None]
+    total_usd = sum(e.get("total_usd", 0) for e in all_exchanges)
+    total_assets = sum(e.get("asset_count", 0) for e in all_exchanges)
 
     return {
         "exchanges": all_exchanges,

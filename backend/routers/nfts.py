@@ -1102,6 +1102,15 @@ async def get_all_chains_nft_summary(user_id: int = Depends(verify_session)):
     Get a combined summary of NFTs across all chains.
     Returns totals and per-chain breakdown.
     """
+    from database import get_cache, set_cache
+    from config import CACHE_TTL_HOT
+
+    # Check cache first (5-minute HOT TTL)
+    cache_key = f"nft_all_summary_{user_id}"
+    cached = await get_cache(cache_key, user_id=user_id)
+    if cached:
+        return cached
+
     # Get prices in parallel
     ada_price, eth_price, sol_price, matic_price, algo_price, bnb_price, avax_price = await asyncio.gather(
         pricing_service.get_price('ADA'),
@@ -1239,7 +1248,7 @@ async def get_all_chains_nft_summary(user_id: int = Depends(verify_session)):
     total_count = sum(data['total_count'] for data in chain_map.values())
     total_value_usd = sum(data['total_value_usd'] for data in chain_map.values())
 
-    return {
+    result = {
         'total_count': total_count,
         'total_value_usd': total_value_usd,
         'chains': chain_map,
@@ -1253,6 +1262,8 @@ async def get_all_chains_nft_summary(user_id: int = Depends(verify_session)):
             'avax': avax_price
         }
     }
+    await set_cache(cache_key, result, ttl_seconds=CACHE_TTL_HOT, user_id=user_id)
+    return result
 
 
 async def _fetch_taptools_floors(policy_ids: list, nft_svc) -> Dict[str, float]:

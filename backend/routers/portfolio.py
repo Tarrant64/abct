@@ -2867,12 +2867,13 @@ async def get_blockchain_asset_breakdown(
         if cached:
             return cached
 
-        # Get portfolio summary for native coin balance (uses cache)
-        summary = await get_portfolio_summary(user_id=user_id)
+        # Fetch summary, assets, and prices in parallel (all use cache internally)
+        summary, assets_data, all_prices = await asyncio.gather(
+            get_portfolio_summary(user_id=user_id),
+            get_all_native_assets(user_id=user_id),
+            pricing_service.get_all_tracked_prices(),
+        )
         chain_data = summary.get(blockchain, {})
-
-        # Get all assets filtered by blockchain (uses cache)
-        assets_data = await get_all_native_assets(user_id=user_id)
         chain_assets = [a for a in assets_data['assets'] if a['blockchain'] == blockchain]
 
         # Calculate native coin value
@@ -2899,9 +2900,6 @@ async def get_blockchain_asset_breakdown(
 
         native_symbol = native_symbols[blockchain]
         native_qty = chain_data.get(native_keys[blockchain], 0)
-
-        # Get price from cache if possible
-        all_prices = await pricing_service.get_all_tracked_prices()
         native_price = all_prices.get(native_symbol, {}).get('usd', 0)
         native_value = native_qty * native_price if native_price else 0
 
