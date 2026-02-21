@@ -1288,12 +1288,16 @@ async def get_mobile_portfolio_history(
     Uses the unified chart endpoint for complete on-chain + off-chain data.
     """
     try:
-        # Map mobile ranges to unified endpoint ranges
-        range_map = {"24h": "24h", "7d": "1w", "4w": "1m", "3m": "3m", "1y": "1y", "all": "all"}
-        unified_range = range_map.get(range, "1w")
+        # 24h range uses dedicated hourly endpoint
+        if range == "24h":
+            unified_data = await portfolio.get_24h_hourly_chart(user_id=user_id, refresh=False)
+        else:
+            # Map mobile ranges to unified endpoint ranges
+            range_map = {"7d": "1w", "4w": "1m", "3m": "3m", "1y": "1y", "all": "all"}
+            unified_range = range_map.get(range, "1w")
 
-        # Call unified chart endpoint
-        unified_data = await portfolio.get_unified_chart(user_id=user_id, range=unified_range)
+            # Call unified chart endpoint
+            unified_data = await portfolio.get_unified_chart(user_id=user_id, range=unified_range)
 
         data_points = unified_data.get('data', [])
         if data_points:

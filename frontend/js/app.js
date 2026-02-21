@@ -8222,8 +8222,13 @@ async function loadV2BalanceHistory(range) {
         // Check client-side cache first
         let result = cached;
         if (!result) {
-            let url = `${API_BASE}/portfolio/chart/unified?range=${range}`;
-            if (v2ChartMode === 'by_chain') url += '&by_chain=true';
+            let url;
+            if (range === '24h') {
+                url = `${API_BASE}/portfolio/chart/24h-hourly`;
+            } else {
+                url = `${API_BASE}/portfolio/chart/unified?range=${range}`;
+                if (v2ChartMode === 'by_chain') url += '&by_chain=true';
+            }
 
             const response = await authFetch(url);
             if (!response.ok) {
@@ -8253,7 +8258,8 @@ async function loadV2BalanceHistory(range) {
             if (coverageText && result.coverage) {
                 const c = result.coverage;
                 if (c.oldest_date && c.newest_date) {
-                    coverageText.textContent = `Coverage: ${c.oldest_date} to ${c.newest_date} (${c.total_days} days)`;
+                    const unit = range === '24h' ? 'hours' : 'days';
+                    coverageText.textContent = `Coverage: ${c.oldest_date} to ${c.newest_date} (${c.total_days} ${unit})`;
                 }
             }
         } else {

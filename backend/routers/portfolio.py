@@ -1607,6 +1607,117 @@ async def get_unified_chart(
     return result
 
 
+@router.get("/chart/24h-hourly")
+async def get_24h_hourly_chart(
+    user_id: int = Depends(verify_session),
+    refresh: bool = Query(False, description="Force refresh"),
+):
+    """
+    24-hour hourly portfolio chart.
+
+    Computes hourly portfolio values by multiplying current on-chain holdings
+    by hourly historical prices. Off-chain values (exchanges, staking, DeFi,
+    NFTs) are added as a static offset from the current portfolio totals.
+    """
+    cache_key = f"portfolio_24h_hourly_{user_id}"
+    if not refresh:
+        cached = await get_cache(cache_key, user_id=user_id)
+        if cached:
+            return cached
+
+    # Get current portfolio summary + totals in parallel
+    summary, totals = await asyncio.gather(
+        get_portfolio_summary(user_id=user_id, refresh=False),
+        get_portfolio_totals(user_id=user_id),
+    )
+
+    # Extract per-token quantities from chain summary using _CHAIN_MAP
+    holdings = {}  # symbol -> quantity
+    for chain, (symbol, _display, amount_field) in _CHAIN_MAP.items():
+        chain_data = summary.get(chain, {})
+        qty = float(chain_data.get(amount_field, 0) or 0)
+        if qty > 0:
+            # Use price lookup symbol (e.g. ETH_BASE -> ETH) to avoid duplicates
+            price_sym = _PRICE_SYMBOL.get(symbol, symbol)
+            holdings[price_sym] = holdings.get(price_sym, 0) + qty
+
+    if not holdings:
+        return {
+            "data": [],
+            "coverage": {"oldest_date": None, "newest_date": None, "total_days": 0}
+        }
+
+    # Fetch 24h hourly prices for all held tokens
+    historical = await pricing_service.get_historical_prices(
+        list(holdings.keys()), days=1
+    )
+
+    if not historical:
+        return {
+            "data": [],
+            "coverage": {"oldest_date": None, "newest_date": None, "total_days": 0}
+        }
+
+    # Build time -> {symbol: price} index from historical data
+    # Each symbol has entries like {'date': 'YYYY-MM-DD HH:MM', 'price': float, 'time': unix_ts}
+    all_times = {}  # date_str -> {symbol: price}
+    for symbol, entries in historical.items():
+        for entry in entries:
+            date_str = entry['date']
+            if date_str not in all_times:
+                all_times[date_str] = {}
+            all_times[date_str][symbol] = entry['price']
+
+    # Sort timestamps chronologically
+    sorted_times = sorted(all_times.keys())
+
+    # Static off-chain offset from current totals
+    exchange_usd = float(totals.get('exchange_usd', 0) or 0)
+    staking_usd = float(totals.get('staking_usd', 0) or 0)
+    defi_usd = float(totals.get('defi_usd', 0) or 0)
+    nft_usd = float(totals.get('nft_usd', 0) or 0)
+    off_chain = exchange_usd + staking_usd + defi_usd + nft_usd
+
+    # Build chart data points
+    data = []
+    for date_str in sorted_times:
+        prices_at_time = all_times[date_str]
+        on_chain = 0.0
+        for symbol, qty in holdings.items():
+            price = prices_at_time.get(symbol, 0)
+            if price > 0:
+                on_chain += qty * price
+
+        if on_chain == 0:
+            continue  # Skip points where no prices are available
+
+        total = on_chain + off_chain
+        # Use 'T' separator for hourly data so frontend detects hourly format
+        display_date = date_str.replace(' ', 'T') if ' ' in date_str else date_str
+        data.append({
+            "date": display_date,
+            "total_value": round(total, 2),
+            "on_chain_value": round(on_chain, 2),
+            "off_chain_value": round(off_chain, 2),
+            "breakdown": {
+                "chains": {},
+                "components": {
+                    "wallets": round(on_chain, 2),
+                    "exchange": round(exchange_usd, 2),
+                    "staking": round(staking_usd, 2),
+                    "defi": round(defi_usd, 2),
+                    "nfts": round(nft_usd, 2),
+                    "tracked_tokens": 0,
+                }
+            }
+        })
+
+    logger.info(f"24h hourly chart: {len(data)} points from holdings × prices")
+    result = {"data": data, "coverage": _compute_chart_coverage(data)}
+    await set_cache(cache_key, result, ttl_seconds=CACHE_TTL_HOT, user_id=user_id)
+    return result
+
+
 @router.post("/history/rebuild")
 async def rebuild_wallet_history(
     user_id: int = Depends(verify_session),
@@ -1630,6 +1741,7 @@ async def rebuild_wallet_history(
     for r in ('24h', '1w', '1m', '3m', '6m', '1y', 'all'):
         await clear_cache(f"unified_chart_{user_id}_{r}", user_id=user_id)
         await clear_cache(f"unified_chart_{user_id}_{r}_by_chain", user_id=user_id)
+    await clear_cache(f"portfolio_24h_hourly_{user_id}", user_id=user_id)
 
     # Clear existing balance data for this user
     async with aiosqlite.connect(DATABASE_PATH) as db:
