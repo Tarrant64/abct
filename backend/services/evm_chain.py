@@ -62,6 +62,86 @@ EVM_CHAINS = {
         'explorer_base': 'https://snowscan.xyz',
         'explorer_name': 'Snowscan',
     },
+    'optimism': {
+        'name': 'Optimism',
+        'alchemy_base': 'https://opt-mainnet.g.alchemy.com',
+        'public_rpc': 'https://mainnet.optimism.io',
+        'native_symbol': 'ETH',
+        'balance_key': 'balance_eth',
+        'opensea_chain': 'optimism',
+        'explorer_base': 'https://optimistic.etherscan.io',
+        'explorer_name': 'Optimistic Etherscan',
+    },
+    'zksync': {
+        'name': 'zkSync Era',
+        'alchemy_base': 'https://zksync-mainnet.g.alchemy.com',
+        'public_rpc': 'https://mainnet.era.zksync.io',
+        'native_symbol': 'ETH',
+        'balance_key': 'balance_eth',
+        'opensea_chain': 'zksync',
+        'explorer_base': 'https://explorer.zksync.io',
+        'explorer_name': 'zkSync Explorer',
+    },
+    'linea': {
+        'name': 'Linea',
+        'alchemy_base': 'https://linea-mainnet.g.alchemy.com',
+        'public_rpc': 'https://rpc.linea.build',
+        'native_symbol': 'ETH',
+        'balance_key': 'balance_eth',
+        'opensea_chain': 'linea',
+        'explorer_base': 'https://lineascan.build',
+        'explorer_name': 'LineaScan',
+    },
+    'scroll': {
+        'name': 'Scroll',
+        'alchemy_base': 'https://scroll-mainnet.g.alchemy.com',
+        'public_rpc': 'https://rpc.scroll.io',
+        'native_symbol': 'ETH',
+        'balance_key': 'balance_eth',
+        'opensea_chain': 'scroll',
+        'explorer_base': 'https://scrollscan.com',
+        'explorer_name': 'Scrollscan',
+    },
+    'fantom': {
+        'name': 'Fantom Opera',
+        'alchemy_base': None,
+        'public_rpc': 'https://rpc.ftm.tools',
+        'native_symbol': 'FTM',
+        'balance_key': 'balance_ftm',
+        'opensea_chain': None,
+        'explorer_base': 'https://ftmscan.com',
+        'explorer_name': 'FtmScan',
+    },
+    'cronos': {
+        'name': 'Cronos',
+        'alchemy_base': None,
+        'public_rpc': 'https://evm.cronos.org',
+        'native_symbol': 'CRO',
+        'balance_key': 'balance_cro',
+        'opensea_chain': None,
+        'explorer_base': 'https://cronoscan.com',
+        'explorer_name': 'CronoScan',
+    },
+    'gnosis': {
+        'name': 'Gnosis Chain',
+        'alchemy_base': None,
+        'public_rpc': 'https://rpc.gnosischain.com',
+        'native_symbol': 'xDAI',
+        'balance_key': 'balance_xdai',
+        'opensea_chain': None,
+        'explorer_base': 'https://gnosisscan.io',
+        'explorer_name': 'GnosisScan',
+    },
+    'moonbeam': {
+        'name': 'Moonbeam',
+        'alchemy_base': None,
+        'public_rpc': 'https://rpc.api.moonbeam.network',
+        'native_symbol': 'GLMR',
+        'balance_key': 'balance_glmr',
+        'opensea_chain': None,
+        'explorer_base': 'https://moonbeam.moonscan.io',
+        'explorer_name': 'Moonscan',
+    },
 }
 
 
@@ -93,8 +173,15 @@ class EVMChainService(APIKeyManager):
         self._nft_cache_key = f"{chain_name}_nft_all_data"
         self._nft_db_cache_ttl = 86400 * 30  # 30 days
 
+    @property
+    def has_alchemy(self) -> bool:
+        """Whether this chain has Alchemy API support."""
+        return self.base_url is not None
+
     async def _get_v2_url(self) -> str:
         """Get Alchemy v2 API URL with API key."""
+        if not self.has_alchemy:
+            return ""
         api_key = await self.get_api_key()
         if not api_key:
             return ""
@@ -102,13 +189,17 @@ class EVMChainService(APIKeyManager):
 
     async def _get_nft_url(self) -> str:
         """Get Alchemy NFT API URL with API key."""
+        if not self.has_alchemy:
+            return ""
         api_key = await self.get_api_key()
         if not api_key:
             return ""
         return f"{self.base_url}/nft/v3/{api_key}"
 
     async def is_configured(self) -> bool:
-        """Check if the API key is configured."""
+        """Check if the API key is configured or public RPC is available."""
+        if not self.has_alchemy:
+            return bool(self.public_rpc_url)
         key = await self.get_api_key()
         return bool(key)
 
@@ -126,6 +217,30 @@ class EVMChainService(APIKeyManager):
         except ValueError:
             return False
 
+    async def _get_native_balance_public_rpc(self, address: str) -> Optional[float]:
+        """Get native balance via public RPC (fallback for non-Alchemy chains)."""
+        if not self.public_rpc_url:
+            return None
+        try:
+            client = get_client(f"evm_{self.chain_name}", timeout=15.0)
+            payload = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "eth_getBalance",
+                "params": [address, "latest"]
+            }
+            response = await client.post(self.public_rpc_url, json=payload)
+            if response.status_code != 200:
+                return None
+            data = response.json()
+            if "error" in data:
+                return None
+            balance_wei = int(data.get("result", "0x0"), 16)
+            return balance_wei / WEI_PER_TOKEN
+        except Exception as e:
+            logger.error(f"Error fetching {self.config['name']} balance via public RPC: {e}")
+            return None
+
     async def get_native_balance(self, address: str) -> Optional[float]:
         """
         Get native token balance for an address.
@@ -133,6 +248,9 @@ class EVMChainService(APIKeyManager):
         Returns:
             Balance as float, or None if error
         """
+        if not self.has_alchemy:
+            return await self._get_native_balance_public_rpc(address)
+
         if not await self.is_configured():
             logger.warning(f"Alchemy API key not configured for {self.config['name']}")
             return None
@@ -177,6 +295,8 @@ class EVMChainService(APIKeyManager):
         Returns:
             List of token balances with metadata
         """
+        if not self.has_alchemy:
+            return []
         if not await self.is_configured():
             logger.warning(f"Alchemy API key not configured for {self.config['name']}")
             return []
@@ -368,6 +488,8 @@ class EVMChainService(APIKeyManager):
         Returns:
             Dictionary with NFTs and pagination info
         """
+        if not self.has_alchemy:
+            return None
         if not await self.is_configured():
             logger.warning(f"Alchemy API key not configured for {self.config['name']}")
             return None
@@ -610,3 +732,11 @@ class EVMChainService(APIKeyManager):
 bsc_service = EVMChainService('bsc')
 arbitrum_service = EVMChainService('arbitrum')
 avalanche_service = EVMChainService('avalanche')
+optimism_service = EVMChainService('optimism')
+zksync_service = EVMChainService('zksync')
+linea_service = EVMChainService('linea')
+scroll_service = EVMChainService('scroll')
+fantom_service = EVMChainService('fantom')
+cronos_service = EVMChainService('cronos')
+gnosis_service = EVMChainService('gnosis')
+moonbeam_service = EVMChainService('moonbeam')

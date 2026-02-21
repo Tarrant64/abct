@@ -49,7 +49,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import PROJECT_ROOT, DATA_DIR, CERTS_DIR, DEFAULT_CERT_PATH, DEFAULT_KEY_PATH, NFT_SCHEDULER_ENABLED
 from database import init_db, init_encryption, migrate_encrypt_api_keys
 from nft_image_database import init_nft_image_db
-from routers import wallets, portfolio, defi, prices, exchanges, nfts, custom_tokens, settings, security, logs, nft_scheduler as nft_scheduler_router, backup, auth, dashboard, mobile, nmkr, cache, spam, transactions, demo, cloudflare, system, balance_history, analytics, intelligence, search
+from routers import wallets, portfolio, defi, prices, exchanges, nfts, custom_tokens, settings, security, logs, nft_scheduler as nft_scheduler_router, backup, auth, dashboard, mobile, nmkr, cache, spam, transactions, demo, cloudflare, system, balance_history, analytics, intelligence, search, pnl
 from routers import engine as engine_router
 
 from middleware import RequestSizeLimitMiddleware, RATE_LIMITING_AVAILABLE
@@ -739,6 +739,7 @@ app.include_router(engine_router.router)
 app.include_router(analytics.router)
 app.include_router(intelligence.router)
 app.include_router(search.router)
+app.include_router(pnl.router)
 
 # Mount static files (frontend)
 frontend_path = PROJECT_ROOT / "frontend"

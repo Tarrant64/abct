@@ -38,6 +38,140 @@ EXCHANGE_CACHE_TTL = CACHE_TTL_HOT  # 5 minutes for exchange data
 # Minimum USD value threshold for displaying assets
 MIN_USD_VALUE = 1.00
 
+
+# ============================================================================
+# EXCHANGE REGISTRY - new exchanges register here for auto-wiring
+# ============================================================================
+
+# Registry entry: {name: {service, display_name, check_configured, env_hint}}
+EXCHANGE_REGISTRY: dict = {}
+
+
+def register_exchange(
+    name: str,
+    service,
+    display_name: str,
+    env_hint: str = "",
+):
+    """Register a new exchange so it auto-appears in /status, /all, and gets its own endpoint.
+
+    Args:
+        name: Internal exchange name (e.g., 'kraken')
+        service: Exchange service instance (must have ensure_configured, get_account_balances, test_connection)
+        display_name: Human-readable name (e.g., 'Kraken')
+        env_hint: .env setup hint for error messages
+    """
+    EXCHANGE_REGISTRY[name] = {
+        'service': service,
+        'display_name': display_name,
+        'env_hint': env_hint,
+    }
+
+    # Dynamically create the GET endpoint for this exchange
+    async def _get_portfolio(user_id: int = Depends(verify_session), refresh: bool = Query(False), _svc=service, _name=name, _display=display_name, _hint=env_hint):
+        f"""Get {_display} portfolio with USD values."""
+        configured = _svc.ensure_configured()
+        if asyncio.iscoroutine(configured):
+            configured = await configured
+        if not configured:
+            raise HTTPException(
+                status_code=503,
+                detail=f"{_display} API not configured. {_hint}"
+            )
+        return await process_exchange_portfolio(_svc, _name, user_id, refresh)
+
+    # Set function metadata for OpenAPI docs
+    _get_portfolio.__name__ = f"get_{name}_portfolio"
+    _get_portfolio.__doc__ = f"Get {display_name} portfolio with USD values"
+
+    router.add_api_route(
+        f"/{name}",
+        _get_portfolio,
+        methods=["GET"],
+        name=f"get_{name}_portfolio",
+        summary=f"Get {display_name} portfolio",
+    )
+
+# ============================================================================
+# Register new exchanges (Binance-style HMAC-SHA256)
+# ============================================================================
+
+from services.bybit_service import bybit_service
+from services.mexc_service import mexc_service
+from services.htx_service import htx_service
+from services.bingx_service import bingx_service
+from services.poloniex_service import poloniex_service
+from services.lbank_service import lbank_service
+from services.bitmart_service import bitmart_service
+from services.whitebit_service import whitebit_service
+from services.coinex_service import coinex_service
+from services.bitvavo_service import bitvavo_service
+from services.bitrue_service import bitrue_service
+from services.xt_service import xt_service
+from services.digifinex_service import digifinex_service
+from services.coinw_service import coinw_service
+from services.pionex_service import pionex_service
+
+register_exchange('bybit', bybit_service, 'Bybit', 'Set BYBIT_API_KEY and BYBIT_API_SECRET in .env')
+register_exchange('mexc', mexc_service, 'MEXC', 'Set MEXC_API_KEY and MEXC_API_SECRET in .env')
+register_exchange('htx', htx_service, 'HTX', 'Set HTX_API_KEY and HTX_API_SECRET in .env')
+register_exchange('bingx', bingx_service, 'BingX', 'Set BINGX_API_KEY and BINGX_API_SECRET in .env')
+register_exchange('poloniex', poloniex_service, 'Poloniex', 'Set POLONIEX_API_KEY and POLONIEX_API_SECRET in .env')
+register_exchange('lbank', lbank_service, 'LBank', 'Set LBANK_API_KEY and LBANK_API_SECRET in .env')
+register_exchange('bitmart', bitmart_service, 'BitMart', 'Set BITMART_API_KEY and BITMART_API_SECRET in .env')
+register_exchange('whitebit', whitebit_service, 'WhiteBIT', 'Set WHITEBIT_API_KEY and WHITEBIT_API_SECRET in .env')
+register_exchange('coinex', coinex_service, 'CoinEx', 'Set COINEX_API_KEY and COINEX_API_SECRET in .env')
+register_exchange('bitvavo', bitvavo_service, 'Bitvavo', 'Set BITVAVO_API_KEY and BITVAVO_API_SECRET in .env')
+register_exchange('bitrue', bitrue_service, 'Bitrue', 'Set BITRUE_API_KEY and BITRUE_API_SECRET in .env')
+register_exchange('xt', xt_service, 'XT.com', 'Set XT_API_KEY and XT_API_SECRET in .env')
+register_exchange('digifinex', digifinex_service, 'DigiFinex', 'Set DIGIFINEX_API_KEY and DIGIFINEX_API_SECRET in .env')
+register_exchange('coinw', coinw_service, 'CoinW', 'Set COINW_API_KEY and COINW_API_SECRET in .env')
+register_exchange('pionex', pionex_service, 'Pionex', 'Set PIONEX_API_KEY and PIONEX_API_SECRET in .env')
+
+# Batch 2-5: OKX/Gemini/Kraken/Special auth exchanges
+from services.phemex_service import phemex_service
+from services.woox_service import woox_service
+from services.ascendex_service import ascendex_service
+from services.deribit_service import deribit_service
+from services.bitflyer_service import bitflyer_service
+from services.gemini_service import gemini_service
+from services.bitfinex_service import bitfinex_service
+from services.btse_service import btse_service
+from services.kraken_service import kraken_service
+from services.coinspot_service import coinspot_service
+from services.cryptocom_service import cryptocom_service
+from services.bitstamp_service import bitstamp_service
+from services.upbit_service import upbit_service
+from services.backpack_service import backpack_service
+from services.swyftx_service import swyftx_service
+from services.bitpanda_service import bitpanda_service
+from services.robinhood_service import robinhood_service
+from services.hitbtc_service import hitbtc_service
+from services.independentreserve_service import independentreserve_service
+from services.probit_service import probit_service
+
+register_exchange('phemex', phemex_service, 'Phemex', 'Set PHEMEX_API_KEY and PHEMEX_API_SECRET in .env')
+register_exchange('woox', woox_service, 'WOO X', 'Set WOOX_API_KEY and WOOX_API_SECRET in .env')
+register_exchange('ascendex', ascendex_service, 'AscendEX', 'Set ASCENDEX_API_KEY and ASCENDEX_API_SECRET in .env')
+register_exchange('deribit', deribit_service, 'Deribit', 'Set DERIBIT_CLIENT_ID and DERIBIT_CLIENT_SECRET in .env')
+register_exchange('bitflyer', bitflyer_service, 'BitFlyer', 'Set BITFLYER_API_KEY and BITFLYER_API_SECRET in .env')
+register_exchange('gemini', gemini_service, 'Gemini', 'Set GEMINI_API_KEY and GEMINI_API_SECRET in .env')
+register_exchange('bitfinex', bitfinex_service, 'Bitfinex', 'Set BITFINEX_API_KEY and BITFINEX_API_SECRET in .env')
+register_exchange('btse', btse_service, 'BTSE', 'Set BTSE_API_KEY and BTSE_API_SECRET in .env')
+register_exchange('kraken', kraken_service, 'Kraken', 'Set KRAKEN_API_KEY and KRAKEN_API_SECRET in .env')
+register_exchange('coinspot', coinspot_service, 'CoinSpot', 'Set COINSPOT_API_KEY and COINSPOT_API_SECRET in .env')
+register_exchange('cryptocom', cryptocom_service, 'Crypto.com', 'Set CRYPTOCOM_API_KEY and CRYPTOCOM_API_SECRET in .env')
+register_exchange('bitstamp', bitstamp_service, 'Bitstamp', 'Set BITSTAMP_API_KEY and BITSTAMP_API_SECRET in .env')
+register_exchange('upbit', upbit_service, 'Upbit', 'Set UPBIT_ACCESS_KEY and UPBIT_SECRET_KEY in .env')
+register_exchange('backpack', backpack_service, 'Backpack', 'Set BACKPACK_API_KEY and BACKPACK_API_SECRET in .env')
+register_exchange('swyftx', swyftx_service, 'Swyftx', 'Set SWYFTX_API_KEY in .env')
+register_exchange('bitpanda', bitpanda_service, 'Bitpanda', 'Set BITPANDA_API_KEY in .env')
+register_exchange('robinhood', robinhood_service, 'Robinhood', 'Set ROBINHOOD_ACCESS_TOKEN in .env')
+register_exchange('hitbtc', hitbtc_service, 'HitBTC', 'Set HITBTC_API_KEY and HITBTC_API_SECRET in .env')
+register_exchange('independentreserve', independentreserve_service, 'Independent Reserve', 'Set INDRES_API_KEY and INDRES_API_SECRET in .env')
+register_exchange('probit', probit_service, 'ProBit', 'Set PROBIT_CLIENT_ID and PROBIT_CLIENT_SECRET in .env')
+
+
 # Map common Coinbase currency codes to our pricing service symbols
 CURRENCY_MAP = {
     "BTC": "BTC",
@@ -71,38 +205,51 @@ CURRENCY_MAP = {
 @router.get("/status")
 async def get_exchange_status():
     """Get status of configured exchanges."""
-    return {
-        "exchanges": {
-            "coinbase": {
-                "configured": await coinbase_service.is_configured(),
-                "name": "Coinbase"
-            },
-            "binance": {
-                "configured": await binance_service.ensure_configured(),
-                "name": "Binance"
-            },
-            "binance_us": {
-                "configured": await binance_us_service.ensure_configured(),
-                "name": "Binance.US"
-            },
-            "okx": {
-                "configured": okx_service.is_configured(),
-                "name": "OKX"
-            },
-            "bitget": {
-                "configured": bitget_service.is_configured(),
-                "name": "Bitget"
-            },
-            "gate": {
-                "configured": gate_service.is_configured(),
-                "name": "Gate.io"
-            },
-            "kucoin": {
-                "configured": kucoin_service.is_configured(),
-                "name": "KuCoin"
-            }
-        }
+    # Legacy exchanges (hardcoded)
+    exchanges = {
+        "coinbase": {
+            "configured": await coinbase_service.is_configured(),
+            "name": "Coinbase"
+        },
+        "binance": {
+            "configured": await binance_service.ensure_configured(),
+            "name": "Binance"
+        },
+        "binance_us": {
+            "configured": await binance_us_service.ensure_configured(),
+            "name": "Binance.US"
+        },
+        "okx": {
+            "configured": okx_service.is_configured(),
+            "name": "OKX"
+        },
+        "bitget": {
+            "configured": bitget_service.is_configured(),
+            "name": "Bitget"
+        },
+        "gate": {
+            "configured": gate_service.is_configured(),
+            "name": "Gate.io"
+        },
+        "kucoin": {
+            "configured": kucoin_service.is_configured(),
+            "name": "KuCoin"
+        },
     }
+
+    # Registered exchanges (from registry)
+    for name, entry in EXCHANGE_REGISTRY.items():
+        if name not in exchanges:
+            svc = entry['service']
+            configured = svc.ensure_configured()
+            if asyncio.iscoroutine(configured):
+                configured = await configured
+            exchanges[name] = {
+                "configured": configured,
+                "name": entry['display_name']
+            }
+
+    return {"exchanges": exchanges}
 
 
 @router.get("/coinbase")
@@ -246,7 +393,7 @@ async def get_all_exchanges_summary(user_id: int = Depends(verify_session)):
         "total_assets": 0
     }
 
-    # List of all exchange services
+    # List of all exchange services (legacy)
     exchanges = [
         (coinbase_service, "Coinbase", get_coinbase_portfolio),
         (binance_service, "Binance", get_binance_portfolio),
@@ -256,6 +403,14 @@ async def get_all_exchanges_summary(user_id: int = Depends(verify_session)):
         (gate_service, "Gate.io", get_gate_portfolio),
         (kucoin_service, "KuCoin", get_kucoin_portfolio),
     ]
+
+    # Add registered exchanges
+    for reg_name, entry in EXCHANGE_REGISTRY.items():
+        svc = entry['service']
+        exchanges.append(
+            (svc, entry['display_name'],
+             lambda uid=user_id, _s=svc, _n=reg_name: process_exchange_portfolio(_s, _n, uid))
+        )
 
     for service, name, get_func in exchanges:
         # Handle both sync and async is_configured (coinbase is async, others sync)
@@ -492,7 +647,8 @@ async def get_all_exchanges(user_id: int = Depends(verify_session), refresh: boo
                 "asset_count": 0
             }
 
-    results = await asyncio.gather(
+    # Build list of all exchanges to fetch (legacy + registered)
+    fetch_tasks = [
         _fetch_exchange("coinbase", "Coinbase",
                         coinbase_service.is_configured,
                         lambda: get_coinbase_portfolio(user_id=user_id, refresh=refresh)),
@@ -514,7 +670,20 @@ async def get_all_exchanges(user_id: int = Depends(verify_session), refresh: boo
         _fetch_exchange("kucoin", "KuCoin",
                         kucoin_service.is_configured,
                         lambda: get_kucoin_portfolio(user_id=user_id, refresh=refresh)),
-    )
+    ]
+
+    # Add registered exchanges
+    for reg_name, entry in EXCHANGE_REGISTRY.items():
+        svc = entry['service']
+        fetch_tasks.append(
+            _fetch_exchange(
+                reg_name, entry['display_name'],
+                svc.ensure_configured,
+                lambda _s=svc, _n=reg_name: process_exchange_portfolio(_s, _n, user_id, refresh)
+            )
+        )
+
+    results = await asyncio.gather(*fetch_tasks)
 
     all_exchanges = [r for r in results if r is not None]
     total_usd = sum(e.get("total_usd", 0) for e in all_exchanges)

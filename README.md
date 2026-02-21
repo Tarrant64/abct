@@ -2,14 +2,15 @@
 
 Personal multi-chain portfolio tracker built Cardano-first.
 
-![Version](https://img.shields.io/badge/version-1.12.3-brightgreen.svg)
-![Build](https://img.shields.io/badge/build-1771554807-blue.svg)
+![Version](https://img.shields.io/badge/version-1.13.0-brightgreen.svg)
+![Build](https://img.shields.io/badge/build-1771717923-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.109-teal.svg)
-![Chains](https://img.shields.io/badge/chains-26-brightgreen.svg)
+![Chains](https://img.shields.io/badge/chains-34-brightgreen.svg)
 ![Docker](https://img.shields.io/badge/docker-ready-blue.svg)
-![Exchanges](https://img.shields.io/badge/exchanges-7-purple.svg)
+![Exchanges](https://img.shields.io/badge/exchanges-42-purple.svg)
+![DeFi](https://img.shields.io/badge/defi_protocols-100%2B-orange.svg)
 ![Themes](https://img.shields.io/badge/themes-5-purple.svg)
 
 **Website**: [abettercryptotracker.com](https://abettercryptotracker.com)
@@ -20,23 +21,34 @@ Existing multi-chain wallets treat Cardano as an afterthought — basic balance 
 
 ## Features
 
-### 26 Blockchains
+### 34 Blockchains
 
-**Cardano** (Primary) — Stake pool tracking, rewards, governance, native assets with metadata, DeFi protocol integration (Minswap, SundaeSwap, etc.), NFT collections with floor prices, stake key wallet grouping.
+**Cardano** (Primary) — Stake pool tracking, rewards, governance, native assets with metadata, DeFi protocol integration (Minswap, SundaeSwap, Liqwid, Indigo, etc.), NFT collections with floor prices, stake key wallet grouping.
 
 **API-Key Chains** — Ethereum, Solana, Polygon, Base, Algorand, Arbitrum, Avalanche, BNB Chain (via Etherscan/Alchemy/Helius APIs)
 
+**New EVM Chains** (v1.13.0) — Optimism, zkSync Era, Linea, Scroll, Fantom, Cronos, Gnosis, Moonbeam
+
 **Free Chains** (no API key required) — Bitcoin, Tron, XRP, Hedera, MultiversX, Sui, Aptos, Filecoin, Litecoin, Dogecoin, Zcash, Tezos, Stacks, VeChain, Cosmos, NEAR, ICP
 
-### 7 Exchanges
-Coinbase, Binance, Binance.US, OKX, Bitget, Gate.io, KuCoin — all read-only API integration.
+### 42 Exchange Integrations
+Read-only API integration across 42 exchanges using 5 auth method families:
+- **Original**: Coinbase, Binance, Binance.US, OKX, Bitget, Gate.io, KuCoin
+- **New**: Bybit, MEXC, Kraken, Gemini, Bitfinex, HTX, BingX, Phemex, WOO X, AscendEX, Poloniex, Crypto.com, Bitstamp, Bitmart, and 21 more
+
+### 100+ DeFi Protocol Detection
+Protocol adapters detect positions automatically — no manual tracking needed:
+- **Cardano** (5): Minswap, Liqwid, Indigo, Strike Finance, Surf Protocol
+- **EVM** (30+): Aave v3, Compound v3, Uniswap v3 LP, Curve, Balancer, EigenLayer, Maker/Spark, Morpho, GMX, and more
+- **Solana** (15): Marinade, Jito, Orca, Raydium, Drift, MarginFi, Kamino, Jupiter Perps, Blazestake, and more
 
 ### Portfolio & Analytics
 - **Dashboard**: Dynamic blockchain cards, allocation donut chart, market heatmap, global market cap widget
+- **P&L Analytics**: Cost basis tracking with FIFO/LIFO/Average methods — per-asset and portfolio-wide realized and unrealized P&L
 - **Per-Wallet History**: Daily balance tracking per wallet/exchange/staking position with unified chart
 - **Transaction Analytics**: Multi-chain transaction history with filtering, analytics, and portfolio vs. BTC relative strength
 - **DePIN Tracking**: Iagon (Cardano) and Helium (Solana) infrastructure protocol monitoring
-- **DeFi Monitoring**: Staking positions with APY and rewards across protocols
+- **DeFi Monitoring**: Auto-detected staking positions with APY and rewards across 100+ protocols
 - **NFT Collection**: Browse NFTs with floor price valuations across Cardano, Ethereum, and Solana
 
 ### Infrastructure
@@ -130,7 +142,7 @@ HELIUS_API_KEY=your_key_here         # Solana
 ABCT_REQUIRE_AUTH=false              # Set to false for localhost-only
 ```
 
-Exchange API keys can be configured in the Settings page or via `.env` — see [Exchange Integration Guide](docs/Exchange-Integration.md) for setup instructions.
+Exchange API keys can be configured in the Settings page or via `.env` — see [Exchange Integration Guide](docs/Exchange-Integration.md) for setup instructions. All 42 exchanges use read-only API keys.
 
 All API keys should be **read-only**. Never grant withdrawal or trading permissions.
 
@@ -148,6 +160,14 @@ All API keys should be **read-only**. Never grant withdrawal or trading permissi
 See [SECURITY.md](SECURITY.md) for full details.
 
 ## What's New
+
+### v1.13.0 — 42 Exchanges, 34 Chains, 100+ DeFi Protocols & P&L (February 2026)
+- **Exchange Expansion**: 35 new exchange integrations (42 total) — Bybit, MEXC, Kraken, Gemini, Bitfinex, HTX, BingX, Phemex, WOO X, AscendEX, Poloniex, Crypto.com, Bitstamp, Bitmart, and 21 more
+- **Exchange Architecture**: `BaseExchangeService` with 5 auth method mixins; Exchange Registry auto-wires new exchanges into `/exchanges/status`, `/exchanges/all`, and individual endpoints
+- **EVM Chain Expansion**: 8 new EVM chains (Optimism, zkSync Era, Linea, Scroll, Fantom, Cronos, Gnosis, Moonbeam) — 34 total chains
+- **DeFi Protocol Support**: 100+ DeFi protocols across Cardano (5), EVM (30+), and Solana (15) via `ProtocolAdapter` framework with auto-discovery
+- **P&L Analytics**: Full cost basis tracking with FIFO/LIFO/Average methods; per-asset and portfolio-wide realized and unrealized P&L; dedicated P&L page
+- **DeFi Router**: New `/defi/protocols` endpoints for position detection, protocol listing, and analytics
 
 ### v1.12.x — 26 Chains, DePIN, Analytics & CI/CD (February 2026)
 - **15 New Blockchains** (11 → 26): XRP, Hedera, MultiversX, Sui, Aptos, Filecoin, Litecoin, Dogecoin, Zcash, Tezos, Stacks, VeChain, Cosmos, NEAR, ICP
@@ -168,7 +188,7 @@ See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 
 - **[Architecture](docs/ARCHITECTURE.md)** — System design overview
 - **[Docker Deployment](docs/DOCKER_DEPLOYMENT.md)** — Complete multi-platform Docker setup
-- **[Exchange Integration](docs/Exchange-Integration.md)** — Setup for 7 supported exchanges
+- **[Exchange Integration](docs/Exchange-Integration.md)** — Setup for 42 supported exchanges
 - **[Backup & Restore](docs/BACKUP_RESTORE_GUIDE.md)** — Configuration management
 - **[Security Guide](SECURITY.md)** — Security best practices
 - **[API Providers](docs/API_PROVIDERS.md)** — API provider details and rate limits
@@ -190,7 +210,7 @@ Built with [FastAPI](https://fastapi.tiangolo.com/), [Chart.js](https://www.char
 **Solana**: [Helius](https://www.helius.dev/) · **Bitcoin**: [Blockstream](https://blockstream.info/) · **Algorand**: [Pera Wallet](https://developer.perawallet.app/), [Tatum](https://tatum.io/)
 **Pricing**: [CoinGecko](https://www.coingecko.com/), [CoinMarketCap](https://coinmarketcap.com/), [DefiLlama](https://defillama.com/), [Coinbase](https://www.coinbase.com/)
 **Logos**: [LogoKit](https://logokit.com/), [Logostream](https://logostream.dev)
-**Exchanges**: [Coinbase CDP](https://www.coinbase.com/cloud), [Binance](https://www.binance.com/), [OKX](https://www.okx.com/), [Bitget](https://www.bitget.com/), [Gate.io](https://www.gate.io/), [KuCoin](https://www.kucoin.com/)
+**Exchanges** (42 total): [Coinbase](https://www.coinbase.com/cloud), [Binance](https://www.binance.com/), [Bybit](https://www.bybit.com/), [MEXC](https://www.mexc.com/), [Kraken](https://www.kraken.com/), [Gemini](https://www.gemini.com/), [OKX](https://www.okx.com/), [Bitget](https://www.bitget.com/), [Gate.io](https://www.gate.io/), [KuCoin](https://www.kucoin.com/), [Bitfinex](https://www.bitfinex.com/), [HTX](https://www.htx.com/), and 30 more
 **Privacy**: [Midnight Network](https://midnight.network/) (NIGHT token support)
 
 For detailed API information including rate limits and pricing, see [API Providers Guide](docs/API_PROVIDERS.md).

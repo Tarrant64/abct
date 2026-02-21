@@ -78,6 +78,77 @@ KUCOIN_API_KEY = os.getenv("KUCOIN_API_KEY", "")
 KUCOIN_API_SECRET = os.getenv("KUCOIN_API_SECRET", "")
 KUCOIN_API_PASSPHRASE = os.getenv("KUCOIN_API_PASSPHRASE", "")
 
+# New Binance-style exchanges
+BYBIT_API_KEY = os.getenv("BYBIT_API_KEY", "")
+BYBIT_API_SECRET = os.getenv("BYBIT_API_SECRET", "")
+MEXC_API_KEY = os.getenv("MEXC_API_KEY", "")
+MEXC_API_SECRET = os.getenv("MEXC_API_SECRET", "")
+HTX_API_KEY = os.getenv("HTX_API_KEY", "")
+HTX_API_SECRET = os.getenv("HTX_API_SECRET", "")
+BINGX_API_KEY = os.getenv("BINGX_API_KEY", "")
+BINGX_API_SECRET = os.getenv("BINGX_API_SECRET", "")
+POLONIEX_API_KEY = os.getenv("POLONIEX_API_KEY", "")
+POLONIEX_API_SECRET = os.getenv("POLONIEX_API_SECRET", "")
+LBANK_API_KEY = os.getenv("LBANK_API_KEY", "")
+LBANK_API_SECRET = os.getenv("LBANK_API_SECRET", "")
+BITMART_API_KEY = os.getenv("BITMART_API_KEY", "")
+BITMART_API_SECRET = os.getenv("BITMART_API_SECRET", "")
+WHITEBIT_API_KEY = os.getenv("WHITEBIT_API_KEY", "")
+WHITEBIT_API_SECRET = os.getenv("WHITEBIT_API_SECRET", "")
+COINEX_API_KEY = os.getenv("COINEX_API_KEY", "")
+COINEX_API_SECRET = os.getenv("COINEX_API_SECRET", "")
+BITVAVO_API_KEY = os.getenv("BITVAVO_API_KEY", "")
+BITVAVO_API_SECRET = os.getenv("BITVAVO_API_SECRET", "")
+BITRUE_API_KEY = os.getenv("BITRUE_API_KEY", "")
+BITRUE_API_SECRET = os.getenv("BITRUE_API_SECRET", "")
+XT_API_KEY = os.getenv("XT_API_KEY", "")
+XT_API_SECRET = os.getenv("XT_API_SECRET", "")
+DIGIFINEX_API_KEY = os.getenv("DIGIFINEX_API_KEY", "")
+DIGIFINEX_API_SECRET = os.getenv("DIGIFINEX_API_SECRET", "")
+COINW_API_KEY = os.getenv("COINW_API_KEY", "")
+COINW_API_SECRET = os.getenv("COINW_API_SECRET", "")
+PIONEX_API_KEY = os.getenv("PIONEX_API_KEY", "")
+PIONEX_API_SECRET = os.getenv("PIONEX_API_SECRET", "")
+
+# Batch 2-5 exchanges
+PHEMEX_API_KEY = os.getenv("PHEMEX_API_KEY", "")
+PHEMEX_API_SECRET = os.getenv("PHEMEX_API_SECRET", "")
+WOOX_API_KEY = os.getenv("WOOX_API_KEY", "")
+WOOX_API_SECRET = os.getenv("WOOX_API_SECRET", "")
+ASCENDEX_API_KEY = os.getenv("ASCENDEX_API_KEY", "")
+ASCENDEX_API_SECRET = os.getenv("ASCENDEX_API_SECRET", "")
+DERIBIT_CLIENT_ID = os.getenv("DERIBIT_CLIENT_ID", "")
+DERIBIT_CLIENT_SECRET = os.getenv("DERIBIT_CLIENT_SECRET", "")
+BITFLYER_API_KEY = os.getenv("BITFLYER_API_KEY", "")
+BITFLYER_API_SECRET = os.getenv("BITFLYER_API_SECRET", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_API_SECRET = os.getenv("GEMINI_API_SECRET", "")
+BITFINEX_API_KEY = os.getenv("BITFINEX_API_KEY", "")
+BITFINEX_API_SECRET = os.getenv("BITFINEX_API_SECRET", "")
+BTSE_API_KEY = os.getenv("BTSE_API_KEY", "")
+BTSE_API_SECRET = os.getenv("BTSE_API_SECRET", "")
+KRAKEN_API_KEY = os.getenv("KRAKEN_API_KEY", "")
+KRAKEN_API_SECRET = os.getenv("KRAKEN_API_SECRET", "")
+COINSPOT_API_KEY = os.getenv("COINSPOT_API_KEY", "")
+COINSPOT_API_SECRET = os.getenv("COINSPOT_API_SECRET", "")
+CRYPTOCOM_API_KEY = os.getenv("CRYPTOCOM_API_KEY", "")
+CRYPTOCOM_API_SECRET = os.getenv("CRYPTOCOM_API_SECRET", "")
+BITSTAMP_API_KEY = os.getenv("BITSTAMP_API_KEY", "")
+BITSTAMP_API_SECRET = os.getenv("BITSTAMP_API_SECRET", "")
+UPBIT_ACCESS_KEY = os.getenv("UPBIT_ACCESS_KEY", "")
+UPBIT_SECRET_KEY = os.getenv("UPBIT_SECRET_KEY", "")
+BACKPACK_API_KEY = os.getenv("BACKPACK_API_KEY", "")
+BACKPACK_API_SECRET = os.getenv("BACKPACK_API_SECRET", "")
+SWYFTX_API_KEY = os.getenv("SWYFTX_API_KEY", "")
+BITPANDA_API_KEY = os.getenv("BITPANDA_API_KEY", "")
+ROBINHOOD_ACCESS_TOKEN = os.getenv("ROBINHOOD_ACCESS_TOKEN", "")
+HITBTC_API_KEY = os.getenv("HITBTC_API_KEY", "")
+HITBTC_API_SECRET = os.getenv("HITBTC_API_SECRET", "")
+INDRES_API_KEY = os.getenv("INDRES_API_KEY", "")
+INDRES_API_SECRET = os.getenv("INDRES_API_SECRET", "")
+PROBIT_CLIENT_ID = os.getenv("PROBIT_CLIENT_ID", "")
+PROBIT_CLIENT_SECRET = os.getenv("PROBIT_CLIENT_SECRET", "")
+
 # API Endpoints
 BLOCKFROST_BASE_URL = "https://cardano-mainnet.blockfrost.io/api/v0"
 CEXPLORER_BASE_URL = "https://api.cexplorer.io/v1"
@@ -92,6 +163,16 @@ ALCHEMY_BASE_URL_CHAIN = "https://base-mainnet.g.alchemy.com"
 ALCHEMY_BSC_URL = "https://bnb-mainnet.g.alchemy.com"
 ALCHEMY_ARBITRUM_URL = "https://arb-mainnet.g.alchemy.com"
 ALCHEMY_AVALANCHE_URL = "https://avax-mainnet.g.alchemy.com"
+ALCHEMY_OPTIMISM_URL = "https://opt-mainnet.g.alchemy.com"
+ALCHEMY_ZKSYNC_URL = "https://zksync-mainnet.g.alchemy.com"
+ALCHEMY_LINEA_URL = "https://linea-mainnet.g.alchemy.com"
+ALCHEMY_SCROLL_URL = "https://scroll-mainnet.g.alchemy.com"
+
+# Public RPC URLs for non-Alchemy EVM chains
+FANTOM_RPC_URL = "https://rpc.ftm.tools"
+CRONOS_RPC_URL = "https://evm.cronos.org"
+GNOSIS_RPC_URL = "https://rpc.gnosischain.com"
+MOONBEAM_RPC_URL = "https://rpc.api.moonbeam.network"
 HELIUS_BASE_URL = "https://api.helius.xyz/v0"
 HELIUS_RPC_URL = "https://mainnet.helius-rpc.com"
 

@@ -688,3 +688,42 @@ async def get_defi_summary(user_id: int = Depends(verify_session), refresh: bool
             return stale
 
     return result
+
+
+# ============================================================================
+# Multi-chain DeFi Position Detection (via Protocol Registry)
+# ============================================================================
+
+from services.defi_protocols.registry import protocol_registry
+
+
+@router.get("/positions/{chain}/{address}")
+async def get_defi_positions_by_chain(chain: str, address: str, user_id: int = Depends(verify_session)):
+    """Get all DeFi positions for an address on a specific chain."""
+    positions = await protocol_registry.detect_all_positions(address, chain=chain)
+    return {
+        "chain": chain,
+        "address": address,
+        "positions": [p.to_dict() for p in positions],
+        "position_count": len(positions),
+        "protocols_scanned": len(protocol_registry.get_adapters_for_chain(chain)),
+    }
+
+
+@router.get("/detect/{address}")
+async def get_all_defi_positions(address: str, user_id: int = Depends(verify_session)):
+    """Get all DeFi positions across all chains for an address."""
+    positions_by_chain = await protocol_registry.detect_positions_by_chain(address)
+    all_positions = []
+    chain_summary = {}
+    for chain, positions in positions_by_chain.items():
+        chain_positions = [p.to_dict() for p in positions]
+        all_positions.extend(chain_positions)
+        chain_summary[chain] = len(chain_positions)
+    return {
+        "address": address,
+        "positions": all_positions,
+        "total_positions": len(all_positions),
+        "chains": chain_summary,
+        "total_protocols": protocol_registry.protocol_count,
+    }

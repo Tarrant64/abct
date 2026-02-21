@@ -14,7 +14,7 @@ digraph ABCT_Architecture {
 
     // Title
     labelloc="t";
-    label="ABCT Architecture - A Better Crypto Tracker\nVersion 1.12.3 (Build 1771184565)\n26 Blockchains | 7 Exchanges | Multi-User | Demo Mode";
+    label="ABCT Architecture - A Better Crypto Tracker\nVersion 1.13.0 (Build 1771554807)\n34 Blockchains | 42 Exchanges | 100+ DeFi Protocols | P&L Engine | Multi-User | Demo Mode";
     fontsize=16;
 
     // ========== SUBGRAPHS ==========
@@ -98,7 +98,9 @@ digraph ABCT_Architecture {
                 r_nfts [label="/nfts\nNFT Collections", fillcolor="#81C784"];
                 r_prices [label="/prices\nCrypto Prices", fillcolor="#81C784"];
                 r_defi [label="/defi\nDeFi Positions", fillcolor="#81C784"];
-                r_exchanges [label="/exchanges\n7 Exchange APIs", fillcolor="#81C784"];
+                r_exchanges [label="/exchanges\n42 Exchange APIs\n+ ExchangeRegistry", fillcolor="#81C784"];
+                r_defi_protocols [label="/defi/protocols\nProtocol Detection\n+ P&L Analytics", fillcolor="#81C784"];
+                r_pnl [label="/pnl\nCost Basis\nP&L Reporting", fillcolor="#81C784"];
                 r_tokens [label="/custom-tokens\nToken Tracking", fillcolor="#81C784"];
                 r_settings [label="/settings\nAPI Key Management", fillcolor="#81C784"];
                 r_security [label="/security\nSSL/Certificate Mgmt", fillcolor="#81C784"];
@@ -116,7 +118,7 @@ digraph ABCT_Architecture {
 
                 // Blockchain Services
                 subgraph cluster_blockchain_svc {
-                    label="Blockchain Services (26 Chains)";
+                    label="Blockchain Services (34 Chains)";
                     style="rounded,filled";
                     fillcolor="#FFE0B2";
                     color="#E65100";
@@ -128,7 +130,7 @@ digraph ABCT_Architecture {
                     s_base [label="base.py\nBase (ETH)", fillcolor="#FFCC80"];
                     s_solana [label="solana.py\nSolana (SOL)", fillcolor="#FFCC80"];
                     s_algorand [label="algorand.py\nAlgorand (ALGO)", fillcolor="#FFCC80"];
-                    s_evm_chain [label="evm_chain.py\nGeneric EVM Service\n(BSC/Arbitrum/Avalanche)", fillcolor="#FFCC80"];
+                    s_evm_chain [label="evm_chain.py\nGeneric EVM Service\n(BSC/Arbitrum/Avalanche\nOptimism/zkSync/Linea\nScroll/Fantom/Cronos\nGnosis/Moonbeam)", fillcolor="#FFCC80"];
                     s_tron [label="tron.py\nTron (TRX)", fillcolor="#FFCC80"];
                     s_xrp [label="xrp.py\nXRP (XRP)", fillcolor="#FFCC80"];
                     s_hedera [label="hedera.py\nHedera (HBAR)", fillcolor="#FFCC80"];
@@ -164,11 +166,12 @@ digraph ABCT_Architecture {
 
                 // Exchange Services
                 subgraph cluster_exchange_svc {
-                    label="Exchange Services (7 Exchanges)";
+                    label="Exchange Services (42 Exchanges via BaseExchangeService)";
                     style="rounded,filled";
                     fillcolor="#E1F5FE";
                     color="#0277BD";
 
+                    s_base_exchange [label="base_exchange.py\nBaseExchangeService\n+ 5 Auth Mixins", fillcolor="#81D4FA", color="#0277BD"];
                     s_coinbase [label="coinbase.py\nCoinbase CDP", fillcolor="#B3E5FC"];
                     s_binance [label="binance_service.py\nBinance.com", fillcolor="#B3E5FC"];
                     s_binance_us [label="binance_us_service.py\nBinance.US", fillcolor="#B3E5FC"];
@@ -176,6 +179,22 @@ digraph ABCT_Architecture {
                     s_bitget [label="bitget_service.py\nBitget Exchange", fillcolor="#B3E5FC"];
                     s_gate [label="gate_service.py\nGate.io", fillcolor="#B3E5FC"];
                     s_kucoin [label="kucoin_service.py\nKuCoin", fillcolor="#B3E5FC"];
+                    s_exchanges_new [label="bybit, mexc, kraken, gemini\nbitfinex, htx, bingx, phemex\nwoox, poloniex, cryptocom\nbitstamp, bitmart + 22 more\n(35 new exchange services)", fillcolor="#B3E5FC"];
+                }
+
+                // DeFi Protocol Services
+                subgraph cluster_defi_protocols {
+                    label="DeFi Protocol Adapters (100+ Protocols)";
+                    style="rounded,filled";
+                    fillcolor="#E8F5E9";
+                    color="#1B5E20";
+
+                    s_protocol_registry [label="registry.py\nProtocolRegistry\n(auto-discovery)", fillcolor="#A5D6A7", color="#1B5E20"];
+                    s_base_adapter [label="base_adapter.py\nProtocolAdapter ABC\n5 DetectionMethods", fillcolor="#A5D6A7", color="#1B5E20"];
+                    s_cardano_defi [label="cardano/\nMinswap, Liqwid, Indigo\nStrike, Surf (UTXO_SCAN)\n5 adapters", fillcolor="#C8E6C9"];
+                    s_evm_defi [label="evm/\nAave v3, Compound v3\nUniswap v3 LP, Curve\nBalancer, EigenLayer\nMaker, Morpho, GMX\n+ liquid staking tokens\n11 adapters", fillcolor="#C8E6C9"];
+                    s_solana_defi [label="solana/\nMarinade, Jito, Orca\nRaydium, Drift, MarginFi\nKamino, Jupiter Perps\nBlazeStake + 6 more\n15 adapters", fillcolor="#C8E6C9"];
+                    s_cost_basis [label="cost_basis_engine.py\nFIFO/LIFO/Average\nP&L Analytics", fillcolor="#C8E6C9"];
                 }
 
                 // Demo Services
@@ -261,12 +280,12 @@ digraph ABCT_Architecture {
 
         // EVM APIs
         subgraph cluster_evm_api {
-            label="EVM Chains (Ethereum/Polygon/Base/BSC/Arbitrum/Avalanche)";
+            label="EVM Chains (12 via Alchemy + Public RPCs)";
             style="rounded,filled";
             fillcolor="#E8EAF6";
             color="#3F51B5";
 
-            api_alchemy [label="Alchemy\nETH/Polygon/Base/BSC/\nArbitrum/Avalanche", fillcolor="#C5CAE9"];
+            api_alchemy [label="Alchemy\nETH/Polygon/Base/BSC/ARB/AVAX\n+OPT/zkSync/Linea/Scroll", fillcolor="#C5CAE9"];
             api_etherscan [label="Etherscan\nEthereum Transactions", fillcolor="#C5CAE9"];
             api_polygonscan [label="Polygonscan\nPolygon Transactions", fillcolor="#C5CAE9"];
             api_basescan [label="Basescan\nBase Transactions", fillcolor="#C5CAE9"];
@@ -338,7 +357,7 @@ digraph ABCT_Architecture {
 
         // Exchange APIs
         subgraph cluster_exchange_api {
-            label="Exchanges (7 Platforms)";
+            label="Exchange APIs (42 Platforms)";
             style="rounded,filled";
             fillcolor="#E8F5E9";
             color="#2E7D32";
@@ -350,6 +369,7 @@ digraph ABCT_Architecture {
             api_bitget [label="Bitget\nDerivatives Exchange", fillcolor="#C8E6C9"];
             api_gate [label="Gate.io\nComprehensive API", fillcolor="#C8E6C9"];
             api_kucoin [label="KuCoin\nGlobal Exchange", fillcolor="#C8E6C9"];
+            api_exchanges_new [label="35 New Exchanges\nBybit, MEXC, Kraken, Gemini\nBitfinex, HTX, Crypto.com\n+ 28 more", fillcolor="#C8E6C9"];
         }
     }
 
@@ -441,13 +461,25 @@ digraph ABCT_Architecture {
     r_nft_scheduler -> s_nft_scheduler;
 
     // Routers to Exchange Services
-    r_exchanges -> s_coinbase;
-    r_exchanges -> s_binance;
-    r_exchanges -> s_binance_us;
-    r_exchanges -> s_okx;
-    r_exchanges -> s_bitget;
-    r_exchanges -> s_gate;
-    r_exchanges -> s_kucoin;
+    r_exchanges -> s_base_exchange [label="ExchangeRegistry"];
+    s_base_exchange -> s_coinbase [style=dashed];
+    s_base_exchange -> s_binance [style=dashed];
+    s_base_exchange -> s_binance_us [style=dashed];
+    s_base_exchange -> s_okx [style=dashed];
+    s_base_exchange -> s_bitget [style=dashed];
+    s_base_exchange -> s_gate [style=dashed];
+    s_base_exchange -> s_kucoin [style=dashed];
+    s_base_exchange -> s_exchanges_new [style=dashed, label="35 more"];
+
+    // DeFi Protocol Router connections
+    main -> r_defi_protocols [style=dashed, color="#388E3C"];
+    main -> r_pnl [style=dashed, color="#388E3C"];
+    r_defi_protocols -> s_protocol_registry;
+    s_protocol_registry -> s_base_adapter [style=dashed];
+    s_protocol_registry -> s_cardano_defi;
+    s_protocol_registry -> s_evm_defi;
+    s_protocol_registry -> s_solana_defi;
+    r_pnl -> s_cost_basis;
 
     // Routers to Support Services
     r_portfolio -> s_snapshot;
@@ -522,6 +554,9 @@ digraph ABCT_Architecture {
 
     // DeFi service connections
     s_defi -> api_alchemy [label="Chainlink Staking", color="#3F51B5"];
+    s_evm_defi -> api_alchemy [label="DeFi contract calls", color="#1B5E20"];
+    s_solana_defi -> api_helius [label="Solana DeFi RPCs", color="#1B5E20"];
+    s_cardano_defi -> api_blockfrost [label="Cardano UTXOs", color="#1B5E20"];
 
     // Pricing service connections (fallback chain)
     s_pricing -> api_coingecko [label="1st", color="#C2185B"];
@@ -540,6 +575,7 @@ digraph ABCT_Architecture {
     s_bitget -> api_bitget [label="HTTPS", color="#2E7D32"];
     s_gate -> api_gate [label="HTTPS", color="#2E7D32"];
     s_kucoin -> api_kucoin [label="HTTPS", color="#2E7D32"];
+    s_exchanges_new -> api_exchanges_new [label="HTTPS (35)", color="#2E7D32"];
 
     // Security monitoring
     sec_agent -> sec_audit [label="runs"];

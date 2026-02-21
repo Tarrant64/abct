@@ -1,12 +1,13 @@
-# ABCT Architecture (v1.12.3)
+# ABCT Architecture (v1.13.0)
 
 ## System Overview
 
 ```
 +-----------------------------------------------------------------------------------+
-|                              ABCT System (v1.12.3)                                 |
+|                              ABCT System (v1.13.0)                                 |
 |                         Multi-User Portfolio Tracker                              |
 |                              BUILD 1771554807                                     |
+|              34 Chains | 42 Exchanges | 100+ DeFi Protocols | P&L Engine          |
 +-----------------------------------------------------------------------------------+
 
                                    +-----------------+
@@ -75,7 +76,7 @@
 |                              Services Layer                                        |
 +-----------------------------------------------------------------------------------+
 |                                                                                    |
-|  Blockchain Services (26 Chains):                                                |
+|  Blockchain Services (34 Chains):                                                |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
 |  | Cardano  | | Bitcoin  | | Ethereum | | Solana   | | Polygon  | |   Base   |     |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
@@ -91,7 +92,15 @@
 |  +----------+ +----------+ +----------+                                             |
 |  |   NEAR   | |   ICP    | |          |                                             |
 |  +----------+ +----------+ +----------+                                             |
-|  Note: BSC, Arbitrum, and Avalanche share the generic evm_chain.py service         |
+|  New EVM Chains (v1.13.0 — all via evm_chain.py):                                 |
+|  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
+|  | Optimism | | zkSync   | |  Linea   | |  Scroll  | | Fantom   | |  Cronos  |     |
+|  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
+|  +----------+ +----------+                                                          |
+|  |  Gnosis  | |Moonbeam  |                                                          |
+|  +----------+ +----------+                                                          |
+|  Note: BSC, Arbitrum, Avalanche, Optimism, zkSync, Linea, Scroll, Fantom,          |
+|  Cronos, Gnosis, and Moonbeam all use the generic evm_chain.py service             |
 |  Tron uses tron.py with TronGrid API (free, no key required)                       |
 |  XRP, Hedera, MultiversX, Sui, Aptos, and Filecoin use free public APIs (no key)   |
 |  Litecoin and Dogecoin use BlockCypher API (free, no key required)                 |
@@ -104,13 +113,16 @@
 |  ICP uses Rosetta API (free, no key required) - balance only                       |
 |  DeFi service includes Chainlink Staking (Ethereum contract reads via Alchemy)     |
 |                                                                                    |
-|  Exchange Services:                                                               |
-|  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
-|  | Coinbase | | Binance  | |Binance.US| |   OKX    | |  Bitget  | | Gate.io  |     |
-|  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
-|  +----------+                                                                      |
-|  |  KuCoin  |                                                                      |
-|  +----------+                                                                      |
+|  Exchange Services (42 Exchanges via BaseExchangeService + 5 auth mixins):        |
+|  Original (7): Coinbase, Binance, Binance.US, OKX, Bitget, Gate.io, KuCoin        |
+|  New (35): Bybit, MEXC, HTX, BingX (Binance-style HMAC-SHA256)                    |
+|           Phemex, WOO X, AscendEX (OKX-style HMAC-SHA256 base64)                 |
+|           Kraken, CoinSpot (Gate-style HMAC-SHA512)                               |
+|           Gemini, Bitfinex, BTSE (Gemini-style HMAC-SHA384)                       |
+|           Poloniex, Crypto.com, Bitstamp, Bitmart, Upbit, Pionex,                 |
+|           Robinhood, Deribit, Backpack, CoinEx, LBank, ProBit, HitBTC,            |
+|           Bitrue, WhiteBIT, Digifinex, CoinW, BitFlyer, Bitpanda,                 |
+|           Bitvavo, Swyftx, Independent Reserve, XT.com                            |
 |                                                                                    |
 |  Core Services:                                                                   |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
@@ -384,6 +396,50 @@ TapTools (Cardano only)
 Stale cache backup
 ```
 
+## Exchange Service Architecture
+
+All 42 exchanges extend `BaseExchangeService` (`services/base_exchange.py`) with auth mixins:
+
+| Auth Mixin | Algorithm | Exchanges |
+|-----------|-----------|-----------|
+| `BinanceStyleAuth` | HMAC-SHA256 query string | Bybit, MEXC, HTX, BingX, Bitrue, Pionex, XT, CoinW, Digifinex, LBank, ProBit, CoinEx, Bitmart, WhiteBIT, HitBTC |
+| `OKXStyleAuth` | HMAC-SHA256 base64 header | Phemex, WOO X, AscendEX |
+| `GateStyleAuth` | HMAC-SHA512 | Kraken, CoinSpot |
+| `GeminiStyleAuth` | HMAC-SHA384 payload | Gemini, Bitfinex, BTSE |
+| Custom | JWT, Ed25519, Bearer, OAuth2, Basic | Coinbase (Ed25519), Robinhood (OAuth2), Deribit (Bearer), Backpack (Ed25519), Poloniex, Crypto.com, Bitstamp, Upbit, Bitflyer, Bitpanda, Bitvavo, Swyftx, IndependentReserve |
+
+`ExchangeRegistry` auto-wires new exchanges into `/exchanges/status`, `/exchanges/all`, and creates individual `GET /exchanges/{name}/balances` endpoints. Adding a new exchange requires only: create `{name}_service.py`, extend `BaseExchangeService`, register in the router.
+
+## DeFi Protocol Detection
+
+Protocol adapters implement `ProtocolAdapter` ABC (`services/defi_protocols/base_adapter.py`) with 5 detection methods:
+
+| Method | Enum | Use Case | Example Protocols |
+|--------|------|----------|-------------------|
+| Token balance | `TOKEN_BALANCE` | Check ERC-20/SPL receipt tokens | stETH, rETH, mSOL, jitoSOL |
+| Contract call | `CONTRACT_CALL` | Query smart contract state | Aave, Compound, Maker, Spark |
+| UTXO scan | `UTXO_SCAN` | Scan UTXOs for protocol assets | Minswap, Liqwid, Indigo (Cardano) |
+| NFT position | `NFT_POSITION` | NFT-based LP positions | Uniswap v3, Orca (concentrated) |
+| Program account | `PROGRAM_ACCOUNT` | Solana program accounts | Marinade, Drift, MarginFi, Kamino |
+
+`ProtocolRegistry` provides auto-discovery: adapters self-register at import time via `__init__.py` exports. Detection runs in parallel with per-adapter timeouts. Current coverage:
+
+- **Cardano** (5): Minswap, Liqwid, Indigo, Strike Finance, Surf Protocol
+- **EVM** (11 adapters, 30+ pools): Aave v3, Compound v3, Uniswap v3 LP, Curve, Balancer, EigenLayer, Maker/Spark, Morpho, GMX, `token_balance_adapters.py` (liquid staking tokens: stETH, rETH, wstETH, cbETH, swETH, rswETH, ezETH)
+- **Solana** (15): Marinade, Jito, Blazestake, Sanctum, Orca, Raydium, Lifinity, Meteora, Drift, MarginFi, Kamino, Jupiter Perps, Phoenix, Solend, Tulip
+
+## P&L Analytics
+
+`CostBasisEngine` (`services/cost_basis_engine.py`) tracks cost basis lots from exchange transactions and wallet history:
+
+- **Ingestion**: Imports buy/sell/deposit/withdrawal transactions from `exchange_transactions` table into `cost_basis_lots`
+- **Lot disposal**: FIFO (first in, first out), LIFO (last in, first out), or Average Cost matching
+- **Realized gains**: Stored in `realized_gains` table with per-lot detail
+- **Unrealized gains**: Computed on demand by comparing open lots against current prices
+- **Summary table**: `asset_pnl_summary` materialized for fast portfolio performance queries
+
+Endpoints: `GET /pnl/summary`, `GET /pnl/assets`, `POST /pnl/ingest`, `GET /pnl/method`
+
 ## HTTP Client Pool
 
 Shared persistent `httpx.AsyncClient` instances via `get_client(name, timeout)`:
@@ -421,10 +477,11 @@ Shared persistent `httpx.AsyncClient` instances via `get_client(name, timeout)`:
 - **5 Themes**: Dark Mode (default), Light, Cypherpunk 1, Ocean Depths, Sunset Horizon
 - **Cache Busting**: Build version system (v=1770726755) for immediate updates
 
-### External Services (35 providers)
+### External Services (35+ providers)
 - **Cardano**: Blockfrost, CExplorer, TapTools, Koios, Maestro (fallback)
 - **Bitcoin**: Blockstream
-- **EVM**: Etherscan, Alchemy, Polygonscan, Basescan, BscScan, Arbiscan, Snowscan
+- **EVM (original)**: Etherscan, Alchemy, Polygonscan, Basescan, BscScan, Arbiscan, Snowscan
+- **EVM (new chains)**: Optimism public RPC, zkSync RPC, Linea RPC, Scroll RPC, Fantom public RPC, Cronos RPC, Gnosis RPC, Moonbeam RPC — all via evm_chain.py
 - **Solana**: Helius
 - **Algorand**: Pera Wallet API, Tatum
 - **Tron**: TronGrid (free, no API key required)
@@ -445,7 +502,7 @@ Shared persistent `httpx.AsyncClient` instances via `get_client(name, timeout)`:
 - **ICP**: Rosetta API (free, no API key required)
 - **DeFi**: Chainlink Staking via Alchemy (Ethereum contract reads)
 - **Pricing**: CoinGecko, CoinMarketCap, Coinbase, DefiLlama
-- **Exchanges**: Coinbase CDP, Binance, Binance.US, OKX, Bitget, Gate.io, KuCoin
+- **Exchanges**: 42 exchanges via BaseExchangeService with 5 auth method families
 
 ## Security Architecture
 
@@ -558,10 +615,12 @@ ABCT/
 │   │   ├── positions/              # Stage F (2 stubs)
 │   │   ├── providers/              # Registry + Provider dataclass
 │   │   └── scheduler/              # Scheduler + TokenBucket + CircuitBreaker
-│   ├── services/                   # 75+ business logic services
+│   ├── services/                   # 100+ business logic services
 │   │   ├── http_client.py          # Shared HTTP client pool
 │   │   ├── api_key_manager.py      # Dynamic API key management
 │   │   ├── pricing.py              # 5-source pricing fallback
+│   │   ├── base_exchange.py        # BaseExchangeService + 5 auth mixins
+│   │   ├── cost_basis_engine.py    # P&L: FIFO/LIFO/Average cost basis
 │   │   ├── cardano.py              # Cardano blockchain
 │   │   ├── bitcoin.py              # Bitcoin blockchain
 │   │   ├── ethereum.py             # Ethereum blockchain
@@ -569,7 +628,9 @@ ABCT/
 │   │   ├── polygon.py              # Polygon blockchain
 │   │   ├── base.py                 # Base blockchain
 │   │   ├── algorand.py             # Algorand blockchain
-│   │   ├── evm_chain.py           # Generic EVM (BSC, Arbitrum, Avalanche)
+│   │   ├── evm_chain.py           # Generic EVM (BSC, Arbitrum, Avalanche,
+│   │   │                           #   Optimism, zkSync, Linea, Scroll,
+│   │   │                           #   Fantom, Cronos, Gnosis, Moonbeam)
 │   │   ├── tron.py                # Tron blockchain (TronGrid)
 │   │   ├── xrp.py                 # XRP Ledger (XRPL JSON-RPC)
 │   │   ├── hedera.py              # Hedera (Mirror Node REST API)
@@ -596,7 +657,13 @@ ABCT/
 │   │   ├── api_health.py          # API health monitoring
 │   │   ├── rate_limit_tracker.py  # Rate limit tracking
 │   │   ├── known_addresses.py     # Known address labels
-│   │   └── ...                     # Exchange, NFT, demo services
+│   │   ├── defi_protocols/        # DeFi protocol adapters (100+ protocols)
+│   │   │   ├── base_adapter.py    # ProtocolAdapter ABC + DetectionMethod enum
+│   │   │   ├── registry.py        # ProtocolRegistry with auto-discovery
+│   │   │   ├── cardano/           # 5 Cardano adapters (UTXO_SCAN method)
+│   │   │   ├── evm/               # 11 EVM adapters (TOKEN_BALANCE/CONTRACT_CALL/NFT_POSITION)
+│   │   │   └── solana/            # 15 Solana adapters (PROGRAM_ACCOUNT method)
+│   │   └── *_service.py           # 41 exchange service files (+ coinbase.py = 42)
 │   └── middleware/                 # Security middleware
 ├── frontend/                      # HTML/CSS/JS (19 pages)
 │   ├── index.html                 # Dashboard

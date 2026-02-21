@@ -1105,6 +1105,82 @@ async def init_db():
             ON exchange_transactions(token_symbol)
         """)
 
+        # P&L: Cost basis lots
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS cost_basis_lots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                token_symbol TEXT NOT NULL,
+                acquisition_date TIMESTAMP NOT NULL,
+                acquisition_type TEXT NOT NULL DEFAULT 'buy',
+                acquisition_source TEXT,
+                quantity REAL NOT NULL,
+                cost_per_unit_usd REAL NOT NULL DEFAULT 0,
+                remaining_quantity REAL NOT NULL,
+                tx_id TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_cost_basis_user_token
+            ON cost_basis_lots(user_id, token_symbol)
+        """)
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_cost_basis_date
+            ON cost_basis_lots(acquisition_date)
+        """)
+
+        # P&L: Realized gains
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS realized_gains (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                token_symbol TEXT NOT NULL,
+                disposal_date TIMESTAMP NOT NULL,
+                disposal_type TEXT NOT NULL DEFAULT 'sell',
+                quantity REAL NOT NULL,
+                proceeds_usd REAL NOT NULL DEFAULT 0,
+                cost_basis_usd REAL NOT NULL DEFAULT 0,
+                gain_loss_usd REAL NOT NULL DEFAULT 0,
+                holding_period TEXT,
+                lot_id INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (lot_id) REFERENCES cost_basis_lots(id)
+            )
+        """)
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_realized_gains_user_token
+            ON realized_gains(user_id, token_symbol)
+        """)
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_realized_gains_date
+            ON realized_gains(disposal_date DESC)
+        """)
+
+        # P&L: Asset P&L summary (materialized view for fast reads)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS asset_pnl_summary (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                token_symbol TEXT NOT NULL,
+                total_invested_usd REAL NOT NULL DEFAULT 0,
+                current_value_usd REAL NOT NULL DEFAULT 0,
+                unrealized_gain_usd REAL NOT NULL DEFAULT 0,
+                realized_gain_usd REAL NOT NULL DEFAULT 0,
+                avg_cost_basis_usd REAL NOT NULL DEFAULT 0,
+                total_quantity REAL NOT NULL DEFAULT 0,
+                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, token_symbol),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_pnl_summary_user
+            ON asset_pnl_summary(user_id)
+        """)
+
         await db.commit()
 
 async def get_db():

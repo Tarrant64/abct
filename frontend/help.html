@@ -6,8 +6,8 @@
     <title>ABCT - Help & Guide</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771712887">
-    <script src="/static/js/session-auth.js?v=1771712887"></script>
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771717923">
+    <script src="/static/js/session-auth.js?v=1771717923"></script>
     <style>
         /* ========== Help Page Layout ========== */
         .help-page {
@@ -914,6 +914,7 @@
                 <a href="#blockchains">Supported Blockchains</a>
                 <a href="#api-keys">API Key Guide</a>
                 <a href="#exchanges">Exchange Integration</a>
+                <a href="#defi">DeFi Protocol Support</a>
                 <a href="#pricing">Pricing System</a>
                 <a href="#features">Feature Matrix</a>
                 <a href="#setup">Recommended Setup</a>
@@ -928,7 +929,7 @@
                     <div class="help-hero">
                         <h1>A Better Crypto Tracker</h1>
                         <div class="tagline">Self-hosted multi-chain portfolio tracking</div>
-                        <p>ABCT is a privacy-first cryptocurrency portfolio tracker that aggregates wallet balances, exchange accounts, DeFi positions, and NFT collections across 26 blockchains &mdash; all running on your own hardware.</p>
+                        <p>ABCT is a privacy-first cryptocurrency portfolio tracker that aggregates wallet balances, exchange accounts, DeFi positions, NFT collections, and P&amp;L tracking across 34 blockchains &mdash; all running on your own hardware.</p>
                     </div>
 
                     <h2>Quick Start</h2>
@@ -1215,6 +1216,70 @@
                             <span class="chain-detail">ICP &bull; Rosetta API</span>
                             <span class="chain-badge badge-free">No Key Needed</span>
                         </div>
+                        <div class="chain-card">
+                            <div class="chain-head">
+                                <img src="https://img.logokit.com/crypto/OP?size=32" alt="Optimism" class="chain-logo" onerror="this.style.display='none'">
+                                <span class="chain-name">Optimism</span>
+                            </div>
+                            <span class="chain-detail">ETH &bull; Alchemy</span>
+                            <span class="chain-badge badge-key">Free Key</span>
+                        </div>
+                        <div class="chain-card">
+                            <div class="chain-head">
+                                <img src="https://img.logokit.com/crypto/ZK?size=32" alt="zkSync Era" class="chain-logo" onerror="this.style.display='none'">
+                                <span class="chain-name">zkSync Era</span>
+                            </div>
+                            <span class="chain-detail">ETH &bull; Alchemy</span>
+                            <span class="chain-badge badge-key">Free Key</span>
+                        </div>
+                        <div class="chain-card">
+                            <div class="chain-head">
+                                <img src="https://img.logokit.com/crypto/LINEA?size=32" alt="Linea" class="chain-logo" onerror="this.style.display='none'">
+                                <span class="chain-name">Linea</span>
+                            </div>
+                            <span class="chain-detail">ETH &bull; Alchemy</span>
+                            <span class="chain-badge badge-key">Free Key</span>
+                        </div>
+                        <div class="chain-card">
+                            <div class="chain-head">
+                                <img src="https://img.logokit.com/crypto/SCR?size=32" alt="Scroll" class="chain-logo" onerror="this.style.display='none'">
+                                <span class="chain-name">Scroll</span>
+                            </div>
+                            <span class="chain-detail">ETH &bull; Alchemy</span>
+                            <span class="chain-badge badge-key">Free Key</span>
+                        </div>
+                        <div class="chain-card">
+                            <div class="chain-head">
+                                <img src="https://img.logokit.com/crypto/FTM?size=32" alt="Fantom" class="chain-logo" onerror="this.style.display='none'">
+                                <span class="chain-name">Fantom</span>
+                            </div>
+                            <span class="chain-detail">FTM &bull; Public RPC</span>
+                            <span class="chain-badge badge-free">No Key Needed</span>
+                        </div>
+                        <div class="chain-card">
+                            <div class="chain-head">
+                                <img src="https://img.logokit.com/crypto/CRO?size=32" alt="Cronos" class="chain-logo" onerror="this.style.display='none'">
+                                <span class="chain-name">Cronos</span>
+                            </div>
+                            <span class="chain-detail">CRO &bull; Public RPC</span>
+                            <span class="chain-badge badge-free">No Key Needed</span>
+                        </div>
+                        <div class="chain-card">
+                            <div class="chain-head">
+                                <img src="https://img.logokit.com/crypto/GNO?size=32" alt="Gnosis" class="chain-logo" onerror="this.style.display='none'">
+                                <span class="chain-name">Gnosis</span>
+                            </div>
+                            <span class="chain-detail">xDAI &bull; Public RPC</span>
+                            <span class="chain-badge badge-free">No Key Needed</span>
+                        </div>
+                        <div class="chain-card">
+                            <div class="chain-head">
+                                <img src="https://img.logokit.com/crypto/GLMR?size=32" alt="Moonbeam" class="chain-logo" onerror="this.style.display='none'">
+                                <span class="chain-name">Moonbeam</span>
+                            </div>
+                            <span class="chain-detail">GLMR &bull; Public RPC</span>
+                            <span class="chain-badge badge-free">No Key Needed</span>
+                        </div>
                     </div>
                 </section>
 
@@ -1323,7 +1388,7 @@
                             </div>
                             <div class="api-item">
                                 <h4>Alchemy</h4>
-                                <p>Ethereum, Polygon, Base, Arbitrum: tokens, NFTs, balances</p>
+                                <p>Ethereum, Polygon, Base, Arbitrum, Optimism, zkSync, Linea, Scroll: tokens, NFTs, balances</p>
                                 <a href="https://www.alchemy.com" target="_blank" rel="noopener" class="api-link">alchemy.com &rarr;</a>
                             </div>
                             <div class="api-item">
@@ -1431,10 +1496,337 @@
                             <div class="ex-detail">Simple key/secret pair</div>
                             <span class="ex-auth">HMAC (key + secret)</span>
                         </div>
+                        <div class="exchange-card">
+                            <h4>Kraken</h4>
+                            <div class="ex-detail">Spot & staking balances</div>
+                            <div class="ex-detail">Veteran US exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Bybit</h4>
+                            <div class="ex-detail">Spot & unified account</div>
+                            <div class="ex-detail">Global derivatives exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>HTX (Huobi)</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">Major Asian exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>MEXC</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">High-volume altcoin exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Bitfinex</h4>
+                            <div class="ex-detail">Spot & margin balances</div>
+                            <div class="ex-detail">Professional trading platform</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Gemini</h4>
+                            <div class="ex-detail">Spot & earn balances</div>
+                            <div class="ex-detail">US-regulated exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Crypto.com</h4>
+                            <div class="ex-detail">Spot & earn balances</div>
+                            <div class="ex-detail">App & exchange combined</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Phemex</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">Derivatives-focused exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Poloniex</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">Established altcoin exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Bitstamp</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">EU-regulated exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Bittrex</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">US exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>BingX</h4>
+                            <div class="ex-detail">Spot & perpetual balances</div>
+                            <div class="ex-detail">Social trading exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>AscendEX</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">Multi-chain exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>LBank</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">Altcoin-focused exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Coinex</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">BCH-focused exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>XT.com</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">Global exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>DigiFinex</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">Singapore exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Exmo</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">Eastern European exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Probit</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">IEO-focused exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Tidex</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">Multi-asset exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Latoken</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">IEO exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>BigONE</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">Asian exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Whitebit</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">European exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Upbit</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">South Korean exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Bithumb</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">South Korean exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Coinone</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">South Korean exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Indodax</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">Indonesian exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Coinhako</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">Southeast Asian exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Luno</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">Africa & Asia exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Bitso</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">Latin American exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Mercado Bitcoin</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">Brazil's largest exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>Foxbit</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">Brazilian exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>CoinDCX</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">Indian exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
+                        <div class="exchange-card">
+                            <h4>WazirX</h4>
+                            <div class="ex-detail">Spot balances</div>
+                            <div class="ex-detail">Indian exchange</div>
+                            <span class="ex-auth">HMAC (key + secret)</span>
+                        </div>
                     </div>
                 </section>
 
-                <!-- 6. Pricing System -->
+                <!-- 6. DeFi Protocol Support -->
+                <section id="defi">
+                    <h2>DeFi Protocol Support</h2>
+                    <p>ABCT tracks staking, liquidity, and lending positions across 100+ DeFi protocols. Positions are detected automatically when you scan a wallet.</p>
+
+                    <h3>Cardano (5 Protocols)</h3>
+                    <div class="api-list">
+                        <div class="api-item">
+                            <h4>Indigo Protocol</h4>
+                            <p>INDY governance staking and synthetic asset positions (iAssets)</p>
+                        </div>
+                        <div class="api-item">
+                            <h4>Liqwid Finance</h4>
+                            <p>LQ governance staking and ADA/token lending positions</p>
+                        </div>
+                        <div class="api-item">
+                            <h4>Strike Finance</h4>
+                            <p>STRIKE governance staking positions</p>
+                        </div>
+                        <div class="api-item">
+                            <h4>Iagon</h4>
+                            <p>IAG token staking in decentralized storage network</p>
+                        </div>
+                        <div class="api-item">
+                            <h4>Surf Lending</h4>
+                            <p>ADA supplied to Surf Lending (Flow Lending) protocol</p>
+                        </div>
+                    </div>
+
+                    <h3>EVM Chains (~30 Protocols)</h3>
+                    <div class="api-list">
+                        <div class="api-item">
+                            <h4>Lido</h4>
+                            <p>stETH and wstETH liquid staking positions (Ethereum)</p>
+                        </div>
+                        <div class="api-item">
+                            <h4>Rocket Pool</h4>
+                            <p>rETH liquid staking positions (Ethereum)</p>
+                        </div>
+                        <div class="api-item">
+                            <h4>Chainlink Staking</h4>
+                            <p>Staked LINK and pending rewards via Chainlink v0.2</p>
+                        </div>
+                        <div class="api-item">
+                            <h4>Aave v3</h4>
+                            <p>Lending and borrowing positions across EVM chains</p>
+                        </div>
+                        <div class="api-item">
+                            <h4>Compound v3</h4>
+                            <p>Lending positions (Ethereum, Polygon, Arbitrum, Base)</p>
+                        </div>
+                        <div class="api-item">
+                            <h4>Uniswap V3</h4>
+                            <p>Concentrated liquidity positions via The Graph</p>
+                        </div>
+                        <div class="api-item">
+                            <h4>Curve Finance</h4>
+                            <p>Liquidity pool and gauge staking positions</p>
+                        </div>
+                        <div class="api-item">
+                            <h4>Convex Finance</h4>
+                            <p>cvxCRV and Curve LP staking positions</p>
+                        </div>
+                        <div class="api-item">
+                            <h4>Frax Finance</h4>
+                            <p>sFRAX, frxETH and liquid staking positions</p>
+                        </div>
+                        <div class="api-item">
+                            <h4>EigenLayer</h4>
+                            <p>ETH and LST restaking positions</p>
+                        </div>
+                        <div class="api-item">
+                            <h4>Pendle Finance</h4>
+                            <p>Yield tokenization positions and LP</p>
+                        </div>
+                        <div class="api-item">
+                            <h4>Yearn Finance</h4>
+                            <p>Vault deposit positions (yTokens)</p>
+                        </div>
+                    </div>
+
+                    <h3>Solana (15 Protocols)</h3>
+                    <div class="api-list">
+                        <div class="api-item">
+                            <h4>Marinade Finance</h4>
+                            <p>mSOL liquid staking positions</p>
+                        </div>
+                        <div class="api-item">
+                            <h4>Jito</h4>
+                            <p>JitoSOL liquid staking and MEV rewards</p>
+                        </div>
+                        <div class="api-item">
+                            <h4>Orca</h4>
+                            <p>Whirlpool concentrated liquidity positions</p>
+                        </div>
+                        <div class="api-item">
+                            <h4>Marginfi</h4>
+                            <p>Lending and borrowing positions</p>
+                        </div>
+                        <div class="api-item">
+                            <h4>Kamino Finance</h4>
+                            <p>Automated liquidity vaults and lending</p>
+                        </div>
+                        <div class="api-item">
+                            <h4>Raydium</h4>
+                            <p>AMM and concentrated liquidity positions</p>
+                        </div>
+                        <div class="api-item">
+                            <h4>Drift Protocol</h4>
+                            <p>Perpetuals and lending positions</p>
+                        </div>
+                        <div class="api-item">
+                            <h4>Helium (HNT)</h4>
+                            <p>Hotspot rewards and veHNT staking</p>
+                        </div>
+                    </div>
+
+                    <div class="info-callout info">
+                        <span class="callout-icon">&#128161;</span>
+                        <div>DeFi positions are cached for 24 hours. Use the refresh button on the Dashboard to force a fresh scan. Positions require the relevant chain API keys to be configured (Blockfrost for Cardano, Alchemy/Helius for EVM/Solana).</div>
+                    </div>
+                </section>
+
+                <!-- 7. Pricing System -->
                 <section id="pricing">
                     <h2>Pricing System</h2>
                     <p>ABCT uses a multi-source pricing engine with automatic failover. If one source is rate-limited or down, the next one takes over seamlessly.</p>
@@ -1506,7 +1898,7 @@
                     </div>
                 </section>
 
-                <!-- 7. Feature Matrix -->
+                <!-- 8. Feature Matrix -->
                 <section id="features">
                     <h2>Feature Matrix</h2>
                     <p>What you can do at each API configuration level.</p>
@@ -1523,7 +1915,7 @@
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td>BTC / TRX / ALGO / XRP / HBAR / EGLD / SUI / APT / FIL / LTC / DOGE / ZEC / XTZ / STX / VET / ATOM / NEAR / ICP balances</td>
+                                    <td>BTC / TRX / ALGO / XRP / HBAR / EGLD / SUI / APT / FIL / LTC / DOGE / ZEC / XTZ / STX / VET / ATOM / NEAR / ICP / FTM / CRO / xDAI / GLMR balances</td>
                                     <td><span class="check">&#10003;</span></td>
                                     <td><span class="check">&#10003;</span></td>
                                     <td><span class="check">&#10003;</span></td>
@@ -1541,7 +1933,7 @@
                                     <td><span class="check">&#10003;</span></td>
                                 </tr>
                                 <tr>
-                                    <td>ETH / SOL / ADA balances</td>
+                                    <td>ETH / SOL / ADA / OPT / zkSync / Linea / Scroll balances</td>
                                     <td><span class="cross">&#10007;</span></td>
                                     <td><span class="check">&#10003;</span></td>
                                     <td><span class="check">&#10003;</span></td>
@@ -1630,12 +2022,24 @@
                                     <td><span class="cross">&#10007;</span></td>
                                     <td><span class="check">&#10003;</span></td>
                                 </tr>
+                                <tr>
+                                    <td>P&amp;L / cost basis tracking</td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>DeFi protocol detection (100+ protocols)</td>
+                                    <td><span class="cross">&#10007;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
                 </section>
 
-                <!-- 8. Recommended Setup Guide -->
+                <!-- 9. Recommended Setup Guide -->
                 <section id="setup">
                     <h2>Recommended Setup</h2>
                     <p>For the best experience, add API keys in this priority order. Each step significantly improves data coverage.</p>
@@ -1685,7 +2089,7 @@
                     </div>
                 </section>
 
-                <!-- 9. FAQ / Troubleshooting -->
+                <!-- 10. FAQ / Troubleshooting -->
                 <section id="faq">
                     <h2>FAQ & Troubleshooting</h2>
 
@@ -1755,6 +2159,37 @@
                                 <p>Check <a href="/settings.html" style="color: var(--accent-success, #00d26a);">Settings &rarr; Logs</a> for any error messages from the backend.</p>
                             </div>
                         </details>
+
+                        <details>
+                            <summary>What is cost basis tracking and P&amp;L?</summary>
+                            <div class="faq-answer">
+                                <p>Cost basis tracking records what you originally paid for each asset so ABCT can calculate your unrealized and realized profit and loss (P&amp;L). You can enter purchase prices and dates manually in the Transactions section.</p>
+                                <p>P&amp;L is calculated as: <code>Current Value &minus; Cost Basis</code>. A positive value means you're in profit; negative means a loss relative to what you paid.</p>
+                            </div>
+                        </details>
+
+                        <details>
+                            <summary>What costing methods are supported (FIFO, LIFO, Average)?</summary>
+                            <div class="faq-answer">
+                                <p>ABCT supports three cost basis accounting methods:</p>
+                                <p>&bull; <strong>FIFO (First In, First Out)</strong> &mdash; The oldest purchases are considered sold first. Most common for tax reporting.<br>
+                                &bull; <strong>LIFO (Last In, First Out)</strong> &mdash; The newest purchases are considered sold first. Can minimize gains when prices rise.<br>
+                                &bull; <strong>Average Cost</strong> &mdash; All purchases are averaged together. Simplest calculation.</p>
+                                <p>The method can be configured per-asset or globally in the P&amp;L settings. Consult a tax professional to determine which method is appropriate for your jurisdiction.</p>
+                            </div>
+                        </details>
+
+                        <details>
+                            <summary>How do I add manual cost basis entries?</summary>
+                            <div class="faq-answer">
+                                <p>Go to the <strong>Transactions</strong> page and use the "Add Entry" button. You can specify:</p>
+                                <p>&bull; Asset and chain<br>
+                                &bull; Purchase date and quantity<br>
+                                &bull; Purchase price (cost basis)<br>
+                                &bull; Transaction type (buy, sell, transfer, airdrop)</p>
+                                <p>Manual entries are combined with automatically-fetched transaction history to calculate your overall P&amp;L. You can also import a CSV file for bulk entry.</p>
+                            </div>
+                        </details>
                     </div>
 
                     <a href="#helpTop" class="back-to-top">&uarr; Back to top</a>
@@ -1764,7 +2199,7 @@
         </div>
 
         <footer style="text-align: center; padding: 20px; margin-top: 20px; color: #888; font-size: 0.875rem;">
-            <p>ABCT - Help & Guide | <span style="opacity: 0.6;">v1.12.3 (BUILD 1771712887)</span></p>
+            <p>ABCT - Help & Guide | <span style="opacity: 0.6;">v1.13.0 (BUILD 1771717923)</span></p>
         </footer>
     </div>
 

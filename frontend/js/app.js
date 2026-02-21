@@ -36,7 +36,7 @@ async function authFetch(url, options = {}) {
 let prices = { ADA: 0, BTC: 0, ETH: 0, SOL: 0, MATIC: 0, BNB: 0, AVAX: 0, TRX: 0 };
 
 // Portfolio totals for calculating total value
-let walletTotals = { ADA: 0, BTC: 0, ETH: 0, SOL: 0, MATIC: 0, ETH_BASE: 0, ALGO: 0, BNB: 0, ETH_ARB: 0, AVAX: 0, TRX: 0, XRP: 0, HBAR: 0, EGLD: 0, SUI: 0, APT: 0, FIL: 0, LTC: 0, DOGE: 0, ZEC: 0, XTZ: 0, STX: 0, VET: 0, ATOM: 0, NEAR: 0, ICP: 0 };
+let walletTotals = { ADA: 0, BTC: 0, ETH: 0, SOL: 0, MATIC: 0, ETH_BASE: 0, ALGO: 0, BNB: 0, ETH_ARB: 0, AVAX: 0, TRX: 0, XRP: 0, HBAR: 0, EGLD: 0, SUI: 0, APT: 0, FIL: 0, LTC: 0, DOGE: 0, ZEC: 0, XTZ: 0, STX: 0, VET: 0, ATOM: 0, NEAR: 0, ICP: 0, ETH_OPT: 0, ETH_ZK: 0, ETH_LINEA: 0, ETH_SCROLL: 0, FTM: 0, CRO: 0, XDAI: 0, GLMR: 0 };
 let stakingTotals = {}; // { 'INDY': 1234.56, 'STRIKE': 789.01, etc. }
 let defiTotals = {}; // DeFi tokens held in wallets (governance tokens, stablecoins, etc.)
 let exchangeTotals = { usd: 0 }; // Total USD value from exchanges
@@ -649,6 +649,14 @@ function getChainAllocations() {
         cosmos:     { label: 'Cosmos',     symbol: 'ATOM', color: '#2e3148', balKey: 'ATOM', priceKey: 'ATOM' },
         near:       { label: 'NEAR',       symbol: 'NEAR', color: '#00c08b', balKey: 'NEAR', priceKey: 'NEAR' },
         icp:        { label: 'ICP',        symbol: 'ICP',  color: '#29abe2', balKey: 'ICP',  priceKey: 'ICP'  },
+        optimism:   { label: 'Optimism',  symbol: 'ETH',  color: '#FF0420', balKey: 'ETH_OPT',    priceKey: 'ETH' },
+        zksync:     { label: 'zkSync',    symbol: 'ETH',  color: '#8C8DFC', balKey: 'ETH_ZK',     priceKey: 'ETH' },
+        linea:      { label: 'Linea',     symbol: 'ETH',  color: '#61DFFF', balKey: 'ETH_LINEA',  priceKey: 'ETH' },
+        scroll:     { label: 'Scroll',    symbol: 'ETH',  color: '#FFEEDA', balKey: 'ETH_SCROLL', priceKey: 'ETH' },
+        fantom:     { label: 'Fantom',    symbol: 'FTM',  color: '#1969FF', balKey: 'FTM',        priceKey: 'FTM' },
+        cronos:     { label: 'Cronos',    symbol: 'CRO',  color: '#002D74', balKey: 'CRO',        priceKey: 'CRO' },
+        gnosis:     { label: 'Gnosis',    symbol: 'xDAI', color: '#3E6957', balKey: 'XDAI',       priceKey: 'DAI' },
+        moonbeam:   { label: 'Moonbeam',  symbol: 'GLMR', color: '#53CBC9', balKey: 'GLMR',       priceKey: 'GLMR' },
     };
 
     for (const [chain, cfg] of Object.entries(chainMap)) {
@@ -4819,7 +4827,42 @@ function renderAllExchanges(exchanges) {
         'okx': 'https://static.okx.com/cdn/assets/imgs/MjAyMQ/C18EFDB60B2E2E21.png',
         'bitget': 'https://www.bitget.com/favicon.ico',
         'gate': 'https://www.gate.io/favicon.ico',
-        'kucoin': 'https://www.kucoin.com/favicon.ico'
+        'kucoin': 'https://www.kucoin.com/favicon.ico',
+        'bybit': 'https://www.bybit.com/favicon.ico',
+        'mexc': 'https://www.mexc.com/favicon.ico',
+        'htx': 'https://www.htx.com/favicon.ico',
+        'bingx': 'https://bingx.com/favicon.ico',
+        'poloniex': 'https://poloniex.com/favicon.ico',
+        'lbank': 'https://www.lbank.info/favicon.ico',
+        'bitmart': 'https://www.bitmart.com/favicon.ico',
+        'whitebit': 'https://whitebit.com/favicon.ico',
+        'coinex': 'https://www.coinex.com/favicon.ico',
+        'bitvavo': 'https://bitvavo.com/favicon.ico',
+        'bitrue': 'https://www.bitrue.com/favicon.ico',
+        'xt': 'https://www.xt.com/favicon.ico',
+        'digifinex': 'https://www.digifinex.com/favicon.ico',
+        'coinw': 'https://www.coinw.com/favicon.ico',
+        'pionex': 'https://www.pionex.com/favicon.ico',
+        'phemex': 'https://phemex.com/favicon.ico',
+        'woox': 'https://woo.org/favicon.ico',
+        'ascendex': 'https://ascendex.com/favicon.ico',
+        'deribit': 'https://www.deribit.com/favicon.ico',
+        'bitflyer': 'https://bitflyer.com/favicon.ico',
+        'gemini': 'https://www.gemini.com/favicon.ico',
+        'bitfinex': 'https://www.bitfinex.com/favicon.ico',
+        'btse': 'https://www.btse.com/favicon.ico',
+        'kraken': 'https://www.kraken.com/favicon.ico',
+        'coinspot': 'https://www.coinspot.com.au/favicon.ico',
+        'cryptocom': 'https://crypto.com/favicon.ico',
+        'bitstamp': 'https://www.bitstamp.net/favicon.ico',
+        'upbit': 'https://upbit.com/favicon.ico',
+        'backpack': 'https://backpack.exchange/favicon.ico',
+        'swyftx': 'https://swyftx.com/favicon.ico',
+        'bitpanda': 'https://www.bitpanda.com/favicon.ico',
+        'robinhood': 'https://robinhood.com/favicon.ico',
+        'hitbtc': 'https://hitbtc.com/favicon.ico',
+        'independentreserve': 'https://www.independentreserve.com/favicon.ico',
+        'probit': 'https://www.probit.com/favicon.ico'
     };
 
     const exchangeNames = {
@@ -4829,7 +4872,42 @@ function renderAllExchanges(exchanges) {
         'okx': 'OKX',
         'bitget': 'Bitget',
         'gate': 'Gate.io',
-        'kucoin': 'KuCoin'
+        'kucoin': 'KuCoin',
+        'bybit': 'Bybit',
+        'mexc': 'MEXC',
+        'htx': 'HTX',
+        'bingx': 'BingX',
+        'poloniex': 'Poloniex',
+        'lbank': 'LBank',
+        'bitmart': 'BitMart',
+        'whitebit': 'WhiteBIT',
+        'coinex': 'CoinEx',
+        'bitvavo': 'Bitvavo',
+        'bitrue': 'Bitrue',
+        'xt': 'XT.com',
+        'digifinex': 'DigiFinex',
+        'coinw': 'CoinW',
+        'pionex': 'Pionex',
+        'phemex': 'Phemex',
+        'woox': 'WOO X',
+        'ascendex': 'AscendEX',
+        'deribit': 'Deribit',
+        'bitflyer': 'BitFlyer',
+        'gemini': 'Gemini',
+        'bitfinex': 'Bitfinex',
+        'btse': 'BTSE',
+        'kraken': 'Kraken',
+        'coinspot': 'CoinSpot',
+        'cryptocom': 'Crypto.com',
+        'bitstamp': 'Bitstamp',
+        'upbit': 'Upbit',
+        'backpack': 'Backpack',
+        'swyftx': 'Swyftx',
+        'bitpanda': 'Bitpanda',
+        'robinhood': 'Robinhood',
+        'hitbtc': 'HitBTC',
+        'independentreserve': 'Independent Reserve',
+        'probit': 'ProBit'
     };
 
     const exchangeFallbacks = {
@@ -4839,7 +4917,42 @@ function renderAllExchanges(exchanges) {
         'okx': 'OKX',
         'bitget': 'BG',
         'gate': 'GT',
-        'kucoin': 'KC'
+        'kucoin': 'KC',
+        'bybit': 'BY',
+        'mexc': 'MX',
+        'htx': 'HTX',
+        'bingx': 'BX',
+        'poloniex': 'PLX',
+        'lbank': 'LB',
+        'bitmart': 'BM',
+        'whitebit': 'WB',
+        'coinex': 'CEX',
+        'bitvavo': 'BV',
+        'bitrue': 'BR',
+        'xt': 'XT',
+        'digifinex': 'DFX',
+        'coinw': 'CW',
+        'pionex': 'PNX',
+        'phemex': 'PHX',
+        'woox': 'WX',
+        'ascendex': 'AEX',
+        'deribit': 'DRB',
+        'bitflyer': 'BFY',
+        'gemini': 'GMN',
+        'bitfinex': 'BFX',
+        'btse': 'BSE',
+        'kraken': 'KRK',
+        'coinspot': 'CS',
+        'cryptocom': 'CDC',
+        'bitstamp': 'BST',
+        'upbit': 'UPB',
+        'backpack': 'BPK',
+        'swyftx': 'SWX',
+        'bitpanda': 'BPD',
+        'robinhood': 'RH',
+        'hitbtc': 'HIT',
+        'independentreserve': 'IR',
+        'probit': 'PRB'
     };
 
     for (const exchange of exchanges) {
