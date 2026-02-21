@@ -4787,6 +4787,112 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     cursor: pointer;
 }
 
+/* Column settings button */
+.column-settings-btn {
+    background: none;
+    border: 1px solid var(--bg-secondary, rgba(255,255,255,0.1));
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 1rem;
+    line-height: 1;
+    transition: color 0.2s, border-color 0.2s;
+}
+.column-settings-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--accent-color, #00d26a);
+}
+
+/* Column settings dropdown panel */
+.column-settings-panel {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 100;
+    background: var(--bg-card, #1a1f2e);
+    border: 1px solid var(--bg-secondary, rgba(255,255,255,0.1));
+    border-radius: 10px;
+    padding: 12px;
+    min-width: 200px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    margin-top: 4px;
+}
+.column-settings-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--bg-secondary, rgba(255,255,255,0.1));
+}
+.column-settings-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.column-settings-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 4px;
+    border-radius: 6px;
+    cursor: default;
+    transition: background 0.15s;
+}
+.column-settings-item:hover {
+    background: rgba(255,255,255,0.05);
+}
+.column-settings-item.dragging {
+    opacity: 0.4;
+}
+.column-settings-item.drag-over {
+    border-top: 2px solid var(--accent-color, #00d26a);
+}
+.column-drag-handle {
+    cursor: grab;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    width: 16px;
+    text-align: center;
+    user-select: none;
+}
+.column-settings-item[draggable="false"] .column-drag-handle {
+    cursor: default;
+    opacity: 0.3;
+}
+.column-settings-label {
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    flex: 1;
+}
+.column-settings-item input[type="checkbox"] {
+    accent-color: var(--accent-color, #00d26a);
+    cursor: pointer;
+}
+.column-settings-item input[type="checkbox"]:disabled {
+    cursor: default;
+    opacity: 0.5;
+}
+.column-settings-reset {
+    margin-top: 8px;
+    padding: 5px 10px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    background: none;
+    border: 1px solid var(--bg-secondary, rgba(255,255,255,0.1));
+    border-radius: 6px;
+    cursor: pointer;
+    width: 100%;
+    transition: color 0.2s, border-color 0.2s;
+}
+.column-settings-reset:hover {
+    color: var(--text-primary);
+    border-color: var(--accent-color, #00d26a);
+}
+
 .holdings-loading {
     display: flex;
     flex-direction: column;
@@ -9626,43 +9732,33 @@ body.privacy-mode a[data-href] {
   DARK MODE THEME - Specific Overrides with Glowing Borders
 ===============================================================================*/
 
-/* Dark mode - Main header with glowing border */
+/* Dark mode - Main header */
 [data-theme="dark-mode"] header {
-    border: 1px solid rgba(0, 210, 106, 0.4);
     border-radius: 16px;
     padding: 20px 24px !important;
-    box-shadow: 0 0 20px rgba(0, 210, 106, 0.2), 0 4px 6px rgba(0, 0, 0, 0.3);
     margin-bottom: 30px;
 }
 
-/* Dark mode - Section headers with glowing borders */
+/* Dark mode - Section headers */
 [data-theme="dark-mode"] .section-header-inline,
 [data-theme="dark-mode"] .collapsible-section .section-header {
-    border: 1px solid rgba(0, 210, 106, 0.4);
     border-radius: 12px;
     padding: 16px 20px;
-    box-shadow: 0 0 15px rgba(0, 210, 106, 0.2), 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 [data-theme="dark-mode"] .summary-header {
-    border: 1px solid rgba(0, 210, 106, 0.4);
     border-radius: 12px;
     padding: 16px 20px;
-    box-shadow: 0 0 15px rgba(0, 210, 106, 0.2), 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 [data-theme="dark-mode"] .history-section .section-header-inline {
-    border: 1px solid rgba(0, 210, 106, 0.4);
     border-radius: 12px;
     padding: 16px 20px;
-    box-shadow: 0 0 15px rgba(0, 210, 106, 0.2), 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 [data-theme="dark-mode"] .page-header {
-    border: 1px solid rgba(0, 210, 106, 0.4);
     border-radius: 12px;
     padding: 16px 20px;
-    box-shadow: 0 0 15px rgba(0, 210, 106, 0.2), 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 /*===============================================================================

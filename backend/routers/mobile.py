@@ -462,6 +462,91 @@ async def get_mobile_portfolio_summary(
     # Sort by value descending
     blockchain_summaries.sort(key=lambda x: x['value_usd'], reverse=True)
 
+    # Build top_holdings: aggregate by symbol (combine same-symbol across chains + staking)
+    symbol_agg = {}
+    for bs in blockchain_summaries:
+        sym = bs['symbol']
+        if sym in symbol_agg:
+            symbol_agg[sym]['value_usd'] += bs['value_usd']
+            symbol_agg[sym]['native_amount'] += bs['native_amount']
+            symbol_agg[sym]['wallet_count'] += bs['wallet_count']
+        else:
+            symbol_agg[sym] = {
+                "name": bs['name'],
+                "symbol": sym,
+                "value_usd": bs['value_usd'],
+                "native_amount": bs['native_amount'],
+                "native_price_usd": bs['native_price_usd'],
+                "price_change_24h": bs['price_change_24h'],
+                "wallet_count": bs['wallet_count'],
+                "percentage": 0,
+            }
+
+    # Merge staking positions into top_holdings (per-token breakdown)
+    try:
+        all_wallets = await get_all_wallets(user_id=user_id)
+        cardano_addrs = [w['address'] for w in all_wallets if w['blockchain'] == 'cardano']
+        if cardano_addrs:
+            staking_caches = await asyncio.gather(*[
+                get_cache(f"staking_positions_{addr}") for addr in cardano_addrs
+            ])
+            for cached in staking_caches:
+                if not cached or not cached.get('protocols'):
+                    continue
+                for protocol_name, protocol_data in cached['protocols'].items():
+                    for stake in (protocol_data.get('staked') or []):
+                        token = (stake.get('token') or 'ADA').upper()
+                        amount = float(stake.get('amount', 0))
+                        price_data = all_prices.get(token, {})
+                        price_usd = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
+                        val = amount * price_usd
+                        if token in symbol_agg:
+                            symbol_agg[token]['value_usd'] += val
+                            symbol_agg[token]['native_amount'] += amount
+                        else:
+                            symbol_agg[token] = {
+                                "name": token.lower(),
+                                "symbol": token,
+                                "value_usd": val,
+                                "native_amount": amount,
+                                "native_price_usd": round(price_usd, 2),
+                                "price_change_24h": round((price_data.get('usd_24h_change', 0) or 0) if isinstance(price_data, dict) else 0, 2),
+                                "wallet_count": 0,
+                                "percentage": 0,
+                            }
+                    # Add pending rewards
+                    reward_token = protocol_data.get('reward_token')
+                    pending = float(protocol_data.get('pending_rewards', 0))
+                    if reward_token and pending > 0:
+                        rt = reward_token.upper()
+                        price_data = all_prices.get(rt, {})
+                        price_usd = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
+                        val = pending * price_usd
+                        if rt in symbol_agg:
+                            symbol_agg[rt]['value_usd'] += val
+                            symbol_agg[rt]['native_amount'] += pending
+                        else:
+                            symbol_agg[rt] = {
+                                "name": rt.lower(),
+                                "symbol": rt,
+                                "value_usd": val,
+                                "native_amount": pending,
+                                "native_price_usd": round(price_usd, 2),
+                                "price_change_24h": round((price_data.get('usd_24h_change', 0) or 0) if isinstance(price_data, dict) else 0, 2),
+                                "wallet_count": 0,
+                                "percentage": 0,
+                            }
+    except Exception as e:
+        logger.debug(f"Could not aggregate staking for top holdings: {e}")
+
+    # Finalize top_holdings
+    top_holdings = list(symbol_agg.values())
+    for h in top_holdings:
+        h['value_usd'] = round(h['value_usd'], 2)
+        h['native_amount'] = round(h['native_amount'], 8)
+        h['percentage'] = round((h['value_usd'] / total_value_usd * 100) if total_value_usd > 0 else 0, 1)
+    top_holdings.sort(key=lambda x: x['value_usd'], reverse=True)
+
     result = {
         "total_value_usd": round(total_value_usd, 2),
         "total_native": native_totals,
@@ -496,6 +581,7 @@ async def get_mobile_portfolio_summary(
             }
         },
         "blockchains": blockchain_summaries,
+        "top_holdings": top_holdings[:8],
         "last_updated": datetime.utcnow().isoformat() + "Z",
         "from_cache": False
     }

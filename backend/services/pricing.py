@@ -361,6 +361,7 @@ class PricingService:
                             'usd_1h_change': coin.get('price_change_percentage_1h_in_currency', 0) or 0,
                             'usd_24h_change': coin.get('price_change_percentage_24h', 0) or 0,
                             'market_cap': coin.get('market_cap', 0) or 0,
+                            'volume_24h': coin.get('total_volume', 0) or 0,
                             'total_supply': coin.get('total_supply'),
                             'circulating_supply': coin.get('circulating_supply'),
                             'max_supply': coin.get('max_supply'),

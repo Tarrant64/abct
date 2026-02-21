@@ -1201,6 +1201,12 @@ async def get_all_holdings(
         # Prefer CoinGecko image (reliable CDN), keep existing logo_url as fallback
         if key in cg_images:
             h['logo_url'] = cg_images[key]
+        # Add market data from price cache
+        price_info = all_prices.get(h['symbol'], {})
+        h['market_cap'] = price_info.get('market_cap', 0) or 0
+        h['volume_24h'] = price_info.get('volume_24h', 0) or 0
+        # Allocation percentage
+        h['allocation_pct'] = round((h['value_usd'] / total_value * 100) if total_value > 0 else 0, 2)
 
     return {
         'holdings': sorted_holdings,

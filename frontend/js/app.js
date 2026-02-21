@@ -8223,12 +8223,8 @@ async function loadV2BalanceHistory(range) {
         let result = cached;
         if (!result) {
             let url;
-            if (range === '24h') {
-                url = `${API_BASE}/portfolio/chart/24h-hourly`;
-            } else {
-                url = `${API_BASE}/portfolio/chart/unified?range=${range}`;
-                if (v2ChartMode === 'by_chain') url += '&by_chain=true';
-            }
+            url = `${API_BASE}/portfolio/chart/unified?range=${range}`;
+            if (v2ChartMode === 'by_chain') url += '&by_chain=true';
 
             const response = await authFetch(url);
             if (!response.ok) {
@@ -9652,11 +9648,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const isNftsPage = !!document.querySelector('.nfts-tab-nav');
 
     if (isOverview) {
-        // OVERVIEW PAGE: Load prices, portfolio summary, then background data
+        // OVERVIEW PAGE: Load prices + snapshot totals first, then portfolio summary
         try {
-            await loadPrices();
+            await Promise.all([
+                loadPrices(),
+                loadPortfolioTotals()  // Must resolve before first updateTotalPortfolioValue()
+            ]);
         } catch (e) {
-            console.error('[Overview] Failed to load prices:', e);
+            console.error('[Overview] Failed to load prices/totals:', e);
         }
         try {
             await loadPortfolioSummary();
@@ -9664,10 +9663,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error('[Overview] Failed to load portfolio summary:', e);
         }
 
-        // Background updates - load exchange data + snapshot totals for staking/defi
+        // Background updates - load exchange data + remaining data
         Promise.allSettled([
             loadExchangeData(),
-            loadPortfolioTotals(),
             loadCustomTokens(),
             loadAllNftSummaries(),
             loadPortfolioAnalytics(true),
@@ -9756,12 +9754,275 @@ let _holdingsSortField = 'value_usd';
 let _holdingsSortAsc = false;
 let _holdingsData = null;
 
+// ========================================
+// ALL ASSETS COLUMN CUSTOMIZATION
+// ========================================
+
+const HOLDINGS_DEFAULT_COLUMNS = [
+    { id: 'name', label: 'Name', sortable: true, fixed: true, visible: true },
+    { id: 'amount', label: 'Amount', sortable: true, visible: true },
+    { id: 'price_change_24h', label: '24h', sortable: true, visible: true },
+    { id: 'sparkline', label: 'Price Graph', sortable: false, visible: true },
+    { id: 'price_usd', label: 'Price', sortable: true, visible: true },
+    { id: 'value_usd', label: 'Total', sortable: true, visible: true },
+    { id: 'market_cap', label: 'MCap', sortable: true, visible: false },
+    { id: 'volume_24h', label: '24h Vol', sortable: true, visible: false },
+    { id: 'allocation_pct', label: 'Alloc %', sortable: true, visible: false },
+];
+
+let _holdingsColumnConfig = null;
+let _holdingsSettingsPanel = null;
+
+function getHoldingsColumnConfig() {
+    if (!_holdingsColumnConfig) {
+        try {
+            const saved = localStorage.getItem('holdingsColumnConfig');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                // Merge with defaults to handle new columns added in updates
+                const savedIds = new Set(parsed.map(c => c.id));
+                const merged = [...parsed];
+                for (const def of HOLDINGS_DEFAULT_COLUMNS) {
+                    if (!savedIds.has(def.id)) merged.push({...def});
+                }
+                // Ensure fixed columns retain their properties
+                for (const col of merged) {
+                    const def = HOLDINGS_DEFAULT_COLUMNS.find(d => d.id === col.id);
+                    if (def) {
+                        col.sortable = def.sortable;
+                        col.fixed = def.fixed || false;
+                        if (col.fixed) col.visible = true;
+                    }
+                }
+                _holdingsColumnConfig = merged;
+            }
+        } catch (e) { /* ignore corrupt localStorage */ }
+        if (!_holdingsColumnConfig) {
+            _holdingsColumnConfig = HOLDINGS_DEFAULT_COLUMNS.map(c => ({...c}));
+        }
+    }
+    return _holdingsColumnConfig;
+}
+
+function saveHoldingsColumnConfig() {
+    localStorage.setItem('holdingsColumnConfig', JSON.stringify(_holdingsColumnConfig));
+}
+
+function _formatCompactNumber(n) {
+    if (!n || n === 0) return '--';
+    if (n >= 1e12) return '$' + (n / 1e12).toFixed(2) + 'T';
+    if (n >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B';
+    if (n >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M';
+    if (n >= 1e3) return '$' + (n / 1e3).toFixed(1) + 'K';
+    return '$' + n.toFixed(2);
+}
+
+function _holdingCellHtml(colId, h) {
+    const symbol = h.symbol || '?';
+    const name = h.name || symbol;
+    const letter = symbol.charAt(0).toUpperCase();
+
+    switch (colId) {
+        case 'name': {
+            const logoUrl = h.logo_url || getLogoKitUrl(symbol);
+            const logoHtml = logoUrl
+                ? `<img src="${logoUrl}" alt="${symbol}" class="holding-logo" data-fallback="${letter}">`
+                : `<div class="holding-logo-fallback">${letter}</div>`;
+            return `<td><div class="holding-name-cell">${logoHtml}<div class="holding-name-text"><span class="holding-ticker">${symbol}</span><span class="holding-full-name">${name}</span></div></div></td>`;
+        }
+        case 'amount': {
+            const amount = h.amount || 0;
+            let amountStr;
+            if (amount >= 1000000) amountStr = (amount / 1000000).toFixed(2) + 'M';
+            else if (amount >= 10000) amountStr = amount.toLocaleString('en-US', { maximumFractionDigits: 2 });
+            else if (amount >= 1) amountStr = amount.toLocaleString('en-US', { maximumFractionDigits: 4 });
+            else amountStr = amount.toLocaleString('en-US', { maximumFractionDigits: 6 });
+            return `<td class="text-right"><span class="holding-amount">${blurValue(amountStr)}</span></td>`;
+        }
+        case 'price_change_24h': {
+            const change = h.price_change_24h || 0;
+            const changeClass = change > 0 ? 'positive' : change < 0 ? 'negative' : 'neutral';
+            const changeSign = change > 0 ? '+' : '';
+            return `<td class="text-right"><span class="holding-change ${changeClass}">${changeSign}${change.toFixed(2)}%</span></td>`;
+        }
+        case 'sparkline':
+            return `<td><div class="holding-sparkline-slot" data-symbol="${symbol}"></div></td>`;
+        case 'price_usd': {
+            const price = h.price_usd || 0;
+            let priceStr;
+            if (price >= 1) priceStr = '$' + price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            else if (price >= 0.01) priceStr = '$' + price.toFixed(4);
+            else if (price > 0) priceStr = '$' + price.toFixed(6);
+            else priceStr = '--';
+            return `<td class="text-right"><span class="holding-price">${blurValue(priceStr)}</span></td>`;
+        }
+        case 'value_usd':
+            return `<td class="text-right"><span class="holding-total">${blurValue(formatUSD(h.value_usd || 0))}</span></td>`;
+        case 'market_cap':
+            return `<td class="text-right">${_formatCompactNumber(h.market_cap)}</td>`;
+        case 'volume_24h':
+            return `<td class="text-right">${_formatCompactNumber(h.volume_24h)}</td>`;
+        case 'allocation_pct': {
+            const pct = h.allocation_pct || 0;
+            return `<td class="text-right">${pct > 0 ? pct.toFixed(2) + '%' : '--'}</td>`;
+        }
+        default:
+            return '<td>--</td>';
+    }
+}
+
+// Settings panel (created programmatically to avoid DOMPurify issues)
+function toggleHoldingsSettings() {
+    if (_holdingsSettingsPanel) {
+        _holdingsSettingsPanel.remove();
+        _holdingsSettingsPanel = null;
+        return;
+    }
+    const btn = document.getElementById('holdingsSettingsBtn');
+    if (!btn) return;
+    _holdingsSettingsPanel = _createHoldingsSettingsPanel();
+    btn.parentElement.appendChild(_holdingsSettingsPanel);
+
+    // Close on outside click
+    const closeHandler = (e) => {
+        if (_holdingsSettingsPanel && !_holdingsSettingsPanel.contains(e.target) && e.target !== btn) {
+            _holdingsSettingsPanel.remove();
+            _holdingsSettingsPanel = null;
+            document.removeEventListener('click', closeHandler);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closeHandler), 0);
+}
+
+function _createHoldingsSettingsPanel() {
+    const config = getHoldingsColumnConfig();
+    const panel = document.createElement('div');
+    panel.className = 'column-settings-panel';
+
+    const title = document.createElement('div');
+    title.className = 'column-settings-title';
+    title.textContent = 'Columns';
+    panel.appendChild(title);
+
+    const list = document.createElement('div');
+    list.className = 'column-settings-list';
+
+    let dragSrcEl = null;
+
+    config.forEach((col, idx) => {
+        const item = document.createElement('div');
+        item.className = 'column-settings-item';
+        item.draggable = !col.fixed;
+        item.dataset.colIdx = idx;
+
+        // Drag handle
+        const handle = document.createElement('span');
+        handle.className = 'column-drag-handle';
+        handle.textContent = col.fixed ? '' : '⠿';
+        item.appendChild(handle);
+
+        // Checkbox
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = col.visible;
+        cb.disabled = col.fixed;
+        cb.addEventListener('change', () => {
+            col.visible = cb.checked;
+            saveHoldingsColumnConfig();
+            _rerenderHoldings();
+        });
+        item.appendChild(cb);
+
+        // Label
+        const label = document.createElement('span');
+        label.className = 'column-settings-label';
+        label.textContent = col.label;
+        item.appendChild(label);
+
+        // Drag events (only for non-fixed columns)
+        if (!col.fixed) {
+            item.addEventListener('dragstart', (e) => {
+                dragSrcEl = item;
+                item.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            item.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                const target = e.currentTarget;
+                if (target !== dragSrcEl && !config[target.dataset.colIdx]?.fixed) {
+                    target.classList.add('drag-over');
+                }
+            });
+            item.addEventListener('dragleave', (e) => {
+                e.currentTarget.classList.remove('drag-over');
+            });
+            item.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.currentTarget.classList.remove('drag-over');
+                if (dragSrcEl === item) return;
+                const fromIdx = parseInt(dragSrcEl.dataset.colIdx);
+                const toIdx = parseInt(item.dataset.colIdx);
+                if (config[toIdx]?.fixed) return;
+                // Reorder config array
+                const [moved] = _holdingsColumnConfig.splice(fromIdx, 1);
+                _holdingsColumnConfig.splice(toIdx, 0, moved);
+                saveHoldingsColumnConfig();
+                // Rebuild the panel and re-render table
+                const parent = panel.parentElement;
+                panel.remove();
+                _holdingsSettingsPanel = _createHoldingsSettingsPanel();
+                parent.appendChild(_holdingsSettingsPanel);
+                _rerenderHoldings();
+            });
+            item.addEventListener('dragend', () => {
+                item.classList.remove('dragging');
+                list.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+            });
+        }
+
+        list.appendChild(item);
+    });
+
+    panel.appendChild(list);
+
+    // Reset button
+    const resetBtn = document.createElement('button');
+    resetBtn.className = 'column-settings-reset';
+    resetBtn.textContent = 'Reset to defaults';
+    resetBtn.addEventListener('click', () => {
+        _holdingsColumnConfig = HOLDINGS_DEFAULT_COLUMNS.map(c => ({...c}));
+        saveHoldingsColumnConfig();
+        const parent = panel.parentElement;
+        panel.remove();
+        _holdingsSettingsPanel = _createHoldingsSettingsPanel();
+        parent.appendChild(_holdingsSettingsPanel);
+        _rerenderHoldings();
+    });
+    panel.appendChild(resetBtn);
+
+    return panel;
+}
+
+function _rerenderHoldings() {
+    if (!_holdingsData) return;
+    const body = document.getElementById('holdingsOverviewBody');
+    if (body) renderAllHoldings(_holdingsData.holdings, body);
+}
+
 async function loadAllHoldings() {
     const section = document.getElementById('holdingsOverviewSection');
     if (!section) return;
 
     const body = document.getElementById('holdingsOverviewBody');
     const loading = document.getElementById('holdingsLoading');
+
+    // Attach settings button handler
+    const settingsBtn = document.getElementById('holdingsSettingsBtn');
+    if (settingsBtn && !settingsBtn._listenerAdded) {
+        settingsBtn.addEventListener('click', toggleHoldingsSettings);
+        settingsBtn._listenerAdded = true;
+    }
 
     try {
         if (loading) loading.style.display = 'flex';
@@ -9805,6 +10066,9 @@ function renderAllHoldings(holdings, container) {
         return;
     }
 
+    // Get visible columns from config
+    const columns = getHoldingsColumnConfig().filter(c => c.visible);
+
     // Sort
     const sorted = [...filtered].sort((a, b) => {
         let va, vb;
@@ -9813,23 +10077,13 @@ function renderAllHoldings(holdings, container) {
                 va = (a.symbol || '').toLowerCase();
                 vb = (b.symbol || '').toLowerCase();
                 return _holdingsSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
-            case 'amount':
-                va = a.amount || 0;
-                vb = b.amount || 0;
-                break;
-            case 'price_change_24h':
-                va = a.price_change_24h || 0;
-                vb = b.price_change_24h || 0;
-                break;
-            case 'price_usd':
-                va = a.price_usd || 0;
-                vb = b.price_usd || 0;
-                break;
-            case 'value_usd':
-            default:
-                va = a.value_usd || 0;
-                vb = b.value_usd || 0;
-                break;
+            case 'amount': va = a.amount || 0; vb = b.amount || 0; break;
+            case 'price_change_24h': va = a.price_change_24h || 0; vb = b.price_change_24h || 0; break;
+            case 'price_usd': va = a.price_usd || 0; vb = b.price_usd || 0; break;
+            case 'market_cap': va = a.market_cap || 0; vb = b.market_cap || 0; break;
+            case 'volume_24h': va = a.volume_24h || 0; vb = b.volume_24h || 0; break;
+            case 'allocation_pct': va = a.allocation_pct || 0; vb = b.allocation_pct || 0; break;
+            case 'value_usd': default: va = a.value_usd || 0; vb = b.value_usd || 0; break;
         }
         return _holdingsSortAsc ? va - vb : vb - va;
     });
@@ -9840,89 +10094,32 @@ function renderAllHoldings(holdings, container) {
     };
     const cls = (field) => _holdingsSortField === field ? 'sorted' : '';
 
+    // Build header from column config
+    let headerHtml = '';
+    for (const col of columns) {
+        const align = col.id === 'name' ? '' : 'text-right';
+        const sortAttr = col.sortable ? `data-sort="${col.id}"` : 'data-sort=""';
+        const sortCls = col.sortable ? cls(col.id) : '';
+        const sortArrow = col.sortable ? ' ' + arrow(col.id) : '';
+        headerHtml += `<th class="${`${align} ${sortCls}`.trim()}" ${sortAttr}>${col.label}${sortArrow}</th>`;
+    }
+
     let html = `
         <div class="assets-table-wrapper">
             <table class="holdings-overview-table">
-                <thead>
-                    <tr>
-                        <th class="${cls('name')}" data-sort="name">Name ${arrow('name')}</th>
-                        <th class="text-right ${cls('amount')}" data-sort="amount">Amount ${arrow('amount')}</th>
-                        <th class="text-right ${cls('price_change_24h')}" data-sort="price_change_24h">24h ${arrow('price_change_24h')}</th>
-                        <th data-sort="">Price Graph</th>
-                        <th class="text-right ${cls('price_usd')}" data-sort="price_usd">Price ${arrow('price_usd')}</th>
-                        <th class="text-right ${cls('value_usd')}" data-sort="value_usd">Total ${arrow('value_usd')}</th>
-                    </tr>
-                </thead>
+                <thead><tr>${headerHtml}</tr></thead>
                 <tbody>`;
 
+    // Build rows from column config
     for (const h of sorted) {
-        const symbol = h.symbol || '?';
-        const name = h.name || symbol;
-        const letter = symbol.charAt(0).toUpperCase();
-        // Prefer backend logo (CoinGecko CDN), fall back to LogoKit
-        const logoUrl = h.logo_url || getLogoKitUrl(symbol);
-        const amount = h.amount || 0;
-        const price = h.price_usd || 0;
-        const value = h.value_usd || 0;
-        const change = h.price_change_24h || 0;
-
-        const changeClass = change > 0 ? 'positive' : change < 0 ? 'negative' : 'neutral';
-        const changeSign = change > 0 ? '+' : '';
-
-        // Format amount
-        let amountStr;
-        if (amount >= 1000000) {
-            amountStr = (amount / 1000000).toFixed(2) + 'M';
-        } else if (amount >= 10000) {
-            amountStr = amount.toLocaleString('en-US', { maximumFractionDigits: 2 });
-        } else if (amount >= 1) {
-            amountStr = amount.toLocaleString('en-US', { maximumFractionDigits: 4 });
-        } else {
-            amountStr = amount.toLocaleString('en-US', { maximumFractionDigits: 6 });
+        html += '<tr>';
+        for (const col of columns) {
+            html += _holdingCellHtml(col.id, h);
         }
-
-        // Format price
-        let priceStr;
-        if (price >= 1) {
-            priceStr = '$' + price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        } else if (price >= 0.01) {
-            priceStr = '$' + price.toFixed(4);
-        } else if (price > 0) {
-            priceStr = '$' + price.toFixed(6);
-        } else {
-            priceStr = '--';
-        }
-
-        const valueStr = formatUSD(value);
-
-        // Logo: image with data-fallback for error handling after setSafeHTML
-        const logoHtml = logoUrl
-            ? `<img src="${logoUrl}" alt="${symbol}" class="holding-logo" data-fallback="${letter}">`
-            : `<div class="holding-logo-fallback">${letter}</div>`;
-
-        html += `
-                    <tr>
-                        <td>
-                            <div class="holding-name-cell">
-                                ${logoHtml}
-                                <div class="holding-name-text">
-                                    <span class="holding-ticker">${symbol}</span>
-                                    <span class="holding-full-name">${name}</span>
-                                </div>
-                            </div>
-                        </td>
-                        <td class="text-right"><span class="holding-amount">${blurValue(amountStr)}</span></td>
-                        <td class="text-right"><span class="holding-change ${changeClass}">${changeSign}${change.toFixed(2)}%</span></td>
-                        <td><div class="holding-sparkline-slot" data-symbol="${symbol}"></div></td>
-                        <td class="text-right"><span class="holding-price">${blurValue(priceStr)}</span></td>
-                        <td class="text-right"><span class="holding-total">${blurValue(valueStr)}</span></td>
-                    </tr>`;
+        html += '</tr>';
     }
 
-    html += `
-                </tbody>
-            </table>
-        </div>`;
+    html += '</tbody></table></div>';
 
     setSafeHTML(container, html);
 

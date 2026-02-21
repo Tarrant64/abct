@@ -140,7 +140,6 @@
 
                 <!-- Range controls -->
                 <div class="history-range-selector" id="v2RangeSelector">
-                    <button class="range-btn v2-range" data-range="24h" onclick="loadV2BalanceHistory('24h')">24H</button>
                     <button class="range-btn v2-range active" data-range="1w" onclick="loadV2BalanceHistory('1w')">1W</button>
                     <button class="range-btn v2-range" data-range="1m" onclick="loadV2BalanceHistory('1m')">1M</button>
                     <button class="range-btn v2-range" data-range="3m" onclick="loadV2BalanceHistory('3m')">3M</button>
@@ -183,9 +182,12 @@
             <section class="holdings-overview-section" id="holdingsOverviewSection">
                 <div class="section-header-inline">
                     <h2>All Assets</h2>
-                    <label class="toggle-label" id="zeroBalanceToggle" style="display:none;">
-                        <input type="checkbox" id="showZeroBalances"> Show zero balances
-                    </label>
+                    <div style="display:flex;align-items:center;gap:10px;position:relative;">
+                        <button class="column-settings-btn" id="holdingsSettingsBtn" title="Column settings">&#9881;</button>
+                        <label class="toggle-label" id="zeroBalanceToggle" style="display:none;">
+                            <input type="checkbox" id="showZeroBalances"> Show zero balances
+                        </label>
+                    </div>
                 </div>
                 <div id="holdingsOverviewBody">
                     <div class="holdings-loading" id="holdingsLoading">
