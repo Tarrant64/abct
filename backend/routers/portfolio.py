@@ -960,8 +960,11 @@ _PRICE_SYMBOL = {
 }
 
 
-async def _fetch_sparklines(symbols: list) -> dict:
-    """Fetch 7-day sparkline data from CoinGecko for multiple coins."""
+async def _fetch_sparklines_and_images(symbols: list) -> tuple[dict, dict]:
+    """Fetch 7-day sparkline data AND image URLs from CoinGecko for multiple coins.
+
+    Returns (sparklines_dict, images_dict).
+    """
     from services.pricing import ASSET_TO_COINGECKO
     from services.http_client import get_client
 
@@ -974,9 +977,8 @@ async def _fetch_sparklines(symbols: list) -> dict:
             symbol_to_id[sym] = cg_id
 
     if not symbol_to_id:
-        return {}
+        return {}, {}
 
-    id_to_symbol = {v: k for k, v in symbol_to_id.items()}
     cg_ids = list(set(symbol_to_id.values()))
 
     try:
@@ -992,23 +994,24 @@ async def _fetch_sparklines(symbols: list) -> dict:
             }
         )
         if response.status_code == 200:
-            result = {}
+            sparklines = {}
+            images = {}
             for coin in response.json():
                 sparkline = coin.get('sparkline_in_7d', {}).get('price', [])
-                if sparkline:
-                    # Downsample to ~50 points for compact response
-                    step = max(1, len(sparkline) // 50)
-                    sampled = sparkline[::step]
-                    # Map CoinGecko ID back to all symbols that use it
-                    for sym, cg_id in symbol_to_id.items():
-                        if cg_id == coin['id']:
-                            result[sym] = sampled
-            return result
+                image_url = coin.get('image', '')
+                for sym, cg_id in symbol_to_id.items():
+                    if cg_id == coin['id']:
+                        if sparkline:
+                            step = max(1, len(sparkline) // 50)
+                            sparklines[sym] = sparkline[::step]
+                        if image_url:
+                            images[sym] = image_url
+            return sparklines, images
         else:
             logger.warning(f"CoinGecko sparkline fetch returned {response.status_code}")
     except Exception as e:
         logger.warning(f"Failed to fetch sparklines: {e}")
-    return {}
+    return {}, {}
 
 
 def _merge_holding(holdings: dict, key: str, amount: float, price: float,
@@ -1190,11 +1193,14 @@ async def get_all_holdings(
 
     total_value = sum(h.get('value_usd', 0) for h in sorted_holdings)
 
-    # Fetch sparklines for all symbols
-    sparklines = await _fetch_sparklines(list(holdings.keys()))
+    # Fetch sparklines + CoinGecko image URLs
+    sparklines, cg_images = await _fetch_sparklines_and_images(list(holdings.keys()))
     for h in sorted_holdings:
         key = next((k for k, v in holdings.items() if v is h), h['symbol'])
         h['sparkline_7d'] = sparklines.get(key, [])
+        # Prefer CoinGecko image (reliable CDN), keep existing logo_url as fallback
+        if key in cg_images:
+            h['logo_url'] = cg_images[key]
 
     return {
         'holdings': sorted_holdings,
