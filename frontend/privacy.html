@@ -6,11 +6,11 @@
     <title>Privacy & ZK | ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771792479">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771793607">
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1771792479"></script>
+    <script src="/static/js/session-auth.js?v=1771793607"></script>
     <style>
         /* ========== Privacy Page Layout ========== */
         .privacy-page {
@@ -843,69 +843,33 @@
     </style>
 </head>
 <body>
-    <div class="privacy-page">
+    <div class="container">
         <header>
-            <h1><a href="/" style="color: inherit; text-decoration: none;">A Better Crypto Tracker</a></h1>
-            <div class="header-actions">
-                <button id="privacyBtn" class="btn btn-privacy" onclick="togglePrivacyMode()" title="Toggle privacy mode">
-                    Privacy Mode
-                </button>
-                <div class="waffle-menu-container">
-                    <button class="waffle-menu-btn" onclick="toggleWaffleMenu()" title="Menu">
-                        <span class="waffle-icon">
-                            <span></span><span></span><span></span>
-                            <span></span><span></span><span></span>
-                            <span></span><span></span><span></span>
-                        </span>
+            <nav class="main-nav">
+                <a href="/" class="nav-item">Overview</a>
+                <a href="/assets.html" class="nav-item">Assets</a>
+                <a href="/nfts.html" class="nav-item">NFTs</a>
+                <a href="/data.html" class="nav-item">Data &amp; Analytics</a>
+                <a href="/privacy.html" class="nav-item active">Privacy &amp; ZK</a>
+            </nav>
+            <div class="header-right-controls">
+                <div class="user-avatar-container">
+                    <button class="user-avatar-btn" onclick="toggleUserMenu()">
+                        <div class="avatar-circle" id="userAvatar">?</div>
                     </button>
-                    <div class="waffle-menu-dropdown" id="waffleMenu">
-                        <a href="/" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128200;</span>
-                            <span class="waffle-item-label">Dashboard</span>
-                        </a>
-                        <a href="/wallets.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128176;</span>
-                            <span class="waffle-item-label">Manage Wallets</span>
-                        </a>
-                        <a href="/transactions.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128260;</span>
-                            <span class="waffle-item-label">Transactions</span>
-                        </a>
-                        <a href="/apis.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128273;</span>
-                            <span class="waffle-item-label">APIs</span>
-                        </a>
-                        <a href="/services.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#9881;</span>
-                            <span class="waffle-item-label">Services</span>
-                        </a>
-                        <a href="/system.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128295;</span>
-                            <span class="waffle-item-label">Settings</span>
-                        </a>
-                        <a href="/cache.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128452;</span>
-                            <span class="waffle-item-label">Cache Management</span>
-                        </a>
-                        <a href="/nft-wall.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128444;</span>
-                            <span class="waffle-item-label">NFT Wall</span>
-                        </a>
-                        <a href="/logs.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#128221;</span>
-                            <span class="waffle-item-label">System Logs</span>
-                        </a>
-                        <a href="/help.html" class="waffle-menu-item">
-                            <span class="waffle-item-icon">&#10067;</span>
-                            <span class="waffle-item-label">Help & Guide</span>
-                        </a>
-                        <a href="/privacy.html" class="waffle-menu-item active">
-                            <span class="waffle-item-icon">&#128274;</span>
-                            <span class="waffle-item-label">Privacy & ZK</span>
-                        </a>
-                        <div class="waffle-menu-divider"></div>
-                        <div class="waffle-menu-theme">
-                            <span class="waffle-item-icon">&#127912;</span>
+                    <div class="user-menu-dropdown" id="userMenu">
+                        <div class="user-menu-header">
+                            <span id="userMenuName">User</span>
+                        </div>
+                        <div class="user-menu-divider"></div>
+                        <a href="/settings.html" class="user-menu-item">Settings</a>
+                        <a href="/help.html" class="user-menu-item">Help &amp; Guide</a>
+                        <div class="user-menu-divider"></div>
+                        <button class="user-menu-item" onclick="togglePrivacyMode()">
+                            Privacy Mode <span class="privacy-indicator" id="privacyIndicator">OFF</span>
+                        </button>
+                        <div class="user-menu-theme-row">
+                            <span>Theme</span>
                             <select id="themeSelect" onchange="changeTheme(this.value)" title="Select theme">
                                 <option value="dark-mode">Dark Mode</option>
                                 <option value="light">Light</option>
@@ -917,6 +881,9 @@
                                 <option value="cypher3">Cypher3</option>
                             </select>
                         </div>
+                        <div class="user-menu-divider"></div>
+                        <button class="user-menu-item" id="changePasswordMenuItem" onclick="showChangePasswordModal()">Change Password</button>
+                        <button class="user-menu-item user-menu-logout" onclick="logout()">Logout</button>
                     </div>
                 </div>
             </div>
@@ -1176,7 +1143,7 @@
             </div>
         </div>
 
-    </div><!-- /.privacy-page -->
+    </div><!-- /.container -->
 
     <!-- Monero Balance Modal -->
     <div class="privacy-modal-overlay" id="xmrBalanceModal">
@@ -1194,10 +1161,10 @@
     </div>
 
     <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
-        <p>ABCT - Privacy &amp; ZK | <span style="opacity: 0.6;">v1.15.0 (BUILD 1771792479)</span></p>
+        <p>ABCT - Privacy &amp; ZK | <span style="opacity: 0.6;">v1.15.1 (BUILD 1771793607)</span></p>
     </footer>
 
-    <script src="/static/js/app.js?v=1771792479"></script>
+    <script src="/static/js/app.js?v=1771793607"></script>
 
     <script>
         // ============================================================
