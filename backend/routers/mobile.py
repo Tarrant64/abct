@@ -141,6 +141,7 @@ async def _fetch_asset_sparklines(symbols: list, max_points: int = 24) -> dict:
     """Fetch 7-day sparkline price data from CoinGecko for a list of symbols.
 
     Returns dict mapping symbol -> {sparkline_7d, sparkline_24h, cg_image_url}.
+    When max_points=0, only fetches images (no sparkline data) for lighter payload.
     """
     from services.pricing import ASSET_TO_COINGECKO
     from services.http_client import get_client
@@ -156,15 +157,16 @@ async def _fetch_asset_sparklines(symbols: list, max_points: int = 24) -> dict:
 
     try:
         client = get_client("coingecko", timeout=30.0)
+        params = {
+            "vs_currency": "usd",
+            "ids": ",".join(set(symbol_to_id.values())),
+            "sparkline": "true" if max_points > 0 else "false",
+            "per_page": 250,
+            "page": 1
+        }
         response = await client.get(
             "https://api.coingecko.com/api/v3/coins/markets",
-            params={
-                "vs_currency": "usd",
-                "ids": ",".join(set(symbol_to_id.values())),
-                "sparkline": "true",
-                "per_page": 250,
-                "page": 1
-            }
+            params=params
         )
         if response.status_code != 200:
             return {}
@@ -172,7 +174,8 @@ async def _fetch_asset_sparklines(symbols: list, max_points: int = 24) -> dict:
         sparklines = {}
         for coin in response.json():
             raw = coin.get('sparkline_in_7d', {}).get('price', [])
-            cg_image_url = coin.get('image', '')
+            # Use small (120px) image instead of large (250px) — much faster on watchOS
+            cg_image_url = (coin.get('image', '') or '').replace('/large/', '/small/')
             if not raw:
                 # Still capture the image URL even without sparkline data
                 for sym, cg_id in symbol_to_id.items():
@@ -615,9 +618,13 @@ async def get_mobile_portfolio_summary(
         h['percentage'] = round((h['value_usd'] / total_value_usd * 100) if total_value_usd > 0 else 0, 1)
     top_holdings.sort(key=lambda x: x['value_usd'], reverse=True)
 
-    # Fetch 7-day sparkline data for top holdings (for watchOS charts)
-    top_symbols = [h['symbol'] for h in top_holdings[:8]]
+    # Fetch 7-day sparkline data + CoinGecko images for top holdings (for watchOS)
+    # Sparklines for top 8 (heavy data), images for all (lightweight)
+    all_symbols = [h['symbol'] for h in top_holdings]
+    top_symbols = all_symbols[:8]
+    remaining_symbols = all_symbols[8:]
     try:
+        # Fetch sparklines + images for top 8 (single CoinGecko call)
         sparklines = await _fetch_asset_sparklines(top_symbols)
         for h in top_holdings[:8]:
             asset_data = sparklines.get(h['symbol'], {})
@@ -626,6 +633,15 @@ async def get_mobile_portfolio_summary(
             cg_url = asset_data.get('cg_image_url', '')
             if cg_url:
                 h['watch_image_url'] = cg_url
+
+        # Fetch images for remaining holdings (no sparkline needed)
+        if remaining_symbols:
+            extra_images = await _fetch_asset_sparklines(remaining_symbols, max_points=0)
+            for h in top_holdings[8:]:
+                asset_data = extra_images.get(h['symbol'], {})
+                cg_url = asset_data.get('cg_image_url', '')
+                if cg_url:
+                    h['watch_image_url'] = cg_url
     except Exception as e:
         logger.debug(f"Could not fetch sparklines for top holdings: {e}")
 
