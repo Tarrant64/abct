@@ -7,7 +7,7 @@ This ensures session state is shared across multiple uvicorn worker processes.
 
 from typing import Optional
 from datetime import datetime
-from fastapi import HTTPException, Header
+from fastapi import HTTPException, Header, Query
 import os
 
 
@@ -130,3 +130,38 @@ async def verify_session_optional(authorization: Optional[str] = Header(None)) -
     except Exception:
         # On any error, just return None (not authenticated)
         return None
+
+
+async def verify_session_sse(
+    authorization: Optional[str] = Header(None),
+    token: Optional[str] = Query(None)
+) -> int:
+    """Verify session for SSE endpoints that use EventSource.
+    EventSource can't send headers, so also accepts token as query param."""
+    from database import get_session, cleanup_expired_sessions
+
+    actual_token = None
+    if authorization and authorization.startswith("Bearer "):
+        actual_token = authorization[7:]
+    elif token:
+        actual_token = token
+
+    if not actual_token:
+        if not is_auth_required():
+            return 1
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    await cleanup_expired_sessions()
+    session_data = await get_session(actual_token)
+    if not session_data:
+        if not is_auth_required():
+            return 1
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+    expires_at = datetime.fromisoformat(session_data['expires_at'])
+    if expires_at < datetime.utcnow():
+        if not is_auth_required():
+            return 1
+        raise HTTPException(status_code=401, detail="Session expired")
+
+    return session_data['user_id']

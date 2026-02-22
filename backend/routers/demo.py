@@ -7,15 +7,15 @@ Provides endpoints for:
 - Getting population progress
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Header, Query
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator
 import json
 import asyncio
 import logging
 import aiosqlite
 
-from auth_utils import verify_session, is_auth_required
+from auth_utils import verify_session, verify_session_sse
 from middleware.demo_mode import is_demo_user
 from services.demo_populator import (
     demo_populator,
@@ -112,43 +112,6 @@ async def get_population_progress(user_id: int = Depends(verify_session)):
         "status": progress["status"],
         "current_step": progress["current_step"]
     }
-
-
-async def verify_session_sse(
-    authorization: Optional[str] = Header(None),
-    token: Optional[str] = Query(None)
-) -> int:
-    """Verify session for SSE endpoints. EventSource can't send headers,
-    so we also accept the token as a query parameter."""
-    from database import get_session, cleanup_expired_sessions
-    from datetime import datetime
-
-    # Determine the actual token: header takes priority, then query param
-    actual_token = None
-    if authorization and authorization.startswith("Bearer "):
-        actual_token = authorization[7:]
-    elif token:
-        actual_token = token
-
-    if not actual_token:
-        if not is_auth_required():
-            return 1
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-    await cleanup_expired_sessions()
-    session_data = await get_session(actual_token)
-    if not session_data:
-        if not is_auth_required():
-            return 1
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-
-    expires_at = datetime.fromisoformat(session_data['expires_at'])
-    if expires_at < datetime.utcnow():
-        if not is_auth_required():
-            return 1
-        raise HTTPException(status_code=401, detail="Session expired")
-
-    return session_data['user_id']
 
 
 @router.get("/populate/stream")

@@ -4,7 +4,7 @@ Pricing API Endpoints
 Provides current cryptocurrency prices from CoinGecko.
 """
 
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Depends
 import sys
 import os
 import httpx
@@ -14,6 +14,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.pricing import pricing_service
 from services.http_client import get_client
+from auth_utils import verify_session, verify_session_sse
 
 router = APIRouter(prefix="/prices", tags=["prices"])
 logger = logging.getLogger(__name__)
@@ -23,7 +24,7 @@ _global_market_cache = {"data": None, "timestamp": 0}
 
 
 @router.get("")
-async def get_prices():
+async def get_prices(_user_id: int = Depends(verify_session)):
     """
     Get current USD prices for main cryptocurrencies (ADA, BTC, ETH, SOL, MATIC).
     Prices are cached for 5 minutes to respect rate limits.
@@ -37,7 +38,7 @@ async def get_prices():
 
 
 @router.get("/all")
-async def get_all_prices():
+async def get_all_prices(_user_id: int = Depends(verify_session)):
     """
     Get prices for all tracked assets including DeFi tokens.
     """
@@ -50,7 +51,7 @@ async def get_all_prices():
 
 
 @router.get("/search/{query}")
-async def search_token(query: str):
+async def search_token(query: str, _user_id: int = Depends(verify_session)):
     """
     Search for a cryptocurrency by ticker or name using CoinGecko.
     Returns price data if found.
@@ -144,7 +145,7 @@ async def search_token(query: str):
 
 
 @router.get("/global")
-async def get_global_market():
+async def get_global_market(_user_id: int = Depends(verify_session)):
     """
     Get global crypto market cap and 24h change percentage.
     Tries CMC first (saves CoinGecko calls), falls back to CoinGecko.
@@ -220,7 +221,7 @@ async def get_global_market():
 
 
 @router.get("/trending")
-async def get_trending():
+async def get_trending(_user_id: int = Depends(verify_session)):
     """Get trending coins."""
     trending = await pricing_service.get_trending_coins()
     return {"coins": trending, "source": "CoinGecko"}
@@ -230,7 +231,8 @@ async def get_trending():
 async def get_top_movers(
     min_change: float = 3.0,
     min_mcap: float = 100_000_000,
-    limit: int = 15
+    limit: int = 15,
+    _user_id: int = Depends(verify_session)
 ):
     """
     Get top movers in last 24h: coins with >min_change% absolute price change
@@ -291,7 +293,7 @@ async def get_top_movers(
 
 
 @router.get("/stream/cardano")
-async def stream_cardano_prices():
+async def stream_cardano_prices(_user_id: int = Depends(verify_session_sse)):
     """
     SSE endpoint for live Cardano token prices via Charli3 streaming.
     Falls back to polling if Charli3 streaming is unavailable.
@@ -346,7 +348,7 @@ async def stream_cardano_prices():
 
 
 @router.get("/{symbol}")
-async def get_price(symbol: str):
+async def get_price(symbol: str, _user_id: int = Depends(verify_session)):
     """
     Get current USD price for a specific cryptocurrency.
     """

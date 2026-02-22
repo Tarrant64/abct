@@ -307,7 +307,8 @@ let _cardanoPriceStream = null;
 function initCardanoPriceStream() {
     if (_cardanoPriceStream) return;
     try {
-        _cardanoPriceStream = new EventSource(`${API_BASE}/prices/stream/cardano`);
+        const _sseToken = localStorage.getItem('abct_token');
+        _cardanoPriceStream = new EventSource(`${API_BASE}/prices/stream/cardano${_sseToken ? '?token=' + encodeURIComponent(_sseToken) : ''}`);
         _cardanoPriceStream.onmessage = function(event) {
             try {
                 const data = JSON.parse(event.data);
