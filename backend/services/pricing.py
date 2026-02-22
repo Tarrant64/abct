@@ -58,18 +58,48 @@ ASSET_TO_COINGECKO = {
     'XER': 'xerberus',
     'NIGHT': 'midnight-3',
     'FLOW': 'flow-lending',
-    # New chain native tokens
+    # Chain native tokens
     'XRP': 'ripple',
     'HBAR': 'hedera-hashgraph',
     'EGLD': 'elrond-erd-2',
     'SUI': 'sui',
     'APT': 'aptos',
     'FIL': 'filecoin',
-    # Existing chains missing from map
     'BNB': 'binancecoin',
     'AVAX': 'avalanche-2',
     'TRX': 'tron',
     'LINK': 'chainlink',
+    'HNT': 'helium',
+    'LTC': 'litecoin',
+    'DOGE': 'dogecoin',
+    'ZEC': 'zcash',
+    'DOT': 'polkadot',
+    'KSM': 'kusama',
+    'NEAR': 'near',
+    'ICP': 'internet-computer',
+    'TON': 'the-open-network',
+    'XTZ': 'tezos',
+    'XLM': 'stellar',
+    'VET': 'vechain',
+    'VTHO': 'vethor-token',
+    'STX': 'blockstack',
+    'KAS': 'kaspa',
+    'ERG': 'ergo',
+    'KLAY': 'klay-token',
+    'ARB': 'arbitrum',
+    'MINA': 'mina-protocol',
+    'ZIL': 'zilliqa',
+    'WAVES': 'waves',
+    'IOTA': 'iota',
+    'MOBILE': 'helium-mobile',
+    # Cosmos ecosystem
+    'ATOM': 'cosmos',
+    'OSMO': 'osmosis',
+    'TIA': 'celestia',
+    'INJ': 'injective-protocol',
+    'SEI': 'sei-network',
+    'AKT': 'akash-network',
+    'DYDX': 'dydx-chain',
 }
 
 # Map our asset names to CoinMarketCap symbols
@@ -97,6 +127,36 @@ ASSET_TO_CMC = {
     'AVAX': 'AVAX',
     'TRX': 'TRX',
     'LINK': 'LINK',
+    'HNT': 'HNT',
+    'LTC': 'LTC',
+    'DOGE': 'DOGE',
+    'ZEC': 'ZEC',
+    'DOT': 'DOT',
+    'KSM': 'KSM',
+    'NEAR': 'NEAR',
+    'ICP': 'ICP',
+    'TON': 'TON',
+    'XTZ': 'XTZ',
+    'XLM': 'XLM',
+    'VET': 'VET',
+    'VTHO': 'VTHO',
+    'STX': 'STX',
+    'KAS': 'KAS',
+    'ERG': 'ERG',
+    'KLAY': 'KLAY',
+    'ARB': 'ARB',
+    'MINA': 'MINA',
+    'ZIL': 'ZIL',
+    'WAVES': 'WAVES',
+    'IOTA': 'IOTA',
+    'MOBILE': 'MOBILE',
+    'ATOM': 'ATOM',
+    'OSMO': 'OSMO',
+    'TIA': 'TIA',
+    'INJ': 'INJ',
+    'SEI': 'SEI',
+    'AKT': 'AKT',
+    'DYDX': 'DYDX',
 }
 
 # Map token symbols to their policy IDs and asset names for TapTools/CExplorer
@@ -118,8 +178,20 @@ CARDANO_TOKEN_POLICIES = {
 }
 
 # Major coins that can be priced by multiple sources
-MAJOR_SYMBOLS = {'ADA', 'BTC', 'ETH', 'SOL', 'MATIC', 'ALGO', 'USDC', 'USDT', 'DAI',
-                  'XRP', 'HBAR', 'EGLD', 'SUI', 'APT', 'FIL', 'BNB', 'AVAX', 'TRX', 'LINK'}
+MAJOR_SYMBOLS = {
+    # Original
+    'ADA', 'BTC', 'ETH', 'SOL', 'MATIC', 'ALGO', 'USDC', 'USDT', 'DAI',
+    'XRP', 'HBAR', 'EGLD', 'SUI', 'APT', 'FIL', 'BNB', 'AVAX', 'TRX', 'LINK', 'HNT',
+    # UTXO chains
+    'LTC', 'DOGE', 'ZEC', 'KAS', 'ERG',
+    # Cosmos ecosystem
+    'ATOM', 'OSMO', 'TIA', 'INJ', 'SEI', 'AKT', 'DYDX',
+    # Substrate chains
+    'DOT', 'KSM',
+    # Other L1s
+    'NEAR', 'ICP', 'TON', 'XTZ', 'XLM', 'VET', 'VTHO', 'STX',
+    'KLAY', 'ARB', 'MINA', 'ZIL', 'WAVES', 'IOTA', 'MOBILE',
+}
 
 
 def _classify_symbol(symbol: str) -> str:
