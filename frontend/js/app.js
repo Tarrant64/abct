@@ -1561,21 +1561,35 @@ async function loadPortfolioSummary() {
             if (tronWalletCount > 0) chains.push({ name: 'Tron', count: tronWalletCount, label: `${tronWalletCount} wallet${tronWalletCount !== 1 ? 's' : ''}` });
 
             const maxVisible = 4;
-            let summaryHtml = '<span class="chain-icons-stack">';
+            const stackEl = document.createElement('span');
+            stackEl.className = 'chain-icons-stack';
             chains.slice(0, maxVisible).forEach(chain => {
                 const customLogo = chainCustomLogoMap[chain.name];
                 const logoSrc = customLogo || getLogoKitUrl(chainIconMap[chain.name] || chain.name, 28);
-                summaryHtml += `<img src="${logoSrc}" alt="${chain.name}" title="${chain.name}: ${chain.label}" class="chain-icon-circle" onerror="this.style.display='none'">`;
+                const img = document.createElement('img');
+                img.src = logoSrc;
+                img.alt = chain.name;
+                img.title = `${chain.name}: ${chain.label}`;
+                img.className = 'chain-icon-circle';
+                img.addEventListener('error', () => {
+                    // Replace broken image with text initial fallback
+                    const fallback = document.createElement('span');
+                    fallback.className = 'chain-icon-circle chain-icon-fallback';
+                    fallback.title = img.title;
+                    fallback.textContent = chain.name.charAt(0);
+                    img.replaceWith(fallback);
+                });
+                stackEl.appendChild(img);
             });
             if (chains.length > maxVisible) {
-                summaryHtml += `<span class="chain-icon-overflow" title="${chains.slice(maxVisible).map(c => c.name).join(', ')}">+${chains.length - maxVisible}</span>`;
+                const overflow = document.createElement('span');
+                overflow.className = 'chain-icon-overflow';
+                overflow.title = chains.slice(maxVisible).map(c => c.name).join(', ');
+                overflow.textContent = `+${chains.length - maxVisible}`;
+                stackEl.appendChild(overflow);
             }
-            summaryHtml += '</span>';
-            setSafeHTML(walletsSummary, summaryHtml);
-            // Fix onerror stripped by DOMPurify
-            walletsSummary.querySelectorAll('img.chain-icon-circle').forEach(img => {
-                img.addEventListener('error', () => { img.style.display = 'none'; });
-            });
+            walletsSummary.textContent = '';
+            walletsSummary.appendChild(stackEl);
         }
 
         // Render wallets list with stake groups for Cardano

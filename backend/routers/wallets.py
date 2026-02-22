@@ -550,6 +550,24 @@ async def get_wallet_assets_by_id(wallet_id: int, user_id: int = Depends(verify_
         "native_coin_price_usd": native_balance['price_usd'] if native_balance else None
     }
 
+@router.get("/detect")
+async def detect_address(address: str, user_id: int = Depends(verify_session)):
+    """Detect which blockchain(s) an address belongs to."""
+    address = address.strip()
+    if not address:
+        raise HTTPException(status_code=400, detail="Address is required")
+
+    detected = detect_blockchains(address)
+    raw = address.split(':', 1)[-1] if ':' in address else address
+
+    return {
+        'detected': detected,
+        'ambiguous': len(detected) > 1,
+        'is_xpub': is_bitcoin_xpub(raw),
+        'is_stake': raw.startswith('stake1')
+    }
+
+
 @router.get("/{address}")
 async def get_wallet(address: str, user_id: int = Depends(verify_session)):
     """Get details for a specific wallet."""
@@ -2097,24 +2115,6 @@ async def xpub_status(user_id: int = Depends(verify_session)):
     return {
         'available': bitcoin_service.xpub_available(),
         'message': 'bip_utils installed' if bitcoin_service.xpub_available() else 'Install bip_utils for xpub support'
-    }
-
-
-@router.get("/detect")
-async def detect_address(address: str, user_id: int = Depends(verify_session)):
-    """Detect which blockchain(s) an address belongs to."""
-    address = address.strip()
-    if not address:
-        raise HTTPException(status_code=400, detail="Address is required")
-
-    detected = detect_blockchains(address)
-    raw = address.split(':', 1)[-1] if ':' in address else address
-
-    return {
-        'detected': detected,
-        'ambiguous': len(detected) > 1,
-        'is_xpub': is_bitcoin_xpub(raw),
-        'is_stake': raw.startswith('stake1')
     }
 
 
