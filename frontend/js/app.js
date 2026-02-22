@@ -1999,6 +1999,11 @@ function attachDashboardWalletEventListeners() {
         });
     });
 
+    // Blockchain logo error handlers (hide broken images)
+    document.querySelectorAll('img.blockchain-logo-small').forEach(img => {
+        img.addEventListener('error', () => { img.style.display = 'none'; });
+    });
+
     // Wallet sync button listeners
     document.querySelectorAll('.btn-wallet-sync[data-wallet-sync]').forEach(btn => {
         btn.addEventListener('click', function(event) {
@@ -10126,8 +10131,8 @@ function destroyAssetDetailChart() {
 
 // Initial load
 document.addEventListener('DOMContentLoaded', async () => {
-    // Load LogoKit token from backend (non-blocking, must be early)
-    initLogokitToken();
+    // Load LogoKit token from backend (must complete before any logo URLs are generated)
+    await initLogokitToken();
 
     // Load saved theme preference
     loadSavedTheme();
