@@ -7390,40 +7390,6 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
 .ath-atl-change.positive { color: var(--accent-success, #27ae60); }
 .ath-atl-change.negative { color: var(--accent-error, #e74c3c); }
 
-/* Your Holdings */
-.asset-detail-holdings {
-    margin-bottom: 20px;
-}
-
-.your-holdings-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-}
-
-.your-holding-stat {
-    background: var(--bg-secondary);
-    padding: 12px;
-    border-radius: 10px;
-    text-align: center;
-}
-
-.your-holding-stat .stat-label {
-    display: block;
-    font-size: 0.7rem;
-    color: var(--text-secondary);
-    margin-bottom: 4px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.your-holding-stat .stat-value {
-    display: block;
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
 /* Description */
 .asset-detail-desc-text {
     font-size: 0.85rem;
@@ -7467,10 +7433,6 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     }
 
     .asset-detail-ath-atl {
-        grid-template-columns: 1fr;
-    }
-
-    .your-holdings-grid {
         grid-template-columns: 1fr;
     }
 

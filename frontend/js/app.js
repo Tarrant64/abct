@@ -9854,10 +9854,6 @@ function openAssetDetail(symbol, cgId, holdingData) {
     const symbolEl = document.getElementById('assetDetailSymbol');
     const priceEl = document.getElementById('assetDetailPrice');
     const changeEl = document.getElementById('assetDetailChange24h');
-    const amountEl = document.getElementById('assetDetailAmount');
-    const valueEl = document.getElementById('assetDetailValue');
-    const allocEl = document.getElementById('assetDetailAlloc');
-
     if (logoEl) {
         logoEl.src = holdingData.logo_url || getLogoKitUrl(symbol);
         logoEl.alt = symbol;
@@ -9875,14 +9871,6 @@ function openAssetDetail(symbol, cgId, holdingData) {
         changeEl.textContent = `${sign}${change24h.toFixed(2)}%`;
         changeEl.className = 'asset-detail-change ' + (change24h > 0 ? 'positive' : change24h < 0 ? 'negative' : 'neutral');
     }
-
-    // Your Holdings (instant from click data)
-    if (amountEl) {
-        const amt = holdingData.amount || 0;
-        amountEl.textContent = blurValue(amt >= 1 ? amt.toLocaleString('en-US', { maximumFractionDigits: 4 }) : amt.toLocaleString('en-US', { maximumFractionDigits: 6 }));
-    }
-    if (valueEl) valueEl.textContent = blurValue(formatUSD(holdingData.value_usd || 0));
-    if (allocEl) allocEl.textContent = holdingData.allocation_pct ? holdingData.allocation_pct.toFixed(2) + '%' : '--';
 
     // Reset sections that need API data
     document.getElementById('assetDetailRank').textContent = '';
@@ -9922,6 +9910,9 @@ function initAssetDetailChart() {
     const theme = document.documentElement.getAttribute('data-theme') || 'dark-mode';
     const colors = getModalPriceChartColors(theme);
 
+    const crosshairOpts2 = { mode: colors.crosshairMode != null ? colors.crosshairMode : LightweightCharts.CrosshairMode.Normal };
+    if (colors.crosshairColor) { crosshairOpts2.vertLine = { color: colors.crosshairColor }; crosshairOpts2.horzLine = { color: colors.crosshairColor }; }
+
     _assetDetailChart = LightweightCharts.createChart(container, {
         layout: {
             background: { color: colors.background },
@@ -9931,7 +9922,7 @@ function initAssetDetailChart() {
             vertLines: { color: colors.gridLines },
             horzLines: { color: colors.gridLines }
         },
-        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+        crosshair: crosshairOpts2,
         rightPriceScale: { borderColor: colors.border },
         timeScale: {
             borderColor: colors.border,
@@ -9942,12 +9933,18 @@ function initAssetDetailChart() {
         height: container.clientHeight
     });
 
-    _assetDetailChartSeries = _assetDetailChart.addAreaSeries({
-        topColor: colors.areaTop,
-        bottomColor: colors.areaBottom,
-        lineColor: colors.lineColor,
-        lineWidth: 2
-    });
+    const seriesOpts2 = { lineColor: colors.lineColor, lineWidth: colors.lineWidth || 2 };
+    if (colors.lineStyle != null) seriesOpts2.lineStyle = colors.lineStyle;
+    if (colors.lineType != null) seriesOpts2.lineType = colors.lineType;
+
+    if (colors.seriesType === 'line') {
+        seriesOpts2.color = colors.lineColor;
+        _assetDetailChartSeries = _assetDetailChart.addLineSeries(seriesOpts2);
+    } else {
+        seriesOpts2.topColor = colors.areaTop;
+        seriesOpts2.bottomColor = colors.areaBottom;
+        _assetDetailChartSeries = _assetDetailChart.addAreaSeries(seriesOpts2);
+    }
 
     _assetDetailResizeObserver = new ResizeObserver(() => {
         if (_assetDetailChart && container) {
@@ -10026,8 +10023,8 @@ async function fetchAssetDetail(symbol, cgId) {
             const max = d.max_supply || d.total_supply || 0;
             const pct = max > 0 ? Math.min((circ / max) * 100, 100) : 0;
             document.getElementById('assetDetailSupplyBar').style.width = pct.toFixed(1) + '%';
-            document.getElementById('assetDetailCirculating').textContent = `Circulating: ${_formatCompactNumber(circ)}`;
-            document.getElementById('assetDetailMaxSupply').textContent = max > 0 ? `Max: ${_formatCompactNumber(max)}` : 'Max: ∞';
+            document.getElementById('assetDetailCirculating').textContent = `Circulating: ${_formatCompactNumber(circ, '')}`;
+            document.getElementById('assetDetailMaxSupply').textContent = max > 0 ? `Max: ${_formatCompactNumber(max, '')}` : 'Max: ∞';
         }
 
         // ATH / ATL
@@ -10335,13 +10332,13 @@ function saveHoldingsColumnConfig() {
     localStorage.setItem('holdingsColumnConfig', JSON.stringify(_holdingsColumnConfig));
 }
 
-function _formatCompactNumber(n) {
+function _formatCompactNumber(n, prefix = '$') {
     if (!n || n === 0) return '--';
-    if (n >= 1e12) return '$' + (n / 1e12).toFixed(2) + 'T';
-    if (n >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B';
-    if (n >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M';
-    if (n >= 1e3) return '$' + (n / 1e3).toFixed(1) + 'K';
-    return '$' + n.toFixed(2);
+    if (n >= 1e12) return prefix + (n / 1e12).toFixed(2) + 'T';
+    if (n >= 1e9) return prefix + (n / 1e9).toFixed(2) + 'B';
+    if (n >= 1e6) return prefix + (n / 1e6).toFixed(2) + 'M';
+    if (n >= 1e3) return prefix + (n / 1e3).toFixed(1) + 'K';
+    return prefix + n.toFixed(2);
 }
 
 function _holdingCellHtml(colId, h) {
@@ -11255,6 +11252,9 @@ function initModalPriceChart(blockchain) {
     const theme = document.documentElement.getAttribute('data-theme') || 'dark-mode';
     const colors = getModalPriceChartColors(theme);
 
+    const crosshairOpts3 = { mode: colors.crosshairMode != null ? colors.crosshairMode : LightweightCharts.CrosshairMode.Normal };
+    if (colors.crosshairColor) { crosshairOpts3.vertLine = { color: colors.crosshairColor }; crosshairOpts3.horzLine = { color: colors.crosshairColor }; }
+
     modalPriceChart = LightweightCharts.createChart(container, {
         layout: {
             background: { color: colors.background },
@@ -11264,9 +11264,7 @@ function initModalPriceChart(blockchain) {
             vertLines: { color: colors.gridLines },
             horzLines: { color: colors.gridLines }
         },
-        crosshair: {
-            mode: LightweightCharts.CrosshairMode.Normal
-        },
+        crosshair: crosshairOpts3,
         rightPriceScale: {
             borderColor: colors.border
         },
@@ -11279,12 +11277,18 @@ function initModalPriceChart(blockchain) {
         height: container.clientHeight
     });
 
-    modalPriceChartSeries = modalPriceChart.addAreaSeries({
-        topColor: colors.areaTop,
-        bottomColor: colors.areaBottom,
-        lineColor: colors.lineColor,
-        lineWidth: 2
-    });
+    const seriesOpts3 = { lineColor: colors.lineColor, lineWidth: colors.lineWidth || 2 };
+    if (colors.lineStyle != null) seriesOpts3.lineStyle = colors.lineStyle;
+    if (colors.lineType != null) seriesOpts3.lineType = colors.lineType;
+
+    if (colors.seriesType === 'line') {
+        seriesOpts3.color = colors.lineColor;
+        modalPriceChartSeries = modalPriceChart.addLineSeries(seriesOpts3);
+    } else {
+        seriesOpts3.topColor = colors.areaTop;
+        seriesOpts3.bottomColor = colors.areaBottom;
+        modalPriceChartSeries = modalPriceChart.addAreaSeries(seriesOpts3);
+    }
 
     // Handle resize
     modalPriceChartResizeObserver = new ResizeObserver(() => {
@@ -12478,6 +12482,9 @@ async function initializePriceChart() {
     const chartColors = getPriceChartColors(theme);
 
     // Create chart
+    const crosshairOpts = { mode: chartColors.crosshairMode != null ? chartColors.crosshairMode : LightweightCharts.CrosshairMode.Normal };
+    if (chartColors.crosshairColor) { crosshairOpts.vertLine = { color: chartColors.crosshairColor }; crosshairOpts.horzLine = { color: chartColors.crosshairColor }; }
+
     priceChart = LightweightCharts.createChart(container, {
         layout: {
             background: { color: chartColors.background },
@@ -12487,9 +12494,7 @@ async function initializePriceChart() {
             vertLines: { color: chartColors.gridLines },
             horzLines: { color: chartColors.gridLines }
         },
-        crosshair: {
-            mode: LightweightCharts.CrosshairMode.Normal
-        },
+        crosshair: crosshairOpts,
         rightPriceScale: {
             borderColor: chartColors.border
         },
@@ -12502,13 +12507,22 @@ async function initializePriceChart() {
         height: container.clientHeight
     });
 
-    // Create area series with theme colors
-    priceChartSeries = priceChart.addAreaSeries({
-        topColor: chartColors.areaTop,
-        bottomColor: chartColors.areaBottom,
+    // Create series based on Chart Designer settings
+    const seriesOpts = {
         lineColor: chartColors.lineColor,
-        lineWidth: 2
-    });
+        lineWidth: chartColors.lineWidth || 2
+    };
+    if (chartColors.lineStyle != null) seriesOpts.lineStyle = chartColors.lineStyle;
+    if (chartColors.lineType != null) seriesOpts.lineType = chartColors.lineType;
+
+    if (chartColors.seriesType === 'line') {
+        seriesOpts.color = chartColors.lineColor;
+        priceChartSeries = priceChart.addLineSeries(seriesOpts);
+    } else {
+        seriesOpts.topColor = chartColors.areaTop;
+        seriesOpts.bottomColor = chartColors.areaBottom;
+        priceChartSeries = priceChart.addAreaSeries(seriesOpts);
+    }
 
     // Handle resize
     const resizeObserver = new ResizeObserver(() => {
@@ -12527,7 +12541,45 @@ async function initializePriceChart() {
     await loadPriceChartData('cardano', '1D');
 }
 
+function getChartDesignerSettings() {
+    try {
+        const raw = localStorage.getItem('abct_chart_designer');
+        if (!raw) return null;
+        const s = JSON.parse(raw);
+        if (!s || !s.enabled) return null;
+        return s;
+    } catch (e) {
+        return null;
+    }
+}
+
 function getPriceChartColors(theme) {
+    // Check for Chart Designer overrides
+    const custom = getChartDesignerSettings();
+    if (custom) {
+        const hexToRgba = (hex, opacity) => {
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+        };
+        return {
+            background: custom.background,
+            text: custom.textColor,
+            gridLines: custom.gridVisible ? custom.gridColor : 'transparent',
+            border: custom.borderColor,
+            areaTop: hexToRgba(custom.areaTopColor, custom.areaTopOpacity),
+            areaBottom: hexToRgba(custom.areaBottomColor, custom.areaBottomOpacity),
+            lineColor: custom.lineColor,
+            crosshairMode: custom.crosshairMode,
+            crosshairColor: custom.crosshairColor,
+            seriesType: custom.seriesType,
+            lineWidth: custom.lineWidth,
+            lineStyle: custom.lineStyle,
+            lineType: custom.lineType
+        };
+    }
+
     const themeColors = {
         'dark-mode': {
             background: '#1a1a2e',
