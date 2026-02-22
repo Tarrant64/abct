@@ -8494,6 +8494,10 @@ async function loadV2BalanceHistory(range) {
                 renderV2Chart(result.data, range);
             }
 
+            // Show persistent collect button when chart has data
+            const collectBtn = document.getElementById('collectHistoryBtn');
+            if (collectBtn) collectBtn.style.display = 'inline-block';
+
             // Update coverage info
             if (coverageText && result.coverage) {
                 const c = result.coverage;
@@ -8816,9 +8820,11 @@ async function startBalanceCollection() {
     const emptyState = document.getElementById('v2ChartEmptyState');
     const loadingState = document.getElementById('v2ChartLoadingState');
     const progress = document.getElementById('v2CollectionProgress');
+    const collectBtn = document.getElementById('collectHistoryBtn');
 
     if (emptyState) emptyState.style.display = 'none';
     if (loadingState) loadingState.style.display = 'none';
+    if (collectBtn) collectBtn.style.display = 'none';
     if (progress) progress.style.display = 'block';
 
     try {
@@ -8837,6 +8843,7 @@ async function startBalanceCollection() {
     } catch (error) {
         console.error('Error starting balance collection:', error);
         if (progress) progress.style.display = 'none';
+        if (collectBtn) collectBtn.style.display = 'inline-block';
         if (emptyState) {
             emptyState.style.display = 'flex';
             setSafeHTML(emptyState, '<p>Error starting collection.</p><button class="btn btn-primary" data-action="collect">Retry</button>');
@@ -8877,6 +8884,8 @@ function pollV2CollectionStatus() {
                 v2PollInterval = null;
                 const progress = document.getElementById('v2CollectionProgress');
                 if (progress) progress.style.display = 'none';
+                const collectBtn = document.getElementById('collectHistoryBtn');
+                if (collectBtn) collectBtn.style.display = 'inline-block';
                 const emptyState = document.getElementById('v2ChartEmptyState');
                 if (emptyState) {
                     emptyState.style.display = 'flex';
@@ -10209,6 +10218,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (e) {
             console.error('[Overview] Failed to load portfolio summary:', e);
         }
+
+        // Wire up persistent "Collect History" button
+        const collectBtn = document.getElementById('collectHistoryBtn');
+        if (collectBtn) collectBtn.addEventListener('click', startBalanceCollection);
 
         // Fire chart + holdings immediately (no longer gated by background batch)
         loadV2BalanceHistory('1w');

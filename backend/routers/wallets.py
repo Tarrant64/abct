@@ -1831,6 +1831,32 @@ async def _trigger_tx_history(user_id: int, wallet_id: int, blockchain: str):
         logging.getLogger(__name__).warning(f"Auto tx-history fetch failed for wallet {wallet_id}: {e}")
 
 
+async def _trigger_balance_history(user_id: int, wallet_id: int, blockchain: str):
+    """Fire-and-forget balance history collection for a newly added wallet."""
+    try:
+        from engine.orchestrator import backfill_orchestrator
+        from engine.models import BackfillRequest, ChainId, WorkDomain
+        from engine import db as engine_db
+
+        try:
+            chain = ChainId(blockchain)
+        except ValueError:
+            return  # Chain not supported by V2 engine
+
+        request = BackfillRequest(
+            chains=[chain],
+            wallet_ids=[wallet_id],
+            domains=[WorkDomain.INDEX, WorkDomain.HYDRATE, WorkDomain.NORMALIZE, WorkDomain.ENRICH_PRICE],
+        )
+        backfill_id = await backfill_orchestrator.plan_backfill(user_id, request)
+        run_id = await engine_db.create_scheduler_run(user_id, backfill_id, 'auto_wallet_add')
+        backfill_orchestrator.set_run_id(backfill_id, run_id)
+        await backfill_orchestrator.run_backfill(backfill_id)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Auto balance-history for wallet {wallet_id}: {e}")
+
+
 @router.post("/discover")
 async def discover_related_wallets(data: dict, user_id: int = Depends(verify_session)):
     """
@@ -2262,8 +2288,9 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
                 await _refresh_wallet_balance(saved_wallet)
             except Exception as e:
                 print(f"Warning: Failed to refresh balance for {address}: {e}")
-            # Fire-and-forget tx history fetch for the newly added wallet
+            # Fire-and-forget tx history + balance history for the newly added wallet
             asyncio.create_task(_trigger_tx_history(user_id, saved_wallet['id'], blockchain))
+            asyncio.create_task(_trigger_balance_history(user_id, saved_wallet['id'], blockchain))
 
         return {
             "message": "Wallet added",

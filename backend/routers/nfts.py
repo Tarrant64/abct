@@ -2218,6 +2218,7 @@ async def get_nfts_with_images(
             'nfts': formatted_nfts,
             'total_count': len(formatted_nfts),
             'by_chain': by_chain,
+            'total_by_chain': by_chain,  # In demo mode, all NFTs have cached images
             'prices': prices,
             'demo_mode': True
         }
@@ -2277,6 +2278,7 @@ async def get_nfts_with_images(
     # Per-chain fetch helpers that return a list of formatted NFTs
     async def _wall_cardano():
         nfts = await nft_service.get_all_nfts(user_id=user_id, force_refresh=False)
+        total = len(nfts)
         result = []
         for nft in nfts:
             asset_id = nft.get('unit') or nft.get('asset_id')
@@ -2295,12 +2297,13 @@ async def get_nfts_with_images(
                     'floor_price_usd': (nft.get('price_ada') or 0) * prices['ada'],
                     'native_symbol': 'ADA', 'image_info': cached_images[key]
                 })
-        return result
+        return result, total
 
     async def _wall_ethereum():
         if not eth_configured:
-            return []
+            return [], 0
         nfts = await ethereum_nft_service.get_all_ethereum_nfts(user_id=user_id, force_refresh=False)
+        total = len(nfts)
         result = []
         for nft in nfts:
             asset_id = f"{nft.get('contract_address')}_{nft.get('token_id')}"
@@ -2318,12 +2321,13 @@ async def get_nfts_with_images(
                     'floor_price': floor_eth, 'floor_price_usd': floor_eth * prices['eth'],
                     'native_symbol': 'ETH', 'image_info': cached_images[key]
                 })
-        return result
+        return result, total
 
     async def _wall_solana():
         if not sol_configured:
-            return []
+            return [], 0
         nfts = await solana_nft_service.get_all_solana_nfts(user_id=user_id, force_refresh=False)
+        total = len(nfts)
         result = []
         for nft in nfts:
             asset_id = nft.get('mint') or nft.get('asset_id')
@@ -2340,12 +2344,13 @@ async def get_nfts_with_images(
                     'floor_price': floor_sol, 'floor_price_usd': floor_sol * prices['sol'],
                     'native_symbol': 'SOL', 'image_info': cached_images[key]
                 })
-        return result
+        return result, total
 
     async def _wall_polygon():
         if not poly_configured:
-            return []
+            return [], 0
         nfts = await polygon_service.get_all_polygon_nfts(polygon_wallets, force_refresh=False)
+        total = len(nfts)
         result = []
         for nft in nfts:
             asset_id = f"{nft.get('contract_address')}_{nft.get('token_id')}"
@@ -2362,12 +2367,13 @@ async def get_nfts_with_images(
                     'floor_price': floor_matic, 'floor_price_usd': floor_matic * prices['matic'],
                     'native_symbol': 'POL', 'image_info': cached_images[key]
                 })
-        return result
+        return result, total
 
     async def _wall_base():
         if not base_configured:
-            return []
+            return [], 0
         nfts = await base_service.get_all_base_nfts(base_wallets, force_refresh=False)
+        total = len(nfts)
         result = []
         for nft in nfts:
             asset_id = f"{nft.get('contract_address')}_{nft.get('token_id')}"
@@ -2384,7 +2390,7 @@ async def get_nfts_with_images(
                     'floor_price': floor_eth, 'floor_price_usd': floor_eth * prices['eth'],
                     'native_symbol': 'ETH', 'image_info': cached_images[key]
                 })
-        return result
+        return result, total
 
     # Map chain names to fetch functions
     _chain_fetchers = {
@@ -2398,12 +2404,17 @@ async def get_nfts_with_images(
             return await _chain_fetchers[chain]()
         except Exception as e:
             logging.getLogger(__name__).warning(f"Error fetching {chain} NFTs for wall: {e}")
-            return []
+            return [], 0
 
     chain_results = await asyncio.gather(*[_safe_fetch(c) for c in chains_to_fetch])
     all_nfts = []
-    for result in chain_results:
-        all_nfts.extend(result)
+    total_by_chain = {}
+    for i, result in enumerate(chain_results):
+        nfts, total = result
+        chain_name = chains_to_fetch[i]
+        all_nfts.extend(nfts)
+        if total > 0:
+            total_by_chain[chain_name] = total
 
     # Sort by value (highest first)
     all_nfts.sort(key=lambda x: x.get('floor_price_usd', 0), reverse=True)
@@ -2482,6 +2493,7 @@ async def get_nfts_with_images(
             'total_count': len(all_nfts),
             'collection_count': len(grouped_nfts),
             'by_chain': by_chain,
+            'total_by_chain': total_by_chain,
             'prices': prices,
             'grouped': True
         }
@@ -2493,6 +2505,7 @@ async def get_nfts_with_images(
         'nfts': all_nfts,
         'total_count': len(all_nfts),
         'by_chain': by_chain,
+        'total_by_chain': total_by_chain,
         'prices': prices,
         'grouped': False
     }

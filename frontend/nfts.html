@@ -848,14 +848,38 @@
                     groupedNfts = data.grouped_nfts || [];
                     allPrices = data.prices || {};
 
-                    const countAllEl = document.getElementById('wallCountAll');
-                    if (countAllEl) countAllEl.textContent = data.total_count || 0;
-
-                    const byChain = data.by_chain || {};
-                    ['cardano', 'ethereum', 'solana', 'polygon', 'base'].forEach(chain => {
-                        const countEl = document.getElementById(`wallCount${chain.charAt(0).toUpperCase() + chain.slice(1)}`);
-                        if (countEl) countEl.textContent = byChain[chain] || 0;
-                    });
+                    // Only update tab counts when fetching all chains;
+                    // chain-filtered responses only have data for one chain and would zero out the rest
+                    if (currentChain === 'all') {
+                        const countAllEl = document.getElementById('wallCountAll');
+                        const byChain = data.by_chain || {};
+                        const totalByChain = data.total_by_chain || {};
+                        const overallTotal = Object.values(totalByChain).reduce((s, v) => s + v, 0);
+                        if (countAllEl) {
+                            const cached = data.total_count || 0;
+                            if (overallTotal > 0 && cached < overallTotal) {
+                                countAllEl.textContent = `${cached}/${overallTotal}`;
+                                countAllEl.title = `${cached} cached of ${overallTotal} total NFTs`;
+                            } else {
+                                countAllEl.textContent = cached;
+                                countAllEl.title = '';
+                            }
+                        }
+                        ['cardano', 'ethereum', 'solana', 'polygon', 'base'].forEach(chain => {
+                            const countEl = document.getElementById(`wallCount${chain.charAt(0).toUpperCase() + chain.slice(1)}`);
+                            if (countEl) {
+                                const cached = byChain[chain] || 0;
+                                const total = totalByChain[chain] || 0;
+                                if (total > 0 && cached < total) {
+                                    countEl.textContent = `${cached}/${total}`;
+                                    countEl.title = `${cached} cached of ${total} total NFTs`;
+                                } else {
+                                    countEl.textContent = cached;
+                                    countEl.title = '';
+                                }
+                            }
+                        });
+                    }
 
                     const totalValue = allNfts.reduce((sum, nft) => sum + (nft.floor_price_usd || 0), 0);
                     const totalEl = document.getElementById('wallTotalValue');
