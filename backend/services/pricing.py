@@ -73,6 +73,8 @@ ASSET_TO_COINGECKO = {
     'LTC': 'litecoin',
     'DOGE': 'dogecoin',
     'ZEC': 'zcash',
+    'XMR': 'monero',
+    'SCRT': 'secret',
     'DOT': 'polkadot',
     'KSM': 'kusama',
     'NEAR': 'near',
@@ -131,6 +133,8 @@ ASSET_TO_CMC = {
     'LTC': 'LTC',
     'DOGE': 'DOGE',
     'ZEC': 'ZEC',
+    'XMR': 'XMR',
+    'SCRT': 'SCRT',
     'DOT': 'DOT',
     'KSM': 'KSM',
     'NEAR': 'NEAR',
@@ -183,7 +187,9 @@ MAJOR_SYMBOLS = {
     'ADA', 'BTC', 'ETH', 'SOL', 'MATIC', 'ALGO', 'USDC', 'USDT', 'DAI',
     'XRP', 'HBAR', 'EGLD', 'SUI', 'APT', 'FIL', 'BNB', 'AVAX', 'TRX', 'LINK', 'HNT',
     # UTXO chains
-    'LTC', 'DOGE', 'ZEC', 'KAS', 'ERG',
+    'LTC', 'DOGE', 'ZEC', 'KAS', 'ERG', 'XMR',
+    # Privacy chains
+    'SCRT',
     # Cosmos ecosystem
     'ATOM', 'OSMO', 'TIA', 'INJ', 'SEI', 'AKT', 'DYDX',
     # Substrate chains

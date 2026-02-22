@@ -51,6 +51,7 @@ from database import init_db, init_encryption, migrate_encrypt_api_keys
 from nft_image_database import init_nft_image_db
 from routers import wallets, portfolio, defi, prices, exchanges, nfts, custom_tokens, settings, security, logs, nft_scheduler as nft_scheduler_router, backup, auth, dashboard, mobile, nmkr, cache, spam, transactions, demo, cloudflare, system, balance_history, analytics, intelligence, search, pnl
 from routers import engine as engine_router
+from routers.privacy import router as privacy_router
 
 from middleware import RequestSizeLimitMiddleware, RATE_LIMITING_AVAILABLE
 from services.logging_service import get_logging_service
@@ -740,6 +741,7 @@ app.include_router(analytics.router)
 app.include_router(intelligence.router)
 app.include_router(search.router)
 app.include_router(pnl.router)
+app.include_router(privacy_router)
 
 # Mount static files (frontend)
 frontend_path = PROJECT_ROOT / "frontend"

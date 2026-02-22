@@ -49,6 +49,8 @@ from services.filecoin import filecoin_service
 from services.litecoin import litecoin_service
 from services.dogecoin import dogecoin_service
 from services.zcash import zcash_service
+from services.monero import monero_service
+from services.secret_network import secret_network_service
 from services.tezos import tezos_service
 from services.stacks import stacks_service
 from services.vechain import vechain_service
@@ -314,6 +316,8 @@ async def get_wallet_assets_by_id(wallet_id: int, user_id: int = Depends(verify_
     waves_price_usd = await pricing_service.get_price('WAVES')
     mina_price_usd = await pricing_service.get_price('MINA')
     zil_price_usd = await pricing_service.get_price('ZIL')
+    xmr_price_usd = await pricing_service.get_price('XMR')
+    scrt_price_usd = await pricing_service.get_price('SCRT')
 
     # For Cardano wallets, try to get TapTools data for ADA-denominated pricing
     taptools_positions = {}
@@ -521,6 +525,8 @@ async def get_wallet_assets_by_id(wallet_id: int, user_id: int = Depends(verify_
             'waves': {'ticker': 'WAVES', 'name': 'Waves', 'decimals': 8, 'price_usd': waves_price_usd},
             'mina': {'ticker': 'MINA', 'name': 'Mina Protocol', 'decimals': 9, 'price_usd': mina_price_usd},
             'zilliqa': {'ticker': 'ZIL', 'name': 'Zilliqa', 'decimals': 12, 'price_usd': zil_price_usd},
+            'monero': {'ticker': 'XMR', 'name': 'Monero', 'decimals': 12, 'price_usd': xmr_price_usd},
+            'secret_network': {'ticker': 'SCRT', 'name': 'Secret Network', 'decimals': 6, 'price_usd': scrt_price_usd},
         }
 
         if wallet['blockchain'] in native_config:
@@ -719,6 +725,20 @@ async def refresh_wallet_balance(address: str, user_id: int = Depends(verify_ses
         raise HTTPException(status_code=404, detail="Wallet not found")
 
     return await _refresh_wallet_balance(wallet)
+
+
+async def get_stored_balance(wallet_id: int, unit: str) -> Optional[str]:
+    """Get stored balance for a wallet from the balances table, filtered by unit."""
+    import aiosqlite as _aiosqlite
+    from config import DATABASE_PATH as _DATABASE_PATH
+    async with _aiosqlite.connect(str(_DATABASE_PATH)) as db:
+        cursor = await db.execute(
+            "SELECT amount FROM balances WHERE wallet_id = ? AND unit = ? ORDER BY updated_at DESC LIMIT 1",
+            (wallet_id, unit)
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
 
 async def _refresh_wallet_balance(wallet: dict) -> dict:
     """Internal function to refresh a single wallet's balance."""
@@ -1806,6 +1826,36 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
                     'source': info.get('source')
                 }
 
+        elif blockchain == 'monero':
+            # Monero: fully private, manual balance only
+            # The address is stored for reference only - we cannot query balances
+            existing_balance = await get_stored_balance(wallet_id, 'XMR')
+            manual_balance = float(existing_balance) if existing_balance else 0.0
+            return {
+                'address': address,
+                'success': True,
+                'balance': manual_balance,
+                'unit': 'XMR',
+                'token_count': 0,
+                'source': 'manual',
+                'manual': True,
+                'privacy_note': 'Monero balances cannot be fetched publicly. Set balance manually.'
+            }
+
+        elif blockchain == 'secret_network':
+            info = await secret_network_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_scrt']), 'SCRT')
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_scrt'],
+                    'unit': 'SCRT',
+                    'token_count': 0,
+                    'source': info.get('source')
+                }
+
         return {
             'address': address,
             'success': False,
@@ -2166,7 +2216,7 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
         if not blockchain:
             raise HTTPException(
                 status_code=400,
-                detail="Could not detect blockchain. Supported: Cardano (addr1, stake1), Bitcoin (1, 3, bc1, xpub/ypub/zpub), Ethereum (0x 42-char), Polygon (polygon:0x), Base (base:0x), Solana (base58), BNB Chain (bsc:0x), Arbitrum (arb:0x), Avalanche (avax:0x), Tron (T...), XRP (r...), Hedera (0.0.N), MultiversX (erd1...), Sui (0x 66-char), Aptos (aptos:0x), Filecoin (f1/f3...), Litecoin (L/M/ltc1), Dogecoin (D...), Zcash (t1/t3), Tezos (tz1/KT1), Stacks (SP...), VeChain (vet:0x), Cosmos (cosmos1...), NEAR (*.near), ICP (icp:...), TON (EQ/UQ...), Polkadot (polkadot:...), Kusama (kusama:...), Stellar (G...), Kaspa (kaspa:...), Osmosis (osmo1...), Celestia (celestia1...), Injective (inj1...), dYdX (dydx1...), Sei (sei1...), Akash (akash1...), Kaia (kaia:0x), Ergo (9...), IOTA (iota:0x), Waves (3P...), Mina (B62...), Zilliqa (zil1/0x)"
+                detail="Could not detect blockchain. Supported: Cardano (addr1, stake1), Bitcoin (1, 3, bc1, xpub/ypub/zpub), Ethereum (0x 42-char), Polygon (polygon:0x), Base (base:0x), Solana (base58), BNB Chain (bsc:0x), Arbitrum (arb:0x), Avalanche (avax:0x), Tron (T...), XRP (r...), Hedera (0.0.N), MultiversX (erd1...), Sui (0x 66-char), Aptos (aptos:0x), Filecoin (f1/f3...), Litecoin (L/M/ltc1), Dogecoin (D...), Zcash (t1/t3), Tezos (tz1/KT1), Stacks (SP...), VeChain (vet:0x), Cosmos (cosmos1...), NEAR (*.near), ICP (icp:...), TON (EQ/UQ...), Polkadot (polkadot:...), Kusama (kusama:...), Stellar (G...), Kaspa (kaspa:...), Osmosis (osmo1...), Celestia (celestia1...), Injective (inj1...), dYdX (dydx1...), Sei (sei1...), Akash (akash1...), Kaia (kaia:0x), Ergo (9...), IOTA (iota:0x), Waves (3P...), Mina (B62...), Zilliqa (zil1/0x), Monero (monero:4.../8...), Secret Network (secret1...)"
             )
 
         # Extract raw address if chain prefix was provided
@@ -2174,7 +2224,7 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
         if ':' in address:
             parts = address.split(':', 1)
             chain_prefix = parts[0].lower()
-            if chain_prefix in ('cardano', 'bitcoin', 'ethereum', 'eth', 'polygon', 'matic', 'base', 'solana', 'sol', 'algorand', 'algo', 'bsc', 'bnb', 'arb', 'arbitrum', 'avax', 'avalanche', 'tron', 'trx', 'xrp', 'ripple', 'hedera', 'hbar', 'multiversx', 'egld', 'elrond', 'sui', 'aptos', 'apt', 'filecoin', 'fil', 'litecoin', 'ltc', 'dogecoin', 'doge', 'zcash', 'zec', 'tezos', 'xtz', 'stacks', 'stx', 'vechain', 'vet', 'cosmos', 'atom', 'near', 'icp', 'ton', 'polkadot', 'dot', 'kusama', 'ksm', 'stellar', 'xlm', 'kaspa', 'kas', 'osmosis', 'osmo', 'celestia', 'tia', 'injective', 'inj', 'dydx', 'sei', 'akash', 'akt', 'kaia', 'klay', 'ergo', 'erg', 'iota', 'waves', 'mina', 'zilliqa', 'zil'):
+            if chain_prefix in ('cardano', 'bitcoin', 'ethereum', 'eth', 'polygon', 'matic', 'base', 'solana', 'sol', 'algorand', 'algo', 'bsc', 'bnb', 'arb', 'arbitrum', 'avax', 'avalanche', 'tron', 'trx', 'xrp', 'ripple', 'hedera', 'hbar', 'multiversx', 'egld', 'elrond', 'sui', 'aptos', 'apt', 'filecoin', 'fil', 'litecoin', 'ltc', 'dogecoin', 'doge', 'zcash', 'zec', 'tezos', 'xtz', 'stacks', 'stx', 'vechain', 'vet', 'cosmos', 'atom', 'near', 'icp', 'ton', 'polkadot', 'dot', 'kusama', 'ksm', 'stellar', 'xlm', 'kaspa', 'kas', 'osmosis', 'osmo', 'celestia', 'tia', 'injective', 'inj', 'dydx', 'sei', 'akash', 'akt', 'kaia', 'klay', 'ergo', 'erg', 'iota', 'waves', 'mina', 'zilliqa', 'zil', 'monero', 'xmr', 'secret_network', 'secret', 'scrt'):
                 raw_address = parts[1]
         address = raw_address
 

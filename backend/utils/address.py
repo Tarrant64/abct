@@ -61,6 +61,17 @@ def detect_blockchain(address: str) -> Optional[str]:
             'waves': 'waves',
             'mina': 'mina',
             'zilliqa': 'zilliqa', 'zil': 'zilliqa',
+            'monero': 'monero', 'xmr': 'monero',
+            'secret_network': 'secret_network', 'secret': 'secret_network', 'scrt': 'secret_network',
+            # EVM L2s/sidechains (via evm_chain factory)
+            'optimism': 'optimism', 'op': 'optimism',
+            'zksync': 'zksync',
+            'linea': 'linea',
+            'scroll': 'scroll',
+            'fantom': 'fantom', 'ftm': 'fantom',
+            'cronos': 'cronos', 'cro': 'cronos',
+            'gnosis': 'gnosis', 'gno': 'gnosis',
+            'moonbeam': 'moonbeam', 'glmr': 'moonbeam',
         }
         if prefix in prefix_map:
             return prefix_map[prefix]
@@ -235,6 +246,22 @@ def detect_blockchain(address: str) -> Optional[str]:
     # Zilliqa bech32 addresses - zil1... (39 chars)
     if address.startswith('zil1') and len(address) == 39:
         return 'zilliqa'
+
+    # Secret Network addresses - secret1... bech32, 45 chars total
+    if address.startswith('secret1') and len(address) == 45:
+        return 'secret_network'
+
+    # Monero primary addresses - start with '4', 95 chars
+    # Monero subaddresses - start with '8', 95 chars
+    # Monero integrated addresses - start with '4', 106 chars
+    if address.startswith('4') and len(address) in (95, 106):
+        base58_chars = set('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz')
+        if all(c in base58_chars for c in address):
+            return 'monero'
+    if address.startswith('8') and len(address) == 95:
+        base58_chars = set('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz')
+        if all(c in base58_chars for c in address):
+            return 'monero'
 
     # IOTA MoveVM addresses - 0x + 64 hex chars (same as Sui but use iota: prefix)
     # Handled via explicit prefix only (iota:0x...) to avoid collision with Sui
@@ -419,6 +446,20 @@ def detect_blockchains(address: str) -> List[str]:
     if address.startswith('zil1') and len(address) == 39:
         return ['zilliqa']
 
+    # Secret Network bech32
+    if address.startswith('secret1') and len(address) == 45:
+        return ['secret_network']
+
+    # Monero
+    if address.startswith('4') and len(address) in (95, 106):
+        base58_chars = set('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz')
+        if all(c in base58_chars for c in address):
+            return ['monero']
+    if address.startswith('8') and len(address) == 95:
+        base58_chars = set('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz')
+        if all(c in base58_chars for c in address):
+            return ['monero']
+
     return []
 
 
@@ -513,6 +554,8 @@ def parse_address(line: str) -> Optional[Tuple[str, str]]:
             'kas': 'kaspa', 'osmo': 'osmosis', 'tia': 'celestia',
             'inj': 'injective', 'akt': 'akash', 'klay': 'kaia',
             'erg': 'ergo', 'zil': 'zilliqa',
+            'xmr': 'monero',
+            'secret': 'secret_network', 'scrt': 'secret_network',
         }
         if blockchain in prefix_map:
             blockchain = prefix_map[blockchain]
@@ -524,7 +567,8 @@ def parse_address(line: str) -> Optional[Tuple[str, str]]:
                         'vechain', 'cosmos', 'near', 'icp',
                         'ton', 'polkadot', 'kusama', 'stellar', 'kaspa',
                         'osmosis', 'celestia', 'injective', 'dydx', 'sei', 'akash',
-                        'kaia', 'ergo', 'iota', 'waves', 'mina', 'zilliqa')
+                        'kaia', 'ergo', 'iota', 'waves', 'mina', 'zilliqa',
+                        'monero', 'secret_network')
         if blockchain in valid_chains:
             return (blockchain, address)
         return None

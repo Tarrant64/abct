@@ -442,6 +442,8 @@ const CHAIN_CONFIG = {
     waves:      { name: 'Waves',     symbol: 'WAVES',logo: 'WAVES',icon: '~', decimals: 8, priceKey: 'WAVES', balanceKey: 'total_waves',nativeLabel: 'WAVES'},
     mina:       { name: 'Mina',      symbol: 'MINA', logo: 'MINA', icon: 'M', decimals: 9, priceKey: 'MINA',  balanceKey: 'total_mina', nativeLabel: 'MINA' },
     zilliqa:    { name: 'Zilliqa',   symbol: 'ZIL',  logo: 'ZIL',  icon: 'Z', decimals: 12, priceKey: 'ZIL',  balanceKey: 'total_zil',  nativeLabel: 'ZIL'  },
+    monero:        { name: 'Monero',         symbol: 'XMR',  logo: 'XMR',  icon: 'ɱ', decimals: 12, priceKey: 'XMR',  balanceKey: 'total_xmr',  nativeLabel: 'XMR', manual: true },
+    secret_network:{ name: 'Secret Network', symbol: 'SCRT', logo: 'SCRT', icon: '🔒', decimals: 6,  priceKey: 'SCRT', balanceKey: 'total_scrt', nativeLabel: 'SCRT' },
 };
 
 // Render blockchain cards dynamically, sorted by value, only for chains with wallets
@@ -692,6 +694,8 @@ function getChainAllocations() {
         waves:      { label: 'Waves',     symbol: 'WAVES',color: '#0055FF', balKey: 'WAVES',      priceKey: 'WAVES'},
         mina:       { label: 'Mina',      symbol: 'MINA', color: '#E49B13', balKey: 'MINA',       priceKey: 'MINA' },
         zilliqa:    { label: 'Zilliqa',   symbol: 'ZIL',  color: '#49C1BF', balKey: 'ZIL',        priceKey: 'ZIL'  },
+        monero:        { label: 'Monero',         symbol: 'XMR',  color: '#FF6B00', balKey: 'XMR',  priceKey: 'XMR'  },
+        secret_network:{ label: 'Secret Network', symbol: 'SCRT', color: '#1B1B24', balKey: 'SCRT', priceKey: 'SCRT' },
     };
 
     for (const [chain, cfg] of Object.entries(chainMap)) {

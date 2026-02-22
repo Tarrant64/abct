@@ -1,0 +1,1640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy & ZK | ABCT</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771792479">
+    <!-- DOMPurify for XSS protection -->
+    <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+    <!-- Session-based authentication -->
+    <script src="/static/js/session-auth.js?v=1771792479"></script>
+    <style>
+        /* ========== Privacy Page Layout ========== */
+        .privacy-page {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .privacy-page header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            margin-bottom: 24px;
+            border-radius: 12px;
+            background: var(--gradient-header);
+            border: 1px solid var(--border-color);
+        }
+
+        .privacy-page header h1 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .privacy-page header h1 a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        /* ========== Page Title ========== */
+        .page-header {
+            margin-bottom: 28px;
+        }
+
+        .page-header h2 {
+            font-size: 24px;
+            color: var(--text-primary);
+            margin: 0 0 6px 0;
+        }
+
+        .page-header p {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin: 0;
+        }
+
+        /* ========== Section Headers ========== */
+        .privacy-section {
+            margin-bottom: 36px;
+        }
+
+        .privacy-section-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 16px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--accent-success);
+        }
+
+        .privacy-section-header h3 {
+            font-size: 18px;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .privacy-section-header .section-icon {
+            font-size: 20px;
+        }
+
+        /* ========== Wallet Summary Cards ========== */
+        .privacy-wallets-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 16px;
+        }
+
+        .privacy-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .privacy-card:hover {
+            border-color: var(--accent-success);
+            box-shadow: 0 0 12px rgba(0, 210, 106, 0.12);
+        }
+
+        .privacy-card-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .privacy-card-logo {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: contain;
+        }
+
+        .privacy-card-logo-placeholder {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+
+        .privacy-card-title {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .privacy-card-title .chain-name {
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text-primary);
+        }
+
+        .privacy-card-title .wallet-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .privacy-card-body .balance {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+
+        .privacy-card-body .balance-usd {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        /* ========== Privacy Score Badge ========== */
+        .privacy-score-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .privacy-score-badge.score-protected {
+            background: rgba(0, 210, 106, 0.15);
+            color: #00d26a;
+            border: 1px solid rgba(0, 210, 106, 0.3);
+        }
+
+        .privacy-score-badge.score-partial {
+            background: rgba(255, 193, 7, 0.15);
+            color: #ffc107;
+            border: 1px solid rgba(255, 193, 7, 0.3);
+        }
+
+        .privacy-score-badge.score-exposed {
+            background: rgba(255, 107, 107, 0.15);
+            color: #ff6b6b;
+            border: 1px solid rgba(255, 107, 107, 0.3);
+        }
+
+        /* ========== Privacy Tags ========== */
+        .privacy-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .privacy-tag.tag-full {
+            background: rgba(0, 210, 106, 0.15);
+            color: #00d26a;
+        }
+
+        .privacy-tag.tag-shielded {
+            background: rgba(100, 180, 255, 0.15);
+            color: #64b4ff;
+        }
+
+        .privacy-tag.tag-partial {
+            background: rgba(255, 193, 7, 0.15);
+            color: #ffc107;
+        }
+
+        /* ========== Per-Wallet Analysis Table ========== */
+        .privacy-analysis-table {
+            width: 100%;
+            border-collapse: collapse;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        .privacy-analysis-table thead th {
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 12px 16px;
+            text-align: left;
+        }
+
+        .privacy-analysis-table tbody tr {
+            border-top: 1px solid var(--border-color);
+            transition: background 0.15s;
+        }
+
+        .privacy-analysis-table tbody tr:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .privacy-analysis-table td {
+            padding: 12px 16px;
+            font-size: 13px;
+            color: var(--text-primary);
+            vertical-align: middle;
+        }
+
+        .privacy-analysis-table .wallet-name-cell {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .wallet-chain-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            object-fit: contain;
+            flex-shrink: 0;
+        }
+
+        .wallet-chain-icon-placeholder {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+
+        /* ========== Chain Stats Grid ========== */
+        .privacy-chain-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+        }
+
+        .privacy-chain-stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .privacy-chain-stat-card .chain-stat-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .privacy-chain-stat-card .chain-stat-logo {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            object-fit: contain;
+        }
+
+        .privacy-chain-stat-card .chain-stat-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .privacy-chain-stat-card .chain-stat-subtitle {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .privacy-level-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .privacy-level-indicator.level-high {
+            background: rgba(0, 210, 106, 0.15);
+            color: #00d26a;
+            border: 1px solid rgba(0, 210, 106, 0.3);
+        }
+
+        .privacy-level-indicator.level-medium {
+            background: rgba(100, 180, 255, 0.15);
+            color: #64b4ff;
+            border: 1px solid rgba(100, 180, 255, 0.3);
+        }
+
+        .privacy-level-indicator.level-partial {
+            background: rgba(255, 193, 7, 0.15);
+            color: #ffc107;
+            border: 1px solid rgba(255, 193, 7, 0.3);
+        }
+
+        .chain-stat-desc {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        .chain-stat-facts {
+            margin-top: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .chain-stat-fact {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .chain-stat-fact .fact-icon {
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .chain-stat-value {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .chain-stat-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+        }
+
+        .chain-stats-row {
+            display: flex;
+            gap: 16px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .chain-stat-item {
+            flex: 1;
+        }
+
+        /* ========== Education Accordion ========== */
+        .privacy-education-section {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .education-item {
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .education-item-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 18px;
+            cursor: pointer;
+            background: var(--bg-card);
+            user-select: none;
+            transition: background 0.15s;
+        }
+
+        .education-item-header:hover {
+            background: var(--bg-secondary);
+        }
+
+        .education-item-header .edu-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .education-item-header .edu-icon {
+            font-size: 18px;
+        }
+
+        .education-item-header .edu-chevron {
+            font-size: 12px;
+            color: var(--text-secondary);
+            transition: transform 0.2s;
+        }
+
+        .education-item.open .edu-chevron {
+            transform: rotate(180deg);
+        }
+
+        .education-item-body {
+            display: none;
+            padding: 16px 18px;
+            background: var(--bg-secondary);
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.7;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .education-item.open .education-item-body {
+            display: block;
+        }
+
+        .education-item-body p {
+            margin: 0 0 12px 0;
+        }
+
+        .education-item-body p:last-child {
+            margin-bottom: 0;
+        }
+
+        .education-item-body strong {
+            color: var(--text-primary);
+        }
+
+        .edu-tip {
+            background: rgba(0, 210, 106, 0.08);
+            border: 1px solid rgba(0, 210, 106, 0.2);
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-top: 10px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .edu-tip strong {
+            color: var(--accent-success) !important;
+        }
+
+        .edu-warning {
+            background: rgba(255, 107, 107, 0.08);
+            border: 1px solid rgba(255, 107, 107, 0.2);
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-top: 10px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .edu-warning strong {
+            color: #ff6b6b !important;
+        }
+
+        /* ========== Loading & Empty States ========== */
+        .privacy-loading {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 32px;
+            color: var(--text-secondary);
+            font-size: 14px;
+            justify-content: center;
+        }
+
+        .privacy-empty-state {
+            text-align: center;
+            padding: 48px 24px;
+            color: var(--text-secondary);
+            border: 1px dashed var(--border-color);
+            border-radius: 12px;
+        }
+
+        .privacy-empty-state .empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .privacy-empty-state h4 {
+            font-size: 16px;
+            color: var(--text-primary);
+            margin: 0 0 8px 0;
+        }
+
+        .privacy-empty-state p {
+            font-size: 14px;
+            margin: 0 0 16px 0;
+        }
+
+        .privacy-empty-state a {
+            color: var(--accent-success);
+        }
+
+        /* ========== Detail Panels ========== */
+        .score-detail-panel {
+            margin-top: 8px;
+            padding: 14px;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            font-size: 13px;
+        }
+
+        .score-detail-panel .detail-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .score-detail-panel .detail-row:last-child {
+            border-bottom: none;
+        }
+
+        .score-detail-panel .detail-label {
+            color: var(--text-secondary);
+        }
+
+        .score-detail-panel .detail-value {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .score-detail-panel .recommendations {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .score-detail-panel .recommendations h5 {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            margin: 0 0 8px 0;
+        }
+
+        .score-detail-panel .rec-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        /* ========== Monero Balance Modal ========== */
+        .privacy-modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 9000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .privacy-modal-overlay.active {
+            display: flex;
+        }
+
+        .privacy-modal {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 28px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .privacy-modal h3 {
+            font-size: 18px;
+            color: var(--text-primary);
+            margin: 0 0 8px 0;
+        }
+
+        .privacy-modal p {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin: 0 0 16px 0;
+            line-height: 1.6;
+        }
+
+        .privacy-modal label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .privacy-modal input[type="number"] {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 15px;
+            outline: none;
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+
+        .privacy-modal input[type="number"]:focus {
+            border-color: var(--accent-success);
+        }
+
+        .privacy-modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 18px;
+            justify-content: flex-end;
+        }
+
+        /* ========== Buttons ========== */
+        .btn-check-score {
+            padding: 5px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .btn-check-score:hover {
+            border-color: var(--accent-success);
+            color: var(--accent-success);
+            background: rgba(0, 210, 106, 0.08);
+        }
+
+        .btn-set-balance {
+            padding: 5px 12px;
+            border: 1px solid rgba(255, 107, 0, 0.4);
+            border-radius: 6px;
+            background: rgba(255, 107, 0, 0.1);
+            color: #ff6b00;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .btn-set-balance:hover {
+            border-color: #ff6b00;
+            background: rgba(255, 107, 0, 0.15);
+        }
+
+        /* ========== Light Theme Overrides ========== */
+        [data-theme="light"] .privacy-card {
+            background: #ffffff;
+            border-color: #e5e7eb;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        [data-theme="light"] .privacy-card:hover {
+            border-color: var(--accent-success);
+            box-shadow: 0 4px 12px rgba(0, 184, 148, 0.15);
+        }
+
+        [data-theme="light"] .privacy-chain-stat-card {
+            background: #ffffff;
+            border-color: #e5e7eb;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        [data-theme="light"] .education-item {
+            border-color: #e5e7eb;
+        }
+
+        [data-theme="light"] .education-item-header {
+            background: #ffffff;
+        }
+
+        [data-theme="light"] .education-item-header:hover {
+            background: #f5f7fa;
+        }
+
+        [data-theme="light"] .education-item-body {
+            background: #f9fafb;
+            border-top-color: #e5e7eb;
+        }
+
+        [data-theme="light"] .privacy-analysis-table thead th {
+            background: #f5f7fa;
+        }
+
+        [data-theme="light"] .privacy-analysis-table tbody tr:hover {
+            background: rgba(0, 0, 0, 0.02);
+        }
+
+        [data-theme="light"] .privacy-analysis-table {
+            border-color: #e5e7eb;
+        }
+
+        [data-theme="light"] .privacy-analysis-table tbody tr {
+            border-top-color: #e5e7eb;
+        }
+
+        [data-theme="light"] .privacy-empty-state {
+            border-color: #d1d5db;
+        }
+
+        [data-theme="light"] .score-detail-panel {
+            background: #f5f7fa;
+            border-color: #e5e7eb;
+        }
+
+        [data-theme="light"] .score-detail-panel .detail-row {
+            border-bottom-color: #e5e7eb;
+        }
+
+        [data-theme="light"] .score-detail-panel .recommendations {
+            border-top-color: #e5e7eb;
+        }
+
+        [data-theme="light"] .privacy-modal {
+            background: #ffffff;
+            border-color: #e5e7eb;
+        }
+
+        [data-theme="light"] .privacy-modal input[type="number"] {
+            background: #f9fafb;
+            border-color: #d1d5db;
+        }
+
+        [data-theme="light"] .chain-stats-row {
+            border-top-color: #e5e7eb;
+        }
+
+        [data-theme="light"] .privacy-page header {
+            border-color: #e5e7eb;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+        }
+
+        /* ========== cypherpunk1 Theme Overrides ========== */
+        [data-theme="cypherpunk1"] .privacy-score-badge.score-protected {
+            color: #00d4ff;
+            background: rgba(0, 212, 255, 0.15);
+            border-color: rgba(0, 212, 255, 0.3);
+        }
+
+        [data-theme="cypherpunk1"] .privacy-level-indicator.level-high {
+            color: #00d4ff;
+            background: rgba(0, 212, 255, 0.15);
+            border-color: rgba(0, 212, 255, 0.3);
+        }
+
+        [data-theme="cypherpunk1"] .privacy-section-header {
+            border-bottom-color: #00d4ff;
+        }
+
+        [data-theme="cypherpunk1"] .privacy-card:hover {
+            border-color: #00d4ff;
+            box-shadow: 0 0 16px rgba(0, 212, 255, 0.2);
+        }
+
+        /* ========== Responsive ========== */
+        @media (max-width: 768px) {
+            .privacy-wallets-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .privacy-chain-stats {
+                grid-template-columns: 1fr;
+            }
+
+            .privacy-analysis-table {
+                font-size: 12px;
+            }
+
+            .privacy-analysis-table td, .privacy-analysis-table th {
+                padding: 10px 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="privacy-page">
+        <header>
+            <h1><a href="/" style="color: inherit; text-decoration: none;">A Better Crypto Tracker</a></h1>
+            <div class="header-actions">
+                <button id="privacyBtn" class="btn btn-privacy" onclick="togglePrivacyMode()" title="Toggle privacy mode">
+                    Privacy Mode
+                </button>
+                <div class="waffle-menu-container">
+                    <button class="waffle-menu-btn" onclick="toggleWaffleMenu()" title="Menu">
+                        <span class="waffle-icon">
+                            <span></span><span></span><span></span>
+                            <span></span><span></span><span></span>
+                            <span></span><span></span><span></span>
+                        </span>
+                    </button>
+                    <div class="waffle-menu-dropdown" id="waffleMenu">
+                        <a href="/" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128200;</span>
+                            <span class="waffle-item-label">Dashboard</span>
+                        </a>
+                        <a href="/wallets.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128176;</span>
+                            <span class="waffle-item-label">Manage Wallets</span>
+                        </a>
+                        <a href="/transactions.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128260;</span>
+                            <span class="waffle-item-label">Transactions</span>
+                        </a>
+                        <a href="/apis.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128273;</span>
+                            <span class="waffle-item-label">APIs</span>
+                        </a>
+                        <a href="/services.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#9881;</span>
+                            <span class="waffle-item-label">Services</span>
+                        </a>
+                        <a href="/system.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128295;</span>
+                            <span class="waffle-item-label">Settings</span>
+                        </a>
+                        <a href="/cache.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128452;</span>
+                            <span class="waffle-item-label">Cache Management</span>
+                        </a>
+                        <a href="/nft-wall.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128444;</span>
+                            <span class="waffle-item-label">NFT Wall</span>
+                        </a>
+                        <a href="/logs.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128221;</span>
+                            <span class="waffle-item-label">System Logs</span>
+                        </a>
+                        <a href="/help.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#10067;</span>
+                            <span class="waffle-item-label">Help & Guide</span>
+                        </a>
+                        <a href="/privacy.html" class="waffle-menu-item active">
+                            <span class="waffle-item-icon">&#128274;</span>
+                            <span class="waffle-item-label">Privacy & ZK</span>
+                        </a>
+                        <div class="waffle-menu-divider"></div>
+                        <div class="waffle-menu-theme">
+                            <span class="waffle-item-icon">&#127912;</span>
+                            <select id="themeSelect" onchange="changeTheme(this.value)" title="Select theme">
+                                <option value="dark-mode">Dark Mode</option>
+                                <option value="light">Light</option>
+                                <option value="cypherpunk1">Cypherpunk 1</option>
+                                <option value="ocean-depths">Ocean Depths</option>
+                                <option value="sunset-horizon">Sunset Horizon</option>
+                                <option value="cypher">Cypher</option>
+                                <option value="cypher2">Cypher2</option>
+                                <option value="cypher3">Cypher3</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="page-header">
+            <h2>&#128274; Privacy &amp; ZK</h2>
+            <p>Analyze your on-chain privacy posture across ZCash, Monero, Secret Network, and Ethereum shielded protocols.</p>
+        </div>
+
+        <!-- Section 1: Privacy Holdings Summary -->
+        <div class="privacy-section" id="sectionHoldings">
+            <div class="privacy-section-header">
+                <span class="section-icon">&#128200;</span>
+                <h3>Privacy Holdings</h3>
+            </div>
+            <div id="privacyWalletsContainer">
+                <div class="privacy-loading" id="holdingsLoading">
+                    <div class="spinner-small"></div>
+                    <span>Loading privacy wallets...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 2: Per-Wallet Privacy Analysis -->
+        <div class="privacy-section" id="sectionAnalysis">
+            <div class="privacy-section-header">
+                <span class="section-icon">&#128269;</span>
+                <h3>Per-Wallet Privacy Analysis</h3>
+            </div>
+            <div id="privacyAnalysisContainer">
+                <div class="privacy-loading" id="analysisLoading">
+                    <div class="spinner-small"></div>
+                    <span>Loading wallet analysis...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 3: Chain Privacy Stats -->
+        <div class="privacy-section" id="sectionStats">
+            <div class="privacy-section-header">
+                <span class="section-icon">&#128202;</span>
+                <h3>Chain Privacy Stats</h3>
+            </div>
+            <div class="privacy-chain-stats" id="privacyChainStats">
+                <!-- ZCash Card -->
+                <div class="privacy-chain-stat-card">
+                    <div class="chain-stat-header">
+                        <img src="https://img.logokit.com/crypto/ZEC?size=36" alt="Zcash" class="chain-stat-logo" id="zecStatLogo">
+                        <div>
+                            <div class="chain-stat-title">ZCash Shielded Pool</div>
+                            <div class="chain-stat-subtitle">zaddr (Sapling/Orchard)</div>
+                        </div>
+                    </div>
+                    <div class="privacy-level-indicator level-medium">
+                        &#9651; Optional Privacy
+                    </div>
+                    <div class="chain-stat-desc">
+                        ZCash supports both transparent (t-addr) and shielded (z-addr) transactions. Only funds held in z-addresses benefit from zero-knowledge proof privacy. Shielded pool stats update via the ZCash network.
+                    </div>
+                    <div class="chain-stats-row" id="zecStatsRow">
+                        <div class="chain-stat-item">
+                            <div class="chain-stat-value" id="zecPoolValue">--</div>
+                            <div class="chain-stat-label">Pool Size (ZEC)</div>
+                        </div>
+                        <div class="chain-stat-item">
+                            <div class="chain-stat-value" id="zecShieldedPct">--</div>
+                            <div class="chain-stat-label">% of Supply Shielded</div>
+                        </div>
+                    </div>
+                    <div class="chain-stat-facts">
+                        <div class="chain-stat-fact"><span class="fact-icon">&#9679;</span> Uses zk-SNARKs (Groth16) for zero-knowledge proofs</div>
+                        <div class="chain-stat-fact"><span class="fact-icon">&#9679;</span> Sapling &amp; Orchard shielded pools</div>
+                        <div class="chain-stat-fact"><span class="fact-icon">&#9679;</span> t-to-z transactions reveal sending amount on-chain</div>
+                    </div>
+                </div>
+
+                <!-- Monero Card -->
+                <div class="privacy-chain-stat-card">
+                    <div class="chain-stat-header">
+                        <img src="https://img.logokit.com/crypto/XMR?size=36" alt="Monero" class="chain-stat-logo" id="xmrStatLogo">
+                        <div>
+                            <div class="chain-stat-title">Monero</div>
+                            <div class="chain-stat-subtitle">Always 100% Private</div>
+                        </div>
+                    </div>
+                    <div class="privacy-level-indicator level-high">
+                        &#10003; Fully Private by Design
+                    </div>
+                    <div class="chain-stat-desc">
+                        Every Monero transaction is private by default. Ring signatures obscure the sender, stealth addresses protect the recipient, and RingCT hides the transaction amount. There is no transparent mode.
+                    </div>
+                    <div class="chain-stat-facts">
+                        <div class="chain-stat-fact"><span class="fact-icon">&#9679;</span> Ring signatures obscure sender among 16 decoys</div>
+                        <div class="chain-stat-fact"><span class="fact-icon">&#9679;</span> Stealth addresses hide recipient on-chain</div>
+                        <div class="chain-stat-fact"><span class="fact-icon">&#9679;</span> RingCT hides all transaction amounts</div>
+                        <div class="chain-stat-fact"><span class="fact-icon">&#9679;</span> Bulletproofs for compact range proofs</div>
+                    </div>
+                </div>
+
+                <!-- Secret Network Card -->
+                <div class="privacy-chain-stat-card">
+                    <div class="chain-stat-header">
+                        <img src="https://img.logokit.com/crypto/SCRT?size=36" alt="Secret Network" class="chain-stat-logo" id="scrtStatLogo">
+                        <div>
+                            <div class="chain-stat-title">Secret Network</div>
+                            <div class="chain-stat-subtitle">Encrypted Smart Contracts</div>
+                        </div>
+                    </div>
+                    <div class="privacy-level-indicator level-high">
+                        &#128274; Private Smart Contracts
+                    </div>
+                    <div class="chain-stat-desc">
+                        Secret Network uses Trusted Execution Environments (TEE / Intel SGX) to run smart contracts with encrypted state and inputs. Contract state is not visible on-chain, and only authorised viewers can decrypt balances.
+                    </div>
+                    <div class="chain-stat-facts">
+                        <div class="chain-stat-fact"><span class="fact-icon">&#9679;</span> Contract state encrypted inside TEE (SGX)</div>
+                        <div class="chain-stat-fact"><span class="fact-icon">&#9679;</span> Secret tokens (SNIP-20) hide balances and transfers</div>
+                        <div class="chain-stat-fact"><span class="fact-icon">&#9679;</span> Viewing keys grant selective disclosure</div>
+                        <div class="chain-stat-fact"><span class="fact-icon">&#9679;</span> Cosmos-based; IBC-compatible</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 4: Privacy Education -->
+        <div class="privacy-section" id="sectionEducation">
+            <div class="privacy-section-header">
+                <span class="section-icon">&#128218;</span>
+                <h3>Privacy Education</h3>
+            </div>
+            <div class="privacy-education-section" id="educationAccordion">
+
+                <!-- 1. What is ZK Privacy -->
+                <div class="education-item" id="edu-zk">
+                    <div class="education-item-header" data-edu="edu-zk">
+                        <div class="edu-title">
+                            <span class="edu-icon">&#128161;</span>
+                            What is Zero-Knowledge Privacy?
+                        </div>
+                        <span class="edu-chevron">&#9660;</span>
+                    </div>
+                    <div class="education-item-body">
+                        <p>A <strong>zero-knowledge proof (ZKP)</strong> is a cryptographic method that lets one party (the prover) convince another party (the verifier) that a statement is true — without revealing <em>why</em> it is true or sharing any underlying data.</p>
+                        <p>In cryptocurrency terms, ZK proofs let you prove you own funds and authorise a transaction without revealing your balance, sender address, or receiver address to the public blockchain.</p>
+                        <p>Think of it like proving you know a secret password without actually saying the password out loud. The verifier is convinced the password is correct, but learns nothing about what the password is.</p>
+                        <div class="edu-tip">
+                            <strong>Key insight:</strong> ZK proofs are the mathematical foundation of ZCash's shielded transactions. Every shielded ZEC transfer includes a proof the network can verify cryptographically without seeing the amounts or addresses involved.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. ZCash Shielded vs Transparent -->
+                <div class="education-item" id="edu-zcash">
+                    <div class="education-item-header" data-edu="edu-zcash">
+                        <div class="edu-title">
+                            <span class="edu-icon">&#9401;</span>
+                            ZCash: Shielded vs Transparent
+                        </div>
+                        <span class="edu-chevron">&#9660;</span>
+                    </div>
+                    <div class="education-item-body">
+                        <p>ZCash has two types of addresses. Only one of them provides privacy.</p>
+                        <p><strong>Transparent addresses (t-addr)</strong> work exactly like Bitcoin — all transaction details are fully visible on the public blockchain. Anyone can see your balance, incoming and outgoing amounts, and counterparty addresses.</p>
+                        <p><strong>Shielded addresses (z-addr)</strong> use zk-SNARKs to hide the sender, receiver, and amount. On-chain you only see that a valid shielded transaction occurred. There are two generations: <strong>Sapling</strong> (legacy) and <strong>Orchard</strong> (current, Halo2 proofs with no trusted setup).</p>
+                        <p>When you move ZEC from a t-addr to a z-addr (shielding), the amount entering the shielded pool is visible. Once inside, transfers between z-addrs are fully private. Moving from z-addr back to t-addr (deshielding) reveals the output amount.</p>
+                        <div class="edu-warning">
+                            <strong>Important:</strong> Most ZCash wallets and exchanges use t-addresses by default. Check your wallet settings — if you are holding ZEC on a t-address, you have no privacy. Only Orchard or Sapling z-addresses provide ZK privacy.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Monero: Always Private -->
+                <div class="education-item" id="edu-monero">
+                    <div class="education-item-header" data-edu="edu-monero">
+                        <div class="edu-title">
+                            <span class="edu-icon">ɱ</span>
+                            Monero: Always Private
+                        </div>
+                        <span class="edu-chevron">&#9660;</span>
+                    </div>
+                    <div class="education-item-body">
+                        <p>Monero (XMR) takes a different philosophy from ZCash: <strong>privacy is mandatory, not optional.</strong> Every transaction on Monero is private by default. There is no transparent mode.</p>
+                        <p>Monero uses three complementary technologies to achieve this:</p>
+                        <p><strong>Ring Signatures</strong> — When you send XMR, your transaction is cryptographically mixed with 15 other "decoy" outputs from the blockchain. An outside observer cannot determine which of the 16 inputs is the real one, obscuring the sender.</p>
+                        <p><strong>Stealth Addresses</strong> — Every transaction generates a unique one-time address for the recipient. The recipient's actual wallet address never appears on the blockchain. Only the recipient can identify which outputs belong to them, using their private view key.</p>
+                        <p><strong>RingCT (Ring Confidential Transactions)</strong> — Transaction amounts are encrypted using Pedersen commitments. The network can verify inputs equal outputs (no coins created from thin air) without knowing the actual amounts. Bulletproofs make this efficient.</p>
+                        <div class="edu-tip">
+                            <strong>Result:</strong> Because XMR balances are encrypted and never directly queryable from the blockchain, ABCT requires you to manually enter your Monero balance. Use the "Set Balance" button on your XMR wallet to keep it up to date.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. Secret Network -->
+                <div class="education-item" id="edu-secret">
+                    <div class="education-item-header" data-edu="edu-secret">
+                        <div class="edu-title">
+                            <span class="edu-icon">&#128274;</span>
+                            Secret Network: Private Smart Contracts
+                        </div>
+                        <span class="edu-chevron">&#9660;</span>
+                    </div>
+                    <div class="education-item-body">
+                        <p>Secret Network is a Cosmos-based blockchain that adds data privacy to smart contracts using <strong>Trusted Execution Environments (TEE)</strong>, specifically Intel SGX.</p>
+                        <p>On most blockchains (Ethereum, Cardano, Solana) the state of every smart contract — including every wallet's token balance — is public. Secret Network encrypts contract state inside a secure hardware enclave. Only the enclave can decrypt and process the data. Even Secret Network validators cannot see the encrypted state.</p>
+                        <p><strong>Secret Tokens (SNIP-20)</strong> are the private equivalent of ERC-20 tokens. Your SNIP-20 balance is hidden from public view. You use a <strong>viewing key</strong> to let specific parties (like a wallet or auditor) see your balance, giving you selective transparency.</p>
+                        <p>Secret DeFi (AMMs, lending, etc.) runs on private contract state, meaning your trading activity and positions are not visible to the public.</p>
+                        <div class="edu-tip">
+                            <strong>Note:</strong> TEE-based privacy has a different trust model from ZK proofs. You trust that Intel SGX has not been compromised and that the Secret Network validators are running genuine SGX hardware. ZK proofs (ZCash, Mina) rely on math alone.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. ZK Rollups vs ZK Privacy -->
+                <div class="education-item" id="edu-zkrollups">
+                    <div class="education-item-header" data-edu="edu-zkrollups">
+                        <div class="edu-title">
+                            <span class="edu-icon">&#9889;</span>
+                            ZK Rollups vs ZK Privacy — An Important Distinction
+                        </div>
+                        <span class="edu-chevron">&#9660;</span>
+                    </div>
+                    <div class="education-item-body">
+                        <p>The term "ZK" (zero-knowledge) appears in two very different contexts in crypto. It is important not to confuse them.</p>
+                        <p><strong>ZK Rollups (zkSync, Scroll, Linea, Polygon zkEVM)</strong> use ZK proofs for <em>scalability</em>, not privacy. They batch thousands of transactions off-chain and submit a single validity proof to Ethereum, proving all those transactions were executed correctly. The transaction data is still public — anyone can see who sent what to whom. ZK here means "we can prove correctness without re-executing everything", not "we hide the data".</p>
+                        <p><strong>ZK Privacy chains (ZCash, Mina)</strong> use ZK proofs to actually hide transaction details — sender, receiver, and amount — from the public blockchain. This is what most people mean when they say "ZK privacy".</p>
+                        <div class="edu-warning">
+                            <strong>Do not assume privacy from the "ZK" label.</strong> Using zkSync Era or Scroll does not provide any transaction privacy. Your balances and transaction history on these networks are fully public, just like on regular Ethereum.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6. Privacy Best Practices -->
+                <div class="education-item" id="edu-bestpractices">
+                    <div class="education-item-header" data-edu="edu-bestpractices">
+                        <div class="edu-title">
+                            <span class="edu-icon">&#9989;</span>
+                            Privacy Best Practices
+                        </div>
+                        <span class="edu-chevron">&#9660;</span>
+                    </div>
+                    <div class="education-item-body">
+                        <p><strong>For ZCash users:</strong></p>
+                        <p>Always shield your ZEC immediately after receiving it. Use an Orchard z-address (not Sapling, which is being deprecated) as your primary receiving address. Avoid t-addresses entirely. When withdrawing from an exchange, accept that the amount will be visible on-chain when it enters the shielded pool — this is unavoidable. From that point, keep funds in z-addr to z-addr transfers for maximum privacy.</p>
+                        <p><strong>For Monero users:</strong></p>
+                        <p>Every XMR transaction is private by default. Best practices include: avoid reusing subaddresses (use a fresh one per sender), run your own node if possible (using a remote node can reveal your IP and which transactions you query), and be mindful of on-ramp/off-ramp points where KYC may link your identity to your XMR.</p>
+                        <p><strong>For Secret Network users:</strong></p>
+                        <p>Use SNIP-20 tokens rather than the native IBC-transferred tokens where privacy matters. Set viewing keys only for parties you trust. Remember that SCRT staking amounts and validator interactions are public — only token balances inside Secret contracts are private.</p>
+                        <p><strong>General:</strong></p>
+                        <p>No privacy chain protects you at the on-ramp or off-ramp. When you buy XMR on a KYC exchange and withdraw it, the exchange knows you own that XMR. Privacy chains protect the on-chain trail, not your identity at the exchange level.</p>
+                        <div class="edu-tip">
+                            <strong>Self-custody matters:</strong> Hardware wallets (Ledger supports ZCash transparent, Trezor supports XMR) add another layer. For maximum Monero privacy, use the official Monero GUI/CLI wallet with your own node.
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+    </div><!-- /.privacy-page -->
+
+    <!-- Monero Balance Modal -->
+    <div class="privacy-modal-overlay" id="xmrBalanceModal">
+        <div class="privacy-modal">
+            <h3>Set Monero Balance</h3>
+            <p>Monero balances cannot be fetched from the blockchain because all amounts are encrypted. Enter your current XMR balance manually to keep your portfolio value accurate.</p>
+            <label for="xmrBalanceInput">XMR Balance</label>
+            <input type="number" id="xmrBalanceInput" min="0" step="0.000000000001" placeholder="0.000000000000">
+            <input type="hidden" id="xmrWalletIdInput" value="">
+            <div class="privacy-modal-actions">
+                <button class="btn btn-secondary" id="xmrModalCancelBtn">Cancel</button>
+                <button class="btn btn-primary" id="xmrModalSaveBtn">Save Balance</button>
+            </div>
+        </div>
+    </div>
+
+    <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
+        <p>ABCT - Privacy &amp; ZK | <span style="opacity: 0.6;">v1.15.0 (BUILD 1771792479)</span></p>
+    </footer>
+
+    <script src="/static/js/app.js?v=1771792479"></script>
+
+    <script>
+        // ============================================================
+        // Privacy Page — main logic
+        // ============================================================
+
+        const PRIVACY_CHAINS = ['zcash', 'monero', 'secret_network'];
+
+        // LogoKit URL helper (mirrors app.js getLogoKitUrl but standalone)
+        function privacyLogoUrl(symbol, size) {
+            return 'https://img.logokit.com/crypto/' + symbol + '?size=' + (size || 32);
+        }
+
+        // Format number with commas
+        function fmtNumber(n, decimals) {
+            if (n === null || n === undefined || isNaN(n)) return '--';
+            return parseFloat(n).toLocaleString(undefined, { maximumFractionDigits: decimals || 2 });
+        }
+
+        function fmtUSD(n) {
+            if (n === null || n === undefined || isNaN(n)) return '--';
+            return '$' + parseFloat(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        // Privacy score badge class
+        function scoreBadgeClass(score) {
+            if (score >= 67) return 'score-protected';
+            if (score >= 34) return 'score-partial';
+            return 'score-exposed';
+        }
+
+        function scoreBadgeLabel(score) {
+            if (score >= 67) return 'Protected';
+            if (score >= 34) return 'Partial';
+            return 'Exposed';
+        }
+
+        // ========================
+        // Section 1 & 2: wallets
+        // ========================
+        async function initPrivacyPage() {
+            try {
+                const resp = await authFetch('/privacy/wallets/summary');
+                if (!resp || !resp.ok) {
+                    renderWalletsEmpty('Could not load privacy wallets. The backend privacy module may not be configured yet.');
+                    renderAnalysisEmpty('No wallet data available.');
+                    return;
+                }
+                const data = await resp.json();
+                renderPrivacyWallets(data.wallets || []);
+                renderPrivacyAnalysis(data.wallets || []);
+            } catch (e) {
+                renderWalletsEmpty('Could not reach /privacy/wallets/summary. The privacy API may not be enabled on this instance.');
+                renderAnalysisEmpty('');
+            }
+
+            // Also load chain stats
+            loadPrivacyStats();
+        }
+
+        function renderWalletsEmpty(msg) {
+            const el = document.getElementById('privacyWalletsContainer');
+            if (!el) return;
+            setSafeHTML(el, '<div class="privacy-empty-state"><div class="empty-icon">&#128274;</div><h4>No privacy wallets found</h4><p>' + (msg || 'Add a ZCash, Monero, or Secret Network wallet to get started.') + '</p><a href="/wallets.html">Manage Wallets</a></div>');
+        }
+
+        function renderAnalysisEmpty(msg) {
+            const el = document.getElementById('privacyAnalysisContainer');
+            if (!el) return;
+            setSafeHTML(el, msg ? '<p style="color: var(--text-secondary); font-size: 14px; padding: 16px 0;">' + msg + '</p>' : '');
+        }
+
+        function renderPrivacyWallets(wallets) {
+            const container = document.getElementById('privacyWalletsContainer');
+            if (!container) return;
+
+            if (!wallets.length) {
+                renderWalletsEmpty();
+                return;
+            }
+
+            let html = '<div class="privacy-wallets-grid">';
+            for (const w of wallets) {
+                const chainKey = (w.chain || '').toLowerCase();
+                const isMonero = chainKey === 'monero';
+                const isZcash = chainKey === 'zcash';
+
+                // Badge
+                let badgeHtml = '';
+                if (isMonero) {
+                    badgeHtml = '<span class="privacy-score-badge score-protected">&#10003; Fully Private</span>';
+                } else if (typeof w.privacy_score === 'number') {
+                    const cls = scoreBadgeClass(w.privacy_score);
+                    badgeHtml = '<span class="privacy-score-badge ' + cls + '">' + w.privacy_score + '% ' + scoreBadgeLabel(w.privacy_score) + '</span>';
+                }
+
+                const symbol = (w.symbol || chainKey).toUpperCase();
+                const balance = fmtNumber(w.balance, 8);
+                const usdValue = fmtUSD(w.usd_value);
+                const label = w.label || w.address_short || 'Wallet';
+
+                html += '<div class="privacy-card">';
+                html += '  <div class="privacy-card-header">';
+                html += '    <img src="' + privacyLogoUrl(symbol, 32) + '" alt="' + symbol + '" class="privacy-card-logo" data-fallback-text="' + (w.chain_icon || symbol[0]) + '">';
+                html += '    <div class="privacy-card-title">';
+                html += '      <div class="chain-name">' + (w.chain_name || chainKey) + '</div>';
+                html += '      <div class="wallet-label">' + label + '</div>';
+                html += '    </div>';
+                html += '  </div>';
+                html += '  <div class="privacy-card-body">';
+                html += '    <div class="balance">' + balance + ' ' + symbol + '</div>';
+                html += '    <div class="balance-usd">' + usdValue + '</div>';
+                html += '    ' + badgeHtml;
+                if (isMonero) {
+                    html += '  <div style="margin-top: 10px;"><button class="btn-set-balance" data-wallet-id="' + w.id + '" data-action="set-xmr-balance">Set Balance</button></div>';
+                }
+                html += '  </div>';
+                html += '</div>';
+            }
+            html += '</div>';
+
+            setSafeHTML(container, html);
+
+            // Attach event listeners (DOMPurify strips inline handlers)
+            container.querySelectorAll('img.privacy-card-logo').forEach(img => {
+                const fallback = img.getAttribute('data-fallback-text') || '?';
+                img.addEventListener('error', () => {
+                    const placeholder = document.createElement('div');
+                    placeholder.className = 'privacy-card-logo-placeholder';
+                    placeholder.textContent = fallback;
+                    img.parentNode.replaceChild(placeholder, img);
+                });
+            });
+
+            container.querySelectorAll('[data-action="set-xmr-balance"]').forEach(btn => {
+                btn.addEventListener('click', () => openXmrModal(btn.dataset.walletId));
+            });
+        }
+
+        function renderPrivacyAnalysis(wallets) {
+            const container = document.getElementById('privacyAnalysisContainer');
+            if (!container) return;
+
+            if (!wallets.length) {
+                setSafeHTML(container, '');
+                return;
+            }
+
+            let html = '<table class="privacy-analysis-table">';
+            html += '<thead><tr>';
+            html += '<th>Wallet</th>';
+            html += '<th>Chain</th>';
+            html += '<th>Balance</th>';
+            html += '<th>Privacy Score</th>';
+            html += '<th>Actions</th>';
+            html += '</tr></thead>';
+            html += '<tbody id="privacyAnalysisTbody">';
+
+            for (const w of wallets) {
+                const chainKey = (w.chain || '').toLowerCase();
+                const isMonero = chainKey === 'monero';
+                const symbol = (w.symbol || chainKey).toUpperCase();
+                const label = w.label || w.address_short || 'Wallet';
+                const balance = fmtNumber(w.balance, 8);
+
+                let scoreCellHtml = '';
+                if (isMonero) {
+                    scoreCellHtml = '<span class="privacy-score-badge score-protected">&#10003; Fully Private</span>';
+                } else if (typeof w.privacy_score === 'number') {
+                    const cls = scoreBadgeClass(w.privacy_score);
+                    scoreCellHtml = '<span class="privacy-score-badge ' + cls + '">' + w.privacy_score + '% ' + scoreBadgeLabel(w.privacy_score) + '</span>';
+                } else {
+                    scoreCellHtml = '<span style="color: var(--text-secondary); font-size: 12px;">Not checked</span>';
+                }
+
+                let actionHtml = '';
+                if (isMonero) {
+                    actionHtml = '<button class="btn-set-balance" data-wallet-id="' + w.id + '" data-action="set-xmr-balance-row">Set Balance</button>';
+                } else {
+                    actionHtml = '<button class="btn-check-score" data-wallet-id="' + w.id + '" data-action="check-score">Check Score</button>';
+                }
+
+                html += '<tr data-wallet-row="' + w.id + '">';
+                html += '<td>';
+                html += '  <div class="wallet-name-cell">';
+                html += '    <img src="' + privacyLogoUrl(symbol, 24) + '" alt="' + symbol + '" class="wallet-chain-icon" data-fallback-text="' + symbol[0] + '">';
+                html += '    <span>' + label + '</span>';
+                html += '  </div>';
+                html += '</td>';
+                html += '<td>' + (w.chain_name || chainKey) + '</td>';
+                html += '<td>' + balance + ' ' + symbol + '</td>';
+                html += '<td id="score-cell-' + w.id + '">' + scoreCellHtml + '</td>';
+                html += '<td>' + actionHtml + '</td>';
+                html += '</tr>';
+                // Detail row (hidden until score check)
+                html += '<tr id="detail-row-' + w.id + '" style="display:none;"><td colspan="5"><div class="score-detail-panel" id="detail-panel-' + w.id + '"></div></td></tr>';
+            }
+
+            html += '</tbody></table>';
+
+            setSafeHTML(container, html);
+
+            // Attach listeners
+            container.querySelectorAll('img.wallet-chain-icon').forEach(img => {
+                const fallback = img.getAttribute('data-fallback-text') || '?';
+                img.addEventListener('error', () => {
+                    const placeholder = document.createElement('div');
+                    placeholder.className = 'wallet-chain-icon-placeholder';
+                    placeholder.textContent = fallback;
+                    img.parentNode.replaceChild(placeholder, img);
+                });
+            });
+
+            container.querySelectorAll('[data-action="check-score"]').forEach(btn => {
+                btn.addEventListener('click', () => checkWalletScore(btn.dataset.walletId, btn));
+            });
+
+            container.querySelectorAll('[data-action="set-xmr-balance-row"]').forEach(btn => {
+                btn.addEventListener('click', () => openXmrModal(btn.dataset.walletId));
+            });
+        }
+
+        // ========================
+        // Section 2: Score check
+        // ========================
+        async function checkWalletScore(walletId, triggerBtn) {
+            const detailRow = document.getElementById('detail-row-' + walletId);
+            const detailPanel = document.getElementById('detail-panel-' + walletId);
+            const scoreCell = document.getElementById('score-cell-' + walletId);
+
+            if (!detailRow || !detailPanel) return;
+
+            // Toggle if already open
+            if (detailRow.style.display !== 'none') {
+                detailRow.style.display = 'none';
+                return;
+            }
+
+            if (triggerBtn) triggerBtn.textContent = 'Checking...';
+
+            try {
+                const resp = await authFetch('/privacy/wallet/' + walletId + '/score');
+                if (!resp || !resp.ok) {
+                    setSafeHTML(detailPanel, '<p style="color: var(--text-secondary); font-size: 13px; margin: 0;">Could not load score. The privacy endpoint may not be available.</p>');
+                    detailRow.style.display = '';
+                    if (triggerBtn) triggerBtn.textContent = 'Check Score';
+                    return;
+                }
+                const result = await resp.json();
+
+                // Update score cell
+                if (scoreCell && typeof result.score === 'number') {
+                    const cls = scoreBadgeClass(result.score);
+                    scoreCell.innerHTML = '';
+                    const badge = document.createElement('span');
+                    badge.className = 'privacy-score-badge ' + cls;
+                    badge.textContent = result.score + '% ' + scoreBadgeLabel(result.score);
+                    scoreCell.appendChild(badge);
+                }
+
+                // Build detail panel
+                let detailHtml = '';
+                if (result.details) {
+                    const d = result.details;
+                    detailHtml += '<div>';
+                    if (d.shield_events !== undefined) {
+                        detailHtml += '<div class="detail-row"><span class="detail-label">Shield Events</span><span class="detail-value">' + d.shield_events + '</span></div>';
+                    }
+                    if (d.shielded_pct !== undefined) {
+                        detailHtml += '<div class="detail-row"><span class="detail-label">Holdings Shielded</span><span class="detail-value">' + d.shielded_pct + '%</span></div>';
+                    }
+                    if (d.railgun_interactions !== undefined) {
+                        detailHtml += '<div class="detail-row"><span class="detail-label">Railgun Interactions</span><span class="detail-value">' + d.railgun_interactions + '</span></div>';
+                    }
+                    if (d.transparent_balance !== undefined) {
+                        detailHtml += '<div class="detail-row"><span class="detail-label">Transparent Balance</span><span class="detail-value">' + fmtNumber(d.transparent_balance, 8) + '</span></div>';
+                    }
+                    if (d.shielded_balance !== undefined) {
+                        detailHtml += '<div class="detail-row"><span class="detail-label">Shielded Balance</span><span class="detail-value">' + fmtNumber(d.shielded_balance, 8) + '</span></div>';
+                    }
+                    detailHtml += '</div>';
+                }
+
+                if (result.recommendations && result.recommendations.length) {
+                    detailHtml += '<div class="recommendations"><h5>Recommendations</h5>';
+                    for (const rec of result.recommendations) {
+                        detailHtml += '<div class="rec-item"><span>&#x2022;</span><span>' + rec + '</span></div>';
+                    }
+                    detailHtml += '</div>';
+                }
+
+                if (!detailHtml) {
+                    detailHtml = '<p style="color: var(--text-secondary); font-size: 13px; margin: 0;">No additional details returned.</p>';
+                }
+
+                setSafeHTML(detailPanel, detailHtml);
+                detailRow.style.display = '';
+
+            } catch (e) {
+                setSafeHTML(detailPanel, '<p style="color: var(--text-secondary); font-size: 13px; margin: 0;">Error fetching score: ' + e.message + '</p>');
+                detailRow.style.display = '';
+            }
+
+            if (triggerBtn) triggerBtn.textContent = 'Hide';
+        }
+
+        // ========================
+        // Section 3: Chain stats
+        // ========================
+        async function loadPrivacyStats() {
+            try {
+                const resp = await authFetch('/privacy/stats');
+                if (!resp || !resp.ok) return;
+                const stats = await resp.json();
+
+                if (stats.zcash) {
+                    const z = stats.zcash;
+                    const poolEl = document.getElementById('zecPoolValue');
+                    const pctEl = document.getElementById('zecShieldedPct');
+                    if (poolEl && z.shielded_pool_zec !== undefined) {
+                        poolEl.textContent = fmtNumber(z.shielded_pool_zec, 0) + ' ZEC';
+                    }
+                    if (pctEl && z.shielded_pct !== undefined) {
+                        pctEl.textContent = fmtNumber(z.shielded_pct, 1) + '%';
+                    }
+                }
+            } catch (e) {
+                // Stats endpoint may not exist — silently skip
+            }
+        }
+
+        // ========================
+        // Monero Balance Modal
+        // ========================
+        function openXmrModal(walletId) {
+            const modal = document.getElementById('xmrBalanceModal');
+            const walletInput = document.getElementById('xmrWalletIdInput');
+            const balanceInput = document.getElementById('xmrBalanceInput');
+            if (!modal) return;
+            if (walletInput) walletInput.value = walletId || '';
+            if (balanceInput) balanceInput.value = '';
+            modal.classList.add('active');
+            if (balanceInput) balanceInput.focus();
+        }
+
+        function closeXmrModal() {
+            const modal = document.getElementById('xmrBalanceModal');
+            if (modal) modal.classList.remove('active');
+        }
+
+        async function setMoneroBalance(walletId, balance) {
+            try {
+                const resp = await authFetch('/privacy/monero/set-balance', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ wallet_id: walletId, balance: parseFloat(balance) })
+                });
+                if (resp && resp.ok) {
+                    closeXmrModal();
+                    // Refresh the page holdings
+                    await initPrivacyPage();
+                } else {
+                    alert('Failed to save balance. Check the API response.');
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        // ========================
+        // Education Accordion
+        // ========================
+        function initAccordion() {
+            document.querySelectorAll('.education-item-header').forEach(header => {
+                header.addEventListener('click', () => {
+                    const item = document.getElementById(header.getAttribute('data-edu'));
+                    if (!item) return;
+                    item.classList.toggle('open');
+                });
+            });
+        }
+
+        // ========================
+        // Inject LogoKit tokens
+        // ========================
+        function injectLogokitTokens() {
+            fetch('/api/config/public').then(r => r.json()).then(cfg => {
+                if (!cfg.logokit_token) return;
+                document.querySelectorAll('img[src*="img.logokit.com"]').forEach(img => {
+                    if (!img.src.includes('token=')) {
+                        img.src = img.src.replace('?', '?token=' + cfg.logokit_token + '&');
+                    }
+                });
+            }).catch(() => {});
+        }
+
+        // ========================
+        // Init on DOM ready
+        // ========================
+        document.addEventListener('DOMContentLoaded', () => {
+            // Theme / privacy mode
+            if (typeof initializePrivacyMode === 'function') initializePrivacyMode();
+            if (typeof loadSavedTheme === 'function') loadSavedTheme();
+
+            // Accordion
+            initAccordion();
+
+            // Modal cancel / save buttons
+            const cancelBtn = document.getElementById('xmrModalCancelBtn');
+            const saveBtn = document.getElementById('xmrModalSaveBtn');
+            const modalOverlay = document.getElementById('xmrBalanceModal');
+
+            if (cancelBtn) cancelBtn.addEventListener('click', closeXmrModal);
+            if (saveBtn) {
+                saveBtn.addEventListener('click', () => {
+                    const walletId = document.getElementById('xmrWalletIdInput').value;
+                    const balance = document.getElementById('xmrBalanceInput').value;
+                    if (!balance || isNaN(parseFloat(balance))) {
+                        alert('Please enter a valid balance.');
+                        return;
+                    }
+                    setMoneroBalance(walletId, balance);
+                });
+            }
+            // Close modal on overlay click
+            if (modalOverlay) {
+                modalOverlay.addEventListener('click', e => {
+                    if (e.target === modalOverlay) closeXmrModal();
+                });
+            }
+
+            // LogoKit
+            injectLogokitTokens();
+
+            // Load wallet data
+            initPrivacyPage();
+        });
+    </script>
+</body>
+</html>
