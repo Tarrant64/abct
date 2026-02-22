@@ -13129,3 +13129,292 @@ body.privacy-mode a[data-href] {
         width: 260px;
     }
 }
+
+/*===============================================================================
+  WALLET ADDRESS DETECTION UI
+===============================================================================*/
+
+.chain-detection-result {
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-top: 8px;
+    min-height: 40px;
+    transition: border-color 0.2s;
+}
+
+.detection-loading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.detection-loading .spinner-small {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border-color);
+    border-top-color: var(--accent-success);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.detection-single {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.detection-single img {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+}
+
+.detection-single .chain-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.detection-single .checkmark {
+    color: var(--accent-success);
+    font-size: 18px;
+    margin-left: auto;
+}
+
+.chain-detection-result.detected {
+    border-color: var(--accent-success);
+    background: rgba(0, 210, 106, 0.05);
+}
+
+.detection-none {
+    color: var(--accent-error);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.detection-none a {
+    color: var(--accent-success);
+    text-decoration: underline;
+}
+
+.chain-chip-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.chain-chip-group .chip-label {
+    width: 100%;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 2px;
+}
+
+.chain-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.chain-chip img {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+}
+
+.chain-chip:hover {
+    border-color: var(--accent-success);
+    background: rgba(0, 210, 106, 0.08);
+}
+
+.chain-chip.active {
+    border-color: var(--accent-success);
+    background: rgba(0, 210, 106, 0.15);
+    font-weight: 600;
+}
+
+/* Light theme overrides */
+[data-theme="light"] .chain-detection-result {
+    border-color: #e5e7eb;
+    background: #f9fafb;
+}
+
+[data-theme="light"] .chain-detection-result.detected {
+    border-color: var(--accent-success);
+    background: rgba(0, 184, 148, 0.06);
+}
+
+[data-theme="light"] .chain-chip {
+    border-color: #d1d5db;
+    background: #ffffff;
+}
+
+[data-theme="light"] .chain-chip:hover {
+    border-color: var(--accent-success);
+    background: rgba(0, 184, 148, 0.06);
+}
+
+[data-theme="light"] .chain-chip.active {
+    border-color: var(--accent-success);
+    background: rgba(0, 184, 148, 0.12);
+}
+
+/*===============================================================================
+  EXCHANGE SEARCH BAR + PAGINATION
+===============================================================================*/
+
+.exchange-search-bar {
+    display: flex;
+    align-items: center;
+    position: relative;
+    margin-bottom: 12px;
+}
+
+.exchange-search-bar input {
+    width: 100%;
+    padding: 10px 36px 10px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.exchange-search-bar input:focus {
+    border-color: var(--accent-success);
+    box-shadow: 0 0 0 3px rgba(0, 210, 106, 0.15);
+}
+
+.exchange-search-bar input::placeholder {
+    color: var(--text-secondary);
+}
+
+.exchange-search-clear {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 50%;
+    line-height: 1;
+    display: none;
+}
+
+.exchange-search-clear:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.exchange-search-clear.visible {
+    display: block;
+}
+
+.pagination-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    gap: 12px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    flex-wrap: wrap;
+}
+
+.pagination-controls .page-size-select {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.pagination-controls select {
+    padding: 4px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.pagination-controls .page-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pagination-controls .page-nav button {
+    padding: 4px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.pagination-controls .page-nav button:hover:not(:disabled) {
+    border-color: var(--accent-success);
+    background: rgba(0, 210, 106, 0.08);
+}
+
+.pagination-controls .page-nav button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.pagination-controls .page-info {
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.exchange-empty-state {
+    text-align: center;
+    padding: 24px 16px;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+/* Light theme overrides */
+[data-theme="light"] .exchange-search-bar input {
+    border-color: #d1d5db;
+    background: #ffffff;
+}
+
+[data-theme="light"] .exchange-search-bar input:focus {
+    border-color: var(--accent-success);
+    box-shadow: 0 0 0 3px rgba(0, 184, 148, 0.12);
+}
+
+[data-theme="light"] .exchange-search-clear:hover {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .pagination-controls select,
+[data-theme="light"] .pagination-controls .page-nav button {
+    border-color: #d1d5db;
+    background: #ffffff;
+}
+
+[data-theme="light"] .pagination-controls .page-nav button:hover:not(:disabled) {
+    border-color: var(--accent-success);
+    background: rgba(0, 184, 148, 0.06);
+}

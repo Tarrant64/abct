@@ -242,6 +242,186 @@ def detect_blockchain(address: str) -> Optional[str]:
     return None
 
 
+# All EVM chains that use 0x + 40 hex (42 total chars)
+EVM_CHAINS_42 = [
+    'ethereum', 'polygon', 'base', 'arbitrum', 'avalanche', 'bsc',
+    'optimism', 'zksync', 'linea', 'scroll', 'fantom', 'cronos',
+    'gnosis', 'moonbeam', 'kaia', 'vechain', 'zilliqa'
+]
+
+# Move-based chains that use 0x + 64 hex (66 total chars)
+MOVE_CHAINS_66 = ['sui', 'aptos', 'iota']
+
+
+def detect_blockchains(address: str) -> List[str]:
+    """
+    Detect ALL possible blockchains for an address (may return multiple for ambiguous formats).
+
+    Returns:
+        List of chain IDs that could match this address format.
+        Empty list if no match.
+    """
+    address = address.strip()
+
+    # Explicit prefix → single-element list
+    if ':' in address:
+        result = detect_blockchain(address)
+        return [result] if result else []
+
+    # Unique-format chains (single match)
+    # Cardano
+    if address.startswith('addr1'):
+        return ['cardano']
+    if address.startswith('stake1'):
+        return ['cardano']
+
+    # MultiversX
+    if address.startswith('erd1') and len(address) == 62:
+        return ['multiversx']
+
+    # Cosmos-family bech32
+    if address.startswith('cosmos1') and 39 <= len(address) <= 45:
+        return ['cosmos']
+    if address.startswith('osmo1') and 39 <= len(address) <= 50:
+        return ['osmosis']
+    if address.startswith('celestia1') and 43 <= len(address) <= 55:
+        return ['celestia']
+    if address.startswith('inj1') and 42 <= len(address) <= 46:
+        return ['injective']
+    if address.startswith('dydx1') and 42 <= len(address) <= 47:
+        return ['dydx']
+    if address.startswith('sei1') and 42 <= len(address) <= 46:
+        return ['sei']
+    if address.startswith('akash1') and 43 <= len(address) <= 50:
+        return ['akash']
+
+    # Tezos
+    if address.startswith(('tz1', 'tz2', 'tz3', 'KT1')) and len(address) == 36:
+        return ['tezos']
+
+    # Litecoin bech32
+    if address.startswith('ltc1') and len(address) >= 26:
+        return ['litecoin']
+
+    # NEAR named accounts
+    if address.endswith('.near') and len(address) >= 6:
+        return ['near']
+
+    # Stacks
+    if address.startswith(('SP', 'ST')) and 33 <= len(address) <= 41:
+        base58_chars = set('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz')
+        if all(c in base58_chars for c in address):
+            return ['stacks']
+
+    # Algorand
+    if len(address) == 58:
+        base32_chars = set('ABCDEFGHIJKLMNOPQRSTUVWXYZ234567')
+        if all(c in base32_chars for c in address.upper()):
+            return ['algorand']
+
+    # Tron
+    if address.startswith('T') and len(address) == 34:
+        base58_chars = set('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz')
+        if all(c in base58_chars for c in address):
+            return ['tron']
+
+    # Hedera
+    if re.match(r'^\d+\.\d+\.\d+$', address):
+        return ['hedera']
+
+    # XRP
+    if address.startswith('r') and 25 <= len(address) <= 35:
+        base58_chars = set('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz')
+        if all(c in base58_chars for c in address):
+            return ['xrp']
+
+    # Dogecoin
+    if address.startswith('D') and 26 <= len(address) <= 35:
+        base58_chars = set('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz')
+        if all(c in base58_chars for c in address):
+            return ['dogecoin']
+
+    # ZCash
+    if address.startswith(('t1', 't3')) and len(address) == 35:
+        base58_chars = set('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz')
+        if all(c in base58_chars for c in address):
+            return ['zcash']
+
+    # Litecoin legacy
+    if address.startswith(('L', 'M')) and 26 <= len(address) <= 35:
+        base58_chars = set('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz')
+        if all(c in base58_chars for c in address):
+            return ['litecoin']
+
+    # Filecoin
+    if len(address) >= 3 and address[0] == 'f' and address[1] in ('0', '1', '3', '4'):
+        return ['filecoin']
+
+    # 0x addresses — ambiguous for EVM (42 chars) or Move (66 chars)
+    if address.lower().startswith('0x') and len(address) == 42:
+        try:
+            int(address[2:], 16)
+            return list(EVM_CHAINS_42)
+        except ValueError:
+            pass
+
+    if address.lower().startswith('0x') and len(address) == 66:
+        try:
+            int(address[2:], 16)
+            return list(MOVE_CHAINS_66)
+        except ValueError:
+            pass
+
+    # Solana
+    if len(address) >= 32 and len(address) <= 44:
+        if not address.startswith(('1', '3', 'bc1')):
+            base58_chars = set('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz')
+            if all(c in base58_chars for c in address):
+                return ['solana']
+
+    # Bitcoin
+    if re.match(r'^1[a-km-zA-HJ-NP-Z1-9]{25,34}$', address):
+        return ['bitcoin']
+    if re.match(r'^3[a-km-zA-HJ-NP-Z1-9]{25,34}$', address):
+        return ['bitcoin']
+    if re.match(r'^bc1[a-zA-HJ-NP-Z0-9]{25,90}$', address):
+        return ['bitcoin']
+    if is_bitcoin_xpub(address):
+        return ['bitcoin']
+
+    # TON
+    if address.startswith(('EQ', 'UQ')) and len(address) == 48:
+        return ['ton']
+
+    # Stellar
+    if address.startswith('G') and len(address) == 56:
+        return ['stellar']
+
+    # Mina
+    if address.startswith('B62') and 50 <= len(address) <= 60:
+        return ['mina']
+
+    # Kaspa
+    if address.startswith('kaspa:') and len(address) > 10:
+        return ['kaspa']
+
+    # Waves
+    if address.startswith(('3P', '3N')) and 34 <= len(address) <= 36:
+        return ['waves']
+
+    # Ergo
+    if address.startswith('9') and 40 <= len(address) <= 60:
+        base58_chars = set('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz')
+        if all(c in base58_chars for c in address):
+            return ['ergo']
+
+    # Zilliqa bech32
+    if address.startswith('zil1') and len(address) == 39:
+        return ['zilliqa']
+
+    return []
+
+
 def is_bitcoin_xpub(key: str) -> bool:
     """
     Check if a string is a Bitcoin extended public key.

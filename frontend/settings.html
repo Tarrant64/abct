@@ -6,9 +6,9 @@
     <title>Settings - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771730324">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771732108">
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
-    <script src="/static/js/session-auth.js?v=1771730324"></script>
+    <script src="/static/js/session-auth.js?v=1771732108"></script>
     <script>
         // XSS Protection - Safe HTML rendering (needed before app.js)
         function setSafeHTML(element, html) {
@@ -5784,7 +5784,7 @@
     </footer>
 
     <!-- App JS (provides changeTheme, loadSavedTheme, togglePrivacyMode, initializePrivacyMode, authFetch) -->
-    <script src="/static/js/app.js?v=1771730324"></script>
+    <script src="/static/js/app.js?v=1771732108"></script>
 
     <!-- ==================== Tab Switching Logic ==================== -->
     <script>
@@ -5858,6 +5858,12 @@
         let utilizationData = null;
         let currentEditApiId = null;
 
+        // Exchange pagination/search state
+        let allExchangeApis = [];
+        let exchangeCurrentPage = 1;
+        let exchangePageSize = 10;
+        let exchangeSearchQuery = '';
+
         document.addEventListener('DOMContentLoaded', () => {
             // API data loading is handled by the Page Initialization script below.
             // Only attach modal button listeners here.
@@ -5893,26 +5899,56 @@
 
                 const configuredCount = category.apis.filter(a => a.configured).length;
 
-                htmlContent += `
-                    <div class="api-category" data-category-id="${catId}">
-                        <div class="category-header" data-category-id="${catId}">
-                            <div class="category-info">
-                                <div class="category-icon ${catId}">${category.icon}</div>
-                                <div>
-                                    <div class="category-title">${category.name}</div>
-                                    <div class="category-desc">${category.description}</div>
+                if (catId === 'exchanges') {
+                    // Exchange category: search + paginated items
+                    allExchangeApis = category.apis;
+                    htmlContent += `
+                        <div class="api-category" data-category-id="${catId}">
+                            <div class="category-header" data-category-id="${catId}">
+                                <div class="category-info">
+                                    <div class="category-icon ${catId}">${category.icon}</div>
+                                    <div>
+                                        <div class="category-title">${category.name}</div>
+                                        <div class="category-desc">${category.description}</div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <div class="category-count">${configuredCount}/${category.apis.length} configured</div>
+                                    <span class="collapse-icon">▼</span>
                                 </div>
                             </div>
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <div class="category-count">${configuredCount}/${category.apis.length} configured</div>
-                                <span class="collapse-icon">▼</span>
+                            <div class="api-list" id="list-${catId}">
+                                <div class="exchange-search-bar">
+                                    <input type="text" id="exchangeSearch" placeholder="Search exchanges..." autocomplete="off">
+                                    <button type="button" class="exchange-search-clear" id="exchangeSearchClear">&times;</button>
+                                </div>
+                                <div id="exchange-items-container"></div>
+                                <div id="exchange-pagination" class="pagination-controls" style="display: none;"></div>
                             </div>
                         </div>
-                        <div class="api-list" id="list-${catId}">
-                            ${category.apis.map(api => renderApiItem(api)).join('')}
+                    `;
+                } else {
+                    htmlContent += `
+                        <div class="api-category" data-category-id="${catId}">
+                            <div class="category-header" data-category-id="${catId}">
+                                <div class="category-info">
+                                    <div class="category-icon ${catId}">${category.icon}</div>
+                                    <div>
+                                        <div class="category-title">${category.name}</div>
+                                        <div class="category-desc">${category.description}</div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <div class="category-count">${configuredCount}/${category.apis.length} configured</div>
+                                    <span class="collapse-icon">▼</span>
+                                </div>
+                            </div>
+                            <div class="api-list" id="list-${catId}">
+                                ${category.apis.map(api => renderApiItem(api)).join('')}
+                            </div>
                         </div>
-                    </div>
-                `;
+                    `;
+                }
             });
 
             setSafeHTML(container, htmlContent);
@@ -5920,6 +5956,12 @@
             // Attach event listeners after rendering (DOMPurify strips inline handlers)
             attachApiEventListeners();
             attachCategoryToggleListeners();
+
+            // Render exchange items with search/pagination
+            if (allExchangeApis.length > 0) {
+                renderExchangeItems();
+                attachExchangeSearchListeners();
+            }
         }
 
         function renderApiItem(api) {
@@ -6120,6 +6162,174 @@
             });
         }
 
+        // ===== Exchange Search + Pagination =====
+
+        function renderExchangeItems() {
+            const container = document.getElementById('exchange-items-container');
+            const paginationEl = document.getElementById('exchange-pagination');
+            if (!container) return;
+
+            let filtered = allExchangeApis;
+            if (exchangeSearchQuery) {
+                const q = exchangeSearchQuery.toLowerCase();
+                filtered = allExchangeApis.filter(api => api.name.toLowerCase().includes(q) || (api.description && api.description.toLowerCase().includes(q)));
+            }
+
+            if (filtered.length === 0) {
+                setSafeHTML(container, '<div class="exchange-empty-state">No exchanges match your search.</div>');
+                paginationEl.style.display = 'none';
+                return;
+            }
+
+            let itemsToRender;
+            let totalPages = 1;
+
+            if (exchangeSearchQuery) {
+                // While searching, show all matches (no pagination)
+                itemsToRender = filtered;
+                paginationEl.style.display = 'none';
+            } else {
+                if (exchangePageSize === 0) {
+                    // "All" selected
+                    itemsToRender = filtered;
+                    paginationEl.style.display = 'none';
+                } else {
+                    totalPages = Math.ceil(filtered.length / exchangePageSize);
+                    if (exchangeCurrentPage > totalPages) exchangeCurrentPage = totalPages;
+                    const start = (exchangeCurrentPage - 1) * exchangePageSize;
+                    itemsToRender = filtered.slice(start, start + exchangePageSize);
+
+                    // Render pagination
+                    const startNum = (exchangeCurrentPage - 1) * exchangePageSize + 1;
+                    const endNum = Math.min(exchangeCurrentPage * exchangePageSize, filtered.length);
+                    setSafeHTML(paginationEl, `
+                        <div class="page-size-select">
+                            <span>Show</span>
+                            <select id="exchangePageSizeSelect">
+                                <option value="10" ${exchangePageSize === 10 ? 'selected' : ''}>10</option>
+                                <option value="20" ${exchangePageSize === 20 ? 'selected' : ''}>20</option>
+                                <option value="0">All</option>
+                            </select>
+                        </div>
+                        <div class="page-nav">
+                            <button id="exchangePrev" ${exchangeCurrentPage <= 1 ? 'disabled' : ''}>Prev</button>
+                            <span class="page-info">${startNum}-${endNum} of ${filtered.length}</span>
+                            <button id="exchangeNext" ${exchangeCurrentPage >= totalPages ? 'disabled' : ''}>Next</button>
+                        </div>
+                    `);
+                    paginationEl.style.display = 'flex';
+                    attachExchangePaginationListeners();
+                }
+            }
+
+            setSafeHTML(container, itemsToRender.map(api => renderApiItem(api)).join(''));
+            attachExchangeItemListeners(container);
+        }
+
+        function attachExchangeItemListeners(container) {
+            container.querySelectorAll('.btn-save-api').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    saveApiKey(e.target.getAttribute('data-api-id'));
+                });
+            });
+            container.querySelectorAll('.btn-remove-api').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    disableApi(e.target.getAttribute('data-api-id'));
+                });
+            });
+            container.querySelectorAll('.api-toggle').forEach(toggle => {
+                toggle.addEventListener('change', (e) => {
+                    toggleApi(e.target.getAttribute('data-api-id'), e.target.checked);
+                });
+            });
+            container.querySelectorAll('.api-key-field').forEach(input => {
+                input.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') saveApiKey(e.target.getAttribute('data-api-id'));
+                });
+            });
+            container.querySelectorAll('.btn-choose-file').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const apiId = e.target.getAttribute('data-api-id');
+                    document.getElementById(`file-${apiId}`).click();
+                });
+            });
+            container.querySelectorAll('.api-file-field').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    const apiId = e.target.getAttribute('data-api-id');
+                    const fileNameSpan = document.getElementById(`filename-${apiId}`);
+                    const uploadBtn = container.querySelector(`.btn-upload-file[data-api-id="${apiId}"]`);
+                    if (e.target.files && e.target.files[0]) {
+                        fileNameSpan.textContent = e.target.files[0].name;
+                        uploadBtn.disabled = false;
+                    } else {
+                        fileNameSpan.textContent = 'No file chosen';
+                        uploadBtn.disabled = true;
+                    }
+                });
+            });
+            container.querySelectorAll('.btn-upload-file').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    uploadApiFile(e.target.getAttribute('data-api-id'));
+                });
+            });
+        }
+
+        let exchangeSearchTimer = null;
+
+        function attachExchangeSearchListeners() {
+            const searchInput = document.getElementById('exchangeSearch');
+            const clearBtn = document.getElementById('exchangeSearchClear');
+            if (!searchInput) return;
+
+            searchInput.addEventListener('input', function() {
+                const val = this.value;
+                clearBtn.classList.toggle('visible', val.length > 0);
+                if (exchangeSearchTimer) clearTimeout(exchangeSearchTimer);
+                exchangeSearchTimer = setTimeout(() => {
+                    exchangeSearchQuery = val.trim();
+                    exchangeCurrentPage = 1;
+                    renderExchangeItems();
+                }, 200);
+            });
+
+            clearBtn.addEventListener('click', function() {
+                searchInput.value = '';
+                this.classList.remove('visible');
+                exchangeSearchQuery = '';
+                exchangeCurrentPage = 1;
+                renderExchangeItems();
+                searchInput.focus();
+            });
+        }
+
+        function attachExchangePaginationListeners() {
+            const prevBtn = document.getElementById('exchangePrev');
+            const nextBtn = document.getElementById('exchangeNext');
+            const sizeSelect = document.getElementById('exchangePageSizeSelect');
+
+            if (prevBtn) {
+                prevBtn.addEventListener('click', () => {
+                    if (exchangeCurrentPage > 1) {
+                        exchangeCurrentPage--;
+                        renderExchangeItems();
+                    }
+                });
+            }
+            if (nextBtn) {
+                nextBtn.addEventListener('click', () => {
+                    exchangeCurrentPage++;
+                    renderExchangeItems();
+                });
+            }
+            if (sizeSelect) {
+                sizeSelect.addEventListener('change', (e) => {
+                    exchangePageSize = parseInt(e.target.value, 10);
+                    exchangeCurrentPage = 1;
+                    renderExchangeItems();
+                });
+            }
+        }
+
         async function saveApiKey(apiId) {
             const input = document.getElementById(`key-${apiId}`);
             const apiKey = input ? input.value.trim() : '';
@@ -6253,14 +6463,20 @@
                             last_tested_at: apiInfo.last_tested_at || null,
                         };
 
-                        // Re-render the API item
-                        const newHtml = renderApiItem(apiData.categories[currentCategory].apis[apiIndex]);
-                        const tempDiv = document.createElement('div');
-                        setSafeHTML(tempDiv, newHtml);
-                        apiItem.replaceWith(tempDiv.firstElementChild);
+                        // Sync allExchangeApis if this is an exchange
+                        if (currentCategory === 'exchanges') {
+                            allExchangeApis = apiData.categories['exchanges'].apis;
+                            renderExchangeItems();
+                        } else {
+                            // Re-render the API item
+                            const newHtml = renderApiItem(apiData.categories[currentCategory].apis[apiIndex]);
+                            const tempDiv = document.createElement('div');
+                            setSafeHTML(tempDiv, newHtml);
+                            apiItem.replaceWith(tempDiv.firstElementChild);
 
-                        // Re-attach event listeners for this item
-                        attachApiEventListeners();
+                            // Re-attach event listeners for this item
+                            attachApiEventListeners();
+                        }
                     }
                 }
             } catch (error) {

@@ -64,7 +64,7 @@ from services.taptools import taptools_wallet_service
 from services.graph import graph_service
 from services.nmkr_service import nmkr_service
 from services.logokit_service import logokit_service
-from utils.address import parse_wallets_file, detect_blockchain, is_bitcoin_xpub, get_xpub_type
+from utils.address import parse_wallets_file, detect_blockchain, detect_blockchains, is_bitcoin_xpub, get_xpub_type
 from config import WALLETS_FILE, DATA_DIR
 from middleware.demo_mode import is_demo_user
 from auth_utils import verify_session
@@ -2097,6 +2097,24 @@ async def xpub_status(user_id: int = Depends(verify_session)):
     return {
         'available': bitcoin_service.xpub_available(),
         'message': 'bip_utils installed' if bitcoin_service.xpub_available() else 'Install bip_utils for xpub support'
+    }
+
+
+@router.get("/detect")
+async def detect_address(address: str, user_id: int = Depends(verify_session)):
+    """Detect which blockchain(s) an address belongs to."""
+    address = address.strip()
+    if not address:
+        raise HTTPException(status_code=400, detail="Address is required")
+
+    detected = detect_blockchains(address)
+    raw = address.split(':', 1)[-1] if ':' in address else address
+
+    return {
+        'detected': detected,
+        'ambiguous': len(detected) > 1,
+        'is_xpub': is_bitcoin_xpub(raw),
+        'is_stake': raw.startswith('stake1')
     }
 
 

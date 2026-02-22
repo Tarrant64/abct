@@ -6,14 +6,14 @@
     <title>Wallets & Transactions - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771730324">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771732108">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <!-- Chart.js for analytics -->
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1771730324"></script>
+    <script src="/static/js/session-auth.js?v=1771732108"></script>
     <style>
         /* Wallet Manager Styles */
         .wallet-manager {
@@ -1194,30 +1194,12 @@
     <div class="modal-overlay" id="addModal">
         <div class="modal">
             <h2>Add Wallet</h2>
-            <form onsubmit="addWallet(event)">
+            <form id="addWalletForm">
                 <div class="form-group">
-                    <label for="walletChain">Blockchain</label>
-                    <select id="walletChain" required>
-                        <option value="">Select blockchain...</option>
-                        <option value="cardano">Cardano</option>
-                        <option value="bitcoin">Bitcoin</option>
-                        <option value="ethereum">Ethereum</option>
-                        <option value="solana">Solana</option>
-                        <option value="polygon">Polygon</option>
-                        <option value="base">Base</option>
-                        <option value="algorand">Algorand</option>
-                        <option value="bsc">BNB Smart Chain</option>
-                        <option value="arbitrum">Arbitrum</option>
-                        <option value="avalanche">Avalanche</option>
-                        <option value="tron">Tron</option>
-                        <option value="xrp">XRP Ledger</option>
-                        <option value="hedera">Hedera</option>
-                        <option value="multiversx">MultiversX</option>
-                        <option value="sui">Sui</option>
-                        <option value="aptos">Aptos</option>
-                        <option value="filecoin">Filecoin</option>
-                    </select>
+                    <label for="walletAddress" id="addressLabel">Wallet Address</label>
+                    <input type="text" id="walletAddress" placeholder="Paste address: addr1..., 0x..., bc1..., base58..." required autocomplete="off">
                 </div>
+                <div id="chainDetectionResult" class="chain-detection-result" style="display: none;"></div>
                 <div class="form-group" id="cardanoDiscoveryOption" style="display: none;">
                     <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
                         <input type="checkbox" id="enableDiscovery" checked>
@@ -1229,7 +1211,7 @@
                 </div>
                 <div class="form-group" id="bitcoinXpubOption" style="display: none;">
                     <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                        <input type="checkbox" id="enableXpub" onchange="toggleXpubMode()">
+                        <input type="checkbox" id="enableXpub">
                         <span>Enter xpub (HD wallet extended public key)</span>
                     </label>
                     <div class="hint" style="margin-top: 5px;">
@@ -1237,23 +1219,12 @@
                     </div>
                 </div>
                 <div class="form-group">
-                    <label for="walletAddress" id="addressLabel">Wallet Address</label>
-                    <input type="text" id="walletAddress" placeholder="Enter wallet address" required>
-                    <div class="hint" id="addressHint">
-                        Examples:<br>
-                        Cardano: addr1q..., stake1u...<br>
-                        Bitcoin: bc1..., 1..., 3..., xpub..., ypub..., zpub...<br>
-                        Ethereum/Polygon/Base: 0x...<br>
-                        Solana: Base58 address
-                    </div>
-                </div>
-                <div class="form-group">
                     <label for="walletLabel">Label (optional)</label>
                     <input type="text" id="walletLabel" placeholder="e.g., Main Wallet, Cold Storage">
                 </div>
                 <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeAddModal()">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Add Wallet</button>
+                    <button type="button" class="btn btn-secondary" id="btnCancelAdd">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="btnSubmitAdd" disabled>Add Wallet</button>
                 </div>
             </form>
         </div>
@@ -2105,83 +2076,210 @@ base:0x789..." oninput="previewImport()"></textarea>
             }, 1500);
         }
 
+        // ===== Chain Detection State =====
+        let detectedChain = null;
+        let detectedChains = [];
+        let detectionTimer = null;
+
+        const CHAIN_DISPLAY_NAMES = {
+            cardano: 'Cardano', bitcoin: 'Bitcoin', ethereum: 'Ethereum', solana: 'Solana',
+            polygon: 'Polygon', base: 'Base', algorand: 'Algorand', bsc: 'BNB Smart Chain',
+            arbitrum: 'Arbitrum', avalanche: 'Avalanche', tron: 'Tron', xrp: 'XRP Ledger',
+            hedera: 'Hedera', multiversx: 'MultiversX', sui: 'Sui', aptos: 'Aptos',
+            filecoin: 'Filecoin', litecoin: 'Litecoin', dogecoin: 'Dogecoin', zcash: 'Zcash',
+            tezos: 'Tezos', stacks: 'Stacks', vechain: 'VeChain', cosmos: 'Cosmos',
+            near: 'NEAR', icp: 'ICP', ton: 'TON', polkadot: 'Polkadot', kusama: 'Kusama',
+            stellar: 'Stellar', kaspa: 'Kaspa', osmosis: 'Osmosis', celestia: 'Celestia',
+            injective: 'Injective', dydx: 'dYdX', sei: 'Sei', akash: 'Akash', kaia: 'Kaia',
+            ergo: 'Ergo', iota: 'IOTA', waves: 'Waves', mina: 'Mina', zilliqa: 'Zilliqa',
+            optimism: 'Optimism', zksync: 'zkSync', linea: 'Linea', scroll: 'Scroll',
+            fantom: 'Fantom', cronos: 'Cronos', gnosis: 'Gnosis', moonbeam: 'Moonbeam'
+        };
+
+        const CHAIN_SYMBOLS = {
+            cardano: 'ADA', bitcoin: 'BTC', ethereum: 'ETH', solana: 'SOL', polygon: 'MATIC',
+            algorand: 'ALGO', bsc: 'BNB', arbitrum: 'ARB', avalanche: 'AVAX', tron: 'TRX',
+            xrp: 'XRP', hedera: 'HBAR', multiversx: 'EGLD', sui: 'SUI', aptos: 'APT',
+            filecoin: 'FIL', litecoin: 'LTC', dogecoin: 'DOGE', zcash: 'ZEC', tezos: 'XTZ',
+            stacks: 'STX', vechain: 'VET', cosmos: 'ATOM', near: 'NEAR', icp: 'ICP',
+            ton: 'TON', polkadot: 'DOT', kusama: 'KSM', stellar: 'XLM', kaspa: 'KAS',
+            osmosis: 'OSMO', celestia: 'TIA', injective: 'INJ', dydx: 'DYDX', sei: 'SEI',
+            akash: 'AKT', kaia: 'KAIA', ergo: 'ERG', iota: 'IOTA', waves: 'WAVES',
+            mina: 'MINA', zilliqa: 'ZIL', optimism: 'OP', zksync: 'ZK', linea: 'LINEA',
+            scroll: 'SCROLL', fantom: 'FTM', cronos: 'CRO', gnosis: 'GNO', moonbeam: 'GLMR',
+            base: 'BASE'
+        };
+
+        const CHAIN_LOGO_OVERRIDES = {
+            base: 'https://avatars.githubusercontent.com/u/108554348?s=32',
+            arbitrum: 'https://avatars.githubusercontent.com/u/119917794?s=32'
+        };
+
+        function getChainLogo(chainId) {
+            if (CHAIN_LOGO_OVERRIDES[chainId]) return CHAIN_LOGO_OVERRIDES[chainId];
+            const sym = CHAIN_SYMBOLS[chainId] || chainId.toUpperCase();
+            return `https://img.logokit.com/crypto/${sym}?size=32`;
+        }
+
         // Add Wallet Modal
         function openAddModal() {
             document.getElementById('addModal').classList.add('active');
             document.getElementById('walletAddress').value = '';
             document.getElementById('walletLabel').value = '';
-            document.getElementById('walletChain').value = '';
             document.getElementById('cardanoDiscoveryOption').style.display = 'none';
             document.getElementById('bitcoinXpubOption').style.display = 'none';
             document.getElementById('enableXpub').checked = false;
-            resetXpubMode();
+            document.getElementById('chainDetectionResult').style.display = 'none';
+            document.getElementById('btnSubmitAdd').disabled = true;
+            detectedChain = null;
+            detectedChains = [];
+            if (detectionTimer) clearTimeout(detectionTimer);
         }
 
         function closeAddModal() {
             document.getElementById('addModal').classList.remove('active');
         }
 
-        // Show/hide chain-specific options based on selection
-        document.getElementById('walletChain').addEventListener('change', function() {
+        // Debounced address detection
+        document.getElementById('walletAddress').addEventListener('input', function() {
+            const addr = this.value.trim();
+            if (detectionTimer) clearTimeout(detectionTimer);
+
+            if (!addr || addr.length < 6) {
+                document.getElementById('chainDetectionResult').style.display = 'none';
+                detectedChain = null;
+                detectedChains = [];
+                updateSubmitButton();
+                handleSpecialChainOptions(null);
+                return;
+            }
+
+            detectionTimer = setTimeout(() => detectChain(addr), 300);
+        });
+
+        async function detectChain(address) {
+            const resultEl = document.getElementById('chainDetectionResult');
+            resultEl.style.display = 'block';
+            resultEl.className = 'chain-detection-result';
+            setSafeHTML(resultEl, '<div class="detection-loading"><div class="spinner-small"></div> Detecting blockchain...</div>');
+            detectedChain = null;
+            detectedChains = [];
+            updateSubmitButton();
+
+            try {
+                const response = await authFetch('/wallets/detect?address=' + encodeURIComponent(address));
+                if (!response.ok) throw new Error('Detection failed');
+                const data = await response.json();
+
+                detectedChains = data.detected || [];
+
+                if (detectedChains.length === 1) {
+                    // Single match
+                    detectedChain = detectedChains[0];
+                    resultEl.className = 'chain-detection-result detected';
+                    const name = CHAIN_DISPLAY_NAMES[detectedChain] || detectedChain;
+                    const logo = getChainLogo(detectedChain);
+                    setSafeHTML(resultEl, `
+                        <div class="detection-single">
+                            <img src="${logo}" alt="${name}" onerror="this.style.display='none'">
+                            <span class="chain-name">${name}</span>
+                            <span class="checkmark">&#10003;</span>
+                        </div>
+                    `);
+                    // Fix onerror stripped by DOMPurify
+                    resultEl.querySelectorAll('img').forEach(img => {
+                        img.addEventListener('error', () => { img.style.display = 'none'; });
+                    });
+                    handleSpecialChainOptions(detectedChain, data.is_stake, data.is_xpub);
+                } else if (detectedChains.length > 1) {
+                    // Multiple matches — show chip grid
+                    resultEl.className = 'chain-detection-result';
+                    let chipsHtml = '<div class="chain-chip-group"><span class="chip-label">Multiple chains detected — select one:</span>';
+                    detectedChains.forEach(cid => {
+                        const name = CHAIN_DISPLAY_NAMES[cid] || cid;
+                        const logo = getChainLogo(cid);
+                        chipsHtml += `<button type="button" class="chain-chip" data-chain="${cid}"><img src="${logo}" alt="${name}" onerror="this.style.display='none'"> ${name}</button>`;
+                    });
+                    chipsHtml += '</div>';
+                    setSafeHTML(resultEl, chipsHtml);
+                    // Attach chip click listeners + fix onerror
+                    resultEl.querySelectorAll('.chain-chip').forEach(chip => {
+                        chip.addEventListener('click', () => selectChainChip(chip.getAttribute('data-chain')));
+                    });
+                    resultEl.querySelectorAll('img').forEach(img => {
+                        img.addEventListener('error', () => { img.style.display = 'none'; });
+                    });
+                    handleSpecialChainOptions(null);
+                } else {
+                    // No match
+                    resultEl.className = 'chain-detection-result';
+                    setSafeHTML(resultEl, `
+                        <div class="detection-none">
+                            Chain not detected. Check the address format or
+                            <a href="https://github.com/Tarrant64/abct/issues" target="_blank" rel="noopener">request chain support</a>.
+                        </div>
+                    `);
+                    handleSpecialChainOptions(null);
+                }
+            } catch (err) {
+                resultEl.className = 'chain-detection-result';
+                setSafeHTML(resultEl, '<div class="detection-none">Detection error. Please try again.</div>');
+                handleSpecialChainOptions(null);
+            }
+            updateSubmitButton();
+        }
+
+        function selectChainChip(chainId) {
+            detectedChain = chainId;
+            const resultEl = document.getElementById('chainDetectionResult');
+            resultEl.querySelectorAll('.chain-chip').forEach(chip => {
+                chip.classList.toggle('active', chip.getAttribute('data-chain') === chainId);
+            });
+            resultEl.className = 'chain-detection-result detected';
+            handleSpecialChainOptions(chainId);
+            updateSubmitButton();
+        }
+
+        function handleSpecialChainOptions(chain, isStake, isXpub) {
             const discoveryOption = document.getElementById('cardanoDiscoveryOption');
             const xpubOption = document.getElementById('bitcoinXpubOption');
-
-            discoveryOption.style.display = this.value === 'cardano' ? 'block' : 'none';
-            xpubOption.style.display = this.value === 'bitcoin' ? 'block' : 'none';
-
-            // Reset xpub mode when switching chains
-            if (this.value !== 'bitcoin') {
+            discoveryOption.style.display = chain === 'cardano' ? 'block' : 'none';
+            xpubOption.style.display = (chain === 'bitcoin' || isXpub) ? 'block' : 'none';
+            if (chain !== 'bitcoin' && !isXpub) {
                 document.getElementById('enableXpub').checked = false;
-                resetXpubMode();
+            }
+        }
+
+        function updateSubmitButton() {
+            document.getElementById('btnSubmitAdd').disabled = !detectedChain;
+        }
+
+        // Attach modal button listeners (DOMPurify-safe)
+        document.getElementById('btnCancelAdd').addEventListener('click', closeAddModal);
+        document.getElementById('enableXpub').addEventListener('change', function() {
+            const addressLabel = document.getElementById('addressLabel');
+            const addressInput = document.getElementById('walletAddress');
+            if (this.checked) {
+                addressLabel.textContent = 'Extended Public Key';
+                addressInput.placeholder = 'Enter xpub, ypub, or zpub...';
+            } else {
+                addressLabel.textContent = 'Wallet Address';
+                addressInput.placeholder = 'Paste address: addr1..., 0x..., bc1..., base58...';
             }
         });
 
-        // Toggle xpub mode for Bitcoin
-        function toggleXpubMode() {
-            const isXpub = document.getElementById('enableXpub').checked;
-            const addressLabel = document.getElementById('addressLabel');
-            const addressInput = document.getElementById('walletAddress');
-            const addressHint = document.getElementById('addressHint');
-
-            if (isXpub) {
-                addressLabel.textContent = 'Extended Public Key';
-                addressInput.placeholder = 'Enter xpub, ypub, or zpub...';
-                setSafeHTML(addressHint, `
-                    <strong>HD Wallet Discovery:</strong><br>
-                    xpub: Legacy addresses (1...)<br>
-                    ypub: Nested SegWit addresses (3...)<br>
-                    zpub: Native SegWit addresses (bc1...)<br>
-                    <em>All addresses with balance will be discovered automatically.</em>
-                `);
-
-            } else {
-                resetXpubMode();
-            }
-        }
-
-        function resetXpubMode() {
-            document.getElementById('addressLabel').textContent = 'Wallet Address';
-            document.getElementById('walletAddress').placeholder = 'Enter wallet address';
-            setSafeHTML(document.getElementById('addressHint'), `
-                Examples:<br>
-                Cardano: addr1q..., stake1u...<br>
-                Bitcoin: bc1..., 1..., 3..., xpub..., ypub..., zpub...<br>
-                Ethereum/Polygon/Base: 0x...<br>
-                Solana: Base58 address
-            `);
-
-        }
-
         let discoveredAddresses = [];
 
-        async function addWallet(event) {
+        document.getElementById('addWalletForm').addEventListener('submit', async function(event) {
             event.preventDefault();
 
-            const chain = document.getElementById('walletChain').value;
+            const chain = detectedChain;
             const address = document.getElementById('walletAddress').value.trim();
             const label = document.getElementById('walletLabel').value.trim();
             const enableDiscovery = document.getElementById('enableDiscovery').checked;
             const enableXpub = document.getElementById('enableXpub').checked;
+
+            if (!chain) return;
 
             // Close the add modal first
             closeAddModal();
@@ -2192,7 +2290,7 @@ base:0x789..." oninput="previewImport()"></textarea>
                     await discoverCardanoWallets(address, label);
                 } catch (error) {
                     showStatus(error.message || 'Discovery failed', 'error');
-                    await loadWallets(); // Still reload in case some wallets were added
+                    await loadWallets();
                 }
                 return;
             }
@@ -2203,7 +2301,7 @@ base:0x789..." oninput="previewImport()"></textarea>
                     await discoverBitcoinXpub(address, label);
                 } catch (error) {
                     showStatus(error.message || 'xpub discovery failed', 'error');
-                    await loadWallets(); // Still reload in case some wallets were added
+                    await loadWallets();
                 }
                 return;
             }
@@ -2229,7 +2327,7 @@ base:0x789..." oninput="previewImport()"></textarea>
             } catch (error) {
                 showStatus(error.message, 'error');
             }
-        }
+        });
 
         // Check if address is an xpub
         function isXpubAddress(addr) {
@@ -2980,11 +3078,11 @@ base:0x789..." oninput="previewImport()"></textarea>
         // Waffle menu toggle
     </script>
 
-    <script src="/static/js/app.js?v=1771730324"></script>
+    <script src="/static/js/app.js?v=1771732108"></script>
 
     <!-- Transaction scripts -->
-    <script src="/static/js/transactions.js?v=1771730324"></script>
-    <script src="/static/js/transaction-analytics.js?v=1771730324"></script>
+    <script src="/static/js/transactions.js?v=1771732108"></script>
+    <script src="/static/js/transaction-analytics.js?v=1771732108"></script>
 
     <script>
         // Main tab switching function
