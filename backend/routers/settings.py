@@ -1029,6 +1029,38 @@ API_REGISTRY = {
         "rate_limit_note": "5 req/min, 25 req/day",
         "rate_limit_type": "quota"
     },
+
+    # Layer 1 APIs
+    "ton_center": {
+        "name": "TON Center",
+        "category": "services",
+        "description": "TON blockchain balances and Jetton token data. Optional key for higher rate limits",
+        "required": False,
+        "docs_url": "https://toncenter.com/api/v2",
+        "env_var": "TON_CENTER_API_KEY",
+        "pricing": "free",
+        "pricing_note": "Free public API, optional key for higher limits",
+        "default_limit": None,
+        "default_period": 86400,
+        "period_label": "day",
+        "rate_limit_note": "1 req/sec without key, 10 req/sec with key",
+        "rate_limit_type": "rate"
+    },
+    "subscan": {
+        "name": "Subscan",
+        "category": "services",
+        "description": "Polkadot DOT and Kusama KSM balances and token data. Optional key for higher rate limits",
+        "required": False,
+        "docs_url": "https://docs.subscan.io/",
+        "env_var": "SUBSCAN_API_KEY",
+        "pricing": "free",
+        "pricing_note": "Free public API, optional key for higher limits",
+        "default_limit": None,
+        "default_period": 86400,
+        "period_label": "day",
+        "rate_limit_note": "Rate-limited on free tier",
+        "rate_limit_type": "rate"
+    },
 }
 
 # Category labels for grouping
