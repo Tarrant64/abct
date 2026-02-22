@@ -199,6 +199,25 @@ NEAR_RPC_URL = "https://rpc.mainnet.near.org"
 NEARBLOCKS_API_URL = "https://api.nearblocks.io/v1"
 ICP_ROSETTA_URL = "https://rosetta-api.internetcomputer.org"
 
+# New chain LCD/API URLs (all free, no key required)
+OSMOSIS_LCD_URL = "https://osmosis-rest.publicnode.com"
+CELESTIA_LCD_URL = "https://celestia-rest.publicnode.com"
+INJECTIVE_LCD_URL = "https://injective-rest.publicnode.com"
+DYDX_LCD_URL = "https://dydx-rest.publicnode.com"
+SEI_LCD_URL = "https://sei-rest.publicnode.com"
+AKASH_LCD_URL = "https://akash-rest.publicnode.com"
+TON_CENTER_URL = "https://toncenter.com/api/v2"
+SUBSCAN_POLKADOT_URL = "https://polkadot.api.subscan.io"
+SUBSCAN_KUSAMA_URL = "https://kusama.api.subscan.io"
+STELLAR_HORIZON_URL = "https://horizon.stellar.org"
+KASPA_API_URL = "https://api.kaspa.org"
+KAIA_RPC_URL = "https://public-en.node.kaia.io"
+ERGO_EXPLORER_URL = "https://explorer.ergoplatform.com/api/v1"
+IOTA_RPC_URL = "https://api.mainnet.iota.cafe"
+WAVES_NODE_URL = "https://nodes.wavesnodes.com"
+MINA_GRAPHQL_URL = "https://graphql.minaexplorer.com"
+ZILLIQA_API_URL = "https://api.zilliqa.com"
+
 # Etherscan V2 unified API (single endpoint, chain selected by chainid param)
 ETHERSCAN_V2_URL = "https://api.etherscan.io/v2/api"
 # Legacy aliases (deprecated — use ETHERSCAN_V2_URL + chainid instead)

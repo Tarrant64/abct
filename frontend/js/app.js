@@ -36,7 +36,7 @@ async function authFetch(url, options = {}) {
 let prices = { ADA: 0, BTC: 0, ETH: 0, SOL: 0, MATIC: 0, BNB: 0, AVAX: 0, TRX: 0 };
 
 // Portfolio totals for calculating total value
-let walletTotals = { ADA: 0, BTC: 0, ETH: 0, SOL: 0, MATIC: 0, ETH_BASE: 0, ALGO: 0, BNB: 0, ETH_ARB: 0, AVAX: 0, TRX: 0, XRP: 0, HBAR: 0, EGLD: 0, SUI: 0, APT: 0, FIL: 0, LTC: 0, DOGE: 0, ZEC: 0, XTZ: 0, STX: 0, VET: 0, ATOM: 0, NEAR: 0, ICP: 0, ETH_OPT: 0, ETH_ZK: 0, ETH_LINEA: 0, ETH_SCROLL: 0, FTM: 0, CRO: 0, XDAI: 0, GLMR: 0 };
+let walletTotals = { ADA: 0, BTC: 0, ETH: 0, SOL: 0, MATIC: 0, ETH_BASE: 0, ALGO: 0, BNB: 0, ETH_ARB: 0, AVAX: 0, TRX: 0, XRP: 0, HBAR: 0, EGLD: 0, SUI: 0, APT: 0, FIL: 0, LTC: 0, DOGE: 0, ZEC: 0, XTZ: 0, STX: 0, VET: 0, ATOM: 0, NEAR: 0, ICP: 0, ETH_OPT: 0, ETH_ZK: 0, ETH_LINEA: 0, ETH_SCROLL: 0, FTM: 0, CRO: 0, XDAI: 0, GLMR: 0, OSMO: 0, TIA: 0, INJ: 0, DYDX: 0, SEI: 0, AKT: 0, TON: 0, DOT: 0, KSM: 0, XLM: 0, KAS: 0, KLAY: 0, ERG: 0, IOTA: 0, WAVES: 0, MINA: 0, ZIL: 0 };
 let stakingTotals = {}; // { 'INDY': 1234.56, 'STRIKE': 789.01, etc. }
 let defiTotals = {}; // DeFi tokens held in wallets (governance tokens, stablecoins, etc.)
 let exchangeTotals = { usd: 0 }; // Total USD value from exchanges
@@ -424,6 +424,23 @@ const CHAIN_CONFIG = {
     cosmos:     { name: 'Cosmos',     symbol: 'ATOM', logo: 'ATOM', icon: '⚛', decimals: 6, priceKey: 'ATOM',  balanceKey: 'total_atom', nativeLabel: 'ATOM' },
     near:       { name: 'NEAR',       symbol: 'NEAR', logo: 'NEAR', icon: 'Ⓝ', decimals: 8, priceKey: 'NEAR',  balanceKey: 'total_near', nativeLabel: 'NEAR' },
     icp:        { name: 'ICP',        symbol: 'ICP',  logo: 'ICP',  icon: '∞', decimals: 8, priceKey: 'ICP',   balanceKey: 'total_icp',  nativeLabel: 'ICP' },
+    osmosis:    { name: 'Osmosis',   symbol: 'OSMO', logo: 'OSMO', icon: '⚗', decimals: 6, priceKey: 'OSMO',  balanceKey: 'total_osmo', nativeLabel: 'OSMO' },
+    celestia:   { name: 'Celestia',  symbol: 'TIA',  logo: 'TIA',  icon: '✦', decimals: 6, priceKey: 'TIA',   balanceKey: 'total_tia',  nativeLabel: 'TIA'  },
+    injective:  { name: 'Injective', symbol: 'INJ',  logo: 'INJ',  icon: '⬡', decimals: 8, priceKey: 'INJ',   balanceKey: 'total_inj',  nativeLabel: 'INJ'  },
+    dydx:       { name: 'dYdX',      symbol: 'DYDX', logo: 'DYDX', icon: '⬡', decimals: 8, priceKey: 'DYDX',  balanceKey: 'total_dydx', nativeLabel: 'DYDX' },
+    sei:        { name: 'Sei',       symbol: 'SEI',  logo: 'SEI',  icon: '⬡', decimals: 6, priceKey: 'SEI',   balanceKey: 'total_sei',  nativeLabel: 'SEI'  },
+    akash:      { name: 'Akash',     symbol: 'AKT',  logo: 'AKT',  icon: '☁', decimals: 6, priceKey: 'AKT',   balanceKey: 'total_akt',  nativeLabel: 'AKT'  },
+    ton:        { name: 'TON',       symbol: 'TON',  logo: 'TON',  icon: '💎', decimals: 9, priceKey: 'TON',   balanceKey: 'total_ton',  nativeLabel: 'TON'  },
+    polkadot:   { name: 'Polkadot',  symbol: 'DOT',  logo: 'DOT',  icon: '●', decimals: 10, priceKey: 'DOT',  balanceKey: 'total_dot',  nativeLabel: 'DOT'  },
+    kusama:     { name: 'Kusama',    symbol: 'KSM',  logo: 'KSM',  icon: '⬡', decimals: 12, priceKey: 'KSM',  balanceKey: 'total_ksm',  nativeLabel: 'KSM'  },
+    stellar:    { name: 'Stellar',   symbol: 'XLM',  logo: 'XLM',  icon: '*', decimals: 7, priceKey: 'XLM',   balanceKey: 'total_xlm',  nativeLabel: 'XLM'  },
+    kaspa:      { name: 'Kaspa',     symbol: 'KAS',  logo: 'KAS',  icon: 'K', decimals: 8, priceKey: 'KAS',   balanceKey: 'total_kas',  nativeLabel: 'KAS'  },
+    kaia:       { name: 'Kaia',      symbol: 'KLAY', logo: 'KLAY', icon: '⬡', decimals: 18, priceKey: 'KLAY', balanceKey: 'total_klay', nativeLabel: 'KLAY' },
+    ergo:       { name: 'Ergo',      symbol: 'ERG',  logo: 'ERG',  icon: 'E', decimals: 9, priceKey: 'ERG',   balanceKey: 'total_erg',  nativeLabel: 'ERG'  },
+    iota:       { name: 'IOTA',      symbol: 'IOTA', logo: 'IOTA', icon: 'I', decimals: 6, priceKey: 'IOTA',  balanceKey: 'total_iota', nativeLabel: 'IOTA' },
+    waves:      { name: 'Waves',     symbol: 'WAVES',logo: 'WAVES',icon: '~', decimals: 8, priceKey: 'WAVES', balanceKey: 'total_waves',nativeLabel: 'WAVES'},
+    mina:       { name: 'Mina',      symbol: 'MINA', logo: 'MINA', icon: 'M', decimals: 9, priceKey: 'MINA',  balanceKey: 'total_mina', nativeLabel: 'MINA' },
+    zilliqa:    { name: 'Zilliqa',   symbol: 'ZIL',  logo: 'ZIL',  icon: 'Z', decimals: 12, priceKey: 'ZIL',  balanceKey: 'total_zil',  nativeLabel: 'ZIL'  },
 };
 
 // Render blockchain cards dynamically, sorted by value, only for chains with wallets
@@ -657,6 +674,23 @@ function getChainAllocations() {
         cronos:     { label: 'Cronos',    symbol: 'CRO',  color: '#002D74', balKey: 'CRO',        priceKey: 'CRO' },
         gnosis:     { label: 'Gnosis',    symbol: 'xDAI', color: '#3E6957', balKey: 'XDAI',       priceKey: 'DAI' },
         moonbeam:   { label: 'Moonbeam',  symbol: 'GLMR', color: '#53CBC9', balKey: 'GLMR',       priceKey: 'GLMR' },
+        osmosis:    { label: 'Osmosis',   symbol: 'OSMO', color: '#5604AB', balKey: 'OSMO',       priceKey: 'OSMO' },
+        celestia:   { label: 'Celestia',  symbol: 'TIA',  color: '#7B2BF9', balKey: 'TIA',        priceKey: 'TIA'  },
+        injective:  { label: 'Injective', symbol: 'INJ',  color: '#00F2FE', balKey: 'INJ',        priceKey: 'INJ'  },
+        dydx:       { label: 'dYdX',      symbol: 'DYDX', color: '#6966FF', balKey: 'DYDX',       priceKey: 'DYDX' },
+        sei:        { label: 'Sei',       symbol: 'SEI',  color: '#9B1B30', balKey: 'SEI',        priceKey: 'SEI'  },
+        akash:      { label: 'Akash',     symbol: 'AKT',  color: '#FF414C', balKey: 'AKT',        priceKey: 'AKT'  },
+        ton:        { label: 'TON',       symbol: 'TON',  color: '#0098EA', balKey: 'TON',        priceKey: 'TON'  },
+        polkadot:   { label: 'Polkadot',  symbol: 'DOT',  color: '#E6007A', balKey: 'DOT',        priceKey: 'DOT'  },
+        kusama:     { label: 'Kusama',    symbol: 'KSM',  color: '#000000', balKey: 'KSM',        priceKey: 'KSM'  },
+        stellar:    { label: 'Stellar',   symbol: 'XLM',  color: '#14B6E7', balKey: 'XLM',        priceKey: 'XLM'  },
+        kaspa:      { label: 'Kaspa',     symbol: 'KAS',  color: '#49EACB', balKey: 'KAS',        priceKey: 'KAS'  },
+        kaia:       { label: 'Kaia',      symbol: 'KLAY', color: '#FE4101', balKey: 'KLAY',       priceKey: 'KLAY' },
+        ergo:       { label: 'Ergo',      symbol: 'ERG',  color: '#FF5722', balKey: 'ERG',        priceKey: 'ERG'  },
+        iota:       { label: 'IOTA',      symbol: 'IOTA', color: '#131F37', balKey: 'IOTA',       priceKey: 'IOTA' },
+        waves:      { label: 'Waves',     symbol: 'WAVES',color: '#0055FF', balKey: 'WAVES',      priceKey: 'WAVES'},
+        mina:       { label: 'Mina',      symbol: 'MINA', color: '#E49B13', balKey: 'MINA',       priceKey: 'MINA' },
+        zilliqa:    { label: 'Zilliqa',   symbol: 'ZIL',  color: '#49C1BF', balKey: 'ZIL',        priceKey: 'ZIL'  },
     };
 
     for (const [chain, cfg] of Object.entries(chainMap)) {
@@ -1458,6 +1492,23 @@ async function loadPortfolioSummary() {
         walletTotals.ATOM = data.cosmos?.total_atom || 0;
         walletTotals.NEAR = data.near?.total_near || 0;
         walletTotals.ICP = data.icp?.total_icp || 0;
+        walletTotals.OSMO = data.osmosis?.total_osmo || 0;
+        walletTotals.TIA = data.celestia?.total_tia || 0;
+        walletTotals.INJ = data.injective?.total_inj || 0;
+        walletTotals.DYDX = data.dydx?.total_dydx || 0;
+        walletTotals.SEI = data.sei?.total_sei || 0;
+        walletTotals.AKT = data.akash?.total_akt || 0;
+        walletTotals.TON = data.ton?.total_ton || 0;
+        walletTotals.DOT = data.polkadot?.total_dot || 0;
+        walletTotals.KSM = data.kusama?.total_ksm || 0;
+        walletTotals.XLM = data.stellar?.total_xlm || 0;
+        walletTotals.KAS = data.kaspa?.total_kas || 0;
+        walletTotals.KLAY = data.kaia?.total_klay || 0;
+        walletTotals.ERG = data.ergo?.total_erg || 0;
+        walletTotals.IOTA = data.iota?.total_iota || 0;
+        walletTotals.WAVES = data.waves?.total_waves || 0;
+        walletTotals.MINA = data.mina?.total_mina || 0;
+        walletTotals.ZIL = data.zilliqa?.total_zil || 0;
 
         // Render blockchain cards dynamically (sorted by value, only chains with wallets)
         renderBlockchainCards(data);
@@ -5680,6 +5731,23 @@ async function refreshWallets() {
         walletTotals.ATOM = data.cosmos?.total_atom || 0;
         walletTotals.NEAR = data.near?.total_near || 0;
         walletTotals.ICP = data.icp?.total_icp || 0;
+        walletTotals.OSMO = data.osmosis?.total_osmo || 0;
+        walletTotals.TIA = data.celestia?.total_tia || 0;
+        walletTotals.INJ = data.injective?.total_inj || 0;
+        walletTotals.DYDX = data.dydx?.total_dydx || 0;
+        walletTotals.SEI = data.sei?.total_sei || 0;
+        walletTotals.AKT = data.akash?.total_akt || 0;
+        walletTotals.TON = data.ton?.total_ton || 0;
+        walletTotals.DOT = data.polkadot?.total_dot || 0;
+        walletTotals.KSM = data.kusama?.total_ksm || 0;
+        walletTotals.XLM = data.stellar?.total_xlm || 0;
+        walletTotals.KAS = data.kaspa?.total_kas || 0;
+        walletTotals.KLAY = data.kaia?.total_klay || 0;
+        walletTotals.ERG = data.ergo?.total_erg || 0;
+        walletTotals.IOTA = data.iota?.total_iota || 0;
+        walletTotals.WAVES = data.waves?.total_waves || 0;
+        walletTotals.MINA = data.mina?.total_mina || 0;
+        walletTotals.ZIL = data.zilliqa?.total_zil || 0;
 
         // Update summary cards (native coin + tokens)
         const adaUsd = data.cardano.total_ada * (prices.ADA || 0) + (data.cardano.native_assets_value_usd || 0);
@@ -11786,6 +11854,23 @@ async function initBlockchainsTab() {
                 walletTotals.ATOM = data.cosmos?.total_atom || 0;
                 walletTotals.NEAR = data.near?.total_near || 0;
                 walletTotals.ICP = data.icp?.total_icp || 0;
+                walletTotals.OSMO = data.osmosis?.total_osmo || 0;
+                walletTotals.TIA = data.celestia?.total_tia || 0;
+                walletTotals.INJ = data.injective?.total_inj || 0;
+                walletTotals.DYDX = data.dydx?.total_dydx || 0;
+                walletTotals.SEI = data.sei?.total_sei || 0;
+                walletTotals.AKT = data.akash?.total_akt || 0;
+                walletTotals.TON = data.ton?.total_ton || 0;
+                walletTotals.DOT = data.polkadot?.total_dot || 0;
+                walletTotals.KSM = data.kusama?.total_ksm || 0;
+                walletTotals.XLM = data.stellar?.total_xlm || 0;
+                walletTotals.KAS = data.kaspa?.total_kas || 0;
+                walletTotals.KLAY = data.kaia?.total_klay || 0;
+                walletTotals.ERG = data.ergo?.total_erg || 0;
+                walletTotals.IOTA = data.iota?.total_iota || 0;
+                walletTotals.WAVES = data.waves?.total_waves || 0;
+                walletTotals.MINA = data.mina?.total_mina || 0;
+                walletTotals.ZIL = data.zilliqa?.total_zil || 0;
                 renderBlockchainCards(data);
             }
         } catch (e) {

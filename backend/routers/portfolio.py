@@ -311,6 +311,167 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
             'total_icp': 0.0,
             'native_assets_value_usd': 0.0,
             'wallets': []
+        },
+        'optimism': {
+            'wallet_count': 0,
+            'total_eth': 0.0,
+            'token_count': 0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'zksync': {
+            'wallet_count': 0,
+            'total_eth': 0.0,
+            'token_count': 0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'linea': {
+            'wallet_count': 0,
+            'total_eth': 0.0,
+            'token_count': 0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'scroll': {
+            'wallet_count': 0,
+            'total_eth': 0.0,
+            'token_count': 0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'fantom': {
+            'wallet_count': 0,
+            'total_ftm': 0.0,
+            'token_count': 0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'cronos': {
+            'wallet_count': 0,
+            'total_cro': 0.0,
+            'token_count': 0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'gnosis': {
+            'wallet_count': 0,
+            'total_xdai': 0.0,
+            'token_count': 0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'moonbeam': {
+            'wallet_count': 0,
+            'total_glmr': 0.0,
+            'token_count': 0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'kaia': {
+            'wallet_count': 0,
+            'total_klay': 0.0,
+            'token_count': 0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'osmosis': {
+            'wallet_count': 0,
+            'total_osmo': 0.0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'celestia': {
+            'wallet_count': 0,
+            'total_tia': 0.0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'injective': {
+            'wallet_count': 0,
+            'total_inj': 0.0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'dydx': {
+            'wallet_count': 0,
+            'total_dydx': 0.0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'sei': {
+            'wallet_count': 0,
+            'total_sei': 0.0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'akash': {
+            'wallet_count': 0,
+            'total_akt': 0.0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'ton': {
+            'wallet_count': 0,
+            'total_ton': 0.0,
+            'token_count': 0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'polkadot': {
+            'wallet_count': 0,
+            'total_dot': 0.0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'kusama': {
+            'wallet_count': 0,
+            'total_ksm': 0.0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'stellar': {
+            'wallet_count': 0,
+            'total_xlm': 0.0,
+            'token_count': 0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'kaspa': {
+            'wallet_count': 0,
+            'total_kas': 0.0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'ergo': {
+            'wallet_count': 0,
+            'total_erg': 0.0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'iota': {
+            'wallet_count': 0,
+            'total_iota': 0.0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'waves': {
+            'wallet_count': 0,
+            'total_waves': 0.0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'mina': {
+            'wallet_count': 0,
+            'total_mina': 0.0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
+        },
+        'zilliqa': {
+            'wallet_count': 0,
+            'total_zil': 0.0,
+            'native_assets_value_usd': 0.0,
+            'wallets': []
         }
     }
 
@@ -609,6 +770,178 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
             summary['icp']['native_assets_value_usd'] += native_assets_value_usd
             summary['icp']['wallets'].append(wallet_summary)
 
+        elif blockchain == 'optimism':
+            summary['optimism']['wallet_count'] += 1
+            summary['optimism']['total_eth'] += balance
+            summary['optimism']['token_count'] += len(assets)
+            summary['optimism']['native_assets_value_usd'] += native_assets_value_usd
+            wallet_summary['token_count'] = len(assets)
+            summary['optimism']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'zksync':
+            summary['zksync']['wallet_count'] += 1
+            summary['zksync']['total_eth'] += balance
+            summary['zksync']['token_count'] += len(assets)
+            summary['zksync']['native_assets_value_usd'] += native_assets_value_usd
+            wallet_summary['token_count'] = len(assets)
+            summary['zksync']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'linea':
+            summary['linea']['wallet_count'] += 1
+            summary['linea']['total_eth'] += balance
+            summary['linea']['token_count'] += len(assets)
+            summary['linea']['native_assets_value_usd'] += native_assets_value_usd
+            wallet_summary['token_count'] = len(assets)
+            summary['linea']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'scroll':
+            summary['scroll']['wallet_count'] += 1
+            summary['scroll']['total_eth'] += balance
+            summary['scroll']['token_count'] += len(assets)
+            summary['scroll']['native_assets_value_usd'] += native_assets_value_usd
+            wallet_summary['token_count'] = len(assets)
+            summary['scroll']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'fantom':
+            summary['fantom']['wallet_count'] += 1
+            summary['fantom']['total_ftm'] += balance
+            summary['fantom']['token_count'] += len(assets)
+            summary['fantom']['native_assets_value_usd'] += native_assets_value_usd
+            wallet_summary['token_count'] = len(assets)
+            summary['fantom']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'cronos':
+            summary['cronos']['wallet_count'] += 1
+            summary['cronos']['total_cro'] += balance
+            summary['cronos']['token_count'] += len(assets)
+            summary['cronos']['native_assets_value_usd'] += native_assets_value_usd
+            wallet_summary['token_count'] = len(assets)
+            summary['cronos']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'gnosis':
+            summary['gnosis']['wallet_count'] += 1
+            summary['gnosis']['total_xdai'] += balance
+            summary['gnosis']['token_count'] += len(assets)
+            summary['gnosis']['native_assets_value_usd'] += native_assets_value_usd
+            wallet_summary['token_count'] = len(assets)
+            summary['gnosis']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'moonbeam':
+            summary['moonbeam']['wallet_count'] += 1
+            summary['moonbeam']['total_glmr'] += balance
+            summary['moonbeam']['token_count'] += len(assets)
+            summary['moonbeam']['native_assets_value_usd'] += native_assets_value_usd
+            wallet_summary['token_count'] = len(assets)
+            summary['moonbeam']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'kaia':
+            summary['kaia']['wallet_count'] += 1
+            summary['kaia']['total_klay'] += balance
+            summary['kaia']['token_count'] += len(assets)
+            summary['kaia']['native_assets_value_usd'] += native_assets_value_usd
+            wallet_summary['token_count'] = len(assets)
+            summary['kaia']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'osmosis':
+            summary['osmosis']['wallet_count'] += 1
+            summary['osmosis']['total_osmo'] += balance
+            summary['osmosis']['native_assets_value_usd'] += native_assets_value_usd
+            summary['osmosis']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'celestia':
+            summary['celestia']['wallet_count'] += 1
+            summary['celestia']['total_tia'] += balance
+            summary['celestia']['native_assets_value_usd'] += native_assets_value_usd
+            summary['celestia']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'injective':
+            summary['injective']['wallet_count'] += 1
+            summary['injective']['total_inj'] += balance
+            summary['injective']['native_assets_value_usd'] += native_assets_value_usd
+            summary['injective']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'dydx':
+            summary['dydx']['wallet_count'] += 1
+            summary['dydx']['total_dydx'] += balance
+            summary['dydx']['native_assets_value_usd'] += native_assets_value_usd
+            summary['dydx']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'sei':
+            summary['sei']['wallet_count'] += 1
+            summary['sei']['total_sei'] += balance
+            summary['sei']['native_assets_value_usd'] += native_assets_value_usd
+            summary['sei']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'akash':
+            summary['akash']['wallet_count'] += 1
+            summary['akash']['total_akt'] += balance
+            summary['akash']['native_assets_value_usd'] += native_assets_value_usd
+            summary['akash']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'ton':
+            summary['ton']['wallet_count'] += 1
+            summary['ton']['total_ton'] += balance
+            summary['ton']['token_count'] += len(assets)
+            summary['ton']['native_assets_value_usd'] += native_assets_value_usd
+            wallet_summary['token_count'] = len(assets)
+            summary['ton']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'polkadot':
+            summary['polkadot']['wallet_count'] += 1
+            summary['polkadot']['total_dot'] += balance
+            summary['polkadot']['native_assets_value_usd'] += native_assets_value_usd
+            summary['polkadot']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'kusama':
+            summary['kusama']['wallet_count'] += 1
+            summary['kusama']['total_ksm'] += balance
+            summary['kusama']['native_assets_value_usd'] += native_assets_value_usd
+            summary['kusama']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'stellar':
+            summary['stellar']['wallet_count'] += 1
+            summary['stellar']['total_xlm'] += balance
+            summary['stellar']['token_count'] += len(assets)
+            summary['stellar']['native_assets_value_usd'] += native_assets_value_usd
+            wallet_summary['token_count'] = len(assets)
+            summary['stellar']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'kaspa':
+            summary['kaspa']['wallet_count'] += 1
+            summary['kaspa']['total_kas'] += balance
+            summary['kaspa']['native_assets_value_usd'] += native_assets_value_usd
+            summary['kaspa']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'ergo':
+            summary['ergo']['wallet_count'] += 1
+            summary['ergo']['total_erg'] += balance
+            summary['ergo']['native_assets_value_usd'] += native_assets_value_usd
+            summary['ergo']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'iota':
+            summary['iota']['wallet_count'] += 1
+            summary['iota']['total_iota'] += balance
+            summary['iota']['native_assets_value_usd'] += native_assets_value_usd
+            summary['iota']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'waves':
+            summary['waves']['wallet_count'] += 1
+            summary['waves']['total_waves'] += balance
+            summary['waves']['native_assets_value_usd'] += native_assets_value_usd
+            summary['waves']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'mina':
+            summary['mina']['wallet_count'] += 1
+            summary['mina']['total_mina'] += balance
+            summary['mina']['native_assets_value_usd'] += native_assets_value_usd
+            summary['mina']['wallets'].append(wallet_summary)
+
+        elif blockchain == 'zilliqa':
+            summary['zilliqa']['wallet_count'] += 1
+            summary['zilliqa']['total_zil'] += balance
+            summary['zilliqa']['native_assets_value_usd'] += native_assets_value_usd
+            summary['zilliqa']['wallets'].append(wallet_summary)
+
     # Derive group label from first wallet with a label
     for group in stake_groups.values():
         if not group['label']:
@@ -653,6 +986,31 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
     summary['cosmos']['total_atom'] = round(summary['cosmos']['total_atom'], 6)
     summary['near']['total_near'] = round(summary['near']['total_near'], 8)
     summary['icp']['total_icp'] = round(summary['icp']['total_icp'], 8)
+    summary['optimism']['total_eth'] = round(summary['optimism']['total_eth'], 8)
+    summary['zksync']['total_eth'] = round(summary['zksync']['total_eth'], 8)
+    summary['linea']['total_eth'] = round(summary['linea']['total_eth'], 8)
+    summary['scroll']['total_eth'] = round(summary['scroll']['total_eth'], 8)
+    summary['fantom']['total_ftm'] = round(summary['fantom']['total_ftm'], 8)
+    summary['cronos']['total_cro'] = round(summary['cronos']['total_cro'], 8)
+    summary['gnosis']['total_xdai'] = round(summary['gnosis']['total_xdai'], 8)
+    summary['moonbeam']['total_glmr'] = round(summary['moonbeam']['total_glmr'], 8)
+    summary['kaia']['total_klay'] = round(summary['kaia']['total_klay'], 8)
+    summary['osmosis']['total_osmo'] = round(summary['osmosis']['total_osmo'], 6)
+    summary['celestia']['total_tia'] = round(summary['celestia']['total_tia'], 6)
+    summary['injective']['total_inj'] = round(summary['injective']['total_inj'], 8)
+    summary['dydx']['total_dydx'] = round(summary['dydx']['total_dydx'], 8)
+    summary['sei']['total_sei'] = round(summary['sei']['total_sei'], 6)
+    summary['akash']['total_akt'] = round(summary['akash']['total_akt'], 6)
+    summary['ton']['total_ton'] = round(summary['ton']['total_ton'], 9)
+    summary['polkadot']['total_dot'] = round(summary['polkadot']['total_dot'], 10)
+    summary['kusama']['total_ksm'] = round(summary['kusama']['total_ksm'], 12)
+    summary['stellar']['total_xlm'] = round(summary['stellar']['total_xlm'], 7)
+    summary['kaspa']['total_kas'] = round(summary['kaspa']['total_kas'], 8)
+    summary['ergo']['total_erg'] = round(summary['ergo']['total_erg'], 9)
+    summary['iota']['total_iota'] = round(summary['iota']['total_iota'], 9)
+    summary['waves']['total_waves'] = round(summary['waves']['total_waves'], 8)
+    summary['mina']['total_mina'] = round(summary['mina']['total_mina'], 9)
+    summary['zilliqa']['total_zil'] = round(summary['zilliqa']['total_zil'], 12)
 
     # Cache the result with timestamp
     from datetime import datetime

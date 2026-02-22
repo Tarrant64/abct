@@ -21,7 +21,24 @@ from services.solana import solana_service
 from services.polygon import polygon_service
 from services.base import base_service
 from services.algorand import algorand_service
-from services.evm_chain import bsc_service, arbitrum_service, avalanche_service
+from services.evm_chain import (
+    bsc_service, arbitrum_service, avalanche_service,
+    optimism_service, zksync_service, linea_service, scroll_service,
+    fantom_service, cronos_service, gnosis_service, moonbeam_service, kaia_service
+)
+from services.cosmos_chain import (
+    osmosis_service, celestia_service, injective_service,
+    dydx_service, sei_service, akash_service
+)
+from services.ton_service import ton_service
+from services.substrate_service import polkadot_service, kusama_service
+from services.stellar_service import stellar_service
+from services.kaspa_service import kaspa_service
+from services.ergo_service import ergo_service
+from services.iota_service import iota_service
+from services.waves_service import waves_service
+from services.mina_service import mina_service
+from services.zilliqa_service import zilliqa_service
 from services.tron import tron_service
 from services.xrp import xrp_service
 from services.hedera import hedera_service
@@ -275,6 +292,28 @@ async def get_wallet_assets_by_id(wallet_id: int, user_id: int = Depends(verify_
     atom_price_usd = await pricing_service.get_price('ATOM')
     near_price_usd = await pricing_service.get_price('NEAR')
     icp_price_usd = await pricing_service.get_price('ICP')
+    ftm_price_usd = await pricing_service.get_price('FTM')
+    cro_price_usd = await pricing_service.get_price('CRO')
+    xdai_price_usd = await pricing_service.get_price('DAI')
+    glmr_price_usd = await pricing_service.get_price('GLMR')
+    # New chains
+    osmo_price_usd = await pricing_service.get_price('OSMO')
+    tia_price_usd = await pricing_service.get_price('TIA')
+    inj_price_usd = await pricing_service.get_price('INJ')
+    dydx_price_usd = await pricing_service.get_price('DYDX')
+    sei_price_usd = await pricing_service.get_price('SEI')
+    akt_price_usd = await pricing_service.get_price('AKT')
+    ton_price_usd = await pricing_service.get_price('TON')
+    dot_price_usd = await pricing_service.get_price('DOT')
+    ksm_price_usd = await pricing_service.get_price('KSM')
+    xlm_price_usd = await pricing_service.get_price('XLM')
+    kas_price_usd = await pricing_service.get_price('KAS')
+    klay_price_usd = await pricing_service.get_price('KLAY')
+    erg_price_usd = await pricing_service.get_price('ERG')
+    iota_price_usd = await pricing_service.get_price('IOTA')
+    waves_price_usd = await pricing_service.get_price('WAVES')
+    mina_price_usd = await pricing_service.get_price('MINA')
+    zil_price_usd = await pricing_service.get_price('ZIL')
 
     # For Cardano wallets, try to get TapTools data for ADA-denominated pricing
     taptools_positions = {}
@@ -293,7 +332,7 @@ async def get_wallet_assets_by_id(wallet_id: int, user_id: int = Depends(verify_
 
     # For Ethereum-based chains, try to get Graph/Uniswap data for native-token-denominated pricing
     graph_prices = {}
-    if wallet['blockchain'] in ['ethereum', 'polygon', 'base', 'bsc', 'arbitrum', 'avalanche'] and graph_service.is_configured():
+    if wallet['blockchain'] in ['ethereum', 'polygon', 'base', 'bsc', 'arbitrum', 'avalanche', 'optimism', 'zksync', 'linea', 'scroll', 'fantom', 'cronos', 'gnosis', 'moonbeam'] and graph_service.is_configured():
         try:
             # Get token addresses for Graph API lookup
             token_addresses = []
@@ -348,7 +387,7 @@ async def get_wallet_assets_by_id(wallet_id: int, user_id: int = Depends(verify_
                     asset_data['price_usd'] = (total_ada * ada_price_usd) / actual_qty
 
         # For Ethereum-based chains, try Graph API (ETH-denominated)
-        elif wallet['blockchain'] in ['ethereum', 'polygon', 'base', 'bsc', 'arbitrum', 'avalanche'] and asset.get('asset_id') in graph_prices:
+        elif wallet['blockchain'] in ['ethereum', 'polygon', 'base', 'bsc', 'arbitrum', 'avalanche', 'optimism', 'zksync', 'linea', 'scroll', 'fantom', 'cronos', 'gnosis', 'moonbeam'] and asset.get('asset_id') in graph_prices:
             price_eth = graph_prices[asset['asset_id']]
             total_eth = actual_qty * price_eth
 
@@ -457,6 +496,31 @@ async def get_wallet_assets_by_id(wallet_id: int, user_id: int = Depends(verify_
             'cosmos': {'ticker': 'ATOM', 'name': 'Cosmos', 'decimals': 6, 'price_usd': atom_price_usd},
             'near': {'ticker': 'NEAR', 'name': 'NEAR Protocol', 'decimals': 24, 'price_usd': near_price_usd},
             'icp': {'ticker': 'ICP', 'name': 'Internet Computer', 'decimals': 8, 'price_usd': icp_price_usd},
+            'optimism': {'ticker': 'ETH', 'name': 'Optimism (ETH)', 'decimals': 18, 'price_usd': eth_price_usd},
+            'zksync': {'ticker': 'ETH', 'name': 'zkSync Era (ETH)', 'decimals': 18, 'price_usd': eth_price_usd},
+            'linea': {'ticker': 'ETH', 'name': 'Linea (ETH)', 'decimals': 18, 'price_usd': eth_price_usd},
+            'scroll': {'ticker': 'ETH', 'name': 'Scroll (ETH)', 'decimals': 18, 'price_usd': eth_price_usd},
+            'fantom': {'ticker': 'FTM', 'name': 'Fantom', 'decimals': 18, 'price_usd': ftm_price_usd},
+            'cronos': {'ticker': 'CRO', 'name': 'Cronos', 'decimals': 18, 'price_usd': cro_price_usd},
+            'gnosis': {'ticker': 'xDAI', 'name': 'Gnosis Chain', 'decimals': 18, 'price_usd': xdai_price_usd},
+            'moonbeam': {'ticker': 'GLMR', 'name': 'Moonbeam', 'decimals': 18, 'price_usd': glmr_price_usd},
+            'kaia': {'ticker': 'KLAY', 'name': 'Kaia', 'decimals': 18, 'price_usd': klay_price_usd},
+            'osmosis': {'ticker': 'OSMO', 'name': 'Osmosis', 'decimals': 6, 'price_usd': osmo_price_usd},
+            'celestia': {'ticker': 'TIA', 'name': 'Celestia', 'decimals': 6, 'price_usd': tia_price_usd},
+            'injective': {'ticker': 'INJ', 'name': 'Injective', 'decimals': 18, 'price_usd': inj_price_usd},
+            'dydx': {'ticker': 'DYDX', 'name': 'dYdX', 'decimals': 18, 'price_usd': dydx_price_usd},
+            'sei': {'ticker': 'SEI', 'name': 'Sei', 'decimals': 6, 'price_usd': sei_price_usd},
+            'akash': {'ticker': 'AKT', 'name': 'Akash', 'decimals': 6, 'price_usd': akt_price_usd},
+            'ton': {'ticker': 'TON', 'name': 'TON', 'decimals': 9, 'price_usd': ton_price_usd},
+            'polkadot': {'ticker': 'DOT', 'name': 'Polkadot', 'decimals': 10, 'price_usd': dot_price_usd},
+            'kusama': {'ticker': 'KSM', 'name': 'Kusama', 'decimals': 12, 'price_usd': ksm_price_usd},
+            'stellar': {'ticker': 'XLM', 'name': 'Stellar', 'decimals': 7, 'price_usd': xlm_price_usd},
+            'kaspa': {'ticker': 'KAS', 'name': 'Kaspa', 'decimals': 8, 'price_usd': kas_price_usd},
+            'ergo': {'ticker': 'ERG', 'name': 'Ergo', 'decimals': 9, 'price_usd': erg_price_usd},
+            'iota': {'ticker': 'IOTA', 'name': 'IOTA', 'decimals': 9, 'price_usd': iota_price_usd},
+            'waves': {'ticker': 'WAVES', 'name': 'Waves', 'decimals': 8, 'price_usd': waves_price_usd},
+            'mina': {'ticker': 'MINA', 'name': 'Mina Protocol', 'decimals': 9, 'price_usd': mina_price_usd},
+            'zilliqa': {'ticker': 'ZIL', 'name': 'Zilliqa', 'decimals': 12, 'price_usd': zil_price_usd},
         }
 
         if wallet['blockchain'] in native_config:
@@ -903,6 +967,206 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
                     'source': info.get('source')
                 }
 
+        elif blockchain == 'optimism':
+            info = await optimism_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_eth']), 'ETH_OP')
+                op_assets = [
+                    {
+                        'asset_id': t['contract_address'],
+                        'policy_id': t['contract_address'],
+                        'asset_name': t['symbol'],
+                        'quantity': str(int(t['balance_raw'])),
+                        'decimals': t['decimals']
+                    }
+                    for t in info.get('tokens', [])
+                ]
+                await save_native_assets(wallet_id, op_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_eth'],
+                    'unit': 'ETH',
+                    'token_count': info.get('token_count', 0),
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'zksync':
+            info = await zksync_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_eth']), 'ETH_ZK')
+                zk_assets = [
+                    {
+                        'asset_id': t['contract_address'],
+                        'policy_id': t['contract_address'],
+                        'asset_name': t['symbol'],
+                        'quantity': str(int(t['balance_raw'])),
+                        'decimals': t['decimals']
+                    }
+                    for t in info.get('tokens', [])
+                ]
+                await save_native_assets(wallet_id, zk_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_eth'],
+                    'unit': 'ETH',
+                    'token_count': info.get('token_count', 0),
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'linea':
+            info = await linea_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_eth']), 'ETH_LINEA')
+                linea_assets = [
+                    {
+                        'asset_id': t['contract_address'],
+                        'policy_id': t['contract_address'],
+                        'asset_name': t['symbol'],
+                        'quantity': str(int(t['balance_raw'])),
+                        'decimals': t['decimals']
+                    }
+                    for t in info.get('tokens', [])
+                ]
+                await save_native_assets(wallet_id, linea_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_eth'],
+                    'unit': 'ETH',
+                    'token_count': info.get('token_count', 0),
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'scroll':
+            info = await scroll_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_eth']), 'ETH_SCROLL')
+                scroll_assets = [
+                    {
+                        'asset_id': t['contract_address'],
+                        'policy_id': t['contract_address'],
+                        'asset_name': t['symbol'],
+                        'quantity': str(int(t['balance_raw'])),
+                        'decimals': t['decimals']
+                    }
+                    for t in info.get('tokens', [])
+                ]
+                await save_native_assets(wallet_id, scroll_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_eth'],
+                    'unit': 'ETH',
+                    'token_count': info.get('token_count', 0),
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'fantom':
+            info = await fantom_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_ftm']), 'FTM')
+                ftm_assets = [
+                    {
+                        'asset_id': t['contract_address'],
+                        'policy_id': t['contract_address'],
+                        'asset_name': t['symbol'],
+                        'quantity': str(int(t['balance_raw'])),
+                        'decimals': t['decimals']
+                    }
+                    for t in info.get('tokens', [])
+                ]
+                await save_native_assets(wallet_id, ftm_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_ftm'],
+                    'unit': 'FTM',
+                    'token_count': info.get('token_count', 0),
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'cronos':
+            info = await cronos_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_cro']), 'CRO')
+                cro_assets = [
+                    {
+                        'asset_id': t['contract_address'],
+                        'policy_id': t['contract_address'],
+                        'asset_name': t['symbol'],
+                        'quantity': str(int(t['balance_raw'])),
+                        'decimals': t['decimals']
+                    }
+                    for t in info.get('tokens', [])
+                ]
+                await save_native_assets(wallet_id, cro_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_cro'],
+                    'unit': 'CRO',
+                    'token_count': info.get('token_count', 0),
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'gnosis':
+            info = await gnosis_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_xdai']), 'xDAI')
+                gnosis_assets = [
+                    {
+                        'asset_id': t['contract_address'],
+                        'policy_id': t['contract_address'],
+                        'asset_name': t['symbol'],
+                        'quantity': str(int(t['balance_raw'])),
+                        'decimals': t['decimals']
+                    }
+                    for t in info.get('tokens', [])
+                ]
+                await save_native_assets(wallet_id, gnosis_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_xdai'],
+                    'unit': 'xDAI',
+                    'token_count': info.get('token_count', 0),
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'moonbeam':
+            info = await moonbeam_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_glmr']), 'GLMR')
+                glmr_assets = [
+                    {
+                        'asset_id': t['contract_address'],
+                        'policy_id': t['contract_address'],
+                        'asset_name': t['symbol'],
+                        'quantity': str(int(t['balance_raw'])),
+                        'decimals': t['decimals']
+                    }
+                    for t in info.get('tokens', [])
+                ]
+                await save_native_assets(wallet_id, glmr_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_glmr'],
+                    'unit': 'GLMR',
+                    'token_count': info.get('token_count', 0),
+                    'source': info.get('source')
+                }
+
         elif blockchain == 'tron':
             info = await tron_service.get_address_info(address)
             if info:
@@ -1253,6 +1517,277 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
                     'source': info.get('source')
                 }
 
+        elif blockchain == 'kaia':
+            info = await kaia_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_klay']), 'KLAY')
+                kaia_assets = [
+                    {
+                        'asset_id': t['contract_address'],
+                        'policy_id': t['contract_address'],
+                        'asset_name': t['symbol'],
+                        'quantity': str(int(t['balance_raw'])),
+                        'decimals': t['decimals']
+                    }
+                    for t in info.get('tokens', [])
+                ]
+                await save_native_assets(wallet_id, kaia_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_klay'],
+                    'unit': 'KLAY',
+                    'token_count': info.get('token_count', 0),
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'osmosis':
+            info = await osmosis_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_osmo']), 'OSMO')
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_osmo'],
+                    'unit': 'OSMO',
+                    'token_count': 0,
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'celestia':
+            info = await celestia_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_tia']), 'TIA')
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_tia'],
+                    'unit': 'TIA',
+                    'token_count': 0,
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'injective':
+            info = await injective_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_inj']), 'INJ')
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_inj'],
+                    'unit': 'INJ',
+                    'token_count': 0,
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'dydx':
+            info = await dydx_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_dydx']), 'DYDX')
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_dydx'],
+                    'unit': 'DYDX',
+                    'token_count': 0,
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'sei':
+            info = await sei_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_sei']), 'SEI')
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_sei'],
+                    'unit': 'SEI',
+                    'token_count': 0,
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'akash':
+            info = await akash_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_akt']), 'AKT')
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_akt'],
+                    'unit': 'AKT',
+                    'token_count': 0,
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'ton':
+            info = await ton_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_ton']), 'TON')
+                ton_assets = [
+                    {
+                        'asset_id': t['contract_address'],
+                        'policy_id': t['contract_address'],
+                        'asset_name': t['symbol'],
+                        'quantity': str(int(t['balance_raw'])),
+                        'decimals': t['decimals']
+                    }
+                    for t in info.get('tokens', [])
+                ]
+                await save_native_assets(wallet_id, ton_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_ton'],
+                    'unit': 'TON',
+                    'token_count': info.get('token_count', 0),
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'polkadot':
+            info = await polkadot_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_dot']), 'DOT')
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_dot'],
+                    'unit': 'DOT',
+                    'token_count': 0,
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'kusama':
+            info = await kusama_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_ksm']), 'KSM')
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_ksm'],
+                    'unit': 'KSM',
+                    'token_count': 0,
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'stellar':
+            info = await stellar_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_xlm']), 'XLM')
+                stellar_assets = [
+                    {
+                        'asset_id': t['contract_address'],
+                        'policy_id': t['contract_address'],
+                        'asset_name': t['symbol'],
+                        'quantity': str(int(t['balance_raw'])),
+                        'decimals': t['decimals']
+                    }
+                    for t in info.get('tokens', [])
+                ]
+                await save_native_assets(wallet_id, stellar_assets)
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_xlm'],
+                    'unit': 'XLM',
+                    'token_count': info.get('token_count', 0),
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'kaspa':
+            info = await kaspa_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_kas']), 'KAS')
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_kas'],
+                    'unit': 'KAS',
+                    'token_count': 0,
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'ergo':
+            info = await ergo_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_erg']), 'ERG')
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_erg'],
+                    'unit': 'ERG',
+                    'token_count': 0,
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'iota':
+            info = await iota_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_iota']), 'IOTA')
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_iota'],
+                    'unit': 'IOTA',
+                    'token_count': 0,
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'waves':
+            info = await waves_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_waves']), 'WAVES')
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_waves'],
+                    'unit': 'WAVES',
+                    'token_count': 0,
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'mina':
+            info = await mina_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_mina']), 'MINA')
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_mina'],
+                    'unit': 'MINA',
+                    'token_count': 0,
+                    'source': info.get('source')
+                }
+
+        elif blockchain == 'zilliqa':
+            info = await zilliqa_service.get_address_info(address)
+            if info:
+                await clear_wallet_balances(wallet_id)
+                await save_balance(wallet_id, str(info['balance_zil']), 'ZIL')
+                return {
+                    'address': address,
+                    'success': True,
+                    'balance': info['balance_zil'],
+                    'unit': 'ZIL',
+                    'token_count': 0,
+                    'source': info.get('source')
+                }
+
         return {
             'address': address,
             'success': False,
@@ -1587,7 +2122,7 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
         if not blockchain:
             raise HTTPException(
                 status_code=400,
-                detail="Could not detect blockchain. Supported: Cardano (addr1, stake1), Bitcoin (1, 3, bc1, xpub/ypub/zpub), Ethereum (0x 42-char), Polygon (polygon:0x), Base (base:0x), Solana (base58), BNB Chain (bsc:0x), Arbitrum (arb:0x), Avalanche (avax:0x), Tron (T...), XRP (r...), Hedera (0.0.N), MultiversX (erd1...), Sui (0x 66-char), Aptos (aptos:0x), Filecoin (f1/f3...), Litecoin (L/M/ltc1), Dogecoin (D...), Zcash (t1/t3), Tezos (tz1/KT1), Stacks (SP...), VeChain (vet:0x), Cosmos (cosmos1...), NEAR (*.near), ICP (icp:...)"
+                detail="Could not detect blockchain. Supported: Cardano (addr1, stake1), Bitcoin (1, 3, bc1, xpub/ypub/zpub), Ethereum (0x 42-char), Polygon (polygon:0x), Base (base:0x), Solana (base58), BNB Chain (bsc:0x), Arbitrum (arb:0x), Avalanche (avax:0x), Tron (T...), XRP (r...), Hedera (0.0.N), MultiversX (erd1...), Sui (0x 66-char), Aptos (aptos:0x), Filecoin (f1/f3...), Litecoin (L/M/ltc1), Dogecoin (D...), Zcash (t1/t3), Tezos (tz1/KT1), Stacks (SP...), VeChain (vet:0x), Cosmos (cosmos1...), NEAR (*.near), ICP (icp:...), TON (EQ/UQ...), Polkadot (polkadot:...), Kusama (kusama:...), Stellar (G...), Kaspa (kaspa:...), Osmosis (osmo1...), Celestia (celestia1...), Injective (inj1...), dYdX (dydx1...), Sei (sei1...), Akash (akash1...), Kaia (kaia:0x), Ergo (9...), IOTA (iota:0x), Waves (3P...), Mina (B62...), Zilliqa (zil1/0x)"
             )
 
         # Extract raw address if chain prefix was provided
@@ -1595,7 +2130,7 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
         if ':' in address:
             parts = address.split(':', 1)
             chain_prefix = parts[0].lower()
-            if chain_prefix in ('cardano', 'bitcoin', 'ethereum', 'eth', 'polygon', 'matic', 'base', 'solana', 'sol', 'algorand', 'algo', 'bsc', 'bnb', 'arb', 'arbitrum', 'avax', 'avalanche', 'tron', 'trx', 'xrp', 'ripple', 'hedera', 'hbar', 'multiversx', 'egld', 'elrond', 'sui', 'aptos', 'apt', 'filecoin', 'fil', 'litecoin', 'ltc', 'dogecoin', 'doge', 'zcash', 'zec', 'tezos', 'xtz', 'stacks', 'stx', 'vechain', 'vet', 'cosmos', 'atom', 'near', 'icp'):
+            if chain_prefix in ('cardano', 'bitcoin', 'ethereum', 'eth', 'polygon', 'matic', 'base', 'solana', 'sol', 'algorand', 'algo', 'bsc', 'bnb', 'arb', 'arbitrum', 'avax', 'avalanche', 'tron', 'trx', 'xrp', 'ripple', 'hedera', 'hbar', 'multiversx', 'egld', 'elrond', 'sui', 'aptos', 'apt', 'filecoin', 'fil', 'litecoin', 'ltc', 'dogecoin', 'doge', 'zcash', 'zec', 'tezos', 'xtz', 'stacks', 'stx', 'vechain', 'vet', 'cosmos', 'atom', 'near', 'icp', 'ton', 'polkadot', 'dot', 'kusama', 'ksm', 'stellar', 'xlm', 'kaspa', 'kas', 'osmosis', 'osmo', 'celestia', 'tia', 'injective', 'inj', 'dydx', 'sei', 'akash', 'akt', 'kaia', 'klay', 'ergo', 'erg', 'iota', 'waves', 'mina', 'zilliqa', 'zil'):
                 raw_address = parts[1]
         address = raw_address
 
@@ -1885,7 +2420,7 @@ async def delete_wallet(address: str, user_id: int = Depends(verify_session)):
     if ':' in address:
         parts = address.split(':', 1)
         chain_prefix = parts[0].lower()
-        if chain_prefix in ('cardano', 'bitcoin', 'ethereum', 'polygon', 'base', 'solana', 'algorand', 'bsc', 'arbitrum', 'avalanche', 'tron', 'xrp', 'hedera', 'multiversx', 'sui', 'aptos', 'filecoin', 'litecoin', 'dogecoin', 'zcash', 'tezos', 'stacks', 'vechain', 'cosmos', 'near', 'icp'):
+        if chain_prefix in ('cardano', 'bitcoin', 'ethereum', 'polygon', 'base', 'solana', 'algorand', 'bsc', 'arbitrum', 'avalanche', 'tron', 'xrp', 'hedera', 'multiversx', 'sui', 'aptos', 'filecoin', 'litecoin', 'dogecoin', 'zcash', 'tezos', 'stacks', 'vechain', 'cosmos', 'near', 'icp', 'ton', 'polkadot', 'kusama', 'stellar', 'kaspa', 'osmosis', 'celestia', 'injective', 'dydx', 'sei', 'akash', 'kaia', 'ergo', 'iota', 'waves', 'mina', 'zilliqa'):
             blockchain = chain_prefix
             raw_address = parts[1]
 

@@ -2,15 +2,15 @@
 
 Personal multi-chain portfolio tracker built Cardano-first.
 
-![Version](https://img.shields.io/badge/version-1.13.0-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-1.14.0-brightgreen.svg)
 ![Build](https://img.shields.io/badge/build-1771717923-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.109-teal.svg)
-![Chains](https://img.shields.io/badge/chains-34-brightgreen.svg)
+![Chains](https://img.shields.io/badge/chains-51-brightgreen.svg)
 ![Docker](https://img.shields.io/badge/docker-ready-blue.svg)
 ![Exchanges](https://img.shields.io/badge/exchanges-42-purple.svg)
-![DeFi](https://img.shields.io/badge/defi_protocols-100%2B-orange.svg)
+![DeFi](https://img.shields.io/badge/defi_protocols-80%2B-orange.svg)
 ![Themes](https://img.shields.io/badge/themes-5-purple.svg)
 
 **Website**: [abettercryptotracker.com](https://abettercryptotracker.com)
@@ -21,25 +21,35 @@ Existing multi-chain wallets treat Cardano as an afterthought — basic balance 
 
 ## Features
 
-### 34 Blockchains
+### 51 Blockchains
 
 **Cardano** (Primary) — Stake pool tracking, rewards, governance, native assets with metadata, DeFi protocol integration (Minswap, SundaeSwap, Liqwid, Indigo, etc.), NFT collections with floor prices, stake key wallet grouping.
 
 **API-Key Chains** — Ethereum, Solana, Polygon, Base, Algorand, Arbitrum, Avalanche, BNB Chain (via Etherscan/Alchemy/Helius APIs)
 
-**New EVM Chains** (v1.13.0) — Optimism, zkSync Era, Linea, Scroll, Fantom, Cronos, Gnosis, Moonbeam
+**EVM Chains** — Optimism, zkSync Era, Linea, Scroll, Fantom, Cronos, Gnosis, Moonbeam (all via generic EVM service)
 
-**Free Chains** (no API key required) — Bitcoin, Tron, XRP, Hedera, MultiversX, Sui, Aptos, Filecoin, Litecoin, Dogecoin, Zcash, Tezos, Stacks, VeChain, Cosmos, NEAR, ICP
+**Generic EVM Support** — Any EVM-compatible chain can be tracked. The `evm_chain.py` service is config-driven: add a new entry with the chain's RPC URL, chain ID, and explorer base URL and it works without additional code.
+
+**Cosmos IBC Chains** (v1.14.0) — Osmosis, Celestia, Injective, dYdX, Sei, Akash (shared LCD pattern via `cosmos_chain.py`)
+
+**Substrate Chains** (v1.14.0) — Polkadot, Kusama (via Subscan REST API, optional key)
+
+**Major L1 Additions** (v1.14.0) — TON (TON Center API), Stellar (Horizon API), Kaspa
+
+**Additional Chains** (v1.14.0) — Kaia (formerly Klaytn), Ergo, IOTA, Waves, Mina, Zilliqa
+
+**Free Chains** (no API key required) — Bitcoin, Tron, XRP, Hedera, MultiversX, Sui, Aptos, Filecoin, Litecoin, Dogecoin, Zcash, Tezos, Stacks, VeChain, Cosmos (ATOM), NEAR, ICP, and all Cosmos IBC chains above
 
 ### 42 Exchange Integrations
 Read-only API integration across 42 exchanges using 5 auth method families:
 - **Original**: Coinbase, Binance, Binance.US, OKX, Bitget, Gate.io, KuCoin
 - **New**: Bybit, MEXC, Kraken, Gemini, Bitfinex, HTX, BingX, Phemex, WOO X, AscendEX, Poloniex, Crypto.com, Bitstamp, Bitmart, and 21 more
 
-### 100+ DeFi Protocol Detection
+### 80+ DeFi Protocol Detection
 Protocol adapters detect positions automatically — no manual tracking needed:
-- **Cardano** (5): Minswap, Liqwid, Indigo, Strike Finance, Surf Protocol
-- **EVM** (30+): Aave v3, Compound v3, Uniswap v3 LP, Curve, Balancer, EigenLayer, Maker/Spark, Morpho, GMX, and more
+- **Cardano** (13): Minswap, SundaeSwap V3, WingRiders, Splash, Djed, FluidTokens, Lenfi, MuesliSwap, Liqwid, Indigo, Strike Finance, Surf Protocol, Iagon
+- **EVM** (55+): Aave v3, Compound v3, Uniswap v3 LP, Curve, Balancer, EigenLayer, Maker/Spark, Morpho, GMX, Pendle, Stargate, Aerodrome, Velodrome, Radiant, Benqi, SushiSwap, Yearn v3, Beefy, Synthetix, Liquity, Camelot, Abracadabra, PancakeSwap v3, and more
 - **Solana** (15): Marinade, Jito, Orca, Raydium, Drift, MarginFi, Kamino, Jupiter Perps, Blazestake, and more
 
 ### Portfolio & Analytics
@@ -161,6 +171,17 @@ See [SECURITY.md](SECURITY.md) for full details.
 
 ## What's New
 
+### v1.14.0 — 51 Chains, Cosmos IBC, 80+ DeFi Protocols (February 2026)
+- **Chain Depth Expansion**: 34 → 51 chains across 5 new categories
+- **Cosmos IBC Support**: Osmosis, Celestia, Injective, dYdX, Sei, Akash — all via shared `cosmos_chain.py` LCD pattern
+- **Substrate Chains**: Polkadot and Kusama via Subscan REST API (optional API key for higher rate limits)
+- **Major L1 Additions**: TON (TON Center API), Stellar (Horizon API), Kaspa
+- **Additional Chains**: Kaia (formerly Klaytn), Ergo, IOTA, Waves, Mina, Zilliqa
+- **EVM Chain Fixes**: 8 previously wired-but-broken EVM chains now fully working (Optimism, zkSync Era, Linea, Scroll, Fantom, Cronos, Gnosis, Moonbeam)
+- **Generic EVM Framework**: `evm_chain.py` is now fully config-driven; any EVM-compatible chain works without new code
+- **Cardano DeFi Expansion**: 5 → 13 protocols (added Minswap, SundaeSwap V3, WingRiders, Splash, Djed, FluidTokens, Lenfi, MuesliSwap)
+- **EVM DeFi Expansion**: ~30 → 55+ protocols (Pendle, Stargate, Aerodrome, Velodrome, Radiant, Benqi, SushiSwap, Yearn v3, Beefy, Synthetix, Liquity, Camelot, Abracadabra, PancakeSwap v3, and more)
+
 ### v1.13.0 — 42 Exchanges, 34 Chains, 100+ DeFi Protocols & P&L (February 2026)
 - **Exchange Expansion**: 35 new exchange integrations (42 total) — Bybit, MEXC, Kraken, Gemini, Bitfinex, HTX, BingX, Phemex, WOO X, AscendEX, Poloniex, Crypto.com, Bitstamp, Bitmart, and 21 more
 - **Exchange Architecture**: `BaseExchangeService` with 5 auth method mixins; Exchange Registry auto-wires new exchanges into `/exchanges/status`, `/exchanges/all`, and individual endpoints
@@ -208,6 +229,8 @@ Built with [FastAPI](https://fastapi.tiangolo.com/), [Chart.js](https://www.char
 **Cardano**: [Blockfrost](https://blockfrost.io/), [TapTools](https://www.taptools.io/), [CExplorer](https://cexplorer.io/), [Koios](https://koios.rest/)
 **Ethereum & EVM**: [Alchemy](https://www.alchemy.com/), [Etherscan](https://etherscan.io/), [Basescan](https://basescan.org/), [Polygonscan](https://polygonscan.com/)
 **Solana**: [Helius](https://www.helius.dev/) · **Bitcoin**: [Blockstream](https://blockstream.info/) · **Algorand**: [Pera Wallet](https://developer.perawallet.app/), [Tatum](https://tatum.io/)
+**TON**: [TON Center](https://toncenter.com/) · **Stellar**: [Horizon API](https://horizon.stellar.org/) · **Substrate**: [Subscan](https://subscan.io/)
+**Cosmos IBC**: Public LCD nodes (Osmosis, Celestia, Injective, dYdX, Sei, Akash)
 **Pricing**: [CoinGecko](https://www.coingecko.com/), [CoinMarketCap](https://coinmarketcap.com/), [DefiLlama](https://defillama.com/), [Coinbase](https://www.coinbase.com/)
 **Logos**: [LogoKit](https://logokit.com/), [Logostream](https://logostream.dev)
 **Exchanges** (42 total): [Coinbase](https://www.coinbase.com/cloud), [Binance](https://www.binance.com/), [Bybit](https://www.bybit.com/), [MEXC](https://www.mexc.com/), [Kraken](https://www.kraken.com/), [Gemini](https://www.gemini.com/), [OKX](https://www.okx.com/), [Bitget](https://www.bitget.com/), [Gate.io](https://www.gate.io/), [KuCoin](https://www.kucoin.com/), [Bitfinex](https://www.bitfinex.com/), [HTX](https://www.htx.com/), and 30 more
@@ -225,5 +248,5 @@ For detailed API information including rate limits and pricing, see [API Provide
 
 ---
 
-**Current Version:** v1.12.3 (BUILD 1771554807)
-**Last Updated:** February 19, 2026
+**Current Version:** v1.14.0 (BUILD 1771717923)
+**Last Updated:** February 21, 2026

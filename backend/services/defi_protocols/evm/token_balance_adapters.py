@@ -277,6 +277,125 @@ TOKEN_REGISTRY = {
             },
         },
     },
+
+    # -----------------------------------------------------------------------
+    # Yearn v3 (yvTokens)
+    # -----------------------------------------------------------------------
+    "Yearn v3": {
+        "url": "https://yearn.fi",
+        "tokens": {
+            "yvUSDC": {
+                "ethereum": "0xa354F35829Ae975e850e23e9615b11Da1B3dC4DE",
+                "decimals": 6,
+                "position_type": PositionType.YIELD_VAULT,
+            },
+            "yvWETH": {
+                "ethereum": "0xa258C4606Ca8206D8aA700cE2143D7db854D168c",
+                "decimals": 18,
+                "position_type": PositionType.YIELD_VAULT,
+            },
+            "yvDAI": {
+                "ethereum": "0xdA816459F1AB5631232FE5e97a05BBBb94970c95",
+                "decimals": 18,
+                "position_type": PositionType.YIELD_VAULT,
+            },
+        },
+    },
+
+    # -----------------------------------------------------------------------
+    # Beefy Finance (mooTokens)
+    # -----------------------------------------------------------------------
+    "Beefy Finance": {
+        "url": "https://beefy.com",
+        "tokens": {
+            "mooCurve3Pool": {
+                "ethereum": "0xc55d5caaa9afec269d4d87e4b6c980f38fb00657",
+                "decimals": 18,
+                "position_type": PositionType.YIELD_VAULT,
+            },
+            "mooPancakeBNB-BUSD": {
+                "bsc": "0x0895196562C7868C5Be92459FaE7f877ED450452",
+                "decimals": 18,
+                "position_type": PositionType.YIELD_VAULT,
+            },
+            "mooAaveUSDC": {
+                "polygon": "0xA7dCDcfB54DB4E41bDf8fEe3cA4b0F28fBA44f0b",
+                "decimals": 6,
+                "position_type": PositionType.YIELD_VAULT,
+            },
+        },
+    },
+
+    # -----------------------------------------------------------------------
+    # dYdX (Staked DYDX)
+    # -----------------------------------------------------------------------
+    "dYdX": {
+        "url": "https://dydx.exchange",
+        "tokens": {
+            "stkDYDX": {
+                "ethereum": "0x65f7BA4Ec257AF7c55fd5854E5f6356bBd0fb8EC",
+                "decimals": 18,
+                "position_type": PositionType.STAKING,
+            },
+        },
+    },
+
+    # -----------------------------------------------------------------------
+    # Alchemix (alTokens)
+    # -----------------------------------------------------------------------
+    "Alchemix": {
+        "url": "https://alchemix.fi",
+        "tokens": {
+            "alUSD": {
+                "ethereum": "0xBC6DA0FE9aD5f3b0d58160288917AA56653660E9",
+                "decimals": 18,
+                "position_type": PositionType.YIELD_VAULT,
+            },
+            "alETH": {
+                "ethereum": "0x0100546F2cD4C9D97f798fFC9755E47865FF7Ee6",
+                "decimals": 18,
+                "position_type": PositionType.YIELD_VAULT,
+            },
+        },
+    },
+
+    # -----------------------------------------------------------------------
+    # Fluid / Instadapp (fTokens)
+    # -----------------------------------------------------------------------
+    "Fluid (Instadapp)": {
+        "url": "https://fluid.instadapp.io",
+        "tokens": {
+            "fUSDC": {
+                "ethereum": "0x9Fb7b4477576Fe5B32be4C1843aFB1e55F251B33",
+                "decimals": 6,
+                "position_type": PositionType.LENDING_SUPPLY,
+            },
+            "fUSDT": {
+                "ethereum": "0x90551c1795392094FE6D29B758EcCD233cFAa260",
+                "decimals": 6,
+                "position_type": PositionType.LENDING_SUPPLY,
+            },
+        },
+    },
+
+    # -----------------------------------------------------------------------
+    # Stake DAO (sdTokens)
+    # -----------------------------------------------------------------------
+    "Stake DAO": {
+        "url": "https://stakedao.org",
+        "tokens": {
+            "sdCRV": {
+                "ethereum": "0x73968b9a57c6E53d41345FD57a6E6ae27d6CDB2F",
+                "decimals": 18,
+                "position_type": PositionType.STAKING,
+            },
+            "sdFXS": {
+                "ethereum": "0x402F878BDd1f5C66FdAF0fabaBcF74741B68ac36",
+                "decimals": 18,
+                "position_type": PositionType.STAKING,
+            },
+        },
+    },
 }
 
 

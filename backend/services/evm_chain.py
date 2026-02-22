@@ -142,6 +142,16 @@ EVM_CHAINS = {
         'explorer_base': 'https://moonbeam.moonscan.io',
         'explorer_name': 'Moonscan',
     },
+    'kaia': {
+        'name': 'Kaia',
+        'alchemy_base': None,
+        'public_rpc': 'https://public-en.node.kaia.io',
+        'native_symbol': 'KLAY',
+        'balance_key': 'balance_klay',
+        'opensea_chain': None,
+        'explorer_base': 'https://kaiascan.io',
+        'explorer_name': 'KaiaScan',
+    },
 }
 
 
@@ -740,3 +750,4 @@ fantom_service = EVMChainService('fantom')
 cronos_service = EVMChainService('cronos')
 gnosis_service = EVMChainService('gnosis')
 moonbeam_service = EVMChainService('moonbeam')
+kaia_service = EVMChainService('kaia')

@@ -9,7 +9,9 @@ def detect_blockchain(address: str) -> Optional[str]:
         'cardano', 'bitcoin', 'ethereum', 'polygon', 'base', 'solana', 'algorand',
         'bsc', 'arbitrum', 'avalanche', 'tron', 'xrp', 'hedera', 'multiversx',
         'sui', 'aptos', 'filecoin', 'litecoin', 'dogecoin', 'zcash', 'tezos',
-        'stacks', 'vechain', 'cosmos', 'near', 'icp', or None if unknown
+        'stacks', 'vechain', 'cosmos', 'near', 'icp', 'ton', 'polkadot', 'kusama',
+        'stellar', 'kaspa', 'osmosis', 'celestia', 'injective', 'dydx', 'sei',
+        'akash', 'kaia', 'ergo', 'iota', 'waves', 'mina', 'zilliqa', or None if unknown
     """
     address = address.strip()
 
@@ -41,6 +43,24 @@ def detect_blockchain(address: str) -> Optional[str]:
             'cosmos': 'cosmos', 'atom': 'cosmos',
             'near': 'near',
             'icp': 'icp',
+            # New chains
+            'ton': 'ton',
+            'polkadot': 'polkadot', 'dot': 'polkadot',
+            'kusama': 'kusama', 'ksm': 'kusama',
+            'stellar': 'stellar', 'xlm': 'stellar',
+            'kaspa': 'kaspa', 'kas': 'kaspa',
+            'osmosis': 'osmosis', 'osmo': 'osmosis',
+            'celestia': 'celestia', 'tia': 'celestia',
+            'injective': 'injective', 'inj': 'injective',
+            'dydx': 'dydx',
+            'sei': 'sei',
+            'akash': 'akash', 'akt': 'akash',
+            'kaia': 'kaia', 'klay': 'kaia',
+            'ergo': 'ergo', 'erg': 'ergo',
+            'iota': 'iota',
+            'waves': 'waves',
+            'mina': 'mina',
+            'zilliqa': 'zilliqa', 'zil': 'zilliqa',
         }
         if prefix in prefix_map:
             return prefix_map[prefix]
@@ -168,6 +188,57 @@ def detect_blockchain(address: str) -> Optional[str]:
     if is_bitcoin_xpub(address):
         return 'bitcoin'
 
+    # TON addresses - EQ... or UQ... user-friendly format (48 chars)
+    if address.startswith(('EQ', 'UQ')) and len(address) == 48:
+        return 'ton'
+
+    # Stellar addresses - G prefix, 56 chars, base32
+    if address.startswith('G') and len(address) == 56:
+        return 'stellar'
+
+    # Mina Protocol addresses - B62... prefix, ~55 chars
+    if address.startswith('B62') and 50 <= len(address) <= 60:
+        return 'mina'
+
+    # Kaspa addresses - kaspa: prefix
+    if address.startswith('kaspa:') and len(address) > 10:
+        return 'kaspa'
+
+    # Cosmos IBC chain bech32 prefixes
+    if address.startswith('osmo1') and 39 <= len(address) <= 50:
+        return 'osmosis'
+    if address.startswith('celestia1') and 43 <= len(address) <= 55:
+        return 'celestia'
+    if address.startswith('inj1') and 42 <= len(address) <= 46:
+        return 'injective'
+    if address.startswith('dydx1') and 42 <= len(address) <= 47:
+        return 'dydx'
+    if address.startswith('sei1') and 42 <= len(address) <= 46:
+        return 'sei'
+    if address.startswith('akash1') and 43 <= len(address) <= 50:
+        return 'akash'
+
+    # Waves addresses - 3P/3N prefix, ~35 chars, base58
+    if address.startswith(('3P', '3N')) and 34 <= len(address) <= 36:
+        return 'waves'
+
+    # Ergo addresses - start with 9, ~51 chars
+    if address.startswith('9') and 40 <= len(address) <= 60:
+        base58_chars = set('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz')
+        if all(c in base58_chars for c in address):
+            return 'ergo'
+
+    # Polkadot addresses - SS58 format, 47-48 chars, base58 (starts with 1)
+    # Kusama addresses - SS58 format, 47-48 chars (starts with C/D/E/F/G/H)
+    # These are ambiguous without prefix, so require explicit prefix
+
+    # Zilliqa bech32 addresses - zil1... (39 chars)
+    if address.startswith('zil1') and len(address) == 39:
+        return 'zilliqa'
+
+    # IOTA MoveVM addresses - 0x + 64 hex chars (same as Sui but use iota: prefix)
+    # Handled via explicit prefix only (iota:0x...) to avoid collision with Sui
+
     return None
 
 
@@ -257,6 +328,11 @@ def parse_address(line: str) -> Optional[Tuple[str, str]]:
             'ltc': 'litecoin', 'doge': 'dogecoin', 'zec': 'zcash',
             'xtz': 'tezos', 'stx': 'stacks', 'vet': 'vechain',
             'atom': 'cosmos',
+            # New chains
+            'dot': 'polkadot', 'ksm': 'kusama', 'xlm': 'stellar',
+            'kas': 'kaspa', 'osmo': 'osmosis', 'tia': 'celestia',
+            'inj': 'injective', 'akt': 'akash', 'klay': 'kaia',
+            'erg': 'ergo', 'zil': 'zilliqa',
         }
         if blockchain in prefix_map:
             blockchain = prefix_map[blockchain]
@@ -265,7 +341,10 @@ def parse_address(line: str) -> Optional[Tuple[str, str]]:
                         'algorand', 'bsc', 'arbitrum', 'avalanche', 'tron',
                         'xrp', 'hedera', 'multiversx', 'sui', 'aptos', 'filecoin',
                         'litecoin', 'dogecoin', 'zcash', 'tezos', 'stacks',
-                        'vechain', 'cosmos', 'near', 'icp')
+                        'vechain', 'cosmos', 'near', 'icp',
+                        'ton', 'polkadot', 'kusama', 'stellar', 'kaspa',
+                        'osmosis', 'celestia', 'injective', 'dydx', 'sei', 'akash',
+                        'kaia', 'ergo', 'iota', 'waves', 'mina', 'zilliqa')
         if blockchain in valid_chains:
             return (blockchain, address)
         return None

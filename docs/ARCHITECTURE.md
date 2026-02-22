@@ -1,13 +1,13 @@
-# ABCT Architecture (v1.13.0)
+# ABCT Architecture (v1.14.0)
 
 ## System Overview
 
 ```
 +-----------------------------------------------------------------------------------+
-|                              ABCT System (v1.13.0)                                 |
+|                              ABCT System (v1.14.0)                                 |
 |                         Multi-User Portfolio Tracker                              |
-|                              BUILD 1771554807                                     |
-|              34 Chains | 42 Exchanges | 100+ DeFi Protocols | P&L Engine          |
+|                              BUILD 1771717923                                     |
+|              51 Chains | 42 Exchanges | 80+ DeFi Protocols | P&L Engine           |
 +-----------------------------------------------------------------------------------+
 
                                    +-----------------+
@@ -76,7 +76,7 @@
 |                              Services Layer                                        |
 +-----------------------------------------------------------------------------------+
 |                                                                                    |
-|  Blockchain Services (34 Chains):                                                |
+|  Blockchain Services (51 Chains):                                                |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
 |  | Cardano  | | Bitcoin  | | Ethereum | | Solana   | | Polygon  | |   Base   |     |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
@@ -89,18 +89,38 @@
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
 |  | Dogecoin | |  Zcash   | |  Tezos   | |  Stacks  | | VeChain  | |  Cosmos  |     |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
-|  +----------+ +----------+ +----------+                                             |
-|  |   NEAR   | |   ICP    | |          |                                             |
-|  +----------+ +----------+ +----------+                                             |
-|  New EVM Chains (v1.13.0 — all via evm_chain.py):                                 |
+|  +----------+ +----------+                                                          |
+|  |   NEAR   | |   ICP    |                                                          |
+|  +----------+ +----------+                                                          |
+|  EVM Chains (all via generic evm_chain.py):                                        |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
 |  | Optimism | | zkSync   | |  Linea   | |  Scroll  | | Fantom   | |  Cronos  |     |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
 |  +----------+ +----------+                                                          |
 |  |  Gnosis  | |Moonbeam  |                                                          |
 |  +----------+ +----------+                                                          |
+|  Cosmos IBC Chains (v1.14.0 — shared cosmos_chain.py via LCD REST API):            |
+|  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
+|  | Osmosis  | | Celestia | |Injective | |  dYdX    | |   Sei    | |  Akash   |     |
+|  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
+|  Substrate Chains (v1.14.0 — shared substrate_service.py via Subscan API):         |
+|  +----------+ +----------+                                                          |
+|  |Polkadot  | | Kusama   |                                                          |
+|  +----------+ +----------+                                                          |
+|  Major L1 Additions (v1.14.0):                                                     |
+|  +----------+ +----------+ +----------+                                             |
+|  |   TON    | | Stellar  | |  Kaspa   |                                             |
+|  +----------+ +----------+ +----------+                                             |
+|  Additional Chains (v1.14.0):                                                      |
+|  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
+|  |  Kaia    | |  Ergo    | |  IOTA    | |  Waves   | |  Mina    | | Zilliqa  |     |
+|  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
 |  Note: BSC, Arbitrum, Avalanche, Optimism, zkSync, Linea, Scroll, Fantom,          |
-|  Cronos, Gnosis, and Moonbeam all use the generic evm_chain.py service             |
+|  Cronos, Gnosis, Moonbeam, and Kaia all use the generic evm_chain.py service       |
+|  Cosmos IBC chains use cosmos_chain.py (config-driven, free LCD endpoints)         |
+|  Polkadot/Kusama use substrate_service.py (Subscan API, optional key)              |
+|  TON uses ton_service.py (TON Center API, optional key)                            |
+|  Stellar uses stellar_service.py (Horizon API, free, no key required)              |
 |  Tron uses tron.py with TronGrid API (free, no key required)                       |
 |  XRP, Hedera, MultiversX, Sui, Aptos, and Filecoin use free public APIs (no key)   |
 |  Litecoin and Dogecoin use BlockCypher API (free, no key required)                 |
@@ -171,6 +191,11 @@
 |  |Cosmos LCD| | NEAR RPC | |Rosetta   |                                             |
 |  |(ATOM/Free)| |(NEAR/Free)| |(ICP/Free)|                                             |
 |  +----------+ +----------+ +----------+                                             |
+|  New APIs (v1.14.0):                                                              |
+|  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
+|  |TON Center| | Horizon  | | Subscan  | |Cosmos LCD| | Public   | | Misc     |     |
+|  |(TON/opt) | |(Stellar) | |(DOT/KSM) | |(IBC/Free)| | RPCs     | | APIs     |     |
+|  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
 |                                                                                    |
 |  Pricing:                                                                         |
 |  +----------+ +----------+ +----------+ +----------+ +----------+                  |
@@ -424,8 +449,8 @@ Protocol adapters implement `ProtocolAdapter` ABC (`services/defi_protocols/base
 
 `ProtocolRegistry` provides auto-discovery: adapters self-register at import time via `__init__.py` exports. Detection runs in parallel with per-adapter timeouts. Current coverage:
 
-- **Cardano** (5): Minswap, Liqwid, Indigo, Strike Finance, Surf Protocol
-- **EVM** (11 adapters, 30+ pools): Aave v3, Compound v3, Uniswap v3 LP, Curve, Balancer, EigenLayer, Maker/Spark, Morpho, GMX, `token_balance_adapters.py` (liquid staking tokens: stETH, rETH, wstETH, cbETH, swETH, rswETH, ezETH)
+- **Cardano** (13): Minswap, SundaeSwap V3, WingRiders, Splash, Djed, FluidTokens, Lenfi, MuesliSwap, Liqwid, Indigo, Strike Finance, Surf Protocol, Iagon
+- **EVM** (55+ protocols): Aave v3, Compound v3, Uniswap v3 LP, Curve, Balancer, EigenLayer, Maker/Spark, Morpho, GMX, Pendle, Stargate, Aerodrome, Velodrome, Radiant, Benqi, SushiSwap, Yearn v3, Beefy, Synthetix, Liquity, Camelot, Abracadabra, PancakeSwap v3, `token_balance_adapters.py` (liquid staking tokens: stETH, rETH, wstETH, cbETH, swETH, rswETH, ezETH), and more
 - **Solana** (15): Marinade, Jito, Blazestake, Sanctum, Orca, Raydium, Lifinity, Meteora, Drift, MarginFi, Kamino, Jupiter Perps, Phoenix, Solend, Tulip
 
 ## P&L Analytics
@@ -500,6 +525,11 @@ Shared persistent `httpx.AsyncClient` instances via `get_client(name, timeout)`:
 - **Cosmos**: Cosmos LCD/PublicNode (free, no API key required)
 - **NEAR**: NEAR RPC + NearBlocks API (free, no API key required)
 - **ICP**: Rosetta API (free, no API key required)
+- **TON**: TON Center API (optional API key for higher rate limits)
+- **Stellar**: Horizon API (free, no API key required)
+- **Polkadot/Kusama**: Subscan REST API (optional API key for higher rate limits)
+- **Cosmos IBC** (Osmosis, Celestia, Injective, dYdX, Sei, Akash): Public LCD endpoints (free, no API key required)
+- **Kaspa, Ergo, IOTA, Waves, Mina, Zilliqa, Kaia**: Public chain REST APIs (free, no API key required)
 - **DeFi**: Chainlink Staking via Alchemy (Ethereum contract reads)
 - **Pricing**: CoinGecko, CoinMarketCap, Coinbase, DefiLlama
 - **Exchanges**: 42 exchanges via BaseExchangeService with 5 auth method families
@@ -645,8 +675,18 @@ ABCT/
 │   │   ├── stacks.py              # Stacks (Hiro API)
 │   │   ├── vechain.py             # VeChain (VeBlocks/Thor API)
 │   │   ├── cosmos.py              # Cosmos (Cosmos LCD/PublicNode)
+│   │   ├── cosmos_chain.py        # Cosmos IBC chains (config-driven LCD)
 │   │   ├── near.py                # NEAR (NEAR RPC + NearBlocks API)
 │   │   ├── icp.py                 # ICP (Rosetta API)
+│   │   ├── ton_service.py         # TON (TON Center API)
+│   │   ├── stellar_service.py     # Stellar (Horizon API)
+│   │   ├── substrate_service.py   # Polkadot/Kusama (Subscan API)
+│   │   ├── kaspa_service.py       # Kaspa (public REST API)
+│   │   ├── ergo_service.py        # Ergo (public REST API)
+│   │   ├── iota_service.py        # IOTA (public REST API)
+│   │   ├── waves_service.py       # Waves (public REST API)
+│   │   ├── mina_service.py        # Mina (public REST API)
+│   │   ├── zilliqa_service.py     # Zilliqa (public REST API)
 │   │   ├── helium.py              # Helium (DePIN tracking)
 │   │   ├── charli3.py             # Charli3 oracle service
 │   │   ├── tradfi_data.py         # TradFi data integration
@@ -660,8 +700,8 @@ ABCT/
 │   │   ├── defi_protocols/        # DeFi protocol adapters (100+ protocols)
 │   │   │   ├── base_adapter.py    # ProtocolAdapter ABC + DetectionMethod enum
 │   │   │   ├── registry.py        # ProtocolRegistry with auto-discovery
-│   │   │   ├── cardano/           # 5 Cardano adapters (UTXO_SCAN method)
-│   │   │   ├── evm/               # 11 EVM adapters (TOKEN_BALANCE/CONTRACT_CALL/NFT_POSITION)
+│   │   │   ├── cardano/           # 13 Cardano adapters (UTXO_SCAN method)
+│   │   │   ├── evm/               # 55+ EVM protocols (TOKEN_BALANCE/CONTRACT_CALL/NFT_POSITION)
 │   │   │   └── solana/            # 15 Solana adapters (PROGRAM_ACCOUNT method)
 │   │   └── *_service.py           # 41 exchange service files (+ coinbase.py = 42)
 │   └── middleware/                 # Security middleware
