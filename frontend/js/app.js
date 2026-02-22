@@ -1572,6 +1572,10 @@ async function loadPortfolioSummary() {
             }
             summaryHtml += '</span>';
             setSafeHTML(walletsSummary, summaryHtml);
+            // Fix onerror stripped by DOMPurify
+            walletsSummary.querySelectorAll('img.chain-icon-circle').forEach(img => {
+                img.addEventListener('error', () => { img.style.display = 'none'; });
+            });
         }
 
         // Render wallets list with stake groups for Cardano

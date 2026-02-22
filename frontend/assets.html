@@ -1033,39 +1033,12 @@
     <div class="modal-overlay" id="addModal">
         <div class="modal">
             <h2>Add Wallet</h2>
-            <form onsubmit="addWallet(event)">
+            <form id="addWalletForm">
                 <div class="form-group">
-                    <label for="walletChain">Blockchain</label>
-                    <select id="walletChain" required>
-                        <option value="">Select blockchain...</option>
-                        <option value="cardano">Cardano</option>
-                        <option value="bitcoin">Bitcoin</option>
-                        <option value="ethereum">Ethereum</option>
-                        <option value="solana">Solana</option>
-                        <option value="polygon">Polygon</option>
-                        <option value="base">Base</option>
-                        <option value="algorand">Algorand</option>
-                        <option value="bsc">BNB Smart Chain</option>
-                        <option value="arbitrum">Arbitrum</option>
-                        <option value="avalanche">Avalanche</option>
-                        <option value="tron">Tron</option>
-                        <option value="xrp">XRP Ledger</option>
-                        <option value="hedera">Hedera</option>
-                        <option value="multiversx">MultiversX</option>
-                        <option value="sui">Sui</option>
-                        <option value="aptos">Aptos</option>
-                        <option value="filecoin">Filecoin</option>
-                        <option value="litecoin">Litecoin</option>
-                        <option value="dogecoin">Dogecoin</option>
-                        <option value="zcash">Zcash</option>
-                        <option value="tezos">Tezos</option>
-                        <option value="stacks">Stacks</option>
-                        <option value="vechain">VeChain</option>
-                        <option value="cosmos">Cosmos</option>
-                        <option value="near">NEAR</option>
-                        <option value="icp">ICP</option>
-                    </select>
+                    <label for="walletAddress" id="addressLabel">Wallet Address</label>
+                    <input type="text" id="walletAddress" placeholder="Paste address: addr1..., 0x..., bc1..., base58..." required autocomplete="off">
                 </div>
+                <div id="chainDetectionResult" class="chain-detection-result" style="display: none;"></div>
                 <div class="form-group" id="cardanoDiscoveryOption" style="display: none;">
                     <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
                         <input type="checkbox" id="enableDiscovery" checked>
@@ -1077,7 +1050,7 @@
                 </div>
                 <div class="form-group" id="bitcoinXpubOption" style="display: none;">
                     <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                        <input type="checkbox" id="enableXpub" onchange="toggleXpubMode()">
+                        <input type="checkbox" id="enableXpub">
                         <span>Enter xpub (HD wallet extended public key)</span>
                     </label>
                     <div class="hint" style="margin-top: 5px;">
@@ -1085,23 +1058,12 @@
                     </div>
                 </div>
                 <div class="form-group">
-                    <label for="walletAddress" id="addressLabel">Wallet Address</label>
-                    <input type="text" id="walletAddress" placeholder="Enter wallet address" required>
-                    <div class="hint" id="addressHint">
-                        Examples:<br>
-                        Cardano: addr1q..., stake1u...<br>
-                        Bitcoin: bc1..., 1..., 3..., xpub..., ypub..., zpub...<br>
-                        Ethereum/Polygon/Base: 0x...<br>
-                        Solana: Base58 address
-                    </div>
-                </div>
-                <div class="form-group">
                     <label for="walletLabel">Label (optional)</label>
                     <input type="text" id="walletLabel" placeholder="e.g., Main Wallet, Cold Storage">
                 </div>
                 <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeAddModal()">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Add Wallet</button>
+                    <button type="button" class="btn btn-secondary" id="btnCancelAdd">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="btnSubmitAdd" disabled>Add Wallet</button>
                 </div>
             </form>
         </div>
