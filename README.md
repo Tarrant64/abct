@@ -3,7 +3,7 @@
 Personal multi-chain portfolio tracker built Cardano-first.
 
 ![Version](https://img.shields.io/badge/version-1.14.0-brightgreen.svg)
-![Build](https://img.shields.io/badge/build-1771717923-blue.svg)
+![Build](https://img.shields.io/badge/build-1771728190-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.109-teal.svg)
