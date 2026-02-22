@@ -32,11 +32,10 @@
     </style>
     <!-- Chart Designer styles -->
     <style>
-        .cd-layout { display: grid; grid-template-columns: 340px 1fr; gap: 24px; }
-        @media (max-width: 800px) { .cd-layout { grid-template-columns: 1fr; } }
-        .cd-controls { display: flex; flex-direction: column; gap: 4px; max-height: 70vh; overflow-y: auto; padding-right: 8px; }
-        .cd-controls::-webkit-scrollbar { width: 6px; }
-        .cd-controls::-webkit-scrollbar-thumb { background: var(--border-color, #3a3a5a); border-radius: 3px; }
+        .cd-layout { display: flex; flex-direction: column; gap: 20px; }
+        .cd-controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+        @media (max-width: 900px) { .cd-controls { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 600px) { .cd-controls { grid-template-columns: 1fr; } }
         .cd-section { background: var(--card-bg, #1e1e36); border: 1px solid var(--border-color, #30363d); border-radius: 10px; padding: 14px 16px; }
         .cd-section-title { margin: 0 0 10px; font-size: 0.9rem; color: var(--text-primary, #eaeaea); font-weight: 600; }
         .cd-field { margin-bottom: 10px; }
@@ -58,9 +57,9 @@
         .cd-toggle-slider::before { content: ""; position: absolute; height: 16px; width: 16px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: 0.2s; }
         .cd-toggle input:checked + .cd-toggle-slider { background: var(--accent-success, #00d26a); }
         .cd-toggle input:checked + .cd-toggle-slider::before { transform: translateX(18px); }
-        .cd-actions { display: flex; gap: 10px; padding-top: 8px; }
+        .cd-actions { display: flex; gap: 10px; padding-top: 8px; grid-column: 1 / -1; }
         .cd-actions .btn { flex: 1; justify-content: center; }
-        .cd-preview { position: sticky; top: 0; }
+        .cd-preview { }
         .cd-preview-hint { text-align: center; color: var(--text-secondary, #666); font-size: 0.78rem; margin-top: 8px; }
     </style>
     <!-- API Keys styles -->
@@ -5784,7 +5783,14 @@
         <!-- ===== CHART DESIGNER TAB ===== -->
         <div id="chartdesignerTab" class="settings-tab-content">
             <div class="cd-layout">
-                <!-- Controls Column -->
+                <!-- Live Preview (full width) -->
+                <div class="cd-preview">
+                    <h3 class="cd-section-title">Live Preview</h3>
+                    <div id="cdPreviewChart" style="width: 100%; height: 250px; border-radius: 8px; overflow: hidden;"></div>
+                    <p class="cd-preview-hint">Preview updates as you adjust settings</p>
+                </div>
+
+                <!-- Controls Grid -->
                 <div class="cd-controls">
                     <!-- Series Type -->
                     <div class="cd-section">
@@ -5927,13 +5933,6 @@
                         <button class="btn btn-secondary" onclick="resetChartDesigner()">Reset to Theme Defaults</button>
                         <button class="btn btn-success" onclick="saveChartDesigner()">Save</button>
                     </div>
-                </div>
-
-                <!-- Preview Column -->
-                <div class="cd-preview">
-                    <h3 class="cd-section-title">Live Preview</h3>
-                    <div id="cdPreviewChart" style="width: 100%; height: 250px; border-radius: 8px; overflow: hidden;"></div>
-                    <p class="cd-preview-hint">Preview updates as you adjust settings</p>
                 </div>
             </div>
         </div>
