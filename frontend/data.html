@@ -6,7 +6,7 @@
     <title>Data & Analytics - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771793607">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1771794638">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <!-- Chart.js for analytics -->
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
@@ -19,7 +19,7 @@
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1771793607"></script>
+    <script src="/static/js/session-auth.js?v=1771794638"></script>
     <style>
         /* Wallet Manager Styles */
         .wallet-manager {
@@ -847,7 +847,6 @@
                 <a href="/assets.html" class="nav-item">Assets</a>
                 <a href="/nfts.html" class="nav-item">NFTs</a>
                 <a href="/data.html" class="nav-item active">Data & Analytics</a>
-                <a href="/privacy.html" class="nav-item">Privacy &amp; ZK</a>
             </nav>
             <div class="header-right-controls">
                 <div class="user-avatar-container">
@@ -899,6 +898,7 @@
             <button class="main-tab-btn" data-tab="analytics" onclick="switchMainTab('analytics')">Analytics</button>
             <button class="main-tab-btn" data-tab="intelligence" onclick="switchMainTab('intelligence')">Wallet Intelligence</button>
             <button class="main-tab-btn" data-tab="cryptomarket" id="cryptoMarketTabBtn" onclick="switchMainTab('cryptomarket')">Crypto Market</button>
+            <button class="main-tab-btn" data-tab="privacyzk" onclick="switchMainTab('privacyzk')">Privacy &amp; ZK <span style="font-size:10px;opacity:0.7;font-style:italic;">(Experimental)</span></button>
         </div>
 
         <!-- ===================== -->
@@ -1816,6 +1816,156 @@
         </div>
         <!-- End Crypto Market Tab -->
 
+        <!-- ===================== -->
+        <!-- PRIVACY & ZK TAB      -->
+        <!-- ===================== -->
+        <div id="privacyzkTab" class="main-tab-content">
+
+            <!-- Per-Wallet Privacy Analysis -->
+            <div class="privacy-section" id="sectionAnalysis">
+                <div class="privacy-section-header">
+                    <span class="section-icon">&#128269;</span>
+                    <h3>Per-Wallet Privacy Analysis</h3><span class="section-info-btn">i<span class="info-tooltip">Checks the privacy posture of your ZCash, Monero, and Secret Network wallets, and detects Railgun protocol interactions on Ethereum/Polygon wallets. ZCash analysis uses Blockchair to count shielded transactions (no API key needed). Railgun detection uses Etherscan (requires Etherscan API key). Monero is always fully private by design — no checking needed. Results may return no data if your wallets have no privacy activity or the required API keys are not configured.</span></span>
+                </div>
+                <div id="privacyAnalysisContainer">
+                    <div class="privacy-loading" id="analysisLoading">
+                        <div class="spinner-small"></div>
+                        <span>Loading wallet analysis...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Privacy Education -->
+            <div class="privacy-section" id="sectionEducation">
+                <div class="privacy-section-header">
+                    <span class="section-icon">&#128218;</span>
+                    <h3>Privacy Education</h3>
+                </div>
+                <div class="privacy-education-section" id="educationAccordion">
+
+                    <div class="education-item" id="edu-zk">
+                        <div class="education-item-header" data-edu="edu-zk">
+                            <div class="edu-title"><span class="edu-icon">&#128161;</span>What is Zero-Knowledge Privacy?</div>
+                            <span class="edu-chevron">&#9660;</span>
+                        </div>
+                        <div class="education-item-body">
+                            <p>A <strong>zero-knowledge proof (ZKP)</strong> is a cryptographic method that lets one party (the prover) convince another party (the verifier) that a statement is true — without revealing <em>why</em> it is true or sharing any underlying data.</p>
+                            <p>In cryptocurrency terms, ZK proofs let you prove you own funds and authorise a transaction without revealing your balance, sender address, or receiver address to the public blockchain.</p>
+                            <p>Think of it like proving you know a secret password without actually saying the password out loud. The verifier is convinced the password is correct, but learns nothing about what the password is.</p>
+                            <div class="edu-tip"><strong>Key insight:</strong> ZK proofs are the mathematical foundation of ZCash's shielded transactions. Every shielded ZEC transfer includes a proof the network can verify cryptographically without seeing the amounts or addresses involved.</div>
+                        </div>
+                    </div>
+
+                    <div class="education-item" id="edu-zcash">
+                        <div class="education-item-header" data-edu="edu-zcash">
+                            <div class="edu-title"><span class="edu-icon">&#9401;</span>ZCash: Shielded vs Transparent</div>
+                            <span class="edu-chevron">&#9660;</span>
+                        </div>
+                        <div class="education-item-body">
+                            <p>ZCash has two types of addresses. Only one of them provides privacy.</p>
+                            <p><strong>Transparent addresses (t-addr)</strong> work exactly like Bitcoin — all transaction details are fully visible on the public blockchain. Anyone can see your balance, incoming and outgoing amounts, and counterparty addresses.</p>
+                            <p><strong>Shielded addresses (z-addr)</strong> use zk-SNARKs to hide the sender, receiver, and amount. On-chain you only see that a valid shielded transaction occurred. There are two generations: <strong>Sapling</strong> (legacy) and <strong>Orchard</strong> (current, Halo2 proofs with no trusted setup).</p>
+                            <p>When you move ZEC from a t-addr to a z-addr (shielding), the amount entering the shielded pool is visible. Once inside, transfers between z-addrs are fully private. Moving from z-addr back to t-addr (deshielding) reveals the output amount.</p>
+                            <div class="edu-warning"><strong>Important:</strong> Most ZCash wallets and exchanges use t-addresses by default. Check your wallet settings — if you are holding ZEC on a t-address, you have no privacy. Only Orchard or Sapling z-addresses provide ZK privacy.</div>
+                        </div>
+                    </div>
+
+                    <div class="education-item" id="edu-monero">
+                        <div class="education-item-header" data-edu="edu-monero">
+                            <div class="edu-title"><span class="edu-icon">&#625;</span>Monero: Always Private</div>
+                            <span class="edu-chevron">&#9660;</span>
+                        </div>
+                        <div class="education-item-body">
+                            <p>Monero (XMR) takes a different philosophy from ZCash: <strong>privacy is mandatory, not optional.</strong> Every transaction on Monero is private by default. There is no transparent mode.</p>
+                            <p>Monero uses three complementary technologies to achieve this:</p>
+                            <p><strong>Ring Signatures</strong> — When you send XMR, your transaction is cryptographically mixed with 15 other "decoy" outputs from the blockchain. An outside observer cannot determine which of the 16 inputs is the real one, obscuring the sender.</p>
+                            <p><strong>Stealth Addresses</strong> — Every transaction generates a unique one-time address for the recipient. The recipient's actual wallet address never appears on the blockchain. Only the recipient can identify which outputs belong to them, using their private view key.</p>
+                            <p><strong>RingCT (Ring Confidential Transactions)</strong> — Transaction amounts are encrypted using Pedersen commitments. The network can verify inputs equal outputs (no coins created from thin air) without knowing the actual amounts. Bulletproofs make this efficient.</p>
+                            <div class="edu-tip"><strong>Result:</strong> Because XMR balances are encrypted and never directly queryable from the blockchain, ABCT requires you to manually enter your Monero balance. Use the "Set Balance" button on your XMR wallet to keep it up to date.</div>
+                        </div>
+                    </div>
+
+                    <div class="education-item" id="edu-secret">
+                        <div class="education-item-header" data-edu="edu-secret">
+                            <div class="edu-title"><span class="edu-icon">&#128274;</span>Secret Network: Private Smart Contracts</div>
+                            <span class="edu-chevron">&#9660;</span>
+                        </div>
+                        <div class="education-item-body">
+                            <p>Secret Network is a Cosmos-based blockchain that adds data privacy to smart contracts using <strong>Trusted Execution Environments (TEE)</strong>, specifically Intel SGX.</p>
+                            <p>On most blockchains (Ethereum, Cardano, Solana) the state of every smart contract — including every wallet's token balance — is public. Secret Network encrypts contract state inside a secure hardware enclave. Only the enclave can decrypt and process the data. Even Secret Network validators cannot see the encrypted state.</p>
+                            <p><strong>Secret Tokens (SNIP-20)</strong> are the private equivalent of ERC-20 tokens. Your SNIP-20 balance is hidden from public view. You use a <strong>viewing key</strong> to let specific parties (like a wallet or auditor) see your balance, giving you selective transparency.</p>
+                            <p>Secret DeFi (AMMs, lending, etc.) runs on private contract state, meaning your trading activity and positions are not visible to the public.</p>
+                            <div class="edu-tip"><strong>Note:</strong> TEE-based privacy has a different trust model from ZK proofs. You trust that Intel SGX has not been compromised and that the Secret Network validators are running genuine SGX hardware. ZK proofs (ZCash, Mina) rely on math alone.</div>
+                        </div>
+                    </div>
+
+                    <div class="education-item" id="edu-midnight">
+                        <div class="education-item-header" data-edu="edu-midnight">
+                            <div class="edu-title"><span class="edu-icon">&#127761;</span>Midnight: Private Smart Contracts on Cardano</div>
+                            <span class="edu-chevron">&#9660;</span>
+                        </div>
+                        <div class="education-item-body">
+                            <p>Midnight is a data-protection blockchain developed by IOG (Input Output Global), the company behind Cardano. It extends privacy beyond token transfers to <strong>smart contract state</strong> — your contract data, balances, and application activity can be kept private.</p>
+                            <p>Unlike Secret Network (which uses Intel SGX hardware enclaves), Midnight uses <strong>zero-knowledge proofs based on the Halo 2 proving system</strong> — the same cryptographic foundation as ZCash's Orchard addresses. Privacy is mathematically enforced, not dependent on trusted hardware.</p>
+                            <p><strong>Shielded and Unshielded Tokens</strong> — Midnight supports both private (shielded) and public (unshielded) token types. Developers choose per-application which state is private. This allows compliant use cases: a regulated financial application can keep amounts private while proving to auditors that KYC conditions are met — without revealing the underlying data.</p>
+                            <p>Smart contracts on Midnight are written in <strong>Compact</strong>, a TypeScript-like language designed to make ZK-enabled development accessible to regular developers without deep cryptography expertise.</p>
+                            <p>Midnight uses <strong>DUST</strong> as its native fee token — a separate asset from ADA, though tightly coupled to the Cardano ecosystem with a native bridge for interoperability.</p>
+                            <div class="edu-tip"><strong>Status (early 2026):</strong> Midnight is in active testnet development (Teysha testnet). ABCT does not currently support Midnight wallets as mainnet has not yet launched. Once live, Midnight will be trackable similarly to Secret Network — public DUST balances visible, private token balances requiring explicit viewer key disclosure.</div>
+                        </div>
+                    </div>
+
+                    <div class="education-item" id="edu-zkrollups">
+                        <div class="education-item-header" data-edu="edu-zkrollups">
+                            <div class="edu-title"><span class="edu-icon">&#9889;</span>ZK Rollups vs ZK Privacy — An Important Distinction</div>
+                            <span class="edu-chevron">&#9660;</span>
+                        </div>
+                        <div class="education-item-body">
+                            <p>The term "ZK" (zero-knowledge) appears in two very different contexts in crypto. It is important not to confuse them.</p>
+                            <p><strong>ZK Rollups (zkSync, Scroll, Linea, Polygon zkEVM)</strong> use ZK proofs for <em>scalability</em>, not privacy. They batch thousands of transactions off-chain and submit a single validity proof to Ethereum, proving all those transactions were executed correctly. The transaction data is still public — anyone can see who sent what to whom. ZK here means "we can prove correctness without re-executing everything", not "we hide the data".</p>
+                            <p><strong>ZK Privacy chains (ZCash, Mina)</strong> use ZK proofs to actually hide transaction details — sender, receiver, and amount — from the public blockchain. This is what most people mean when they say "ZK privacy".</p>
+                            <div class="edu-warning"><strong>Do not assume privacy from the "ZK" label.</strong> Using zkSync Era or Scroll does not provide any transaction privacy. Your balances and transaction history on these networks are fully public, just like on regular Ethereum.</div>
+                        </div>
+                    </div>
+
+                    <div class="education-item" id="edu-bestpractices">
+                        <div class="education-item-header" data-edu="edu-bestpractices">
+                            <div class="edu-title"><span class="edu-icon">&#9989;</span>Privacy Best Practices</div>
+                            <span class="edu-chevron">&#9660;</span>
+                        </div>
+                        <div class="education-item-body">
+                            <p><strong>For ZCash users:</strong></p>
+                            <p>Always shield your ZEC immediately after receiving it. Use an Orchard z-address (not Sapling, which is being deprecated) as your primary receiving address. Avoid t-addresses entirely. When withdrawing from an exchange, accept that the amount will be visible on-chain when it enters the shielded pool — this is unavoidable. From that point, keep funds in z-addr to z-addr transfers for maximum privacy.</p>
+                            <p><strong>For Monero users:</strong></p>
+                            <p>Every XMR transaction is private by default. Best practices include: avoid reusing subaddresses (use a fresh one per sender), run your own node if possible (using a remote node can reveal your IP and which transactions you query), and be mindful of on-ramp/off-ramp points where KYC may link your identity to your XMR.</p>
+                            <p><strong>For Secret Network users:</strong></p>
+                            <p>Use SNIP-20 tokens rather than the native IBC-transferred tokens where privacy matters. Set viewing keys only for parties you trust. Remember that SCRT staking amounts and validator interactions are public — only token balances inside Secret contracts are private.</p>
+                            <p><strong>General:</strong></p>
+                            <p>No privacy chain protects you at the on-ramp or off-ramp. When you buy XMR on a KYC exchange and withdraw it, the exchange knows you own that XMR. Privacy chains protect the on-chain trail, not your identity at the exchange level.</p>
+                            <div class="edu-tip"><strong>Self-custody matters:</strong> Hardware wallets (Ledger supports ZCash transparent, Trezor supports XMR) add another layer. For maximum Monero privacy, use the official Monero GUI/CLI wallet with your own node.</div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+        <!-- End Privacy & ZK Tab -->
+
+        <!-- Monero Balance Modal (Privacy & ZK Tab) -->
+        <div class="privacy-modal-overlay" id="xmrBalanceModal">
+            <div class="privacy-modal">
+                <h3>Set Monero Balance</h3>
+                <p>Monero balances cannot be fetched from the blockchain because all amounts are encrypted. Enter your current XMR balance manually to keep your portfolio value accurate.</p>
+                <label for="xmrBalanceInput">XMR Balance</label>
+                <input type="number" id="xmrBalanceInput" min="0" step="0.000000000001" placeholder="0.000000000000">
+                <input type="hidden" id="xmrWalletIdInput" value="">
+                <div class="privacy-modal-actions">
+                    <button class="btn btn-secondary" id="xmrModalCancelBtn">Cancel</button>
+                    <button class="btn btn-primary" id="xmrModalSaveBtn">Save Balance</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Blockchain Asset Breakdown Modal -->
         <div id="assetBreakdownModal" class="modal hidden">
             <div class="modal-overlay" onclick="closeAssetBreakdownModal()"></div>
@@ -2142,21 +2292,21 @@
         }
     </script>
 
-    <script src="/static/js/app.js?v=1771793607"></script>
+    <script src="/static/js/app.js?v=1771794638"></script>
 
     <!-- Transaction scripts -->
-    <script src="/static/js/transactions.js?v=1771793607"></script>
-    <script src="/static/js/transaction-analytics.js?v=1771793607"></script>
+    <script src="/static/js/transactions.js?v=1771794638"></script>
+    <script src="/static/js/transaction-analytics.js?v=1771794638"></script>
     <!-- Advanced Analytics tab -->
-    <script src="/static/js/analytics-tab.js?v=1771793607"></script>
+    <script src="/static/js/analytics-tab.js?v=1771794638"></script>
     <!-- Sankey flow diagram -->
-    <script src="/static/js/sankey-chart.js?v=1771793607"></script>
+    <script src="/static/js/sankey-chart.js?v=1771794638"></script>
     <!-- Streamgraph (chain history) -->
-    <script src="/static/js/stream-chart.js?v=1771793607"></script>
+    <script src="/static/js/stream-chart.js?v=1771794638"></script>
     <!-- Wallet Intelligence tab -->
-    <script src="/static/js/wallet-intelligence.js?v=1771793607"></script>
+    <script src="/static/js/wallet-intelligence.js?v=1771794638"></script>
     <!-- Crypto Market tab -->
-    <script src="/static/js/crypto-market.js?v=1771793607"></script>
+    <script src="/static/js/crypto-market.js?v=1771794638"></script>
 
     <script>
         // Main tab switching function
@@ -2211,12 +2361,281 @@
                 initCryptoMarketTab();
             }
 
+            // Initialize privacy & ZK tab on first open
+            if (tabName === 'privacyzk' && typeof initPrivacyTab === 'function') {
+                initPrivacyTab();
+            }
+
             // Update URL hash
             if (history.replaceState) {
                 history.replaceState(null, null, '#' + tabName);
             }
         }
 
+    </script>
+
+    <script>
+        // ============================================================
+        // Privacy & ZK Tab Logic
+        // ============================================================
+        let privacyTabInitted = false;
+
+        function initPrivacyTab() {
+            if (privacyTabInitted) return;
+            privacyTabInitted = true;
+            initAccordion();
+            initPrivacyPage();
+            setupXmrModal();
+            injectLogokitTokensPrivacy();
+        }
+
+        function privacyLogoUrl(symbol, size) {
+            return 'https://img.logokit.com/crypto/' + symbol + '?size=' + (size || 32);
+        }
+
+        function fmtNumber(n, decimals) {
+            if (n === null || n === undefined || isNaN(n)) return '--';
+            return parseFloat(n).toLocaleString(undefined, { maximumFractionDigits: decimals || 2 });
+        }
+
+        function fmtUSD(n) {
+            if (n === null || n === undefined || isNaN(n)) return '--';
+            return '$' + parseFloat(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function scoreBadgeClass(score) {
+            if (score >= 67) return 'score-protected';
+            if (score >= 34) return 'score-partial';
+            return 'score-exposed';
+        }
+
+        function scoreBadgeLabel(score) {
+            if (score >= 67) return 'Protected';
+            if (score >= 34) return 'Partial';
+            return 'Exposed';
+        }
+
+        async function initPrivacyPage() {
+            try {
+                const resp = await authFetch('/privacy/wallets/summary');
+                if (!resp || !resp.ok) {
+                    renderAnalysisEmpty('Could not load privacy data. The backend privacy module may not be configured yet.');
+                    return;
+                }
+                const data = await resp.json();
+                renderPrivacyAnalysis(data.wallets || []);
+            } catch (e) {
+                renderAnalysisEmpty('Could not reach /privacy/wallets/summary. The privacy API may not be enabled on this instance.');
+            }
+        }
+
+        function renderAnalysisEmpty(msg) {
+            const el = document.getElementById('privacyAnalysisContainer');
+            if (!el) return;
+            setSafeHTML(el, msg ? '<p style="color: var(--text-secondary); font-size: 14px; padding: 16px 0;">' + msg + '</p>' : '');
+        }
+
+        function renderPrivacyAnalysis(wallets) {
+            const container = document.getElementById('privacyAnalysisContainer');
+            if (!container) return;
+
+            if (!wallets.length) {
+                setSafeHTML(container, '<div class="privacy-empty-state"><div class="empty-icon">&#128274;</div><h4>No privacy wallets found</h4><p>Add a ZCash, Monero, or Secret Network wallet to see analysis here.</p><a href="/wallets.html">Manage Wallets</a></div>');
+                return;
+            }
+
+            let html = '<table class="privacy-analysis-table"><thead><tr>';
+            html += '<th>Wallet</th><th>Chain</th><th>Balance</th><th>Privacy Score</th><th>Actions</th>';
+            html += '</tr></thead><tbody id="privacyAnalysisTbody">';
+
+            for (const w of wallets) {
+                const chainKey = (w.chain || '').toLowerCase();
+                const isMonero = chainKey === 'monero';
+                const symbol = (w.symbol || chainKey).toUpperCase();
+                const label = w.label || w.address_short || 'Wallet';
+                const balance = fmtNumber(w.balance, 8);
+
+                let scoreCellHtml = '';
+                if (isMonero) {
+                    scoreCellHtml = '<span class="privacy-score-badge score-protected">&#10003; Fully Private</span>';
+                } else if (typeof w.privacy_score === 'number') {
+                    const cls = scoreBadgeClass(w.privacy_score);
+                    scoreCellHtml = '<span class="privacy-score-badge ' + cls + '">' + w.privacy_score + '% ' + scoreBadgeLabel(w.privacy_score) + '</span>';
+                } else {
+                    scoreCellHtml = '<span style="color: var(--text-secondary); font-size: 12px;">Not checked</span>';
+                }
+
+                let actionHtml = '';
+                if (isMonero) {
+                    actionHtml = '<button class="btn-set-balance" data-wallet-id="' + w.id + '" data-action="set-xmr-balance-row">Set Balance</button>';
+                } else {
+                    actionHtml = '<button class="btn-check-score" data-wallet-id="' + w.id + '" data-action="check-score">Check Score</button>';
+                }
+
+                html += '<tr data-wallet-row="' + w.id + '">';
+                html += '<td><div class="wallet-name-cell"><img src="' + privacyLogoUrl(symbol, 24) + '" alt="' + symbol + '" class="wallet-chain-icon" data-fallback-text="' + symbol[0] + '"><span>' + label + '</span></div></td>';
+                html += '<td>' + (w.chain_name || chainKey) + '</td>';
+                html += '<td>' + balance + ' ' + symbol + '</td>';
+                html += '<td id="score-cell-' + w.id + '">' + scoreCellHtml + '</td>';
+                html += '<td>' + actionHtml + '</td>';
+                html += '</tr>';
+                html += '<tr id="detail-row-' + w.id + '" style="display:none;"><td colspan="5"><div class="score-detail-panel" id="detail-panel-' + w.id + '"></div></td></tr>';
+            }
+            html += '</tbody></table>';
+
+            setSafeHTML(container, html);
+
+            container.querySelectorAll('img.wallet-chain-icon').forEach(img => {
+                const fallback = img.getAttribute('data-fallback-text') || '?';
+                img.addEventListener('error', () => {
+                    const placeholder = document.createElement('div');
+                    placeholder.className = 'wallet-chain-icon-placeholder';
+                    placeholder.textContent = fallback;
+                    img.parentNode.replaceChild(placeholder, img);
+                });
+            });
+
+            container.querySelectorAll('[data-action="check-score"]').forEach(btn => {
+                btn.addEventListener('click', () => checkWalletScore(btn.dataset.walletId, btn));
+            });
+
+            container.querySelectorAll('[data-action="set-xmr-balance-row"]').forEach(btn => {
+                btn.addEventListener('click', () => openXmrModal(btn.dataset.walletId));
+            });
+        }
+
+        async function checkWalletScore(walletId, triggerBtn) {
+            const detailRow = document.getElementById('detail-row-' + walletId);
+            const detailPanel = document.getElementById('detail-panel-' + walletId);
+            const scoreCell = document.getElementById('score-cell-' + walletId);
+            if (!detailRow || !detailPanel) return;
+
+            if (detailRow.style.display !== 'none') {
+                detailRow.style.display = 'none';
+                if (triggerBtn) triggerBtn.textContent = 'Check Score';
+                return;
+            }
+
+            if (triggerBtn) triggerBtn.textContent = 'Checking...';
+
+            try {
+                const resp = await authFetch('/privacy/wallet/' + walletId + '/score');
+                if (!resp || !resp.ok) {
+                    setSafeHTML(detailPanel, '<p style="color: var(--text-secondary); font-size: 13px; margin: 0;">Could not load score. The privacy endpoint may not be available.</p>');
+                    detailRow.style.display = '';
+                    if (triggerBtn) triggerBtn.textContent = 'Check Score';
+                    return;
+                }
+                const result = await resp.json();
+
+                if (scoreCell && typeof result.score === 'number') {
+                    const cls = scoreBadgeClass(result.score);
+                    scoreCell.innerHTML = '';
+                    const badge = document.createElement('span');
+                    badge.className = 'privacy-score-badge ' + cls;
+                    badge.textContent = result.score + '% ' + scoreBadgeLabel(result.score);
+                    scoreCell.appendChild(badge);
+                }
+
+                let detailHtml = '';
+                if (result.details) {
+                    const d = result.details;
+                    detailHtml += '<div>';
+                    if (d.shield_events !== undefined) detailHtml += '<div class="detail-row"><span class="detail-label">Shield Events</span><span class="detail-value">' + d.shield_events + '</span></div>';
+                    if (d.shielded_pct !== undefined) detailHtml += '<div class="detail-row"><span class="detail-label">Holdings Shielded</span><span class="detail-value">' + d.shielded_pct + '%</span></div>';
+                    if (d.railgun_interactions !== undefined) detailHtml += '<div class="detail-row"><span class="detail-label">Railgun Interactions</span><span class="detail-value">' + d.railgun_interactions + '</span></div>';
+                    if (d.transparent_balance !== undefined) detailHtml += '<div class="detail-row"><span class="detail-label">Transparent Balance</span><span class="detail-value">' + fmtNumber(d.transparent_balance, 8) + '</span></div>';
+                    if (d.shielded_balance !== undefined) detailHtml += '<div class="detail-row"><span class="detail-label">Shielded Balance</span><span class="detail-value">' + fmtNumber(d.shielded_balance, 8) + '</span></div>';
+                    detailHtml += '</div>';
+                }
+                if (result.recommendations && result.recommendations.length) {
+                    detailHtml += '<div class="recommendations"><h5>Recommendations</h5>';
+                    for (const rec of result.recommendations) {
+                        detailHtml += '<div class="rec-item"><span>&#x2022;</span><span>' + rec + '</span></div>';
+                    }
+                    detailHtml += '</div>';
+                }
+                if (!detailHtml) detailHtml = '<p style="color: var(--text-secondary); font-size: 13px; margin: 0;">No additional details returned.</p>';
+
+                setSafeHTML(detailPanel, detailHtml);
+                detailRow.style.display = '';
+            } catch (e) {
+                setSafeHTML(detailPanel, '<p style="color: var(--text-secondary); font-size: 13px; margin: 0;">Error fetching score: ' + e.message + '</p>');
+                detailRow.style.display = '';
+            }
+            if (triggerBtn) triggerBtn.textContent = 'Hide';
+        }
+
+        function openXmrModal(walletId) {
+            const modal = document.getElementById('xmrBalanceModal');
+            const walletInput = document.getElementById('xmrWalletIdInput');
+            const balanceInput = document.getElementById('xmrBalanceInput');
+            if (!modal) return;
+            if (walletInput) walletInput.value = walletId || '';
+            if (balanceInput) balanceInput.value = '';
+            modal.classList.add('active');
+            if (balanceInput) balanceInput.focus();
+        }
+
+        function closeXmrModal() {
+            const modal = document.getElementById('xmrBalanceModal');
+            if (modal) modal.classList.remove('active');
+        }
+
+        async function setMoneroBalance(walletId, balance) {
+            try {
+                const resp = await authFetch('/privacy/monero/set-balance', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ wallet_id: walletId, balance: parseFloat(balance) })
+                });
+                if (resp && resp.ok) {
+                    closeXmrModal();
+                    await initPrivacyPage();
+                } else {
+                    alert('Failed to save balance. Check the API response.');
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        function initAccordion() {
+            document.querySelectorAll('#educationAccordion .education-item-header').forEach(header => {
+                header.addEventListener('click', () => {
+                    const item = document.getElementById(header.getAttribute('data-edu'));
+                    if (!item) return;
+                    item.classList.toggle('open');
+                });
+            });
+        }
+
+        function setupXmrModal() {
+            const cancelBtn = document.getElementById('xmrModalCancelBtn');
+            const saveBtn = document.getElementById('xmrModalSaveBtn');
+            const modalOverlay = document.getElementById('xmrBalanceModal');
+            if (cancelBtn) cancelBtn.addEventListener('click', closeXmrModal);
+            if (saveBtn) {
+                saveBtn.addEventListener('click', () => {
+                    const walletId = document.getElementById('xmrWalletIdInput').value;
+                    const balance = document.getElementById('xmrBalanceInput').value;
+                    if (!balance || isNaN(parseFloat(balance))) { alert('Please enter a valid balance.'); return; }
+                    setMoneroBalance(walletId, balance);
+                });
+            }
+            if (modalOverlay) {
+                modalOverlay.addEventListener('click', e => { if (e.target === modalOverlay) closeXmrModal(); });
+            }
+        }
+
+        function injectLogokitTokensPrivacy() {
+            fetch('/api/config/public').then(r => r.json()).then(cfg => {
+                if (!cfg.logokit_token) return;
+                document.querySelectorAll('#privacyzkTab img[src*="img.logokit.com"]').forEach(img => {
+                    if (!img.src.includes('token=')) img.src = img.src.replace('?', '?token=' + cfg.logokit_token + '&');
+                });
+            }).catch(() => {});
+        }
     </script>
 
     <script>
@@ -2235,7 +2654,7 @@
             // Handle hash-based tab navigation
             let hash = window.location.hash.replace('#', '');
             // Valid tab names
-            const validTabs = ['transactions', 'activity', 'analytics', 'blockchains', 'intelligence', 'cryptomarket'];
+            const validTabs = ['transactions', 'activity', 'analytics', 'blockchains', 'intelligence', 'cryptomarket', 'privacyzk'];
             if (hash && validTabs.includes(hash)) {
                 switchMainTab(hash);
             } else {
@@ -2246,7 +2665,7 @@
     </script>
 
     <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
-        <p>ABCT - Data & Analytics | <span id="appVersion" style="opacity: 0.6;">v1.15.1 (BUILD 1771793607)</span></p>
+        <p>ABCT - Data & Analytics | <span id="appVersion" style="opacity: 0.6;">v1.15.2 (BUILD 1771794638)</span></p>
     </footer>
 </body>
 </html>
