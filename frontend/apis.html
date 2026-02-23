@@ -1488,9 +1488,11 @@
             `;
         }
 
-        function attachApiEventListeners() {
+        function attachApiEventListeners(root) {
+            const scope = root || document;
+
             // Save API key buttons
-            document.querySelectorAll('.btn-save-api').forEach(btn => {
+            scope.querySelectorAll('.btn-save-api').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     const apiId = e.target.getAttribute('data-api-id');
                     saveApiKey(apiId);
@@ -1498,7 +1500,7 @@
             });
 
             // Remove API key buttons
-            document.querySelectorAll('.btn-remove-api').forEach(btn => {
+            scope.querySelectorAll('.btn-remove-api').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     const apiId = e.target.getAttribute('data-api-id');
                     disableApi(apiId);
@@ -1506,7 +1508,7 @@
             });
 
             // Toggle API enabled/disabled
-            document.querySelectorAll('.api-toggle').forEach(toggle => {
+            scope.querySelectorAll('.api-toggle').forEach(toggle => {
                 toggle.addEventListener('change', (e) => {
                     const apiId = e.target.getAttribute('data-api-id');
                     const enabled = e.target.checked;
@@ -1515,7 +1517,7 @@
             });
 
             // Enter key in API key input fields
-            document.querySelectorAll('.api-key-field').forEach(input => {
+            scope.querySelectorAll('.api-key-field').forEach(input => {
                 input.addEventListener('keypress', (e) => {
                     if (e.key === 'Enter') {
                         const apiId = e.target.getAttribute('data-api-id');
@@ -1525,7 +1527,7 @@
             });
 
             // File upload - Choose File buttons
-            document.querySelectorAll('.btn-choose-file').forEach(btn => {
+            scope.querySelectorAll('.btn-choose-file').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     const apiId = e.target.getAttribute('data-api-id');
                     const fileInput = document.getElementById(`file-${apiId}`);
@@ -1534,7 +1536,7 @@
             });
 
             // File upload - File input change
-            document.querySelectorAll('.api-file-field').forEach(input => {
+            scope.querySelectorAll('.api-file-field').forEach(input => {
                 input.addEventListener('change', (e) => {
                     const apiId = e.target.getAttribute('data-api-id');
                     const fileNameSpan = document.getElementById(`filename-${apiId}`);
@@ -1551,7 +1553,7 @@
             });
 
             // File upload - Upload buttons
-            document.querySelectorAll('.btn-upload-file').forEach(btn => {
+            scope.querySelectorAll('.btn-upload-file').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     const apiId = e.target.getAttribute('data-api-id');
                     uploadApiFile(apiId);
@@ -1656,7 +1658,7 @@
                 const apiInfo = await response.json();
 
                 // Find the API item element
-                const apiItem = document.querySelector(`[data-api-id="${apiId}"]`);
+                const apiItem = document.querySelector(`.api-item[data-api-id="${apiId}"]`);
                 if (!apiItem) {
                     console.warn(`API item element not found for ${apiId}`);
                     return;
@@ -1696,10 +1698,11 @@
                         const newHtml = renderApiItem(apiData.categories[currentCategory].apis[apiIndex]);
                         const tempDiv = document.createElement('div');
                         setSafeHTML(tempDiv, newHtml);
-                        apiItem.replaceWith(tempDiv.firstElementChild);
+                        const newElement = tempDiv.firstElementChild;
+                        apiItem.replaceWith(newElement);
 
-                        // Re-attach event listeners for this item
-                        attachApiEventListeners();
+                        // Attach event listeners only to the new element
+                        attachApiEventListeners(newElement);
                     }
                 }
             } catch (error) {
