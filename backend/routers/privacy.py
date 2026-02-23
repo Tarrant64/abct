@@ -9,8 +9,10 @@ Endpoints:
     GET  /privacy/approvals/wallets              - List EVM wallets supporting approval checks
     GET  /privacy/approvals/wallet/{wallet_id}   - On-demand per-wallet approval analysis
     POST /privacy/scan-poisoning                 - Scan transaction history for address poisoning
+    POST /privacy/scan-cardano-shield            - Scan Cardano transactions against Shield threat feed
 """
 
+import json
 import logging
 import sys
 import os
@@ -29,6 +31,8 @@ from services.etherscan import etherscan_service
 from services.privacy_detector import privacy_detector
 from services.moralis import moralis_service
 from services.approval_checker import approval_checker, CHAIN_MAP
+from services.cardano_shield import cardano_shield
+from services.cardano_token_registry import cardano_token_registry
 from database import save_balance, clear_wallet_balances, get_cache, set_cache
 
 router = APIRouter(prefix="/privacy", tags=["privacy"])
@@ -46,6 +50,13 @@ DUST_THRESHOLDS = {
     'arbitrum': 0.001, 'bsc': 0.001, 'cardano': 2.0,
     'solana': 0.001, 'bitcoin': 0.00001, 'algorand': 0.001,
 }
+
+# Cardano Shield: suspicious naming pattern heuristics
+SUSPICIOUS_PREFIXES = ['a', 'w']       # aSNEK, wAGENT (typosquat wrapped/alt tokens)
+SUSPICIOUS_KEYWORDS = [
+    'reward', 'ticket', 'airdrop', 'claim', 'free',
+    'bonus', 'gift', 'prize', 'winner', 'giveaway'
+]
 
 
 @router.get("/stats")
@@ -643,6 +654,328 @@ async def scan_address_poisoning(user_id: int = Depends(verify_session)):
     except Exception as e:
         logger.error(f"Error scanning for address poisoning for user {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to run address poisoning scan")
+
+
+# ── Cardano Shield Transaction Scanner ──────────────────────────────
+
+
+def _check_suspicious_name(name: str) -> Optional[str]:
+    """Check if a token name matches suspicious patterns. Returns reason or None."""
+    if not name:
+        return None
+    name_lower = name.lower()
+
+    # Check suspicious keyword matches
+    for kw in SUSPICIOUS_KEYWORDS:
+        if kw in name_lower:
+            return f'Suspicious keyword "{kw}" in token name'
+
+    # Check prefix typosquat (e.g., aSNEK mimicking SNEK)
+    for prefix in SUSPICIOUS_PREFIXES:
+        if name.startswith(prefix) and len(name) > 1 and name[1].isupper():
+            return f'Possible typosquat prefix "{prefix}" (e.g., {name} vs {name[1:]})'
+
+    return None
+
+
+def _extract_sender(raw_data: dict, own_addresses: set) -> Optional[str]:
+    """Extract sender address from Blockfrost raw transaction data.
+
+    Cardano engine_events have NULL counterparty, so we look at the inputs
+    array in the raw Blockfrost tx data and pick the first input address
+    that isn't one of the user's own wallets.
+    """
+    if not raw_data:
+        return None
+    inputs = raw_data.get('inputs', [])
+    for inp in inputs:
+        addr = inp.get('address', '')
+        if addr and addr.lower() not in own_addresses:
+            return addr
+    # If all inputs are own addresses, return the first input anyway
+    if inputs:
+        return inputs[0].get('address', '')
+    return None
+
+
+def _build_shield_report(
+    high: list, medium: list, low: list,
+    wallets_count: int, tx_count: int, suspicious_count: int,
+    registry_stats: dict
+) -> str:
+    """Build plaintext report for Cardano Shield scan."""
+    lines = []
+    lines.append('=== ABCT Cardano Shield Scan Report ===')
+    lines.append('Powered by Cardano Shield (Apache 2.0) by AdaBox.io')
+    lines.append('Enhanced for retrospective analysis by ABCT')
+    lines.append('')
+    lines.append(f'Date: {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}')
+    lines.append(f'Cardano wallets scanned: {wallets_count}')
+    lines.append(f'Transactions analyzed: {tx_count:,}')
+    lines.append(f'Suspicious items found: {suspicious_count}')
+    lines.append('')
+    lines.append(f'CF Token Registry: {registry_stats.get("registered", 0)} registered, '
+                 f'{registry_stats.get("unregistered", 0)} unregistered out of '
+                 f'{registry_stats.get("total_checked", 0)} unique tokens checked')
+    shield_stats = cardano_shield.get_threat_feed_stats()
+    lines.append(f'Shield Feed: {shield_stats.get("blacklisted_policies", 0)} blacklisted policies, '
+                 f'{shield_stats.get("whitelisted_addresses", 0)} whitelisted addresses')
+    lines.append('')
+
+    def _format_entries(entries, label):
+        lines.append(f'--- {label} ---')
+        lines.append('')
+        if not entries:
+            lines.append('  (none)')
+            lines.append('')
+            return
+        for i, e in enumerate(entries, 1):
+            lines.append(f'[{i}] {e.get("reason", "Suspicious")}')
+            if e.get('wallet_label') or e.get('wallet_address'):
+                addr_short = e.get('wallet_address', '')
+                if len(addr_short) > 16:
+                    addr_short = addr_short[:8] + '...' + addr_short[-6:]
+                wlabel = e.get('wallet_label') or 'Unnamed'
+                lines.append(f'    Wallet: {wlabel} ({addr_short})')
+            if e.get('tx_time'):
+                lines.append(f'    Date: {e["tx_time"]}')
+            if e.get('tx_id'):
+                tx_display = e['tx_id']
+                if len(tx_display) > 16:
+                    tx_display = tx_display[:10] + '...'
+                lines.append(f'    TX: {tx_display}')
+            if e.get('sender'):
+                sender = e['sender']
+                if len(sender) > 20:
+                    sender = sender[:10] + '...' + sender[-6:]
+                lines.append(f'    From: {sender}')
+            if e.get('token_name'):
+                lines.append(f'    Token: {e["token_name"]}')
+            if e.get('policy_id'):
+                pid = e['policy_id']
+                if len(pid) > 16:
+                    pid = pid[:10] + '...' + pid[-6:]
+                lines.append(f'    Policy: {pid}')
+            if e.get('blacklist_match'):
+                lines.append(f'    Shield Match: {e["blacklist_match"]}')
+            if e.get('cf_registered') is not None:
+                lines.append(f'    CF Registered: {"Yes" if e["cf_registered"] else "No"}')
+            lines.append('')
+
+    _format_entries(high, 'HIGH RISK — Blacklisted by Cardano Shield')
+    _format_entries(medium, 'MEDIUM RISK — Suspicious pattern + unregistered')
+    _format_entries(low, 'LOW RISK — Unregistered token from unknown sender')
+
+    lines.append('=== End of Report ===')
+    return '\n'.join(lines)
+
+
+async def _scan_cardano_shield(user_id: int) -> dict:
+    """Scan Cardano transaction history against Shield threat feed + CF Token Registry."""
+    ROW_CAP = 50_000
+
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        db.row_factory = aiosqlite.Row
+
+        # 1. Get Cardano wallets
+        cursor = await db.execute(
+            "SELECT id, address, blockchain, label FROM wallets WHERE user_id = ? AND blockchain = 'cardano'",
+            (user_id,)
+        )
+        wallets = [dict(r) for r in await cursor.fetchall()]
+
+        if not wallets:
+            return {
+                'wallets_scanned': 0,
+                'transactions_analyzed': 0,
+                'suspicious_count': 0,
+                'report_text': _build_shield_report([], [], [], 0, 0, 0, {}),
+                'scan_date': datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC'),
+            }
+
+        own_addresses = set()
+        wallet_map = {}
+        for w in wallets:
+            own_addresses.add(w['address'].lower())
+            wallet_map[w['address'].lower()] = w
+
+        # 2. Query engine_events for Cardano
+        cursor = await db.execute(
+            """SELECT chain, tx_id, direction, amount, asset_id,
+                      counterparty, block_time, account_id, event_type
+               FROM engine_events
+               WHERE user_id = ? AND chain = 'cardano'
+               ORDER BY block_time DESC
+               LIMIT ?""",
+            (user_id, ROW_CAP)
+        )
+        events = [dict(r) for r in await cursor.fetchall()]
+
+    # 3. Collect incoming token events and their tx_ids for raw data lookup
+    incoming_events = []
+    tx_ids_needed = set()
+    for ev in events:
+        if ev.get('direction') != 'in':
+            continue
+        asset_id = ev.get('asset_id', '')
+        if asset_id == 'native':
+            continue  # Skip ADA transfers
+        incoming_events.append(ev)
+        tx_ids_needed.add(ev['tx_id'])
+
+    # 4. Batch-fetch engine_tx_raw for sender extraction
+    from engine.db import get_tx_raw_batch
+    tx_raw_map = await get_tx_raw_batch('cardano', list(tx_ids_needed))
+
+    # 5. Extract unique policy IDs and build CF registry subjects
+    policy_id_set = set()
+    subject_map = {}  # subject -> (policy_id, asset_name_hex)
+    for ev in incoming_events:
+        asset_id = ev.get('asset_id', '')
+        if '.' in asset_id:
+            parts = asset_id.split('.', 1)
+            policy_id = parts[0]
+            asset_name_hex = parts[1] if len(parts) > 1 else ''
+        else:
+            # asset_id might be just the policy ID with no asset name
+            policy_id = asset_id
+            asset_name_hex = ''
+
+        if len(policy_id) == 56 and all(c in '0123456789abcdef' for c in policy_id.lower()):
+            policy_id_set.add(policy_id.lower())
+            subject = (policy_id + asset_name_hex).lower()
+            subject_map[subject] = (policy_id.lower(), asset_name_hex.lower())
+
+    # 6. Cross-reference policy IDs against Shield blacklist (sync, O(1))
+    blacklisted_pids = {}
+    for pid in policy_id_set:
+        match = cardano_shield.check_policy_id(pid)
+        if match:
+            blacklisted_pids[pid] = match
+
+    # 7. Batch-query CF Token Registry
+    subjects_list = list(subject_map.keys())
+    registry_results = {}
+    if subjects_list:
+        registry_results = await cardano_token_registry.batch_check(subjects_list)
+
+    registry_stats = {
+        'total_checked': len(subjects_list),
+        'registered': sum(1 for v in registry_results.values() if v),
+        'unregistered': sum(1 for v in registry_results.values() if not v),
+    }
+
+    # 8. Score each incoming token event
+    high_confidence = []
+    medium_confidence = []
+    low_confidence = []
+
+    for ev in incoming_events:
+        asset_id = ev.get('asset_id', '')
+        if '.' in asset_id:
+            parts = asset_id.split('.', 1)
+            policy_id = parts[0].lower()
+            asset_name_hex = parts[1].lower() if len(parts) > 1 else ''
+        else:
+            policy_id = asset_id.lower()
+            asset_name_hex = ''
+
+        if len(policy_id) != 56:
+            continue
+
+        subject = policy_id + asset_name_hex
+        is_cf_registered = registry_results.get(subject, False)
+
+        # Decode asset name for display
+        try:
+            token_name = bytes.fromhex(asset_name_hex).decode('utf-8') if asset_name_hex else ''
+        except (ValueError, UnicodeDecodeError):
+            token_name = asset_name_hex
+
+        # Extract sender from raw tx data
+        raw_data = tx_raw_map.get(ev['tx_id'])
+        sender = _extract_sender(raw_data, own_addresses)
+
+        # Check if sender is whitelisted (DEX/marketplace)
+        sender_whitelisted = False
+        if sender:
+            wl_label = cardano_shield.check_address(sender)
+            if wl_label:
+                sender_whitelisted = True
+
+        # Resolve wallet info
+        account_id = (ev.get('account_id') or '').lower()
+        wallet_info = wallet_map.get(account_id, {})
+
+        bt = ev.get('block_time')
+        tx_time = datetime.fromtimestamp(bt, tz=timezone.utc).strftime('%Y-%m-%d %H:%M') if bt else ''
+
+        entry = {
+            'wallet_label': wallet_info.get('label', ''),
+            'wallet_address': wallet_info.get('address', ''),
+            'tx_id': ev.get('tx_id', ''),
+            'tx_time': tx_time,
+            'sender': sender or '',
+            'token_name': token_name,
+            'policy_id': policy_id,
+            'cf_registered': is_cf_registered,
+        }
+
+        # HIGH: Policy ID in Shield blacklist
+        if policy_id in blacklisted_pids:
+            entry['reason'] = f'Blacklisted token: {blacklisted_pids[policy_id]}'
+            entry['blacklist_match'] = blacklisted_pids[policy_id]
+            high_confidence.append(entry)
+            continue
+
+        # Skip if CF-registered or sender is whitelisted
+        if is_cf_registered or sender_whitelisted:
+            continue
+
+        # MEDIUM: Suspicious naming pattern + NOT in CF registry
+        name_suspicion = _check_suspicious_name(token_name)
+        if name_suspicion:
+            entry['reason'] = name_suspicion
+            medium_confidence.append(entry)
+            continue
+
+        # LOW: Not in CF registry + sender not whitelisted
+        if not is_cf_registered and not sender_whitelisted:
+            entry['reason'] = 'Unregistered token from unknown sender'
+            low_confidence.append(entry)
+
+    total_suspicious = len(high_confidence) + len(medium_confidence) + len(low_confidence)
+
+    report = _build_shield_report(
+        high_confidence, medium_confidence, low_confidence,
+        len(wallets), len(events), total_suspicious,
+        registry_stats
+    )
+
+    return {
+        'wallets_scanned': len(wallets),
+        'transactions_analyzed': len(events),
+        'suspicious_count': total_suspicious,
+        'report_text': report,
+        'scan_date': datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC'),
+    }
+
+
+@router.post("/scan-cardano-shield")
+async def scan_cardano_shield(user_id: int = Depends(verify_session)):
+    """
+    Scan Cardano transaction history against the Cardano Shield threat feed.
+
+    Cross-references incoming token events with the Cardano Shield blacklist
+    (370+ scam token policy IDs) and the Cardano Foundation Token Registry
+    (7,800+ verified tokens) to identify potentially malicious tokens.
+    """
+    try:
+        result = await _scan_cardano_shield(user_id)
+        return result
+    except Exception as e:
+        logger.error(f"Error running Cardano Shield scan for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to run Cardano Shield scan")
 
 
 class MoneroBalanceUpdate(BaseModel):

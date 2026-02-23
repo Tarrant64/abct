@@ -1890,6 +1890,27 @@
                 </div>
             </div>
 
+            <!-- Cardano Shield Transaction Scanner -->
+            <div class="privacy-section" id="sectionCardanoShield">
+                <div class="privacy-section-header">
+                    <span class="section-icon">&#128737;</span>
+                    <h3>Cardano Shield Transaction Scanner</h3><span class="section-info-btn">i<span class="info-tooltip">Scans your Cardano transaction history against the Cardano Shield threat feed (370+ known scam token policy IDs) and the Cardano Foundation Token Registry (7,800+ verified tokens). Blacklisted tokens are flagged as HIGH risk, unregistered tokens with suspicious naming patterns as MEDIUM risk, and other unregistered tokens from unknown senders as LOW risk. Powered by Cardano Shield (Apache 2.0) by AdaBox.io.</span></span>
+                </div>
+                <div id="shieldSectionContainer">
+                    <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px; flex-wrap: wrap;">
+                        <span id="shieldStatus" style="color: var(--text-secondary); font-size: 14px;">Loading...</span>
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;">
+                        <button class="btn btn-primary" id="btnRunShieldScan" style="display: none;">Scan Wallets</button>
+                    </div>
+                    <div class="progress-bar-container" id="shieldProgressBar" style="display: none;">
+                        <div class="progress-bar-fill" id="shieldProgressFill" style="width: 0%;"></div>
+                    </div>
+                    <span id="shieldProgressText" style="color: var(--text-secondary); font-size: 13px; display: none;"></span>
+                    <div id="shieldResultsArea" style="margin-top: 12px;"></div>
+                </div>
+            </div>
+
         </div>
         <!-- End Security / Privacy Tab -->
 
@@ -2329,6 +2350,7 @@
             await initApprovalsSection();
             await initSpamSection();
             await initPoisoningSection();
+            await initCardanoShieldSection();
             setupXmrModal();
             injectLogokitTokensPrivacy();
         }
@@ -3063,6 +3085,130 @@
 
                     // Attach copy listener using data-action pattern (DOMPurify safe)
                     wrapper.querySelector('[data-action="copy-poisoning-report"]').addEventListener('click', function() {
+                        navigator.clipboard.writeText(result.report_text).then(function() {
+                            copyBtn.textContent = 'Copied!';
+                            setTimeout(function() { copyBtn.textContent = 'Copy Report'; }, 2000);
+                        }).catch(function() {
+                            // Fallback
+                            var ta = document.createElement('textarea');
+                            ta.value = result.report_text;
+                            ta.style.cssText = 'position:fixed;left:-9999px;';
+                            document.body.appendChild(ta);
+                            ta.select();
+                            document.execCommand('copy');
+                            document.body.removeChild(ta);
+                            copyBtn.textContent = 'Copied!';
+                            setTimeout(function() { copyBtn.textContent = 'Copy Report'; }, 2000);
+                        });
+                    });
+                }
+
+                scanBtn.textContent = 'Scan Again';
+                scanBtn.disabled = false;
+
+            } catch (e) {
+                clearInterval(progressTimer);
+                progressFill.style.width = '0%';
+                progressText.textContent = 'Scan failed: ' + e.message;
+                progressText.style.color = 'var(--error-color, #ef4444)';
+                scanBtn.textContent = 'Scan Wallets';
+                scanBtn.disabled = false;
+            }
+        }
+
+        // ============================================================
+        // Cardano Shield Transaction Scanner
+        // ============================================================
+
+        async function initCardanoShieldSection() {
+            var statusEl = document.getElementById('shieldStatus');
+            var scanBtn = document.getElementById('btnRunShieldScan');
+            try {
+                var resp = await authFetch('/wallets');
+                if (!resp.ok) throw new Error('Failed to fetch wallets');
+                var data = await resp.json();
+                var allWallets = data.wallets || data || [];
+                var cardanoCount = allWallets.filter(function(w) { return w.blockchain === 'cardano'; }).length;
+                statusEl.textContent = cardanoCount + ' Cardano wallet' + (cardanoCount !== 1 ? 's' : '') + ' available to scan';
+                if (cardanoCount > 0) {
+                    scanBtn.style.display = '';
+                    scanBtn.addEventListener('click', runCardanoShieldScan);
+                } else {
+                    statusEl.textContent = 'No Cardano wallets found. Add Cardano wallets to enable scanning.';
+                }
+            } catch (e) {
+                statusEl.textContent = 'Could not load wallet info.';
+                statusEl.style.color = 'var(--text-secondary)';
+            }
+        }
+
+        async function runCardanoShieldScan() {
+            var scanBtn = document.getElementById('btnRunShieldScan');
+            var progressBar = document.getElementById('shieldProgressBar');
+            var progressFill = document.getElementById('shieldProgressFill');
+            var progressText = document.getElementById('shieldProgressText');
+            var resultsArea = document.getElementById('shieldResultsArea');
+
+            scanBtn.disabled = true;
+            scanBtn.textContent = 'Scanning...';
+            progressBar.style.display = '';
+            progressText.style.display = '';
+            progressFill.style.width = '0%';
+            progressText.textContent = 'Analyzing Cardano transactions against Shield threat feed...';
+            resultsArea.innerHTML = '';
+
+            // Animate progress bar with random increments up to 85%
+            var progress = 0;
+            var progressTimer = setInterval(function() {
+                if (progress < 85) {
+                    progress += Math.random() * 6 + 1;
+                    if (progress > 85) progress = 85;
+                    progressFill.style.width = Math.round(progress) + '%';
+                }
+            }, 400);
+
+            try {
+                var resp = await authFetch('/privacy/scan-cardano-shield', { method: 'POST' });
+                clearInterval(progressTimer);
+
+                if (!resp.ok) {
+                    var errMsg = 'Scan failed';
+                    try { var err = await resp.json(); errMsg = err.detail || errMsg; } catch(e2) {}
+                    throw new Error(errMsg);
+                }
+
+                var result = await resp.json();
+
+                // Snap to 100%
+                progressFill.style.width = '100%';
+                progressText.textContent = 'Scanned ' + result.wallets_scanned + ' Cardano wallet' + (result.wallets_scanned !== 1 ? 's' : '') + ', ' + (result.transactions_analyzed || 0).toLocaleString() + ' transactions analyzed';
+
+                if (result.suspicious_count === 0) {
+                    // Green success box
+                    resultsArea.innerHTML = '<div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 10px; padding: 16px; color: var(--success-color, #10b981); font-size: 14px; margin-top: 8px;">' +
+                        '<strong>No suspicious tokens detected.</strong> All incoming Cardano tokens look clean against the Shield threat feed.' +
+                        '</div>';
+                } else {
+                    // Render report in monospace pre block + copy button
+                    var wrapper = document.createElement('div');
+                    wrapper.style.cssText = 'margin-top: 8px; position: relative;';
+
+                    var copyBtn = document.createElement('button');
+                    copyBtn.className = 'btn btn-secondary';
+                    copyBtn.style.cssText = 'margin-bottom: 8px; font-size: 12px; padding: 4px 12px;';
+                    copyBtn.textContent = 'Copy Report';
+                    copyBtn.setAttribute('data-action', 'copy-shield-report');
+                    wrapper.appendChild(copyBtn);
+
+                    var preEl = document.createElement('pre');
+                    preEl.style.cssText = 'background: var(--card-bg, rgba(42,42,74,0.5)); border: 1px solid var(--border-color, rgba(255,255,255,0.1)); border-radius: 10px; padding: 16px; font-size: 12px; line-height: 1.5; overflow-x: auto; white-space: pre-wrap; word-break: break-all; color: var(--text-primary, #e0e0e0); max-height: 500px; overflow-y: auto;';
+                    preEl.textContent = result.report_text;
+                    wrapper.appendChild(preEl);
+
+                    resultsArea.appendChild(wrapper);
+
+                    // Attach copy listener using data-action pattern (DOMPurify safe)
+                    wrapper.querySelector('[data-action="copy-shield-report"]').addEventListener('click', function() {
                         navigator.clipboard.writeText(result.report_text).then(function() {
                             copyBtn.textContent = 'Copied!';
                             setTimeout(function() { copyBtn.textContent = 'Copy Report'; }, 2000);

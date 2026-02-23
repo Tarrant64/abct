@@ -52,6 +52,7 @@ from nft_image_database import init_nft_image_db
 from routers import wallets, portfolio, defi, prices, exchanges, nfts, custom_tokens, settings, security, logs, nft_scheduler as nft_scheduler_router, backup, auth, dashboard, mobile, nmkr, cache, spam, transactions, demo, cloudflare, system, balance_history, analytics, intelligence, search, pnl
 from routers import engine as engine_router
 from routers.privacy import router as privacy_router
+from services.cardano_shield import cardano_shield
 
 from middleware import RequestSizeLimitMiddleware, RATE_LIMITING_AVAILABLE
 from services.logging_service import get_logging_service
@@ -469,6 +470,32 @@ async def lifespan(app: FastAPI):
             await log_service.warning("main", f"Cloudflare tunnel auto-restore failed: {e}")
 
     _background_tasks.append(asyncio.create_task(restore_cloudflare_tunnel()))
+
+    # Initialize Cardano Shield threat feed (background)
+    async def init_cardano_shield():
+        try:
+            await cardano_shield.initialize()
+            logger.info("Cardano Shield threat feed initialized")
+            await log_service.info("main", "Cardano Shield threat feed initialized")
+        except Exception as e:
+            logger.warning(f"Cardano Shield initialization failed: {e}")
+            await log_service.warning("main", f"Cardano Shield initialization failed: {e}")
+
+    async def periodic_cardano_shield_refresh():
+        """Refresh Cardano Shield threat feed every 24 hours."""
+        while True:
+            try:
+                await asyncio.sleep(24 * 3600)
+                await cardano_shield._refresh_feed()
+                logger.info("Cardano Shield threat feed refreshed")
+                await log_service.info("main", "Cardano Shield threat feed refreshed")
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.warning(f"Cardano Shield refresh failed: {e}")
+
+    _background_tasks.append(asyncio.create_task(init_cardano_shield()))
+    _background_tasks.append(asyncio.create_task(periodic_cardano_shield_refresh()))
 
     # Clear all chart caches on startup (ensures fresh data after materialization)
     try:
