@@ -898,7 +898,7 @@
             <button class="main-tab-btn" data-tab="analytics" onclick="switchMainTab('analytics')">Analytics</button>
             <button class="main-tab-btn" data-tab="intelligence" onclick="switchMainTab('intelligence')">Wallet Intelligence</button>
             <button class="main-tab-btn" data-tab="cryptomarket" id="cryptoMarketTabBtn" onclick="switchMainTab('cryptomarket')">Crypto Market</button>
-            <button class="main-tab-btn" data-tab="privacyzk" onclick="switchMainTab('privacyzk')">Privacy &amp; ZK <span style="font-size:10px;opacity:0.7;font-style:italic;">(Experimental)</span></button>
+            <button class="main-tab-btn" data-tab="privacyzk" onclick="switchMainTab('privacyzk')">Security / Privacy</button>
         </div>
 
         <!-- ===================== -->
@@ -1816,9 +1816,9 @@
         </div>
         <!-- End Crypto Market Tab -->
 
-        <!-- ===================== -->
-        <!-- PRIVACY & ZK TAB      -->
-        <!-- ===================== -->
+        <!-- ========================= -->
+        <!-- SECURITY / PRIVACY TAB    -->
+        <!-- ========================= -->
         <div id="privacyzkTab" class="main-tab-content">
 
             <!-- Per-Wallet Privacy Analysis -->
@@ -1832,6 +1832,40 @@
                         <div class="spinner-small"></div>
                         <span>Loading wallet analysis...</span>
                     </div>
+                </div>
+            </div>
+
+            <!-- Token Approval Security -->
+            <div class="privacy-section" id="sectionApprovals">
+                <div class="privacy-section-header">
+                    <span class="section-icon">&#128274;</span>
+                    <h3>Token Approval Security</h3><span class="section-info-btn">i<span class="info-tooltip">Shows ERC-20 token approvals (allowances) on your EVM wallets. Unlimited or stale approvals are a common attack vector. Uses Moralis API to fetch approval data (requires Moralis API key). Click "Check Approvals" to scan a wallet, then visit revoke.cash to revoke unwanted approvals.</span></span>
+                </div>
+                <div id="approvalsContainer">
+                    <div class="privacy-loading" id="approvalsLoading">
+                        <div class="spinner-small"></div>
+                        <span>Loading EVM wallets...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Spam Token Detection -->
+            <div class="privacy-section" id="sectionSpam">
+                <div class="privacy-section-header">
+                    <span class="section-icon">&#128681;</span>
+                    <h3>Spam Token Detection</h3><span class="section-info-btn">i<span class="info-tooltip">Scans your EVM wallets for known spam and scam tokens using the Moralis API. Detected tokens can be hidden from your portfolio. Requires a Moralis API key to be configured.</span></span>
+                </div>
+                <div id="spamSectionContainer">
+                    <div id="spamStatusRow" style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px; flex-wrap: wrap;">
+                        <span id="spamMoralisStatus" style="color: var(--text-secondary); font-size: 14px;">Checking Moralis API...</span>
+                        <span id="spamHiddenCount" style="color: var(--text-secondary); font-size: 13px; display: none;"></span>
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;">
+                        <button class="btn btn-primary" id="btnRunSpamFilter" style="display: none;">Run Spam Filter</button>
+                        <button class="btn btn-secondary" id="btnShowHidden" style="display: none;">Show Hidden Tokens</button>
+                    </div>
+                    <div id="spamResultsArea"></div>
+                    <div id="spamHiddenArea" style="display: none;"></div>
                 </div>
             </div>
 
@@ -1949,9 +1983,9 @@
             </div>
 
         </div>
-        <!-- End Privacy & ZK Tab -->
+        <!-- End Security / Privacy Tab -->
 
-        <!-- Monero Balance Modal (Privacy & ZK Tab) -->
+        <!-- Monero Balance Modal (Security / Privacy Tab) -->
         <div class="privacy-modal-overlay" id="xmrBalanceModal">
             <div class="privacy-modal">
                 <h3>Set Monero Balance</h3>
@@ -2376,7 +2410,7 @@
 
     <script>
         // ============================================================
-        // Privacy & ZK Tab Logic
+        // Security / Privacy Tab Logic
         // ============================================================
         let privacyTabInitted = false;
 
@@ -2385,6 +2419,8 @@
             privacyTabInitted = true;
             initAccordion();
             initPrivacyPage();
+            initApprovalsSection();
+            initSpamSection();
             setupXmrModal();
             injectLogokitTokensPrivacy();
         }
@@ -2595,6 +2631,412 @@
                 } else {
                     alert('Failed to save balance. Check the API response.');
                 }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        // ── Token Approval Security ──────────────────────────────────
+
+        async function initApprovalsSection() {
+            const container = document.getElementById('approvalsContainer');
+            if (!container) return;
+
+            try {
+                const resp = await authFetch('/privacy/approvals/wallets');
+                if (!resp || !resp.ok) {
+                    setSafeHTML(container, '<p style="color: var(--text-secondary); font-size: 14px; padding: 16px 0;">Could not load EVM wallets. The approvals API may not be available.</p>');
+                    return;
+                }
+                const data = await resp.json();
+                renderApprovalsWalletList(data.wallets || []);
+            } catch (e) {
+                setSafeHTML(container, '<p style="color: var(--text-secondary); font-size: 14px; padding: 16px 0;">Could not reach /privacy/approvals/wallets.</p>');
+            }
+        }
+
+        function renderApprovalsWalletList(wallets) {
+            const container = document.getElementById('approvalsContainer');
+            if (!container) return;
+
+            if (!wallets.length) {
+                setSafeHTML(container, '<div class="privacy-empty-state"><div class="empty-icon">&#128274;</div><h4>No EVM wallets found</h4><p>Add an Ethereum, Polygon, BSC, Arbitrum, Base, Avalanche, or Optimism wallet to check token approvals.</p><a href="/wallets.html">Manage Wallets</a></div>');
+                return;
+            }
+
+            const chainLabels = {
+                ethereum: 'Ethereum', polygon: 'Polygon', bsc: 'BSC',
+                arbitrum: 'Arbitrum', base: 'Base', avalanche: 'Avalanche', optimism: 'Optimism'
+            };
+
+            let html = '<table class="privacy-analysis-table"><thead><tr>';
+            html += '<th>Wallet</th><th>Chain</th><th>Approvals</th><th>Actions</th>';
+            html += '</tr></thead><tbody id="approvalsTbody">';
+
+            for (const w of wallets) {
+                const chain = w.blockchain || '';
+                const chainLabel = chainLabels[chain] || chain;
+                const symbol = chain === 'bsc' ? 'BNB' : chain === 'avalanche' ? 'AVAX' : chain === 'optimism' ? 'OP' : (chain === 'arbitrum' ? 'ARB' : (chain === 'base' ? 'BASE' : 'ETH'));
+                const label = w.label || (w.address ? w.address.slice(0, 6) + '...' + w.address.slice(-4) : 'Wallet');
+
+                html += '<tr data-approval-wallet="' + w.wallet_id + '">';
+                html += '<td><div class="wallet-name-cell"><img src="' + privacyLogoUrl(symbol, 24) + '" alt="' + symbol + '" class="wallet-chain-icon" data-fallback-text="' + symbol[0] + '"><span>' + label + '</span></div></td>';
+                html += '<td>' + chainLabel + '</td>';
+                html += '<td id="approval-count-' + w.wallet_id + '"><span style="color: var(--text-secondary); font-size: 12px;">Not checked</span></td>';
+                html += '<td><div class="approval-actions"><button class="btn-check-score" data-wallet-id="' + w.wallet_id + '" data-action="check-approvals">Check Approvals</button></div></td>';
+                html += '</tr>';
+                html += '<tr id="approval-detail-row-' + w.wallet_id + '" style="display:none;"><td colspan="4"><div class="score-detail-panel" id="approval-detail-panel-' + w.wallet_id + '"></div></td></tr>';
+            }
+            html += '</tbody></table>';
+
+            setSafeHTML(container, html);
+
+            // Attach image fallback listeners
+            container.querySelectorAll('img.wallet-chain-icon').forEach(function(img) {
+                var fb = img.getAttribute('data-fallback-text') || '?';
+                img.addEventListener('error', function() {
+                    var ph = document.createElement('div');
+                    ph.className = 'wallet-chain-icon-placeholder';
+                    ph.textContent = fb;
+                    img.parentNode.replaceChild(ph, img);
+                });
+            });
+
+            // Attach check-approvals button listeners
+            container.querySelectorAll('[data-action="check-approvals"]').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    checkWalletApprovals(btn.dataset.walletId, btn);
+                });
+            });
+        }
+
+        async function checkWalletApprovals(walletId, triggerBtn) {
+            var detailRow = document.getElementById('approval-detail-row-' + walletId);
+            var detailPanel = document.getElementById('approval-detail-panel-' + walletId);
+            var countCell = document.getElementById('approval-count-' + walletId);
+            if (!detailRow || !detailPanel) return;
+
+            // Toggle off if already open
+            if (detailRow.style.display !== 'none') {
+                detailRow.style.display = 'none';
+                if (triggerBtn) triggerBtn.textContent = 'Check Approvals';
+                return;
+            }
+
+            if (triggerBtn) triggerBtn.textContent = 'Checking...';
+
+            try {
+                var resp = await authFetch('/privacy/approvals/wallet/' + walletId);
+                if (!resp || !resp.ok) {
+                    var errText = 'Could not load approvals.';
+                    try { var errData = await resp.json(); errText = errData.detail || errText; } catch(e2) {}
+                    setSafeHTML(detailPanel, '<p style="color: var(--text-secondary); font-size: 13px; margin: 0;">' + errText + '</p>');
+                    detailRow.style.display = '';
+                    if (triggerBtn) triggerBtn.textContent = 'Check Approvals';
+                    return;
+                }
+                var result = await resp.json();
+                var approvals = result.approvals || [];
+                var summary = result.summary || {};
+                var revokeUrl = result.revoke_url || '';
+
+                // Update count badge in table
+                if (countCell) {
+                    var total = summary.total || 0;
+                    var badgeCls = 'approval-count-badge';
+                    if (summary.high > 0) badgeCls += ' has-high';
+                    else if (summary.medium > 0) badgeCls += ' has-medium';
+                    else badgeCls += ' all-low';
+                    countCell.innerHTML = '';
+                    var badge = document.createElement('span');
+                    badge.className = badgeCls;
+                    badge.textContent = total;
+                    countCell.appendChild(badge);
+                }
+
+                // Build detail panel
+                var detailHtml = '';
+
+                // Summary stats
+                detailHtml += '<div class="approval-summary">';
+                detailHtml += '<div class="approval-stat"><span class="approval-stat-label">Total</span><span class="approval-stat-value">' + (summary.total || 0) + '</span></div>';
+                detailHtml += '<div class="approval-stat"><span class="approval-stat-label">High Risk</span><span class="approval-stat-value" style="color: #ff6b6b;">' + (summary.high || 0) + '</span></div>';
+                detailHtml += '<div class="approval-stat"><span class="approval-stat-label">Medium</span><span class="approval-stat-value" style="color: #ffc107;">' + (summary.medium || 0) + '</span></div>';
+                detailHtml += '<div class="approval-stat"><span class="approval-stat-label">Low</span><span class="approval-stat-value" style="color: #00d26a;">' + (summary.low || 0) + '</span></div>';
+                detailHtml += '<div class="approval-stat"><span class="approval-stat-label">Unlimited</span><span class="approval-stat-value">' + (summary.unlimited || 0) + '</span></div>';
+                if (summary.total_usd_at_risk > 0) {
+                    detailHtml += '<div class="approval-stat"><span class="approval-stat-label">USD at Risk</span><span class="approval-stat-value">' + fmtUSD(summary.total_usd_at_risk) + '</span></div>';
+                }
+                detailHtml += '</div>';
+
+                // Recommendation
+                if (summary.recommendation) {
+                    detailHtml += '<div class="approval-recommendation">' + summary.recommendation + '</div>';
+                }
+
+                // Approval table
+                if (approvals.length > 0) {
+                    detailHtml += '<div class="approval-list-wrapper" style="margin-top: 14px;">';
+                    detailHtml += '<table class="approval-detail-table"><thead><tr>';
+                    detailHtml += '<th>Token</th><th>Spender</th><th>Amount</th><th>Age</th><th>Risk</th>';
+                    detailHtml += '</tr></thead><tbody>';
+
+                    for (var i = 0; i < approvals.length; i++) {
+                        var a = approvals[i];
+                        var spenderShort = a.spender_address ? a.spender_address.slice(0, 6) + '...' + a.spender_address.slice(-4) : '?';
+                        var spenderDisplay = a.spender_label !== 'Unknown' ? a.spender_label : spenderShort;
+                        var amountDisplay = a.is_unlimited ? '<span style="color: #ff6b6b; font-weight: 600;">Unlimited</span>' : a.human_value;
+                        var ageDisplay = a.age_days > 0 ? a.age_days + 'd' : '<1d';
+                        var riskBadge = '<span class="approval-risk-badge risk-' + a.risk_level + '">' + a.risk_score + ' ' + a.risk_level.charAt(0).toUpperCase() + a.risk_level.slice(1) + '</span>';
+
+                        detailHtml += '<tr>';
+                        detailHtml += '<td><strong>' + (a.token_symbol || '???') + '</strong> <span style="color: var(--text-secondary); font-size: 11px;">' + (a.token_name || '') + '</span></td>';
+                        detailHtml += '<td title="' + (a.spender_address || '') + '">' + spenderDisplay + '</td>';
+                        detailHtml += '<td>' + amountDisplay + '</td>';
+                        detailHtml += '<td>' + ageDisplay + '</td>';
+                        detailHtml += '<td>' + riskBadge + '</td>';
+                        detailHtml += '</tr>';
+                    }
+                    detailHtml += '</tbody></table></div>';
+                }
+
+                // Revoke.cash link
+                if (revokeUrl) {
+                    detailHtml += '<div style="margin-top: 14px; text-align: right;">';
+                    detailHtml += '<a href="' + revokeUrl + '" target="_blank" rel="noopener noreferrer" class="btn-revoke-link-detail" data-action="revoke-link">Manage on revoke.cash &#8599;</a>';
+                    detailHtml += '</div>';
+                }
+
+                if (!detailHtml) {
+                    detailHtml = '<p style="color: var(--text-secondary); font-size: 13px; margin: 0;">No approval data returned.</p>';
+                }
+
+                setSafeHTML(detailPanel, detailHtml);
+
+                // Re-attach revoke link (setSafeHTML strips target, so recreate as click handler)
+                detailPanel.querySelectorAll('[data-action="revoke-link"]').forEach(function(link) {
+                    link.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        window.open(revokeUrl, '_blank', 'noopener,noreferrer');
+                    });
+                });
+
+                detailRow.style.display = '';
+            } catch (e) {
+                setSafeHTML(detailPanel, '<p style="color: var(--text-secondary); font-size: 13px; margin: 0;">Error fetching approvals: ' + e.message + '</p>');
+                detailRow.style.display = '';
+            }
+            if (triggerBtn) triggerBtn.textContent = 'Hide';
+        }
+
+        // ============================================================
+        // Spam Token Detection (inline in Security / Privacy tab)
+        // ============================================================
+        let spamDetectedTokens = [];
+
+        async function initSpamSection() {
+            const statusEl = document.getElementById('spamMoralisStatus');
+            const hiddenCountEl = document.getElementById('spamHiddenCount');
+            const runBtn = document.getElementById('btnRunSpamFilter');
+            const showHiddenBtn = document.getElementById('btnShowHidden');
+
+            try {
+                const resp = await authFetch('/spam/status');
+                if (!resp.ok) throw new Error('status endpoint failed');
+                const data = await resp.json();
+
+                if (data.moralis_configured) {
+                    statusEl.textContent = 'Moralis API: configured';
+                    statusEl.style.color = 'var(--success-color, #10b981)';
+                    runBtn.style.display = '';
+                    runBtn.addEventListener('click', runSpamFilterInline);
+                } else {
+                    statusEl.textContent = 'Moralis API not configured — add a Moralis key in Settings to enable spam detection.';
+                    statusEl.style.color = 'var(--text-secondary)';
+                }
+            } catch (e) {
+                statusEl.textContent = 'Could not check spam filter status.';
+                statusEl.style.color = 'var(--text-secondary)';
+            }
+
+            // Load hidden token count
+            try {
+                const resp = await authFetch('/spam/hidden');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    const count = (data.hidden_tokens || []).length;
+                    if (count > 0) {
+                        hiddenCountEl.textContent = count + ' token' + (count !== 1 ? 's' : '') + ' currently hidden';
+                        hiddenCountEl.style.display = '';
+                        showHiddenBtn.style.display = '';
+                        showHiddenBtn.addEventListener('click', loadHiddenTokens);
+                    }
+                }
+            } catch (e) { /* ignore */ }
+        }
+
+        async function runSpamFilterInline() {
+            const resultsArea = document.getElementById('spamResultsArea');
+            const runBtn = document.getElementById('btnRunSpamFilter');
+            runBtn.disabled = true;
+            runBtn.textContent = 'Scanning...';
+            setSafeHTML(resultsArea, '<div style="display: flex; align-items: center; gap: 10px; padding: 16px 0;"><div class="spinner-small"></div><span style="color: var(--text-secondary);">Scanning wallets for spam tokens...</span></div>');
+
+            try {
+                const resp = await authFetch('/spam/scan');
+                if (!resp.ok) {
+                    const err = await resp.json();
+                    throw new Error(err.detail || 'Failed to scan for spam');
+                }
+                const data = await resp.json();
+                spamDetectedTokens = data.spam_tokens || [];
+
+                if (spamDetectedTokens.length === 0) {
+                    setSafeHTML(resultsArea, '<div style="padding: 16px; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); border-radius: 8px;"><p style="margin: 0; color: #10b981;">No spam tokens detected across ' + data.wallets_scanned + ' wallet' + (data.wallets_scanned !== 1 ? 's' : '') + '.</p></div>');
+                } else {
+                    let html = '<div style="padding: 12px 16px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; margin-bottom: 12px;">';
+                    html += '<p style="margin: 0; color: #ef4444;">Found <strong>' + data.total_found + '</strong> spam token' + (data.total_found !== 1 ? 's' : '') + ' across <strong>' + data.wallets_scanned + '</strong> wallet' + (data.wallets_scanned !== 1 ? 's' : '') + '.</p></div>';
+                    html += '<div class="spam-token-list-container">';
+                    spamDetectedTokens.forEach(function(token, idx) {
+                        html += '<div class="spam-token-item">';
+                        html += '<input type="checkbox" class="spam-token-checkbox" checked data-spam-idx="' + idx + '">';
+                        html += '<div class="spam-token-info"><div class="spam-token-name">' + (token.name || 'Unknown') + ' (' + (token.symbol || 'N/A') + ')</div>';
+                        html += '<div class="spam-token-address">' + token.address + '</div></div>';
+                        html += '<span class="spam-token-chain">' + token.blockchain + '</span></div>';
+                    });
+                    html += '</div>';
+                    html += '<div style="display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap;">';
+                    html += '<button class="btn btn-secondary" data-action="select-all-spam">Select All</button>';
+                    html += '<button class="btn btn-danger" data-action="hide-selected-spam">Hide Selected</button>';
+                    html += '</div>';
+                    setSafeHTML(resultsArea, html);
+
+                    // Attach listeners (DOMPurify strips inline handlers)
+                    resultsArea.querySelectorAll('[data-action="select-all-spam"]').forEach(function(btn) {
+                        btn.addEventListener('click', selectAllSpamInline);
+                    });
+                    resultsArea.querySelectorAll('[data-action="hide-selected-spam"]').forEach(function(btn) {
+                        btn.addEventListener('click', hideSelectedSpamInline);
+                    });
+                }
+            } catch (e) {
+                setSafeHTML(resultsArea, '<div style="padding: 16px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; color: #ef4444;">' + e.message + '</div>');
+            }
+            runBtn.disabled = false;
+            runBtn.textContent = 'Run Spam Filter';
+        }
+
+        function selectAllSpamInline() {
+            document.querySelectorAll('#spamResultsArea .spam-token-checkbox').forEach(function(cb) { cb.checked = true; });
+        }
+
+        async function hideSelectedSpamInline() {
+            const selected = [];
+            document.querySelectorAll('#spamResultsArea .spam-token-checkbox:checked').forEach(function(cb) {
+                const idx = parseInt(cb.getAttribute('data-spam-idx'));
+                selected.push(idx);
+            });
+            if (selected.length === 0) { alert('Select at least one token to hide.'); return; }
+
+            const tokensToHide = selected.map(function(idx) {
+                var t = spamDetectedTokens[idx];
+                return { blockchain: t.blockchain, token_address: t.address, token_symbol: t.symbol, token_name: t.name, reason: 'spam' };
+            });
+
+            try {
+                const resp = await authFetch('/spam/hide', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tokens: tokensToHide })
+                });
+                if (!resp.ok) { const err = await resp.json(); throw new Error(err.detail || 'Failed to hide tokens'); }
+                const result = await resp.json();
+                setSafeHTML(document.getElementById('spamResultsArea'), '<div style="padding: 16px; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); border-radius: 8px;"><p style="margin: 0; color: #10b981;">Successfully hidden ' + result.hidden_count + ' spam token' + (result.hidden_count !== 1 ? 's' : '') + '.</p></div>');
+                spamDetectedTokens = [];
+                // Refresh hidden count
+                const hiddenCountEl = document.getElementById('spamHiddenCount');
+                const showHiddenBtn = document.getElementById('btnShowHidden');
+                try {
+                    const hr = await authFetch('/spam/hidden');
+                    if (hr.ok) {
+                        const hd = await hr.json();
+                        const c = (hd.hidden_tokens || []).length;
+                        hiddenCountEl.textContent = c + ' token' + (c !== 1 ? 's' : '') + ' currently hidden';
+                        hiddenCountEl.style.display = '';
+                        if (showHiddenBtn.style.display === 'none') {
+                            showHiddenBtn.style.display = '';
+                            showHiddenBtn.addEventListener('click', loadHiddenTokens);
+                        }
+                    }
+                } catch (e2) { /* ignore */ }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function loadHiddenTokens() {
+            const area = document.getElementById('spamHiddenArea');
+            area.style.display = '';
+            setSafeHTML(area, '<div style="display: flex; align-items: center; gap: 10px; padding: 12px 0;"><div class="spinner-small"></div><span style="color: var(--text-secondary);">Loading hidden tokens...</span></div>');
+
+            try {
+                const resp = await authFetch('/spam/hidden');
+                if (!resp.ok) throw new Error('Failed to load hidden tokens');
+                const data = await resp.json();
+                const tokens = data.hidden_tokens || [];
+
+                if (tokens.length === 0) {
+                    setSafeHTML(area, '<p style="color: var(--text-secondary); font-size: 14px; padding: 8px 0;">No hidden tokens.</p>');
+                    return;
+                }
+
+                let html = '<h4 style="margin: 16px 0 8px; color: var(--text-primary);">Hidden Tokens (' + tokens.length + ')</h4>';
+                html += '<div class="spam-token-list-container">';
+                tokens.forEach(function(token) {
+                    html += '<div class="spam-token-item">';
+                    html += '<div class="spam-token-info"><div class="spam-token-name">' + (token.token_name || token.token_symbol || 'Unknown') + '</div>';
+                    html += '<div class="spam-token-address">' + (token.token_address || '') + '</div></div>';
+                    html += '<span class="spam-token-chain">' + token.blockchain + '</span>';
+                    html += '<button class="btn btn-secondary btn-small" data-action="unhide-spam" data-unhide-chain="' + token.blockchain + '" data-unhide-addr="' + (token.token_address || '') + '">Unhide</button>';
+                    html += '</div>';
+                });
+                html += '</div>';
+                setSafeHTML(area, html);
+
+                // Attach unhide listeners
+                area.querySelectorAll('[data-action="unhide-spam"]').forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        var chain = btn.getAttribute('data-unhide-chain');
+                        var addr = btn.getAttribute('data-unhide-addr');
+                        unhideTokenInline(chain, addr);
+                    });
+                });
+            } catch (e) {
+                setSafeHTML(area, '<p style="color: #ef4444; font-size: 14px; padding: 8px 0;">Error loading hidden tokens: ' + e.message + '</p>');
+            }
+        }
+
+        async function unhideTokenInline(blockchain, address) {
+            try {
+                const resp = await authFetch('/spam/unhide/' + encodeURIComponent(blockchain) + '/' + encodeURIComponent(address), { method: 'DELETE' });
+                if (!resp.ok) { const err = await resp.json(); throw new Error(err.detail || 'Failed to unhide token'); }
+                // Reload hidden list
+                loadHiddenTokens();
+                // Update count
+                const hiddenCountEl = document.getElementById('spamHiddenCount');
+                try {
+                    const hr = await authFetch('/spam/hidden');
+                    if (hr.ok) {
+                        const hd = await hr.json();
+                        const c = (hd.hidden_tokens || []).length;
+                        if (c > 0) {
+                            hiddenCountEl.textContent = c + ' token' + (c !== 1 ? 's' : '') + ' currently hidden';
+                        } else {
+                            hiddenCountEl.style.display = 'none';
+                            document.getElementById('btnShowHidden').style.display = 'none';
+                        }
+                    }
+                } catch (e2) { /* ignore */ }
             } catch (e) {
                 alert('Error: ' + e.message);
             }

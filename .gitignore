@@ -175,6 +175,9 @@ install-unraid.sh
 test_*.sh
 test_*.py
 
+# E2E test suite (local only)
+tests/
+
 # Mobile API - now in production
 # backend/routers/mobile.py
 

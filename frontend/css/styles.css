@@ -14065,3 +14065,280 @@ body.privacy-mode a[data-href] {
     background: rgba(6, 214, 160, 0.12);
     border-color: rgba(6, 214, 160, 0.3);
 }
+
+/* ── Token Approval Security ─────────────────────────────────────── */
+
+/* Revoke.cash external link buttons */
+.btn-revoke-link,
+.btn-revoke-link-detail {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid rgba(255, 107, 107, 0.4);
+    border-radius: 6px;
+    background: rgba(255, 107, 107, 0.08);
+    color: #ff6b6b;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    text-decoration: none;
+}
+
+.btn-revoke-link:hover,
+.btn-revoke-link-detail:hover {
+    border-color: #ff6b6b;
+    background: rgba(255, 107, 107, 0.15);
+    color: #ff6b6b;
+}
+
+.btn-revoke-link-detail {
+    font-size: 11px;
+    padding: 4px 10px;
+}
+
+/* Approval summary stats */
+.approval-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding: 14px 16px;
+    background: var(--bg-secondary);
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+}
+
+.approval-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 100px;
+}
+
+.approval-stat-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+}
+
+.approval-stat-value {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+/* Scrollable approval list */
+.approval-list-wrapper {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+/* Per-approval detail table */
+.approval-detail-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.approval-detail-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.approval-detail-table thead th {
+    text-align: left;
+    padding: 8px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    background: var(--bg-card, #1a1a2e);
+    border-bottom: 2px solid var(--border-color);
+}
+
+.approval-detail-table tbody td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+    vertical-align: middle;
+}
+
+.approval-detail-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.approval-detail-table tbody tr:hover td {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* Risk badge (reuses score-badge pattern but approval-specific) */
+.approval-risk-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.approval-risk-badge.risk-high {
+    background: rgba(255, 107, 107, 0.15);
+    color: #ff6b6b;
+    border: 1px solid rgba(255, 107, 107, 0.3);
+}
+
+.approval-risk-badge.risk-medium {
+    background: rgba(255, 193, 7, 0.15);
+    color: #ffc107;
+    border: 1px solid rgba(255, 193, 7, 0.3);
+}
+
+.approval-risk-badge.risk-low {
+    background: rgba(0, 210, 106, 0.15);
+    color: #00d26a;
+    border: 1px solid rgba(0, 210, 106, 0.3);
+}
+
+/* Approval count badge (in wallet list) */
+.approval-count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 700;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+.approval-count-badge.has-high {
+    background: rgba(255, 107, 107, 0.15);
+    color: #ff6b6b;
+    border-color: rgba(255, 107, 107, 0.3);
+}
+
+.approval-count-badge.has-medium {
+    background: rgba(255, 193, 7, 0.15);
+    color: #ffc107;
+    border-color: rgba(255, 193, 7, 0.3);
+}
+
+.approval-count-badge.all-low {
+    background: rgba(0, 210, 106, 0.15);
+    color: #00d26a;
+    border-color: rgba(0, 210, 106, 0.3);
+}
+
+/* Approval action buttons row */
+.approval-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* Recommendation text in summary */
+.approval-recommendation {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    border-left: 3px solid var(--accent-success);
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+/* Light theme — approval overrides */
+[data-theme="light"] .btn-revoke-link,
+[data-theme="light"] .btn-revoke-link-detail {
+    background: rgba(220, 53, 69, 0.06);
+    border-color: rgba(220, 53, 69, 0.3);
+    color: #dc3545;
+}
+
+[data-theme="light"] .btn-revoke-link:hover,
+[data-theme="light"] .btn-revoke-link-detail:hover {
+    background: rgba(220, 53, 69, 0.12);
+    border-color: #dc3545;
+}
+
+[data-theme="light"] .approval-summary {
+    background: #f9fafb;
+    border-color: #e5e7eb;
+}
+
+[data-theme="light"] .approval-list-wrapper {
+    border-color: #e5e7eb;
+}
+
+[data-theme="light"] .approval-detail-table thead th {
+    background: #ffffff;
+    border-bottom-color: #e5e7eb;
+    color: #6b7280;
+}
+
+[data-theme="light"] .approval-detail-table tbody td {
+    border-bottom-color: #f3f4f6;
+    color: #1f2937;
+}
+
+[data-theme="light"] .approval-detail-table tbody tr:hover td {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+[data-theme="light"] .approval-recommendation {
+    background: #f0fdf4;
+    border-left-color: #00b894;
+}
+
+[data-theme="light"] .approval-count-badge {
+    background: #f3f4f6;
+    border-color: #e5e7eb;
+    color: #374151;
+}
+
+/* Cypherpunk1 — approval overrides */
+[data-theme="cypherpunk1"] .approval-detail-table tbody tr:hover td {
+    background: rgba(0, 212, 255, 0.03);
+}
+
+[data-theme="cypherpunk1"] .approval-summary {
+    background: rgba(0, 212, 255, 0.04);
+}
+
+[data-theme="cypherpunk1"] .approval-risk-badge.risk-low {
+    color: #00d4ff;
+    background: rgba(0, 212, 255, 0.15);
+    border-color: rgba(0, 212, 255, 0.3);
+}
+
+/* Ocean-depths — approval overrides */
+[data-theme="ocean-depths"] .approval-detail-table tbody tr:hover td {
+    background: rgba(6, 214, 160, 0.03);
+}
+
+[data-theme="ocean-depths"] .approval-summary {
+    background: rgba(6, 214, 160, 0.04);
+}
+
+/* Sunset-horizon — approval overrides */
+[data-theme="sunset-horizon"] .approval-detail-table tbody tr:hover td {
+    background: rgba(6, 214, 160, 0.03);
+}
+
+[data-theme="sunset-horizon"] .approval-summary {
+    background: rgba(6, 214, 160, 0.04);
+}
