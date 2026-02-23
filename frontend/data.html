@@ -1869,119 +1869,6 @@
                 </div>
             </div>
 
-            <!-- Privacy Education -->
-            <div class="privacy-section" id="sectionEducation">
-                <div class="privacy-section-header">
-                    <span class="section-icon">&#128218;</span>
-                    <h3>Privacy Education</h3>
-                </div>
-                <div class="privacy-education-section" id="educationAccordion">
-
-                    <div class="education-item" id="edu-zk">
-                        <div class="education-item-header" data-edu="edu-zk">
-                            <div class="edu-title"><span class="edu-icon">&#128161;</span>What is Zero-Knowledge Privacy?</div>
-                            <span class="edu-chevron">&#9660;</span>
-                        </div>
-                        <div class="education-item-body">
-                            <p>A <strong>zero-knowledge proof (ZKP)</strong> is a cryptographic method that lets one party (the prover) convince another party (the verifier) that a statement is true — without revealing <em>why</em> it is true or sharing any underlying data.</p>
-                            <p>In cryptocurrency terms, ZK proofs let you prove you own funds and authorise a transaction without revealing your balance, sender address, or receiver address to the public blockchain.</p>
-                            <p>Think of it like proving you know a secret password without actually saying the password out loud. The verifier is convinced the password is correct, but learns nothing about what the password is.</p>
-                            <div class="edu-tip"><strong>Key insight:</strong> ZK proofs are the mathematical foundation of ZCash's shielded transactions. Every shielded ZEC transfer includes a proof the network can verify cryptographically without seeing the amounts or addresses involved.</div>
-                        </div>
-                    </div>
-
-                    <div class="education-item" id="edu-zcash">
-                        <div class="education-item-header" data-edu="edu-zcash">
-                            <div class="edu-title"><span class="edu-icon">&#9401;</span>ZCash: Shielded vs Transparent</div>
-                            <span class="edu-chevron">&#9660;</span>
-                        </div>
-                        <div class="education-item-body">
-                            <p>ZCash has two types of addresses. Only one of them provides privacy.</p>
-                            <p><strong>Transparent addresses (t-addr)</strong> work exactly like Bitcoin — all transaction details are fully visible on the public blockchain. Anyone can see your balance, incoming and outgoing amounts, and counterparty addresses.</p>
-                            <p><strong>Shielded addresses (z-addr)</strong> use zk-SNARKs to hide the sender, receiver, and amount. On-chain you only see that a valid shielded transaction occurred. There are two generations: <strong>Sapling</strong> (legacy) and <strong>Orchard</strong> (current, Halo2 proofs with no trusted setup).</p>
-                            <p>When you move ZEC from a t-addr to a z-addr (shielding), the amount entering the shielded pool is visible. Once inside, transfers between z-addrs are fully private. Moving from z-addr back to t-addr (deshielding) reveals the output amount.</p>
-                            <div class="edu-warning"><strong>Important:</strong> Most ZCash wallets and exchanges use t-addresses by default. Check your wallet settings — if you are holding ZEC on a t-address, you have no privacy. Only Orchard or Sapling z-addresses provide ZK privacy.</div>
-                        </div>
-                    </div>
-
-                    <div class="education-item" id="edu-monero">
-                        <div class="education-item-header" data-edu="edu-monero">
-                            <div class="edu-title"><span class="edu-icon">&#625;</span>Monero: Always Private</div>
-                            <span class="edu-chevron">&#9660;</span>
-                        </div>
-                        <div class="education-item-body">
-                            <p>Monero (XMR) takes a different philosophy from ZCash: <strong>privacy is mandatory, not optional.</strong> Every transaction on Monero is private by default. There is no transparent mode.</p>
-                            <p>Monero uses three complementary technologies to achieve this:</p>
-                            <p><strong>Ring Signatures</strong> — When you send XMR, your transaction is cryptographically mixed with 15 other "decoy" outputs from the blockchain. An outside observer cannot determine which of the 16 inputs is the real one, obscuring the sender.</p>
-                            <p><strong>Stealth Addresses</strong> — Every transaction generates a unique one-time address for the recipient. The recipient's actual wallet address never appears on the blockchain. Only the recipient can identify which outputs belong to them, using their private view key.</p>
-                            <p><strong>RingCT (Ring Confidential Transactions)</strong> — Transaction amounts are encrypted using Pedersen commitments. The network can verify inputs equal outputs (no coins created from thin air) without knowing the actual amounts. Bulletproofs make this efficient.</p>
-                            <div class="edu-tip"><strong>Result:</strong> Because XMR balances are encrypted and never directly queryable from the blockchain, ABCT requires you to manually enter your Monero balance. Use the "Set Balance" button on your XMR wallet to keep it up to date.</div>
-                        </div>
-                    </div>
-
-                    <div class="education-item" id="edu-secret">
-                        <div class="education-item-header" data-edu="edu-secret">
-                            <div class="edu-title"><span class="edu-icon">&#128274;</span>Secret Network: Private Smart Contracts</div>
-                            <span class="edu-chevron">&#9660;</span>
-                        </div>
-                        <div class="education-item-body">
-                            <p>Secret Network is a Cosmos-based blockchain that adds data privacy to smart contracts using <strong>Trusted Execution Environments (TEE)</strong>, specifically Intel SGX.</p>
-                            <p>On most blockchains (Ethereum, Cardano, Solana) the state of every smart contract — including every wallet's token balance — is public. Secret Network encrypts contract state inside a secure hardware enclave. Only the enclave can decrypt and process the data. Even Secret Network validators cannot see the encrypted state.</p>
-                            <p><strong>Secret Tokens (SNIP-20)</strong> are the private equivalent of ERC-20 tokens. Your SNIP-20 balance is hidden from public view. You use a <strong>viewing key</strong> to let specific parties (like a wallet or auditor) see your balance, giving you selective transparency.</p>
-                            <p>Secret DeFi (AMMs, lending, etc.) runs on private contract state, meaning your trading activity and positions are not visible to the public.</p>
-                            <div class="edu-tip"><strong>Note:</strong> TEE-based privacy has a different trust model from ZK proofs. You trust that Intel SGX has not been compromised and that the Secret Network validators are running genuine SGX hardware. ZK proofs (ZCash, Mina) rely on math alone.</div>
-                        </div>
-                    </div>
-
-                    <div class="education-item" id="edu-midnight">
-                        <div class="education-item-header" data-edu="edu-midnight">
-                            <div class="edu-title"><span class="edu-icon">&#127761;</span>Midnight: Private Smart Contracts on Cardano</div>
-                            <span class="edu-chevron">&#9660;</span>
-                        </div>
-                        <div class="education-item-body">
-                            <p>Midnight is a data-protection blockchain developed by IOG (Input Output Global), the company behind Cardano. It extends privacy beyond token transfers to <strong>smart contract state</strong> — your contract data, balances, and application activity can be kept private.</p>
-                            <p>Unlike Secret Network (which uses Intel SGX hardware enclaves), Midnight uses <strong>zero-knowledge proofs based on the Halo 2 proving system</strong> — the same cryptographic foundation as ZCash's Orchard addresses. Privacy is mathematically enforced, not dependent on trusted hardware.</p>
-                            <p><strong>Shielded and Unshielded Tokens</strong> — Midnight supports both private (shielded) and public (unshielded) token types. Developers choose per-application which state is private. This allows compliant use cases: a regulated financial application can keep amounts private while proving to auditors that KYC conditions are met — without revealing the underlying data.</p>
-                            <p>Smart contracts on Midnight are written in <strong>Compact</strong>, a TypeScript-like language designed to make ZK-enabled development accessible to regular developers without deep cryptography expertise.</p>
-                            <p>Midnight uses <strong>DUST</strong> as its native fee token — a separate asset from ADA, though tightly coupled to the Cardano ecosystem with a native bridge for interoperability.</p>
-                            <div class="edu-tip"><strong>Status (early 2026):</strong> Midnight is in active testnet development (Teysha testnet). ABCT does not currently support Midnight wallets as mainnet has not yet launched. Once live, Midnight will be trackable similarly to Secret Network — public DUST balances visible, private token balances requiring explicit viewer key disclosure.</div>
-                        </div>
-                    </div>
-
-                    <div class="education-item" id="edu-zkrollups">
-                        <div class="education-item-header" data-edu="edu-zkrollups">
-                            <div class="edu-title"><span class="edu-icon">&#9889;</span>ZK Rollups vs ZK Privacy — An Important Distinction</div>
-                            <span class="edu-chevron">&#9660;</span>
-                        </div>
-                        <div class="education-item-body">
-                            <p>The term "ZK" (zero-knowledge) appears in two very different contexts in crypto. It is important not to confuse them.</p>
-                            <p><strong>ZK Rollups (zkSync, Scroll, Linea, Polygon zkEVM)</strong> use ZK proofs for <em>scalability</em>, not privacy. They batch thousands of transactions off-chain and submit a single validity proof to Ethereum, proving all those transactions were executed correctly. The transaction data is still public — anyone can see who sent what to whom. ZK here means "we can prove correctness without re-executing everything", not "we hide the data".</p>
-                            <p><strong>ZK Privacy chains (ZCash, Mina)</strong> use ZK proofs to actually hide transaction details — sender, receiver, and amount — from the public blockchain. This is what most people mean when they say "ZK privacy".</p>
-                            <div class="edu-warning"><strong>Do not assume privacy from the "ZK" label.</strong> Using zkSync Era or Scroll does not provide any transaction privacy. Your balances and transaction history on these networks are fully public, just like on regular Ethereum.</div>
-                        </div>
-                    </div>
-
-                    <div class="education-item" id="edu-bestpractices">
-                        <div class="education-item-header" data-edu="edu-bestpractices">
-                            <div class="edu-title"><span class="edu-icon">&#9989;</span>Privacy Best Practices</div>
-                            <span class="edu-chevron">&#9660;</span>
-                        </div>
-                        <div class="education-item-body">
-                            <p><strong>For ZCash users:</strong></p>
-                            <p>Always shield your ZEC immediately after receiving it. Use an Orchard z-address (not Sapling, which is being deprecated) as your primary receiving address. Avoid t-addresses entirely. When withdrawing from an exchange, accept that the amount will be visible on-chain when it enters the shielded pool — this is unavoidable. From that point, keep funds in z-addr to z-addr transfers for maximum privacy.</p>
-                            <p><strong>For Monero users:</strong></p>
-                            <p>Every XMR transaction is private by default. Best practices include: avoid reusing subaddresses (use a fresh one per sender), run your own node if possible (using a remote node can reveal your IP and which transactions you query), and be mindful of on-ramp/off-ramp points where KYC may link your identity to your XMR.</p>
-                            <p><strong>For Secret Network users:</strong></p>
-                            <p>Use SNIP-20 tokens rather than the native IBC-transferred tokens where privacy matters. Set viewing keys only for parties you trust. Remember that SCRT staking amounts and validator interactions are public — only token balances inside Secret contracts are private.</p>
-                            <p><strong>General:</strong></p>
-                            <p>No privacy chain protects you at the on-ramp or off-ramp. When you buy XMR on a KYC exchange and withdraw it, the exchange knows you own that XMR. Privacy chains protect the on-chain trail, not your identity at the exchange level.</p>
-                            <div class="edu-tip"><strong>Self-custody matters:</strong> Hardware wallets (Ledger supports ZCash transparent, Trezor supports XMR) add another layer. For maximum Monero privacy, use the official Monero GUI/CLI wallet with your own node.</div>
-                        </div>
-                    </div>
-
-                </div>
-            </div>
-
         </div>
         <!-- End Security / Privacy Tab -->
 
@@ -2417,7 +2304,6 @@
         async function initPrivacyTab() {
             if (privacyTabInitted) return;
             privacyTabInitted = true;
-            initAccordion();
             await initPrivacyPage();
             await initApprovalsSection();
             await initSpamSection();
@@ -3061,16 +2947,6 @@
             } catch (e) {
                 alert('Error: ' + e.message);
             }
-        }
-
-        function initAccordion() {
-            document.querySelectorAll('#educationAccordion .education-item-header').forEach(header => {
-                header.addEventListener('click', () => {
-                    const item = document.getElementById(header.getAttribute('data-edu'));
-                    if (!item) return;
-                    item.classList.toggle('open');
-                });
-            });
         }
 
         function setupXmrModal() {
