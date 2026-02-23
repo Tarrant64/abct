@@ -2845,7 +2845,7 @@
                 if (!resp.ok) throw new Error('status endpoint failed');
                 const data = await resp.json();
 
-                if (data.moralis_configured) {
+                if (data.configured) {
                     statusEl.textContent = 'Moralis API: configured';
                     statusEl.style.color = 'var(--success-color, #10b981)';
                     runBtn.style.display = '';
