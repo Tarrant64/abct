@@ -15,6 +15,7 @@ from typing import Optional
 
 import aiosqlite
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from auth_utils import verify_session
@@ -235,10 +236,14 @@ async def get_wallets_privacy_summary(user_id: int = Depends(verify_session)):
         raise HTTPException(status_code=500, detail="Failed to fetch privacy summary")
 
 
+class MoneroBalanceUpdate(BaseModel):
+    wallet_id: int
+    balance: float
+
+
 @router.post("/monero/set-balance")
 async def set_monero_balance(
-    wallet_id: int,
-    amount_xmr: float,
+    data: MoneroBalanceUpdate,
     user_id: int = Depends(verify_session)
 ):
     """
@@ -246,11 +251,10 @@ async def set_monero_balance(
 
     Since Monero is fully private, balances cannot be fetched from public APIs.
     This endpoint allows users to manually record their XMR holdings.
-
-    Args:
-        wallet_id: ID of the Monero wallet to update
-        amount_xmr: XMR balance to record (must be >= 0)
     """
+    wallet_id = data.wallet_id
+    amount_xmr = data.balance
+
     if amount_xmr < 0:
         raise HTTPException(status_code=400, detail="Balance cannot be negative")
 

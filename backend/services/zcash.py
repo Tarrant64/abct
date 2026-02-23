@@ -66,8 +66,7 @@ class ZCashService:
         try:
             client = get_client("blockchair_zec", timeout=30.0)
             response = await client.get(
-                f"{self.base_url}/dashboards/address/{address}",
-                timeout=30.0
+                f"{self.base_url}/dashboards/address/{address}"
             )
 
             if response.status_code == 400:
@@ -123,8 +122,7 @@ class ZCashService:
         try:
             client = get_client("blockchair_zec", timeout=30.0)
             response = await client.get(
-                f"{self.base_url}/stats",
-                timeout=30.0
+                f"{self.base_url}/stats"
             )
 
             if response.status_code == 429:
@@ -198,8 +196,7 @@ class ZCashService:
             client = get_client("blockchair_zec", timeout=30.0)
             response = await client.get(
                 f"{self.base_url}/dashboards/address/{address}",
-                params={'transaction_details': 'true'},
-                timeout=30.0
+                params={'transaction_details': 'true'}
             )
 
             if response.status_code == 429:

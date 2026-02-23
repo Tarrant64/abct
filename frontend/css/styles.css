@@ -13395,6 +13395,314 @@ body.privacy-mode a[data-href] {
   PRIVACY & ZK PAGE
 ===============================================================================*/
 
+/* Section containers */
+.privacy-section {
+    margin-bottom: 28px;
+}
+
+.privacy-section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.privacy-section-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+}
+
+.privacy-section-header .section-info-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    cursor: help;
+    user-select: none;
+}
+
+.privacy-section-header .section-info-btn .info-tooltip {
+    display: none;
+    position: absolute;
+    top: 26px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 320px;
+    padding: 12px 14px;
+    background: var(--bg-card, #1a1a2e);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    z-index: 100;
+    white-space: normal;
+}
+
+.privacy-section-header .section-info-btn:hover .info-tooltip {
+    display: block;
+}
+
+/* Loading & empty states */
+.privacy-loading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 20px 0;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.privacy-empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-secondary);
+}
+
+.privacy-empty-state .empty-icon {
+    font-size: 2.5rem;
+    margin-bottom: 12px;
+    opacity: 0.5;
+}
+
+.privacy-empty-state h4 {
+    margin: 0 0 8px;
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+.privacy-empty-state p {
+    margin: 0 0 16px;
+    font-size: 13px;
+}
+
+.privacy-empty-state a {
+    color: var(--accent-success);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.privacy-empty-state a:hover {
+    text-decoration: underline;
+}
+
+/* Analysis table */
+.privacy-analysis-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.privacy-analysis-table thead th {
+    text-align: left;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    border-bottom: 2px solid var(--border-color);
+}
+
+.privacy-analysis-table tbody td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+    vertical-align: middle;
+}
+
+.privacy-analysis-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.privacy-analysis-table tbody tr:hover td {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* Wallet name cell with icon */
+.wallet-name-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.wallet-name-cell .wallet-chain-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.wallet-chain-icon-placeholder {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--bg-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+/* Score detail panel (expandable row) */
+.score-detail-panel {
+    padding: 16px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+}
+
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    font-size: 13px;
+}
+
+.detail-row + .detail-row {
+    border-top: 1px solid var(--border-color);
+}
+
+.detail-label {
+    color: var(--text-secondary);
+}
+
+.detail-value {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+/* Recommendations */
+.recommendations {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+}
+
+.recommendations h5 {
+    margin: 0 0 8px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+}
+
+.rec-item {
+    display: flex;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 13px;
+    color: var(--text-primary);
+    line-height: 1.5;
+}
+
+/* Action buttons (Check Score / Set Balance) */
+.btn-check-score,
+.btn-set-balance {
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.btn-check-score:hover,
+.btn-set-balance:hover {
+    border-color: var(--accent-success);
+    background: rgba(0, 210, 106, 0.08);
+    color: var(--accent-success);
+}
+
+/* XMR Balance Modal */
+.privacy-modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.privacy-modal-overlay.active {
+    display: flex;
+}
+
+.privacy-modal {
+    background: var(--bg-card, #1a1a2e);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 28px;
+    max-width: 440px;
+    width: 90%;
+}
+
+.privacy-modal h3 {
+    margin: 0 0 8px;
+    color: var(--text-primary);
+}
+
+.privacy-modal p {
+    margin: 0 0 16px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.privacy-modal label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.privacy-modal input[type="number"] {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.privacy-modal input[type="number"]:focus {
+    outline: none;
+    border-color: var(--accent-success);
+    box-shadow: 0 0 0 2px rgba(0, 210, 106, 0.15);
+}
+
+.privacy-modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
 /* Score badges — coloured pill showing privacy level */
 .privacy-score-badge {
     display: inline-flex;
@@ -13546,7 +13854,87 @@ body.privacy-mode a[data-href] {
     color: #ffc107;
 }
 
-/* Light theme overrides */
+/* Light theme overrides — privacy layout */
+[data-theme="light"] .privacy-section-header {
+    border-bottom-color: #e5e7eb;
+}
+
+[data-theme="light"] .privacy-section-header .section-info-btn .info-tooltip {
+    background: #ffffff;
+    border-color: #e5e7eb;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    color: #6b7280;
+}
+
+[data-theme="light"] .privacy-analysis-table thead th {
+    color: #6b7280;
+    border-bottom-color: #e5e7eb;
+}
+
+[data-theme="light"] .privacy-analysis-table tbody td {
+    border-bottom-color: #f3f4f6;
+    color: #1f2937;
+}
+
+[data-theme="light"] .privacy-analysis-table tbody tr:hover td {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+[data-theme="light"] .score-detail-panel {
+    background: #f9fafb;
+}
+
+[data-theme="light"] .detail-row + .detail-row {
+    border-top-color: #e5e7eb;
+}
+
+[data-theme="light"] .detail-label {
+    color: #6b7280;
+}
+
+[data-theme="light"] .detail-value {
+    color: #1f2937;
+}
+
+[data-theme="light"] .recommendations {
+    border-top-color: #e5e7eb;
+}
+
+[data-theme="light"] .btn-check-score,
+[data-theme="light"] .btn-set-balance {
+    background: #ffffff;
+    border-color: #e5e7eb;
+    color: #374151;
+}
+
+[data-theme="light"] .btn-check-score:hover,
+[data-theme="light"] .btn-set-balance:hover {
+    border-color: #00b894;
+    color: #00b894;
+    background: rgba(0, 184, 148, 0.06);
+}
+
+[data-theme="light"] .privacy-modal {
+    background: #ffffff;
+    border-color: #e5e7eb;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="light"] .privacy-modal input[type="number"] {
+    background: #f9fafb;
+    border-color: #e5e7eb;
+    color: #1f2937;
+}
+
+[data-theme="light"] .privacy-modal input[type="number"]:focus {
+    border-color: #00b894;
+}
+
+[data-theme="light"] .wallet-chain-icon-placeholder {
+    background: #f3f4f6;
+    color: #9ca3af;
+}
+
 [data-theme="light"] .privacy-card {
     background: #ffffff;
     border-color: #e5e7eb;
@@ -13587,7 +13975,22 @@ body.privacy-mode a[data-href] {
     border-color: rgba(0, 184, 148, 0.3);
 }
 
-/* Cypherpunk1 theme overrides */
+/* Cypherpunk1 theme overrides — privacy layout */
+[data-theme="cypherpunk1"] .btn-check-score:hover,
+[data-theme="cypherpunk1"] .btn-set-balance:hover {
+    border-color: #00d4ff;
+    color: #00d4ff;
+    background: rgba(0, 212, 255, 0.08);
+}
+
+[data-theme="cypherpunk1"] .privacy-analysis-table tbody tr:hover td {
+    background: rgba(0, 212, 255, 0.03);
+}
+
+[data-theme="cypherpunk1"] .score-detail-panel {
+    background: rgba(0, 212, 255, 0.04);
+}
+
 [data-theme="cypherpunk1"] .privacy-score-badge.score-protected {
     color: #00d4ff;
     background: rgba(0, 212, 255, 0.15);
@@ -13609,7 +14012,22 @@ body.privacy-mode a[data-href] {
     background: rgba(0, 212, 255, 0.03);
 }
 
-/* Ocean depths theme overrides */
+/* Ocean depths theme overrides — privacy layout */
+[data-theme="ocean-depths"] .btn-check-score:hover,
+[data-theme="ocean-depths"] .btn-set-balance:hover {
+    border-color: #06d6a0;
+    color: #06d6a0;
+    background: rgba(6, 214, 160, 0.08);
+}
+
+[data-theme="ocean-depths"] .privacy-analysis-table tbody tr:hover td {
+    background: rgba(6, 214, 160, 0.03);
+}
+
+[data-theme="ocean-depths"] .score-detail-panel {
+    background: rgba(6, 214, 160, 0.04);
+}
+
 [data-theme="ocean-depths"] .privacy-card:hover {
     border-color: #06d6a0;
     box-shadow: 0 0 12px rgba(6, 214, 160, 0.2);
@@ -13621,7 +14039,22 @@ body.privacy-mode a[data-href] {
     border-color: rgba(6, 214, 160, 0.3);
 }
 
-/* Sunset horizon theme overrides */
+/* Sunset horizon theme overrides — privacy layout */
+[data-theme="sunset-horizon"] .btn-check-score:hover,
+[data-theme="sunset-horizon"] .btn-set-balance:hover {
+    border-color: #06d6a0;
+    color: #06d6a0;
+    background: rgba(6, 214, 160, 0.08);
+}
+
+[data-theme="sunset-horizon"] .privacy-analysis-table tbody tr:hover td {
+    background: rgba(6, 214, 160, 0.03);
+}
+
+[data-theme="sunset-horizon"] .score-detail-panel {
+    background: rgba(6, 214, 160, 0.04);
+}
+
 [data-theme="sunset-horizon"] .privacy-card:hover {
     border-color: #06d6a0;
     box-shadow: 0 0 12px rgba(6, 214, 160, 0.2);

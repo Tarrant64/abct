@@ -66,8 +66,7 @@ class SecretNetworkService:
         try:
             client = get_client("secret_network", timeout=30.0)
             response = await client.get(
-                f"{self.base_url}/cosmos/bank/v1beta1/balances/{address}",
-                timeout=30.0
+                f"{self.base_url}/cosmos/bank/v1beta1/balances/{address}"
             )
 
             if response.status_code == 400:
