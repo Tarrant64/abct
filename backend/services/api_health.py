@@ -22,7 +22,7 @@ API_HEALTH_TESTS = {
     # Header-based: ("header", url, header_name)
     "blockfrost":    ("header", "https://cardano-mainnet.blockfrost.io/api/v0/health", "project_id"),
     "taptools":      ("header", "https://openapi.taptools.io/api/v1/token/mcap", "x-api-key"),
-    "moralis":       ("header", "https://deep-index.moralis.io/api/v2.2/resolve/unstoppabledomains/brad.crypto", "X-API-Key"),
+    "moralis":       ("header", "https://deep-index.moralis.io/api/v2.2/web3/version", "X-API-Key"),
     "coinmarketcap": ("header", "https://pro-api.coinmarketcap.com/v1/key/info", "X-CMC_PRO_API_KEY"),
     "nmkr":          ("header", "https://studio-api.nmkr.io/v2/GetCounts", "Authorization"),
     "coingecko":     ("header", "https://pro-api.coingecko.com/api/v3/ping", "x-cg-pro-api-key"),
