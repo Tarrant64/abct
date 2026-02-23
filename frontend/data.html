@@ -2414,13 +2414,13 @@
         // ============================================================
         let privacyTabInitted = false;
 
-        function initPrivacyTab() {
+        async function initPrivacyTab() {
             if (privacyTabInitted) return;
             privacyTabInitted = true;
             initAccordion();
-            initPrivacyPage();
-            initApprovalsSection();
-            initSpamSection();
+            await initPrivacyPage();
+            await initApprovalsSection();
+            await initSpamSection();
             setupXmrModal();
             injectLogokitTokensPrivacy();
         }
@@ -2571,8 +2571,8 @@
             try {
                 const resp = await authFetch('/privacy/wallet/' + walletId + '/score');
                 if (!resp || !resp.ok) {
-                    var errMsg = 'Could not load score.';
-                    try { var errBody = await resp.json(); errMsg = errBody.detail || errMsg; } catch (e2) {}
+                    let errMsg = 'Could not load score.';
+                    try { let errBody = await resp.json(); errMsg = errBody.detail || errMsg; } catch (e2) {}
                     setSafeHTML(detailPanel, '<p style="color: var(--text-secondary); font-size: 13px; margin: 0;">' + errMsg + '</p>');
                     detailRow.style.display = '';
                     if (triggerBtn) triggerBtn.textContent = 'Check Score';
@@ -2644,7 +2644,7 @@
                 const resp = await authFetch('/privacy/monero/set-balance', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ wallet_id: walletId, balance: parseFloat(balance) })
+                    body: JSON.stringify({ wallet_id: parseInt(walletId), balance: parseFloat(balance) })
                 });
                 if (resp && resp.ok) {
                     closeXmrModal();
@@ -2906,8 +2906,9 @@
             try {
                 const resp = await authFetch('/spam/scan');
                 if (!resp.ok) {
-                    const err = await resp.json();
-                    throw new Error(err.detail || 'Failed to scan for spam');
+                    let errMsg = 'Failed to scan for spam';
+                    try { const err = await resp.json(); errMsg = err.detail || errMsg; } catch(e2) {}
+                    throw new Error(errMsg);
                 }
                 const data = await resp.json();
                 spamDetectedTokens = data.spam_tokens || [];
@@ -2970,7 +2971,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ tokens: tokensToHide })
                 });
-                if (!resp.ok) { const err = await resp.json(); throw new Error(err.detail || 'Failed to hide tokens'); }
+                if (!resp.ok) { let errMsg = 'Failed to hide tokens'; try { const err = await resp.json(); errMsg = err.detail || errMsg; } catch(e2) {} throw new Error(errMsg); }
                 const result = await resp.json();
                 setSafeHTML(document.getElementById('spamResultsArea'), '<div style="padding: 16px; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); border-radius: 8px;"><p style="margin: 0; color: #10b981;">Successfully hidden ' + result.hidden_count + ' spam token' + (result.hidden_count !== 1 ? 's' : '') + '.</p></div>');
                 spamDetectedTokens = [];
@@ -2986,7 +2987,6 @@
                         hiddenCountEl.style.display = '';
                         if (showHiddenBtn.style.display === 'none') {
                             showHiddenBtn.style.display = '';
-                            showHiddenBtn.addEventListener('click', loadHiddenTokens);
                         }
                     }
                 } catch (e2) { /* ignore */ }
@@ -3040,9 +3040,9 @@
         async function unhideTokenInline(blockchain, address) {
             try {
                 const resp = await authFetch('/spam/unhide/' + encodeURIComponent(blockchain) + '/' + encodeURIComponent(address), { method: 'DELETE' });
-                if (!resp.ok) { const err = await resp.json(); throw new Error(err.detail || 'Failed to unhide token'); }
+                if (!resp.ok) { let errMsg = 'Failed to unhide token'; try { const err = await resp.json(); errMsg = err.detail || errMsg; } catch(e2) {} throw new Error(errMsg); }
                 // Reload hidden list
-                loadHiddenTokens();
+                await loadHiddenTokens();
                 // Update count
                 const hiddenCountEl = document.getElementById('spamHiddenCount');
                 try {
@@ -3082,7 +3082,7 @@
                 saveBtn.addEventListener('click', () => {
                     const walletId = document.getElementById('xmrWalletIdInput').value;
                     const balance = document.getElementById('xmrBalanceInput').value;
-                    if (!balance || isNaN(parseFloat(balance))) { alert('Please enter a valid balance.'); return; }
+                    if (!balance || isNaN(parseFloat(balance)) || parseFloat(balance) < 0) { alert('Please enter a valid balance.'); return; }
                     setMoneroBalance(walletId, balance);
                 });
             }

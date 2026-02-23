@@ -12,24 +12,17 @@ from services.http_client import get_client
 logger = logging.getLogger(__name__)
 
 MORALIS_API_BASE = "https://deep-index.moralis.io/api/v2.2"
+MORALIS_SOLANA_API_BASE = "https://solana-gateway.moralis.io"
 
 
 class MoralisService:
     """Service for detecting spam tokens using Moralis API."""
 
-    def __init__(self):
-        self.api_key = None
-
     async def _get_api_key(self) -> Optional[str]:
-        """Get Moralis API key from database or environment."""
-        if self.api_key:
-            return self.api_key
-
-        # Try to load from database first
+        """Get Moralis API key from database (fresh on every call)."""
         try:
             from routers.settings import get_effective_api_key
-            self.api_key = await get_effective_api_key('moralis')
-            return self.api_key
+            return await get_effective_api_key('moralis')
         except Exception as e:
             logger.error(f"Error loading Moralis API key: {e}")
             return None
@@ -266,17 +259,20 @@ class MoralisService:
         try:
             client = get_client("moralis", timeout=30.0)
             response = await client.get(
-                f"{MORALIS_API_BASE}/solana/account/{wallet_address}/tokens",
+                f"{MORALIS_SOLANA_API_BASE}/account/mainnet/{wallet_address}/tokens",
                 headers=headers
             )
 
             if response.status_code == 200:
                 data = response.json()
-                tokens = data.get("tokens", [])
+                # Response is a flat array of tokens
+                tokens = data if isinstance(data, list) else data.get("tokens", [])
                 spam_tokens = []
 
                 for token in tokens:
-                    if token.get("possible_spam", False):
+                    # Check both camelCase and snake_case field names
+                    is_spam = token.get("possibleSpam", False) or token.get("possible_spam", False)
+                    if is_spam:
                         spam_tokens.append({
                             "address": token.get("mint"),
                             "name": token.get("name"),

@@ -47,48 +47,44 @@ async def get_privacy_stats(user_id: int = Depends(verify_session)):
     Returns descriptions and network-level data (where available) for
     ZCash, Monero, and Secret Network.
     """
+    # Fetch ZCash shielded pool stats (best-effort, may return None)
+    zcash_pool_stats = None
     try:
-        # Fetch ZCash shielded pool stats (best-effort, may return None)
-        zcash_pool_stats = None
-        try:
-            zcash_pool_stats = await zcash_service.get_shielded_pool_stats()
-        except Exception as e:
-            logger.warning(f"Could not fetch ZCash pool stats: {e}")
-
-        return {
-            'zcash': {
-                'shielded_pool_stats': zcash_pool_stats,
-                'description': (
-                    'ZCash uses zk-SNARKs for optional privacy via shielded (z-) addresses. '
-                    'Transparent (t-) addresses are publicly visible like Bitcoin. '
-                    'Funds can be shielded by sending from a t-address to a z-address.'
-                ),
-                'privacy_type': 'optional',
-                'technology': 'zk-SNARKs (Sapling/Orchard)'
-            },
-            'monero': {
-                'always_private': True,
-                'description': (
-                    'All Monero transactions are private by design using ring signatures, '
-                    'stealth addresses, and RingCT. Wallet balances cannot be determined '
-                    'from public data. Users must enter their balance manually.'
-                ),
-                'privacy_type': 'mandatory',
-                'technology': 'Ring Signatures + Stealth Addresses + RingCT'
-            },
-            'secret_network': {
-                'description': (
-                    'Secret Network encrypts smart contract state using Intel SGX Trusted '
-                    'Execution Environments. Wallet (SCRT) balances are public, but smart '
-                    'contract interactions and SNIP-20 token balances are private.'
-                ),
-                'privacy_type': 'selective',
-                'technology': 'Intel SGX TEE'
-            }
-        }
+        zcash_pool_stats = await zcash_service.get_shielded_pool_stats()
     except Exception as e:
-        logger.error(f"Error fetching privacy stats: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch privacy statistics")
+        logger.warning(f"Could not fetch ZCash pool stats: {e}")
+
+    return {
+        'zcash': {
+            'shielded_pool_stats': zcash_pool_stats,
+            'description': (
+                'ZCash uses zk-SNARKs for optional privacy via shielded (z-) addresses. '
+                'Transparent (t-) addresses are publicly visible like Bitcoin. '
+                'Funds can be shielded by sending from a t-address to a z-address.'
+            ),
+            'privacy_type': 'optional',
+            'technology': 'zk-SNARKs (Sapling/Orchard)'
+        },
+        'monero': {
+            'always_private': True,
+            'description': (
+                'All Monero transactions are private by design using ring signatures, '
+                'stealth addresses, and RingCT. Wallet balances cannot be determined '
+                'from public data. Users must enter their balance manually.'
+            ),
+            'privacy_type': 'mandatory',
+            'technology': 'Ring Signatures + Stealth Addresses + RingCT'
+        },
+        'secret_network': {
+            'description': (
+                'Secret Network encrypts smart contract state using Intel SGX Trusted '
+                'Execution Environments. Wallet (SCRT) balances are public, but smart '
+                'contract interactions and SNIP-20 token balances are private.'
+            ),
+            'privacy_type': 'selective',
+            'technology': 'Intel SGX TEE'
+        }
+    }
 
 
 @router.get("/wallet/{wallet_id}/score")
@@ -184,15 +180,16 @@ async def get_wallets_privacy_summary(user_id: int = Depends(verify_session)):
     external API calls (use /wallet/{id}/score for detailed on-demand analysis).
     """
     try:
+        chains_list = list(PRIVACY_RELEVANT_CHAINS)
+        placeholders = ','.join('?' for _ in chains_list)
         async with aiosqlite.connect(str(DATABASE_PATH)) as db:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute(
-                """SELECT id, address, blockchain, label
+                f"""SELECT id, address, blockchain, label
                    FROM wallets
-                   WHERE user_id = ? AND blockchain IN
-                   ('zcash', 'monero', 'secret_network', 'ethereum', 'polygon', 'arbitrum', 'bsc')
+                   WHERE user_id = ? AND blockchain IN ({placeholders})
                    ORDER BY blockchain, id""",
-                (user_id,)
+                (user_id, *chains_list)
             )
             rows = await cursor.fetchall()
 
@@ -254,7 +251,8 @@ async def get_approval_wallets(user_id: int = Depends(verify_session)):
     Lightweight — no external API calls. Returns wallet metadata only.
     """
     try:
-        placeholders = ','.join(f"'{c}'" for c in APPROVAL_CHAINS)
+        chains_list = list(APPROVAL_CHAINS)
+        placeholders = ','.join('?' for _ in chains_list)
         async with aiosqlite.connect(str(DATABASE_PATH)) as db:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute(
@@ -262,7 +260,7 @@ async def get_approval_wallets(user_id: int = Depends(verify_session)):
                     FROM wallets
                     WHERE user_id = ? AND blockchain IN ({placeholders})
                     ORDER BY blockchain, id""",
-                (user_id,)
+                (user_id, *chains_list)
             )
             rows = await cursor.fetchall()
 
@@ -393,7 +391,7 @@ async def set_monero_balance(
 
     try:
         await clear_wallet_balances(wallet_id)
-        await save_balance(wallet_id, str(amount_xmr), 'XMR')
+        await save_balance(wallet_id, f"{amount_xmr:.12f}", 'XMR')
 
         return {
             'success': True,

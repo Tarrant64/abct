@@ -9,6 +9,7 @@ Read-only analysis — users are linked to revoke.cash to take action.
 
 import logging
 import time
+from datetime import datetime
 from typing import Optional, List, Dict
 
 from services.http_client import get_client
@@ -132,7 +133,6 @@ class ApprovalChecker:
             age_days = 0
             if block_timestamp:
                 try:
-                    from datetime import datetime
                     if 'T' in str(block_timestamp):
                         ts = datetime.fromisoformat(str(block_timestamp).replace('Z', '+00:00')).timestamp()
                     else:
