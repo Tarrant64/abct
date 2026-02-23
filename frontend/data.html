@@ -2471,51 +2471,65 @@
             setSafeHTML(el, msg ? '<p style="color: var(--text-secondary); font-size: 14px; padding: 16px 0;">' + msg + '</p>' : '');
         }
 
+        // Map blockchain key to display name and native symbol
+        const CHAIN_META = {
+            zcash: { name: 'ZCash', symbol: 'ZEC' },
+            monero: { name: 'Monero', symbol: 'XMR' },
+            secret_network: { name: 'Secret Network', symbol: 'SCRT' },
+            ethereum: { name: 'Ethereum', symbol: 'ETH' },
+            polygon: { name: 'Polygon', symbol: 'MATIC' },
+            arbitrum: { name: 'Arbitrum', symbol: 'ARB' },
+            bsc: { name: 'BNB Chain', symbol: 'BNB' }
+        };
+
         function renderPrivacyAnalysis(wallets) {
             const container = document.getElementById('privacyAnalysisContainer');
             if (!container) return;
 
             if (!wallets.length) {
-                setSafeHTML(container, '<div class="privacy-empty-state"><div class="empty-icon">&#128274;</div><h4>No privacy wallets found</h4><p>Add a ZCash, Monero, or Secret Network wallet to see analysis here.</p><a href="/wallets.html">Manage Wallets</a></div>');
+                setSafeHTML(container, '<div class="privacy-empty-state"><div class="empty-icon">&#128274;</div><h4>No privacy-relevant wallets found</h4><p>Add a ZCash, Monero, Secret Network, or EVM wallet to see privacy analysis here.</p><a href="/wallets.html">Manage Wallets</a></div>');
                 return;
             }
 
             let html = '<table class="privacy-analysis-table"><thead><tr>';
-            html += '<th>Wallet</th><th>Chain</th><th>Balance</th><th>Privacy Score</th><th>Actions</th>';
+            html += '<th>Wallet</th><th>Chain</th><th>Privacy Score</th><th>Description</th><th>Actions</th>';
             html += '</tr></thead><tbody id="privacyAnalysisTbody">';
 
             for (const w of wallets) {
-                const chainKey = (w.chain || '').toLowerCase();
+                const chainKey = (w.blockchain || '').toLowerCase();
+                const meta = CHAIN_META[chainKey] || { name: chainKey, symbol: chainKey.toUpperCase() };
                 const isMonero = chainKey === 'monero';
-                const symbol = (w.symbol || chainKey).toUpperCase();
-                const label = w.label || w.address_short || 'Wallet';
-                const balance = fmtNumber(w.balance, 8);
+                const wId = w.wallet_id;
+                const addrShort = w.address ? (w.address.substring(0, 8) + '...' + w.address.slice(-6)) : '';
+                const label = w.label || addrShort || 'Wallet';
 
                 let scoreCellHtml = '';
                 if (isMonero) {
                     scoreCellHtml = '<span class="privacy-score-badge score-protected">&#10003; Fully Private</span>';
-                } else if (typeof w.privacy_score === 'number') {
-                    const cls = scoreBadgeClass(w.privacy_score);
-                    scoreCellHtml = '<span class="privacy-score-badge ' + cls + '">' + w.privacy_score + '% ' + scoreBadgeLabel(w.privacy_score) + '</span>';
+                } else if (typeof w.static_privacy_score === 'number') {
+                    const cls = scoreBadgeClass(w.static_privacy_score);
+                    scoreCellHtml = '<span class="privacy-score-badge ' + cls + '">' + w.static_privacy_score + '% ' + scoreBadgeLabel(w.static_privacy_score) + '</span>';
                 } else {
-                    scoreCellHtml = '<span style="color: var(--text-secondary); font-size: 12px;">Not checked</span>';
+                    scoreCellHtml = '<span style="color: var(--text-secondary); font-size: 12px;">Click to check</span>';
                 }
 
                 let actionHtml = '';
                 if (isMonero) {
-                    actionHtml = '<button class="btn-set-balance" data-wallet-id="' + w.id + '" data-action="set-xmr-balance-row">Set Balance</button>';
-                } else {
-                    actionHtml = '<button class="btn-check-score" data-wallet-id="' + w.id + '" data-action="check-score">Check Score</button>';
+                    actionHtml = '<button class="btn-set-balance" data-wallet-id="' + wId + '" data-action="set-xmr-balance-row">Set Balance</button>';
+                } else if (w.static_privacy_score === null || w.static_privacy_score === undefined) {
+                    actionHtml = '<button class="btn-check-score" data-wallet-id="' + wId + '" data-action="check-score">Check Score</button>';
                 }
 
-                html += '<tr data-wallet-row="' + w.id + '">';
-                html += '<td><div class="wallet-name-cell"><img src="' + privacyLogoUrl(symbol, 24) + '" alt="' + symbol + '" class="wallet-chain-icon" data-fallback-text="' + symbol[0] + '"><span>' + label + '</span></div></td>';
-                html += '<td>' + (w.chain_name || chainKey) + '</td>';
-                html += '<td>' + balance + ' ' + symbol + '</td>';
-                html += '<td id="score-cell-' + w.id + '">' + scoreCellHtml + '</td>';
+                const descText = w.description || '';
+
+                html += '<tr data-wallet-row="' + wId + '">';
+                html += '<td><div class="wallet-name-cell"><img src="' + privacyLogoUrl(meta.symbol, 24) + '" alt="' + meta.symbol + '" class="wallet-chain-icon" data-fallback-text="' + meta.symbol[0] + '"><span>' + label + '</span></div></td>';
+                html += '<td>' + meta.name + '</td>';
+                html += '<td id="score-cell-' + wId + '">' + scoreCellHtml + '</td>';
+                html += '<td style="font-size: 12px; color: var(--text-secondary); max-width: 280px;">' + descText + '</td>';
                 html += '<td>' + actionHtml + '</td>';
                 html += '</tr>';
-                html += '<tr id="detail-row-' + w.id + '" style="display:none;"><td colspan="5"><div class="score-detail-panel" id="detail-panel-' + w.id + '"></div></td></tr>';
+                html += '<tr id="detail-row-' + wId + '" style="display:none;"><td colspan="5"><div class="score-detail-panel" id="detail-panel-' + wId + '"></div></td></tr>';
             }
             html += '</tbody></table>';
 
@@ -2557,41 +2571,48 @@
             try {
                 const resp = await authFetch('/privacy/wallet/' + walletId + '/score');
                 if (!resp || !resp.ok) {
-                    setSafeHTML(detailPanel, '<p style="color: var(--text-secondary); font-size: 13px; margin: 0;">Could not load score. The privacy endpoint may not be available.</p>');
+                    var errMsg = 'Could not load score.';
+                    try { var errBody = await resp.json(); errMsg = errBody.detail || errMsg; } catch (e2) {}
+                    setSafeHTML(detailPanel, '<p style="color: var(--text-secondary); font-size: 13px; margin: 0;">' + errMsg + '</p>');
                     detailRow.style.display = '';
                     if (triggerBtn) triggerBtn.textContent = 'Check Score';
                     return;
                 }
                 const result = await resp.json();
 
-                if (scoreCell && typeof result.score === 'number') {
-                    const cls = scoreBadgeClass(result.score);
+                // Update score badge — backend returns privacy_score
+                if (scoreCell && typeof result.privacy_score === 'number') {
+                    const cls = scoreBadgeClass(result.privacy_score);
                     scoreCell.innerHTML = '';
                     const badge = document.createElement('span');
                     badge.className = 'privacy-score-badge ' + cls;
-                    badge.textContent = result.score + '% ' + scoreBadgeLabel(result.score);
+                    badge.textContent = result.privacy_score + '% ' + scoreBadgeLabel(result.privacy_score);
                     scoreCell.appendChild(badge);
                 }
 
-                let detailHtml = '';
-                if (result.details) {
-                    const d = result.details;
-                    detailHtml += '<div>';
-                    if (d.shield_events !== undefined) detailHtml += '<div class="detail-row"><span class="detail-label">Shield Events</span><span class="detail-value">' + d.shield_events + '</span></div>';
-                    if (d.shielded_pct !== undefined) detailHtml += '<div class="detail-row"><span class="detail-label">Holdings Shielded</span><span class="detail-value">' + d.shielded_pct + '%</span></div>';
-                    if (d.railgun_interactions !== undefined) detailHtml += '<div class="detail-row"><span class="detail-label">Railgun Interactions</span><span class="detail-value">' + d.railgun_interactions + '</span></div>';
-                    if (d.transparent_balance !== undefined) detailHtml += '<div class="detail-row"><span class="detail-label">Transparent Balance</span><span class="detail-value">' + fmtNumber(d.transparent_balance, 8) + '</span></div>';
-                    if (d.shielded_balance !== undefined) detailHtml += '<div class="detail-row"><span class="detail-label">Shielded Balance</span><span class="detail-value">' + fmtNumber(d.shielded_balance, 8) + '</span></div>';
+                // Build detail panel from flat backend fields
+                let detailHtml = '<div>';
+                if (result.railgun_tx_count !== undefined) {
+                    detailHtml += '<div class="detail-row"><span class="detail-label">Railgun Transactions</span><span class="detail-value">' + result.railgun_tx_count + '</span></div>';
+                }
+                if (result.protocol_interactions && result.protocol_interactions.length) {
+                    detailHtml += '<div class="detail-row"><span class="detail-label">Protocols Detected</span><span class="detail-value">' + result.protocol_interactions.join(', ') + '</span></div>';
+                }
+                if (result.has_privacy_usage !== undefined) {
+                    detailHtml += '<div class="detail-row"><span class="detail-label">Privacy Usage</span><span class="detail-value">' + (result.has_privacy_usage ? 'Yes' : 'None detected') + '</span></div>';
+                }
+                detailHtml += '</div>';
+
+                // Recommendation (singular string from backend)
+                if (result.recommendation) {
+                    detailHtml += '<div class="recommendations"><h5>Recommendation</h5>';
+                    detailHtml += '<div class="rec-item"><span>&#x2022;</span><span>' + result.recommendation + '</span></div>';
                     detailHtml += '</div>';
                 }
-                if (result.recommendations && result.recommendations.length) {
-                    detailHtml += '<div class="recommendations"><h5>Recommendations</h5>';
-                    for (const rec of result.recommendations) {
-                        detailHtml += '<div class="rec-item"><span>&#x2022;</span><span>' + rec + '</span></div>';
-                    }
-                    detailHtml += '</div>';
+                // Also support description field
+                if (result.description && !result.recommendation) {
+                    detailHtml += '<p style="color: var(--text-secondary); font-size: 13px; margin: 8px 0 0;">' + result.description + '</p>';
                 }
-                if (!detailHtml) detailHtml = '<p style="color: var(--text-secondary); font-size: 13px; margin: 0;">No additional details returned.</p>';
 
                 setSafeHTML(detailPanel, detailHtml);
                 detailRow.style.display = '';
