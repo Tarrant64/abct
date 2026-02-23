@@ -1869,6 +1869,27 @@
                 </div>
             </div>
 
+            <!-- Address Poisoning Scanner -->
+            <div class="privacy-section" id="sectionPoisoning">
+                <div class="privacy-section-header">
+                    <span class="section-icon">&#9888;</span>
+                    <h3>Address Poisoning Scanner</h3><span class="section-info-btn">i<span class="info-tooltip">Scans your transaction history locally for address poisoning attacks. Attackers send micro-transactions from lookalike addresses (matching first and last characters) hoping you copy the wrong address. No external API calls — all analysis runs on your stored transaction data.</span></span>
+                </div>
+                <div id="poisoningSectionContainer">
+                    <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px; flex-wrap: wrap;">
+                        <span id="poisoningStatus" style="color: var(--text-secondary); font-size: 14px;">Loading...</span>
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;">
+                        <button class="btn btn-primary" id="btnRunPoisoningScan" style="display: none;">Scan Wallets</button>
+                    </div>
+                    <div class="progress-bar-container" id="poisoningProgressBar" style="display: none;">
+                        <div class="progress-bar-fill" id="poisoningProgressFill" style="width: 0%;"></div>
+                    </div>
+                    <span id="poisoningProgressText" style="color: var(--text-secondary); font-size: 13px; display: none;"></span>
+                    <div id="poisoningResultsArea" style="margin-top: 12px;"></div>
+                </div>
+            </div>
+
         </div>
         <!-- End Security / Privacy Tab -->
 
@@ -2307,6 +2328,7 @@
             await initPrivacyPage();
             await initApprovalsSection();
             await initSpamSection();
+            await initPoisoningSection();
             setupXmrModal();
             injectLogokitTokensPrivacy();
         }
@@ -2946,6 +2968,129 @@
                 } catch (e2) { /* ignore */ }
             } catch (e) {
                 alert('Error: ' + e.message);
+            }
+        }
+
+        // ============================================================
+        // Address Poisoning Scanner
+        // ============================================================
+
+        async function initPoisoningSection() {
+            var statusEl = document.getElementById('poisoningStatus');
+            var scanBtn = document.getElementById('btnRunPoisoningScan');
+            try {
+                var resp = await authFetch('/wallets');
+                if (!resp.ok) throw new Error('Failed to fetch wallets');
+                var data = await resp.json();
+                var count = (data.wallets || data || []).length;
+                statusEl.textContent = count + ' wallet' + (count !== 1 ? 's' : '') + ' available to scan';
+                if (count > 0) {
+                    scanBtn.style.display = '';
+                    scanBtn.addEventListener('click', runPoisoningScan);
+                } else {
+                    statusEl.textContent = 'No wallets found. Add wallets to enable scanning.';
+                }
+            } catch (e) {
+                statusEl.textContent = 'Could not load wallet info.';
+                statusEl.style.color = 'var(--text-secondary)';
+            }
+        }
+
+        async function runPoisoningScan() {
+            var scanBtn = document.getElementById('btnRunPoisoningScan');
+            var progressBar = document.getElementById('poisoningProgressBar');
+            var progressFill = document.getElementById('poisoningProgressFill');
+            var progressText = document.getElementById('poisoningProgressText');
+            var resultsArea = document.getElementById('poisoningResultsArea');
+
+            scanBtn.disabled = true;
+            scanBtn.textContent = 'Scanning...';
+            progressBar.style.display = '';
+            progressText.style.display = '';
+            progressFill.style.width = '0%';
+            progressText.textContent = 'Analyzing transaction history...';
+            resultsArea.innerHTML = '';
+
+            // Animate progress bar with random increments up to 85%
+            var progress = 0;
+            var progressTimer = setInterval(function() {
+                if (progress < 85) {
+                    progress += Math.random() * 8 + 2;
+                    if (progress > 85) progress = 85;
+                    progressFill.style.width = Math.round(progress) + '%';
+                }
+            }, 400);
+
+            try {
+                var resp = await authFetch('/privacy/scan-poisoning', { method: 'POST' });
+                clearInterval(progressTimer);
+
+                if (!resp.ok) {
+                    var errMsg = 'Scan failed';
+                    try { var err = await resp.json(); errMsg = err.detail || errMsg; } catch(e2) {}
+                    throw new Error(errMsg);
+                }
+
+                var result = await resp.json();
+
+                // Snap to 100%
+                progressFill.style.width = '100%';
+                progressText.textContent = 'Scanned ' + result.wallets_scanned + ' wallet' + (result.wallets_scanned !== 1 ? 's' : '') + ', ' + (result.transactions_analyzed || 0).toLocaleString() + ' transactions analyzed';
+
+                if (result.suspicious_count === 0) {
+                    // Green success box
+                    resultsArea.innerHTML = '<div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 10px; padding: 16px; color: var(--success-color, #10b981); font-size: 14px; margin-top: 8px;">' +
+                        '<strong>No address poisoning detected.</strong> Your transaction history looks clean.' +
+                        '</div>';
+                } else {
+                    // Render report in monospace pre block + copy button
+                    var wrapper = document.createElement('div');
+                    wrapper.style.cssText = 'margin-top: 8px; position: relative;';
+
+                    var copyBtn = document.createElement('button');
+                    copyBtn.className = 'btn btn-secondary';
+                    copyBtn.style.cssText = 'margin-bottom: 8px; font-size: 12px; padding: 4px 12px;';
+                    copyBtn.textContent = 'Copy Report';
+                    copyBtn.setAttribute('data-action', 'copy-poisoning-report');
+                    wrapper.appendChild(copyBtn);
+
+                    var preEl = document.createElement('pre');
+                    preEl.style.cssText = 'background: var(--card-bg, rgba(42,42,74,0.5)); border: 1px solid var(--border-color, rgba(255,255,255,0.1)); border-radius: 10px; padding: 16px; font-size: 12px; line-height: 1.5; overflow-x: auto; white-space: pre-wrap; word-break: break-all; color: var(--text-primary, #e0e0e0); max-height: 500px; overflow-y: auto;';
+                    preEl.textContent = result.report_text;
+                    wrapper.appendChild(preEl);
+
+                    resultsArea.appendChild(wrapper);
+
+                    // Attach copy listener using data-action pattern (DOMPurify safe)
+                    wrapper.querySelector('[data-action="copy-poisoning-report"]').addEventListener('click', function() {
+                        navigator.clipboard.writeText(result.report_text).then(function() {
+                            copyBtn.textContent = 'Copied!';
+                            setTimeout(function() { copyBtn.textContent = 'Copy Report'; }, 2000);
+                        }).catch(function() {
+                            // Fallback
+                            var ta = document.createElement('textarea');
+                            ta.value = result.report_text;
+                            ta.style.cssText = 'position:fixed;left:-9999px;';
+                            document.body.appendChild(ta);
+                            ta.select();
+                            document.execCommand('copy');
+                            document.body.removeChild(ta);
+                            copyBtn.textContent = 'Copied!';
+                            setTimeout(function() { copyBtn.textContent = 'Copy Report'; }, 2000);
+                        });
+                    });
+                }
+
+                scanBtn.textContent = 'Scan Again';
+                scanBtn.disabled = false;
+
+            } catch (e) {
+                clearInterval(progressTimer);
+                progressFill.style.width = '0%';
+                progressText.textContent = 'Scan failed: ' + e.message;
+                progressText.style.color = 'var(--error-color, #ef4444)';
+                scanBtn.textContent = 'Scan Wallets';
+                scanBtn.disabled = false;
             }
         }
 

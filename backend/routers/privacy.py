@@ -8,11 +8,13 @@ Endpoints:
     POST /privacy/monero/set-balance             - Set manual XMR balance for a Monero wallet
     GET  /privacy/approvals/wallets              - List EVM wallets supporting approval checks
     GET  /privacy/approvals/wallet/{wallet_id}   - On-demand per-wallet approval analysis
+    POST /privacy/scan-poisoning                 - Scan transaction history for address poisoning
 """
 
 import logging
 import sys
 import os
+from datetime import datetime, timezone
 from typing import Optional
 
 import aiosqlite
@@ -36,6 +38,13 @@ logger = logging.getLogger(__name__)
 PRIVACY_RELEVANT_CHAINS = {
     'zcash', 'monero', 'secret_network',
     'ethereum', 'polygon', 'arbitrum', 'bsc'
+}
+
+# Dust thresholds per chain for address poisoning detection
+DUST_THRESHOLDS = {
+    'ethereum': 0.001, 'polygon': 0.001, 'base': 0.001,
+    'arbitrum': 0.001, 'bsc': 0.001, 'cardano': 2.0,
+    'solana': 0.001, 'bitcoin': 0.00001, 'algorand': 0.001,
 }
 
 
@@ -343,6 +352,297 @@ async def get_wallet_approvals(wallet_id: int, user_id: int = Depends(verify_ses
     await set_cache(cache_key, response, CACHE_TTL_WARM, user_id=user_id)
 
     return response
+
+
+# ── Address Poisoning Scanner ────────────────────────────────────────
+
+
+def _is_lookalike(addr: str, known: str, prefix_len: int = 4, suffix_len: int = 4) -> bool:
+    """Check if addr mimics known by sharing first N and last N characters."""
+    if not addr or not known or addr == known:
+        return False
+    if len(addr) < prefix_len + suffix_len or len(known) < prefix_len + suffix_len:
+        return False
+    return (addr[:prefix_len] == known[:prefix_len]
+            and addr[-suffix_len:] == known[-suffix_len:])
+
+
+async def _scan_address_poisoning(user_id: int) -> dict:
+    """Scan all user transaction history for address poisoning patterns."""
+    ROW_CAP = 50_000
+
+    async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+        db.row_factory = aiosqlite.Row
+
+        # 1. Get all user wallets
+        cursor = await db.execute(
+            "SELECT id, address, blockchain, label FROM wallets WHERE user_id = ?",
+            (user_id,)
+        )
+        wallets = [dict(r) for r in await cursor.fetchall()]
+
+        if not wallets:
+            return {
+                'wallets_scanned': 0,
+                'transactions_analyzed': 0,
+                'suspicious_count': 0,
+                'high_confidence': [],
+                'medium_confidence': [],
+                'low_confidence': [],
+                'report_text': _build_report([], [], [], 0, 0, 0),
+                'scan_date': datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC'),
+            }
+
+        wallet_map = {}  # id -> {address, blockchain, label}
+        own_addresses = set()  # user's own wallet addresses (lowercased)
+        for w in wallets:
+            wallet_map[w['id']] = w
+            own_addresses.add(w['address'].lower())
+
+        wallet_ids = [w['id'] for w in wallets]
+        placeholders = ','.join('?' for _ in wallet_ids)
+
+        # 2. Query V1 transaction_history
+        cursor = await db.execute(
+            f"""SELECT wallet_id, blockchain, tx_hash, tx_time, direction,
+                       amount, token_symbol, from_address, to_address
+                FROM transaction_history
+                WHERE user_id = ?
+                ORDER BY tx_time DESC
+                LIMIT ?""",
+            (user_id, ROW_CAP)
+        )
+        v1_rows = [dict(r) for r in await cursor.fetchall()]
+
+        # 3. Query V2 engine_events
+        cursor = await db.execute(
+            f"""SELECT chain, tx_id, direction, amount, asset_id,
+                       counterparty, block_time, account_id
+                FROM engine_events
+                WHERE user_id = ?
+                ORDER BY block_time DESC
+                LIMIT ?""",
+            (user_id, ROW_CAP)
+        )
+        v2_rows = [dict(r) for r in await cursor.fetchall()]
+
+    # 4. Build "known good" address book — addresses user has SENT to
+    known_good = set(own_addresses)
+    for row in v1_rows:
+        if row.get('direction') == 'sent' and row.get('to_address'):
+            known_good.add(row['to_address'].lower())
+    for row in v2_rows:
+        if row.get('direction') == 'out' and row.get('counterparty'):
+            known_good.add(row['counterparty'].lower())
+
+    # 5. Normalize incoming transactions from both sources, dedup by tx_hash
+    seen_hashes = set()
+    incoming_txs = []
+
+    for row in v1_rows:
+        if row.get('direction') != 'received':
+            continue
+        tx_hash = (row.get('tx_hash') or '').lower()
+        if tx_hash in seen_hashes:
+            continue
+        seen_hashes.add(tx_hash)
+        sender = (row.get('from_address') or '').lower()
+        if not sender:
+            continue
+        try:
+            amount = float(row.get('amount') or 0)
+        except (ValueError, TypeError):
+            amount = 0
+        wallet = wallet_map.get(row.get('wallet_id'), {})
+        incoming_txs.append({
+            'tx_hash': row.get('tx_hash', ''),
+            'sender': sender,
+            'amount': amount,
+            'token': row.get('token_symbol') or '',
+            'blockchain': row.get('blockchain') or '',
+            'tx_time': row.get('tx_time') or '',
+            'wallet_label': wallet.get('label') or '',
+            'wallet_address': wallet.get('address') or '',
+        })
+
+    for row in v2_rows:
+        if row.get('direction') != 'in':
+            continue
+        tx_hash = (row.get('tx_id') or '').lower()
+        if tx_hash in seen_hashes:
+            continue
+        seen_hashes.add(tx_hash)
+        sender = (row.get('counterparty') or '').lower()
+        if not sender:
+            continue
+        try:
+            amount = float(row.get('amount') or 0)
+        except (ValueError, TypeError):
+            amount = 0
+        chain = row.get('chain') or ''
+        asset_id = row.get('asset_id') or ''
+        token = chain.upper() if asset_id == 'native' else asset_id
+        # Resolve wallet label from account_id
+        account_id = (row.get('account_id') or '').lower()
+        wallet_label = ''
+        wallet_address = ''
+        for w in wallets:
+            if w['address'].lower() == account_id:
+                wallet_label = w.get('label') or ''
+                wallet_address = w['address']
+                break
+        bt = row.get('block_time')
+        tx_time = datetime.fromtimestamp(bt, tz=timezone.utc).strftime('%Y-%m-%d %H:%M') if bt else ''
+        incoming_txs.append({
+            'tx_hash': row.get('tx_id', ''),
+            'sender': sender,
+            'amount': amount,
+            'token': token,
+            'blockchain': chain,
+            'tx_time': tx_time,
+            'wallet_label': wallet_label,
+            'wallet_address': wallet_address,
+        })
+
+    # 6. Detect suspicious transactions
+    high_confidence = []
+    medium_confidence = []
+    low_confidence = []
+
+    for tx in incoming_txs:
+        sender = tx['sender']
+
+        # Skip if sender is in known_good
+        if sender in known_good:
+            continue
+
+        chain = tx['blockchain']
+        dust_threshold = DUST_THRESHOLDS.get(chain, 0.001)
+        amount = tx['amount']
+
+        is_dust = 0 < amount < dust_threshold
+        is_zero = amount == 0
+
+        # Check lookalike against all known_good addresses
+        mimics = None
+        for kg in known_good:
+            if _is_lookalike(sender, kg):
+                mimics = kg
+                break
+
+        if not is_dust and not is_zero and not mimics:
+            continue
+
+        entry = {
+            'wallet_label': tx['wallet_label'],
+            'wallet_address': tx['wallet_address'],
+            'chain': chain,
+            'tx_time': tx['tx_time'],
+            'tx_hash': tx['tx_hash'],
+            'sender': tx['sender'],
+            'amount': tx['amount'],
+            'token': tx['token'],
+            'mimics': mimics,
+        }
+
+        if mimics and (is_dust or is_zero):
+            entry['reason'] = 'Lookalike + ' + ('Zero-value' if is_zero else 'Dust')
+            high_confidence.append(entry)
+        elif mimics:
+            entry['reason'] = 'Lookalike address'
+            medium_confidence.append(entry)
+        elif is_zero:
+            entry['reason'] = 'Zero-value transfer'
+            medium_confidence.append(entry)
+        elif is_dust:
+            entry['reason'] = 'Dust from unknown sender'
+            low_confidence.append(entry)
+
+    total_suspicious = len(high_confidence) + len(medium_confidence) + len(low_confidence)
+    total_txs = len(incoming_txs) + len([r for r in v1_rows if r.get('direction') == 'sent']) + len([r for r in v2_rows if r.get('direction') == 'out'])
+
+    report = _build_report(
+        high_confidence, medium_confidence, low_confidence,
+        len(wallets), total_txs, total_suspicious
+    )
+
+    return {
+        'wallets_scanned': len(wallets),
+        'transactions_analyzed': total_txs,
+        'suspicious_count': total_suspicious,
+        'high_confidence': high_confidence,
+        'medium_confidence': medium_confidence,
+        'low_confidence': low_confidence,
+        'report_text': report,
+        'scan_date': datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC'),
+    }
+
+
+def _build_report(high, medium, low, wallets_count, tx_count, suspicious_count) -> str:
+    """Build plaintext report for address poisoning scan."""
+    lines = []
+    lines.append('=== ABCT Address Poisoning Scan Report ===')
+    lines.append(f'Date: {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}')
+    lines.append(f'Wallets scanned: {wallets_count}')
+    lines.append(f'Transactions analyzed: {tx_count:,}')
+    lines.append(f'Suspicious items found: {suspicious_count}')
+    lines.append('')
+
+    def _format_entries(entries, label):
+        lines.append(f'--- {label} ---')
+        lines.append('')
+        if not entries:
+            lines.append('  (none)')
+            lines.append('')
+            return
+        for i, e in enumerate(entries, 1):
+            lines.append(f'[{i}] {e.get("reason", "Suspicious")}')
+            if e.get('wallet_label') or e.get('wallet_address'):
+                addr_short = e['wallet_address']
+                if len(addr_short) > 12:
+                    addr_short = addr_short[:6] + '...' + addr_short[-4:]
+                label = e.get('wallet_label') or 'Unnamed'
+                lines.append(f'    Wallet: {label} ({addr_short})')
+            lines.append(f'    Chain: {e.get("chain", "unknown")}')
+            if e.get('tx_time'):
+                lines.append(f'    Date: {e["tx_time"]}')
+            if e.get('tx_hash'):
+                tx_display = e['tx_hash']
+                if len(tx_display) > 16:
+                    tx_display = tx_display[:10] + '...'
+                lines.append(f'    TX: {tx_display}')
+            lines.append(f'    From: {e.get("sender", "unknown")}')
+            amt = e.get('amount', 0)
+            token = e.get('token', '')
+            lines.append(f'    Amount: {amt} {token}')
+            if e.get('mimics'):
+                lines.append(f'    Mimics: {e["mimics"]}')
+                lines.append(f'    WARNING: This address matches the first 4 and last 4 characters of an address you have sent funds to.')
+            lines.append('')
+
+    _format_entries(high, 'HIGH CONFIDENCE')
+    _format_entries(medium, 'MEDIUM CONFIDENCE')
+    _format_entries(low, 'LOW CONFIDENCE')
+
+    lines.append('=== End of Report ===')
+    return '\n'.join(lines)
+
+
+@router.post("/scan-poisoning")
+async def scan_address_poisoning(user_id: int = Depends(verify_session)):
+    """
+    Scan all user transaction history for address poisoning attempts.
+
+    Analyzes V1 transaction_history and V2 engine_events locally (no external
+    API calls) to detect dust attacks, zero-value transfers, and lookalike
+    addresses that mimic addresses the user has previously sent funds to.
+    """
+    try:
+        result = await _scan_address_poisoning(user_id)
+        return result
+    except Exception as e:
+        logger.error(f"Error scanning for address poisoning for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to run address poisoning scan")
 
 
 class MoneroBalanceUpdate(BaseModel):
