@@ -916,6 +916,7 @@
                 <a href="#exchanges">Exchange Integration</a>
                 <a href="#defi">DeFi Protocol Support</a>
                 <a href="#pricing">Pricing System</a>
+                <a href="#security">Security Tools</a>
                 <a href="#features">Feature Matrix</a>
                 <a href="#setup">Recommended Setup</a>
                 <a href="#faq">FAQ</a>
@@ -2081,7 +2082,67 @@
                     </div>
                 </section>
 
-                <!-- 8. Feature Matrix -->
+                <!-- 8. Security Tools -->
+                <section id="security">
+                    <h2>Security Tools</h2>
+                    <p>ABCT includes four dedicated wallet security scanners, accessible from the <strong>Data &amp; Security</strong> tab. All scanners are read-only &mdash; they analyze your wallets but never modify wallet state, revoke approvals, or move funds.</p>
+
+                    <div class="info-callout">
+                        <span class="callout-icon">&#128274;</span>
+                        <div>Find all security tools under <strong>Data &amp; Security</strong> in the main navigation. Each scanner runs on-demand when you click it.</div>
+                    </div>
+
+                    <h3>Token Approval Security</h3>
+                    <p>When you interact with DeFi protocols, you grant ERC-20 token approvals that let smart contracts spend your tokens. Some approvals are set to <strong>unlimited</strong> amounts and remain active even after you stop using a protocol. If that contract is later compromised, an attacker can drain the approved tokens from your wallet.</p>
+                    <p>This scanner checks your EVM wallets for:</p>
+                    <p>&bull; <strong>Unlimited approvals</strong> &mdash; contracts authorized to spend your entire token balance<br>
+                    &bull; <strong>Stale approvals</strong> &mdash; active approvals for contracts you haven't interacted with recently<br>
+                    &bull; <strong>Risky spenders</strong> &mdash; contracts flagged by security databases</p>
+                    <p>To actually revoke an approval, use a tool like <a href="https://revoke.cash" target="_blank" rel="noopener noreferrer" style="color: var(--accent-success, #00d26a);">revoke.cash</a> &mdash; ABCT identifies the risks, but revoking requires a wallet transaction.</p>
+
+                    <div class="chain-grid" style="margin: 16px 0;">
+                        <div class="chain-card" style="padding: 12px 16px;">
+                            <strong>Supported chains:</strong> Ethereum, Polygon, BSC, Arbitrum, Base, Avalanche, Optimism
+                            <br><span class="chain-badge" style="background: rgba(255,193,7,0.15); color: #ffc107; margin-top: 8px; display: inline-block;">Requires Moralis API key (free tier)</span>
+                        </div>
+                    </div>
+
+                    <h3>Spam Token Detection</h3>
+                    <p>Scammers airdrop worthless or malicious tokens to active wallets. These spam tokens clutter your portfolio and can be dangerous if you try to interact with them (some contain malicious approval logic).</p>
+                    <p>This scanner identifies known spam and scam tokens using Moralis&rsquo;s spam classification database. Detected spam tokens can be hidden from your portfolio display with one click. Hiding is display-only &mdash; the tokens still exist in your wallet on-chain, but they won&rsquo;t affect your portfolio valuation or charts.</p>
+
+                    <div class="chain-grid" style="margin: 16px 0;">
+                        <div class="chain-card" style="padding: 12px 16px;">
+                            <strong>Supported chains:</strong> Ethereum, Polygon, BSC, Arbitrum, Base, Avalanche, Optimism, Solana
+                            <br><span class="chain-badge" style="background: rgba(255,193,7,0.15); color: #ffc107; margin-top: 8px; display: inline-block;">Requires Moralis API key (free tier)</span>
+                        </div>
+                    </div>
+
+                    <h3>Address Poisoning Scanner</h3>
+                    <p>Address poisoning is an attack where a scammer sends tiny (dust) transactions to your wallet from an address that looks almost identical to one you&rsquo;ve transacted with before. The goal is to trick you into copying the wrong address from your transaction history when sending funds.</p>
+                    <p>This scanner analyzes your transaction history for:</p>
+                    <p>&bull; <strong>Zero-value transfers</strong> &mdash; transactions with no real value, planted to appear in your history<br>
+                    &bull; <strong>Lookalike addresses</strong> &mdash; addresses that share the same first and last characters as your real contacts<br>
+                    &bull; <strong>Dust deposits</strong> &mdash; tiny amounts from unknown addresses designed to seed your history</p>
+
+                    <div class="info-callout success">
+                        <span class="callout-icon">&#10003;</span>
+                        <div><strong>No API key needed.</strong> This scanner works by analyzing locally-cached transaction data across all connected chains.</div>
+                    </div>
+
+                    <h3>Cardano Shield Scanner</h3>
+                    <p>Cardano has its own token threat ecosystem. This scanner cross-references your Cardano native tokens against two authoritative sources:</p>
+                    <p>&bull; <strong>Shield Blacklist</strong> &mdash; a community-maintained list of known malicious or scam Cardano tokens<br>
+                    &bull; <strong>Cardano Foundation Token Registry</strong> &mdash; the official registry of verified legitimate tokens</p>
+                    <p>Tokens that appear on the blacklist or are absent from the registry are flagged with risk levels. The scanner generates a per-wallet threat report you can review.</p>
+
+                    <div class="info-callout success">
+                        <span class="callout-icon">&#10003;</span>
+                        <div><strong>No API key needed.</strong> Uses publicly available Shield and CF Token Registry data.</div>
+                    </div>
+                </section>
+
+                <!-- 9. Feature Matrix -->
                 <section id="features">
                     <h2>Feature Matrix</h2>
                     <p>What you can do at each API configuration level.</p>
@@ -2217,12 +2278,36 @@
                                     <td><span class="check">&#10003;</span></td>
                                     <td><span class="check">&#10003;</span></td>
                                 </tr>
+                                <tr>
+                                    <td>Token approval security (EVM)</td>
+                                    <td><span class="cross">&#10007;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>Spam token detection (EVM + SOL)</td>
+                                    <td><span class="cross">&#10007;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>Address poisoning scanner</td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                </tr>
+                                <tr>
+                                    <td>Cardano Shield threat scanner</td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                    <td><span class="check">&#10003;</span></td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
                 </section>
 
-                <!-- 9. Recommended Setup Guide -->
+                <!-- 10. Recommended Setup Guide -->
                 <section id="setup">
                     <h2>Recommended Setup</h2>
                     <p>For the best experience, add API keys in this priority order. Each step significantly improves data coverage.</p>
@@ -2272,7 +2357,7 @@
                     </div>
                 </section>
 
-                <!-- 10. FAQ / Troubleshooting -->
+                <!-- 11. FAQ / Troubleshooting -->
                 <section id="faq">
                     <h2>FAQ & Troubleshooting</h2>
 
@@ -2371,6 +2456,27 @@
                                 &bull; Purchase price (cost basis)<br>
                                 &bull; Transaction type (buy, sell, transfer, airdrop)</p>
                                 <p>Manual entries are combined with automatically-fetched transaction history to calculate your overall P&amp;L. You can also import a CSV file for bulk entry.</p>
+                            </div>
+                        </details>
+
+                        <details>
+                            <summary>What are the security scanning tools and where do I find them?</summary>
+                            <div class="faq-answer">
+                                <p>ABCT includes four built-in wallet security scanners, all accessible from the <strong>Data &amp; Security</strong> tab:</p>
+                                <p>&bull; <strong>Token Approval Security</strong> &mdash; scans ERC-20 approvals for unlimited spend, stale contracts, and risky spenders (requires Moralis API key)<br>
+                                &bull; <strong>Spam Token Detection</strong> &mdash; identifies known spam/scam tokens so you can hide them from your portfolio (requires Moralis API key)<br>
+                                &bull; <strong>Address Poisoning Scanner</strong> &mdash; detects dust attacks and lookalike addresses in your transaction history (no API key needed)<br>
+                                &bull; <strong>Cardano Shield Scanner</strong> &mdash; cross-refs tokens against the Shield blacklist and CF Token Registry (no API key needed)</p>
+                                <p>The Moralis API key is free to obtain. See the <a href="#security" style="color: var(--accent-success, #00d26a);">Security Tools</a> section above for full details.</p>
+                            </div>
+                        </details>
+
+                        <details>
+                            <summary>Do the security scanners modify my wallets or revoke approvals automatically?</summary>
+                            <div class="faq-answer">
+                                <p><strong>No.</strong> All four scanners are completely read-only. They analyze your wallet data and report findings, but they never modify wallet state, revoke token approvals, or move any funds.</p>
+                                <p>To revoke a risky token approval identified by the scanner, use a dedicated tool like <a href="https://revoke.cash" target="_blank" rel="noopener noreferrer" style="color: var(--accent-success, #00d26a);">revoke.cash</a> &mdash; this requires connecting your wallet and signing a transaction.</p>
+                                <p>Hiding spam tokens is display-only within ABCT &mdash; the tokens still exist on-chain but won&rsquo;t show in your portfolio valuation or charts.</p>
                             </div>
                         </details>
                     </div>
