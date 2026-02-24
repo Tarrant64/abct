@@ -487,9 +487,16 @@ class CostBasisEngine:
         return results
 
     async def compute_realized_pnl(
-        self, user_id: int, token_symbol: str = None
+        self, user_id: int, token_symbol: str = None,
+        start_date: str = None, end_date: str = None
     ) -> List[dict]:
         """Get realized P&L from realized_gains table.
+
+        Args:
+            user_id: User ID
+            token_symbol: Optional filter by token
+            start_date: Optional ISO date string (inclusive lower bound on disposal_date)
+            end_date: Optional ISO date string (inclusive upper bound on disposal_date)
 
         Returns list of realized gain/loss entries.
         """
@@ -507,9 +514,44 @@ class CostBasisEngine:
             if token_symbol:
                 query += " AND token_symbol = ?"
                 params.append(token_symbol.upper())
+            if start_date:
+                query += " AND disposal_date >= ?"
+                params.append(start_date)
+            if end_date:
+                query += " AND disposal_date <= ?"
+                params.append(end_date)
             query += " ORDER BY disposal_date DESC"
 
             cursor = await db.execute(query, params)
+            rows = await cursor.fetchall()
+
+        return [dict(row) for row in rows]
+
+    async def get_monthly_realized(self, user_id: int, months: int = 12) -> List[dict]:
+        """Aggregate realized gains by month.
+
+        Args:
+            user_id: User ID
+            months: Number of months to look back (default 12)
+
+        Returns:
+            List of dicts: [{month: "2026-02", realized: 1234.56, count: 5}, ...]
+        """
+        cutoff = (datetime.utcnow() - timedelta(days=months * 31)).strftime('%Y-%m-%d')
+
+        async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+            db.row_factory = aiosqlite.Row
+
+            cursor = await db.execute(
+                """SELECT strftime('%Y-%m', disposal_date) as month,
+                          COALESCE(SUM(gain_loss_usd), 0) as realized,
+                          COUNT(*) as count
+                   FROM realized_gains
+                   WHERE user_id = ? AND disposal_date >= ?
+                   GROUP BY month
+                   ORDER BY month ASC""",
+                (user_id, cutoff)
+            )
             rows = await cursor.fetchall()
 
         return [dict(row) for row in rows]

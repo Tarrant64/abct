@@ -69,13 +69,30 @@ async def get_unrealized_pnl(
 async def get_realized_gains(
     user_id: int = Depends(verify_session),
     token: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
 ):
-    """Get realized gains/losses log"""
+    """Get realized gains/losses log with optional date filtering"""
     try:
-        return await cost_basis_engine.compute_realized_pnl(user_id, token)
+        return await cost_basis_engine.compute_realized_pnl(
+            user_id, token, start_date, end_date
+        )
     except Exception as e:
         logger.error(f"Error fetching realized gains: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch realized gains")
+
+
+@router.get("/realized/monthly")
+async def get_monthly_realized(
+    user_id: int = Depends(verify_session),
+    months: int = Query(default=12, ge=1, le=60),
+):
+    """Get realized gains aggregated by month"""
+    try:
+        return await cost_basis_engine.get_monthly_realized(user_id, months)
+    except Exception as e:
+        logger.error(f"Error fetching monthly realized gains: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch monthly realized gains")
 
 
 @router.get("/lots/{symbol}")

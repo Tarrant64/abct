@@ -528,6 +528,316 @@
             }
         }
 
+        /* P&L Tab Styles */
+        .pnl-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .pnl-header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .pnl-summary-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        .pnl-card {
+            flex: 1;
+            min-width: 150px;
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 16px 20px;
+            border: 1px solid #2a2a3e;
+        }
+
+        .pnl-card.hero {
+            border-color: #667eea;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+        }
+
+        .pnl-card-label {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .pnl-card-value {
+            font-size: 20px;
+            font-weight: 600;
+            color: #e0e0e0;
+        }
+
+        .pnl-card-value.positive { color: #00d26a; }
+        .pnl-card-value.negative { color: #ff4757; }
+
+        .pnl-movers {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .pnl-movers-panel {
+            flex: 1;
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 16px 20px;
+            border: 1px solid #2a2a3e;
+        }
+
+        .pnl-movers-panel h3 {
+            font-size: 14px;
+            margin: 0 0 12px 0;
+            color: #888;
+        }
+
+        .pnl-mover-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+            font-size: 13px;
+        }
+
+        .pnl-mover-item .symbol {
+            color: #e0e0e0;
+            font-weight: 500;
+        }
+
+        .pnl-mover-item .gain {
+            color: #00d26a;
+        }
+
+        .pnl-mover-item .loss {
+            color: #ff4757;
+        }
+
+        .pnl-subtabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 20px;
+            background: #1a1a2e;
+            padding: 4px;
+            border-radius: 10px;
+            width: fit-content;
+        }
+
+        .pnl-subtab-btn {
+            padding: 8px 20px;
+            border: none;
+            background: transparent;
+            color: #888;
+            cursor: pointer;
+            border-radius: 8px;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .pnl-subtab-btn:hover {
+            color: #e0e0e0;
+        }
+
+        .pnl-subtab-btn.active {
+            background: #667eea;
+            color: #fff;
+        }
+
+        .pnl-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #1a1a2e;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .pnl-table th {
+            text-align: left;
+            padding: 12px 16px;
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #2a2a3e;
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+
+        .pnl-table th:hover {
+            color: #e0e0e0;
+        }
+
+        .pnl-table th.sort-active {
+            color: #667eea;
+        }
+
+        .pnl-table td {
+            padding: 12px 16px;
+            font-size: 13px;
+            color: #e0e0e0;
+            border-bottom: 1px solid #2a2a3e;
+        }
+
+        .pnl-table tr:hover td {
+            background: #22223a;
+        }
+
+        .pnl-table tr.expandable {
+            cursor: pointer;
+        }
+
+        .pnl-table .text-right {
+            text-align: right;
+        }
+
+        .pnl-lots-container {
+            background: rgba(0, 0, 0, 0.2);
+            border-left: 3px solid #667eea;
+            margin: 0;
+            padding: 12px 16px;
+        }
+
+        .pnl-lots-container table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .pnl-lots-container th {
+            font-size: 11px;
+            padding: 8px 12px;
+            color: #888;
+            text-transform: uppercase;
+            border-bottom: 1px solid #2a2a3e;
+            cursor: default;
+        }
+
+        .pnl-lots-container td {
+            font-size: 12px;
+            padding: 8px 12px;
+            color: #ccc;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .pnl-chart-container {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid #2a2a3e;
+            height: 340px;
+            position: relative;
+        }
+
+        .pnl-period-btns {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 16px;
+        }
+
+        .pnl-period-btn {
+            padding: 6px 14px;
+            border: 1px solid #3a3a4e;
+            background: transparent;
+            color: #888;
+            cursor: pointer;
+            border-radius: 6px;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .pnl-period-btn:hover {
+            color: #e0e0e0;
+            border-color: #667eea;
+        }
+
+        .pnl-period-btn.active {
+            background: #667eea;
+            color: #fff;
+            border-color: #667eea;
+        }
+
+        .pnl-chart-summary {
+            margin-top: 12px;
+            font-size: 13px;
+            color: #888;
+        }
+
+        .pnl-filters {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        .pnl-filters select,
+        .pnl-filters input[type="date"] {
+            padding: 8px 12px;
+            border: 1px solid #3a3a4e;
+            border-radius: 8px;
+            background: #2a2a3e;
+            color: #e0e0e0;
+            font-size: 13px;
+        }
+
+        .pnl-empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #888;
+        }
+
+        .pnl-empty-state p {
+            margin-bottom: 16px;
+        }
+
+        .pnl-empty-state .btn {
+            margin: 0 6px;
+        }
+
+        @media (max-width: 768px) {
+            .pnl-summary-row {
+                flex-direction: column;
+            }
+
+            .pnl-card {
+                min-width: auto;
+            }
+
+            .pnl-movers {
+                flex-direction: column;
+            }
+
+            .pnl-table th,
+            .pnl-table td {
+                padding: 10px 10px;
+                font-size: 12px;
+            }
+
+            .pnl-header-row {
+                flex-direction: column;
+                gap: 12px;
+                align-items: flex-start;
+            }
+
+            .pnl-filters {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+
+        /* Privacy Mode - P&L */
+        body.privacy-mode .pnl-card-value {
+            filter: blur(10px);
+            user-select: none;
+        }
+
         /* Privacy Mode - Manage Wallets */
         body.privacy-mode .wallet-address {
             filter: blur(8px);
@@ -829,6 +1139,7 @@
             <button class="assets-tab-btn" data-tab="defi" onclick="switchAssetsTab('defi')">DeFi</button>
             <button class="assets-tab-btn" data-tab="governance" onclick="switchAssetsTab('governance')">Governance</button>
             <button class="assets-tab-btn" data-tab="tokens" onclick="switchAssetsTab('tokens')">Custom Tokens</button>
+            <button class="assets-tab-btn" data-tab="pnl" onclick="switchAssetsTab('pnl')">Profit &amp; Loss</button>
         </div>
 
         <!-- Self-Custody Wallets Tab -->
@@ -929,6 +1240,13 @@
                     <p class="empty-state">No custom tokens added. Use "Add Token" below to track tokens manually.</p>
                 </div>
             </section>
+        </div>
+
+        <!-- Profit & Loss Tab -->
+        <div id="pnlTab" class="assets-tab-content">
+            <div id="pnlContent">
+                <p class="loading-state">Loading P&L data...</p>
+            </div>
         </div>
 
         <!-- Token Policy ID Modal -->
@@ -1292,15 +1610,53 @@ base:0x789..." oninput="previewImport()"></textarea>
         </div>
     </div>
 
+    <!-- Manual Lot Entry Modal -->
+    <div class="modal-overlay" id="manualLotModal">
+        <div class="modal">
+            <h2>Add Cost Basis Entry</h2>
+            <p style="color: #888; margin-bottom: 20px;">
+                Manually record a purchase or acquisition for P&L tracking.
+            </p>
+            <form id="manualLotForm">
+                <div class="form-group">
+                    <label for="lotTokenSymbol">Token Symbol</label>
+                    <input type="text" id="lotTokenSymbol" placeholder="e.g., BTC, ETH, ADA" required autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="lotQuantity">Quantity</label>
+                    <input type="number" id="lotQuantity" placeholder="e.g., 0.5" step="any" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="lotCostPerUnit">Cost Per Unit (USD)</label>
+                    <input type="number" id="lotCostPerUnit" placeholder="e.g., 42000.00" step="any" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="lotAcquisitionDate">Acquisition Date</label>
+                    <input type="date" id="lotAcquisitionDate">
+                    <div class="hint">Leave blank for today's date</div>
+                </div>
+                <div class="form-group">
+                    <label for="lotSource">Source</label>
+                    <input type="text" id="lotSource" placeholder="e.g., Coinbase, OTC, Gift" value="manual">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="btnCancelLot">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Entry</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <footer>
         <p>ABCT - Assets | <span id="appVersion" style="opacity: 0.6;">v1.15.2 (BUILD 1771794638)</span></p>
     </footer>
 
     <script src="/static/js/app.js?v=1771815026"></script>
     <script src="/static/js/wallet-management.js?v=1771815026"></script>
+    <script src="/static/js/pnl-tab.js?v=1771815026"></script>
     <script>
         // Assets page tab switching
-        const ASSETS_TABS = ['wallets', 'exchanges', 'defi', 'governance', 'tokens'];
+        const ASSETS_TABS = ['wallets', 'exchanges', 'defi', 'governance', 'tokens', 'pnl'];
 
         let customTokensTabLoaded = false;
 
@@ -1328,6 +1684,11 @@ base:0x789..." oninput="previewImport()"></textarea>
             if (tabName === 'governance' && !_govRendered && _govRenderData) {
                 renderGovernanceContent(_govRenderData.defiData, _govRenderData.allStaking);
                 _govRendered = true;
+            }
+            // Lazy-load P&L tab on first visit
+            if (tabName === 'pnl' && typeof loadPnlTab === 'function' && !window._pnlLoaded) {
+                window._pnlLoaded = true;
+                loadPnlTab();
             }
             // Update URL hash
             window.location.hash = tabName;
