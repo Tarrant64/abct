@@ -14,6 +14,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/pnl", tags=["pnl"])
 
+# Per-user compute progress tracking
+_compute_progress: dict = {}
+
 
 class ManualLotRequest(BaseModel):
     token_symbol: str
@@ -146,6 +149,15 @@ async def dispose_lots(req: DisposeRequest, user_id: int = Depends(verify_sessio
         raise HTTPException(status_code=500, detail="Failed to dispose lots")
 
 
+@router.get("/compute/status")
+async def get_compute_status(user_id: int = Depends(verify_session)):
+    """Get current P&L computation progress for this user"""
+    status = _compute_progress.get(user_id, {
+        "stage": "idle", "progress": 0, "details": ""
+    })
+    return status
+
+
 @router.post("/compute")
 async def compute_pnl(
     user_id: int = Depends(verify_session),
@@ -154,17 +166,69 @@ async def compute_pnl(
 ):
     """Trigger full P&L recomputation from exchange and wallet transactions"""
     try:
-        result = await cost_basis_engine.ingest_exchange_transactions(user_id, exchange)
-
         if include_wallets:
-            wallet_result = await cost_basis_engine.ingest_wallet_transactions(user_id)
-            result["wallet_lots_created"] = wallet_result["lots_created"]
-            result["wallet_disposals_processed"] = wallet_result["disposals_processed"]
-            result["wallet_skipped_no_price"] = wallet_result["skipped_no_price"]
+            # Unified chronological ingestion (correct FIFO across both sources)
+            _compute_progress[user_id] = {
+                "stage": "detecting_transfers",
+                "progress": 5,
+                "details": "Detecting internal transfers..."
+            }
+            skip_ids = await cost_basis_engine.detect_internal_transfers(user_id)
+
+            _compute_progress[user_id] = {
+                "stage": "ingesting_transactions",
+                "progress": 15,
+                "details": "Ingesting all transactions in chronological order..."
+            }
+
+            result = await cost_basis_engine.ingest_all_transactions(
+                user_id, skip_tx_ids=skip_ids
+            )
+
+            _compute_progress[user_id] = {
+                "stage": "ingesting_transactions",
+                "progress": 70,
+                "details": f"Processed: {result.get('lots_created', 0)} lots, {result.get('disposals_processed', 0)} disposals, {result.get('transfers_matched', 0)} transfers matched"
+            }
+        else:
+            # Exchange-only mode
+            _compute_progress[user_id] = {
+                "stage": "exchange_transactions",
+                "progress": 10,
+                "details": "Ingesting exchange transactions..."
+            }
+
+            result = await cost_basis_engine.ingest_exchange_transactions(
+                user_id, exchange
+            )
+
+            _compute_progress[user_id] = {
+                "stage": "exchange_transactions",
+                "progress": 70,
+                "details": f"Exchange: {result.get('lots_created', 0)} lots, {result.get('disposals_processed', 0)} disposals"
+            }
+
+        _compute_progress[user_id] = {
+            "stage": "refreshing_summary",
+            "progress": 80,
+            "details": "Recomputing P&L summary..."
+        }
 
         await cost_basis_engine.refresh_pnl_summary(user_id)
+
+        _compute_progress[user_id] = {
+            "stage": "complete",
+            "progress": 100,
+            "details": "P&L computation complete"
+        }
+
         return result
     except Exception as e:
+        _compute_progress[user_id] = {
+            "stage": "error",
+            "progress": 0,
+            "details": str(e)
+        }
         logger.error(f"Error computing P&L: {e}")
         raise HTTPException(status_code=500, detail="Failed to compute P&L")
 
@@ -176,10 +240,35 @@ async def compute_wallet_pnl(
 ):
     """Trigger P&L computation from self-custody wallet transactions only"""
     try:
+        _compute_progress[user_id] = {
+            "stage": "wallet_transactions",
+            "progress": 20,
+            "details": "Ingesting wallet transactions..."
+        }
+
         result = await cost_basis_engine.ingest_wallet_transactions(user_id, blockchain)
+
+        _compute_progress[user_id] = {
+            "stage": "refreshing_summary",
+            "progress": 80,
+            "details": "Recomputing P&L summary..."
+        }
+
         await cost_basis_engine.refresh_pnl_summary(user_id)
+
+        _compute_progress[user_id] = {
+            "stage": "complete",
+            "progress": 100,
+            "details": "Wallet P&L computation complete"
+        }
+
         return result
     except Exception as e:
+        _compute_progress[user_id] = {
+            "stage": "error",
+            "progress": 0,
+            "details": str(e)
+        }
         logger.error(f"Error computing wallet P&L: {e}")
         raise HTTPException(status_code=500, detail="Failed to compute wallet P&L")
 

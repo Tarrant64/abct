@@ -19,11 +19,123 @@ ACQUISITION_TYPES = {'buy', 'receive', 'deposit', 'staking_reward', 'interest', 
 # Transaction types that dispose of lots
 DISPOSAL_TYPES = {'sell', 'send', 'withdrawal'}
 
+# Canonical symbol mapping for tokens that have been renamed or have variants
+SYMBOL_ALIASES = {
+    'POL': 'MATIC',       # Polygon rebrand (2024)
+    'WETH': 'ETH',        # Wrapped Ethereum
+    'STETH': 'ETH',       # Lido staked ETH
+    'WBTC': 'BTC',        # Wrapped Bitcoin
+    'USDC.E': 'USDC',     # Bridged USDC
+    'USDCN': 'USDC',      # Native USDC variant
+    'USDT.E': 'USDT',     # Bridged USDT
+}
+
+
+def normalize_symbol(symbol: str) -> str:
+    """Normalize token symbol to its canonical form."""
+    sym = symbol.upper()
+    return SYMBOL_ALIASES.get(sym, sym)
+
 
 class CostBasisEngine:
     """P&L analytics engine with FIFO/LIFO/Average cost basis methods."""
 
-    async def ingest_exchange_transactions(self, user_id: int, exchange: str = None) -> dict:
+    async def detect_internal_transfers(
+        self, user_id: int, time_window_seconds: int = 3600
+    ) -> set:
+        """Identify internal transfers between exchanges and wallets.
+
+        Matches exchange sends to wallet receives with the same symbol and
+        similar amount within a configurable time window (default 1hr).
+
+        Returns a set of tx identifiers (exchange tx_id or wallet tx_hash)
+        that should be skipped during P&L ingestion.
+        """
+        async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+            db.row_factory = aiosqlite.Row
+
+            # Exchange sends/withdrawals
+            cursor = await db.execute(
+                """SELECT tx_id, tx_time, token_symbol, amount
+                   FROM exchange_transactions
+                   WHERE user_id = ? AND status = 'completed'
+                     AND tx_type IN ('send', 'withdrawal')
+                     AND amount IS NOT NULL AND token_symbol IS NOT NULL""",
+                (user_id,)
+            )
+            exchange_sends = await cursor.fetchall()
+
+            # Wallet receives
+            cursor = await db.execute(
+                """SELECT tx_hash, tx_time, token_symbol, amount
+                   FROM transaction_history
+                   WHERE user_id = ? AND status = 'confirmed'
+                     AND direction = 'received'
+                     AND amount IS NOT NULL AND token_symbol IS NOT NULL""",
+                (user_id,)
+            )
+            wallet_receives = await cursor.fetchall()
+
+        if not exchange_sends or not wallet_receives:
+            return set()
+
+        transfer_ids = set()
+        used_wallet_hashes = set()
+
+        for ex_tx in exchange_sends:
+            ex_symbol = normalize_symbol(ex_tx['token_symbol'])
+            try:
+                ex_amount = float(ex_tx['amount'])
+            except (ValueError, TypeError):
+                continue
+            if ex_amount <= 0:
+                continue
+
+            ex_time = ex_tx['tx_time'] or ''
+
+            for wal_tx in wallet_receives:
+                if wal_tx['tx_hash'] in used_wallet_hashes:
+                    continue
+
+                wal_symbol = normalize_symbol(wal_tx['token_symbol'])
+                if wal_symbol != ex_symbol:
+                    continue
+
+                try:
+                    wal_amount = float(wal_tx['amount'])
+                except (ValueError, TypeError):
+                    continue
+
+                # Amount must match within 5% (fees cause slight differences)
+                if ex_amount > 0 and abs(wal_amount - ex_amount) / ex_amount > 0.05:
+                    continue
+
+                # Time must be within window
+                wal_time = wal_tx['tx_time'] or ''
+                try:
+                    ex_dt = datetime.fromisoformat(str(ex_time).replace('Z', '+00:00')[:19])
+                    wal_dt = datetime.fromisoformat(str(wal_time).replace('Z', '+00:00')[:19])
+                    if abs((wal_dt - ex_dt).total_seconds()) > time_window_seconds:
+                        continue
+                except (ValueError, TypeError):
+                    continue
+
+                # Match found — mark both as internal transfers
+                transfer_ids.add(ex_tx['tx_id'])
+                transfer_ids.add(wal_tx['tx_hash'])
+                used_wallet_hashes.add(wal_tx['tx_hash'])
+                logger.info(
+                    f"Transfer match: {ex_symbol} {ex_amount:.6f} "
+                    f"exchange send → wallet receive ({ex_time[:10]})"
+                )
+                break
+
+        if transfer_ids:
+            logger.info(f"Detected {len(transfer_ids) // 2} internal transfers for user {user_id}")
+
+        return transfer_ids
+
+    async def ingest_exchange_transactions(self, user_id: int, exchange: str = None, skip_tx_ids: set = None) -> dict:
         """Import transactions from exchange_transactions table into cost_basis_lots.
 
         For buy/deposit/receive: creates new lot with cost = native_amount / quantity
@@ -70,6 +182,7 @@ class CostBasisEngine:
             transactions = await cursor.fetchall()
 
         # Process each transaction outside the main connection
+        _skip = skip_tx_ids or set()
         for tx in transactions:
             tx_id = tx['tx_id']
             tx_type = (tx['tx_type'] or '').lower()
@@ -78,9 +191,16 @@ class CostBasisEngine:
             if not token_symbol:
                 continue
 
+            # Skip internal transfers (exchange ↔ wallet)
+            if tx_id in _skip:
+                continue
+
+            token_symbol = normalize_symbol(token_symbol)
+
             try:
                 amount = float(tx['amount'] or 0)
                 native_amount = float(tx['native_amount'] or 0)
+                fee_usd = float(tx['fee'] or 0) if tx['fee'] else 0
             except (ValueError, TypeError):
                 errors += 1
                 continue
@@ -88,14 +208,14 @@ class CostBasisEngine:
             if amount <= 0:
                 continue
 
-            token_symbol = token_symbol.upper()
-
             if tx_type in ACQUISITION_TYPES:
                 # Skip if already processed
                 if tx_id in processed_tx_ids:
                     continue
 
-                cost_per_unit = native_amount / amount if amount > 0 else 0
+                # Fee increases cost basis on acquisitions
+                total_cost = native_amount + fee_usd
+                cost_per_unit = total_cost / amount if amount > 0 else 0
                 acquisition_type = tx_type
                 source = tx['exchange'] or 'unknown'
 
@@ -119,7 +239,8 @@ class CostBasisEngine:
                 if already_disposed:
                     continue
 
-                proceeds = native_amount if native_amount > 0 else 0
+                # Fee reduces proceeds on disposals
+                proceeds = max(native_amount - fee_usd, 0) if native_amount > 0 else 0
 
                 try:
                     result = await self.dispose_lots(
@@ -139,7 +260,7 @@ class CostBasisEngine:
             "total_transactions": len(transactions) if 'transactions' in dir() else 0
         }
 
-    async def ingest_wallet_transactions(self, user_id: int, blockchain: str = None) -> dict:
+    async def ingest_wallet_transactions(self, user_id: int, blockchain: str = None, skip_tx_ids: set = None) -> dict:
         """Import on-chain wallet transactions into cost_basis_lots.
 
         Reads from transaction_history table, enriches with historical prices
@@ -216,12 +337,12 @@ class CostBasisEngine:
                 except (ValueError, TypeError):
                     continue
                 already = await self._is_disposal_processed(
-                    user_id, tx['token_symbol'].upper(), tx['tx_time'], amt
+                    user_id, normalize_symbol(tx['token_symbol']), tx['tx_time'], amt
                 )
                 if already:
                     continue
 
-            symbol = tx['token_symbol'].upper()
+            symbol = normalize_symbol(tx['token_symbol'])
             chain = tx['blockchain']
 
             # Map to native symbol if the token_symbol matches the chain native
@@ -258,11 +379,17 @@ class CostBasisEngine:
         logger.info(f"Wallet tx price enrichment: {sum(len(v) for v in price_cache.values())} prices for {len(price_cache)} symbols")
 
         # Process each transaction
+        _skip = skip_tx_ids or set()
         for tx in transactions:
             tx_hash = tx['tx_hash']
             direction = tx['direction']
             chain = tx['blockchain']
-            raw_symbol = tx['token_symbol'].upper()
+
+            # Skip internal transfers (exchange ↔ wallet)
+            if tx_hash in _skip:
+                continue
+
+            raw_symbol = normalize_symbol(tx['token_symbol'])
 
             native = chain_symbol_map.get(chain)
             lookup_symbol = native if (native and raw_symbol == native) else raw_symbol
@@ -285,6 +412,13 @@ class CostBasisEngine:
             if not price:
                 skipped_no_price += 1
                 continue
+
+            # Parse fee for wallet transactions (usually in native token)
+            try:
+                tx_fee = float(tx['fee'] or 0) if tx['fee'] else 0
+            except (ValueError, TypeError):
+                tx_fee = 0
+            fee_usd = tx_fee * price if tx_fee > 0 else 0
 
             if direction == 'received':
                 if tx_hash in processed_tx_ids:
@@ -309,7 +443,8 @@ class CostBasisEngine:
                 if already_disposed:
                     continue
 
-                proceeds = amount * price
+                # Fee reduces proceeds on wallet sends
+                proceeds = max((amount * price) - fee_usd, 0)
                 try:
                     await self.dispose_lots(
                         user_id, raw_symbol, amount, proceeds,
@@ -327,6 +462,226 @@ class CostBasisEngine:
             "skipped_no_price": skipped_no_price,
             "errors": errors,
             "total_transactions": len(transactions)
+        }
+
+    async def ingest_all_transactions(self, user_id: int, skip_tx_ids: set = None) -> dict:
+        """Ingest exchange + wallet transactions in chronological order for correct FIFO.
+
+        Fetches both sources, merges by tx_time, then processes sequentially.
+        This ensures FIFO lot disposal respects global chronology.
+
+        Returns combined result dict.
+        """
+        from engine.enrichment.price_enricher import price_enricher
+
+        _skip = skip_tx_ids or set()
+        lots_created = 0
+        disposals_processed = 0
+        skipped_no_price = 0
+        errors = 0
+
+        chain_symbol_map = {
+            'cardano': 'ADA', 'bitcoin': 'BTC', 'ethereum': 'ETH',
+            'solana': 'SOL', 'polygon': 'MATIC', 'base': 'ETH',
+            'algorand': 'ALGO',
+        }
+
+        async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+            db.row_factory = aiosqlite.Row
+
+            # Get already-processed tx_ids
+            cursor = await db.execute(
+                "SELECT tx_id FROM cost_basis_lots WHERE user_id = ? AND tx_id IS NOT NULL",
+                (user_id,)
+            )
+            processed_tx_ids = {row[0] for row in await cursor.fetchall()}
+
+            # Fetch exchange transactions
+            cursor = await db.execute(
+                """SELECT 'exchange' as source, tx_id, tx_type, tx_time, amount,
+                          token_symbol, native_amount, fee, exchange as origin
+                   FROM exchange_transactions
+                   WHERE user_id = ? AND status = 'completed'
+                   ORDER BY tx_time ASC""",
+                (user_id,)
+            )
+            exchange_rows = [dict(row) for row in await cursor.fetchall()]
+
+            # Fetch wallet transactions
+            cursor = await db.execute(
+                """SELECT 'wallet' as source, tx_hash as tx_id, direction as tx_type,
+                          tx_time, amount, token_symbol, NULL as native_amount,
+                          fee, blockchain as origin
+                   FROM transaction_history
+                   WHERE user_id = ? AND status = 'confirmed'
+                     AND direction IN ('sent', 'received')
+                     AND amount IS NOT NULL AND token_symbol IS NOT NULL
+                   ORDER BY tx_time ASC""",
+                (user_id,)
+            )
+            wallet_rows = [dict(row) for row in await cursor.fetchall()]
+
+        # Merge and sort by tx_time
+        all_txs = exchange_rows + wallet_rows
+        all_txs.sort(key=lambda t: t.get('tx_time') or '')
+
+        if not all_txs:
+            return {
+                "lots_created": 0, "disposals_processed": 0,
+                "skipped_no_price": 0, "errors": 0,
+                "total_transactions": 0, "transfers_matched": len(_skip) // 2
+            }
+
+        # Batch price enrichment for wallet transactions
+        native_symbols = set(chain_symbol_map.values())
+        symbol_dates: Dict[str, set] = {}
+        for tx in all_txs:
+            if tx['source'] != 'wallet':
+                continue
+            if tx['tx_id'] in _skip or tx['tx_id'] in processed_tx_ids:
+                continue
+            symbol = normalize_symbol(tx['token_symbol'])
+            chain = tx['origin']
+            native = chain_symbol_map.get(chain)
+            lookup = native if (native and symbol == native) else symbol
+            tx_date = str(tx.get('tx_time') or '')[:10]
+            if tx_date and len(tx_date) >= 10:
+                symbol_dates.setdefault(lookup, set()).add(tx_date)
+
+        price_cache: Dict[str, Dict[str, float]] = {}
+        for symbol, dates in symbol_dates.items():
+            date_list = sorted(dates)
+            if symbol in native_symbols:
+                price_cache[symbol] = await price_enricher.fetch_historical_prices_batch(symbol, date_list)
+            else:
+                prices = {}
+                for date in date_list:
+                    p = await price_enricher.fetch_historical_price(symbol, "ethereum", date)
+                    if p:
+                        prices[date] = p
+                price_cache[symbol] = prices
+
+        # Process in chronological order
+        for tx in all_txs:
+            tx_id = tx['tx_id']
+
+            if not tx_id or tx_id in _skip:
+                continue
+
+            token_symbol = normalize_symbol(tx.get('token_symbol') or '')
+            if not token_symbol:
+                continue
+
+            try:
+                amount = float(tx.get('amount') or 0)
+            except (ValueError, TypeError):
+                errors += 1
+                continue
+            if amount <= 0:
+                continue
+
+            if tx['source'] == 'exchange':
+                tx_type = (tx.get('tx_type') or '').lower()
+
+                try:
+                    native_amount = float(tx.get('native_amount') or 0)
+                    fee_usd = float(tx.get('fee') or 0) if tx.get('fee') else 0
+                except (ValueError, TypeError):
+                    errors += 1
+                    continue
+
+                if tx_type in ACQUISITION_TYPES:
+                    if tx_id in processed_tx_ids:
+                        continue
+                    total_cost = native_amount + fee_usd
+                    cost_per_unit = total_cost / amount if amount > 0 else 0
+                    try:
+                        await self._insert_lot(
+                            user_id, token_symbol, amount, cost_per_unit,
+                            tx['tx_time'], tx_type, tx.get('origin') or 'exchange', tx_id
+                        )
+                        lots_created += 1
+                        processed_tx_ids.add(tx_id)
+                    except Exception as e:
+                        logger.warning(f"Failed to create lot for tx {tx_id}: {e}")
+                        errors += 1
+
+                elif tx_type in DISPOSAL_TYPES:
+                    already = await self._is_disposal_processed(
+                        user_id, token_symbol, tx['tx_time'], amount
+                    )
+                    if already:
+                        continue
+                    proceeds = max(native_amount - fee_usd, 0) if native_amount > 0 else 0
+                    try:
+                        await self.dispose_lots(
+                            user_id, token_symbol, amount, proceeds,
+                            method="fifo", disposal_type=tx_type,
+                            disposal_date=tx['tx_time']
+                        )
+                        disposals_processed += 1
+                    except Exception as e:
+                        logger.warning(f"Failed to dispose lots for tx {tx_id}: {e}")
+                        errors += 1
+
+            elif tx['source'] == 'wallet':
+                direction = tx.get('tx_type') or ''  # mapped from direction
+                chain = tx.get('origin') or ''
+                native = chain_symbol_map.get(chain)
+                lookup = native if (native and token_symbol == native) else token_symbol
+
+                tx_date = str(tx.get('tx_time') or '')[:10]
+                price = price_cache.get(lookup, {}).get(tx_date) if tx_date else None
+
+                if not price:
+                    skipped_no_price += 1
+                    continue
+
+                try:
+                    tx_fee = float(tx.get('fee') or 0) if tx.get('fee') else 0
+                except (ValueError, TypeError):
+                    tx_fee = 0
+                fee_usd = tx_fee * price if tx_fee > 0 else 0
+
+                if direction == 'received':
+                    if tx_id in processed_tx_ids:
+                        continue
+                    try:
+                        await self._insert_lot(
+                            user_id, token_symbol, amount, price,
+                            tx['tx_time'], 'receive', chain, tx_id
+                        )
+                        lots_created += 1
+                        processed_tx_ids.add(tx_id)
+                    except Exception as e:
+                        logger.warning(f"Failed to create wallet lot for tx {tx_id}: {e}")
+                        errors += 1
+
+                elif direction == 'sent':
+                    already = await self._is_disposal_processed(
+                        user_id, token_symbol, tx['tx_time'], amount
+                    )
+                    if already:
+                        continue
+                    proceeds = max((amount * price) - fee_usd, 0)
+                    try:
+                        await self.dispose_lots(
+                            user_id, token_symbol, amount, proceeds,
+                            method="fifo", disposal_type='send',
+                            disposal_date=tx['tx_time']
+                        )
+                        disposals_processed += 1
+                    except Exception as e:
+                        logger.warning(f"Failed to dispose wallet lots for tx {tx_id}: {e}")
+                        errors += 1
+
+        return {
+            "lots_created": lots_created,
+            "disposals_processed": disposals_processed,
+            "skipped_no_price": skipped_no_price,
+            "errors": errors,
+            "total_transactions": len(all_txs),
+            "transfers_matched": len(_skip) // 2
         }
 
     async def _insert_lot(
@@ -842,7 +1197,10 @@ class CostBasisEngine:
         }
 
     async def refresh_pnl_summary(self, user_id: int) -> None:
-        """Recompute and update asset_pnl_summary table (materialized view)."""
+        """Recompute and update asset_pnl_summary table (materialized view).
+
+        Uses atomic delete+insert so concurrent reads never see partial state.
+        """
         unrealized_items = await self.compute_unrealized_pnl(user_id)
 
         async with aiosqlite.connect(str(DATABASE_PATH)) as db:
@@ -857,60 +1215,47 @@ class CostBasisEngine:
             )
             realized_map = {row['token_symbol']: row['realized'] for row in await cursor.fetchall()}
 
-            # Upsert each token's summary
+            # Build complete row set before touching the table
+            active_symbols = {item['token_symbol'] for item in unrealized_items}
+            rows_to_insert = []
+
             for item in unrealized_items:
                 symbol = item['token_symbol']
                 realized = realized_map.get(symbol, 0)
+                rows_to_insert.append((
+                    user_id, symbol, item['total_invested'], item['current_value'],
+                    item['unrealized_gain'], realized, item['avg_cost_basis'],
+                    item['total_quantity']
+                ))
 
+            # Include zeroed-out rows for tokens with realized gains but no open positions
+            for symbol, realized in realized_map.items():
+                if symbol not in active_symbols and realized != 0:
+                    rows_to_insert.append((
+                        user_id, symbol, 0, 0, 0, realized, 0, 0
+                    ))
+
+            # Atomic swap: delete all + bulk insert in one transaction
+            await db.execute("BEGIN IMMEDIATE")
+            try:
                 await db.execute(
+                    "DELETE FROM asset_pnl_summary WHERE user_id = ?",
+                    (user_id,)
+                )
+                await db.executemany(
                     """INSERT INTO asset_pnl_summary
                        (user_id, token_symbol, total_invested_usd, current_value_usd,
                         unrealized_gain_usd, realized_gain_usd, avg_cost_basis_usd,
                         total_quantity, last_updated)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                       ON CONFLICT(user_id, token_symbol) DO UPDATE SET
-                        total_invested_usd = excluded.total_invested_usd,
-                        current_value_usd = excluded.current_value_usd,
-                        unrealized_gain_usd = excluded.unrealized_gain_usd,
-                        realized_gain_usd = excluded.realized_gain_usd,
-                        avg_cost_basis_usd = excluded.avg_cost_basis_usd,
-                        total_quantity = excluded.total_quantity,
-                        last_updated = CURRENT_TIMESTAMP""",
-                    (user_id, symbol, item['total_invested'], item['current_value'],
-                     item['unrealized_gain'], realized, item['avg_cost_basis'],
-                     item['total_quantity'])
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)""",
+                    rows_to_insert
                 )
+                await db.execute("COMMIT")
+            except Exception:
+                await db.execute("ROLLBACK")
+                raise
 
-            # Remove tokens that no longer have open positions
-            active_symbols = {item['token_symbol'] for item in unrealized_items}
-            cursor = await db.execute(
-                "SELECT token_symbol FROM asset_pnl_summary WHERE user_id = ?",
-                (user_id,)
-            )
-            all_summary_symbols = {row['token_symbol'] for row in await cursor.fetchall()}
-            stale_symbols = all_summary_symbols - active_symbols
-
-            for symbol in stale_symbols:
-                # Keep if there are realized gains, just zero out unrealized
-                realized = realized_map.get(symbol, 0)
-                if realized != 0:
-                    await db.execute(
-                        """UPDATE asset_pnl_summary
-                           SET total_invested_usd = 0, current_value_usd = 0,
-                               unrealized_gain_usd = 0, total_quantity = 0,
-                               last_updated = CURRENT_TIMESTAMP
-                           WHERE user_id = ? AND token_symbol = ?""",
-                        (user_id, symbol)
-                    )
-                else:
-                    await db.execute(
-                        "DELETE FROM asset_pnl_summary WHERE user_id = ? AND token_symbol = ?",
-                        (user_id, symbol)
-                    )
-
-            await db.commit()
-
-        logger.info(f"Refreshed P&L summary for user {user_id}: {len(unrealized_items)} active assets")
+        logger.info(f"Refreshed P&L summary for user {user_id}: {len(rows_to_insert)} assets (atomic)")
 
     async def get_open_lots(self, user_id: int, token_symbol: str) -> List[dict]:
         """Get all open (remaining > 0) cost basis lots for a token."""

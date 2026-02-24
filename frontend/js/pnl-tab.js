@@ -135,11 +135,28 @@ function _attachPnlHeaderListeners(container) {
 
 // --- Refresh P&L ---
 
+let _pnlComputeInProgress = false;
+let _pnlPollTimer = null;
+
 async function refreshPnl() {
-    showStatus('Recomputing P&L from exchanges & wallets...');
+    if (_pnlComputeInProgress) {
+        showStatus('P&L computation already in progress...');
+        return;
+    }
+
+    _pnlComputeInProgress = true;
+    showStatus('Starting P&L computation...');
+
+    // Start polling for progress updates
+    _startProgressPolling();
+
     try {
-        await authFetch('/pnl/compute?include_wallets=true', { method: 'POST' });
-        await authFetch('/pnl/refresh', { method: 'POST' });
+        // This blocks until compute finishes on the backend
+        const res = await authFetch('/pnl/compute?include_wallets=true', { method: 'POST' });
+
+        _stopProgressPolling();
+
+        if (!res.ok) throw new Error('Compute failed');
 
         // Reset lazy-load flags so sub-views reload
         _pnlRealizedLoaded = false;
@@ -151,8 +168,32 @@ async function refreshPnl() {
         await loadPnlTab();
         showStatus('P&L data refreshed successfully');
     } catch (err) {
+        _stopProgressPolling();
         console.error('P&L refresh error:', err);
         showStatus('Failed to refresh P&L data', true);
+    } finally {
+        _pnlComputeInProgress = false;
+    }
+}
+
+function _startProgressPolling() {
+    _stopProgressPolling();
+    _pnlPollTimer = setInterval(async () => {
+        try {
+            const res = await authFetch('/pnl/compute/status');
+            if (!res.ok) return;
+            const status = await res.json();
+            if (status.stage === 'idle' || status.stage === 'complete') return;
+            const stage = status.stage.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            showStatus(`${stage} (${status.progress}%) \u2014 ${status.details || ''}`);
+        } catch (_) { /* ignore poll errors */ }
+    }, 800);
+}
+
+function _stopProgressPolling() {
+    if (_pnlPollTimer) {
+        clearInterval(_pnlPollTimer);
+        _pnlPollTimer = null;
     }
 }
 

@@ -304,6 +304,9 @@ async def init_db():
         # Enable WAL mode for better concurrent read performance
         await db.execute("PRAGMA journal_mode=WAL")
         await db.execute("PRAGMA synchronous=NORMAL")
+        await db.execute("PRAGMA cache_size=-64000")  # 64MB page cache
+        await db.execute("PRAGMA wal_autocheckpoint=1000")  # Checkpoint every ~4MB
+        await db.execute("PRAGMA temp_store=MEMORY")  # Temp tables in RAM
 
         # Users table (created by auth system, but ensure it exists)
         await db.execute("""
@@ -935,6 +938,11 @@ async def init_db():
             ON balance_history(user_id, wallet_id, balance_date)
         """)
 
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_balance_history_user_date_blockchain
+            ON balance_history(user_id, balance_date, blockchain)
+        """)
+
         # V2 balance history collection jobs
         await db.execute("""
             CREATE TABLE IF NOT EXISTS balance_history_jobs (
@@ -1056,6 +1064,11 @@ async def init_db():
             ON transaction_history(user_id, blockchain)
         """)
 
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_txhist_user_status_direction
+            ON transaction_history(user_id, status, direction)
+        """)
+
         # ============================================================================
         # EXCHANGE TRANSACTIONS (CEX full history: buys, sells, sends, receives, etc.)
         # ============================================================================
@@ -1105,6 +1118,11 @@ async def init_db():
             ON exchange_transactions(token_symbol)
         """)
 
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_exchange_tx_user_status
+            ON exchange_transactions(user_id, status)
+        """)
+
         # P&L: Cost basis lots
         await db.execute("""
             CREATE TABLE IF NOT EXISTS cost_basis_lots (
@@ -1129,6 +1147,12 @@ async def init_db():
         await db.execute("""
             CREATE INDEX IF NOT EXISTS idx_cost_basis_date
             ON cost_basis_lots(acquisition_date)
+        """)
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_cost_basis_user_token_remaining
+            ON cost_basis_lots(user_id, token_symbol, remaining_quantity)
+            WHERE remaining_quantity > 0
         """)
 
         # P&L: Realized gains
@@ -1159,6 +1183,11 @@ async def init_db():
             ON realized_gains(disposal_date DESC)
         """)
 
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_realized_gains_user_token_date
+            ON realized_gains(user_id, token_symbol, disposal_date DESC)
+        """)
+
         # P&L: Asset P&L summary (materialized view for fast reads)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS asset_pnl_summary (
@@ -1182,6 +1211,9 @@ async def init_db():
         """)
 
         await db.commit()
+
+        # Update query planner statistics after schema/index creation
+        await db.execute("ANALYZE")
 
 async def get_db():
     """Get database connection."""
