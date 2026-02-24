@@ -446,7 +446,7 @@ async def get_mobile_portfolio_summary(
         'bitcoin': ('BTC', 'total_btc'),
         'ethereum': ('ETH', 'total_eth'),
         'solana': ('SOL', 'total_sol'),
-        'polygon': ('POL', 'total_matic'),
+        'polygon': ('MATIC', 'total_matic'),
         'base': ('ETH', 'total_eth'),
         'algorand': ('ALGO', 'total_algo'),
         'bsc': ('BNB', 'total_bnb'),
@@ -609,6 +609,42 @@ async def get_mobile_portfolio_summary(
                             }
     except Exception as e:
         logger.debug(f"Could not aggregate staking for top holdings: {e}")
+
+    # Merge exchange assets into top_holdings (so exchange-staked SOL etc. appear in totals)
+    try:
+        exchange_names = ['coinbase', 'binance', 'binance_us', 'okx', 'bitget', 'gate', 'kucoin']
+        exchange_caches = await asyncio.gather(*[
+            get_cache(f"{name}_portfolio", user_id=user_id) for name in exchange_names
+        ])
+        for exc_data in exchange_caches:
+            if not exc_data or not exc_data.get('assets'):
+                continue
+            for asset in exc_data['assets']:
+                currency = (asset.get('currency') or '').upper()
+                if not currency or currency == 'USD':
+                    continue
+                balance = float(asset.get('balance', 0))
+                price = float(asset.get('price', 0))
+                if balance <= 0:
+                    continue
+                val = balance * price
+                if currency in symbol_agg:
+                    symbol_agg[currency]['value_usd'] += val
+                    symbol_agg[currency]['native_amount'] += balance
+                else:
+                    symbol_agg[currency] = {
+                        "name": currency.lower(),
+                        "symbol": currency,
+                        "value_usd": val,
+                        "native_amount": balance,
+                        "native_price_usd": round(price, 2),
+                        "price_change_24h": 0,
+                        "wallet_count": 0,
+                        "percentage": 0,
+                        "image_url": logokit_service.get_crypto_logo_url(currency, size=64),
+                    }
+    except Exception as e:
+        logger.debug(f"Could not aggregate exchange assets for top holdings: {e}")
 
     # Finalize top_holdings
     top_holdings = list(symbol_agg.values())
