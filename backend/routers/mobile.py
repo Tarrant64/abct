@@ -409,7 +409,7 @@ async def get_mobile_portfolio_summary(
     portfolio_data, exchange_summary, nft_summary, defi_summary, snapshot_totals = await asyncio.gather(
         portfolio.get_portfolio_summary(user_id=user_id, refresh=refresh),
         exchanges.get_all_exchanges_summary(user_id=user_id),
-        nfts.get_nft_summary(user_id=user_id),
+        nfts.get_all_chains_nft_summary(user_id=user_id),
         defi.get_defi_summary(user_id=user_id),
         portfolio.get_portfolio_totals(user_id=user_id),
         return_exceptions=True
@@ -424,7 +424,7 @@ async def get_mobile_portfolio_summary(
         exchange_summary = {"total_usd": 0}
     if isinstance(nft_summary, Exception):
         logger.warning(f"NFT summary fetch failed: {nft_summary}")
-        nft_summary = {"total_value_usd": 0, "collections": []}
+        nft_summary = {"total_value_usd": 0, "chains": {}}
     if isinstance(defi_summary, Exception):
         logger.warning(f"DeFi summary fetch failed: {defi_summary}")
         defi_summary = {"all_positions": []}
