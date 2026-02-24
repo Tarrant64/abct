@@ -10218,9 +10218,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize NFT image cache toggle state (non-blocking — can be slow)
     initImageCacheToggle();
 
-    // Check CoinGecko quota every 10 minutes
-    checkCoinGeckoQuota();
-    setInterval(checkCoinGeckoQuota, 600000);
+    // CoinGecko quota banner disabled — re-enable when ready
+    // checkCoinGeckoQuota();
+    // setInterval(checkCoinGeckoQuota, 600000);
 
     // Initialize portfolio history chart range buttons
     initHistoryRangeButtons();
