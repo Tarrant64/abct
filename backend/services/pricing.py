@@ -3,8 +3,8 @@ Pricing Service - Smart chain-aware routing with fallback sources.
 
 Routing strategy:
 - Cardano tokens: Charli3 -> TapTools -> DefiLlama
-- Major coins (BTC, ETH, ADA, SOL, etc.): CoinGecko -> CMC -> Coinbase -> DefiLlama
-- Other tokens (DeFi mapped in CoinGecko): CoinGecko -> DefiLlama
+- Major coins (BTC, ETH, ADA, SOL, etc.): CoinGecko -> CMC -> Coinbase -> CoinPaprika -> DefiLlama
+- Other tokens (DeFi mapped in CoinGecko): CoinGecko -> CoinPaprika -> DefiLlama
 
 Historical prices:
 - Cardano tokens: Charli3 OHLCV -> DefiLlama chart -> CoinGecko
@@ -226,19 +226,38 @@ class PricingService:
         self._cg_api_key: Optional[str] = None
         self._cg_key_loaded = False
 
+    def _is_cg_pro_key(self, key: str) -> bool:
+        """Detect CoinGecko Pro API key (starts with 'CG-' and is 32+ chars)."""
+        return key.startswith("CG-") and len(key) >= 32
+
+    def _get_cg_base_url(self) -> str:
+        """Return CoinGecko base URL (pro endpoint if a Pro key is configured)."""
+        if self._cg_api_key and self._is_cg_pro_key(self._cg_api_key):
+            return "https://pro-api.coingecko.com/api/v3"
+        return COINGECKO_BASE_URL
+
     async def _get_cg_headers(self) -> dict:
-        """Get CoinGecko request headers with API key if configured."""
+        """Get CoinGecko request headers with API key if configured.
+
+        Supports both demo keys (x-cg-demo-api-key header) and Pro keys
+        (x-cg-pro-api-key header with pro-api.coingecko.com base URL).
+        """
         if not self._cg_key_loaded:
             try:
                 from database import get_api_key
                 self._cg_api_key = await get_api_key("coingecko")
                 if self._cg_api_key:
-                    logger.info("CoinGecko demo API key loaded from database")
+                    if self._is_cg_pro_key(self._cg_api_key):
+                        logger.info("CoinGecko Pro API key loaded from database")
+                    else:
+                        logger.info("CoinGecko demo API key loaded from database")
             except Exception:
                 pass
             self._cg_key_loaded = True
 
         if self._cg_api_key:
+            if self._is_cg_pro_key(self._cg_api_key):
+                return {"x-cg-pro-api-key": self._cg_api_key}
             return {"x-cg-demo-api-key": self._cg_api_key}
         return {}
 
@@ -339,6 +358,7 @@ class PricingService:
                         'market_cap': 0,
                         'volume_24h': data.get('volume_24h', 0),
                         'source': 'Charli3',
+                        'data_completeness': 'partial',
                         'updated_at': datetime.now().isoformat()
                     }
         except Exception as e:
@@ -376,6 +396,11 @@ class PricingService:
         if still_missing:
             await self._fetch_from_coinbase(still_missing)
 
+        # CoinPaprika fallback (free, no key required)
+        missing_for_cp = [s for s in symbols if self.cache.get(s, {}).get('usd', 0) == 0]
+        if missing_for_cp:
+            await self._fetch_from_coinpaprika(missing_for_cp)
+
         # DefiLlama final fallback
         still_missing_2 = [s for s in symbols if self.cache.get(s, {}).get('usd', 0) == 0
                           and s.upper() in ASSET_TO_COINGECKO]
@@ -383,7 +408,7 @@ class PricingService:
             await self._fetch_from_defillama(still_missing_2, include_major=True)
 
     async def _fetch_other_prices(self, symbols: List[str]) -> None:
-        """Route: CoinGecko -> DefiLlama for other tokens (DeFi tokens mapped in CoinGecko)."""
+        """Route: CoinGecko -> CoinPaprika -> DefiLlama for other tokens (DeFi tokens mapped in CoinGecko)."""
         if not symbols:
             return
 
@@ -392,6 +417,11 @@ class PricingService:
             logger.info(f"Skipping CoinGecko (cooldown) for other tokens")
         else:
             await self._fetch_from_coingecko(symbols)
+
+        # CoinPaprika fallback (free, no key required)
+        missing_for_cp = [s for s in symbols if self.cache.get(s, {}).get('usd', 0) == 0]
+        if missing_for_cp:
+            await self._fetch_from_coinpaprika(missing_for_cp)
 
         # DefiLlama fallback
         still_missing = [s for s in symbols if self.cache.get(s, {}).get('usd', 0) == 0
@@ -417,9 +447,10 @@ class PricingService:
         try:
             client = get_client("coingecko", timeout=30.0)
             cg_headers = await self._get_cg_headers()
+            cg_base = self._get_cg_base_url()
             response = await fetch_with_retry(
                 client, "GET",
-                f"{COINGECKO_BASE_URL}/coins/markets",
+                f"{cg_base}/coins/markets",
                 params={
                     'ids': ','.join(cg_ids),
                     'vs_currency': 'usd',
@@ -445,6 +476,7 @@ class PricingService:
                             'max_supply': coin.get('max_supply'),
                             'image': coin.get('image', ''),
                             'source': 'CoinGecko',
+                            'data_completeness': 'full',
                             'updated_at': datetime.now().isoformat()
                         }
                 logger.info(f"CoinGecko: fetched prices for {len(data)} tokens")
@@ -508,6 +540,7 @@ class PricingService:
                             'market_cap': quote.get('market_cap', 0) or 0,
                             'volume_24h': quote.get('volume_24h', 0) or 0,
                             'source': 'CoinMarketCap',
+                            'data_completeness': 'full',
                             'updated_at': datetime.now().isoformat()
                         }
                         fetched_count += 1
@@ -551,6 +584,7 @@ class PricingService:
                             'usd_24h_change': 0,
                             'market_cap': 0,
                             'source': 'Coinbase',
+                            'data_completeness': 'price_only',
                             'updated_at': datetime.now().isoformat()
                         }
                         logger.info(f"Coinbase: got price for {symbol}: ${price}")
@@ -559,6 +593,35 @@ class PricingService:
 
         except Exception as e:
             logger.error(f"Coinbase fetch error: {e}")
+
+    async def _fetch_from_coinpaprika(self, symbols: List[str]) -> None:
+        """Fetch prices from CoinPaprika API (free, no key required)."""
+        try:
+            from services.coinpaprika import coinpaprika_service
+            to_fetch = [s for s in symbols if self.cache.get(s.upper(), {}).get('usd', 0) == 0]
+            if not to_fetch:
+                return
+
+            results = await coinpaprika_service.get_prices_batch(to_fetch)
+            fetched_count = 0
+            for symbol, price_data in results.items():
+                price = price_data.get('usd')
+                if price and price > 0:
+                    self.cache[symbol] = {
+                        'usd': price,
+                        'usd_1h_change': price_data.get('usd_1h_change', 0) or 0,
+                        'usd_24h_change': price_data.get('usd_24h_change', 0) or 0,
+                        'market_cap': price_data.get('market_cap', 0) or 0,
+                        'volume_24h': price_data.get('volume_24h', 0) or 0,
+                        'source': 'CoinPaprika',
+                        'data_completeness': 'full',
+                        'updated_at': datetime.now().isoformat()
+                    }
+                    fetched_count += 1
+            if fetched_count > 0:
+                logger.info(f"CoinPaprika: fetched prices for {fetched_count} tokens")
+        except Exception as e:
+            logger.warning(f"CoinPaprika fetch error: {e}")
 
     async def _fetch_from_taptools(self, symbols: List[str]) -> None:
         """Fetch prices from TapTools API for Cardano tokens."""
@@ -589,6 +652,7 @@ class PricingService:
                                 'usd_24h_change': data[0].get('priceChange24h', 0) or 0,
                                 'market_cap': data[0].get('mcap', 0) or 0,
                                 'source': 'TapTools',
+                                'data_completeness': 'partial',
                                 'updated_at': datetime.now().isoformat()
                             }
                             logger.info(f"TapTools: got price for {symbol}: ${price}")
@@ -642,6 +706,7 @@ class PricingService:
                             'market_cap': 0,
                             'confidence': price_data.get('confidence', 0),
                             'source': 'DefiLlama',
+                            'data_completeness': 'price_only',
                             'updated_at': datetime.now().isoformat()
                         }
                         fetched_count += 1
@@ -816,6 +881,7 @@ class PricingService:
         try:
             client = get_client("coingecko_historical", timeout=15.0)
             cg_headers = await self._get_cg_headers()
+            cg_base = self._get_cg_base_url()
             for symbol in symbols:
                 cg_id = ASSET_TO_COINGECKO.get(symbol)
                 if not cg_id:
@@ -824,7 +890,7 @@ class PricingService:
                 try:
                     response = await fetch_with_retry(
                         client, "GET",
-                        f"{COINGECKO_BASE_URL}/coins/{cg_id}/market_chart",
+                        f"{cg_base}/coins/{cg_id}/market_chart",
                         params={'vs_currency': 'usd', 'days': days},
                         headers=cg_headers
                     )
@@ -897,12 +963,17 @@ class PricingService:
 
     async def get_trending_coins(self) -> List[dict]:
         """
-        Get trending coins. Tries CMC first, falls back to CoinGecko.
+        Get trending coins. Tries CoinGecko first, falls back to CoinPaprika.
         """
         # Try CoinGecko trending (always available on free tier)
         try:
             client = get_client("coingecko", timeout=15.0)
-            response = await client.get(f"{COINGECKO_BASE_URL}/search/trending")
+            cg_base = self._get_cg_base_url()
+            cg_headers = await self._get_cg_headers()
+            response = await client.get(
+                f"{cg_base}/search/trending",
+                headers=cg_headers
+            )
             if response.status_code == 200:
                 data = response.json()
                 trending = []
@@ -918,7 +989,14 @@ class PricingService:
                     })
                 return trending
         except Exception as e:
-            logger.error(f"Error fetching trending coins: {e}")
+            logger.warning(f"CoinGecko trending failed: {e}")
+
+        # CoinPaprika fallback for trending
+        try:
+            from services.coinpaprika import coinpaprika_service
+            return await coinpaprika_service.get_trending()
+        except Exception as e:
+            logger.warning(f"CoinPaprika trending fallback failed: {e}")
 
         return []
 
@@ -940,6 +1018,7 @@ async def resolve_coingecko_id(symbol: str, blockchain: Optional[str] = None) ->
     1. ASSET_TO_COINGECKO dict (static mapping)
     2. engine_token_info DB (wallet-discovered tokens)
     3. CoinGecko /search API (persisted for future lookups)
+    4. CoinPaprika /search fallback (if CoinGecko search fails)
     """
     upper = symbol.upper()
 
@@ -961,8 +1040,9 @@ async def resolve_coingecko_id(symbol: str, blockchain: Optional[str] = None) ->
     try:
         client = get_client("coingecko", timeout=15.0)
         cg_headers = await pricing_service._get_cg_headers()
+        cg_base = pricing_service._get_cg_base_url()
         response = await client.get(
-            f"{COINGECKO_BASE_URL}/search",
+            f"{cg_base}/search",
             params={"query": upper},
             headers=cg_headers
         )
@@ -987,6 +1067,21 @@ async def resolve_coingecko_id(symbol: str, blockchain: Optional[str] = None) ->
                     return cg_id
     except Exception as e:
         logger.warning(f"CoinGecko search failed for {upper}: {e}")
+
+    # 4. CoinPaprika fallback — use its search to find the coin, then try to
+    #    map back to a CoinGecko-style ID via the coin name.
+    try:
+        from services.coinpaprika import coinpaprika_service
+        results = await coinpaprika_service.search_token(upper)
+        for coin in results:
+            if coin.get("symbol", "").upper() == upper:
+                # CoinPaprika found it; derive a plausible CoinGecko ID from the name
+                cp_name = coin.get("name", "").lower().replace(" ", "-")
+                if cp_name:
+                    logger.info(f"CoinPaprika resolved {upper} -> name '{cp_name}' (rank {coin.get('rank')})")
+                    return cp_name
+    except Exception as e:
+        logger.warning(f"CoinPaprika search fallback failed for {upper}: {e}")
 
     return None
 

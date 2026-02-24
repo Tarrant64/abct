@@ -234,6 +234,9 @@ CMC_BASE_URL = "https://pro-api.coinmarketcap.com/v1"
 # Charli3 API (Cardano token pricing + OHLCV)
 CHARLI3_BASE_URL = "https://api.charli3.io/api/v1"
 
+# CoinPaprika API (free, no key required — 25k calls/month)
+COINPAPRIKA_BASE_URL = "https://api.coinpaprika.com/v1"
+
 # Paths
 PROJECT_ROOT = Path(__file__).parent.parent
 DATA_DIR = PROJECT_ROOT / "data"

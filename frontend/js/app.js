@@ -302,6 +302,41 @@ async function loadPrices() {
     }
 }
 
+// ============ CoinGecko Quota Monitor ============
+let _quotaWarningDismissed = false;
+
+async function checkCoinGeckoQuota() {
+    if (_quotaWarningDismissed) return;
+    try {
+        const resp = await authFetch('/prices/quota');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (!data.configured) return;
+
+        const existing = document.getElementById('cg-quota-banner');
+        if (data.status === 'ok') {
+            if (existing) existing.remove();
+            return;
+        }
+
+        if (existing) return; // Already showing
+
+        const banner = document.createElement('div');
+        banner.id = 'cg-quota-banner';
+        banner.className = `quota-banner quota-${data.status}`;
+        banner.innerHTML = `
+            <span class="quota-icon">${data.status === 'critical' ? '🔴' : '🟡'}</span>
+            <span>CoinGecko API: ${data.message}${data.status === 'critical' ? ' — Fallback sources active' : ' — Consider reducing refresh frequency'}</span>
+            <button onclick="this.parentElement.remove(); _quotaWarningDismissed = true;" class="quota-dismiss">&times;</button>
+        `;
+
+        const main = document.querySelector('main') || document.body;
+        main.insertBefore(banner, main.firstChild);
+    } catch (e) {
+        // Silent fail - quota check is non-critical
+    }
+}
+
 // Cardano SSE price stream (Charli3) - updates prices in real-time when available
 let _cardanoPriceStream = null;
 function initCardanoPriceStream() {
@@ -380,6 +415,20 @@ function updatePriceDisplay() {
 
         if (priceElement && pd) {
             priceElement.textContent = formatPriceStr(pd.usd || 0);
+            // Show source badge when not CoinGecko (degraded/fallback data)
+            const src = pd.source || 'CoinGecko';
+            const existingBadge = priceElement.parentElement?.querySelector('.price-source-badge');
+            if (src !== 'CoinGecko') {
+                if (!existingBadge) {
+                    const badge = document.createElement('span');
+                    badge.className = 'price-source-badge';
+                    badge.title = `Price from ${src}`;
+                    badge.textContent = src.replace('CoinMarketCap', 'CMC').replace('CoinPaprika', 'CP').replace('DefiLlama', 'DL');
+                    priceElement.after(badge);
+                }
+            } else if (existingBadge) {
+                existingBadge.remove();
+            }
         }
 
         if (changeElement && pd) {
@@ -10168,6 +10217,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Initialize NFT image cache toggle state (non-blocking — can be slow)
     initImageCacheToggle();
+
+    // Check CoinGecko quota every 10 minutes
+    checkCoinGeckoQuota();
+    setInterval(checkCoinGeckoQuota, 600000);
 
     // Initialize portfolio history chart range buttons
     initHistoryRangeButtons();

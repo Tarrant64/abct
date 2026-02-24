@@ -565,10 +565,25 @@
 
             container.style.display = '';
             _moversData = data.movers.slice(0, 10);
+            _updateMoversSourceBadge(container, data.source);
             renderMovers();
         } catch (e) {
             console.error('Failed to load top movers:', e);
             loadTrendingFallback();
+        }
+    }
+
+    function _updateMoversSourceBadge(container, source) {
+        const header = container.querySelector('.utility-card-header');
+        if (!header) return;
+        const existing = header.querySelector('.price-source-badge');
+        if (existing) existing.remove();
+        if (source && source !== 'CoinGecko' && source !== 'cache') {
+            const badge = document.createElement('span');
+            badge.className = 'price-source-badge';
+            badge.title = 'Data from ' + source;
+            badge.textContent = source.replace('CoinMarketCap', 'CMC').replace('CoinPaprika', 'CP').replace('DefiLlama', 'DL');
+            header.appendChild(badge);
         }
     }
 
@@ -627,6 +642,7 @@
             }
 
             container.style.display = '';
+            _updateMoversSourceBadge(container, data.source);
             const listEl = document.getElementById('trendingCoinsList');
             if (!listEl) return;
 

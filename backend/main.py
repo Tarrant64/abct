@@ -52,6 +52,7 @@ from nft_image_database import init_nft_image_db
 from routers import wallets, portfolio, defi, prices, exchanges, nfts, custom_tokens, settings, security, logs, nft_scheduler as nft_scheduler_router, backup, auth, dashboard, mobile, nmkr, cache, spam, transactions, demo, cloudflare, system, balance_history, analytics, intelligence, search, pnl
 from routers import engine as engine_router
 from routers.privacy import router as privacy_router
+from routers.images import router as images_router
 from services.cardano_shield import cardano_shield
 
 from middleware import RequestSizeLimitMiddleware, RATE_LIMITING_AVAILABLE
@@ -252,6 +253,15 @@ async def lifespan(app: FastAPI):
     logger.info("NFT image cache database initialized")
     await log_service.info("main", "NFT image cache database initialized")
 
+    # Initialize token image cache directory
+    logger.info("Initializing token image cache...")
+    try:
+        from services.image_cache import image_cache_service
+        await image_cache_service.init_cache()
+        logger.info("Token image cache initialized")
+    except Exception as e:
+        logger.warning(f"Token image cache init failed: {e}")
+
     # Warm caches on startup (prices + portfolio) — no V1 snapshot needed
     async def warm_caches_background():
         try:
@@ -338,6 +348,31 @@ async def lifespan(app: FastAPI):
     _background_tasks.append(asyncio.create_task(collect_nft_prices_background()))
     _background_tasks.append(asyncio.create_task(_run_health_checks_background()))
     _background_tasks.append(asyncio.create_task(_seed_defi_logos_background()))
+
+    # Warm token metadata cache (background)
+    async def warm_metadata_cache_background():
+        try:
+            from services.token_metadata_cache import metadata_cache
+            await metadata_cache.init_table()
+            await metadata_cache.warm_cache()
+            logger.info("Token metadata cache warmed successfully")
+        except Exception as e:
+            logger.warning(f"Token metadata cache warming failed: {e}")
+
+    _background_tasks.append(asyncio.create_task(warm_metadata_cache_background()))
+
+    # Warm token image cache (background, runs after metadata)
+    async def warm_image_cache_background():
+        try:
+            # Wait a bit for metadata cache to populate first
+            await asyncio.sleep(30)
+            from services.image_cache import image_cache_service
+            await image_cache_service.warm_image_cache()
+            logger.info("Token image cache warmed successfully")
+        except Exception as e:
+            logger.warning(f"Token image cache warming failed: {e}")
+
+    _background_tasks.append(asyncio.create_task(warm_image_cache_background()))
 
     # Seed wallet_sources and start off-chain collector (V2 per-wallet balances)
     async def offchain_collector_startup():
@@ -769,6 +804,7 @@ app.include_router(intelligence.router)
 app.include_router(search.router)
 app.include_router(pnl.router)
 app.include_router(privacy_router)
+app.include_router(images_router)
 
 # Mount static files (frontend)
 frontend_path = PROJECT_ROOT / "frontend"

@@ -14342,3 +14342,71 @@ body.privacy-mode a[data-href] {
 [data-theme="sunset-horizon"] .approval-summary {
     background: rgba(6, 214, 160, 0.04);
 }
+
+/* ============ Quota Warning Banner ============ */
+.quota-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-radius: 10px;
+    margin: 8px 16px;
+    font-size: 13px;
+    animation: slideDown 0.3s ease;
+}
+.quota-warning {
+    background: rgba(255, 193, 7, 0.15);
+    border: 1px solid rgba(255, 193, 7, 0.4);
+    color: #ffc107;
+}
+.quota-critical {
+    background: rgba(244, 67, 54, 0.15);
+    border: 1px solid rgba(244, 67, 54, 0.4);
+    color: #f44336;
+}
+[data-theme="light"] .quota-warning {
+    background: rgba(255, 152, 0, 0.1);
+    border-color: rgba(255, 152, 0, 0.4);
+    color: #e65100;
+}
+[data-theme="light"] .quota-critical {
+    background: rgba(244, 67, 54, 0.1);
+    border-color: rgba(244, 67, 54, 0.4);
+    color: #c62828;
+}
+.quota-dismiss {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 18px;
+    opacity: 0.7;
+    padding: 0 4px;
+}
+.quota-dismiss:hover { opacity: 1; }
+.quota-icon { font-size: 16px; }
+@keyframes slideDown {
+    from { transform: translateY(-20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+/* ============ Price Source Badge ============ */
+.price-source-badge {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 6px;
+    margin-left: 6px;
+    vertical-align: middle;
+    background: rgba(255, 193, 7, 0.2);
+    border: 1px solid rgba(255, 193, 7, 0.4);
+    color: #ffc107;
+    letter-spacing: 0.3px;
+}
+[data-theme="light"] .price-source-badge {
+    background: rgba(255, 152, 0, 0.12);
+    border-color: rgba(255, 152, 0, 0.4);
+    color: #e65100;
+}

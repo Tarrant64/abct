@@ -1,7 +1,8 @@
 """
 Pricing API Endpoints
 
-Provides current cryptocurrency prices from CoinGecko.
+Provides current cryptocurrency prices from CoinGecko with
+CoinPaprika and DefiLlama fallbacks.
 """
 
 from fastapi import APIRouter, Query, HTTPException, Depends
@@ -53,102 +54,138 @@ async def get_all_prices(_user_id: int = Depends(verify_session)):
 @router.get("/search/{query}")
 async def search_token(query: str, _user_id: int = Depends(verify_session)):
     """
-    Search for a cryptocurrency by ticker or name using CoinGecko.
-    Returns price data if found.
+    Search for a cryptocurrency by ticker or name.
+    Tries CoinGecko first, falls back to CoinPaprika.
     """
+    # --- Try CoinGecko first ---
     try:
-        # First try to search CoinGecko for the token
         client = get_client("coingecko", timeout=10.0)
-        # Search for the coin
         search_response = await client.get(
             f"https://api.coingecko.com/api/v3/search?query={query}"
         )
 
-        if search_response.status_code != 200:
-            logger.error(f"CoinGecko search failed: {search_response.status_code}")
-            raise HTTPException(status_code=500, detail="Search API unavailable")
+        if search_response.status_code == 200:
+            search_data = search_response.json()
+            coins = search_data.get('coins', [])
 
-        search_data = search_response.json()
-        coins = search_data.get('coins', [])
+            if coins:
+                coin = coins[0]
+                coin_id = coin.get('id')
+                logger.info(f"Found coin: {coin.get('name')} ({coin.get('symbol')}) - ID: {coin_id}")
 
-        if not coins:
-            return {
-                "found": False,
-                "message": f"No token found matching '{query}'"
-            }
+                # Fetch detailed price data for this coin
+                price_response = await client.get(
+                    f"https://api.coingecko.com/api/v3/coins/markets",
+                    params={
+                        'ids': coin_id,
+                        'vs_currency': 'usd',
+                        'price_change_percentage': '1h,24h'
+                    }
+                )
 
-        # Get the first match (most relevant)
-        coin = coins[0]
-        coin_id = coin.get('id')
+                if price_response.status_code == 200:
+                    price_data = price_response.json()
+                    if price_data:
+                        market_data = price_data[0]
+                        return {
+                            "found": True,
+                            "symbol": coin.get('symbol', '').upper(),
+                            "name": coin.get('name'),
+                            "coin_id": coin_id,
+                            "usd": market_data.get('current_price'),
+                            "market_cap": market_data.get('market_cap'),
+                            "usd_1h_change": market_data.get('price_change_percentage_1h_in_currency'),
+                            "usd_24h_change": market_data.get('price_change_percentage_24h_in_currency'),
+                            "thumb": coin.get('thumb'),
+                            "source": "CoinGecko"
+                        }
 
-        logger.info(f"Found coin: {coin.get('name')} ({coin.get('symbol')}) - ID: {coin_id}")
+                # Price fetch failed but we found the coin
+                return {
+                    "found": True,
+                    "symbol": coin.get('symbol', '').upper(),
+                    "name": coin.get('name'),
+                    "coin_id": coin_id,
+                    "usd": None,
+                    "market_cap": None,
+                    "usd_1h_change": None,
+                    "usd_24h_change": None,
+                    "source": "CoinGecko"
+                }
 
-        # Fetch detailed price data for this coin
-        price_response = await client.get(
-            f"https://api.coingecko.com/api/v3/coins/markets",
-            params={
-                'ids': coin_id,
-                'vs_currency': 'usd',
-                'price_change_percentage': '1h,24h'
-            }
+            # CoinGecko returned 200 but no results — fall through to CoinPaprika
+            logger.debug(f"CoinGecko search returned no results for '{query}', trying CoinPaprika")
+        else:
+            logger.warning(f"CoinGecko search returned {search_response.status_code}, trying CoinPaprika")
+
+    except Exception as e:
+        logger.warning(f"CoinGecko search failed for '{query}': {e}, trying CoinPaprika")
+
+    # --- CoinPaprika fallback ---
+    try:
+        cp_client = get_client("coinpaprika", timeout=10.0)
+        cp_response = await cp_client.get(
+            "https://api.coinpaprika.com/v1/search",
+            params={"q": query, "c": "currencies", "limit": 10}
         )
 
-        if price_response.status_code != 200:
-            logger.error(f"CoinGecko price fetch failed: {price_response.status_code}")
-            # Return basic info even if price fetch fails
-            return {
-                "found": True,
-                "symbol": coin.get('symbol', '').upper(),
-                "name": coin.get('name'),
-                "coin_id": coin_id,
-                "usd": None,
-                "market_cap": None,
-                "usd_1h_change": None,
-                "usd_24h_change": None
-            }
+        if cp_response.status_code == 200:
+            cp_data = cp_response.json()
+            cp_coins = cp_data.get("currencies", [])
 
-        price_data = price_response.json()
+            if cp_coins:
+                cp_coin = cp_coins[0]
+                cp_id = cp_coin.get("id", "")
 
-        if not price_data:
-            return {
-                "found": True,
-                "symbol": coin.get('symbol', '').upper(),
-                "name": coin.get('name'),
-                "coin_id": coin_id,
-                "usd": None,
-                "market_cap": None,
-                "usd_1h_change": None,
-                "usd_24h_change": None
-            }
+                # Fetch ticker data for price info
+                ticker_resp = await cp_client.get(
+                    f"https://api.coinpaprika.com/v1/tickers/{cp_id}"
+                )
 
-        market_data = price_data[0]
+                if ticker_resp.status_code == 200:
+                    ticker = ticker_resp.json()
+                    quotes = ticker.get("quotes", {}).get("USD", {})
+                    return {
+                        "found": True,
+                        "symbol": (cp_coin.get("symbol") or "").upper(),
+                        "name": cp_coin.get("name"),
+                        "coin_id": cp_id,
+                        "usd": quotes.get("price"),
+                        "market_cap": quotes.get("market_cap"),
+                        "usd_1h_change": quotes.get("percent_change_1h"),
+                        "usd_24h_change": quotes.get("percent_change_24h"),
+                        "thumb": None,
+                        "source": "CoinPaprika"
+                    }
 
-        return {
-            "found": True,
-            "symbol": coin.get('symbol', '').upper(),
-            "name": coin.get('name'),
-            "coin_id": coin_id,
-            "usd": market_data.get('current_price'),
-            "market_cap": market_data.get('market_cap'),
-            "usd_1h_change": market_data.get('price_change_percentage_1h_in_currency'),
-            "usd_24h_change": market_data.get('price_change_percentage_24h_in_currency'),
-            "thumb": coin.get('thumb'),
-            "source": "CoinGecko"
-        }
+                # Ticker fetch failed, return basic info
+                return {
+                    "found": True,
+                    "symbol": (cp_coin.get("symbol") or "").upper(),
+                    "name": cp_coin.get("name"),
+                    "coin_id": cp_id,
+                    "usd": None,
+                    "market_cap": None,
+                    "usd_1h_change": None,
+                    "usd_24h_change": None,
+                    "source": "CoinPaprika"
+                }
 
-    except httpx.TimeoutException:
-        logger.error(f"Timeout searching for token: {query}")
-        raise HTTPException(status_code=504, detail="Search request timed out")
+        logger.warning(f"CoinPaprika search also failed for '{query}'")
     except Exception as e:
-        logger.error(f"Error searching for token {query}: {e}")
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+        logger.error(f"CoinPaprika search failed for '{query}': {e}")
+
+    return {
+        "found": False,
+        "message": f"No token found matching '{query}'"
+    }
 
 
 @router.get("/global")
 async def get_global_market(_user_id: int = Depends(verify_session)):
     """
     Get global crypto market cap and 24h change percentage.
-    Tries CMC first (saves CoinGecko calls), falls back to CoinGecko.
+    Tries CMC first, then CoinGecko, then CoinPaprika.
     """
     global _global_market_cache
     now = time.time()
@@ -203,28 +240,77 @@ async def get_global_market(_user_id: int = Depends(verify_session)):
             }
             _global_market_cache = {"data": result, "timestamp": now}
             return result
-        elif response.status_code == 429:
-            logger.warning("CoinGecko rate limited on /global")
-            if _global_market_cache["data"]:
-                return _global_market_cache["data"]
-            return {"error": "Rate limited", "total_market_cap_usd": 0}
         else:
-            logger.error(f"CoinGecko /global failed: {response.status_code}")
-            if _global_market_cache["data"]:
-                return _global_market_cache["data"]
-            return {"error": "API error", "total_market_cap_usd": 0}
+            logger.warning(f"CoinGecko /global returned {response.status_code}, trying CoinPaprika")
     except Exception as e:
-        logger.error(f"Error fetching global market data: {e}")
-        if _global_market_cache["data"]:
-            return _global_market_cache["data"]
-        return {"error": str(e), "total_market_cap_usd": 0}
+        logger.debug(f"CoinGecko global market failed: {e}")
+
+    # CoinPaprika fallback
+    try:
+        cp_client = get_client("coinpaprika", timeout=10.0)
+        cp_response = await cp_client.get("https://api.coinpaprika.com/v1/global")
+
+        if cp_response.status_code == 200:
+            cp_data = cp_response.json()
+            result = {
+                "total_market_cap_usd": cp_data.get("market_cap_usd", 0),
+                "market_cap_change_percentage_24h": cp_data.get("market_cap_change_24h", 0),
+                "total_volume_usd": cp_data.get("volume_24h_usd", 0),
+                "btc_dominance": cp_data.get("bitcoin_dominance_percentage", 0),
+                "active_cryptocurrencies": cp_data.get("cryptocurrencies_number", 0),
+                "source": "CoinPaprika"
+            }
+            _global_market_cache = {"data": result, "timestamp": now}
+            logger.info("Global market data from CoinPaprika")
+            return result
+        else:
+            logger.warning(f"CoinPaprika /global returned {cp_response.status_code}")
+    except Exception as e:
+        logger.debug(f"CoinPaprika global market failed: {e}")
+
+    # Stale cache as last resort
+    if _global_market_cache["data"]:
+        return _global_market_cache["data"]
+    return {"error": "All global market sources failed", "total_market_cap_usd": 0}
 
 
 @router.get("/trending")
 async def get_trending(_user_id: int = Depends(verify_session)):
-    """Get trending coins."""
+    """Get trending coins. Falls back to CoinPaprika top gainers if CoinGecko is empty."""
     trending = await pricing_service.get_trending_coins()
-    return {"coins": trending, "source": "CoinGecko"}
+    if trending:
+        return {"coins": trending, "source": "CoinGecko"}
+
+    # CoinPaprika fallback — use top tickers sorted by 24h change as "trending"
+    logger.debug("CoinGecko trending empty, trying CoinPaprika tickers")
+    try:
+        cp_client = get_client("coinpaprika", timeout=10.0)
+        cp_response = await cp_client.get(
+            "https://api.coinpaprika.com/v1/tickers",
+            params={"limit": 50}
+        )
+        if cp_response.status_code == 200:
+            tickers = cp_response.json()
+            # Sort by absolute 24h change to find "trending" coins
+            for t in tickers:
+                t["_abs_change"] = abs((t.get("quotes", {}).get("USD", {}).get("percent_change_24h") or 0))
+            tickers.sort(key=lambda t: t["_abs_change"], reverse=True)
+
+            cp_trending = []
+            for t in tickers[:15]:
+                quotes = t.get("quotes", {}).get("USD", {})
+                cp_trending.append({
+                    "name": t.get("name"),
+                    "symbol": (t.get("symbol") or "").upper(),
+                    "price": quotes.get("price"),
+                    "change_24h": quotes.get("percent_change_24h"),
+                    "market_cap": quotes.get("market_cap"),
+                })
+            return {"coins": cp_trending, "source": "CoinPaprika"}
+    except Exception as e:
+        logger.error(f"CoinPaprika trending fallback failed: {e}")
+
+    return {"coins": [], "source": "none"}
 
 
 @router.get("/top-movers")
@@ -246,6 +332,10 @@ async def get_top_movers(
     if cached:
         return {"success": True, "movers": cached, "source": "cache"}
 
+    source = "CoinGecko"
+    coins_data = None
+
+    # --- Try CoinGecko first ---
     try:
         client = get_client("coingecko", timeout=15.0)
         resp = await client.get(
@@ -260,36 +350,101 @@ async def get_top_movers(
             }
         )
 
-        if resp.status_code != 200:
-            logger.warning(f"CoinGecko markets returned {resp.status_code}")
-            return {"success": False, "error": f"API returned {resp.status_code}", "movers": []}
-
-        coins = resp.json()
-        movers = []
-        for coin in coins:
-            mcap = coin.get("market_cap") or 0
-            change_24h = coin.get("price_change_percentage_24h") or 0
-
-            if mcap >= min_mcap and abs(change_24h) >= min_change:
-                movers.append({
+        if resp.status_code == 200:
+            raw = resp.json()
+            coins_data = []
+            for coin in raw:
+                coins_data.append({
                     "name": coin.get("name"),
                     "symbol": (coin.get("symbol") or "").upper(),
                     "image": coin.get("image"),
                     "price": coin.get("current_price"),
-                    "market_cap": mcap,
-                    "change_24h": round(change_24h, 2),
+                    "market_cap": coin.get("market_cap") or 0,
+                    "change_24h": coin.get("price_change_percentage_24h") or 0,
                     "volume_24h": coin.get("total_volume") or 0,
                 })
-
-        # Sort by absolute change descending
-        movers.sort(key=lambda x: abs(x["change_24h"]), reverse=True)
-        movers = movers[:limit]
-
-        await set_cache(cache_key, movers, CACHE_TTL_HOT)
-        return {"success": True, "movers": movers, "source": "CoinGecko"}
+        else:
+            logger.warning(f"CoinGecko markets returned {resp.status_code}, trying CoinPaprika")
     except Exception as e:
-        logger.error(f"Error fetching top movers: {e}")
-        return {"success": False, "error": str(e), "movers": []}
+        logger.warning(f"CoinGecko top movers failed: {e}, trying CoinPaprika")
+
+    # --- CoinPaprika fallback ---
+    if coins_data is None:
+        try:
+            cp_client = get_client("coinpaprika", timeout=15.0)
+            cp_resp = await cp_client.get(
+                "https://api.coinpaprika.com/v1/tickers",
+                params={"limit": 250}
+            )
+
+            if cp_resp.status_code == 200:
+                source = "CoinPaprika"
+                tickers = cp_resp.json()
+                coins_data = []
+                for t in tickers:
+                    quotes = t.get("quotes", {}).get("USD", {})
+                    coins_data.append({
+                        "name": t.get("name"),
+                        "symbol": (t.get("symbol") or "").upper(),
+                        "image": None,
+                        "price": quotes.get("price"),
+                        "market_cap": quotes.get("market_cap") or 0,
+                        "change_24h": quotes.get("percent_change_24h") or 0,
+                        "volume_24h": quotes.get("volume_24h") or 0,
+                    })
+            else:
+                logger.error(f"CoinPaprika tickers returned {cp_resp.status_code}")
+        except Exception as e:
+            logger.error(f"CoinPaprika top movers also failed: {e}")
+
+    if coins_data is None:
+        return {"success": False, "error": "All market data sources failed", "movers": []}
+
+    # Filter and sort
+    movers = []
+    for coin in coins_data:
+        mcap = coin["market_cap"]
+        change_24h = coin["change_24h"]
+        if mcap >= min_mcap and abs(change_24h) >= min_change:
+            coin["change_24h"] = round(change_24h, 2)
+            movers.append(coin)
+
+    movers.sort(key=lambda x: abs(x["change_24h"]), reverse=True)
+    movers = movers[:limit]
+
+    await set_cache(cache_key, movers, CACHE_TTL_HOT)
+    return {"success": True, "movers": movers, "source": source}
+
+
+@router.get("/quota")
+async def get_quota(_user_id: int = Depends(verify_session)):
+    """Get CoinGecko API usage stats with warning thresholds."""
+    try:
+        client = get_client("coingecko", timeout=10.0)
+        cg_headers = await pricing_service._get_cg_headers()
+        if not cg_headers:
+            return {"configured": False, "message": "No CoinGecko API key configured"}
+
+        response = await client.get(
+            "https://api.coingecko.com/api/v3/key",
+            headers=cg_headers
+        )
+        if response.status_code == 200:
+            data = response.json()
+            current = data.get("current_total_monthly_calls", 0)
+            limit = data.get("monthly_call_credit", 10000)
+            pct = (current / limit * 100) if limit > 0 else 0
+            return {
+                "configured": True,
+                "current_calls": current,
+                "monthly_limit": limit,
+                "usage_percent": round(pct, 1),
+                "status": "critical" if pct >= 95 else "warning" if pct >= 80 else "ok",
+                "message": f"{current:,}/{limit:,} calls ({pct:.1f}%)"
+            }
+        return {"configured": True, "error": f"API returned {response.status_code}"}
+    except Exception as e:
+        return {"configured": False, "error": str(e)}
 
 
 @router.get("/stream/cardano")
