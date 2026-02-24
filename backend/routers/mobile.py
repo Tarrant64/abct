@@ -672,6 +672,9 @@ async def get_mobile_portfolio_summary(
         h['value_usd'] = round(h['value_usd'], 2)
         h['native_amount'] = round(h['native_amount'], 8)
         h['percentage'] = round((h['value_usd'] / total_value_usd * 100) if total_value_usd > 0 else 0, 1)
+        # Ensure every entry has an image_url via logokit fallback
+        if not h.get('image_url'):
+            h['image_url'] = logokit_service.get_crypto_logo_url(h['symbol'], size=64)
     top_holdings.sort(key=lambda x: x['value_usd'], reverse=True)
 
     # Fetch 7-day sparkline data + CoinGecko images for top holdings (for watchOS)

@@ -89,14 +89,14 @@ async def get_staking_positions(address: str, refresh: bool = False, user_id: in
     cache_key = f"staking_positions_{address}"
 
     if not refresh:
-        cached = await get_cache(cache_key)
+        cached = await get_cache(cache_key, user_id=user_id)
         if cached:
             cached['from_cache'] = True
             return cached
 
     if not refresh:
         # Fresh cache miss — try stale fallback so frontend gets instant data
-        stale_data, stale_expires = await get_stale_cache(cache_key)
+        stale_data, stale_expires = await get_stale_cache(cache_key, user_id=user_id)
         if stale_data:
             cached_at = (datetime.fromisoformat(stale_expires) - timedelta(seconds=STAKING_CACHE_TTL)).isoformat()
             stale_data['from_cache'] = True
@@ -106,7 +106,7 @@ async def get_staking_positions(address: str, refresh: bool = False, user_id: in
 
     # Fetch previous result for protocol-level merge on timeout
     previous_result = None
-    stale_data, stale_expires = await get_stale_cache(cache_key)
+    stale_data, stale_expires = await get_stale_cache(cache_key, user_id=user_id)
     if stale_data and stale_data.get('protocols'):
         previous_result = stale_data
 
@@ -120,7 +120,7 @@ async def get_staking_positions(address: str, refresh: bool = False, user_id: in
 
         # Don't overwrite cache with a degraded result (fewer protocols with data).
         # This prevents progressive data loss when Blockfrost is overloaded.
-        existing = await get_cache(cache_key)
+        existing = await get_cache(cache_key, user_id=user_id)
         if existing:
             existing_data_count = sum(
                 1 for p in existing.get('protocols', {}).values()
@@ -139,7 +139,7 @@ async def get_staking_positions(address: str, refresh: bool = False, user_id: in
                 existing['from_cache'] = True
                 return existing
 
-        await set_cache(cache_key, result, STAKING_CACHE_TTL)
+        await set_cache(cache_key, result, STAKING_CACHE_TTL, user_id=user_id)
 
     return result
 
@@ -242,7 +242,7 @@ async def get_pending_rewards(address: str, refresh: bool = False, user_id: int 
     cache_key = f"defi_rewards_{address}"
 
     if not refresh:
-        cached = await get_cache(cache_key)
+        cached = await get_cache(cache_key, user_id=user_id)
         if cached:
             cached['from_cache'] = True
             return cached
@@ -251,7 +251,7 @@ async def get_pending_rewards(address: str, refresh: bool = False, user_id: int 
 
     if result:
         result['from_cache'] = False
-        await set_cache(cache_key, result, STAKING_CACHE_TTL)
+        await set_cache(cache_key, result, STAKING_CACHE_TTL, user_id=user_id)
 
     return result
 
@@ -347,7 +347,7 @@ async def get_helium_rewards(address: str, refresh: bool = False, user_id: int =
     cache_key = f"helium_rewards_{address}"
 
     if not refresh:
-        cached = await get_cache(cache_key)
+        cached = await get_cache(cache_key, user_id=user_id)
         if cached:
             cached['from_cache'] = True
             return cached
@@ -362,7 +362,7 @@ async def get_helium_rewards(address: str, refresh: bool = False, user_id: int =
         }
 
     result['from_cache'] = False
-    await set_cache(cache_key, result, CACHE_TTL_WARM)
+    await set_cache(cache_key, result, CACHE_TTL_WARM, user_id=user_id)
     return result
 
 
@@ -372,7 +372,7 @@ async def get_iagon_staking_data(address: str, refresh: bool = False, user_id: i
     cache_key = f"iagon_staking_{address}"
 
     if not refresh:
-        cached = await get_cache(cache_key)
+        cached = await get_cache(cache_key, user_id=user_id)
         if cached:
             cached['from_cache'] = True
             return cached
@@ -403,7 +403,7 @@ async def get_iagon_staking_data(address: str, refresh: bool = False, user_id: i
     }
 
     result['from_cache'] = False
-    await set_cache(cache_key, result, CACHE_TTL_WARM)
+    await set_cache(cache_key, result, CACHE_TTL_WARM, user_id=user_id)
     return result
 
 
@@ -573,7 +573,7 @@ async def get_defi_summary(user_id: int = Depends(verify_session), refresh: bool
     cache_key = f"defi_summary_{user_id}"
 
     if not refresh:
-        cached = await get_cache(cache_key)
+        cached = await get_cache(cache_key, user_id=user_id)
         if cached:
             cached['from_cache'] = True
             return cached
@@ -676,11 +676,11 @@ async def get_defi_summary(user_id: int = Depends(verify_session), refresh: bool
 
     # Only cache if we got meaningful results (avoid caching failed/empty scans)
     if wallets_with_defi > 0 or len(all_positions) > 0:
-        await set_cache(cache_key, result, DEFI_SUMMARY_CACHE_TTL)
+        await set_cache(cache_key, result, DEFI_SUMMARY_CACHE_TTL, user_id=user_id)
     else:
         logger.warning(f"[DeFi Summary] Empty result for {len(cardano_wallets)} wallets - NOT caching (possible API failure)")
         # Try to return stale cache if available
-        stale = await get_cache(cache_key)
+        stale = await get_cache(cache_key, user_id=user_id)
         if stale and stale.get('wallets_with_defi', 0) > 0:
             logger.info("[DeFi Summary] Returning stale cache instead of empty result")
             stale['from_cache'] = True

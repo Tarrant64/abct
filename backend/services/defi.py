@@ -1219,6 +1219,11 @@ class DeFiService:
                 logger.warning(f"Surf Lending API not available: {e}")
 
             # Fallback: Query on-chain data
+            from services.defi_protocols.cardano.surf import SURF_STAKING_ADDRESS
+            if not SURF_STAKING_ADDRESS:
+                logger.warning("[Surf] No staking address configured for on-chain fallback — skipping")
+                return None
+
             response = await client.get(
                 f"{BLOCKFROST_BASE_URL}/addresses/{SURF_STAKING_ADDRESS}/utxos",
                 headers=self.headers,

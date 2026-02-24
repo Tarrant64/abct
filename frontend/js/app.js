@@ -1163,6 +1163,7 @@ async function loadStakingTotalsForOverview() {
 const refreshBtn = document.getElementById('refreshBtn');
 const statusBar = document.getElementById('statusBar');
 const statusMessage = document.getElementById('statusMessage');
+let _statusHideTimeout = null;
 const adaBalance = document.getElementById('adaBalance');
 const btcBalance = document.getElementById('btcBalance');
 const cardanoWallets = document.getElementById('cardanoWallets');
@@ -1408,8 +1409,9 @@ function showStatus(message, isError = false) {
     if (isError) {
         statusBar.classList.add('error');
     }
-    // Auto-hide after 5 seconds
-    setTimeout(() => {
+    // Auto-hide after 5 seconds (clear previous timer so only the latest one wins)
+    clearTimeout(_statusHideTimeout);
+    _statusHideTimeout = setTimeout(() => {
         statusBar.classList.add('hidden');
     }, 5000);
 }
