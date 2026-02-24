@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from routers import portfolio, wallets, exchanges, defi, nfts
 from services.pricing import pricing_service
 from services.logokit_service import logokit_service
+from services.token_metadata_cache import metadata_cache
 from services.cardano import cardano_service
 from database import (
     get_all_wallets,
@@ -576,8 +577,12 @@ async def get_mobile_portfolio_summary(
                             symbol_agg[token]['value_usd'] += val
                             symbol_agg[token]['native_amount'] += amount
                         else:
+                            # Look up proper name and image from metadata cache
+                            meta = await metadata_cache.get_metadata(token)
+                            token_name = (meta.get('name') if meta else None) or token.capitalize()
+                            token_image = (meta.get('image_url') if meta else None) or logokit_service.get_crypto_logo_url(token, size=64)
                             symbol_agg[token] = {
-                                "name": token.lower(),
+                                "name": token_name,
                                 "symbol": token,
                                 "value_usd": val,
                                 "native_amount": amount,
@@ -585,7 +590,7 @@ async def get_mobile_portfolio_summary(
                                 "price_change_24h": round((price_data.get('usd_24h_change', 0) or 0) if isinstance(price_data, dict) else 0, 2),
                                 "wallet_count": 0,
                                 "percentage": 0,
-                                "image_url": logokit_service.get_crypto_logo_url(token, size=64),
+                                "image_url": token_image,
                             }
                     # Add pending rewards
                     reward_token = protocol_data.get('reward_token')
@@ -599,8 +604,11 @@ async def get_mobile_portfolio_summary(
                             symbol_agg[rt]['value_usd'] += val
                             symbol_agg[rt]['native_amount'] += pending
                         else:
+                            meta = await metadata_cache.get_metadata(rt)
+                            rt_name = (meta.get('name') if meta else None) or rt.capitalize()
+                            rt_image = (meta.get('image_url') if meta else None) or logokit_service.get_crypto_logo_url(rt, size=64)
                             symbol_agg[rt] = {
-                                "name": rt.lower(),
+                                "name": rt_name,
                                 "symbol": rt,
                                 "value_usd": val,
                                 "native_amount": pending,
@@ -608,7 +616,7 @@ async def get_mobile_portfolio_summary(
                                 "price_change_24h": round((price_data.get('usd_24h_change', 0) or 0) if isinstance(price_data, dict) else 0, 2),
                                 "wallet_count": 0,
                                 "percentage": 0,
-                                "image_url": logokit_service.get_crypto_logo_url(rt, size=64),
+                                "image_url": rt_image,
                             }
     except Exception as e:
         logger.debug(f"Could not aggregate staking for top holdings: {e}")
@@ -635,8 +643,11 @@ async def get_mobile_portfolio_summary(
                     symbol_agg[currency]['value_usd'] += val
                     symbol_agg[currency]['native_amount'] += balance
                 else:
+                    meta = await metadata_cache.get_metadata(currency)
+                    exc_name = (meta.get('name') if meta else None) or currency.capitalize()
+                    exc_image = (meta.get('image_url') if meta else None) or logokit_service.get_crypto_logo_url(currency, size=64)
                     symbol_agg[currency] = {
-                        "name": currency.lower(),
+                        "name": exc_name,
                         "symbol": currency,
                         "value_usd": val,
                         "native_amount": balance,
@@ -644,7 +655,7 @@ async def get_mobile_portfolio_summary(
                         "price_change_24h": 0,
                         "wallet_count": 0,
                         "percentage": 0,
-                        "image_url": logokit_service.get_crypto_logo_url(currency, size=64),
+                        "image_url": exc_image,
                     }
     except Exception as e:
         logger.debug(f"Could not aggregate exchange assets for top holdings: {e}")
