@@ -150,15 +150,38 @@ async def dispose_lots(req: DisposeRequest, user_id: int = Depends(verify_sessio
 async def compute_pnl(
     user_id: int = Depends(verify_session),
     exchange: Optional[str] = None,
+    include_wallets: bool = Query(default=True),
 ):
-    """Trigger full P&L recomputation from exchange transactions"""
+    """Trigger full P&L recomputation from exchange and wallet transactions"""
     try:
         result = await cost_basis_engine.ingest_exchange_transactions(user_id, exchange)
+
+        if include_wallets:
+            wallet_result = await cost_basis_engine.ingest_wallet_transactions(user_id)
+            result["wallet_lots_created"] = wallet_result["lots_created"]
+            result["wallet_disposals_processed"] = wallet_result["disposals_processed"]
+            result["wallet_skipped_no_price"] = wallet_result["skipped_no_price"]
+
         await cost_basis_engine.refresh_pnl_summary(user_id)
         return result
     except Exception as e:
         logger.error(f"Error computing P&L: {e}")
         raise HTTPException(status_code=500, detail="Failed to compute P&L")
+
+
+@router.post("/compute/wallets")
+async def compute_wallet_pnl(
+    user_id: int = Depends(verify_session),
+    blockchain: Optional[str] = None,
+):
+    """Trigger P&L computation from self-custody wallet transactions only"""
+    try:
+        result = await cost_basis_engine.ingest_wallet_transactions(user_id, blockchain)
+        await cost_basis_engine.refresh_pnl_summary(user_id)
+        return result
+    except Exception as e:
+        logger.error(f"Error computing wallet P&L: {e}")
+        raise HTTPException(status_code=500, detail="Failed to compute wallet P&L")
 
 
 @router.post("/refresh")

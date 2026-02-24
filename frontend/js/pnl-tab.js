@@ -136,9 +136,9 @@ function _attachPnlHeaderListeners(container) {
 // --- Refresh P&L ---
 
 async function refreshPnl() {
-    showStatus('Recomputing P&L data...');
+    showStatus('Recomputing P&L from exchanges & wallets...');
     try {
-        await authFetch('/pnl/compute', { method: 'POST' });
+        await authFetch('/pnl/compute?include_wallets=true', { method: 'POST' });
         await authFetch('/pnl/refresh', { method: 'POST' });
 
         // Reset lazy-load flags so sub-views reload

@@ -139,6 +139,196 @@ class CostBasisEngine:
             "total_transactions": len(transactions) if 'transactions' in dir() else 0
         }
 
+    async def ingest_wallet_transactions(self, user_id: int, blockchain: str = None) -> dict:
+        """Import on-chain wallet transactions into cost_basis_lots.
+
+        Reads from transaction_history table, enriches with historical prices
+        via price_enricher, then creates lots (received) or disposals (sent).
+
+        Args:
+            user_id: User ID
+            blockchain: Optional filter by blockchain name
+
+        Returns:
+            dict with counts: {lots_created, disposals_processed, skipped_no_price, errors, total_transactions}
+        """
+        from engine.enrichment.price_enricher import price_enricher
+
+        lots_created = 0
+        disposals_processed = 0
+        skipped_no_price = 0
+        errors = 0
+
+        # Blockchain -> native symbol mapping
+        chain_symbol_map = {
+            'cardano': 'ADA', 'bitcoin': 'BTC', 'ethereum': 'ETH',
+            'solana': 'SOL', 'polygon': 'MATIC', 'base': 'ETH',
+            'algorand': 'ALGO',
+        }
+
+        async with aiosqlite.connect(str(DATABASE_PATH)) as db:
+            db.row_factory = aiosqlite.Row
+
+            # Get already-processed tx_ids to avoid duplicates
+            cursor = await db.execute(
+                "SELECT tx_id FROM cost_basis_lots WHERE user_id = ? AND tx_id IS NOT NULL",
+                (user_id,)
+            )
+            processed_tx_ids = {row[0] for row in await cursor.fetchall()}
+
+            # Fetch wallet transactions
+            query = """
+                SELECT id, wallet_id, blockchain, tx_hash, tx_time, direction,
+                       amount, token_symbol, fee, status
+                FROM transaction_history
+                WHERE user_id = ? AND status = 'confirmed'
+                  AND direction IN ('sent', 'received')
+                  AND amount IS NOT NULL AND token_symbol IS NOT NULL
+            """
+            params: list = [user_id]
+            if blockchain:
+                query += " AND blockchain = ?"
+                params.append(blockchain)
+            query += " ORDER BY tx_time ASC"
+
+            cursor = await db.execute(query, params)
+            transactions = await cursor.fetchall()
+
+        if not transactions:
+            return {
+                "lots_created": 0, "disposals_processed": 0,
+                "skipped_no_price": 0, "errors": 0, "total_transactions": 0
+            }
+
+        # Batch price enrichment: collect all unique (symbol, date) pairs
+        symbol_dates: Dict[str, set] = {}
+        for tx in transactions:
+            tx_hash = tx['tx_hash']
+            direction = tx['direction']
+
+            # Skip already-processed acquisitions
+            if direction == 'received' and tx_hash in processed_tx_ids:
+                continue
+            # Skip already-processed disposals
+            if direction == 'sent':
+                try:
+                    amt = float(tx['amount'])
+                except (ValueError, TypeError):
+                    continue
+                already = await self._is_disposal_processed(
+                    user_id, tx['token_symbol'].upper(), tx['tx_time'], amt
+                )
+                if already:
+                    continue
+
+            symbol = tx['token_symbol'].upper()
+            chain = tx['blockchain']
+
+            # Map to native symbol if the token_symbol matches the chain native
+            native = chain_symbol_map.get(chain)
+            if native and symbol == native:
+                lookup_symbol = native
+            else:
+                lookup_symbol = symbol
+
+            tx_date = str(tx['tx_time'] or '')[:10]
+            if not tx_date or len(tx_date) < 10:
+                continue
+
+            symbol_dates.setdefault(lookup_symbol, set()).add(tx_date)
+
+        # Fetch prices in batches
+        native_symbols = set(chain_symbol_map.values())
+        price_cache: Dict[str, Dict[str, float]] = {}
+
+        for symbol, dates in symbol_dates.items():
+            date_list = sorted(dates)
+            if symbol in native_symbols:
+                prices = await price_enricher.fetch_historical_prices_batch(symbol, date_list)
+            else:
+                # Non-native token: per-date fetch via DefiLlama
+                prices = {}
+                for date in date_list:
+                    # Try using the symbol as a coingecko lookup
+                    price = await price_enricher.fetch_historical_price(symbol, "ethereum", date)
+                    if price:
+                        prices[date] = price
+            price_cache[symbol] = prices
+
+        logger.info(f"Wallet tx price enrichment: {sum(len(v) for v in price_cache.values())} prices for {len(price_cache)} symbols")
+
+        # Process each transaction
+        for tx in transactions:
+            tx_hash = tx['tx_hash']
+            direction = tx['direction']
+            chain = tx['blockchain']
+            raw_symbol = tx['token_symbol'].upper()
+
+            native = chain_symbol_map.get(chain)
+            lookup_symbol = native if (native and raw_symbol == native) else raw_symbol
+
+            try:
+                amount = float(tx['amount'] or 0)
+            except (ValueError, TypeError):
+                errors += 1
+                continue
+
+            if amount <= 0:
+                continue
+
+            tx_date = str(tx['tx_time'] or '')[:10]
+            if not tx_date or len(tx_date) < 10:
+                errors += 1
+                continue
+
+            price = price_cache.get(lookup_symbol, {}).get(tx_date)
+            if not price:
+                skipped_no_price += 1
+                continue
+
+            if direction == 'received':
+                if tx_hash in processed_tx_ids:
+                    continue
+
+                cost_per_unit = price
+                try:
+                    await self._insert_lot(
+                        user_id, raw_symbol, amount, cost_per_unit,
+                        tx['tx_time'], 'receive', chain, tx_hash
+                    )
+                    lots_created += 1
+                    processed_tx_ids.add(tx_hash)
+                except Exception as e:
+                    logger.warning(f"Failed to create wallet lot for tx {tx_hash}: {e}")
+                    errors += 1
+
+            elif direction == 'sent':
+                already_disposed = await self._is_disposal_processed(
+                    user_id, raw_symbol, tx['tx_time'], amount
+                )
+                if already_disposed:
+                    continue
+
+                proceeds = amount * price
+                try:
+                    await self.dispose_lots(
+                        user_id, raw_symbol, amount, proceeds,
+                        method="fifo", disposal_type='send',
+                        disposal_date=tx['tx_time']
+                    )
+                    disposals_processed += 1
+                except Exception as e:
+                    logger.warning(f"Failed to dispose wallet lots for tx {tx_hash}: {e}")
+                    errors += 1
+
+        return {
+            "lots_created": lots_created,
+            "disposals_processed": disposals_processed,
+            "skipped_no_price": skipped_no_price,
+            "errors": errors,
+            "total_transactions": len(transactions)
+        }
+
     async def _insert_lot(
         self, user_id: int, token_symbol: str, quantity: float,
         cost_per_unit: float, acquisition_date: str,
