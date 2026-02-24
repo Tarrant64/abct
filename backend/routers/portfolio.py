@@ -1454,11 +1454,19 @@ async def get_all_holdings(
             logger.warning(f"[All Holdings] DeFi summary fetch failed: {e}")
             defi_data = None
 
-    # Fetch staking positions for all Cardano wallets
+    # Fetch staking positions for all Cardano wallets.
+    # Call the staking endpoint (not just cache read) so data is fetched
+    # when caches are empty — the mobile app never triggers staking fetches,
+    # so passive cache reads return nothing once the 24h TTL expires.
     cardano_addrs = [w['address'] for w in wallets if w['blockchain'] == 'cardano']
-    staking_caches = await asyncio.gather(*[
-        get_cache(f"staking_positions_{addr}") for addr in cardano_addrs
-    ]) if cardano_addrs else []
+    if cardano_addrs:
+        from routers.defi import get_staking_positions
+        staking_caches = await asyncio.gather(*[
+            get_staking_positions(addr, refresh=False, user_id=user_id)
+            for addr in cardano_addrs
+        ], return_exceptions=True)
+    else:
+        staking_caches = []
 
     # Fetch exchange data from cache
     exchange_names = ['coinbase', 'binance', 'binance_us', 'okx', 'bitget', 'gate', 'kucoin']
@@ -1531,7 +1539,7 @@ async def get_all_holdings(
 
     # --- 4. Staking positions (INDY, STRIKE, LQ, IAG, ADA in Surf, etc.) ---
     for cached in staking_caches:
-        if not cached or not cached.get('protocols'):
+        if isinstance(cached, (Exception, BaseException)) or not cached or not isinstance(cached, dict) or not cached.get('protocols'):
             continue
         for protocol_name, protocol_data in cached['protocols'].items():
             for stake in (protocol_data.get('staked') or []):

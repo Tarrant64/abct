@@ -556,11 +556,14 @@ async def get_mobile_portfolio_summary(
         all_wallets = await get_all_wallets(user_id=user_id)
         cardano_addrs = [w['address'] for w in all_wallets if w['blockchain'] == 'cardano']
         if cardano_addrs:
+            # Call staking endpoint (not just cache read) so data is fetched
+            # when caches are empty — ensures staked tokens appear in top_holdings
             staking_caches = await asyncio.gather(*[
-                get_cache(f"staking_positions_{addr}") for addr in cardano_addrs
-            ])
+                defi.get_staking_positions(addr, refresh=False, user_id=user_id)
+                for addr in cardano_addrs
+            ], return_exceptions=True)
             for cached in staking_caches:
-                if not cached or not cached.get('protocols'):
+                if isinstance(cached, (Exception, BaseException)) or not cached or not isinstance(cached, dict) or not cached.get('protocols'):
                     continue
                 for protocol_name, protocol_data in cached['protocols'].items():
                     for stake in (protocol_data.get('staked') or []):
@@ -645,6 +648,23 @@ async def get_mobile_portfolio_summary(
                     }
     except Exception as e:
         logger.debug(f"Could not aggregate exchange assets for top holdings: {e}")
+
+    # Recompute staking value from now-populated caches.
+    # The staking fetches above populate caches that get_portfolio_totals
+    # couldn't see (it ran in parallel before caches existed).
+    try:
+        from services.offchain_helpers import get_staking_value
+        live_staking = await get_staking_value(all_prices, user_id=user_id)
+        if live_staking > staking_value:
+            staking_value = live_staking
+            total_value_usd = (self_custody_value + tracked_tokens_value + custom_tokens_value +
+                               exchanges_value + nfts_value + staking_value + defi_value)
+            # Recalculate blockchain percentages with updated total
+            for bs in blockchain_summaries:
+                bs['percentage'] = round(
+                    (bs['value_usd'] / total_value_usd * 100) if total_value_usd > 0 else 0, 1)
+    except Exception as e:
+        logger.debug(f"Could not recompute staking value: {e}")
 
     # Finalize top_holdings
     top_holdings = list(symbol_agg.values())
