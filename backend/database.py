@@ -3281,7 +3281,9 @@ async def get_unified_daily_totals(user_id: int, start_date: str = None,
                 SUM(CASE WHEN ws.source_type = 'exchange' THEN wdb.value_usd ELSE 0 END) as exchange_value,
                 SUM(CASE WHEN ws.source_type = 'staking' THEN wdb.value_usd ELSE 0 END) as staking_value,
                 SUM(CASE WHEN ws.source_type = 'defi' THEN wdb.value_usd ELSE 0 END) as defi_value,
-                SUM(CASE WHEN ws.source_type = 'nft' THEN wdb.value_usd ELSE 0 END) as nft_value
+                SUM(CASE WHEN ws.source_type = 'nft' THEN wdb.value_usd ELSE 0 END) as nft_value,
+                SUM(CASE WHEN ws.source_type = 'tracked_tokens' THEN wdb.value_usd ELSE 0 END) as tracked_tokens_value,
+                SUM(CASE WHEN ws.source_type = 'custom_tokens' THEN wdb.value_usd ELSE 0 END) as custom_tokens_value
             FROM wallet_daily_balances wdb
             JOIN wallet_sources ws ON wdb.source_id = ws.id
             WHERE wdb.user_id = ? AND ws.is_active = 1
@@ -3459,3 +3461,19 @@ async def seed_wallet_sources(user_id: int):
             source_key='nft:all',
             label='NFT Portfolio'
         )
+
+    # Seed tracked tokens source (aggregate)
+    await upsert_wallet_source(
+        user_id=user_id,
+        source_type='tracked_tokens',
+        source_key='tracked_tokens:all',
+        label='Tracked Tokens'
+    )
+
+    # Seed custom tokens source (aggregate)
+    await upsert_wallet_source(
+        user_id=user_id,
+        source_type='custom_tokens',
+        source_key='custom_tokens:all',
+        label='Custom Tokens'
+    )

@@ -1748,6 +1748,8 @@ async def get_portfolio_history(
         staking = row.get('staking_value', 0) or 0
         defi = row.get('defi_value', 0) or 0
         nfts = row.get('nft_value', 0) or 0
+        tracked_tokens = row.get('tracked_tokens_value', 0) or 0
+        custom_tokens = row.get('custom_tokens_value', 0) or 0
         total = row.get('total_value', 0) or 0
 
         history.append({
@@ -1759,7 +1761,8 @@ async def get_portfolio_history(
                 "staking": round(staking, 2),
                 "defi": round(defi, 2),
                 "nfts": round(nfts, 2),
-                "tracked_tokens": 0,
+                "tracked_tokens": round(tracked_tokens, 2),
+                "custom_tokens": round(custom_tokens, 2),
             }
         })
 
@@ -1975,6 +1978,8 @@ async def get_unified_chart(
         staking = row.get('staking_value', 0) or 0
         defi = row.get('defi_value', 0) or 0
         nfts = row.get('nft_value', 0) or 0
+        tracked_tokens = row.get('tracked_tokens_value', 0) or 0
+        custom_tokens = row.get('custom_tokens_value', 0) or 0
         total = row.get('total_value', 0) or 0
         off_chain = exchange + staking + defi + nfts
 
@@ -1991,7 +1996,8 @@ async def get_unified_chart(
                     "staking": round(staking, 2),
                     "defi": round(defi, 2),
                     "nfts": round(nfts, 2),
-                    "tracked_tokens": 0,
+                    "tracked_tokens": round(tracked_tokens, 2),
+                    "custom_tokens": round(custom_tokens, 2),
                 }
             }
         })
@@ -2071,6 +2077,8 @@ async def get_24h_hourly_chart(
     staking_usd = float(totals.get('staking_usd', 0) or 0)
     defi_usd = float(totals.get('defi_usd', 0) or 0)
     nft_usd = float(totals.get('nft_usd', 0) or 0)
+    tracked_tokens_usd = float(totals.get('tracked_tokens_usd', 0) or 0)
+    custom_tokens_usd = float(totals.get('custom_tokens_usd', 0) or 0)
     off_chain = exchange_usd + staking_usd + defi_usd + nft_usd
 
     # Build chart data points
@@ -2086,7 +2094,7 @@ async def get_24h_hourly_chart(
         if on_chain == 0:
             continue  # Skip points where no prices are available
 
-        total = on_chain + off_chain
+        total = on_chain + off_chain + tracked_tokens_usd + custom_tokens_usd
         # Use 'T' separator for hourly data so frontend detects hourly format
         display_date = date_str.replace(' ', 'T') if ' ' in date_str else date_str
         data.append({
@@ -2102,7 +2110,8 @@ async def get_24h_hourly_chart(
                     "staking": round(staking_usd, 2),
                     "defi": round(defi_usd, 2),
                     "nfts": round(nft_usd, 2),
-                    "tracked_tokens": 0,
+                    "tracked_tokens": round(tracked_tokens_usd, 2),
+                    "custom_tokens": round(custom_tokens_usd, 2),
                 }
             }
         })

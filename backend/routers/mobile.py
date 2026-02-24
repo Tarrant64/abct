@@ -1172,36 +1172,47 @@ async def get_mobile_defi_staking(user_id: int = Depends(verify_session)):
         except Exception as e:
             logger.warning(f"Could not get staking info for wallet {wallet['id']}: {e}")
 
-    # Get DeFi summary for protocol positions
-    defi_data = await defi.get_defi_summary(user_id=user_id)
+    # Get actual staking positions (tokens locked in smart contracts)
+    for wallet in cardano_wallets:
+        try:
+            cache_key = f"staking_positions_{wallet['address']}"
+            cached = await get_cache(cache_key, user_id=user_id)
+            if not cached:
+                cached = await get_cache(cache_key)
+            if not cached or not isinstance(cached, dict) or not cached.get('protocols'):
+                continue
+            for protocol_name, protocol_data in cached['protocols'].items():
+                for stake in (protocol_data.get('staked') or []):
+                    token = (stake.get('token') or 'ADA').upper()
+                    amount = float(stake.get('amount', 0))
+                    if amount <= 0:
+                        continue
+                    price_data = all_prices.get(token, {})
+                    price_usd = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
+                    staked_usd = amount * price_usd
+                    total_staked_usd += staked_usd
 
-    # Add DeFi protocol staking positions
-    for position in defi_data.get('all_positions', []):
-        # Only include staking-type positions
-        if position.get('type') in ['staking', 'governance']:
-            quantity = position.get('quantity', 0)
-            token = position.get('token', 'Unknown')
-
-            # Try to get token price
-            token_price_data = all_prices.get(token.upper(), {})
-            token_price_usd = token_price_data.get('usd', 0)
-            staked_usd = quantity * token_price_usd
-
-            if staked_usd > 0:
-                total_staked_usd += staked_usd
-
-                positions.append({
-                    "blockchain": "cardano",
-                    "protocol": position.get('protocol', 'Unknown'),
-                    "staked_amount": round(quantity, 6),
-                    "staked_symbol": token,
-                    "staked_usd": round(staked_usd, 2),
-                    "rewards_amount": 0,  # Not available in DeFi summary
-                    "rewards_usd": 0,
-                    "apy": 0,  # Not available in DeFi summary
-                    "active": True,
-                    "logo_url": logokit_service.get_crypto_logo_url(token.upper(), size=32)
-                })
+                    positions.append({
+                        "blockchain": "cardano",
+                        "protocol": protocol_name,
+                        "staked_amount": round(amount, 6),
+                        "staked_symbol": token,
+                        "staked_usd": round(staked_usd, 2),
+                        "rewards_amount": 0,
+                        "rewards_usd": 0,
+                        "apy": 0,
+                        "active": True,
+                        "logo_url": logokit_service.get_crypto_logo_url(token, size=32)
+                    })
+                # Add pending rewards
+                reward_token = protocol_data.get('reward_token')
+                pending = float(protocol_data.get('pending_rewards', 0))
+                if reward_token and pending > 0:
+                    rt_price = all_prices.get(reward_token, {})
+                    rt_price_usd = rt_price.get('usd', 0) if isinstance(rt_price, dict) else 0
+                    total_rewards_usd += pending * rt_price_usd
+        except Exception as e:
+            logger.warning(f"Could not get staking positions for wallet {wallet['id']}: {e}")
 
     return {
         "total_staked_usd": round(total_staked_usd, 2),

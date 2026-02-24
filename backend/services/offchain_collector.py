@@ -233,6 +233,94 @@ class OffchainCollector:
             if onchain_total > 0:
                 logger.debug(f"Offchain collector: on-chain total = ${onchain_total:,.2f}")
 
+        # --- Tracked Tokens ---
+        tracked_sources = await get_wallet_sources(user_id, source_type='tracked_tokens')
+        if tracked_sources:
+            try:
+                from database import get_tracked_tokens, get_wallet_assets
+                from services.defi import DEFI_PROTOCOLS
+
+                tracked_tokens = await get_tracked_tokens()
+                tracked_ids = {t['asset_id'] for t in tracked_tokens}
+
+                if tracked_ids:
+                    wallets = await get_all_wallets(user_id=user_id)
+                    wallet_assets = await asyncio.gather(
+                        *[get_wallet_assets(w['id']) for w in wallets]
+                    )
+                    asset_totals = {}
+                    for wallet, assets in zip(wallets, wallet_assets):
+                        for asset in assets:
+                            aid = asset.get('asset_id', '')
+                            if aid not in tracked_ids:
+                                continue
+                            if aid not in asset_totals:
+                                asset_totals[aid] = {
+                                    'quantity_raw': 0,
+                                    'decimals': int(asset.get('decimals') or 0),
+                                    'ticker': asset.get('ticker'),
+                                    'policy_id': asset.get('policy_id', ''),
+                                }
+                            asset_totals[aid]['quantity_raw'] += float(asset.get('quantity') or 0)
+
+                    tracked_total = 0.0
+                    for aid, data in asset_totals.items():
+                        decimals = data['decimals']
+                        human_qty = data['quantity_raw'] / (10 ** decimals) if decimals > 0 else data['quantity_raw']
+                        ticker = (data.get('ticker') or '').upper()
+                        if not ticker:
+                            continue
+                        # Skip DeFi protocol tokens (already counted in DeFi total)
+                        if data.get('policy_id', '') in DEFI_PROTOCOLS:
+                            continue
+                        price_info = prices.get(ticker, {})
+                        price = price_info.get('usd', 0) if isinstance(price_info, dict) else 0
+                        if price > 0:
+                            tracked_total += human_qty * price
+
+                    if tracked_total > 0:
+                        await upsert_wallet_daily_balance(
+                            user_id=user_id,
+                            source_id=tracked_sources[0]['id'],
+                            date=today,
+                            value_usd=round(tracked_total, 2),
+                            metadata=json.dumps({'source': 'live'}),
+                        )
+                        logger.debug(f"Offchain collector: tracked tokens = ${tracked_total:,.2f}")
+            except Exception as e:
+                logger.warning(f"Offchain collector: tracked tokens failed: {e}")
+
+        # --- Custom Tokens ---
+        custom_sources = await get_wallet_sources(user_id, source_type='custom_tokens')
+        if custom_sources:
+            try:
+                from database import get_all_custom_tokens
+
+                custom_tokens = await get_all_custom_tokens(user_id=user_id)
+                custom_total = 0.0
+                for token in custom_tokens:
+                    if token.get('include_in_total', 1) != 1:
+                        continue
+                    ticker = (token.get('ticker') or '').upper()
+                    quantity = float(token.get('quantity', 0))
+                    if ticker and ticker in prices:
+                        price = prices[ticker].get('usd', 0) if isinstance(prices[ticker], dict) else 0
+                        custom_total += quantity * price
+                    elif token.get('price_usd'):
+                        custom_total += quantity * float(token['price_usd'])
+
+                if custom_total > 0:
+                    await upsert_wallet_daily_balance(
+                        user_id=user_id,
+                        source_id=custom_sources[0]['id'],
+                        date=today,
+                        value_usd=round(custom_total, 2),
+                        metadata=json.dumps({'source': 'live'}),
+                    )
+                    logger.debug(f"Offchain collector: custom tokens = ${custom_total:,.2f}")
+            except Exception as e:
+                logger.warning(f"Offchain collector: custom tokens failed: {e}")
+
         logger.info(f"Offchain collector: Completed collection for user {user_id}")
 
     async def collect_all_users(self):
