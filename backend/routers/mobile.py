@@ -52,14 +52,31 @@ MOBILE_CACHE_TTL = 120  # 2 minutes for mobile responses
 CHART_CACHE_TTL = 900  # 15 minutes for chart data
 
 
+# Display names for tokens not in metadata_cache (CoinGecko top 250)
+_TOKEN_NAMES = {
+    'INDY': 'Indigo',
+    'LQ': 'Liqwid Finance',
+    'STRIKE': 'Strike Finance',
+    'MIN': 'Minswap',
+    'SUNDAE': 'SundaeSwap',
+    'LENFI': 'Lenfi',
+    'SNEK': 'Snek',
+    'WMT': 'World Mobile',
+    'MILK': 'MuesliSwap',
+    'HUNT': 'Hunt',
+    'HOSKY': 'Hosky',
+    'NMKR': 'NMKR',
+}
+
+
 async def _resolve_token_info(symbol: str) -> tuple[str, str]:
     """Look up proper display name and image URL for a token symbol.
 
-    Fallback chain: metadata_cache (CoinGecko CDN) → LogoKit.
+    Fallback chain: metadata_cache (CoinGecko CDN) → _TOKEN_NAMES → LogoKit.
     Always returns full external URLs safe for both web and mobile clients.
     """
     meta = await metadata_cache.get_metadata(symbol)
-    name = (meta.get('name') if meta else None) or symbol.capitalize()
+    name = (meta.get('name') if meta else None) or _TOKEN_NAMES.get(symbol.upper()) or symbol.capitalize()
     image_url = (meta.get('image_url') if meta else None)
     if not image_url:
         image_url = logokit_service.get_crypto_logo_url(symbol, size=64)
