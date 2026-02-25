@@ -597,7 +597,7 @@ function scheduleUpdateTotalPortfolioValue() {
     if (_updateTotalTimer) clearTimeout(_updateTotalTimer);
     _updateTotalTimer = setTimeout(() => {
         _updateTotalTimer = null;
-        scheduleUpdateTotalPortfolioValue();
+        updateTotalPortfolioValue();
     }, 100);
 }
 
