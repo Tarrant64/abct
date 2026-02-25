@@ -270,11 +270,9 @@ function renderGainersLosers(summary) {
         return items.map(item => {
             const cls = isGain ? 'gain' : 'loss';
             const sign = isGain ? '+' : '';
-            const usd = formatUSD(Math.abs(item.unrealized_gain));
-            const pct = item.unrealized_pct.toFixed(1);
             return `<div class="pnl-mover-item">
                 <span class="symbol">${_escHtml(item.token_symbol)}</span>
-                <span class="${cls}">${sign}$${usd.replace('$','')} (${sign}${pct}%)</span>
+                <span class="${cls}">${formatUSDBlur(item.unrealized_gain)} (${blurValue(`${sign}${item.unrealized_pct.toFixed(1)}%`)})</span>
             </div>`;
         }).join('');
     }
