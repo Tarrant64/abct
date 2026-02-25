@@ -1210,6 +1210,32 @@ async def init_db():
             ON asset_pnl_summary(user_id)
         """)
 
+        # Portfolio positions: quantity-first store (never expires, only overwritten)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS portfolio_positions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                symbol TEXT NOT NULL,
+                quantity REAL NOT NULL DEFAULT 0,
+                source_type TEXT NOT NULL,
+                source_detail TEXT DEFAULT '',
+                chain TEXT DEFAULT '',
+                last_price_usd REAL DEFAULT 0,
+                last_value_usd REAL DEFAULT 0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, symbol, source_type, source_detail),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_pp_user
+            ON portfolio_positions(user_id)
+        """)
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_pp_user_source
+            ON portfolio_positions(user_id, source_type)
+        """)
+
         await db.commit()
 
         # Update query planner statistics after schema/index creation
@@ -3509,3 +3535,108 @@ async def seed_wallet_sources(user_id: int):
         source_key='custom_tokens:all',
         label='Custom Tokens'
     )
+
+
+# ============================================================================
+# PORTFOLIO POSITIONS (quantity-first store)
+# ============================================================================
+
+async def upsert_portfolio_position(
+    user_id: int, symbol: str, quantity: float,
+    source_type: str, source_detail: str = '',
+    chain: str = '', last_price_usd: float = 0,
+):
+    """Upsert a single portfolio position row."""
+    value = quantity * last_price_usd if last_price_usd else 0
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("""
+            INSERT INTO portfolio_positions
+                (user_id, symbol, quantity, source_type, source_detail, chain,
+                 last_price_usd, last_value_usd, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(user_id, symbol, source_type, source_detail) DO UPDATE SET
+                quantity = excluded.quantity,
+                last_price_usd = excluded.last_price_usd,
+                last_value_usd = excluded.last_value_usd,
+                updated_at = CURRENT_TIMESTAMP
+        """, (user_id, symbol.upper(), quantity, source_type, source_detail,
+              chain, last_price_usd, value))
+        await db.commit()
+
+
+async def upsert_portfolio_positions_batch(positions: list):
+    """Batch upsert portfolio positions in one transaction.
+
+    Each item: dict with keys user_id, symbol, quantity, source_type,
+    source_detail, chain, last_price_usd.
+    """
+    if not positions:
+        return
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        for pos in positions:
+            qty = pos.get('quantity', 0)
+            price = pos.get('last_price_usd', 0)
+            value = qty * price if price else 0
+            await db.execute("""
+                INSERT INTO portfolio_positions
+                    (user_id, symbol, quantity, source_type, source_detail, chain,
+                     last_price_usd, last_value_usd, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(user_id, symbol, source_type, source_detail) DO UPDATE SET
+                    quantity = excluded.quantity,
+                    last_price_usd = excluded.last_price_usd,
+                    last_value_usd = excluded.last_value_usd,
+                    updated_at = CURRENT_TIMESTAMP
+            """, (pos['user_id'], pos['symbol'].upper(), qty,
+                  pos['source_type'], pos.get('source_detail', ''),
+                  pos.get('chain', ''), price, value))
+        await db.commit()
+
+
+async def get_all_portfolio_positions(user_id: int) -> list:
+    """Get all positions with quantity > 0 for a user, ordered by value DESC."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("""
+            SELECT * FROM portfolio_positions
+            WHERE user_id = ? AND quantity > 0
+            ORDER BY last_value_usd DESC
+        """, (user_id,))
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+
+async def get_positions_freshness(user_id: int) -> dict:
+    """Get MIN/MAX updated_at + count for a user's positions."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute("""
+            SELECT MIN(updated_at) as oldest,
+                   MAX(updated_at) as newest,
+                   COUNT(*) as count
+            FROM portfolio_positions
+            WHERE user_id = ? AND quantity > 0
+        """, (user_id,))
+        row = await cursor.fetchone()
+        if row:
+            return {
+                'oldest': row[0],
+                'newest': row[1],
+                'count': row[2] or 0,
+            }
+        return {'oldest': None, 'newest': None, 'count': 0}
+
+
+async def clear_portfolio_positions(user_id: int, source_type: str = None):
+    """Clear positions for re-seeding. Optionally filter by source_type."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        if source_type:
+            await db.execute(
+                "DELETE FROM portfolio_positions WHERE user_id = ? AND source_type = ?",
+                (user_id, source_type)
+            )
+        else:
+            await db.execute(
+                "DELETE FROM portfolio_positions WHERE user_id = ?",
+                (user_id,)
+            )
+        await db.commit()

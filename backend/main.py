@@ -453,6 +453,144 @@ async def lifespan(app: FastAPI):
     _background_tasks.append(asyncio.create_task(materialize_on_startup()))
     logger.info("Off-chain collector + startup materialization started (V2 only)")
 
+    # Seed portfolio_positions from existing cache data (one-time migration)
+    async def seed_portfolio_positions_background():
+        try:
+            from database import (
+                get_all_users, get_all_portfolio_positions,
+                upsert_portfolio_positions_batch, get_cache, get_stale_cache,
+            )
+            from services.pricing import pricing_service
+
+            users = await get_all_users()
+            non_demo = [u for u in users if not u.get('is_demo', False)]
+
+            for user in non_demo:
+                uid = user['id']
+                existing = await get_all_portfolio_positions(uid)
+                if len(existing) > 5:
+                    logger.info(f"Portfolio positions: user {uid} already has {len(existing)} positions, skipping seed")
+                    continue
+
+                logger.info(f"Portfolio positions: seeding for user {uid}...")
+                positions = []
+
+                # Get current prices
+                try:
+                    all_prices = await pricing_service.get_all_tracked_prices()
+                except Exception:
+                    all_prices = {}
+
+                def _price_for(sym):
+                    p = all_prices.get(sym, {})
+                    return p.get('usd', 0) if isinstance(p, dict) else 0
+
+                # --- Chain positions from portfolio_summary cache ---
+                chain_map = {
+                    'cardano':   ('ADA', 'total_ada'),
+                    'bitcoin':   ('BTC', 'total_btc'),
+                    'ethereum':  ('ETH', 'total_eth'),
+                    'solana':    ('SOL', 'total_sol'),
+                    'polygon':   ('POL', 'total_matic'),
+                    'base':      ('ETH_BASE', 'total_eth'),
+                    'algorand':  ('ALGO', 'total_algo'),
+                    'bsc':       ('BNB', 'total_bnb'),
+                    'arbitrum':  ('ETH_ARB', 'total_eth'),
+                    'avalanche': ('AVAX', 'total_avax'),
+                    'tron':      ('TRX', 'total_trx'),
+                    'xrp':       ('XRP', 'total_xrp'),
+                    'hedera':    ('HBAR', 'total_hbar'),
+                    'litecoin':  ('LTC', 'total_ltc'),
+                    'dogecoin':  ('DOGE', 'total_doge'),
+                    'zcash':     ('ZEC', 'total_zec'),
+                }
+                price_sym_map = {'ETH_BASE': 'ETH', 'ETH_ARB': 'ETH', 'POL': 'MATIC'}
+
+                summary_cache = await get_cache(f"portfolio_summary_{uid}", user_id=uid)
+                if not summary_cache:
+                    stale, _ = await get_stale_cache(f"portfolio_summary_{uid}", user_id=uid)
+                    summary_cache = stale
+                if summary_cache:
+                    for chain, (sym, field) in chain_map.items():
+                        chain_data = summary_cache.get(chain, {})
+                        amount = float(chain_data.get(field, 0))
+                        if amount > 0:
+                            ps = price_sym_map.get(sym, sym)
+                            positions.append({
+                                'user_id': uid, 'symbol': sym, 'quantity': amount,
+                                'source_type': 'chain', 'source_detail': chain,
+                                'chain': chain, 'last_price_usd': _price_for(ps),
+                            })
+
+                # --- Exchange positions ---
+                exchange_keys = ['coinbase', 'binance', 'binance_us', 'okx', 'bitget', 'gate', 'kucoin']
+                for exch in exchange_keys:
+                    exc_cache = await get_cache(f"{exch}_portfolio", user_id=uid)
+                    if not exc_cache:
+                        stale, _ = await get_stale_cache(f"{exch}_portfolio", user_id=uid)
+                        exc_cache = stale
+                    if exc_cache and exc_cache.get('assets'):
+                        for asset in exc_cache['assets']:
+                            currency = (asset.get('currency') or '').upper()
+                            balance = float(asset.get('balance', 0))
+                            if currency and balance > 0:
+                                positions.append({
+                                    'user_id': uid, 'symbol': currency, 'quantity': balance,
+                                    'source_type': 'exchange', 'source_detail': exch,
+                                    'chain': '', 'last_price_usd': float(asset.get('price', 0)),
+                                })
+
+                # --- Staking positions ---
+                from database import get_all_wallets
+                wallets = await get_all_wallets(user_id=uid)
+                for w in wallets:
+                    if w['blockchain'] != 'cardano':
+                        continue
+                    sk_cache = await get_cache(f"staking_positions_{w['address']}", user_id=uid)
+                    if not sk_cache:
+                        sk_cache = await get_cache(f"staking_positions_{w['address']}")
+                    if not sk_cache:
+                        stale, _ = await get_stale_cache(f"staking_positions_{w['address']}", user_id=uid)
+                        sk_cache = stale
+                    if sk_cache and sk_cache.get('protocols'):
+                        for pname, pdata in sk_cache['protocols'].items():
+                            for stake in (pdata.get('staked') or []):
+                                token = (stake.get('token') or 'ADA').upper()
+                                amount = float(stake.get('amount', 0))
+                                if amount > 0:
+                                    positions.append({
+                                        'user_id': uid, 'symbol': token, 'quantity': amount,
+                                        'source_type': 'staking', 'source_detail': pname.lower(),
+                                        'chain': 'cardano', 'last_price_usd': _price_for(token),
+                                    })
+
+                # --- DeFi positions ---
+                defi_cache = await get_cache(f"defi_summary_{uid}", user_id=uid)
+                if not defi_cache:
+                    stale, _ = await get_stale_cache(f"defi_summary_{uid}", user_id=uid)
+                    defi_cache = stale
+                if defi_cache and defi_cache.get('all_positions'):
+                    for pos in defi_cache['all_positions']:
+                        token = (pos.get('token') or '').upper()
+                        qty = float(pos.get('quantity', 0))
+                        if token and qty > 0:
+                            positions.append({
+                                'user_id': uid, 'symbol': token, 'quantity': qty,
+                                'source_type': 'defi', 'source_detail': pos.get('protocol', '').lower(),
+                                'chain': 'cardano', 'last_price_usd': _price_for(token),
+                            })
+
+                if positions:
+                    await upsert_portfolio_positions_batch(positions)
+                    logger.info(f"Portfolio positions: seeded {len(positions)} positions for user {uid}")
+                else:
+                    logger.info(f"Portfolio positions: no cached data to seed for user {uid}")
+
+        except Exception as e:
+            logger.warning(f"Portfolio positions seed failed: {e}")
+
+    _background_tasks.append(asyncio.create_task(seed_portfolio_positions_background()))
+
     # Initialize and optionally start NFT background scheduler
     startup_status["nft_scheduler"] = "initializing"
     try:

@@ -321,6 +321,56 @@ class OffchainCollector:
             except Exception as e:
                 logger.warning(f"Offchain collector: custom tokens failed: {e}")
 
+        # --- Write full position snapshot to portfolio_positions ---
+        try:
+            from database import upsert_portfolio_positions_batch
+            pp_rows = []
+
+            # Exchange positions from cached data
+            for exch in ['coinbase', 'binance', 'binance_us', 'okx', 'bitget', 'gate', 'kucoin']:
+                from database import get_cache as _gc
+                exc_cache = await _gc(f"{exch}_portfolio", user_id=user_id)
+                if exc_cache and exc_cache.get('assets'):
+                    for asset in exc_cache['assets']:
+                        currency = (asset.get('currency') or '').upper()
+                        balance = float(asset.get('balance', 0))
+                        if currency and balance > 0:
+                            pp_rows.append({
+                                'user_id': user_id, 'symbol': currency, 'quantity': balance,
+                                'source_type': 'exchange', 'source_detail': exch,
+                                'chain': '', 'last_price_usd': float(asset.get('price', 0)),
+                            })
+
+            # On-chain positions
+            for source in (onchain_sources or []):
+                wallet_id = source.get('wallet_id')
+                if not wallet_id:
+                    continue
+                chain = source.get('chain', '')
+                balance_info = await get_wallet_balance(wallet_id)
+                balance = float(balance_info['amount']) if balance_info else 0.0
+                symbol = {
+                    'cardano': 'ADA', 'bitcoin': 'BTC', 'ethereum': 'ETH',
+                    'solana': 'SOL', 'polygon': 'POL', 'base': 'ETH_BASE',
+                    'algorand': 'ALGO', 'bsc': 'BNB', 'arbitrum': 'ETH_ARB',
+                    'avalanche': 'AVAX', 'tron': 'TRX',
+                }.get(chain)
+                if balance > 0 and symbol:
+                    _ps = {'ETH_BASE': 'ETH', 'ETH_ARB': 'ETH', 'POL': 'MATIC'}.get(symbol, symbol)
+                    p = prices.get(_ps, {})
+                    price = p.get('usd', 0) if isinstance(p, dict) else 0
+                    pp_rows.append({
+                        'user_id': user_id, 'symbol': symbol, 'quantity': balance,
+                        'source_type': 'chain', 'source_detail': chain,
+                        'chain': chain, 'last_price_usd': price,
+                    })
+
+            if pp_rows:
+                await upsert_portfolio_positions_batch(pp_rows)
+                logger.debug(f"Offchain collector: wrote {len(pp_rows)} portfolio positions for user {user_id}")
+        except Exception as e:
+            logger.debug(f"Offchain collector: portfolio positions write failed: {e}")
+
         logger.info(f"Offchain collector: Completed collection for user {user_id}")
 
     async def collect_all_users(self):

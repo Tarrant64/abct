@@ -414,6 +414,19 @@ def _build_demo_wallet_sources() -> List[Dict]:
     ]
 
 
+@router.get("/portfolio/instant")
+async def get_mobile_portfolio_instant(user_id: int = Depends(verify_session)):
+    """
+    Instant portfolio total for mobile — reads from portfolio_positions table.
+
+    Returns total + breakdown + top holdings with no API calls.
+    Mobile app can call this for immediate display, then call
+    /mobile/portfolio/summary for full details.
+    """
+    from routers.portfolio import get_portfolio_instant
+    return await get_portfolio_instant(user_id=user_id)
+
+
 @router.get("/portfolio/summary")
 async def get_mobile_portfolio_summary(
     user_id: int = Depends(verify_session),

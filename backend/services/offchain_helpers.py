@@ -13,6 +13,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+async def _stale_fallback(key: str, user_id=None):
+    """Try stale cache as fallback when fresh cache misses."""
+    from database import get_stale_cache
+    data, _ = await get_stale_cache(key, user_id=user_id)
+    return data
+
+
 async def get_staking_value(prices: dict, user_id: int = None) -> float:
     """Get total staking value from cached data (including pending rewards)."""
     try:
@@ -28,6 +35,10 @@ async def get_staking_value(prices: dict, user_id: int = None) -> float:
                 cached = await get_cache(cache_key, user_id=user_id)
                 if not cached:
                     cached = await get_cache(cache_key)
+                if not cached:
+                    cached = await _stale_fallback(cache_key, user_id=user_id)
+                    if not cached:
+                        cached = await _stale_fallback(cache_key)
                 if not cached:
                     continue
                 # Cache structure: {protocols: {ProtocolName: {staked: [{token, amount}], reward_token, pending_rewards}}}
@@ -58,6 +69,8 @@ async def get_defi_value(prices: dict, user_id: int = None) -> float:
         from database import get_cache
 
         cached = await get_cache("defi_summary", user_id=user_id)
+        if not cached:
+            cached = await _stale_fallback("defi_summary", user_id=user_id)
         if not cached:
             return 0.0
         # Use pre-calculated total if available
@@ -111,6 +124,8 @@ async def get_exchange_value(prices: dict, user_id: int = None) -> float:
         ]
         for key in exchange_keys:
             cached = await get_cache(key, user_id=user_id)
+            if not cached:
+                cached = await _stale_fallback(key, user_id=user_id)
             if cached and 'total_usd' in cached:
                 total += float(cached['total_usd'])
 

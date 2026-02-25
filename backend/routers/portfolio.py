@@ -1018,6 +1018,47 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
     summary['last_updated'] = datetime.now().isoformat()
     await set_cache(cache_key, summary, PORTFOLIO_CACHE_TTL, user_id=user_id)
 
+    # Fire-and-forget: write chain positions to portfolio_positions table
+    try:
+        from database import upsert_portfolio_positions_batch
+        _pp_chain_map = {
+            'cardano':   ('ADA', 'total_ada'),
+            'bitcoin':   ('BTC', 'total_btc'),
+            'ethereum':  ('ETH', 'total_eth'),
+            'solana':    ('SOL', 'total_sol'),
+            'polygon':   ('POL', 'total_matic'),
+            'base':      ('ETH_BASE', 'total_eth'),
+            'algorand':  ('ALGO', 'total_algo'),
+            'bsc':       ('BNB', 'total_bnb'),
+            'arbitrum':  ('ETH_ARB', 'total_eth'),
+            'avalanche': ('AVAX', 'total_avax'),
+            'tron':      ('TRX', 'total_trx'),
+            'xrp':       ('XRP', 'total_xrp'),
+            'hedera':    ('HBAR', 'total_hbar'),
+            'litecoin':  ('LTC', 'total_ltc'),
+            'dogecoin':  ('DOGE', 'total_doge'),
+            'zcash':     ('ZEC', 'total_zec'),
+        }
+        _pp_price_sym = {'ETH_BASE': 'ETH', 'ETH_ARB': 'ETH', 'POL': 'MATIC'}
+        all_prices = await pricing_service.get_all_tracked_prices()
+        pp_rows = []
+        for chain, (sym, field) in _pp_chain_map.items():
+            chain_data = summary.get(chain, {})
+            amount = float(chain_data.get(field, 0))
+            if amount > 0:
+                ps = _pp_price_sym.get(sym, sym)
+                p = all_prices.get(ps, {})
+                price = p.get('usd', 0) if isinstance(p, dict) else 0
+                pp_rows.append({
+                    'user_id': user_id, 'symbol': sym, 'quantity': amount,
+                    'source_type': 'chain', 'source_detail': chain,
+                    'chain': chain, 'last_price_usd': price,
+                })
+        if pp_rows:
+            await upsert_portfolio_positions_batch(pp_rows)
+    except Exception as e:
+        logger.debug(f"Portfolio positions chain write failed: {e}")
+
     return summary
 
 # Cache TTL for native assets (7 days - tokens don't change often, only cleared on manual refresh)
@@ -1892,6 +1933,153 @@ async def get_portfolio_totals(user_id: int = Depends(verify_session)):
     }
     await set_cache(cache_key, result, ttl_seconds=CACHE_TTL_HOT, user_id=user_id)
     return result
+
+
+@router.get("/instant")
+async def get_portfolio_instant(user_id: int = Depends(verify_session)):
+    """
+    Instant portfolio value from portfolio_positions table.
+
+    Returns total + breakdown + top holdings using stored quantities
+    and fresh in-memory prices. No API calls needed.
+    """
+    from database import get_all_portfolio_positions, get_positions_freshness
+
+    positions = await get_all_portfolio_positions(user_id)
+    freshness = await get_positions_freshness(user_id)
+
+    if not positions:
+        return {
+            "total_usd": 0,
+            "breakdown": {},
+            "top_holdings": [],
+            "freshness": freshness,
+            "has_positions": False,
+        }
+
+    # Get fresh in-memory prices
+    try:
+        all_prices = await pricing_service.get_all_tracked_prices()
+    except Exception:
+        all_prices = {}
+
+    _instant_price_sym = {'ETH_BASE': 'ETH', 'ETH_ARB': 'ETH', 'POL': 'MATIC'}
+
+    # Aggregate by source_type (breakdown) and by symbol (top holdings)
+    breakdown = {}
+    symbol_agg = {}  # symbol → {quantity, value, sources, price, chain}
+
+    for pos in positions:
+        sym = pos['symbol']
+        qty = pos['quantity']
+        source_type = pos['source_type']
+
+        # Get fresh price
+        price_sym = _instant_price_sym.get(sym, sym)
+        price_info = all_prices.get(price_sym, {})
+        price = price_info.get('usd', 0) if isinstance(price_info, dict) else 0
+
+        # Fall back to stored price if pricing is down
+        if price <= 0:
+            price = pos.get('last_price_usd', 0)
+
+        value = qty * price
+
+        # Breakdown by source_type
+        breakdown[source_type] = breakdown.get(source_type, 0) + value
+
+        # Aggregate by symbol
+        if sym not in symbol_agg:
+            symbol_agg[sym] = {
+                'symbol': price_sym,
+                'quantity': 0,
+                'value_usd': 0,
+                'price_usd': price,
+                'price_change_24h': price_info.get('usd_24h_change', 0) if isinstance(price_info, dict) else 0,
+                'sources': set(),
+            }
+        symbol_agg[sym]['quantity'] += qty
+        symbol_agg[sym]['value_usd'] += value
+        symbol_agg[sym]['sources'].add(source_type)
+        # Update price to the best available
+        if price > 0:
+            symbol_agg[sym]['price_usd'] = price
+
+    total_usd = sum(breakdown.values())
+
+    # Build top holdings sorted by value
+    top_holdings = []
+    for sym, agg in sorted(symbol_agg.items(), key=lambda x: x[1]['value_usd'], reverse=True):
+        alloc = round((agg['value_usd'] / total_usd * 100) if total_usd > 0 else 0, 2)
+        top_holdings.append({
+            'symbol': agg['symbol'],
+            'quantity': round(agg['quantity'], 8),
+            'value_usd': round(agg['value_usd'], 2),
+            'price_usd': agg['price_usd'],
+            'price_change_24h': agg['price_change_24h'],
+            'allocation_pct': alloc,
+            'sources': sorted(agg['sources']),
+        })
+
+    return {
+        "total_usd": round(total_usd, 2),
+        "breakdown": {k: round(v, 2) for k, v in breakdown.items()},
+        "top_holdings": top_holdings[:50],  # Top 50 holdings
+        "freshness": freshness,
+        "has_positions": True,
+    }
+
+
+@router.post("/refresh")
+async def refresh_portfolio(user_id: int = Depends(verify_session)):
+    """
+    Full portfolio refresh: clears caches, triggers fresh data fetches,
+    writes new positions, and returns instant data.
+
+    Single call replaces the frontend's 8+ separate refresh calls.
+    """
+    # 1. Clear relevant caches
+    await clear_cache(f"portfolio_summary_{user_id}", user_id=user_id)
+    await clear_cache(f"portfolio_totals_{user_id}", user_id=user_id)
+    await clear_cache(f"all_holdings_{user_id}", user_id=user_id)
+
+    # 2. Trigger portfolio summary refresh (fetches blockchain data + writes positions)
+    try:
+        await get_portfolio_summary(user_id=user_id, refresh=True)
+    except Exception as e:
+        logger.warning(f"Portfolio refresh: summary fetch failed: {e}")
+
+    # 3. Trigger exchange refreshes in parallel
+    try:
+        from routers.exchanges import process_exchange_portfolio
+        from services.coinbase import coinbase_service
+        from services.binance_service import binance_service
+        from services.okx_service import okx_service
+
+        exchange_tasks = []
+        for service, name in [
+            (coinbase_service, 'coinbase'),
+            (binance_service, 'binance'),
+            (okx_service, 'okx'),
+        ]:
+            try:
+                configured = await service.is_configured(user_id=user_id) if hasattr(service, 'is_configured') else service.ensure_configured()
+                if asyncio.iscoroutine(configured):
+                    configured = await configured
+                if configured:
+                    exchange_tasks.append(
+                        process_exchange_portfolio(service, name, user_id, refresh=True)
+                    )
+            except Exception:
+                pass
+
+        if exchange_tasks:
+            await asyncio.gather(*exchange_tasks, return_exceptions=True)
+    except Exception as e:
+        logger.warning(f"Portfolio refresh: exchange refresh failed: {e}")
+
+    # 4. Return fresh instant data
+    return await get_portfolio_instant(user_id=user_id)
 
 
 @router.get("/chart/unified")

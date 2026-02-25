@@ -363,6 +363,25 @@ async def get_coinbase_portfolio(user_id: int = Depends(verify_session), refresh
     }
 
     await set_cache(cache_key, result, EXCHANGE_CACHE_TTL, user_id=user_id)
+
+    # Fire-and-forget: write exchange positions to portfolio_positions
+    try:
+        from database import upsert_portfolio_positions_batch
+        pp_rows = []
+        for asset in filtered_assets:
+            currency = (asset.get('currency') or '').upper()
+            balance = float(asset.get('balance', 0))
+            if currency and balance > 0:
+                pp_rows.append({
+                    'user_id': user_id, 'symbol': currency, 'quantity': balance,
+                    'source_type': 'exchange', 'source_detail': exchange_name,
+                    'chain': '', 'last_price_usd': float(asset.get('price', 0)),
+                })
+        if pp_rows:
+            await upsert_portfolio_positions_batch(pp_rows)
+    except Exception as e:
+        logger.debug(f"Portfolio positions exchange write failed: {e}")
+
     return result
 
 
@@ -520,6 +539,25 @@ async def process_exchange_portfolio(exchange_service, exchange_name: str, user_
     }
 
     await set_cache(cache_key, result, EXCHANGE_CACHE_TTL, user_id=user_id)
+
+    # Fire-and-forget: write Coinbase positions to portfolio_positions
+    try:
+        from database import upsert_portfolio_positions_batch
+        pp_rows = []
+        for asset in filtered_assets:
+            currency = (asset.get('currency') or '').upper()
+            balance = float(asset.get('balance', 0))
+            if currency and balance > 0:
+                pp_rows.append({
+                    'user_id': user_id, 'symbol': currency, 'quantity': balance,
+                    'source_type': 'exchange', 'source_detail': exchange_name,
+                    'chain': '', 'last_price_usd': float(asset.get('price', 0)),
+                })
+        if pp_rows:
+            await upsert_portfolio_positions_batch(pp_rows)
+    except Exception as e:
+        logger.debug(f"Portfolio positions Coinbase write failed: {e}")
+
     return result
 
 

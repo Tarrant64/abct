@@ -591,6 +591,72 @@ function formatPriceStr(price) {
     return `$${price.toFixed(4)}`;
 }
 
+// Debounced updateTotalPortfolioValue — coalesces rapid successive calls
+let _updateTotalTimer = null;
+function scheduleUpdateTotalPortfolioValue() {
+    if (_updateTotalTimer) clearTimeout(_updateTotalTimer);
+    _updateTotalTimer = setTimeout(() => {
+        _updateTotalTimer = null;
+        scheduleUpdateTotalPortfolioValue();
+    }, 100);
+}
+
+// Load instant portfolio from /portfolio/instant (DB + in-memory prices, no API calls)
+async function loadPortfolioInstant() {
+    try {
+        const response = await authFetch(`${API_BASE}/portfolio/instant`);
+        if (!response.ok) return false;
+        const data = await response.json();
+        if (!data.has_positions) return false;
+
+        // Update total display
+        const totalValueEl = document.getElementById('totalPortfolioValue');
+        if (totalValueEl) setSafeHTML(totalValueEl, formatUSDBlur(data.total_usd));
+
+        // Update breakdown
+        const bd = data.breakdown || {};
+        const liquidTotal = (bd.chain || 0) + (bd.exchange || 0) + (bd.tracked_token || 0) + (bd.custom_token || 0);
+        const stakedTotal = (bd.staking || 0) + (bd.defi || 0);
+        const nftsTotal = bd.nft || 0;
+
+        const liquidEl = document.getElementById('breakdownLiquid');
+        const stakedEl = document.getElementById('breakdownStaked');
+        const nftsEl = document.getElementById('breakdownNfts');
+        if (liquidEl) liquidEl.textContent = formatUSD(liquidTotal);
+        if (stakedEl) stakedEl.textContent = formatUSD(stakedTotal);
+        if (nftsEl) nftsEl.textContent = formatUSD(nftsTotal);
+
+        // Cache for next visit
+        if (data.total_usd > 0) {
+            try {
+                localStorage.setItem('cachedPortfolioTotal', JSON.stringify({
+                    total: data.total_usd,
+                    timestamp: Date.now()
+                }));
+            } catch (e) { /* localStorage full */ }
+        }
+
+        // Show freshness indicator if positions > 4 hours old
+        if (data.freshness && data.freshness.oldest) {
+            const oldestAge = Date.now() - new Date(data.freshness.oldest).getTime();
+            if (oldestAge > 4 * 3600 * 1000) {
+                const freshnessEl = document.getElementById('portfolioFreshness');
+                if (freshnessEl) {
+                    const hoursAgo = Math.round(oldestAge / 3600000);
+                    freshnessEl.textContent = `Quantities from ${hoursAgo}h ago`;
+                    freshnessEl.style.display = '';
+                }
+            }
+        }
+
+        console.log(`[Instant] Portfolio loaded: $${data.total_usd.toLocaleString()} (${data.freshness?.count || 0} positions)`);
+        return true;
+    } catch (e) {
+        console.warn('[Instant] loadPortfolioInstant failed:', e);
+        return false;
+    }
+}
+
 // Update total portfolio value display
 function updateTotalPortfolioValue() {
     const totalValueEl = document.getElementById('totalPortfolioValue');
@@ -1114,7 +1180,7 @@ async function loadPortfolioTotals() {
         snapshotTotals.trackedTokens = data.tracked_tokens_usd || 0;
 
         console.log(`[Overview] Snapshot totals: staking=$${data.staking_usd?.toFixed(2)}, defi=$${data.defi_usd?.toFixed(2)}, exchange=$${data.exchange_usd?.toFixed(2)}, nft=$${data.nft_usd?.toFixed(2)}`);
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
     } catch (e) {
         console.error('[Overview] Failed to load portfolio totals:', e);
     }
@@ -1152,7 +1218,7 @@ async function loadStakingTotalsForOverview() {
         if (Object.keys(newTotals).length > 0) {
             stakingTotals = newTotals;
             console.log('[Overview] Staking totals loaded:', stakingTotals);
-            updateTotalPortfolioValue();
+            scheduleUpdateTotalPortfolioValue();
         }
     } catch (e) {
         console.debug('[Overview] Could not load staking totals:', e);
@@ -1652,7 +1718,7 @@ async function loadPortfolioSummary() {
         renderWalletsGrouped(data.cardano.stake_groups || [], data.bitcoin.wallets || [], data.ethereum?.wallets || [], data.solana?.wallets || [], data.polygon?.wallets || [], data.base?.wallets || [], data.algorand?.wallets || [], data.bsc?.wallets || [], data.arbitrum?.wallets || [], data.avalanche?.wallets || [], data.tron?.wallets || []);
 
         // Update total portfolio value
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
 
     } catch (error) {
         console.error('Error loading portfolio summary:', error);
@@ -2695,7 +2761,7 @@ async function loadNativeAssets(forceRefresh = false) {
         renderNativeAssets(data.valuable_assets || [], data.assets || []);
 
         // Update portfolio total
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
 
     } catch (error) {
         console.error('Error loading native assets:', error);
@@ -2864,7 +2930,7 @@ async function toggleTokenTracking(assetId, track, ticker, decimals, tokenValue)
     }
 
     // Update portfolio total immediately
-    updateTotalPortfolioValue();
+    scheduleUpdateTotalPortfolioValue();
 
     // Then persist to backend
     try {
@@ -2888,7 +2954,7 @@ async function toggleTokenTracking(assetId, track, ticker, decimals, tokenValue)
                 if (checkbox) checkbox.checked = !track;
             }
             trackedTokensValue = previousTrackedValue;
-            updateTotalPortfolioValue();
+            scheduleUpdateTotalPortfolioValue();
         }
     } catch (error) {
         console.error('Error toggling token tracking:', error);
@@ -2899,7 +2965,7 @@ async function toggleTokenTracking(assetId, track, ticker, decimals, tokenValue)
             if (checkbox) checkbox.checked = !track;
         }
         trackedTokensValue = previousTrackedValue;
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
     } finally {
         isTogglingToken = false;
     }
@@ -2909,7 +2975,7 @@ async function toggleTokenTracking(assetId, track, ticker, decimals, tokenValue)
 async function loadStakingPositions() {
     // Mark staking as loading
     document.body.classList.add('staking-loading');
-    updateTotalPortfolioValue(); // Update to show spinner
+    scheduleUpdateTotalPortfolioValue(); // Update to show spinner
 
     // Show loading state with progress bar
     setSafeHTML(stakingPositions, `
@@ -3039,13 +3105,13 @@ async function loadStakingPositions() {
 
         // Mark staking as complete and update total portfolio value
         document.body.classList.remove('staking-loading');
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
 
     } catch (error) {
         console.error('Error loading staking positions:', error);
         setSafeHTML(stakingPositions, '<p class="empty-state">Error loading staking positions.</p>');
         document.body.classList.remove('staking-loading');
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
     }
 }
 
@@ -3310,7 +3376,7 @@ function renderStakingPositions(allStaking) {
 async function loadDefiPositions() {
     // Mark DeFi as loading
     document.body.classList.add('defi-loading');
-    updateTotalPortfolioValue();
+    scheduleUpdateTotalPortfolioValue();
 
     try {
         const response = await authFetch(`${API_BASE}/defi/summary`);
@@ -3347,12 +3413,12 @@ async function loadDefiPositions() {
 
         // Mark DeFi as complete and update total portfolio value
         document.body.classList.remove('defi-loading');
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
 
     } catch (error) {
         console.error('Error loading DeFi positions:', error);
         document.body.classList.remove('defi-loading');
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
     }
 }
 
@@ -3589,7 +3655,7 @@ async function loadDefiGovernance(forceRefresh = false) {
             cached.nativeStablecoins || [],
             cached.adaDelegation
         );
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
         updateDefiTimestamp();
 
         // Cache < 2 min old: skip background refresh entirely (unless forced)
@@ -3609,7 +3675,7 @@ async function loadDefiGovernance(forceRefresh = false) {
         // No cache - show loading state
         document.body.classList.add('staking-loading');
         document.body.classList.add('defi-loading');
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
         setSafeHTML(content, `
             <div class="loading-state">
                 <p class="progress-text" id="defiGovProgressText">Loading DeFi data...</p>
@@ -3895,7 +3961,7 @@ async function loadDefiGovernance(forceRefresh = false) {
         renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeStablecoins, adaDelegation);
 
         document.body.classList.remove('staking-loading');
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
 
         // Cache the complete result
         setCachedDefi({ defiData, allStaking, exchangeStablecoins, nativeStablecoins, adaDelegation });
@@ -3918,7 +3984,7 @@ async function loadDefiGovernance(forceRefresh = false) {
         }
         document.body.classList.remove('staking-loading');
         document.body.classList.remove('defi-loading');
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
     } finally {
         setDefiRefreshBar(false);
     }
@@ -4925,7 +4991,7 @@ async function loadExchangeData() {
         }
 
         // Update total portfolio value
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
 
     } catch (error) {
         console.error('Error loading exchange data:', error);
@@ -5230,7 +5296,7 @@ async function syncExchangeBalance(exchangeId, btn) {
 
         // Recalculate exchangeTotals from all visible cards
         recalcExchangeTotals();
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
 
         btn.innerHTML = '<span class="sync-icon">&#10003;</span> Done';
         setTimeout(() => {
@@ -5290,7 +5356,7 @@ async function loadNFTs(forceRefresh = false) {
 
     // Mark NFTs as loading
     document.body.classList.add('nft-loading');
-    updateTotalPortfolioValue();
+    scheduleUpdateTotalPortfolioValue();
 
     setSafeHTML(nftsList, '<p class="loading-state">Loading NFTs... (this may take a moment)</p>');
 
@@ -5301,7 +5367,7 @@ async function loadNFTs(forceRefresh = false) {
         if (!response.ok) {
             setSafeHTML(nftsList, '<p class="empty-state">Error loading NFTs</p>');
             document.body.classList.remove('nft-loading');
-            updateTotalPortfolioValue();
+            scheduleUpdateTotalPortfolioValue();
             return;
         }
 
@@ -5326,13 +5392,13 @@ async function loadNFTs(forceRefresh = false) {
 
         // Mark NFTs as loaded and update portfolio total
         document.body.classList.remove('nft-loading');
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
 
     } catch (error) {
         console.error('Error loading NFTs:', error);
         setSafeHTML(nftsList, '<p class="empty-state">Error loading NFTs</p>');
         document.body.classList.remove('nft-loading');
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
     }
 }
 
@@ -5854,7 +5920,7 @@ async function refreshWallets() {
         }
 
         renderWalletsGrouped(data.cardano.stake_groups || [], data.bitcoin.wallets || [], data.ethereum?.wallets || [], data.solana?.wallets || [], data.polygon?.wallets || [], data.base?.wallets || [], data.algorand?.wallets || [], data.bsc?.wallets || [], data.arbitrum?.wallets || [], data.avalanche?.wallets || [], data.tron?.wallets || []);
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
         showStatus('Wallets refreshed');
     } catch (error) {
         console.error('Error refreshing wallets:', error);
@@ -5897,7 +5963,7 @@ async function refreshExchanges() {
         if (exchangesList) {
             renderAllExchanges(data.exchanges);
         }
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
         showStatus('Exchange data refreshed');
     } catch (error) {
         console.error('Error refreshing exchanges:', error);
@@ -5916,7 +5982,7 @@ async function refreshStaking() {
     }
 
     document.body.classList.add('staking-loading');
-    updateTotalPortfolioValue();
+    scheduleUpdateTotalPortfolioValue();
 
     try {
         // Reload staking positions with refresh
@@ -5939,7 +6005,7 @@ async function refreshDefi() {
     }
 
     document.body.classList.add('defi-loading');
-    updateTotalPortfolioValue();
+    scheduleUpdateTotalPortfolioValue();
 
     try {
         const response = await authFetch(`${API_BASE}/defi/summary?refresh=true`);
@@ -5975,7 +6041,7 @@ async function refreshDefi() {
             btn.classList.remove('refreshing');
         }
         document.body.classList.remove('defi-loading');
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
     }
 }
 
@@ -6008,7 +6074,7 @@ async function refreshNFTs() {
 
     // Mark NFTs as loading
     document.body.classList.add('nft-loading');
-    updateTotalPortfolioValue();
+    scheduleUpdateTotalPortfolioValue();
 
     const nftsList = document.getElementById('nftsList');
     if (nftsList) {
@@ -6254,7 +6320,7 @@ async function refreshNFTs() {
             btn.classList.remove('refreshing');
         }
         document.body.classList.remove('nft-loading');
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
     }
 }
 
@@ -6330,7 +6396,7 @@ async function loadEthereumNFTs() {
         // Update section summary with combined totals
         updateNftSectionSummary();
         updateSummaryCardNftCounts();
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
 
         renderEthereumNFTs(data.nfts, data.eth_price);
 
@@ -6638,7 +6704,7 @@ async function loadSolanaNFTs() {
         // Update section summary and summary card counts
         updateNftSectionSummary();
         updateSummaryCardNftCounts();
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
 
         renderSolanaNFTs(data.nfts, data.sol_price);
 
@@ -6771,7 +6837,7 @@ async function loadPolygonNFTs() {
         // Update section summary and summary card counts
         updateNftSectionSummary();
         updateSummaryCardNftCounts();
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
 
         renderPolygonNFTs(data.nfts, data.matic_price);
 
@@ -6924,7 +6990,7 @@ async function loadBaseNFTs() {
         // Update section summary and summary card counts
         updateNftSectionSummary();
         updateSummaryCardNftCounts();
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
 
         renderBaseNFTs(data.nfts, data.eth_price);
 
@@ -7066,7 +7132,7 @@ async function loadAlgorandNFTs() {
         // Update section summary and summary card counts
         updateNftSectionSummary();
         updateSummaryCardNftCounts();
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
 
         renderAlgorandNFTs(data.nfts);
 
@@ -7197,7 +7263,7 @@ async function loadBscNFTs() {
         // Update section summary and summary card counts
         updateNftSectionSummary();
         updateSummaryCardNftCounts();
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
 
         renderBscNFTs(data.nfts, data.bnb_price);
 
@@ -7350,7 +7416,7 @@ async function loadArbitrumNFTs() {
         // Update section summary and summary card counts
         updateNftSectionSummary();
         updateSummaryCardNftCounts();
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
 
         renderArbitrumNFTs(data.nfts, data.eth_price);
 
@@ -7503,7 +7569,7 @@ async function loadAvalancheNFTs() {
         // Update section summary and summary card counts
         updateNftSectionSummary();
         updateSummaryCardNftCounts();
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
 
         renderAvalancheNFTs(data.nfts, data.avax_price);
 
@@ -7756,7 +7822,7 @@ async function loadAllNftSummaries() {
         // Update section summary and summary card counts
         updateNftSectionSummary();
         updateSummaryCardNftCounts();
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
 
     } catch (error) {
         console.error('Error loading NFT summaries:', error);
@@ -7774,14 +7840,39 @@ async function globalRefreshAll() {
     showStatus('Refreshing all data...');
 
     try {
-        // Refresh prices first
+        // 1. Refresh prices
         await loadPrices();
 
-        // Refresh all sections with force refresh parameter
+        // 2. Call POST /portfolio/refresh — single call that clears caches,
+        //    fetches fresh chain + exchange data, writes positions, and
+        //    returns instant portfolio data.
+        try {
+            const refreshResp = await authFetch(`${API_BASE}/portfolio/refresh`, { method: 'POST' });
+            if (refreshResp.ok) {
+                const instantData = await refreshResp.json();
+                // Update UI with instant data from the refresh response
+                if (instantData.has_positions) {
+                    const totalEl = document.getElementById('totalPortfolioValue');
+                    if (totalEl) setSafeHTML(totalEl, formatUSDBlur(instantData.total_usd));
+                    const bd = instantData.breakdown || {};
+                    const liquidTotal = (bd.chain || 0) + (bd.exchange || 0) + (bd.tracked_token || 0) + (bd.custom_token || 0);
+                    const stakedTotal = (bd.staking || 0) + (bd.defi || 0);
+                    const nftsTotal = bd.nft || 0;
+                    const liquidEl = document.getElementById('breakdownLiquid');
+                    const stakedEl = document.getElementById('breakdownStaked');
+                    const nftsEl = document.getElementById('breakdownNfts');
+                    if (liquidEl) liquidEl.textContent = formatUSD(liquidTotal);
+                    if (stakedEl) stakedEl.textContent = formatUSD(stakedTotal);
+                    if (nftsEl) nftsEl.textContent = formatUSD(nftsTotal);
+                }
+            }
+        } catch (e) {
+            console.warn('[Refresh] POST /portfolio/refresh failed, falling back:', e);
+        }
+
+        // 3. Refresh staking + DeFi + NFTs in parallel
         const refreshPromises = [
-            authFetch(`${API_BASE}/portfolio/summary?refresh=true`).then(r => r.json()),
-            authFetch(`${API_BASE}/defi/summary?refresh=true`).then(r => r.json()),
-            authFetch(`${API_BASE}/exchanges/coinbase?refresh=true`).then(r => r.json()).catch(() => null),
+            authFetch(`${API_BASE}/defi/summary?refresh=true`).then(r => r.json()).catch(() => null),
             authFetch(`${API_BASE}/nfts?force_refresh=true`).then(r => r.json()).catch(() => null)
         ];
 
@@ -7790,7 +7881,6 @@ async function globalRefreshAll() {
         const walletsData = await walletsResponse.json();
         const cardanoWallets = walletsData.wallets.filter(w => w.blockchain === 'cardano');
 
-        // Refresh staking for all wallets with force refresh
         for (const wallet of cardanoWallets) {
             refreshPromises.push(
                 authFetch(`${API_BASE}/defi/staking/${wallet.address}?refresh=true`).then(r => r.json()).catch(() => null)
@@ -7799,7 +7889,7 @@ async function globalRefreshAll() {
 
         await Promise.all(refreshPromises);
 
-        // Also refresh Ethereum, Solana, Polygon, Base, BSC, Arbitrum, and Avalanche NFTs
+        // Also refresh multi-chain NFTs (fire-and-forget)
         authFetch(`${API_BASE}/nfts/ethereum?force_refresh=true`).catch(() => null);
         authFetch(`${API_BASE}/nfts/solana?force_refresh=true`).catch(() => null);
         authFetch(`${API_BASE}/nfts/polygon?force_refresh=true`).catch(() => null);
@@ -7808,17 +7898,16 @@ async function globalRefreshAll() {
         authFetch(`${API_BASE}/nfts/arbitrum?force_refresh=true`).catch(() => null);
         authFetch(`${API_BASE}/nfts/avalanche?force_refresh=true`).catch(() => null);
 
-        // Reload all UI components (force refresh for global refresh)
+        // Reload UI components
         await loadPortfolioSummary();
         await loadExchangeData();
-        // On assets page, load full DeFi UI; on dashboard, just load totals
         if (document.getElementById('defiGovernanceContent')) {
             await loadDefiGovernance();
         } else {
             await loadPortfolioTotals();
         }
 
-        // Load NFT summaries for all chains, then load current chain's list
+        // Reload NFTs
         await loadAllNftSummaries();
         if (currentNFTChain === 'cardano') {
             loadNFTs();
@@ -9369,7 +9458,7 @@ function displayCustomTokens(data) {
     setSafeHTML(tokensList, tokensHtml);
 
     // Update portfolio total
-    updateTotalPortfolioValue();
+    scheduleUpdateTotalPortfolioValue();
 }
 
 // Flag to prevent race conditions during custom token toggle
@@ -9415,7 +9504,7 @@ async function toggleCustomTokenTracking(tokenId, include, tokenValue) {
     }
 
     // Update portfolio total immediately
-    updateTotalPortfolioValue();
+    scheduleUpdateTotalPortfolioValue();
 
     // Then persist to backend
     try {
@@ -9434,7 +9523,7 @@ async function toggleCustomTokenTracking(tokenId, include, tokenValue) {
                 if (checkbox) checkbox.checked = !include;
             }
             customTokensValue = previousCustomValue;
-            updateTotalPortfolioValue();
+            scheduleUpdateTotalPortfolioValue();
         }
     } catch (error) {
         console.error('Error toggling custom token tracking:', error);
@@ -9445,7 +9534,7 @@ async function toggleCustomTokenTracking(tokenId, include, tokenValue) {
             if (checkbox) checkbox.checked = !include;
         }
         customTokensValue = previousCustomValue;
-        updateTotalPortfolioValue();
+        scheduleUpdateTotalPortfolioValue();
     } finally {
         isTogglingCustomToken = false;
     }
@@ -10263,16 +10352,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     const isNftsPage = !!document.querySelector('.nfts-tab-nav');
 
     if (isOverview) {
-        // OVERVIEW PAGE: Load prices + snapshot totals first, then portfolio summary
+        // OVERVIEW PAGE — 3-phase load:
+        //   Phase A: restoreCachedPortfolioTotal() — already called above (instant, localStorage)
+        //   Phase B: loadPortfolioInstant() — fast DB + in-memory prices (<500ms)
+        //   Phase C: Full data load (wallet cards, holdings table, charts)
+
+        // Phase B: Instant portfolio total + breakdown
+        let instantSuccess = false;
         try {
-            await Promise.all([
+            const [_, instantResult] = await Promise.all([
                 loadPrices(),
-                loadPortfolioTotals()  // Must resolve before first updateTotalPortfolioValue()
+                loadPortfolioInstant()
             ]);
+            instantSuccess = instantResult;
         } catch (e) {
-            console.error('[Overview] Failed to load prices/totals:', e);
+            console.warn('[Overview] Phase B (instant) failed:', e);
         }
+
+        // Phase C: Full data — portfolio summary for wallet cards, totals for accurate breakdown
         try {
+            if (!instantSuccess) {
+                // Fallback: no positions yet, use original sequence
+                await loadPortfolioTotals();
+            }
             await loadPortfolioSummary();
         } catch (e) {
             console.error('[Overview] Failed to load portfolio summary:', e);
@@ -10282,11 +10384,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         const collectBtn = document.getElementById('collectHistoryBtn');
         if (collectBtn) collectBtn.addEventListener('click', startBalanceCollection);
 
-        // Fire chart + holdings immediately (no longer gated by background batch)
+        // Fire chart + holdings immediately
         loadV2BalanceHistory('1w');
         loadAllHoldings();
 
-        // Background updates - load exchange data + remaining data
+        // Background updates — load exchange data + remaining data
         Promise.allSettled([
             loadExchangeData(),
             loadCustomTokens(),
@@ -10295,11 +10397,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             load7DayPortfolioChange(),
             load7DayTransactionCount(),
             loadGlobalMarketCap(),
-            loadStakingTotalsForOverview()
+            loadStakingTotalsForOverview(),
+            instantSuccess ? Promise.resolve() : loadPortfolioTotals()
         ]).then(() => {
             console.log('[Overview] Background data loading complete');
             initCardanoPriceStream();
-            updateTotalPortfolioValue();
+            updateTotalPortfolioValue();  // Final recalculation — direct, not debounced
             checkV2CollectionStatus();
             preFetchAssetBreakdowns();
         });
