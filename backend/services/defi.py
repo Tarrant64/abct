@@ -38,18 +38,20 @@ FLOW_TOKEN_POLICY = "2d9db8a89f074aa045eab177f23a3395f62ced8b53499a9e4ad46c80"
 FLOW_ASSET = "2d9db8a89f074aa045eab177f23a3395f62ced8b53499a9e4ad46c80464c4f57"
 
 # Iagon staking contracts (addresses from DefiLlama adapter maintained by Iagon)
-IAGON_OLD_STAKING_ADDRESS = "addr1w9k25wa83tyfk5d26tgx4w99e5yhxd86hg33yl7x7ej7yusggvmu3"
+# NOTE: Old staking contract excluded — it's deprecated and shows ~7568 IAG that was refunded
+# separately. Including it would double-count staked IAG.
+IAGON_OLD_STAKING_ADDRESS = "addr1w9k25wa83tyfk5d26tgx4w99e5yhxd86hg33yl7x7ej7yusggvmu3"  # DEPRECATED
 IAGON_OPERATOR_STAKING_ADDRESS = "addr1zxkrtm5fcf43ukp8w8kstt65kelawutmht4a0aezl06rp43y2c4s7gthspjk2c4557c9zltqcssl4qz7x5syzf7yknhqma7zxx"
 IAGON_DELEGATED_STAKING_ADDRESS = "addr1z8awewqwaek2m7w6c5vyycldf5tykw87w820da273a4smgpy2c4s7gthspjk2c4557c9zltqcssl4qz7x5syzf7yknhq6uv6j0"
 IAGON_BATCHER_ADDRESS = "addr1v8ckrqqrj4u34sxt45vdu8s8nqq3lm3lc8s7su5nyzaq9tcqy2n8j"  # Active batcher/aggregator
 IAGON_ALL_STAKING_ADDRESSES = {
-    IAGON_OLD_STAKING_ADDRESS, IAGON_OPERATOR_STAKING_ADDRESS,
+    IAGON_OPERATOR_STAKING_ADDRESS,
     IAGON_DELEGATED_STAKING_ADDRESS, IAGON_BATCHER_ADDRESS
 }
-# Staking-only addresses (excluding batcher) - used for UTxO snapshot tracking
+# Staking-only addresses (excluding batcher and deprecated old contract)
 # The batcher is transient; only actual staking contract outputs reflect current stake
 IAGON_STAKING_CONTRACT_ADDRESSES = {
-    IAGON_OLD_STAKING_ADDRESS, IAGON_OPERATOR_STAKING_ADDRESS,
+    IAGON_OPERATOR_STAKING_ADDRESS,
     IAGON_DELEGATED_STAKING_ADDRESS
 }
 IAGON_IAG_POLICY = "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114"
@@ -193,13 +195,13 @@ DEFI_PROTOCOLS = {
         "description": "Optim liquid staked ADA"
     },
 
-    # === Spectrum Finance ===
+    # === Spectrum Finance (DEFUNCT - protocol shut down Sept 2025, SPF airdrop refund completed) ===
     "6c8642400e8437f737eb86df0fc8a8437c760f48592b1ba8f5767e81": {
         "protocol": "Spectrum",
         "token": "SPF",
-        "type": "governance",
+        "type": "reserve",
         "decimals": 6,
-        "description": "Spectrum Finance governance token"
+        "description": "Spectrum Finance token (protocol discontinued)"
     },
 
     # === Flow Lending ===
@@ -243,13 +245,22 @@ DEFI_PROTOCOLS = {
         "description": "Bridged DAI"
     },
 
-    # === Iagon ===
+    # === FluidTokens (CIP-68 token) ===
+    "577f0b1342f8f8f4aed3388b80a8535812950c7a892495c0ecdf0f1e": {
+        "protocol": "FluidTokens",
+        "token": "FLDT",
+        "type": "governance",
+        "decimals": 6,
+        "description": "FluidTokens governance token (FluidDAO)"
+    },
+
+    # === Iagon (DePIN - utility token, NOT governance) ===
     "5d16cc1a177b5d9ba9cfa9793b07e60f1fb70fea1f8aef064415d114": {
         "protocol": "Iagon",
         "token": "IAG",
-        "type": "governance",
+        "type": "depin",
         "decimals": 6,
-        "description": "Iagon governance token"
+        "description": "Iagon DePIN utility token"
     },
 
     # === SingularityNET ===
@@ -281,6 +292,7 @@ TOKEN_CATEGORIES = {
     "stablecoin": "Stablecoins",
     "reserve": "Reserve Tokens",
     "liquid_staking": "Liquid Staking",
+    "depin": "DePIN Tokens",
 }
 
 
@@ -782,7 +794,7 @@ class DeFiService:
 
             # Load incremental scan state from persistent cache (7-day TTL)
             # Version marker: bump when calculation logic changes to invalidate stale data
-            SCAN_STATE_VERSION = 4  # v4: staking-contract-only flow tracking (excludes batcher rewards)
+            SCAN_STATE_VERSION = 5  # v5: exclude deprecated old staking contract (refunded separately)
             scan_key = f"iagon_scan_state_{address}"
             scan_state = await get_cache(scan_key)
 

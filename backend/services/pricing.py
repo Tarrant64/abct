@@ -55,6 +55,7 @@ ASSET_TO_COINGECKO = {
     'SNEK': 'snek',
     'STRIKE': 'strike-finance',
     'IAG': 'iagon',
+    'FLDT': 'fluidtokens',
     'XER': 'xerberus',
     'NIGHT': 'midnight-3',
     'FLOW': 'flow-lending',

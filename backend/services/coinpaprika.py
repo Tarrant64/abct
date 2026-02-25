@@ -46,6 +46,7 @@ SYMBOL_TO_COINPAPRIKA: Dict[str, str] = {
     "AGIX": "agix-singularitynet",
     "STRIKE": "strike-strike-finance",
     "IAG": "iag-iagon",
+    "FLDT": "fldt-fluidtokens",
     "XER": "xer-xerberus",
     "NIGHT": "night-midnight",
     "FLOW": "flow-flow-lending",

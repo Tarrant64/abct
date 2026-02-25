@@ -3441,20 +3441,19 @@ function renderDefiPositions(data) {
         'Liquid Staking': '\u{1F4A7}'
     };
 
-    // Governance links for each token
+    // Governance links for each token (direct DAO/voting pages)
     const governanceLinks = {
-        'INDY': 'https://app.indigoprotocol.io/earn',
+        'INDY': 'https://app.indigoprotocol.io/governance',
         'LQ': 'https://app.liqwid.finance/agora',
         'MIN': 'https://app.minswap.org/governance',
-        'SUNDAE': 'https://vote.sundaeswap.finance/',
-        'STRIKE': 'https://app.strikefinance.org/perpetuals/ada',
-        'WRT': 'https://app.wingriders.com/governance',
+        'SUNDAE': 'https://governance.sundaeswap.finance/',
+        'STRIKE': 'https://app.strikefinance.org/',
+        'WRT': 'https://app.wingriders.com/voting',
         'LENFI': 'https://app.lenfi.io/governance',
-        'OPTIM': 'https://app.optim.finance/governance',
-        'SPF': 'https://spectrum.fi/governance',
+        'OPTIM': 'https://dao.optim.finance/',
         'VYFI': 'https://app.vyfi.io/governance',
-        'IAG': 'https://iagon.com/governance',
-        'AGIX': 'https://singularitynet.io/vote'
+        'FLDT': 'https://app.fluidtokens.com',
+        'AGIX': 'https://voting.singularitynet.io'
     };
 
     // Known stablecoins to always show
@@ -3579,18 +3578,17 @@ function renderDefiPositions(data) {
 
 // Governance links for DeFi protocols
 const GOVERNANCE_LINKS = {
-    'INDY': { url: 'https://app.indigoprotocol.io/earn', name: 'Indigo' },
+    'INDY': { url: 'https://app.indigoprotocol.io/governance', name: 'Indigo' },
     'LQ': { url: 'https://app.liqwid.finance/agora', name: 'Liqwid' },
     'MIN': { url: 'https://app.minswap.org/governance', name: 'Minswap' },
-    'SUNDAE': { url: 'https://vote.sundaeswap.finance/', name: 'SundaeSwap' },
-    'STRIKE': { url: 'https://app.strikefinance.org/perpetuals/ada', name: 'Strike' },
-    'WRT': { url: 'https://app.wingriders.com/governance', name: 'WingRiders' },
+    'SUNDAE': { url: 'https://governance.sundaeswap.finance/', name: 'SundaeSwap' },
+    'STRIKE': { url: 'https://app.strikefinance.org/', name: 'Strike' },
+    'WRT': { url: 'https://app.wingriders.com/voting', name: 'WingRiders' },
     'LENFI': { url: 'https://app.lenfi.io/governance', name: 'Lenfi' },
-    'OPTIM': { url: 'https://app.optim.finance/governance', name: 'Optim' },
-    'SPF': { url: 'https://spectrum.fi/governance', name: 'Spectrum' },
+    'OPTIM': { url: 'https://dao.optim.finance/', name: 'Optim' },
     'VYFI': { url: 'https://app.vyfi.io/governance', name: 'VyFi' },
-    'IAG': { url: 'https://iagon.com/governance', name: 'Iagon' },
-    'AGIX': { url: 'https://singularitynet.io/vote', name: 'SingularityNET' }
+    'FLDT': { url: 'https://app.fluidtokens.com', name: 'FluidTokens' },
+    'AGIX': { url: 'https://voting.singularitynet.io', name: 'SingularityNET' }
 };
 
 

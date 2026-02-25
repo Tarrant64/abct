@@ -1,13 +1,13 @@
-# ABCT Architecture (v1.14.0)
+# ABCT Architecture (v1.15.2)
 
 ## System Overview
 
 ```
 +-----------------------------------------------------------------------------------+
-|                              ABCT System (v1.14.0)                                 |
+|                              ABCT System (v1.15.2)                                 |
 |                         Multi-User Portfolio Tracker                              |
-|                              BUILD 1771717923                                     |
-|              51 Chains | 42 Exchanges | 80+ DeFi Protocols | P&L Engine           |
+|                              BUILD 1771794638                                     |
+|              53 Chains | 42 Exchanges | 80+ DeFi Protocols | P&L Engine           |
 +-----------------------------------------------------------------------------------+
 
                                    +-----------------+
@@ -63,6 +63,11 @@
 |  | /custom-tokens/* |  |   /system/*      |  |  /security/*     |                  |
 |  +------------------+  +------------------+  +------------------+                  |
 |                                                                                    |
+|  +------------------+  +------------------+  +------------------+                  |
+|  |  Privacy API     |  |  Images API      |  |  Search API      |                  |
+|  |  /privacy/*      |  |  /images/*       |  |  /search/*       |                  |
+|  +------------------+  +------------------+  +------------------+                  |
+|                                                                                    |
 |  +-----------------------------------------------------------------------+         |
 |  |                  V2 Ingestion Engine (v1.5.0)                         |         |
 |  |                  /engine/*  (11 endpoints)                            |         |
@@ -76,7 +81,7 @@
 |                              Services Layer                                        |
 +-----------------------------------------------------------------------------------+
 |                                                                                    |
-|  Blockchain Services (51 Chains):                                                |
+|  Blockchain Services (53 Chains):                                                |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
 |  | Cardano  | | Bitcoin  | | Ethereum | | Solana   | | Polygon  | |   Base   |     |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
@@ -89,9 +94,9 @@
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
 |  | Dogecoin | |  Zcash   | |  Tezos   | |  Stacks  | | VeChain  | |  Cosmos  |     |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
-|  +----------+ +----------+                                                          |
-|  |   NEAR   | |   ICP    |                                                          |
-|  +----------+ +----------+                                                          |
+|  +----------+ +----------+ +----------+ +----------+                                 |
+|  |   NEAR   | |   ICP    | |  Monero  | |  Secret  |                                 |
+|  +----------+ +----------+ +----------+ +----------+                                 |
 |  EVM Chains (all via generic evm_chain.py):                                        |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
 |  | Optimism | | zkSync   | |  Linea   | |  Scroll  | | Fantom   | |  Cronos  |     |
@@ -99,19 +104,19 @@
 |  +----------+ +----------+                                                          |
 |  |  Gnosis  | |Moonbeam  |                                                          |
 |  +----------+ +----------+                                                          |
-|  Cosmos IBC Chains (v1.14.0 — shared cosmos_chain.py via LCD REST API):            |
+|  Cosmos IBC Chains (v1.14.0+ — shared cosmos_chain.py via LCD REST API):            |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
 |  | Osmosis  | | Celestia | |Injective | |  dYdX    | |   Sei    | |  Akash   |     |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
-|  Substrate Chains (v1.14.0 — shared substrate_service.py via Subscan API):         |
+|  Substrate Chains (v1.14.0+ — shared substrate_service.py via Subscan API):         |
 |  +----------+ +----------+                                                          |
 |  |Polkadot  | | Kusama   |                                                          |
 |  +----------+ +----------+                                                          |
-|  Major L1 Additions (v1.14.0):                                                     |
+|  Major L1 Additions (v1.14.0+):                                                     |
 |  +----------+ +----------+ +----------+                                             |
 |  |   TON    | | Stellar  | |  Kaspa   |                                             |
 |  +----------+ +----------+ +----------+                                             |
-|  Additional Chains (v1.14.0):                                                      |
+|  Additional Chains (v1.14.0+):                                                      |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
 |  |  Kaia    | |  Ergo    | |  IOTA    | |  Waves   | |  Mina    | | Zilliqa  |     |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
@@ -131,6 +136,9 @@
 |  Cosmos uses Cosmos LCD/PublicNode (free, no key required) - IBC tokens + staking  |
 |  NEAR uses NEAR RPC + NearBlocks API (free, no key required) - tokens + NFTs       |
 |  ICP uses Rosetta API (free, no key required) - balance only                       |
+|  Monero uses monero.py - manual balance only (ring signatures make API             |
+|    fetch impossible), user sets balance via POST /privacy/monero/set-balance       |
+|  Secret Network uses secret_network.py - SecretSaturn LCD API (free, no key)       |
 |  DeFi service includes Chainlink Staking (Ethereum contract reads via Alchemy)     |
 |                                                                                    |
 |  Exchange Services (42 Exchanges via BaseExchangeService + 5 auth mixins):        |
@@ -187,10 +195,10 @@
 |  | Glif RPC | |BlockCyph.| |Blockchair| | TzKT API | | Hiro API | |VeBlocks  |     |
 |  |(FIL/Free)| |(LTC/DOGE)| |(ZEC/Free)| |(XTZ/Free)| |(STX/Free)| |(VET/Free)|     |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
-|  +----------+ +----------+ +----------+                                             |
-|  |Cosmos LCD| | NEAR RPC | |Rosetta   |                                             |
-|  |(ATOM/Free)| |(NEAR/Free)| |(ICP/Free)|                                             |
-|  +----------+ +----------+ +----------+                                             |
+|  +----------+ +----------+ +----------+ +----------+                                 |
+|  |Cosmos LCD| | NEAR RPC | |Rosetta   | |SecretSat.|                                 |
+|  |(ATOM/Free)| |(NEAR/Free)| |(ICP/Free)| |(SCRT/Free)|                                 |
+|  +----------+ +----------+ +----------+ +----------+                                 |
 |  New APIs (v1.14.0):                                                              |
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
 |  |TON Center| | Horizon  | | Subscan  | |Cosmos LCD| | Public   | | Misc     |     |
@@ -198,16 +206,16 @@
 |  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
 |                                                                                    |
 |  Pricing:                                                                         |
-|  +----------+ +----------+ +----------+ +----------+ +----------+                  |
-|  |CoinGecko | |   CMC    | | Coinbase | |DefiLlama | | TapTools |                  |
-|  |(primary) | |(fallback)| |(fallback)| |(fallback)| |(ADA only)|                  |
-|  +----------+ +----------+ +----------+ +----------+ +----------+                  |
+|  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
+|  |CoinGecko | |   CMC    | | Coinbase | |CoinPprika| |DefiLlama | | TapTools |     |
+|  |(primary) | |(fallback)| |(fallback)| |(free/25k)| |(fallback)| |(ADA only)|     |
+|  +----------+ +----------+ +----------+ +----------+ +----------+ +----------+     |
 |                                                                                    |
 |  Token Data:                                                                      |
-|  +----------+ +----------+ +----------+ +----------+                               |
-|  |The Graph | |Logostream| |  NMKR    | | NFT CDN  |                               |
-|  |(Uniswap) | |(logos)   | |(minting) | |(images)  |                               |
-|  +----------+ +----------+ +----------+ +----------+                               |
+|  +----------+ +----------+ +----------+ +----------+ +----------+                  |
+|  |The Graph | |Logostream| |  NMKR    | | NFT CDN  | |Img Cache |                  |
+|  |(Uniswap) | |(logos)   | |(minting) | |(images)  | |(local)   |                  |
+|  +----------+ +----------+ +----------+ +----------+ +----------+                  |
 |                                                                                    |
 +-----------------------------------------------------------------------------------+
             |
@@ -414,6 +422,8 @@ CoinMarketCap
     ↓ fail
 Coinbase (spot prices)
     ↓ fail
+CoinPaprika (free, no API key, 25k calls/month)
+    ↓ fail
 DefiLlama
     ↓ fail
 TapTools (Cardano only)
@@ -502,7 +512,7 @@ Shared persistent `httpx.AsyncClient` instances via `get_client(name, timeout)`:
 - **5 Themes**: Dark Mode (default), Light, Cypherpunk 1, Ocean Depths, Sunset Horizon
 - **Cache Busting**: Build version system (v=1770726755) for immediate updates
 
-### External Services (35+ providers)
+### External Services (40+ providers)
 - **Cardano**: Blockfrost, CExplorer, TapTools, Koios, Maestro (fallback)
 - **Bitcoin**: Blockstream
 - **EVM (original)**: Etherscan, Alchemy, Polygonscan, Basescan, BscScan, Arbiscan, Snowscan
@@ -530,8 +540,11 @@ Shared persistent `httpx.AsyncClient` instances via `get_client(name, timeout)`:
 - **Polkadot/Kusama**: Subscan REST API (optional API key for higher rate limits)
 - **Cosmos IBC** (Osmosis, Celestia, Injective, dYdX, Sei, Akash): Public LCD endpoints (free, no API key required)
 - **Kaspa, Ergo, IOTA, Waves, Mina, Zilliqa, Kaia**: Public chain REST APIs (free, no API key required)
+- **Monero**: Manual balance only (ring signatures make API fetch impossible)
+- **Secret Network**: SecretSaturn LCD API (free, no API key required)
 - **DeFi**: Chainlink Staking via Alchemy (Ethereum contract reads)
-- **Pricing**: CoinGecko, CoinMarketCap, Coinbase, DefiLlama
+- **Privacy Detection**: Railgun contract interaction detection (ETH/Polygon/BSC/Arbitrum via Etherscan)
+- **Pricing**: CoinGecko, CoinMarketCap, Coinbase, CoinPaprika, DefiLlama
 - **Exchanges**: 42 exchanges via BaseExchangeService with 5 auth method families
 
 ## Security Architecture
@@ -606,7 +619,7 @@ ABCT/
 │   ├── auth_utils.py               # Session authentication utilities
 │   ├── database.py                 # Database operations + schema
 │   ├── config.py                   # Configuration management
-│   ├── routers/                    # 26 API endpoint routers
+│   ├── routers/                    # 30 API endpoint routers
 │   │   ├── auth.py                 # Authentication endpoints
 │   │   ├── portfolio.py            # Portfolio endpoints
 │   │   ├── wallets.py              # Wallet management
@@ -632,7 +645,11 @@ ABCT/
 │   │   ├── cloudflare.py           # Cloudflare tunnel
 │   │   ├── mobile.py               # Mobile API
 │   │   ├── analytics.py            # Analytics endpoints
-│   │   └── intelligence.py         # Intelligence endpoints
+│   │   ├── intelligence.py         # Intelligence endpoints
+│   │   ├── privacy.py              # Privacy & ZK endpoints
+│   │   ├── images.py               # Token image cache
+│   │   ├── search.py               # Search endpoints
+│   │   └── pnl.py                  # P&L cost basis reporting
 │   ├── engine/                     # V2 Ingestion Engine (v1.5.0+)
 │   │   ├── models.py               # ChainId, WorkUnit, CanonicalEvent
 │   │   ├── db.py                   # 8 engine_* tables
@@ -687,6 +704,12 @@ ABCT/
 │   │   ├── waves_service.py       # Waves (public REST API)
 │   │   ├── mina_service.py        # Mina (public REST API)
 │   │   ├── zilliqa_service.py     # Zilliqa (public REST API)
+│   │   ├── monero.py              # Monero (manual balance only)
+│   │   ├── secret_network.py     # Secret Network (SecretSaturn LCD)
+│   │   ├── privacy_detector.py   # Railgun privacy contract detection
+│   │   ├── coinpaprika.py        # CoinPaprika pricing fallback
+│   │   ├── image_cache.py        # Token image caching service
+│   │   ├── token_metadata_cache.py  # Token metadata cache (SQLite)
 │   │   ├── helium.py              # Helium (DePIN tracking)
 │   │   ├── charli3.py             # Charli3 oracle service
 │   │   ├── tradfi_data.py         # TradFi data integration
@@ -714,6 +737,7 @@ ABCT/
 │   ├── settings.html              # Consolidated settings
 │   ├── system.html                # System management
 │   ├── login.html                 # Login
+│   ├── privacy.html               # Privacy & ZK features
 │   ├── api-help.html              # API help documentation
 │   ├── dashv2.html                # Dashboard V2
 │   ├── data.html                  # Data management

@@ -38,7 +38,7 @@ class DemoDeFiService:
             self._pos("SundaeSwap", "SUNDAE", "SUNDAE", "governance", "Governance Tokens", 35000, 0, blockchain="cardano"),
             self._pos("WingRiders", "WRT", "WRT", "governance", "Governance Tokens", 2000, 0, blockchain="cardano"),
             self._pos("Optim Finance", "OPTIM", "OPTIM", "governance", "Governance Tokens", 20000, 0, blockchain="cardano"),
-            self._pos("Spectrum Finance", "SPF", "SPF", "governance", "Governance Tokens", 3000, 0, blockchain="cardano"),
+            self._pos("FluidTokens", "FLDT", "FLDT", "governance", "Governance Tokens", 5000, 6, blockchain="cardano"),
             # --- Ethereum Governance ---
             self._pos("Aave", "AAVE", "AAVE", "governance", "Governance Tokens", 35, 18, blockchain="ethereum"),
             self._pos("Uniswap", "UNI", "UNI", "governance", "Governance Tokens", 500, 18, blockchain="ethereum"),

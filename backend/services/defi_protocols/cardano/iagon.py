@@ -22,20 +22,22 @@ from services.defi_protocols.base_adapter import (
 logger = logging.getLogger(__name__)
 
 # Iagon staking contracts (addresses from DefiLlama adapter maintained by Iagon)
-IAGON_OLD_STAKING_ADDRESS = "addr1w9k25wa83tyfk5d26tgx4w99e5yhxd86hg33yl7x7ej7yusggvmu3"
+# NOTE: Old staking contract excluded — it's deprecated and shows ~7568 IAG that was refunded
+# separately. Including it would double-count staked IAG.
+IAGON_OLD_STAKING_ADDRESS = "addr1w9k25wa83tyfk5d26tgx4w99e5yhxd86hg33yl7x7ej7yusggvmu3"  # DEPRECATED
 IAGON_OPERATOR_STAKING_ADDRESS = "addr1zxkrtm5fcf43ukp8w8kstt65kelawutmht4a0aezl06rp43y2c4s7gthspjk2c4557c9zltqcssl4qz7x5syzf7yknhqma7zxx"
 IAGON_DELEGATED_STAKING_ADDRESS = "addr1z8awewqwaek2m7w6c5vyycldf5tykw87w820da273a4smgpy2c4s7gthspjk2c4557c9zltqcssl4qz7x5syzf7yknhq6uv6j0"
 IAGON_BATCHER_ADDRESS = "addr1v8ckrqqrj4u34sxt45vdu8s8nqq3lm3lc8s7su5nyzaq9tcqy2n8j"  # Active batcher/aggregator
 
 IAGON_ALL_STAKING_ADDRESSES = {
-    IAGON_OLD_STAKING_ADDRESS, IAGON_OPERATOR_STAKING_ADDRESS,
+    IAGON_OPERATOR_STAKING_ADDRESS,
     IAGON_DELEGATED_STAKING_ADDRESS, IAGON_BATCHER_ADDRESS
 }
 
-# Staking-only addresses (excluding batcher) - used for UTxO snapshot tracking
+# Staking-only addresses (excluding batcher and deprecated old contract)
 # The batcher is transient; only actual staking contract outputs reflect current stake
 IAGON_STAKING_CONTRACT_ADDRESSES = {
-    IAGON_OLD_STAKING_ADDRESS, IAGON_OPERATOR_STAKING_ADDRESS,
+    IAGON_OPERATOR_STAKING_ADDRESS,
     IAGON_DELEGATED_STAKING_ADDRESS
 }
 
@@ -88,7 +90,7 @@ class IagonAdapter(ProtocolAdapter):
 
             # Load incremental scan state from persistent cache (7-day TTL)
             # Version marker: bump when calculation logic changes to invalidate stale data
-            SCAN_STATE_VERSION = 4  # v4: staking-contract-only flow tracking (excludes batcher rewards)
+            SCAN_STATE_VERSION = 5  # v5: exclude deprecated old staking contract (refunded separately)
             scan_key = f"iagon_scan_state_{address}"
             scan_state = await get_cache(scan_key)
 

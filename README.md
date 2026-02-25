@@ -2,12 +2,12 @@
 
 Personal multi-chain portfolio tracker built Cardano-first.
 
-![Version](https://img.shields.io/badge/version-1.14.0-brightgreen.svg)
-![Build](https://img.shields.io/badge/build-1771728190-blue.svg)
+![Version](https://img.shields.io/badge/version-1.15.2-brightgreen.svg)
+![Build](https://img.shields.io/badge/build-1771794638-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.109-teal.svg)
-![Chains](https://img.shields.io/badge/chains-51-brightgreen.svg)
+![Chains](https://img.shields.io/badge/chains-53-brightgreen.svg)
 ![Docker](https://img.shields.io/badge/docker-ready-blue.svg)
 ![Exchanges](https://img.shields.io/badge/exchanges-42-purple.svg)
 ![DeFi](https://img.shields.io/badge/defi_protocols-80%2B-orange.svg)
@@ -21,7 +21,7 @@ Existing multi-chain wallets treat Cardano as an afterthought — basic balance 
 
 ## Features
 
-### 51 Blockchains
+### 53 Blockchains
 
 **Cardano** (Primary) — Stake pool tracking, rewards, governance, native assets with metadata, DeFi protocol integration (Minswap, SundaeSwap, Liqwid, Indigo, etc.), NFT collections with floor prices, stake key wallet grouping.
 
@@ -39,7 +39,9 @@ Existing multi-chain wallets treat Cardano as an afterthought — basic balance 
 
 **Additional Chains** (v1.14.0) — Kaia (formerly Klaytn), Ergo, IOTA, Waves, Mina, Zilliqa
 
-**Free Chains** (no API key required) — Bitcoin, Tron, XRP, Hedera, MultiversX, Sui, Aptos, Filecoin, Litecoin, Dogecoin, Zcash, Tezos, Stacks, VeChain, Cosmos (ATOM), NEAR, ICP, and all Cosmos IBC chains above
+**Privacy Chains** (v1.15.0) — Monero (manual balance only, ring signatures prevent API fetch), Secret Network (SecretSaturn LCD API)
+
+**Free Chains** (no API key required) — Bitcoin, Tron, XRP, Hedera, MultiversX, Sui, Aptos, Filecoin, Litecoin, Dogecoin, Zcash, Tezos, Stacks, VeChain, Cosmos (ATOM), NEAR, ICP, Secret Network, and all Cosmos IBC chains above
 
 ### 42 Exchange Integrations
 Read-only API integration across 42 exchanges using 5 auth method families:
@@ -58,6 +60,7 @@ Protocol adapters detect positions automatically — no manual tracking needed:
 - **Per-Wallet History**: Daily balance tracking per wallet/exchange/staking position with unified chart
 - **Transaction Analytics**: Multi-chain transaction history with filtering, analytics, and portfolio vs. BTC relative strength
 - **DePIN Tracking**: Iagon (Cardano) and Helium (Solana) infrastructure protocol monitoring
+- **Privacy & ZK**: Monero manual balance, Secret Network, Zcash shielded pool stats, Railgun contract detection, per-wallet privacy scoring
 - **DeFi Monitoring**: Auto-detected staking positions with APY and rewards across 100+ protocols
 - **NFT Collection**: Browse NFTs with floor price valuations across Cardano, Ethereum, and Solana
 
@@ -171,6 +174,15 @@ See [SECURITY.md](SECURITY.md) for full details.
 
 ## What's New
 
+### v1.15.x — 53 Chains, Privacy & ZK, CoinPaprika Pricing (February 2026)
+- **Privacy Chains**: Monero (XMR, manual balance) and Secret Network (SCRT, SecretSaturn LCD API)
+- **Privacy & ZK Tab**: Dedicated privacy page with holdings, privacy analysis, shielded pool stats, and education
+- **Privacy Detection**: Railgun contract interaction detection across Ethereum/Polygon/BSC/Arbitrum
+- **Zcash Enhancements**: Shielded pool stats and per-wallet privacy scoring (0/50/100)
+- **CoinPaprika Pricing**: New free pricing fallback (25k calls/month, no API key) inserted between Coinbase and DefiLlama
+- **Token Image Cache**: Local caching of token logos eliminates CoinGecko CDN dependency
+- **Token Metadata Cache**: SQLite-based metadata cache for supply, rank, ATH/ATL data
+
 ### v1.14.0 — 51 Chains, Cosmos IBC, 80+ DeFi Protocols (February 2026)
 - **Chain Depth Expansion**: 34 → 51 chains across 5 new categories
 - **Cosmos IBC Support**: Osmosis, Celestia, Injective, dYdX, Sei, Akash — all via shared `cosmos_chain.py` LCD pattern
@@ -231,7 +243,7 @@ Built with [FastAPI](https://fastapi.tiangolo.com/), [Chart.js](https://www.char
 **Solana**: [Helius](https://www.helius.dev/) · **Bitcoin**: [Blockstream](https://blockstream.info/) · **Algorand**: [Pera Wallet](https://developer.perawallet.app/), [Tatum](https://tatum.io/)
 **TON**: [TON Center](https://toncenter.com/) · **Stellar**: [Horizon API](https://horizon.stellar.org/) · **Substrate**: [Subscan](https://subscan.io/)
 **Cosmos IBC**: Public LCD nodes (Osmosis, Celestia, Injective, dYdX, Sei, Akash)
-**Pricing**: [CoinGecko](https://www.coingecko.com/), [CoinMarketCap](https://coinmarketcap.com/), [DefiLlama](https://defillama.com/), [Coinbase](https://www.coinbase.com/)
+**Pricing**: [CoinGecko](https://www.coingecko.com/), [CoinMarketCap](https://coinmarketcap.com/), [Coinbase](https://www.coinbase.com/), [CoinPaprika](https://coinpaprika.com/), [DefiLlama](https://defillama.com/)
 **Logos**: [LogoKit](https://logokit.com/), [Logostream](https://logostream.dev)
 **Exchanges** (42 total): [Coinbase](https://www.coinbase.com/cloud), [Binance](https://www.binance.com/), [Bybit](https://www.bybit.com/), [MEXC](https://www.mexc.com/), [Kraken](https://www.kraken.com/), [Gemini](https://www.gemini.com/), [OKX](https://www.okx.com/), [Bitget](https://www.bitget.com/), [Gate.io](https://www.gate.io/), [KuCoin](https://www.kucoin.com/), [Bitfinex](https://www.bitfinex.com/), [HTX](https://www.htx.com/), and 30 more
 **Privacy**: [Midnight Network](https://midnight.network/) (NIGHT token support)
@@ -248,5 +260,5 @@ For detailed API information including rate limits and pricing, see [API Provide
 
 ---
 
-**Current Version:** v1.14.0 (BUILD 1771717923)
-**Last Updated:** February 21, 2026
+**Current Version:** v1.15.2 (BUILD 1771794638)
+**Last Updated:** February 25, 2026

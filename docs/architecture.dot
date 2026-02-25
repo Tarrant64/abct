@@ -14,7 +14,7 @@ digraph ABCT_Architecture {
 
     // Title
     labelloc="t";
-    label="ABCT Architecture - A Better Crypto Tracker\nVersion 1.14.0 (Build 1771717923)\n51 Blockchains | 42 Exchanges | 80+ DeFi Protocols | P&L Engine | Multi-User | Demo Mode";
+    label="ABCT Architecture - A Better Crypto Tracker\nVersion 1.15.2 (Build 1771794638)\n53 Blockchains | 42 Exchanges | 80+ DeFi Protocols | P&L Engine | Multi-User | Demo Mode";
     fontsize=16;
 
     // ========== SUBGRAPHS ==========
@@ -107,6 +107,11 @@ digraph ABCT_Architecture {
                 r_backup [label="/backup\nExport/Import", fillcolor="#81C784"];
                 r_logs [label="/logs\nSystem Logging", fillcolor="#81C784"];
                 r_nft_scheduler [label="/nft-scheduler\nBackground NFT Updates", fillcolor="#81C784"];
+                r_privacy [label="/privacy\nPrivacy & ZK\nShielded Pool Stats", fillcolor="#81C784"];
+                r_images [label="/images\nToken Image Cache", fillcolor="#81C784"];
+                r_search [label="/search\nSearch Endpoints", fillcolor="#81C784"];
+                r_system [label="/system\nSystem Health", fillcolor="#81C784"];
+                r_analytics [label="/analytics\nAnalytics Endpoints", fillcolor="#81C784"];
             }
 
             // Services
@@ -118,7 +123,7 @@ digraph ABCT_Architecture {
 
                 // Blockchain Services
                 subgraph cluster_blockchain_svc {
-                    label="Blockchain Services (51 Chains)";
+                    label="Blockchain Services (53 Chains)";
                     style="rounded,filled";
                     fillcolor="#FFE0B2";
                     color="#E65100";
@@ -153,6 +158,8 @@ digraph ABCT_Architecture {
                     s_stellar [label="stellar_service.py\nStellar (XLM)", fillcolor="#FFCC80"];
                     s_kaspa [label="kaspa_service.py\nKaspa (KAS)", fillcolor="#FFCC80"];
                     s_misc_chains [label="ergo/iota/waves\nmina/zilliqa/kaia\n(public REST APIs)", fillcolor="#FFCC80"];
+                    s_monero [label="monero.py\nMonero (XMR)\n(manual balance only)", fillcolor="#FFCC80"];
+                    s_secret [label="secret_network.py\nSecret Network (SCRT)", fillcolor="#FFCC80"];
                 }
 
                 // NFT Services
@@ -234,6 +241,9 @@ digraph ABCT_Architecture {
                     s_logostream [label="logostream.py\nToken Logo API", fillcolor="#80DEEA"];
                     s_ssl [label="ssl_service.py\nCertificate Mgmt", fillcolor="#80DEEA"];
                     s_logging [label="logging_service.py\nCentralized Logs", fillcolor="#80DEEA"];
+                    s_privacy_detector [label="privacy_detector.py\nRailgun Detection\n(ETH/Polygon/BSC/ARB)", fillcolor="#80DEEA"];
+                    s_coinpaprika [label="coinpaprika.py\nPricing Fallback\n(free, 25k/month)", fillcolor="#80DEEA"];
+                    s_image_cache [label="image_cache.py\nToken Image Cache", fillcolor="#80DEEA"];
                 }
             }
         }
@@ -339,6 +349,7 @@ digraph ABCT_Architecture {
             api_horizon [label="Horizon API\nStellar Data (Free)", fillcolor="#B2DFDB"];
             api_subscan [label="Subscan\nPolkadot/Kusama (opt. key)", fillcolor="#B2DFDB"];
             api_cosmos_ibc_lcd [label="Cosmos IBC LCD\nOsmosis/Celestia/Injective\ndYdX/Sei/Akash (Free)", fillcolor="#B2DFDB"];
+            api_secretsaturn [label="SecretSaturn LCD\nSecret Network (Free)", fillcolor="#B2DFDB"];
         }
 
         // Pricing APIs
@@ -351,7 +362,8 @@ digraph ABCT_Architecture {
             api_coingecko [label="1. CoinGecko\nPrimary Price Data", fillcolor="#F8BBD9"];
             api_cmc [label="2. CoinMarketCap\nSecondary Prices", fillcolor="#F8BBD9"];
             api_coinbase_price [label="3. Coinbase\nSpot Prices (Free)", fillcolor="#F8BBD9"];
-            api_defillama [label="4. DefiLlama\nUniversal Fallback", fillcolor="#F8BBD9"];
+            api_coinpaprika [label="4. CoinPaprika\nFree Fallback (25k/mo)", fillcolor="#F8BBD9"];
+            api_defillama [label="5. DefiLlama\nUniversal Fallback", fillcolor="#F8BBD9"];
         }
 
         // Visual Assets APIs
@@ -466,6 +478,19 @@ digraph ABCT_Architecture {
     r_wallets -> s_stellar;
     r_wallets -> s_kaspa;
     r_wallets -> s_misc_chains;
+    r_wallets -> s_secret;
+
+    // Privacy Router connections
+    main -> r_privacy [style=dashed, color="#388E3C"];
+    main -> r_images [style=dashed, color="#388E3C"];
+    main -> r_search [style=dashed, color="#388E3C"];
+    main -> r_system [style=dashed, color="#388E3C"];
+    main -> r_analytics [style=dashed, color="#388E3C"];
+    r_privacy -> s_monero;
+    r_privacy -> s_secret;
+    r_privacy -> s_privacy_detector;
+    r_privacy -> s_zcash [label="shielded stats"];
+    r_images -> s_image_cache;
 
     // Routers to NFT Services
     r_nfts -> s_nft;
@@ -571,6 +596,8 @@ digraph ABCT_Architecture {
     s_stellar -> api_horizon [label="HTTPS", color="#00796B"];
     s_substrate -> api_subscan [label="HTTPS", color="#00796B"];
     s_cosmos_ibc -> api_cosmos_ibc_lcd [label="HTTPS", color="#00796B"];
+    s_secret -> api_secretsaturn [label="HTTPS", color="#00796B"];
+    s_coinpaprika -> api_coinpaprika [label="HTTPS", color="#C2185B"];
 
     // DeFi service connections
     s_defi -> api_alchemy [label="Chainlink Staking", color="#3F51B5"];
@@ -582,7 +609,8 @@ digraph ABCT_Architecture {
     s_pricing -> api_coingecko [label="1st", color="#C2185B"];
     s_pricing -> api_cmc [label="2nd", color="#C2185B"];
     s_pricing -> api_coinbase_price [label="3rd", color="#C2185B"];
-    s_pricing -> api_defillama [label="4th", color="#C2185B"];
+    s_pricing -> api_coinpaprika [label="4th", color="#C2185B"];
+    s_pricing -> api_defillama [label="5th", color="#C2185B"];
 
     // Visual asset services
     s_logostream -> api_logostream [label="HTTPS", color="#E65100"];
