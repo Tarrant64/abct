@@ -51,6 +51,20 @@ logger = logging.getLogger(__name__)
 MOBILE_CACHE_TTL = 120  # 2 minutes for mobile responses
 CHART_CACHE_TTL = 900  # 15 minutes for chart data
 
+
+async def _resolve_token_info(symbol: str) -> tuple[str, str]:
+    """Look up proper display name and image URL for a token symbol.
+
+    Fallback chain: metadata_cache (CoinGecko CDN) → LogoKit.
+    Always returns full external URLs safe for both web and mobile clients.
+    """
+    meta = await metadata_cache.get_metadata(symbol)
+    name = (meta.get('name') if meta else None) or symbol.capitalize()
+    image_url = (meta.get('image_url') if meta else None)
+    if not image_url:
+        image_url = logokit_service.get_crypto_logo_url(symbol, size=64)
+    return name, image_url
+
 # Exchange display info
 EXCHANGE_INFO = {
     "coinbase": {
@@ -577,10 +591,7 @@ async def get_mobile_portfolio_summary(
                             symbol_agg[token]['value_usd'] += val
                             symbol_agg[token]['native_amount'] += amount
                         else:
-                            # Look up proper name and image from metadata cache
-                            meta = await metadata_cache.get_metadata(token)
-                            token_name = (meta.get('name') if meta else None) or token.capitalize()
-                            token_image = (meta.get('image_url') if meta else None) or logokit_service.get_crypto_logo_url(token, size=64)
+                            token_name, token_image = await _resolve_token_info(token)
                             symbol_agg[token] = {
                                 "name": token_name,
                                 "symbol": token,
@@ -604,9 +615,7 @@ async def get_mobile_portfolio_summary(
                             symbol_agg[rt]['value_usd'] += val
                             symbol_agg[rt]['native_amount'] += pending
                         else:
-                            meta = await metadata_cache.get_metadata(rt)
-                            rt_name = (meta.get('name') if meta else None) or rt.capitalize()
-                            rt_image = (meta.get('image_url') if meta else None) or logokit_service.get_crypto_logo_url(rt, size=64)
+                            rt_name, rt_image = await _resolve_token_info(rt)
                             symbol_agg[rt] = {
                                 "name": rt_name,
                                 "symbol": rt,
@@ -643,9 +652,7 @@ async def get_mobile_portfolio_summary(
                     symbol_agg[currency]['value_usd'] += val
                     symbol_agg[currency]['native_amount'] += balance
                 else:
-                    meta = await metadata_cache.get_metadata(currency)
-                    exc_name = (meta.get('name') if meta else None) or currency.capitalize()
-                    exc_image = (meta.get('image_url') if meta else None) or logokit_service.get_crypto_logo_url(currency, size=64)
+                    exc_name, exc_image = await _resolve_token_info(currency)
                     symbol_agg[currency] = {
                         "name": exc_name,
                         "symbol": currency,
@@ -1191,8 +1198,6 @@ async def get_mobile_defi_staking(user_id: int = Depends(verify_session)):
         try:
             cache_key = f"staking_positions_{wallet['address']}"
             cached = await get_cache(cache_key, user_id=user_id)
-            if not cached:
-                cached = await get_cache(cache_key)
             if not cached or not isinstance(cached, dict) or not cached.get('protocols'):
                 continue
             for protocol_name, protocol_data in cached['protocols'].items():
@@ -1206,6 +1211,7 @@ async def get_mobile_defi_staking(user_id: int = Depends(verify_session)):
                     staked_usd = amount * price_usd
                     total_staked_usd += staked_usd
 
+                    _, pos_image = await _resolve_token_info(token)
                     positions.append({
                         "blockchain": "cardano",
                         "protocol": protocol_name,
@@ -1216,7 +1222,7 @@ async def get_mobile_defi_staking(user_id: int = Depends(verify_session)):
                         "rewards_usd": 0,
                         "apy": 0,
                         "active": True,
-                        "logo_url": logokit_service.get_crypto_logo_url(token, size=32)
+                        "logo_url": pos_image,
                     })
                 # Add pending rewards
                 reward_token = protocol_data.get('reward_token')
