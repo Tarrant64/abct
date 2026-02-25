@@ -11,7 +11,7 @@ digraph ABCT_Services {
 
     // Title
     labelloc="t";
-    label=<<FONT FACE="Helvetica Neue" POINT-SIZE="22" COLOR="#E2E8F0"><B>ABCT</B></FONT><BR/><FONT FACE="Helvetica Neue" POINT-SIZE="13" COLOR="#64748B">Blockchain &amp; Service Map</FONT><BR/><FONT FACE="Helvetica Neue" POINT-SIZE="10" COLOR="#475569">26 Chains  |  7 Exchanges  |  4 NFT Chains  |  80+ Services</FONT>>;
+    label=<<FONT FACE="Helvetica Neue" POINT-SIZE="22" COLOR="#E2E8F0"><B>ABCT</B></FONT><BR/><FONT FACE="Helvetica Neue" POINT-SIZE="13" COLOR="#64748B">Blockchain &amp; Service Map</FONT><BR/><FONT FACE="Helvetica Neue" POINT-SIZE="10" COLOR="#475569">53 Chains  |  42 Exchanges  |  4 NFT Chains  |  120+ Services</FONT>>;
 
     // Node defaults
     node [
@@ -50,9 +50,14 @@ digraph ABCT_Services {
                 <TD BGCOLOR="#112F1E"><FONT POINT-SIZE="9" COLOR="#94A3B8">/mobile</FONT></TD>
             </TR>
             <TR>
+                <TD BGCOLOR="#112F1E"><FONT POINT-SIZE="9" COLOR="#94A3B8">/privacy</FONT></TD>
+                <TD BGCOLOR="#112F1E"><FONT POINT-SIZE="9" COLOR="#94A3B8">/pnl</FONT></TD>
                 <TD BGCOLOR="#112F1E"><FONT POINT-SIZE="9" COLOR="#94A3B8">/auth</FONT></TD>
+            </TR>
+            <TR>
                 <TD BGCOLOR="#112F1E"><FONT POINT-SIZE="9" COLOR="#94A3B8">/settings</FONT></TD>
-                <TD BGCOLOR="#112F1E"><FONT POINT-SIZE="9" COLOR="#94A3B8">+16 more</FONT></TD>
+                <TD BGCOLOR="#112F1E"><FONT POINT-SIZE="9" COLOR="#94A3B8">+18 more</FONT></TD>
+                <TD></TD>
             </TR>
         </TABLE>
     >];
@@ -77,7 +82,7 @@ digraph ABCT_Services {
     // ========== EVM COMPATIBLE ==========
     chains_evm [label=<
         <TABLE BGCOLOR="#0D1020" BORDER="2" CELLBORDER="0" CELLSPACING="5" CELLPADDING="6" COLOR="#4338CA" STYLE="ROUNDED">
-            <TR><TD COLSPAN="5"><FONT POINT-SIZE="12" COLOR="#818CF8"><B>EVM Compatible</B></FONT><BR/><FONT POINT-SIZE="8" COLOR="#475569">All via Alchemy + *scan explorers</FONT></TD></TR>
+            <TR><TD COLSPAN="5"><FONT POINT-SIZE="12" COLOR="#818CF8"><B>EVM Compatible</B></FONT><BR/><FONT POINT-SIZE="8" COLOR="#475569">14 chains via Alchemy + *scan explorers</FONT></TD></TR>
             <TR>
                 <TD BGCOLOR="#111530"><FONT COLOR="#8247E5"><B>Polygon</B></FONT></TD>
                 <TD BGCOLOR="#111530"><FONT COLOR="#0052FF"><B>Base</B></FONT></TD>
@@ -85,13 +90,27 @@ digraph ABCT_Services {
                 <TD BGCOLOR="#111530"><FONT COLOR="#28A0F0"><B>Arbitrum</B></FONT></TD>
                 <TD BGCOLOR="#111530"><FONT COLOR="#E84142"><B>Avalanche</B></FONT></TD>
             </TR>
+            <TR>
+                <TD BGCOLOR="#111530"><FONT COLOR="#FF0420"><B>Optimism</B></FONT></TD>
+                <TD BGCOLOR="#111530"><FONT COLOR="#8C8DFC"><B>zkSync Era</B></FONT></TD>
+                <TD BGCOLOR="#111530"><FONT COLOR="#61DFFF"><B>Linea</B></FONT></TD>
+                <TD BGCOLOR="#111530"><FONT COLOR="#FFEEDA"><B>Scroll</B></FONT></TD>
+                <TD BGCOLOR="#111530"><FONT COLOR="#1969FF"><B>Fantom</B></FONT></TD>
+            </TR>
+            <TR>
+                <TD BGCOLOR="#111530"><FONT COLOR="#002D74"><B>Cronos</B></FONT></TD>
+                <TD BGCOLOR="#111530"><FONT COLOR="#04795B"><B>Gnosis</B></FONT></TD>
+                <TD BGCOLOR="#111530"><FONT COLOR="#53CBC9"><B>Moonbeam</B></FONT></TD>
+                <TD BGCOLOR="#111530"><FONT COLOR="#3FE1B0"><B>Kaia</B></FONT></TD>
+                <TD></TD>
+            </TR>
         </TABLE>
     >];
 
     // ========== ALT L1 CHAINS ==========
     chains_alt [label=<
         <TABLE BGCOLOR="#0D1B22" BORDER="2" CELLBORDER="0" CELLSPACING="5" CELLPADDING="6" COLOR="#0D9488" STYLE="ROUNDED">
-            <TR><TD COLSPAN="4"><FONT POINT-SIZE="12" COLOR="#2DD4BF"><B>Alt L1 Chains</B></FONT></TD></TR>
+            <TR><TD COLSPAN="4"><FONT POINT-SIZE="12" COLOR="#2DD4BF"><B>Alt L1 Chains</B></FONT><BR/><FONT POINT-SIZE="8" COLOR="#475569">20 chains</FONT></TD></TR>
             <TR>
                 <TD BGCOLOR="#0F2832"><FONT COLOR="#00C2B0"><B>Algorand</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Pera | Tatum</FONT></TD>
                 <TD BGCOLOR="#0F2832"><FONT COLOR="#00ADEF"><B>Hedera</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Mirror Node</FONT></TD>
@@ -104,6 +123,30 @@ digraph ABCT_Services {
                 <TD BGCOLOR="#0F2832"><FONT COLOR="#00EC97"><B>NEAR</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">RPC</FONT></TD>
                 <TD BGCOLOR="#0F2832"><FONT COLOR="#29ABE2"><B>ICP</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Rosetta</FONT></TD>
             </TR>
+            <TR>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#0098EA"><B>TON</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">TonCenter</FONT></TD>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#E6007A"><B>Polkadot</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Subscan</FONT></TD>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#E6007A"><B>Kusama</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Subscan</FONT></TD>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#14B6E7"><B>Stellar</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Horizon</FONT></TD>
+            </TR>
+            <TR>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#70C7BA"><B>Kaspa</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">REST API</FONT></TD>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#FF5722"><B>Ergo</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Explorer</FONT></TD>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#94A3B8"><B>IOTA</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Shimmer</FONT></TD>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#F7B267"><B>Mina</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">GraphQL</FONT></TD>
+            </TR>
+            <TR>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#0159C1"><B>Waves</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Node API</FONT></TD>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#49C1BF"><B>Zilliqa</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Viewblock</FONT></TD>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#B489FF"><B>Osmosis</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">LCD</FONT></TD>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#7B2BF9"><B>Celestia</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">RPC</FONT></TD>
+            </TR>
+            <TR>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#17EAF0"><B>Injective</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">LCD</FONT></TD>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#6966FF"><B>dYdX</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Indexer</FONT></TD>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#9B1B30"><B>Sei</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">RPC</FONT></TD>
+                <TD BGCOLOR="#0F2832"><FONT COLOR="#FF414C"><B>Akash</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">LCD</FONT></TD>
+            </TR>
         </TABLE>
     >];
 
@@ -114,7 +157,7 @@ digraph ABCT_Services {
             <TR>
                 <TD BGCOLOR="#191C22"><FONT COLOR="#A6A9AA"><B>Litecoin</B></FONT></TD>
                 <TD BGCOLOR="#191C22"><FONT COLOR="#C3A634"><B>Dogecoin</B></FONT></TD>
-                <TD BGCOLOR="#191C22"><FONT COLOR="#F4B728"><B>Zcash</B></FONT></TD>
+                <TD BGCOLOR="#191C22"><FONT COLOR="#F4B728"><B>Zcash</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">+ Privacy Score</FONT></TD>
                 <TD BGCOLOR="#191C22"><FONT COLOR="#2C7DF7"><B>Tezos</B></FONT></TD>
             </TR>
             <TR>
@@ -122,6 +165,13 @@ digraph ABCT_Services {
                 <TD BGCOLOR="#191C22"><FONT COLOR="#15BDFF"><B>VeChain</B></FONT></TD>
                 <TD BGCOLOR="#191C22"><FONT COLOR="#0090FF"><B>Filecoin</B></FONT></TD>
                 <TD BGCOLOR="#191C22"><FONT COLOR="#474DFF"><B>Helium</B></FONT></TD>
+            </TR>
+            <TR><TD COLSPAN="4"><FONT POINT-SIZE="10" COLOR="#A78BFA"><B>Privacy Chains</B></FONT></TD></TR>
+            <TR>
+                <TD BGCOLOR="#191C22"><FONT COLOR="#FF6600"><B>Monero</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Manual Balance</FONT></TD>
+                <TD BGCOLOR="#191C22"><FONT COLOR="#94A3B8"><B>Secret Network</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">SecretSaturn</FONT></TD>
+                <TD></TD>
+                <TD></TD>
             </TR>
         </TABLE>
     >];
@@ -146,7 +196,7 @@ digraph ABCT_Services {
     // ========== EXCHANGE SERVICES ==========
     exchanges [label=<
         <TABLE BGCOLOR="#0D1525" BORDER="2" CELLBORDER="0" CELLSPACING="5" CELLPADDING="6" COLOR="#2563EB" STYLE="ROUNDED">
-            <TR><TD COLSPAN="4"><FONT POINT-SIZE="12" COLOR="#3B82F6"><B>Exchange Services</B></FONT><BR/><FONT POINT-SIZE="8" COLOR="#475569">7 Platforms</FONT></TD></TR>
+            <TR><TD COLSPAN="4"><FONT POINT-SIZE="12" COLOR="#3B82F6"><B>Exchange Services</B></FONT><BR/><FONT POINT-SIZE="8" COLOR="#475569">42 Platforms</FONT></TD></TR>
             <TR>
                 <TD BGCOLOR="#111D35"><FONT COLOR="#0052FF"><B>Coinbase</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">CDP OAuth</FONT></TD>
                 <TD BGCOLOR="#111D35"><FONT COLOR="#F3BA2F"><B>Binance</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Global</FONT></TD>
@@ -157,7 +207,10 @@ digraph ABCT_Services {
                 <TD BGCOLOR="#111D35"><FONT COLOR="#00D4AA"><B>Bitget</B></FONT></TD>
                 <TD BGCOLOR="#111D35"><FONT COLOR="#2354E6"><B>Gate.io</B></FONT></TD>
                 <TD BGCOLOR="#111D35"><FONT COLOR="#24AE8F"><B>KuCoin</B></FONT></TD>
-                <TD></TD>
+                <TD BGCOLOR="#111D35"><FONT COLOR="#5E7FFF"><B>Kraken</B></FONT></TD>
+            </TR>
+            <TR>
+                <TD COLSPAN="4" BGCOLOR="#111D35"><FONT POINT-SIZE="8" COLOR="#64748B">+ 35 more via BaseExchangeService</FONT></TD>
             </TR>
         </TABLE>
     >];
@@ -165,15 +218,20 @@ digraph ABCT_Services {
     // ========== PRICING ENGINE ==========
     pricing [label=<
         <TABLE BGCOLOR="#1C0D1A" BORDER="2" CELLBORDER="0" CELLSPACING="5" CELLPADDING="6" COLOR="#BE185D" STYLE="ROUNDED">
-            <TR><TD COLSPAN="3"><FONT POINT-SIZE="12" COLOR="#EC4899"><B>Pricing Engine</B></FONT><BR/><FONT POINT-SIZE="8" COLOR="#475569">4-tier fallback chain</FONT></TD></TR>
+            <TR><TD COLSPAN="3"><FONT POINT-SIZE="12" COLOR="#EC4899"><B>Pricing Engine</B></FONT><BR/><FONT POINT-SIZE="8" COLOR="#475569">6-source fallback</FONT></TD></TR>
             <TR>
                 <TD BGCOLOR="#2A1226"><FONT COLOR="#10B981"><B>1. CoinGecko</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Primary source</FONT></TD>
                 <TD BGCOLOR="#2A1226"><FONT COLOR="#3B82F6"><B>2. CoinMarketCap</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Secondary</FONT></TD>
                 <TD BGCOLOR="#2A1226"><FONT COLOR="#F59E0B"><B>3. Coinbase</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Spot prices (free)</FONT></TD>
             </TR>
             <TR>
-                <TD BGCOLOR="#2A1226"><FONT COLOR="#8B5CF6"><B>4. DefiLlama</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Universal fallback</FONT></TD>
-                <TD BGCOLOR="#2A1226"><FONT COLOR="#06B6D4"><B>TapTools</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Cardano bonus</FONT></TD>
+                <TD BGCOLOR="#2A1226"><FONT COLOR="#2DD4BF"><B>4. CoinPaprika</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Free, no key</FONT></TD>
+                <TD BGCOLOR="#2A1226"><FONT COLOR="#8B5CF6"><B>5. DefiLlama</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Universal fallback</FONT></TD>
+                <TD BGCOLOR="#2A1226"><FONT COLOR="#06B6D4"><B>TapTools</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Cardano tokens</FONT></TD>
+            </TR>
+            <TR>
+                <TD BGCOLOR="#2A1226"><FONT COLOR="#0088FF"><B>Charli3</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">Cardano oracles</FONT></TD>
+                <TD></TD>
                 <TD></TD>
             </TR>
         </TABLE>
@@ -194,6 +252,12 @@ digraph ABCT_Services {
                 <TD BGCOLOR="#1D1040"><FONT COLOR="#10B981"><B>API Health</B></FONT></TD>
                 <TD BGCOLOR="#1D1040"><FONT COLOR="#F97316"><B>Logos</B></FONT></TD>
                 <TD BGCOLOR="#1D1040"><FONT COLOR="#8B5CF6"><B>Balance History</B></FONT></TD>
+            </TR>
+            <TR>
+                <TD BGCOLOR="#1D1040"><FONT COLOR="#A78BFA"><B>Privacy Detector</B></FONT></TD>
+                <TD BGCOLOR="#1D1040"><FONT COLOR="#F59E0B"><B>Image Cache</B></FONT></TD>
+                <TD BGCOLOR="#1D1040"><FONT COLOR="#06B6D4"><B>Token Metadata</B></FONT></TD>
+                <TD BGCOLOR="#1D1040"><FONT COLOR="#EC4899"><B>P&amp;L / Cost Basis</B></FONT></TD>
             </TR>
         </TABLE>
     >];
@@ -220,7 +284,7 @@ digraph ABCT_Services {
         <TABLE BGCOLOR="#0D2818" BORDER="2" CELLBORDER="0" CELLSPACING="5" CELLPADDING="6" COLOR="#059669" STYLE="ROUNDED">
             <TR><TD COLSPAN="3"><FONT POINT-SIZE="12" COLOR="#10B981"><B>Infrastructure</B></FONT></TD></TR>
             <TR>
-                <TD BGCOLOR="#113822"><FONT COLOR="#10B981"><B>HTTP Pool</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">30+ clients</FONT></TD>
+                <TD BGCOLOR="#113822"><FONT COLOR="#10B981"><B>HTTP Pool</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">35+ clients</FONT></TD>
                 <TD BGCOLOR="#113822"><FONT COLOR="#EF4444"><B>SQLite (WAL)</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">portfolio.db</FONT></TD>
                 <TD BGCOLOR="#113822"><FONT COLOR="#F59E0B"><B>NFT Image DB</B></FONT><BR/><FONT POINT-SIZE="7" COLOR="#64748B">nft_images.db</FONT></TD>
             </TR>

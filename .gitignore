@@ -42,7 +42,9 @@ logs/
 *.sqlite
 *.sqlite3
 data/*.db
+data/*.db.old
 data/*.sqlite
+data/.encryption_key
 
 # Environment variables
 .env

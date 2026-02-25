@@ -12,7 +12,7 @@ digraph ABCT_Overview {
 
     // Title
     labelloc="t";
-    label=<<FONT FACE="Helvetica Neue" POINT-SIZE="22" COLOR="#E2E8F0"><B>ABCT</B></FONT><BR/><FONT FACE="Helvetica Neue" POINT-SIZE="13" COLOR="#64748B">A Better Crypto Tracker  |  System Architecture</FONT><BR/><FONT FACE="Helvetica Neue" POINT-SIZE="10" COLOR="#475569">v1.12.3  |  26 Blockchains  |  7 Exchanges  |  Multi-User  |  Docker</FONT>>;
+    label=<<FONT FACE="Helvetica Neue" POINT-SIZE="22" COLOR="#E2E8F0"><B>ABCT</B></FONT><BR/><FONT FACE="Helvetica Neue" POINT-SIZE="13" COLOR="#64748B">A Better Crypto Tracker  |  System Architecture</FONT><BR/><FONT FACE="Helvetica Neue" POINT-SIZE="10" COLOR="#475569">v1.15.2  |  53 Blockchains  |  42 Exchanges  |  Multi-User  |  Docker</FONT>>;
 
     // Node defaults
     node [
@@ -84,7 +84,7 @@ digraph ABCT_Overview {
             margin=15;
 
             fe_pages [
-                label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11"><B>19 HTML Pages</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Dashboard | Wallets | NFTs | Transactions</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Settings | Security | Backup | Logs | ...</FONT></TD></TR></TABLE>>,
+                label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11"><B>20 HTML Pages</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Dashboard | Wallets | NFTs | Transactions</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Settings | Security | Backup | Logs | ...</FONT></TD></TR></TABLE>>,
                 color="#7C3AED",
                 fillcolor="#1E1040"
             ];
@@ -120,7 +120,7 @@ digraph ABCT_Overview {
 
             // API Routers
             routers [
-                label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11"><B>27 API Routers</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">/wallets | /portfolio | /transactions | /nfts</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">/prices | /exchanges | /defi | /analytics</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">/mobile | /intelligence | /engine | /auth | ...</FONT></TD></TR></TABLE>>,
+                label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11"><B>30 API Routers</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">/wallets | /portfolio | /transactions | /nfts</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">/prices | /exchanges | /defi | /analytics</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">/mobile | /intelligence | /engine | /auth | ...</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">/privacy | /pnl | /search</FONT></TD></TR></TABLE>>,
                 color="#34D399",
                 fillcolor="#0D2818"
             ];
@@ -136,7 +136,7 @@ digraph ABCT_Overview {
             margin=15;
 
             svc_blockchain [
-                label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11" COLOR="#06B6D4"><B>Blockchain Services</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">26 chains: Cardano, Bitcoin, Ethereum,</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Solana, Polygon, Base, Tron, XRP, ...</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">+ Generic EVM (BSC/Arbitrum/Avalanche)</FONT></TD></TR></TABLE>>,
+                label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11" COLOR="#06B6D4"><B>Blockchain Services</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">53 chains: Cardano, Bitcoin, Ethereum,</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Solana, Polygon, Base, Tron, XRP, ...</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">+ Generic EVM + Privacy (Monero/SCRT/ZEC)</FONT></TD></TR></TABLE>>,
                 color="#06B6D4",
                 fillcolor="#0D1B22"
             ];
@@ -148,19 +148,19 @@ digraph ABCT_Overview {
             ];
 
             svc_exchange [
-                label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11" COLOR="#3B82F6"><B>Exchange Services</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Coinbase | Binance | Binance.US</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">OKX | Bitget | Gate.io | KuCoin</FONT></TD></TR></TABLE>>,
+                label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11" COLOR="#3B82F6"><B>Exchange Services — 42 Platforms</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Coinbase | Binance | Binance.US</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">OKX | Bitget | Gate.io | KuCoin</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">+ 35 more via BaseExchangeService</FONT></TD></TR></TABLE>>,
                 color="#3B82F6",
                 fillcolor="#0D1525"
             ];
 
             svc_pricing [
-                label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11" COLOR="#EC4899"><B>Pricing Engine</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">4-tier fallback chain</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">CoinGecko &#8594; CMC &#8594; Coinbase &#8594; DefiLlama</FONT></TD></TR></TABLE>>,
+                label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11" COLOR="#EC4899"><B>Pricing Engine</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">6-source fallback chain</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">CoinGecko &#8594; CMC &#8594; Coinbase &#8594; CoinPaprika &#8594; DefiLlama</FONT></TD></TR></TABLE>>,
                 color="#EC4899",
                 fillcolor="#1C0D1A"
             ];
 
             svc_support [
-                label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11" COLOR="#8B5CF6"><B>Support Services</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Snapshots | Analytics | Chain Analytics</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">TradFi | Offchain | Balance History</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Logging | SSL | API Health | Logos</FONT></TD></TR></TABLE>>,
+                label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11" COLOR="#8B5CF6"><B>Support Services</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Snapshots | Analytics | Chain Analytics</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">P&amp;L Engine | Privacy Detection | Image Cache</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">TradFi | Offchain | Balance History | Logos</FONT></TD></TR></TABLE>>,
                 color="#8B5CF6",
                 fillcolor="#150D2E"
             ];
@@ -174,7 +174,7 @@ digraph ABCT_Overview {
 
         // --- HTTP Client Pool ---
         http_pool [
-            label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11"><B>HTTP Client Pool</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">30+ named persistent connections</FONT></TD></TR></TABLE>>,
+            label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11"><B>HTTP Client Pool</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">35+ named persistent connections</FONT></TD></TR></TABLE>>,
             color="#10B981",
             fillcolor="#0D2818"
         ];
@@ -226,13 +226,13 @@ digraph ABCT_Overview {
         ];
 
         ext_other [
-            label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11" COLOR="#10B981"><B>Other Chains</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Blockstream | Helius | XRPL | TronGrid</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Mirror Node | MultiversX | Sui RPC</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">BlockCypher | Hiro | VeBlocks | ...</FONT></TD></TR></TABLE>>,
+            label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11" COLOR="#10B981"><B>Other Chains</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Blockstream | Helius | XRPL | TronGrid</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Mirror Node | MultiversX | Sui RPC</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">BlockCypher | Hiro | VeBlocks | SecretSaturn | ...</FONT></TD></TR></TABLE>>,
             color="#10B981",
             fillcolor="#0D2818"
         ];
 
         ext_pricing [
-            label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11" COLOR="#EC4899"><B>Pricing APIs</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">CoinGecko | CoinMarketCap</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Coinbase | DefiLlama</FONT></TD></TR></TABLE>>,
+            label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD><FONT POINT-SIZE="11" COLOR="#EC4899"><B>Pricing APIs</B></FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">CoinGecko | CoinMarketCap | CoinPaprika</FONT></TD></TR><TR><TD><FONT POINT-SIZE="9" COLOR="#94A3B8">Coinbase | DefiLlama</FONT></TD></TR></TABLE>>,
             color="#EC4899",
             fillcolor="#1C0D1A"
         ];

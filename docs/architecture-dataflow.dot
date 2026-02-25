@@ -127,13 +127,23 @@ digraph ABCT_DataFlow {
             color="#F59E0B", fillcolor="#1A1508"
         ];
 
+        p_cp [
+            label=<<FONT POINT-SIZE="12" COLOR="#10B981"><B>4. CoinPaprika</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">Free tier (25k/mo)</FONT>>,
+            color="#10B981", fillcolor="#0D2818"
+        ];
+
         p_dl [
-            label=<<FONT POINT-SIZE="12" COLOR="#8B5CF6"><B>4. DefiLlama</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">Universal fallback</FONT>>,
+            label=<<FONT POINT-SIZE="12" COLOR="#8B5CF6"><B>5. DefiLlama</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">Universal fallback</FONT>>,
             color="#8B5CF6", fillcolor="#150D2E"
         ];
 
         p_tt [
             label=<<FONT POINT-SIZE="10" COLOR="#06B6D4"><B>TapTools</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">Cardano-only bonus</FONT>>,
+            color="#06B6D4", fillcolor="#0D1B22"
+        ];
+
+        p_charli3 [
+            label=<<FONT POINT-SIZE="10" COLOR="#06B6D4"><B>Charli3</B></FONT><BR/><FONT POINT-SIZE="9" COLOR="#94A3B8">Cardano oracle</FONT>>,
             color="#06B6D4", fillcolor="#0D1B22"
         ];
 
@@ -146,9 +156,11 @@ digraph ABCT_DataFlow {
         p_cache -> p_cg [color="#10B981", label="  miss  ", fontcolor="#10B981"];
         p_cg -> p_cmc [color="#3B82F6", label="  fail/429  ", fontcolor="#EF4444", style=dashed];
         p_cmc -> p_cb [color="#F59E0B", label="  fail  ", fontcolor="#EF4444", style=dashed];
-        p_cb -> p_dl [color="#8B5CF6", label="  fail  ", fontcolor="#EF4444", style=dashed];
+        p_cb -> p_cp [color="#10B981", label="  fail  ", fontcolor="#EF4444", style=dashed];
+        p_cp -> p_dl [color="#8B5CF6", label="  fail  ", fontcolor="#EF4444", style=dashed];
         p_dl -> p_stale [color="#EF4444", label="  all fail  ", fontcolor="#EF4444", style=dashed];
         p_cg -> p_tt [color="#06B6D4", label="  ADA tokens  ", fontcolor="#06B6D4", style=dashed];
+        p_cg -> p_charli3 [color="#06B6D4", label="  ADA CNTs  ", fontcolor="#06B6D4", style=dashed];
     }
 
     // ========== CACHE TIERS ==========
