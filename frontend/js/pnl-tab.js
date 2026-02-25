@@ -137,6 +137,7 @@ function _attachPnlHeaderListeners(container) {
 
 let _pnlComputeInProgress = false;
 let _pnlPollTimer = null;
+let _pnlLastStatusMsg = '';
 
 async function refreshPnl() {
     if (_pnlComputeInProgress) {
@@ -145,18 +146,20 @@ async function refreshPnl() {
     }
 
     _pnlComputeInProgress = true;
+    _pnlLastStatusMsg = '';
     showStatus('Starting P&L computation...');
 
-    // Start polling for progress updates
-    _startProgressPolling();
-
     try {
-        // This blocks until compute finishes on the backend
+        // Fire-and-forget: backend returns 202 immediately, runs in background
         const res = await authFetch('/pnl/compute?include_wallets=true', { method: 'POST' });
+        if (res.status === 409) {
+            // Already running — just attach to the existing poll
+        } else if (!res.ok) {
+            throw new Error('Compute failed to start');
+        }
 
-        _stopProgressPolling();
-
-        if (!res.ok) throw new Error('Compute failed');
+        // Poll status until complete or error
+        await _pollUntilComplete();
 
         // Reset lazy-load flags so sub-views reload
         _pnlRealizedLoaded = false;
@@ -170,24 +173,44 @@ async function refreshPnl() {
     } catch (err) {
         _stopProgressPolling();
         console.error('P&L refresh error:', err);
-        showStatus('Failed to refresh P&L data', true);
+        showStatus(err.message || 'Failed to refresh P&L data', true);
     } finally {
         _pnlComputeInProgress = false;
+        _pnlLastStatusMsg = '';
     }
 }
 
-function _startProgressPolling() {
-    _stopProgressPolling();
-    _pnlPollTimer = setInterval(async () => {
-        try {
-            const res = await authFetch('/pnl/compute/status');
-            if (!res.ok) return;
-            const status = await res.json();
-            if (status.stage === 'idle' || status.stage === 'complete') return;
-            const stage = status.stage.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-            showStatus(`${stage} (${status.progress}%) \u2014 ${status.details || ''}`);
-        } catch (_) { /* ignore poll errors */ }
-    }, 800);
+function _pollUntilComplete() {
+    return new Promise((resolve, reject) => {
+        _stopProgressPolling();
+        _pnlPollTimer = setInterval(async () => {
+            try {
+                const res = await authFetch('/pnl/compute/status');
+                if (!res.ok) return;
+                const status = await res.json();
+
+                if (status.stage === 'complete') {
+                    _stopProgressPolling();
+                    resolve();
+                    return;
+                }
+                if (status.stage === 'error') {
+                    _stopProgressPolling();
+                    reject(new Error(`P&L computation failed: ${status.details || 'Unknown error'}`));
+                    return;
+                }
+                if (status.stage === 'idle') return;
+
+                // Only update banner when message actually changes
+                const stage = status.stage.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                const msg = `${stage} (${status.progress}%) \u2014 ${status.details || ''}`;
+                if (msg !== _pnlLastStatusMsg) {
+                    _pnlLastStatusMsg = msg;
+                    showStatus(msg);
+                }
+            } catch (_) { /* ignore poll errors */ }
+        }, 1500);
+    });
 }
 
 function _stopProgressPolling() {

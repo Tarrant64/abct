@@ -2,7 +2,9 @@
 P&L Router - Per-asset profit/loss tracking and cost basis management.
 """
 
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional
 import logging
@@ -164,10 +166,35 @@ async def compute_pnl(
     exchange: Optional[str] = None,
     include_wallets: bool = Query(default=True),
 ):
-    """Trigger full P&L recomputation from exchange and wallet transactions"""
+    """Trigger full P&L recomputation from exchange and wallet transactions.
+
+    Returns 202 immediately and runs computation in the background.
+    Poll GET /pnl/compute/status for progress.
+    """
+    current = _compute_progress.get(user_id, {})
+    if current.get("stage") not in (None, "idle", "complete", "error"):
+        return JSONResponse(
+            status_code=409,
+            content={"detail": "Computation already in progress"}
+        )
+
+    _compute_progress[user_id] = {
+        "stage": "starting",
+        "progress": 0,
+        "details": "Queued..."
+    }
+
+    asyncio.create_task(
+        _run_compute(user_id, exchange, include_wallets)
+    )
+
+    return JSONResponse(status_code=202, content={"status": "started"})
+
+
+async def _run_compute(user_id: int, exchange: Optional[str], include_wallets: bool):
+    """Background task that performs the actual P&L computation."""
     try:
         if include_wallets:
-            # Unified chronological ingestion (correct FIFO across both sources)
             _compute_progress[user_id] = {
                 "stage": "detecting_transfers",
                 "progress": 5,
@@ -191,7 +218,6 @@ async def compute_pnl(
                 "details": f"Processed: {result.get('lots_created', 0)} lots, {result.get('disposals_processed', 0)} disposals, {result.get('transfers_matched', 0)} transfers matched"
             }
         else:
-            # Exchange-only mode
             _compute_progress[user_id] = {
                 "stage": "exchange_transactions",
                 "progress": 10,
@@ -221,8 +247,6 @@ async def compute_pnl(
             "progress": 100,
             "details": "P&L computation complete"
         }
-
-        return result
     except Exception as e:
         _compute_progress[user_id] = {
             "stage": "error",
@@ -230,7 +254,6 @@ async def compute_pnl(
             "details": str(e)
         }
         logger.error(f"Error computing P&L: {e}")
-        raise HTTPException(status_code=500, detail="Failed to compute P&L")
 
 
 @router.post("/compute/wallets")
@@ -238,7 +261,33 @@ async def compute_wallet_pnl(
     user_id: int = Depends(verify_session),
     blockchain: Optional[str] = None,
 ):
-    """Trigger P&L computation from self-custody wallet transactions only"""
+    """Trigger P&L computation from self-custody wallet transactions only.
+
+    Returns 202 immediately and runs computation in the background.
+    Poll GET /pnl/compute/status for progress.
+    """
+    current = _compute_progress.get(user_id, {})
+    if current.get("stage") not in (None, "idle", "complete", "error"):
+        return JSONResponse(
+            status_code=409,
+            content={"detail": "Computation already in progress"}
+        )
+
+    _compute_progress[user_id] = {
+        "stage": "starting",
+        "progress": 0,
+        "details": "Queued..."
+    }
+
+    asyncio.create_task(
+        _run_wallet_compute(user_id, blockchain)
+    )
+
+    return JSONResponse(status_code=202, content={"status": "started"})
+
+
+async def _run_wallet_compute(user_id: int, blockchain: Optional[str]):
+    """Background task for wallet-only P&L computation."""
     try:
         _compute_progress[user_id] = {
             "stage": "wallet_transactions",
@@ -246,7 +295,7 @@ async def compute_wallet_pnl(
             "details": "Ingesting wallet transactions..."
         }
 
-        result = await cost_basis_engine.ingest_wallet_transactions(user_id, blockchain)
+        await cost_basis_engine.ingest_wallet_transactions(user_id, blockchain)
 
         _compute_progress[user_id] = {
             "stage": "refreshing_summary",
@@ -261,8 +310,6 @@ async def compute_wallet_pnl(
             "progress": 100,
             "details": "Wallet P&L computation complete"
         }
-
-        return result
     except Exception as e:
         _compute_progress[user_id] = {
             "stage": "error",
@@ -270,7 +317,6 @@ async def compute_wallet_pnl(
             "details": str(e)
         }
         logger.error(f"Error computing wallet P&L: {e}")
-        raise HTTPException(status_code=500, detail="Failed to compute wallet P&L")
 
 
 @router.post("/refresh")
