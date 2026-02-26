@@ -17,6 +17,7 @@ from services.pricing import pricing_service
 from services.defi import DEFI_PROTOCOLS
 from services.taptools import taptools_wallet_service
 from services.logokit_service import logokit_service
+from services.token_metadata_cache import metadata_cache
 from services.nmkr_service import nmkr_service
 from services.demo_wallet_service import demo_wallet_service
 from auth_utils import verify_session
@@ -1414,6 +1415,15 @@ async def _fetch_sparklines_and_images(symbols: list) -> tuple[dict, dict]:
                             sparklines[sym] = sparkline[::step]
                         if image_url:
                             images[sym] = image_url
+                            # Persist to metadata cache so logos survive CG rate-limits
+                            try:
+                                await metadata_cache.upsert_metadata(sym, {
+                                    'coingecko_id': cg_id,
+                                    'name': coin.get('name', sym),
+                                    'image_url': image_url,
+                                })
+                            except Exception:
+                                pass
             await set_cache(sparkline_cache_key, {'sparklines': sparklines, 'images': images}, ttl_seconds=CACHE_TTL_WARM)
             return sparklines, images
         else:
@@ -1529,6 +1539,7 @@ async def get_all_holdings(
         price_info = all_prices.get(price_sym, {})
         price = price_info.get('usd', 0)
 
+        meta = await metadata_cache.get_metadata(price_sym)
         holdings[symbol] = {
             'symbol': price_sym,
             'name': name,
@@ -1537,7 +1548,7 @@ async def get_all_holdings(
             'value_usd': amount * price,
             'price_change_24h': price_info.get('usd_24h_change', 0),
             'wallet_count': chain_data.get('wallet_count', 0),
-            'logo_url': logokit_service.get_crypto_logo_url(price_sym, size=64),
+            'logo_url': (meta.get('image_url') if meta else None) or logokit_service.get_crypto_logo_url(price_sym, size=64),
             'source': 'chain',
         }
 
@@ -1554,6 +1565,7 @@ async def get_all_holdings(
         if asset.get('is_defi_token'):
             continue
 
+        token_meta = await metadata_cache.get_metadata(ticker)
         holdings[ticker] = {
             'symbol': ticker,
             'name': asset.get('asset_name', ticker),
@@ -1562,7 +1574,7 @@ async def get_all_holdings(
             'value_usd': asset.get('value_usd') or 0,
             'price_change_24h': asset.get('price_change_24h', 0),
             'wallet_count': asset.get('wallet_count', 0),
-            'logo_url': asset.get('logo_url') or logokit_service.get_crypto_logo_url(ticker, size=64),
+            'logo_url': asset.get('logo_url') or (token_meta.get('image_url') if token_meta else None) or logokit_service.get_crypto_logo_url(ticker, size=64),
             'source': 'token',
         }
 
@@ -1623,9 +1635,13 @@ async def get_all_holdings(
     for h in sorted_holdings:
         key = next((k for k, v in holdings.items() if v is h), h['symbol'])
         h['sparkline_7d'] = sparklines.get(key, [])
-        # Prefer CoinGecko image (reliable CDN), keep existing logo_url as fallback
+        # Image priority: CoinGecko sparkline fetch > metadata_cache > existing logo_url
         if key in cg_images:
             h['logo_url'] = cg_images[key]
+        else:
+            meta = await metadata_cache.get_metadata(h['symbol'])
+            if meta and meta.get('image_url'):
+                h['logo_url'] = meta['image_url']
         # Add market data from price cache
         price_info = all_prices.get(h['symbol'], {})
         h['market_cap'] = price_info.get('market_cap', 0) or 0
@@ -2011,14 +2027,17 @@ async def get_portfolio_instant(user_id: int = Depends(verify_session)):
     top_holdings = []
     for sym, agg in sorted(symbol_agg.items(), key=lambda x: x[1]['value_usd'], reverse=True):
         alloc = round((agg['value_usd'] / total_usd * 100) if total_usd > 0 else 0, 2)
+        meta = await metadata_cache.get_metadata(agg['symbol'])
         top_holdings.append({
             'symbol': agg['symbol'],
+            'name': (meta.get('name') if meta else None) or agg['symbol'],
             'quantity': round(agg['quantity'], 8),
             'value_usd': round(agg['value_usd'], 2),
             'price_usd': agg['price_usd'],
             'price_change_24h': agg['price_change_24h'],
             'allocation_pct': alloc,
             'sources': sorted(agg['sources']),
+            'image_url': (meta.get('image_url') if meta else None) or logokit_service.get_crypto_logo_url(agg['symbol'], size=64),
         })
 
     return {
@@ -2249,10 +2268,16 @@ async def get_24h_hourly_chart(
 
     # Build time -> {symbol: price} index from historical data
     # Each symbol has entries like {'date': 'YYYY-MM-DD HH:MM', 'price': float, 'time': unix_ts}
+    # Normalize timestamps to hour boundaries so that Charli3 (e.g. "14:00")
+    # and DefiLlama (e.g. "14:05") merge into the same bucket instead of
+    # interleaving into separate data points that cause sawtooth oscillation.
     all_times = {}  # date_str -> {symbol: price}
     for symbol, entries in historical.items():
         for entry in entries:
             date_str = entry['date']
+            # Truncate "YYYY-MM-DD HH:MM" → "YYYY-MM-DD HH:00"
+            if ' ' in date_str and ':' in date_str:
+                date_str = date_str[:date_str.rfind(':')] + ':00'
             if date_str not in all_times:
                 all_times[date_str] = {}
             all_times[date_str][symbol] = entry['price']
@@ -2269,13 +2294,22 @@ async def get_24h_hourly_chart(
     custom_tokens_usd = float(totals.get('custom_tokens_usd', 0) or 0)
     off_chain = exchange_usd + staking_usd + defi_usd + nft_usd
 
-    # Build chart data points
+    # Build chart data points with carry-forward pricing.
+    # Different tokens may have prices at different timestamps (e.g. ADA hourly
+    # from Charli3 vs BTC hourly from DefiLlama). Carry forward the last known
+    # price per symbol to prevent sawtooth patterns from missing data points.
+    last_known_price = {}  # symbol -> last seen price
     data = []
     for date_str in sorted_times:
         prices_at_time = all_times[date_str]
+        # Update last known prices with any new data at this timestamp
+        for sym, price in prices_at_time.items():
+            if price > 0:
+                last_known_price[sym] = price
+
         on_chain = 0.0
         for symbol, qty in holdings.items():
-            price = prices_at_time.get(symbol, 0)
+            price = last_known_price.get(symbol, 0)
             if price > 0:
                 on_chain += qty * price
 

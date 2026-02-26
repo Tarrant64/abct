@@ -460,7 +460,8 @@ async def get_mobile_portfolio_instant(user_id: int = Depends(verify_session)):
 @router.get("/portfolio/summary")
 async def get_mobile_portfolio_summary(
     user_id: int = Depends(verify_session),
-    refresh: bool = Query(False, description="Force refresh from blockchain APIs")
+    refresh: bool = Query(False, description="Force refresh from blockchain APIs"),
+    include_sparklines: bool = Query(True, description="Include sparkline data (disable for faster initial load)")
 ):
     """
     Get complete portfolio overview for mobile dashboard.
@@ -578,8 +579,14 @@ async def get_mobile_portfolio_summary(
                 "price_change_24h": round(price_data.get('usd_24h_change', 0) or 0, 2),
                 "wallet_count": chain_data.get('wallet_count', 0),
                 "percentage": 0,  # Calculated later
-                "image_url": logokit_service.get_crypto_logo_url(symbol, size=64),
+                "image_url": "",  # populated below from metadata_cache
             })
+
+    # Batch-populate image_url from metadata_cache (fast SQLite, no CoinGecko calls)
+    for bs in blockchain_summaries:
+        sym = bs['symbol']
+        meta = await metadata_cache.get_metadata(sym)
+        bs['image_url'] = (meta.get('image_url') if meta else None) or logokit_service.get_crypto_logo_url(sym, size=64)
 
     # Get component values
     exchanges_value = exchange_summary.get('total_usd', 0)
@@ -623,7 +630,7 @@ async def get_mobile_portfolio_summary(
                 "price_change_24h": bs['price_change_24h'],
                 "wallet_count": bs['wallet_count'],
                 "percentage": 0,
-                "image_url": bs.get('image_url', logokit_service.get_crypto_logo_url(sym, size=64)),
+                "image_url": bs['image_url'],
             }
 
     # Merge staking positions into top_holdings (per-token breakdown)
@@ -750,37 +757,40 @@ async def get_mobile_portfolio_summary(
         h['value_usd'] = round(h['value_usd'], 2)
         h['native_amount'] = round(h['native_amount'], 8)
         h['percentage'] = round((h['value_usd'] / total_value_usd * 100) if total_value_usd > 0 else 0, 1)
-        # Ensure every entry has an image_url via logokit fallback
+        # Ensure every entry has an image_url via metadata_cache → logokit fallback
         if not h.get('image_url'):
-            h['image_url'] = logokit_service.get_crypto_logo_url(h['symbol'], size=64)
+            meta = await metadata_cache.get_metadata(h['symbol'])
+            h['image_url'] = (meta.get('image_url') if meta else None) or logokit_service.get_crypto_logo_url(h['symbol'], size=64)
     top_holdings.sort(key=lambda x: x['value_usd'], reverse=True)
 
     # Fetch 7-day sparkline data + CoinGecko images for top holdings (for watchOS)
     # Sparklines for top 8 (heavy data), images for all (lightweight)
-    all_symbols = [h['symbol'] for h in top_holdings]
-    top_symbols = all_symbols[:8]
-    remaining_symbols = all_symbols[8:]
-    try:
-        # Fetch sparklines + images for top 8 (single CoinGecko call)
-        sparklines = await _fetch_asset_sparklines(top_symbols)
-        for h in top_holdings[:8]:
-            asset_data = sparklines.get(h['symbol'], {})
-            h['sparkline_7d'] = asset_data.get('sparkline_7d', [])
-            h['sparkline_24h'] = asset_data.get('sparkline_24h', [])
-            cg_url = asset_data.get('cg_image_url', '')
-            if cg_url:
-                h['watch_image_url'] = cg_url
-
-        # Fetch images for remaining holdings (no sparkline needed)
-        if remaining_symbols:
-            extra_images = await _fetch_asset_sparklines(remaining_symbols, max_points=0)
-            for h in top_holdings[8:]:
-                asset_data = extra_images.get(h['symbol'], {})
+    # Skipped when include_sparklines=false for faster initial mobile load
+    if include_sparklines:
+        all_symbols = [h['symbol'] for h in top_holdings]
+        top_symbols = all_symbols[:8]
+        remaining_symbols = all_symbols[8:]
+        try:
+            # Fetch sparklines + images for top 8 (single CoinGecko call)
+            sparklines = await _fetch_asset_sparklines(top_symbols)
+            for h in top_holdings[:8]:
+                asset_data = sparklines.get(h['symbol'], {})
+                h['sparkline_7d'] = asset_data.get('sparkline_7d', [])
+                h['sparkline_24h'] = asset_data.get('sparkline_24h', [])
                 cg_url = asset_data.get('cg_image_url', '')
                 if cg_url:
                     h['watch_image_url'] = cg_url
-    except Exception as e:
-        logger.debug(f"Could not fetch sparklines for top holdings: {e}")
+
+            # Fetch images for remaining holdings (no sparkline needed)
+            if remaining_symbols:
+                extra_images = await _fetch_asset_sparklines(remaining_symbols, max_points=0)
+                for h in top_holdings[8:]:
+                    asset_data = extra_images.get(h['symbol'], {})
+                    cg_url = asset_data.get('cg_image_url', '')
+                    if cg_url:
+                        h['watch_image_url'] = cg_url
+        except Exception as e:
+            logger.debug(f"Could not fetch sparklines for top holdings: {e}")
 
     result = {
         "total_value_usd": round(total_value_usd, 2),
@@ -1444,7 +1454,7 @@ async def get_mobile_wallet_sources(
 async def get_mobile_wallet_source_chart(
     source_id: int,
     user_id: int = Depends(verify_session),
-    range: str = Query("7d", description="Time range: 7d, 4w, 3m, 1y, all"),
+    range: str = Query("7d", description="Time range: 24h, 7d, 4w, 3m, 1y, all"),
 ):
     """
     Get per-wallet/source historical chart for mobile drill-down.
@@ -1556,7 +1566,7 @@ async def get_mobile_wallet_source_chart(
 @router.get("/portfolio/breakdown-history")
 async def get_mobile_portfolio_breakdown_history(
     user_id: int = Depends(verify_session),
-    range: str = Query("7d", description="Time range: 7d, 4w, 3m, 1y, all"),
+    range: str = Query("7d", description="Time range: 24h, 7d, 4w, 3m, 1y, all"),
 ):
     """
     Stacked composition history by source type for mobile area charts.
@@ -1609,7 +1619,7 @@ async def get_mobile_portfolio_breakdown_history(
 @router.get("/chart/portfolio-history")
 async def get_mobile_portfolio_history(
     user_id: int = Depends(verify_session),
-    range: str = Query("7d", description="Time range: 7d, 4w, 3m, 1y, all"),
+    range: str = Query("7d", description="Time range: 24h, 7d, 4w, 3m, 1y, all"),
     interval: Optional[str] = Query(None, description="Data interval: hourly, daily (auto if not specified)")
 ):
     """
