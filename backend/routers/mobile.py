@@ -1234,7 +1234,7 @@ async def get_mobile_exchange_detail(
 
 
 @router.get("/defi/staking")
-async def get_mobile_defi_staking(user_id: int = Depends(verify_session)):
+async def get_mobile_defi_staking(refresh: bool = Query(False), user_id: int = Depends(verify_session)):
     """
     Get consolidated staking positions and rewards.
 
@@ -1296,7 +1296,7 @@ async def get_mobile_defi_staking(user_id: int = Depends(verify_session)):
     # Blockfrost if cold — ensures Strike/Indigo/etc appear without dashboard refresh
     if cardano_wallets:
         staking_caches = await asyncio.gather(*[
-            defi.get_staking_positions(wallet['address'], refresh=False, user_id=user_id)
+            defi.get_staking_positions(wallet['address'], refresh=refresh, user_id=user_id)
             for wallet in cardano_wallets
         ], return_exceptions=True)
 
