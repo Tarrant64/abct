@@ -633,6 +633,34 @@ async def get_mobile_portfolio_summary(
                 "image_url": bs['image_url'],
             }
 
+    # Merge native tokens (IAG, STRIKE, etc.) into top_holdings
+    # Place BEFORE staking merge so staking amounts ADD to native amounts
+    try:
+        native_assets_data = await portfolio.get_all_native_assets(user_id=user_id)
+        for asset in native_assets_data.get('valuable_assets', []):
+            ticker = (asset.get('ticker') or asset.get('asset_name', '')).upper()
+            if not ticker or ticker in symbol_agg:
+                continue  # Already counted (L1 chain)
+            price_data = all_prices.get(ticker, {})
+            price_usd = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
+            val = float(asset.get('value_usd', 0)) or (float(asset.get('total_quantity', 0)) * price_usd)
+            if val <= 0:
+                continue
+            token_name, token_image = await _resolve_token_info(ticker)
+            symbol_agg[ticker] = {
+                "name": token_name,
+                "symbol": ticker,
+                "value_usd": val,
+                "native_amount": float(asset.get('total_quantity', 0)),
+                "native_price_usd": round(price_usd, 2),
+                "price_change_24h": round((price_data.get('usd_24h_change', 0) or 0) if isinstance(price_data, dict) else 0, 2),
+                "wallet_count": asset.get('wallet_count', 0),
+                "percentage": 0,
+                "image_url": token_image,
+            }
+    except Exception as e:
+        logger.debug(f"Could not merge native tokens for top holdings: {e}")
+
     # Merge staking positions into top_holdings (per-token breakdown)
     try:
         all_wallets = await get_all_wallets(user_id=user_id)
@@ -1264,45 +1292,51 @@ async def get_mobile_defi_staking(user_id: int = Depends(verify_session)):
             logger.warning(f"Could not get staking info for wallet {wallet['id']}: {e}")
 
     # Get actual staking positions (tokens locked in smart contracts)
-    for wallet in cardano_wallets:
-        try:
-            cache_key = f"staking_positions_{wallet['address']}"
-            cached = await get_cache(cache_key, user_id=user_id)
-            if not cached or not isinstance(cached, dict) or not cached.get('protocols'):
-                continue
-            for protocol_name, protocol_data in cached['protocols'].items():
-                for stake in (protocol_data.get('staked') or []):
-                    token = (stake.get('token') or 'ADA').upper()
-                    amount = float(stake.get('amount', 0))
-                    if amount <= 0:
-                        continue
-                    price_data = all_prices.get(token, {})
-                    price_usd = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
-                    staked_usd = amount * price_usd
-                    total_staked_usd += staked_usd
+    # Use defi.get_staking_positions() which reads cache if warm, fetches from
+    # Blockfrost if cold — ensures Strike/Indigo/etc appear without dashboard refresh
+    if cardano_wallets:
+        staking_caches = await asyncio.gather(*[
+            defi.get_staking_positions(wallet['address'], refresh=False, user_id=user_id)
+            for wallet in cardano_wallets
+        ], return_exceptions=True)
 
-                    _, pos_image = await _resolve_token_info(token)
-                    positions.append({
-                        "blockchain": "cardano",
-                        "protocol": protocol_name,
-                        "staked_amount": round(amount, 6),
-                        "staked_symbol": token,
-                        "staked_usd": round(staked_usd, 2),
-                        "rewards_amount": 0,
-                        "rewards_usd": 0,
-                        "apy": 0,
-                        "active": True,
-                        "logo_url": pos_image,
-                    })
-                # Add pending rewards
-                reward_token = protocol_data.get('reward_token')
-                pending = float(protocol_data.get('pending_rewards', 0))
-                if reward_token and pending > 0:
-                    rt_price = all_prices.get(reward_token, {})
-                    rt_price_usd = rt_price.get('usd', 0) if isinstance(rt_price, dict) else 0
-                    total_rewards_usd += pending * rt_price_usd
-        except Exception as e:
-            logger.warning(f"Could not get staking positions for wallet {wallet['id']}: {e}")
+        for cached in staking_caches:
+            try:
+                if isinstance(cached, (Exception, BaseException)) or not cached or not isinstance(cached, dict) or not cached.get('protocols'):
+                    continue
+                for protocol_name, protocol_data in cached['protocols'].items():
+                    for stake in (protocol_data.get('staked') or []):
+                        token = (stake.get('token') or 'ADA').upper()
+                        amount = float(stake.get('amount', 0))
+                        if amount <= 0:
+                            continue
+                        price_data = all_prices.get(token, {})
+                        price_usd = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
+                        staked_usd = amount * price_usd
+                        total_staked_usd += staked_usd
+
+                        _, pos_image = await _resolve_token_info(token)
+                        positions.append({
+                            "blockchain": "cardano",
+                            "protocol": protocol_name,
+                            "staked_amount": round(amount, 6),
+                            "staked_symbol": token,
+                            "staked_usd": round(staked_usd, 2),
+                            "rewards_amount": 0,
+                            "rewards_usd": 0,
+                            "apy": 0,
+                            "active": True,
+                            "logo_url": pos_image,
+                        })
+                    # Add pending rewards
+                    reward_token = protocol_data.get('reward_token')
+                    pending = float(protocol_data.get('pending_rewards', 0))
+                    if reward_token and pending > 0:
+                        rt_price = all_prices.get(reward_token, {})
+                        rt_price_usd = rt_price.get('usd', 0) if isinstance(rt_price, dict) else 0
+                        total_rewards_usd += pending * rt_price_usd
+            except Exception as e:
+                logger.warning(f"Could not process staking positions: {e}")
 
     return {
         "total_staked_usd": round(total_staked_usd, 2),
