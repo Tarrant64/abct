@@ -56,7 +56,7 @@ CHART_CACHE_TTL = 900  # 15 minutes for chart data
 _TOKEN_NAMES = {
     'INDY': 'Indigo',
     'LQ': 'Liqwid Finance',
-    'STRIKE': 'Strike Finance',
+    'STRIKE': 'Strike',
     'MIN': 'Minswap',
     'SUNDAE': 'SundaeSwap',
     'LENFI': 'Lenfi',
@@ -72,14 +72,44 @@ _TOKEN_NAMES = {
 async def _resolve_token_info(symbol: str) -> tuple[str, str]:
     """Look up proper display name and image URL for a token symbol.
 
-    Fallback chain: metadata_cache (CoinGecko CDN) → _TOKEN_NAMES → LogoKit.
+    Fallback chain: metadata_cache → CoinGecko /coins/{id} → LogoKit.
     Always returns full external URLs safe for both web and mobile clients.
     """
+    from services.pricing import ASSET_TO_COINGECKO
+
     meta = await metadata_cache.get_metadata(symbol)
     name = (meta.get('name') if meta else None) or _TOKEN_NAMES.get(symbol.upper()) or symbol.capitalize()
     image_url = (meta.get('image_url') if meta else None)
+
+    # Fallback: direct CoinGecko lookup for tokens with known CG IDs
+    if not image_url:
+        cg_id = ASSET_TO_COINGECKO.get(symbol.upper())
+        if cg_id:
+            try:
+                client = get_client("coingecko", timeout=10.0)
+                resp = await client.get(
+                    f"https://api.coingecko.com/api/v3/coins/{cg_id}",
+                    params={"localization": "false", "tickers": "false",
+                            "market_data": "false", "community_data": "false",
+                            "developer_data": "false"}
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    img = data.get('image', {})
+                    cg_image = img.get('small') or img.get('large') or img.get('thumb')
+                    if cg_image:
+                        image_url = cg_image
+                        await metadata_cache.upsert_metadata(symbol, {
+                            'coingecko_id': cg_id,
+                            'name': data.get('name') or name,
+                            'image_url': cg_image,
+                        })
+            except Exception as e:
+                logger.debug(f"CoinGecko image fallback failed for {symbol}: {e}")
+
     if not image_url:
         image_url = logokit_service.get_crypto_logo_url(symbol, size=64)
+
     return name, image_url
 
 # Exchange display info
