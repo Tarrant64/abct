@@ -867,7 +867,8 @@ async def get_mobile_portfolio_summary(
 async def get_mobile_wallets(
     user_id: int = Depends(verify_session),
     blockchain: Optional[str] = Query(None, description="Filter by blockchain"),
-    include_balances: bool = Query(True, description="Include current balances")
+    include_balances: bool = Query(True, description="Include current balances"),
+    refresh: bool = Query(False, description="Force refresh balances from blockchain APIs")
 ):
     """
     Get simplified wallet list for mobile.
@@ -914,6 +915,23 @@ async def get_mobile_wallets(
         }
 
     all_wallets = await get_all_wallets(user_id=user_id)
+
+    # When refresh=True, re-fetch balances from blockchain APIs before reading
+    if refresh and all_wallets:
+        from routers.wallets import _refresh_wallet_balance
+        semaphore = asyncio.Semaphore(5)
+
+        async def _refresh_limited(w):
+            async with semaphore:
+                try:
+                    return await _refresh_wallet_balance(w)
+                except Exception as e:
+                    logger.warning(f"Wallet refresh failed for {w['address'][:20]}: {e}")
+                    return {'success': False}
+
+        # Filter to requested blockchain if specified
+        to_refresh = [w for w in all_wallets if not blockchain or w['blockchain'] == blockchain]
+        await asyncio.gather(*[_refresh_limited(w) for w in to_refresh], return_exceptions=True)
 
     # Get prices for value calculations
     all_prices = await pricing_service.get_all_tracked_prices()
