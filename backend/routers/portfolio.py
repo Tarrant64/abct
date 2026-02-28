@@ -1560,11 +1560,6 @@ async def get_all_holdings(
         # Skip if already counted as L1 chain
         if ticker in holdings or ticker in _PRICE_SYMBOL.values():
             continue
-        # Skip DeFi governance tokens — they're counted in step 3 (DeFi summary)
-        # to avoid double-counting the same wallet UTXOs
-        if asset.get('is_defi_token'):
-            continue
-
         token_meta = await metadata_cache.get_metadata(ticker)
         holdings[ticker] = {
             'symbol': ticker,
@@ -1582,8 +1577,8 @@ async def get_all_holdings(
     if defi_data and defi_data.get('all_positions'):
         for pos in defi_data['all_positions']:
             token = (pos.get('token') or '').upper()
-            if not token:
-                continue
+            if not token or token in holdings:
+                continue  # Skip tokens already from native assets (step 2)
             _merge_holding(
                 holdings, token, pos.get('quantity', 0), 0,
                 all_prices, name=pos.get('protocol', token),

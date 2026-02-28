@@ -2009,6 +2009,212 @@ async def get_mobile_price_chart(
     return result
 
 
+@router.get("/asset/{symbol}/wallet-breakdown")
+async def get_asset_wallet_breakdown(
+    symbol: str,
+    user_id: int = Depends(verify_session),
+):
+    """
+    Per-wallet/source breakdown for a single token.
+
+    Gathers data from L1 chain wallets, native tokens, exchanges, staking,
+    and DeFi positions, then returns each source with allocation percentages.
+    """
+    symbol = symbol.upper()
+    cache_key = f"mobile_wallet_breakdown_{user_id}_{symbol}"
+
+    cached = await get_cache(cache_key, user_id=user_id)
+    if cached:
+        return cached
+
+    all_prices = await pricing_service.get_all_tracked_prices()
+    price_info = all_prices.get(symbol, {})
+    current_price = price_info.get('usd', 0)
+
+    # Symbol → blockchain mapping (reverse of symbol_map)
+    symbol_to_chains = {
+        'ADA': ['cardano'], 'BTC': ['bitcoin'], 'ETH': ['ethereum', 'base', 'arbitrum'],
+        'SOL': ['solana'], 'MATIC': ['polygon'], 'POL': ['polygon'],
+        'ALGO': ['algorand'], 'BNB': ['bsc'], 'AVAX': ['avalanche'],
+        'TRX': ['tron'], 'XRP': ['xrp'], 'HBAR': ['hedera'],
+        'EGLD': ['multiversx'], 'SUI': ['sui'], 'APT': ['aptos'],
+        'FIL': ['filecoin'], 'LTC': ['litecoin'], 'DOGE': ['dogecoin'],
+        'ZEC': ['zcash'], 'XTZ': ['tezos'], 'STX': ['stacks'],
+        'VET': ['vechain'], 'ATOM': ['cosmos'], 'NEAR': ['near'],
+        'ICP': ['icp'],
+    }
+
+    sources = []
+
+    # Read directly from cache — do NOT call route handlers (they use Depends() injection)
+    portfolio_summary, native_assets_data = await asyncio.gather(
+        get_cache(f"portfolio_summary_{user_id}", user_id=user_id),
+        get_cache("native_assets_all", user_id=user_id),
+    )
+    if not portfolio_summary:
+        portfolio_summary = {}
+        logger.warning(f"Wallet breakdown: no cached portfolio_summary for user {user_id}")
+    if not native_assets_data:
+        native_assets_data = {}
+
+    # 1. L1 chain wallets — read per-wallet data from portfolio summary
+    l1_chains = symbol_to_chains.get(symbol, [])
+    for chain in l1_chains:
+        chain_data = portfolio_summary.get(chain, {})
+        logger.debug(f"Wallet breakdown {symbol}: chain={chain}, wallets={len(chain_data.get('wallets', []))}")
+        for w in chain_data.get('wallets', []):
+            amount = float(w.get('balance', 0))
+            if amount <= 0:
+                continue
+            sources.append({
+                'source_type': 'wallet',
+                'label': w.get('label') or f"{chain.title()} Wallet",
+                'address': w.get('address', ''),
+                'blockchain': chain,
+                'amount': amount,
+                'value_usd': round(amount * current_price, 2),
+                'last_synced': w.get('updated_at') or (datetime.utcnow().isoformat() + 'Z'),
+            })
+
+    # 2. Native tokens (ERC-20, SPL, Cardano native) — per-wallet data
+    if not l1_chains:
+        try:
+            for asset in native_assets_data.get('valuable_assets', []):
+                ticker = (asset.get('ticker') or asset.get('asset_name', '')).upper()
+                if ticker != symbol:
+                    continue
+                for wallet_entry in asset.get('wallets', []):
+                    amount = float(wallet_entry.get('quantity', 0))
+                    if amount <= 0:
+                        continue
+                    sources.append({
+                        'source_type': 'wallet',
+                        'label': wallet_entry.get('label') or 'Wallet',
+                        'address': wallet_entry.get('address', ''),
+                        'blockchain': wallet_entry.get('blockchain', ''),
+                        'amount': amount,
+                        'value_usd': round(amount * current_price, 2),
+                        'last_synced': datetime.utcnow().isoformat() + 'Z',
+                    })
+        except Exception as e:
+            logger.debug(f"Native token breakdown failed for {symbol}: {e}")
+
+    # 3. Exchange assets
+    exchange_names = ['coinbase', 'binance', 'binance_us', 'okx', 'bitget', 'gate', 'kucoin']
+    exchange_caches = await asyncio.gather(*[
+        get_cache(f"{name}_portfolio", user_id=user_id) for name in exchange_names
+    ])
+    for name, exc_data in zip(exchange_names, exchange_caches):
+        if not exc_data or not exc_data.get('assets'):
+            continue
+        for asset in exc_data['assets']:
+            currency = (asset.get('currency') or '').upper()
+            if currency != symbol:
+                continue
+            amount = float(asset.get('balance', 0))
+            if amount <= 0:
+                continue
+            info = EXCHANGE_INFO.get(name, {})
+            sources.append({
+                'source_type': 'exchange',
+                'label': info.get('display_name', name.title()),
+                'amount': amount,
+                'value_usd': round(amount * current_price, 2),
+                'last_synced': datetime.utcnow().isoformat() + 'Z',
+            })
+
+    # 4. Staking positions
+    cardano_wallet_entries = portfolio_summary.get('cardano', {}).get('wallets', [])
+    staking_caches = await asyncio.gather(*[
+        get_cache(f"staking_positions_{w['address']}", user_id=user_id) for w in cardano_wallet_entries
+    ], return_exceptions=True)
+    for w, cached_staking in zip(cardano_wallet_entries, staking_caches):
+        if isinstance(cached_staking, Exception) or not cached_staking or not isinstance(cached_staking, dict):
+            continue
+        for protocol_name, protocol_data in (cached_staking.get('protocols') or {}).items():
+            for stake in (protocol_data.get('staked') or []):
+                token = (stake.get('token') or 'ADA').upper()
+                if token != symbol:
+                    continue
+                amount = float(stake.get('amount', 0))
+                if amount <= 0:
+                    continue
+                sources.append({
+                    'source_type': 'staking',
+                    'label': f"Staked in {protocol_name}",
+                    'address': w['address'],
+                    'blockchain': 'cardano',
+                    'amount': amount,
+                    'value_usd': round(amount * current_price, 2),
+                })
+
+    # 5. DeFi positions
+    defi_data = await get_cache(f"defi_summary_{user_id}")
+    if defi_data and defi_data.get('all_positions'):
+        for pos in defi_data['all_positions']:
+            token = (pos.get('token') or '').upper()
+            if token != symbol:
+                continue
+            amount = float(pos.get('quantity', 0))
+            if amount <= 0:
+                continue
+            sources.append({
+                'source_type': 'defi',
+                'label': pos.get('protocol', 'DeFi'),
+                'amount': amount,
+                'value_usd': round(amount * current_price, 2),
+            })
+
+    # Calculate totals and allocation percentages
+    total_amount = sum(s['amount'] for s in sources)
+    total_value = round(total_amount * current_price, 2)
+
+    # Sort by value descending
+    sources.sort(key=lambda s: s['value_usd'], reverse=True)
+
+    for s in sources:
+        s['amount'] = round(s['amount'], 8)
+        s['allocation_pct'] = round(
+            (s['amount'] / total_amount * 100) if total_amount > 0 else 0, 1
+        )
+
+    # Debug: include diagnostics when no sources found
+    debug_info = None
+    if not sources:
+        chains_checked = l1_chains
+        chain_keys = list(portfolio_summary.keys()) if portfolio_summary else []
+        wallet_counts = {}
+        for c in chains_checked:
+            cd = portfolio_summary.get(c, {})
+            ws = cd.get('wallets', [])
+            wallet_counts[c] = {
+                'count': len(ws),
+                'balances': [w.get('balance', 'MISSING') for w in ws[:5]],
+                'keys': list(ws[0].keys()) if ws else [],
+            }
+        debug_info = {
+            'chains_checked': chains_checked,
+            'portfolio_summary_keys': chain_keys[:10],
+            'portfolio_summary_type': type(portfolio_summary).__name__,
+            'has_cache': portfolio_summary is not None and len(portfolio_summary) > 0,
+            'wallet_counts': wallet_counts,
+        }
+        logger.warning(f"Wallet breakdown empty for {symbol}: {debug_info}")
+
+    result = {
+        'symbol': symbol,
+        'current_price_usd': round(current_price, 6),
+        'total_amount': round(total_amount, 8),
+        'total_value_usd': total_value,
+        'sources': sources,
+    }
+    if debug_info:
+        result['_debug'] = debug_info
+
+    await set_cache(cache_key, result, MOBILE_CACHE_TTL, user_id=user_id)
+    return result
+
+
 @router.get("/status")
 async def get_mobile_api_status():
     """
