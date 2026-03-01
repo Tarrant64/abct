@@ -109,29 +109,34 @@ class ProviderRegistry:
 
 def create_default_registry() -> ProviderRegistry:
     """Create the registry with all known providers."""
+    from config import BLOCKFROST_BASE_URL, BLOCKFROST_EXTERNAL_URL
+    _is_self_hosted = BLOCKFROST_BASE_URL != BLOCKFROST_EXTERNAL_URL
+
     registry = ProviderRegistry()
 
     # --- Cardano ---
-    # Primary: internal RYO node (higher priority, no rate limits)
+    # Primary Blockfrost: limits depend on self-hosted (RYO, unlimited) vs external (free tier)
     registry.register(Provider(
         name="blockfrost",
         chains={ChainId.CARDANO},
         domains={WorkDomain.INDEX, WorkDomain.HYDRATE},
         priority=60,
-        max_concurrency=15,
-        requests_per_second=50.0,
-        burst_size=50,
+        max_concurrency=15 if _is_self_hosted else 5,
+        requests_per_second=50.0 if _is_self_hosted else 10.0,
+        burst_size=50 if _is_self_hosted else 20,
     ))
     # Fallback: external Blockfrost.io (lower priority, used when RYO is down)
-    registry.register(Provider(
-        name="blockfrost_external",
-        chains={ChainId.CARDANO},
-        domains={WorkDomain.INDEX, WorkDomain.HYDRATE},
-        priority=45,
-        max_concurrency=5,
-        requests_per_second=10.0,
-        burst_size=20,
-    ))
+    # Only registered when a separate RYO node is configured
+    if _is_self_hosted:
+        registry.register(Provider(
+            name="blockfrost_external",
+            chains={ChainId.CARDANO},
+            domains={WorkDomain.INDEX, WorkDomain.HYDRATE},
+            priority=45,
+            max_concurrency=5,
+            requests_per_second=10.0,
+            burst_size=20,
+        ))
     registry.register(Provider(
         name="cexplorer",
         chains={ChainId.CARDANO},
