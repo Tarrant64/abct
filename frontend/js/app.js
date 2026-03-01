@@ -1406,7 +1406,14 @@ function initializePrivacyMode() {
             startPrivacyObserver();
         });
     }
+    // Sync avatar dropdown indicator text (ON/OFF)
+    if (typeof syncPrivacyIndicator === 'function') {
+        syncPrivacyIndicator();
+    }
 }
+
+// Flag so transactions.js doesn't overwrite our more complete implementation
+window._appJsPrivacyLoaded = true;
 
 // Toggle privacy mode
 function togglePrivacyMode() {

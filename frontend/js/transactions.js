@@ -971,31 +971,43 @@ function showStatus(message, type = 'info') {
 
 /**
  * Check if privacy mode is enabled
+ * Checks body class first (most reliable), then localStorage.
+ * Supports both 'true' (app.js convention) and 'enabled' (legacy) values.
  */
 function isPrivacyMode() {
-    return localStorage.getItem('privacyMode') === 'enabled';
+    if (document.body.classList.contains('privacy-mode')) return true;
+    const val = localStorage.getItem('privacyMode');
+    return val === 'true' || val === 'enabled';
 }
 
+// Only define togglePrivacyMode, loadSavedTheme, changeTheme if app.js
+// hasn't already defined them (app.js loads first on data.html/wallets.html).
+// On standalone transactions.html, app.js is NOT loaded, so these are needed.
+if (typeof window._appJsPrivacyLoaded === 'undefined') {
+
 /**
- * Toggle privacy mode
+ * Toggle privacy mode (standalone version for transactions.html)
  */
 function togglePrivacyMode() {
     const privacyBtn = document.getElementById('privacyBtn');
     const body = document.body;
-    const currentMode = localStorage.getItem('privacyMode');
+    const isEnabled = body.classList.toggle('privacy-mode');
 
-    if (currentMode === 'enabled') {
-        localStorage.setItem('privacyMode', 'disabled');
-        privacyBtn.classList.remove('active');
-        body.classList.remove('privacy-mode');
-    } else {
-        localStorage.setItem('privacyMode', 'enabled');
-        privacyBtn.classList.add('active');
-        body.classList.add('privacy-mode');
+    localStorage.setItem('privacyMode', isEnabled ? 'true' : 'false');
+
+    if (privacyBtn) {
+        privacyBtn.classList.toggle('active', isEnabled);
     }
 
-    // Re-render to apply privacy mode
-    renderTransactions(currentTransactions);
+    // Sync avatar dropdown indicator if present
+    if (typeof syncPrivacyIndicator === 'function') {
+        syncPrivacyIndicator();
+    }
+
+    // Re-render to apply privacy mode to transaction data
+    if (typeof renderTransactions === 'function' && typeof currentTransactions !== 'undefined') {
+        renderTransactions(currentTransactions);
+    }
 }
 
 /**
@@ -1027,6 +1039,8 @@ function changeTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
 }
+
+} // end if (typeof window._appJsPrivacyLoaded === 'undefined')
 
 /**
  * Format tokens (handle multiple for Cardano)

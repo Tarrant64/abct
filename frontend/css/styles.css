@@ -9568,6 +9568,49 @@ body.privacy-mode canvas {
     user-select: none;
 }
 
+/* SVG Charts - Sankey flow diagram, Streamgraph, Intelligence heatmap, etc. */
+body.privacy-mode .sankey-container,
+body.privacy-mode .sankey-svg,
+body.privacy-mode .stream-container,
+body.privacy-mode .stream-svg,
+body.privacy-mode .intelligence-heatmap-container {
+    filter: blur(20px);
+    user-select: none;
+}
+
+/* Generic privacy-sensitive class used by analytics, intelligence, market tabs */
+body.privacy-mode .privacy-sensitive {
+    filter: blur(8px);
+    user-select: none;
+}
+
+/* Coin/Category Allocation Legends - Data & Analytics page */
+body.privacy-mode .legend-value-inline,
+body.privacy-mode .legend-percentage-compact,
+body.privacy-mode .analytics-legend-value,
+body.privacy-mode .analytics-legend-pct {
+    filter: blur(8px);
+    user-select: none;
+}
+
+/* Stream chart legend values */
+body.privacy-mode .stream-legend {
+    filter: blur(8px);
+    user-select: none;
+}
+
+/* Heatmap tiles - portfolio heatmap on Data & Analytics page */
+body.privacy-mode .heatmap-container {
+    filter: blur(15px);
+    user-select: none;
+}
+
+/* Trending coins / top movers on Analytics tab */
+body.privacy-mode .trending-price {
+    filter: blur(8px);
+    user-select: none;
+}
+
 /* Statistics and Metrics */
 body.privacy-mode .stat-value,
 body.privacy-mode .metric-value,
