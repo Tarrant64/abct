@@ -150,7 +150,8 @@ PROBIT_CLIENT_ID = os.getenv("PROBIT_CLIENT_ID", "")
 PROBIT_CLIENT_SECRET = os.getenv("PROBIT_CLIENT_SECRET", "")
 
 # API Endpoints
-BLOCKFROST_BASE_URL = "https://cardano-mainnet.blockfrost.io/api/v0"
+BLOCKFROST_BASE_URL = os.getenv("BLOCKFROST_BASE_URL", "https://cardano-mainnet.blockfrost.io/api/v0")
+BLOCKFROST_EXTERNAL_URL = os.getenv("BLOCKFROST_EXTERNAL_URL", "https://cardano-mainnet.blockfrost.io/api/v0")
 CEXPLORER_BASE_URL = "https://api.cexplorer.io/v1"
 BLOCKSTREAM_BASE_URL = "https://blockstream.info/api"
 MEMPOOL_BASE_URL = "https://mempool.space/api"  # Fallback for Bitcoin transactions

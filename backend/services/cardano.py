@@ -11,7 +11,7 @@ from database import get_token_metadata, save_token_metadata, get_api_key
 # Import API tracker
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'middleware'))
 from api_tracker import get_blockfrost_client, get_cexplorer_client
-from services.http_client import get_client
+from services.http_client import get_client, blockfrost_fetch
 
 logger = logging.getLogger(__name__)
 
@@ -254,8 +254,8 @@ class CardanoService:
         try:
             async with get_blockfrost_client(headers=await self._get_blockfrost_headers(), timeout=30.0) as client:
                 # Get address info
-                response = await client.get(
-                    f"{BLOCKFROST_BASE_URL}/addresses/{address}",
+                response = await blockfrost_fetch(
+                    f"/addresses/{address}",
                     headers=await self._get_blockfrost_headers(),
                     timeout=30.0
                 )
@@ -411,9 +411,8 @@ class CardanoService:
         """
         # Try Blockfrost API first
         try:
-            client = get_client("blockfrost", timeout=30.0)
-            response = await client.get(
-                f"{BLOCKFROST_BASE_URL}/addresses/{address}",
+            response = await blockfrost_fetch(
+                f"/addresses/{address}",
                 headers=await self._get_blockfrost_headers(),
                 timeout=30.0
             )
@@ -437,9 +436,8 @@ class CardanoService:
     async def get_asset_metadata(self, asset_id: str) -> Optional[dict]:
         """Get metadata for a native asset."""
         try:
-            client = get_client("blockfrost", timeout=30.0)
-            response = await client.get(
-                f"{BLOCKFROST_BASE_URL}/assets/{asset_id}",
+            response = await blockfrost_fetch(
+                f"/assets/{asset_id}",
                 headers=await self._get_blockfrost_headers(),
                 timeout=30.0
             )
@@ -525,9 +523,8 @@ class CardanoService:
         Get account info for a stake address including rewards and pool delegation.
         """
         try:
-            client = get_client("blockfrost", timeout=30.0)
-            response = await client.get(
-                f"{BLOCKFROST_BASE_URL}/accounts/{stake_address}",
+            response = await blockfrost_fetch(
+                f"/accounts/{stake_address}",
                 headers=await self._get_blockfrost_headers(),
                 timeout=30.0
             )
@@ -574,11 +571,9 @@ class CardanoService:
             addresses = []
             page = 1
 
-            client = get_client("blockfrost", timeout=30.0)
-
             while True:
-                response = await client.get(
-                    f"{BLOCKFROST_BASE_URL}/accounts/{stake_address}/addresses",
+                response = await blockfrost_fetch(
+                    f"/accounts/{stake_address}/addresses",
                     headers=await self._get_blockfrost_headers(),
                     params={'page': page, 'count': 100},
                     timeout=30.0
@@ -672,9 +667,8 @@ class CardanoService:
             return None
 
         try:
-            client = get_client("blockfrost", timeout=30.0)
-            response = await client.get(
-                f"{BLOCKFROST_BASE_URL}/pools/{pool_id}/metadata",
+            response = await blockfrost_fetch(
+                f"/pools/{pool_id}/metadata",
                 headers=await self._get_blockfrost_headers(),
                 timeout=30.0
             )
@@ -711,10 +705,9 @@ class CardanoService:
             if account_data:
                 data = account_data
             else:
-                client = get_client("blockfrost", timeout=30.0)
                 # Blockfrost Conway governance endpoint
-                response = await client.get(
-                    f"{BLOCKFROST_BASE_URL}/accounts/{stake_address}",
+                response = await blockfrost_fetch(
+                    f"/accounts/{stake_address}",
                     headers=await self._get_blockfrost_headers(),
                     timeout=30.0
                 )
@@ -734,6 +727,7 @@ class CardanoService:
                 }
 
             # Try to get DRep metadata
+            client = get_client("blockfrost", timeout=30.0)
             drep_info = await self._get_drep_info(client, drep_id)
 
             return {
@@ -754,8 +748,8 @@ class CardanoService:
 
         # 1. First try Blockfrost DRep metadata endpoint
         try:
-            response = await client.get(
-                f"{BLOCKFROST_BASE_URL}/governance/dreps/{drep_id}/metadata",
+            response = await blockfrost_fetch(
+                f"/governance/dreps/{drep_id}/metadata",
                 headers=await self._get_blockfrost_headers(),
                 timeout=30.0
             )
@@ -815,8 +809,8 @@ class CardanoService:
         # 3. Try Blockfrost DRep general info (might have different fields)
         if not drep_name:
             try:
-                response = await client.get(
-                    f"{BLOCKFROST_BASE_URL}/governance/dreps/{drep_id}",
+                response = await blockfrost_fetch(
+                    f"/governance/dreps/{drep_id}",
                     headers=await self._get_blockfrost_headers(),
                     timeout=30.0
                 )

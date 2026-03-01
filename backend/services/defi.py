@@ -16,7 +16,7 @@ import logging
 import sys
 sys.path.insert(0, str(__file__).rsplit('/', 2)[0])
 from config import BLOCKFROST_API_KEY, BLOCKFROST_BASE_URL
-from services.http_client import get_client
+from services.http_client import get_client, blockfrost_fetch
 
 # Protocol API endpoints
 INDIGO_API_BASE = "https://analytics.indigoprotocol.io"
@@ -312,11 +312,10 @@ class DeFiService:
         - Summary by protocol
         """
         try:
-            client = get_client("blockfrost", timeout=30.0)
             # Get all UTXOs
             logger.info(f"[DeFi] Fetching UTXOs for {address[:20]}... API key present: {bool(self.headers.get('project_id'))}")
-            response = await client.get(
-                f"{BLOCKFROST_BASE_URL}/addresses/{address}/utxos",
+            response = await blockfrost_fetch(
+                f"/addresses/{address}/utxos",
                 headers=self.headers,
                 timeout=30.0
             )
@@ -561,10 +560,11 @@ class DeFiService:
             async def fetch_page(pg):
                 async with sem:
                     try:
-                        resp = await client.get(
-                            f"{BLOCKFROST_BASE_URL}/addresses/{LIQWID_STAKING_ADDRESS}/utxos",
+                        resp = await blockfrost_fetch(
+                            f"/addresses/{LIQWID_STAKING_ADDRESS}/utxos",
                             headers=self.headers,
-                            params={"count": 100, "page": pg}
+                            params={"count": 100, "page": pg},
+                            timeout=30.0
                         )
                         if resp.status_code == 200:
                             return resp.json()
@@ -671,10 +671,11 @@ class DeFiService:
             async def fetch_page(pg):
                 async with sem:
                     try:
-                        resp = await client.get(
-                            f"{BLOCKFROST_BASE_URL}/addresses/{STRIKE_STAKING_ADDRESS}/utxos",
+                        resp = await blockfrost_fetch(
+                            f"/addresses/{STRIKE_STAKING_ADDRESS}/utxos",
                             headers=self.headers,
-                            params={"count": 100, "page": pg}
+                            params={"count": 100, "page": pg},
+                            timeout=15.0
                         )
                         if resp.status_code == 200:
                             return resp.json()
@@ -828,10 +829,11 @@ class DeFiService:
                     # Start from next block to avoid re-processing already-counted txs
                     params["from"] = str(from_block + 1)
 
-                response = await client.get(
-                    f"{BLOCKFROST_BASE_URL}/addresses/{address}/transactions",
+                response = await blockfrost_fetch(
+                    f"/addresses/{address}/transactions",
                     headers=self.headers,
-                    params=params
+                    params=params,
+                    timeout=30.0
                 )
 
                 if response.status_code != 200:
@@ -874,9 +876,10 @@ class DeFiService:
             async def fetch_tx_utxos(tx_hash):
                 async with sem:
                     try:
-                        resp = await client.get(
-                            f"{BLOCKFROST_BASE_URL}/txs/{tx_hash}/utxos",
-                            headers=self.headers
+                        resp = await blockfrost_fetch(
+                            f"/txs/{tx_hash}/utxos",
+                            headers=self.headers,
+                            timeout=30.0
                         )
                         if resp.status_code == 200:
                             return resp.json()
@@ -1085,10 +1088,11 @@ class DeFiService:
             accumulated_rewards = 0
 
             # Check for pending rewards in the staking UTxOs datum
-            response = await client.get(
-                f"{BLOCKFROST_BASE_URL}/addresses/{STRIKE_STAKING_ADDRESS}/utxos",
+            response = await blockfrost_fetch(
+                f"/addresses/{STRIKE_STAKING_ADDRESS}/utxos",
                 headers=self.headers,
-                params={"count": 100}
+                params={"count": 100},
+                timeout=15.0
             )
 
             if response.status_code == 200:
@@ -1189,10 +1193,10 @@ class DeFiService:
     async def _get_stake_address(self, address: str) -> Optional[str]:
         """Get the stake address associated with a wallet address."""
         try:
-            client = get_client("blockfrost", timeout=30.0)
-            response = await client.get(
-                f"{BLOCKFROST_BASE_URL}/addresses/{address}",
-                headers=self.headers
+            response = await blockfrost_fetch(
+                f"/addresses/{address}",
+                headers=self.headers,
+                timeout=30.0
             )
             if response.status_code == 200:
                 data = response.json()
@@ -1236,10 +1240,11 @@ class DeFiService:
                 logger.warning("[Surf] No staking address configured for on-chain fallback — skipping")
                 return None
 
-            response = await client.get(
-                f"{BLOCKFROST_BASE_URL}/addresses/{SURF_STAKING_ADDRESS}/utxos",
+            response = await blockfrost_fetch(
+                f"/addresses/{SURF_STAKING_ADDRESS}/utxos",
                 headers=self.headers,
-                params={"count": 100}
+                params={"count": 100},
+                timeout=30.0
             )
 
             if response.status_code != 200:

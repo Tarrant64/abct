@@ -10,7 +10,7 @@ from typing import List, Optional
 
 from engine.models import TxIndexEntry, ChainId
 from engine.indexing.base import TxIndexer
-from services.http_client import get_client, fetch_with_retry
+from services.http_client import get_client, fetch_with_retry, blockfrost_fetch
 from services.api_key_manager import APIKeyManager
 from config import BLOCKFROST_BASE_URL
 
@@ -31,15 +31,14 @@ class CardanoIndexer(TxIndexer):
             logger.warning("No Blockfrost API key for Cardano indexing")
             return []
 
-        client = get_client("blockfrost", timeout=30.0)
         entries = []
         page = 1
 
         # Determine endpoint: stake addresses use /accounts/, payment addresses use /addresses/
         if account_id.startswith("stake1"):
-            base_endpoint = f"{BLOCKFROST_BASE_URL}/accounts/{account_id}/transactions"
+            base_path = f"/accounts/{account_id}/transactions"
         else:
-            base_endpoint = f"{BLOCKFROST_BASE_URL}/addresses/{account_id}/transactions"
+            base_path = f"/addresses/{account_id}/transactions"
 
         while True:
             params = {"count": 100, "page": page, "order": "asc"}
@@ -48,10 +47,11 @@ class CardanoIndexer(TxIndexer):
             if cursor_end:
                 params["to"] = cursor_end
 
-            resp = await fetch_with_retry(
-                client, "GET", base_endpoint,
+            resp = await blockfrost_fetch(
+                base_path,
                 params=params,
                 headers={"project_id": api_key},
+                timeout=30.0
             )
 
             if resp.status_code == 404:

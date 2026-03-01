@@ -33,7 +33,7 @@ from services.solana import solana_service
 from services.polygon import polygon_service
 from services.base import base_service
 from services.coinbase import coinbase_service
-from services.http_client import get_client
+from services.http_client import get_client, blockfrost_fetch
 
 logger = logging.getLogger(__name__)
 
@@ -421,7 +421,6 @@ class TransactionHistoryService:
     async def _fetch_cardano_transactions(self, address: str, limit: int) -> List[dict]:
         """Fetch Cardano transactions via Blockfrost."""
         import httpx
-        from config import BLOCKFROST_BASE_URL
 
         try:
             # Get Blockfrost API key
@@ -432,13 +431,12 @@ class TransactionHistoryService:
 
             headers = {"project_id": blockfrost_key}
 
-            client = get_client("blockfrost", timeout=30.0)
-
             # Get address transactions
-            response = await client.get(
-                f"{BLOCKFROST_BASE_URL}/addresses/{address}/transactions",
+            response = await blockfrost_fetch(
+                f"/addresses/{address}/transactions",
                 headers=headers,
-                params={"count": limit, "order": "desc"}
+                params={"count": limit, "order": "desc"},
+                timeout=30.0
             )
 
             if response.status_code == 404:
@@ -459,18 +457,20 @@ class TransactionHistoryService:
                     continue
 
                 # Get transaction details
-                tx_response = await client.get(
-                    f"{BLOCKFROST_BASE_URL}/txs/{tx_hash}",
-                    headers=headers
+                tx_response = await blockfrost_fetch(
+                    f"/txs/{tx_hash}",
+                    headers=headers,
+                    timeout=30.0
                 )
 
                 if tx_response.status_code == 200:
                     tx_detail = tx_response.json()
 
                     # Get UTXOs for the transaction
-                    utxo_response = await client.get(
-                        f"{BLOCKFROST_BASE_URL}/txs/{tx_hash}/utxos",
-                        headers=headers
+                    utxo_response = await blockfrost_fetch(
+                        f"/txs/{tx_hash}/utxos",
+                        headers=headers,
+                        timeout=30.0
                     )
 
                     if utxo_response.status_code == 200:

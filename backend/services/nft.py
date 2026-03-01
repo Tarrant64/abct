@@ -31,7 +31,7 @@ from database import (
     save_nft_floor_price, get_latest_nft_floor_price, get_all_nft_floor_prices,
     get_collections_needing_price_update, get_nft_price_stats
 )
-from services.http_client import get_client
+from services.http_client import get_client, blockfrost_fetch
 
 # Import new priority NFT metadata services
 try:
@@ -282,10 +282,10 @@ class NFTService:
         # Fallback to Blockfrost (priority #3)
         logger.debug(f"Falling back to Blockfrost for image: {asset_id[:20]}...")
         try:
-            client = get_client("blockfrost", timeout=15.0)
-            response = await client.get(
-                f"{BLOCKFROST_BASE_URL}/assets/{asset_id}",
-                headers=self.blockfrost_headers
+            response = await blockfrost_fetch(
+                f"/assets/{asset_id}",
+                headers=self.blockfrost_headers,
+                timeout=15.0
             )
 
             if response.status_code == 200:
@@ -678,11 +678,11 @@ class NFTService:
 
         # Fall back to Blockfrost
         try:
-            client = get_client("blockfrost", timeout=30.0)
-            response = await client.get(
-                f"{BLOCKFROST_BASE_URL}/assets/policy/{policy_id}",
+            response = await blockfrost_fetch(
+                f"/assets/policy/{policy_id}",
                 headers=self.blockfrost_headers,
-                params={"count": 1}
+                params={"count": 1},
+                timeout=30.0
             )
 
             if response.status_code == 200:
@@ -691,9 +691,10 @@ class NFTService:
                     # Get full asset metadata for the first asset
                     first_asset_id = assets[0].get('asset')
                     if first_asset_id:
-                        asset_response = await client.get(
-                            f"{BLOCKFROST_BASE_URL}/assets/{first_asset_id}",
-                            headers=self.blockfrost_headers
+                        asset_response = await blockfrost_fetch(
+                            f"/assets/{first_asset_id}",
+                            headers=self.blockfrost_headers,
+                            timeout=30.0
                         )
 
                         if asset_response.status_code == 200:

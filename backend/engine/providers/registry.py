@@ -112,11 +112,22 @@ def create_default_registry() -> ProviderRegistry:
     registry = ProviderRegistry()
 
     # --- Cardano ---
+    # Primary: internal RYO node (higher priority, no rate limits)
     registry.register(Provider(
         name="blockfrost",
         chains={ChainId.CARDANO},
         domains={WorkDomain.INDEX, WorkDomain.HYDRATE},
         priority=60,
+        max_concurrency=15,
+        requests_per_second=50.0,
+        burst_size=50,
+    ))
+    # Fallback: external Blockfrost.io (lower priority, used when RYO is down)
+    registry.register(Provider(
+        name="blockfrost_external",
+        chains={ChainId.CARDANO},
+        domains={WorkDomain.INDEX, WorkDomain.HYDRATE},
+        priority=45,
         max_concurrency=5,
         requests_per_second=10.0,
         burst_size=20,

@@ -196,8 +196,8 @@ async def lookup_cardano_token(policy_id: str, asset_name: str = "") -> dict:
     """
     Look up Cardano token information from various sources.
     """
-    import httpx
-    from config import BLOCKFROST_API_KEY, BLOCKFROST_BASE_URL
+    from config import BLOCKFROST_API_KEY
+    from services.http_client import blockfrost_fetch
 
     if not BLOCKFROST_API_KEY:
         return None
@@ -206,12 +206,11 @@ async def lookup_cardano_token(policy_id: str, asset_name: str = "") -> dict:
         # Build asset ID
         asset_id = policy_id + asset_name if asset_name else policy_id
 
-        client = get_client("blockfrost", timeout=30.0)
-
         # Try Blockfrost for token info
-        response = await client.get(
-            f"{BLOCKFROST_BASE_URL}/assets/{asset_id}",
-            headers={"project_id": BLOCKFROST_API_KEY}
+        response = await blockfrost_fetch(
+            f"/assets/{asset_id}",
+            headers={"project_id": BLOCKFROST_API_KEY},
+            timeout=30.0
         )
 
         if response.status_code == 200:

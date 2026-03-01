@@ -28,7 +28,7 @@ from datetime import datetime, timedelta
 import logging
 from typing import Optional, Tuple
 
-from config import DATABASE_PATH
+from config import DATABASE_PATH, BLOCKFROST_BASE_URL, BLOCKFROST_EXTERNAL_URL
 
 logger = logging.getLogger(__name__)
 
@@ -47,11 +47,15 @@ TAPTOOLS_COOLDOWNS = {
 }
 
 # Tier 2: MODERATE - APIs with rate limits but more generous
+# Blockfrost cooldowns are minimal when using self-hosted RYO (no rate limits)
+_blockfrost_is_self_hosted = BLOCKFROST_BASE_URL != BLOCKFROST_EXTERNAL_URL
+_blockfrost_cooldown = 2 if _blockfrost_is_self_hosted else 30
+
 MODERATE_COOLDOWNS = {
     'alchemy': {'nft_queries': 20, 'token_queries': 15},
     'helius': {'nft_queries': 20, 'token_queries': 15},
     'coingecko': {'price_queries': 30},
-    'blockfrost': {'wallet_queries': 30, 'nft_queries': 30},
+    'blockfrost': {'wallet_queries': _blockfrost_cooldown, 'nft_queries': _blockfrost_cooldown},
     'nftcdn': {'metadata_queries': 60},
     'nmkr': {'metadata_queries': 60},
 }

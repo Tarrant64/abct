@@ -13,7 +13,7 @@ import logging
 from typing import List, Optional
 
 from config import BLOCKFROST_API_KEY, BLOCKFROST_BASE_URL
-from services.http_client import get_client
+from services.http_client import get_client, blockfrost_fetch
 from services.defi_protocols.base_adapter import (
     ProtocolAdapter, ProtocolPosition, DetectionMethod, PositionType
 )
@@ -64,10 +64,11 @@ class LiqwidAdapter(ProtocolAdapter):
             async def fetch_page(pg):
                 async with sem:
                     try:
-                        resp = await client.get(
-                            f"{BLOCKFROST_BASE_URL}/addresses/{LIQWID_STAKING_ADDRESS}/utxos",
+                        resp = await blockfrost_fetch(
+                            f"/addresses/{LIQWID_STAKING_ADDRESS}/utxos",
                             headers=headers,
-                            params={"count": 100, "page": pg}
+                            params={"count": 100, "page": pg},
+                            timeout=15.0
                         )
                         if resp.status_code == 200:
                             return resp.json()

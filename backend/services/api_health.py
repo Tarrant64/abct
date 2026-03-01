@@ -13,6 +13,7 @@ Each API has a registered test type:
 import logging
 from datetime import datetime
 from services.http_client import get_client
+from config import BLOCKFROST_BASE_URL, BLOCKFROST_EXTERNAL_URL
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 # Entries not listed here will get "configured, not tested" status.
 API_HEALTH_TESTS = {
     # Header-based: ("header", url, header_name)
-    "blockfrost":    ("header", "https://cardano-mainnet.blockfrost.io/api/v0/health", "project_id"),
+    "blockfrost":    ("header", f"{BLOCKFROST_BASE_URL}/health", "project_id"),
     "taptools":      ("header", "https://openapi.taptools.io/api/v1/token/mcap", "x-api-key"),
     "moralis":       ("header", "https://deep-index.moralis.io/api/v2.2/web3/version", "X-API-Key"),
     "coinmarketcap": ("header", "https://pro-api.coinmarketcap.com/v1/key/info", "X-CMC_PRO_API_KEY"),
@@ -121,12 +122,22 @@ async def _test_header(api_id: str, api_key: str, config: tuple) -> dict:
     status = response.status_code
     success = status < 400
 
+    # Add source info for Blockfrost (internal RYO vs external)
+    extra = {}
+    if api_id == "blockfrost":
+        is_self_hosted = BLOCKFROST_BASE_URL != BLOCKFROST_EXTERNAL_URL
+        extra["source"] = "self-hosted (RYO)" if is_self_hosted else "external"
+        extra["endpoint"] = BLOCKFROST_BASE_URL
+
     if success:
+        msg = "Connected successfully"
+        if extra.get("source"):
+            msg += f" ({extra['source']})"
         return {"success": True, "tested": True,
-                "message": "Connected successfully", "status_code": status}
+                "message": msg, "status_code": status, **extra}
     else:
         return {"success": False, "tested": True,
-                "message": f"HTTP {status}", "status_code": status}
+                "message": f"HTTP {status}", "status_code": status, **extra}
 
 
 async def _test_query(api_id: str, api_key: str, config: tuple) -> dict:

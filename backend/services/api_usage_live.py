@@ -12,6 +12,7 @@ from typing import Optional, Dict
 
 from services.http_client import get_client
 from database import get_api_key, get_cache, set_cache
+from config import BLOCKFROST_BASE_URL, BLOCKFROST_EXTERNAL_URL
 
 logger = logging.getLogger(__name__)
 
@@ -115,16 +116,29 @@ async def _fetch_cmc_usage() -> Optional[Dict]:
 
 async def _fetch_blockfrost_usage() -> Optional[Dict]:
     """
-    Fetch Blockfrost daily usage via /metrics endpoint.
+    Fetch Blockfrost daily usage via /usage/metrics endpoint.
     Sums today's requests from the metrics response.
+
+    For self-hosted RYO nodes, /usage/metrics does not exist.
+    In that case, return unlimited usage indicator.
     """
+    is_self_hosted = BLOCKFROST_BASE_URL != BLOCKFROST_EXTERNAL_URL
+
+    if is_self_hosted:
+        return {
+            "call_count": 0,
+            "requests_limit": None,
+            "period_label": "day",
+            "source": "self-hosted"
+        }
+
     api_key = await get_api_key("blockfrost")
     if not api_key:
         return None
 
     client = get_client("blockfrost_usage", timeout=10.0)
     response = await client.get(
-        "https://cardano-mainnet.blockfrost.io/api/v0/usage/metrics",
+        f"{BLOCKFROST_EXTERNAL_URL}/usage/metrics",
         headers={"project_id": api_key},
         timeout=10.0
     )

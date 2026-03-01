@@ -59,20 +59,18 @@ class TokenMetadataEnricher:
                 return None
             unit = parts[0] + parts[1]
 
-            from services.http_client import get_client, fetch_with_retry
+            from services.http_client import blockfrost_fetch
             from services.api_key_manager import APIKeyManager
-            from config import BLOCKFROST_BASE_URL
 
             keys = APIKeyManager("blockfrost", "BLOCKFROST_API_KEY")
             api_key = await keys.get_api_key()
             if not api_key:
                 return None
 
-            client = get_client("blockfrost", timeout=30.0)
-            resp = await fetch_with_retry(
-                client, "GET",
-                f"{BLOCKFROST_BASE_URL}/assets/{unit}",
+            resp = await blockfrost_fetch(
+                f"/assets/{unit}",
                 headers={"project_id": api_key},
+                timeout=30.0
             )
             if resp.status_code != 200:
                 return None

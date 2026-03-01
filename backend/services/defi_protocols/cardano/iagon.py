@@ -14,7 +14,7 @@ import logging
 from typing import List, Optional
 
 from config import BLOCKFROST_API_KEY, BLOCKFROST_BASE_URL
-from services.http_client import get_client
+from services.http_client import get_client, blockfrost_fetch
 from services.defi_protocols.base_adapter import (
     ProtocolAdapter, ProtocolPosition, DetectionMethod, PositionType
 )
@@ -129,10 +129,11 @@ class IagonAdapter(ProtocolAdapter):
                     # Start from next block to avoid re-processing already-counted txs
                     params["from"] = str(from_block + 1)
 
-                response = await client.get(
-                    f"{BLOCKFROST_BASE_URL}/addresses/{address}/transactions",
+                response = await blockfrost_fetch(
+                    f"/addresses/{address}/transactions",
                     headers=headers,
-                    params=params
+                    params=params,
+                    timeout=30.0
                 )
 
                 if response.status_code != 200:
@@ -182,9 +183,10 @@ class IagonAdapter(ProtocolAdapter):
             async def fetch_tx_utxos(tx_hash):
                 async with sem:
                     try:
-                        resp = await client.get(
-                            f"{BLOCKFROST_BASE_URL}/txs/{tx_hash}/utxos",
-                            headers=headers
+                        resp = await blockfrost_fetch(
+                            f"/txs/{tx_hash}/utxos",
+                            headers=headers,
+                            timeout=30.0
                         )
                         if resp.status_code == 200:
                             return resp.json()

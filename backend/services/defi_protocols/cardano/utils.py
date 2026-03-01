@@ -10,7 +10,7 @@ import logging
 from typing import Optional
 
 from config import BLOCKFROST_API_KEY, BLOCKFROST_BASE_URL
-from services.http_client import get_client
+from services.http_client import get_client, blockfrost_fetch
 
 logger = logging.getLogger(__name__)
 
@@ -55,10 +55,10 @@ async def get_stake_address(address: str) -> Optional[str]:
     """
     try:
         headers = {"project_id": BLOCKFROST_API_KEY}
-        client = get_client("blockfrost", timeout=30.0)
-        response = await client.get(
-            f"{BLOCKFROST_BASE_URL}/addresses/{address}",
-            headers=headers
+        response = await blockfrost_fetch(
+            f"/addresses/{address}",
+            headers=headers,
+            timeout=30.0
         )
         if response.status_code == 200:
             data = response.json()
@@ -80,12 +80,11 @@ async def check_token_in_wallet(address: str, policy_id: str) -> list:
     """
     try:
         headers = {"project_id": BLOCKFROST_API_KEY}
-        client = get_client("blockfrost", timeout=30.0)
         page = 1
         matched = []
         while True:
-            response = await client.get(
-                f"{BLOCKFROST_BASE_URL}/addresses/{address}/assets",
+            response = await blockfrost_fetch(
+                f"/addresses/{address}/assets",
                 headers=headers,
                 params={"page": page, "count": 100},
                 timeout=30.0,
@@ -132,12 +131,11 @@ async def get_wallet_utxos_at_script(
     """
     try:
         headers = {"project_id": BLOCKFROST_API_KEY}
-        client = get_client("blockfrost", timeout=30.0)
         page = 1
         matched_utxos = []
         while True:
-            response = await client.get(
-                f"{BLOCKFROST_BASE_URL}/addresses/{script_address}/utxos",
+            response = await blockfrost_fetch(
+                f"/addresses/{script_address}/utxos",
                 headers=headers,
                 params={"page": page, "count": 100},
                 timeout=30.0,

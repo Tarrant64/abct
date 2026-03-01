@@ -5,7 +5,7 @@ Provides a persistent pool of httpx.AsyncClient instances with connection keep-a
 retry logic with exponential backoff, and graceful shutdown.
 
 Usage:
-    from services.http_client import get_client, fetch_with_retry
+    from services.http_client import get_client, fetch_with_retry, blockfrost_fetch
 
     # Get a persistent client (created once, reused across calls)
     client = get_client("coingecko", timeout=30.0)
@@ -13,6 +13,9 @@ Usage:
 
     # With automatic retry on transient failures
     response = await fetch_with_retry(client, "GET", "https://api.coingecko.com/api/v3/simple/price", params={...})
+
+    # Blockfrost with automatic RYO -> external fallback
+    response = await blockfrost_fetch("/addresses/{address}", headers={"project_id": key})
 """
 
 import httpx
@@ -125,6 +128,66 @@ async def fetch_with_retry(
     if last_exc:
         raise last_exc
     raise RuntimeError("fetch_with_retry: unexpected state")
+
+
+_FALLBACK_STATUSES = {500, 502, 503, 504}
+
+
+async def blockfrost_fetch(
+    path: str,
+    *,
+    method: str = "GET",
+    timeout: float = 30.0,
+    **kwargs,
+) -> httpx.Response:
+    """
+    Make a Blockfrost API request with automatic fallback from internal RYO
+    to external Blockfrost.io.
+
+    Tries BLOCKFROST_BASE_URL first. On connection error, timeout, or 5xx,
+    retries the same request against BLOCKFROST_EXTERNAL_URL.
+
+    Args:
+        path: API path (e.g. "/addresses/{addr}"). Must start with "/".
+        method: HTTP method (default GET).
+        timeout: Request timeout in seconds.
+        **kwargs: Additional keyword arguments passed to client.request()
+            (headers, params, json, etc.).
+
+    Returns:
+        httpx.Response from whichever endpoint succeeded (or the last failure).
+    """
+    from config import BLOCKFROST_BASE_URL, BLOCKFROST_EXTERNAL_URL
+
+    client = get_client("blockfrost", timeout=timeout)
+    primary_url = f"{BLOCKFROST_BASE_URL}{path}"
+
+    # Try primary (internal RYO)
+    try:
+        response = await client.request(method, primary_url, timeout=timeout, **kwargs)
+        if response.status_code not in _FALLBACK_STATUSES:
+            return response
+        # 5xx from primary — fall through to external
+        logger.warning(
+            f"Blockfrost primary returned {response.status_code} for {path}, "
+            f"falling back to external"
+        )
+    except (httpx.ConnectError, httpx.ReadTimeout, httpx.WriteTimeout,
+            httpx.PoolTimeout, httpx.ConnectTimeout) as exc:
+        logger.warning(
+            f"Blockfrost primary {type(exc).__name__} for {path}, "
+            f"falling back to external"
+        )
+
+    # If primary == external, no point retrying the same URL
+    if BLOCKFROST_BASE_URL == BLOCKFROST_EXTERNAL_URL:
+        # Re-raise or return the failed response
+        # Try once more with retry logic
+        return await client.request(method, primary_url, timeout=timeout, **kwargs)
+
+    # Try external fallback
+    external_url = f"{BLOCKFROST_EXTERNAL_URL}{path}"
+    return await client.request(method, external_url, timeout=timeout, **kwargs)
 
 
 async def close_all():

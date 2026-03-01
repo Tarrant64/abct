@@ -9,7 +9,7 @@ from typing import Dict, Any, Optional
 
 from engine.models import ChainId
 from engine.hydration.base import TxHydrator
-from services.http_client import get_client, fetch_with_retry
+from services.http_client import get_client, fetch_with_retry, blockfrost_fetch
 from services.api_key_manager import APIKeyManager
 from config import BLOCKFROST_BASE_URL
 
@@ -27,13 +27,13 @@ class CardanoHydrator(TxHydrator):
         if not api_key:
             return None
 
-        client = get_client("blockfrost", timeout=30.0)
         headers = {"project_id": api_key}
 
         # Fetch transaction metadata
-        tx_resp = await fetch_with_retry(
-            client, "GET", f"{BLOCKFROST_BASE_URL}/txs/{tx_id}",
+        tx_resp = await blockfrost_fetch(
+            f"/txs/{tx_id}",
             headers=headers,
+            timeout=30.0
         )
         if tx_resp.status_code != 200:
             logger.warning(f"Blockfrost tx detail error for {tx_id[:16]}...: HTTP {tx_resp.status_code}")
@@ -41,9 +41,10 @@ class CardanoHydrator(TxHydrator):
         tx_data = tx_resp.json()
 
         # Fetch UTXO details
-        utxo_resp = await fetch_with_retry(
-            client, "GET", f"{BLOCKFROST_BASE_URL}/txs/{tx_id}/utxos",
+        utxo_resp = await blockfrost_fetch(
+            f"/txs/{tx_id}/utxos",
             headers=headers,
+            timeout=30.0
         )
         if utxo_resp.status_code != 200:
             logger.warning(f"Blockfrost utxo error for {tx_id[:16]}...: HTTP {utxo_resp.status_code}")

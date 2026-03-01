@@ -11,7 +11,7 @@ from typing import List
 
 from engine.models import AccountSubject, ChainId, AccountType
 from engine.expansion.base import AccountExpander
-from services.http_client import get_client, fetch_with_retry
+from services.http_client import get_client, fetch_with_retry, blockfrost_fetch
 from services.api_key_manager import APIKeyManager
 from config import BLOCKFROST_BASE_URL
 
@@ -43,14 +43,13 @@ class CardanoExpander(AccountExpander):
                     logger.warning("No Blockfrost API key for Cardano expansion")
                     return subjects
 
-                client = get_client("blockfrost", timeout=30.0)
                 page = 1
                 while True:
-                    resp = await fetch_with_retry(
-                        client, "GET",
-                        f"{BLOCKFROST_BASE_URL}/accounts/{address}/addresses",
+                    resp = await blockfrost_fetch(
+                        f"/accounts/{address}/addresses",
                         params={"count": 100, "page": page},
                         headers={"project_id": api_key},
+                        timeout=30.0
                     )
                     if resp.status_code != 200:
                         break
@@ -88,11 +87,10 @@ class CardanoExpander(AccountExpander):
             try:
                 api_key = await _blockfrost_keys.get_api_key()
                 if api_key:
-                    client = get_client("blockfrost", timeout=30.0)
-                    resp = await fetch_with_retry(
-                        client, "GET",
-                        f"{BLOCKFROST_BASE_URL}/addresses/{address}",
+                    resp = await blockfrost_fetch(
+                        f"/addresses/{address}",
                         headers={"project_id": api_key},
+                        timeout=30.0
                     )
                     if resp.status_code == 200:
                         data = resp.json()

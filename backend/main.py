@@ -340,6 +340,91 @@ async def lifespan(app: FastAPI):
             # Mark overall ready once NFT prices are done (last task)
             startup_status["ready"] = True
 
+    # --- Blockfrost RYO health check on startup ---
+    async def _check_blockfrost_ryo_health():
+        """Test RYO node connectivity on startup, log result."""
+        from config import BLOCKFROST_BASE_URL, BLOCKFROST_EXTERNAL_URL
+        if BLOCKFROST_BASE_URL == BLOCKFROST_EXTERNAL_URL:
+            logger.info("Blockfrost: using external API (no RYO configured)")
+            return
+        try:
+            from services.http_client import get_client
+            client = get_client("blockfrost", timeout=10.0)
+            resp = await asyncio.wait_for(
+                client.get(f"{BLOCKFROST_BASE_URL}/health", timeout=10.0),
+                timeout=15.0
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                is_synced = data.get("is_syncing") is False if "is_syncing" in data else True
+                logger.info(
+                    f"Blockfrost RYO health OK (status={resp.status_code}, "
+                    f"synced={is_synced}, url={BLOCKFROST_BASE_URL})"
+                )
+                await log_service.info("blockfrost_ryo", f"RYO node healthy (synced={is_synced})")
+            else:
+                logger.warning(f"Blockfrost RYO health check returned HTTP {resp.status_code}")
+                await log_service.warning("blockfrost_ryo", f"RYO node returned HTTP {resp.status_code}")
+        except Exception as e:
+            logger.warning(f"Blockfrost RYO health check failed: {e} — external fallback will be used")
+            await log_service.warning("blockfrost_ryo", f"RYO node unreachable: {e}")
+
+    # --- Periodic Blockfrost RYO sync lag detection ---
+    async def _periodic_blockfrost_sync_check():
+        """Every 10 minutes, compare RYO /blocks/latest with external to detect sync lag."""
+        from config import BLOCKFROST_BASE_URL, BLOCKFROST_EXTERNAL_URL
+        if BLOCKFROST_BASE_URL == BLOCKFROST_EXTERNAL_URL:
+            return  # No RYO configured, nothing to compare
+
+        from services.http_client import get_client
+        from database import get_api_key
+
+        MAX_LAG_BLOCKS = 5  # Warn if RYO is more than 5 blocks behind
+
+        while True:
+            try:
+                await asyncio.sleep(600)  # Check every 10 minutes
+                client = get_client("blockfrost", timeout=15.0)
+
+                # Get latest block from RYO
+                ryo_resp = await client.get(
+                    f"{BLOCKFROST_BASE_URL}/blocks/latest", timeout=10.0
+                )
+                if ryo_resp.status_code != 200:
+                    logger.warning(f"Blockfrost RYO /blocks/latest returned {ryo_resp.status_code}")
+                    continue
+                ryo_block = ryo_resp.json().get("height", 0)
+
+                # Get latest block from external
+                api_key = await get_api_key("blockfrost")
+                ext_headers = {"project_id": api_key} if api_key else {}
+                ext_resp = await client.get(
+                    f"{BLOCKFROST_EXTERNAL_URL}/blocks/latest",
+                    headers=ext_headers,
+                    timeout=10.0
+                )
+                if ext_resp.status_code != 200:
+                    continue
+                ext_block = ext_resp.json().get("height", 0)
+
+                lag = ext_block - ryo_block
+                if lag > MAX_LAG_BLOCKS:
+                    logger.warning(
+                        f"Blockfrost RYO sync lag: {lag} blocks behind "
+                        f"(RYO={ryo_block}, external={ext_block})"
+                    )
+                    await log_service.warning(
+                        "blockfrost_ryo",
+                        f"RYO node {lag} blocks behind (RYO={ryo_block}, ext={ext_block})"
+                    )
+                else:
+                    logger.debug(f"Blockfrost RYO sync OK: lag={lag} blocks")
+
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.debug(f"Blockfrost sync check error: {e}")
+
     # Track all background tasks for graceful cancellation on shutdown
     _background_tasks = []
 
@@ -347,6 +432,8 @@ async def lifespan(app: FastAPI):
     _background_tasks.append(asyncio.create_task(warm_caches_background()))
     _background_tasks.append(asyncio.create_task(collect_nft_prices_background()))
     _background_tasks.append(asyncio.create_task(_run_health_checks_background()))
+    _background_tasks.append(asyncio.create_task(_check_blockfrost_ryo_health()))
+    _background_tasks.append(asyncio.create_task(_periodic_blockfrost_sync_check()))
     _background_tasks.append(asyncio.create_task(_seed_defi_logos_background()))
 
     # Warm token metadata cache (background)

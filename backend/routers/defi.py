@@ -439,11 +439,10 @@ async def debug_iagon_staking(address: str, user_id: int = Depends(verify_sessio
         IAGON_OPERATOR_STAKING_ADDRESS, IAGON_DELEGATED_STAKING_ADDRESS,
         IAGON_BATCHER_ADDRESS
     )
-    from services.http_client import get_client
-    from config import BLOCKFROST_API_KEY, BLOCKFROST_BASE_URL
+    from services.http_client import blockfrost_fetch
+    from config import BLOCKFROST_API_KEY
 
     headers = {"project_id": BLOCKFROST_API_KEY}
-    client = get_client("blockfrost", timeout=15.0)
 
     # Check scan state cache
     scan_state = await get_cache(f"iagon_scan_state_{address}")
@@ -452,10 +451,11 @@ async def debug_iagon_staking(address: str, user_id: int = Depends(verify_sessio
     sample_txs = []
     iag_related_txs = []
     for page in [1, 2]:
-        resp = await client.get(
-            f"{BLOCKFROST_BASE_URL}/addresses/{address}/transactions",
+        resp = await blockfrost_fetch(
+            f"/addresses/{address}/transactions",
             headers=headers,
-            params={"count": 100, "page": page, "order": "desc"}
+            params={"count": 100, "page": page, "order": "desc"},
+            timeout=15.0
         )
         if resp.status_code == 200:
             sample_txs.extend(resp.json())
@@ -466,7 +466,7 @@ async def debug_iagon_staking(address: str, user_id: int = Depends(verify_sessio
     sem = asyncio.Semaphore(5)
     async def check_tx(tx):
         async with sem:
-            r = await client.get(f"{BLOCKFROST_BASE_URL}/txs/{tx['tx_hash']}/utxos", headers=headers)
+            r = await blockfrost_fetch(f"/txs/{tx['tx_hash']}/utxos", headers=headers, timeout=15.0)
             if r.status_code != 200:
                 return None
             data = r.json()

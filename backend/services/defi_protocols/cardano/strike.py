@@ -13,7 +13,7 @@ import logging
 from typing import List, Optional
 
 from config import BLOCKFROST_API_KEY, BLOCKFROST_BASE_URL
-from services.http_client import get_client
+from services.http_client import get_client, blockfrost_fetch
 from services.defi_protocols.base_adapter import (
     ProtocolAdapter, ProtocolPosition, DetectionMethod, PositionType
 )
@@ -68,10 +68,11 @@ class StrikeAdapter(ProtocolAdapter):
             async def fetch_page(pg):
                 async with sem:
                     try:
-                        resp = await client.get(
-                            f"{BLOCKFROST_BASE_URL}/addresses/{STRIKE_STAKING_ADDRESS}/utxos",
+                        resp = await blockfrost_fetch(
+                            f"/addresses/{STRIKE_STAKING_ADDRESS}/utxos",
                             headers=headers,
-                            params={"count": 100, "page": pg}
+                            params={"count": 100, "page": pg},
+                            timeout=15.0
                         )
                         if resp.status_code == 200:
                             return resp.json()
@@ -189,10 +190,11 @@ class StrikeAdapter(ProtocolAdapter):
             accumulated_rewards = 0
 
             # Check for pending rewards in the staking UTXOs datum
-            response = await client.get(
-                f"{BLOCKFROST_BASE_URL}/addresses/{STRIKE_STAKING_ADDRESS}/utxos",
+            response = await blockfrost_fetch(
+                f"/addresses/{STRIKE_STAKING_ADDRESS}/utxos",
                 headers=headers,
-                params={"count": 100}
+                params={"count": 100},
+                timeout=15.0
             )
 
             if response.status_code == 200:

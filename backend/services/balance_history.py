@@ -34,7 +34,7 @@ from database import (
 )
 from services.api_key_manager import APIKeyManager
 from services.cardano import cardano_service
-from services.http_client import get_client
+from services.http_client import get_client, blockfrost_fetch
 from services.logging_service import get_logging_service
 
 logger = logging.getLogger(__name__)
@@ -307,13 +307,13 @@ class BalanceHistoryService:
             return {}
 
         headers = {"project_id": blockfrost_key}
-        client = get_client("blockfrost", timeout=30.0)
 
         # Step 1: Get current on-chain balance (anchor point)
         try:
-            addr_response = await client.get(
-                f"{BLOCKFROST_BASE_URL}/addresses/{address}",
-                headers=headers
+            addr_response = await blockfrost_fetch(
+                f"/addresses/{address}",
+                headers=headers,
+                timeout=30.0
             )
             if addr_response.status_code == 404:
                 await log_service.info("balance_history", f"Cardano address not found: {address[:20]}...")
@@ -344,10 +344,11 @@ class BalanceHistoryService:
             if self._cancel_flags.get(hash(address) % 1000):
                 break
             try:
-                response = await client.get(
-                    f"{BLOCKFROST_BASE_URL}/addresses/{address}/transactions",
+                response = await blockfrost_fetch(
+                    f"/addresses/{address}/transactions",
                     headers=headers,
-                    params={"count": 100, "page": page, "order": "asc"}
+                    params={"count": 100, "page": page, "order": "asc"},
+                    timeout=30.0
                 )
                 if response.status_code == 404:
                     break
@@ -407,15 +408,17 @@ class BalanceHistoryService:
             tx_date = tx_info['_date']
 
             try:
-                utxo_response = await client.get(
-                    f"{BLOCKFROST_BASE_URL}/txs/{tx_hash}/utxos",
-                    headers=headers
+                utxo_response = await blockfrost_fetch(
+                    f"/txs/{tx_hash}/utxos",
+                    headers=headers,
+                    timeout=30.0
                 )
                 if utxo_response.status_code == 429:
                     await asyncio.sleep(10)
-                    utxo_response = await client.get(
-                        f"{BLOCKFROST_BASE_URL}/txs/{tx_hash}/utxos",
-                        headers=headers
+                    utxo_response = await blockfrost_fetch(
+                        f"/txs/{tx_hash}/utxos",
+                        headers=headers,
+                        timeout=30.0
                     )
                 if utxo_response.status_code != 200:
                     await asyncio.sleep(0.3)

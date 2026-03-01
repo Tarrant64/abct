@@ -12,7 +12,7 @@ import logging
 from typing import List, Optional
 
 from config import BLOCKFROST_API_KEY, BLOCKFROST_BASE_URL
-from services.http_client import get_client
+from services.http_client import get_client, blockfrost_fetch
 from services.defi_protocols.base_adapter import (
     ProtocolAdapter, ProtocolPosition, DetectionMethod, PositionType
 )
@@ -96,10 +96,11 @@ class SurfAdapter(ProtocolAdapter):
                 logger.debug("[Surf] No staking address configured for on-chain fallback")
                 return []
 
-            response = await client.get(
-                f"{BLOCKFROST_BASE_URL}/addresses/{SURF_STAKING_ADDRESS}/utxos",
+            response = await blockfrost_fetch(
+                f"/addresses/{SURF_STAKING_ADDRESS}/utxos",
                 headers=headers,
-                params={"count": 100}
+                params={"count": 100},
+                timeout=30.0
             )
 
             if response.status_code != 200:
