@@ -49,6 +49,11 @@ let nftCounts = { cardano: 0, ethereum: 0, solana: 0, polygon: 0, base: 0, algor
 let _govRenderData = null; // { defiData, allStaking } for lazy governance tab
 let _govRendered = false;
 
+// Display lock: prevents intermediate portfolio total flicker during load.
+// When true, updateTotalPortfolioValue() still computes values but skips DOM writes.
+// Unlocked only after all background data has loaded (Promise.allSettled).
+let _portfolioDisplayLocked = false;
+
 // NFT chain selection
 let currentNFTChain = 'cardano';
 
@@ -594,6 +599,8 @@ function formatPriceStr(price) {
 // Debounced updateTotalPortfolioValue — coalesces rapid successive calls
 let _updateTotalTimer = null;
 function scheduleUpdateTotalPortfolioValue() {
+    // Skip entirely when display is locked — the final unlock will call updateTotalPortfolioValue() directly
+    if (_portfolioDisplayLocked) return;
     if (_updateTotalTimer) clearTimeout(_updateTotalTimer);
     _updateTotalTimer = setTimeout(() => {
         _updateTotalTimer = null;
@@ -609,22 +616,25 @@ async function loadPortfolioInstant() {
         const data = await response.json();
         if (!data.has_positions) return false;
 
-        // Update total display
-        const totalValueEl = document.getElementById('totalPortfolioValue');
-        if (totalValueEl) setSafeHTML(totalValueEl, formatUSDBlur(data.total_usd));
+        // Skip DOM updates when display is locked (cached value is already shown)
+        if (!_portfolioDisplayLocked) {
+            // Update total display
+            const totalValueEl = document.getElementById('totalPortfolioValue');
+            if (totalValueEl) setSafeHTML(totalValueEl, formatUSDBlur(data.total_usd));
 
-        // Update breakdown
-        const bd = data.breakdown || {};
-        const liquidTotal = (bd.chain || 0) + (bd.exchange || 0) + (bd.tracked_token || 0) + (bd.custom_token || 0);
-        const stakedTotal = (bd.staking || 0) + (bd.defi || 0);
-        const nftsTotal = bd.nft || 0;
+            // Update breakdown
+            const bd = data.breakdown || {};
+            const liquidTotal = (bd.chain || 0) + (bd.exchange || 0) + (bd.tracked_token || 0) + (bd.custom_token || 0);
+            const stakedTotal = (bd.staking || 0) + (bd.defi || 0);
+            const nftsTotal = bd.nft || 0;
 
-        const liquidEl = document.getElementById('breakdownLiquid');
-        const stakedEl = document.getElementById('breakdownStaked');
-        const nftsEl = document.getElementById('breakdownNfts');
-        if (liquidEl) liquidEl.textContent = formatUSD(liquidTotal);
-        if (stakedEl) stakedEl.textContent = formatUSD(stakedTotal);
-        if (nftsEl) nftsEl.textContent = formatUSD(nftsTotal);
+            const liquidEl = document.getElementById('breakdownLiquid');
+            const stakedEl = document.getElementById('breakdownStaked');
+            const nftsEl = document.getElementById('breakdownNfts');
+            if (liquidEl) liquidEl.textContent = formatUSD(liquidTotal);
+            if (stakedEl) stakedEl.textContent = formatUSD(stakedTotal);
+            if (nftsEl) nftsEl.textContent = formatUSD(nftsTotal);
+        }
 
         // Cache for next visit
         if (data.total_usd > 0) {
@@ -717,6 +727,10 @@ function updateTotalPortfolioValue() {
 
     // Total portfolio value = sum of breakdown categories
     const totalValue = liquidTotal + stakedTotal + nftsTotal;
+
+    // When display is locked, skip all DOM writes to prevent flicker.
+    // The final unlock call will invoke this function again for a clean update.
+    if (_portfolioDisplayLocked) return;
 
     // Update total display
     setSafeHTML(totalValueEl, formatUSDBlur(totalValue));
@@ -10305,6 +10319,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Show last known portfolio total instantly (before any API calls)
     restoreCachedPortfolioTotal();
 
+    // Lock the portfolio display on overview page: after the cached value is shown,
+    // prevent intermediate updates from flickering the total. Unlocked after all data loads.
+    if (document.getElementById('totalPortfolioValue')) {
+        _portfolioDisplayLocked = true;
+        // Safety timeout: force-unlock after 30s in case Promise.allSettled never resolves
+        setTimeout(() => {
+            if (_portfolioDisplayLocked) {
+                console.warn('[DisplayLock] Force-unlocking after 30s timeout');
+                _portfolioDisplayLocked = false;
+                updateTotalPortfolioValue();
+            }
+        }, 30000);
+    }
+
     // Check if demo account needs population (non-blocking)
     checkDemoPopulation();
 
@@ -10406,6 +10434,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             instantSuccess ? Promise.resolve() : loadPortfolioTotals()
         ]).then(() => {
             console.log('[Overview] Background data loading complete');
+            _portfolioDisplayLocked = false;  // Unlock display — allow DOM updates now
             initCardanoPriceStream();
             updateTotalPortfolioValue();  // Final recalculation — direct, not debounced
             checkV2CollectionStatus();

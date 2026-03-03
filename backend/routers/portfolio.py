@@ -1019,9 +1019,9 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
     summary['last_updated'] = datetime.now().isoformat()
     await set_cache(cache_key, summary, PORTFOLIO_CACHE_TTL, user_id=user_id)
 
-    # Fire-and-forget: write chain positions to portfolio_positions table
+    # Fire-and-forget: write chain + staking + DeFi positions to portfolio_positions table
     try:
-        from database import upsert_portfolio_positions_batch
+        from database import upsert_portfolio_positions_batch, get_cache as _pp_get_cache, get_all_wallets as _pp_get_wallets
         _pp_chain_map = {
             'cardano':   ('ADA', 'total_ada'),
             'bitcoin':   ('BTC', 'total_btc'),
@@ -1055,10 +1055,68 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
                     'source_type': 'chain', 'source_detail': chain,
                     'chain': chain, 'last_price_usd': price,
                 })
+
+        # Staking positions from cached staking data
+        try:
+            _pp_wallets = await _pp_get_wallets(user_id=user_id)
+            _pp_cardano_addrs = [w['address'] for w in _pp_wallets if w['blockchain'] == 'cardano']
+            for addr in _pp_cardano_addrs:
+                stk_cache = await _pp_get_cache(f"staking_positions_{addr}", user_id=user_id)
+                if not stk_cache:
+                    stk_cache = await _pp_get_cache(f"staking_positions_{addr}")
+                if not stk_cache or not isinstance(stk_cache, dict) or not stk_cache.get('protocols'):
+                    continue
+                for protocol_name, protocol_data in stk_cache['protocols'].items():
+                    for stake in (protocol_data.get('staked') or []):
+                        token = (stake.get('token') or 'ADA').upper()
+                        amount = float(stake.get('amount', 0))
+                        if amount > 0:
+                            price_data = all_prices.get(token, {})
+                            price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
+                            pp_rows.append({
+                                'user_id': user_id, 'symbol': token, 'quantity': amount,
+                                'source_type': 'staking', 'source_detail': protocol_name,
+                                'chain': 'cardano', 'last_price_usd': price,
+                            })
+                    reward_token = protocol_data.get('reward_token')
+                    pending_rewards = float(protocol_data.get('pending_rewards', 0))
+                    if reward_token and pending_rewards > 0:
+                        reward_token_upper = reward_token.upper()
+                        price_data = all_prices.get(reward_token_upper, {})
+                        price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
+                        pp_rows.append({
+                            'user_id': user_id, 'symbol': reward_token_upper, 'quantity': pending_rewards,
+                            'source_type': 'staking', 'source_detail': f"{protocol_name}_rewards",
+                            'chain': 'cardano', 'last_price_usd': price,
+                        })
+        except Exception as e:
+            logger.debug(f"Portfolio positions staking write failed: {e}")
+
+        # DeFi positions from cached DeFi summary
+        try:
+            defi_cache = await _pp_get_cache(f"defi_summary_{user_id}", user_id=user_id)
+            if not defi_cache:
+                defi_cache = await _pp_get_cache("defi_summary", user_id=user_id)
+            if defi_cache and defi_cache.get('all_positions'):
+                for pos in defi_cache['all_positions']:
+                    token = (pos.get('token') or '').upper()
+                    quantity = float(pos.get('quantity', 0))
+                    if token and quantity > 0:
+                        price_data = all_prices.get(token, {})
+                        price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
+                        protocol = pos.get('protocol', 'defi')
+                        pp_rows.append({
+                            'user_id': user_id, 'symbol': token, 'quantity': quantity,
+                            'source_type': 'defi', 'source_detail': protocol,
+                            'chain': 'cardano', 'last_price_usd': price,
+                        })
+        except Exception as e:
+            logger.debug(f"Portfolio positions defi write failed: {e}")
+
         if pp_rows:
             await upsert_portfolio_positions_batch(pp_rows)
     except Exception as e:
-        logger.debug(f"Portfolio positions chain write failed: {e}")
+        logger.debug(f"Portfolio positions write failed: {e}")
 
     return summary
 

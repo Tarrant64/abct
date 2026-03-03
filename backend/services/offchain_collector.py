@@ -365,6 +365,65 @@ class OffchainCollector:
                         'chain': chain, 'last_price_usd': price,
                     })
 
+            # Staking positions from cached staking data
+            try:
+                from database import get_all_wallets as _gaw
+                wallets = await _gaw(user_id=user_id)
+                cardano_addrs = [w['address'] for w in wallets if w['blockchain'] == 'cardano']
+                for addr in cardano_addrs:
+                    stk_cache = await _gc(f"staking_positions_{addr}", user_id=user_id)
+                    if not stk_cache:
+                        stk_cache = await _gc(f"staking_positions_{addr}")
+                    if not stk_cache or not isinstance(stk_cache, dict) or not stk_cache.get('protocols'):
+                        continue
+                    for protocol_name, protocol_data in stk_cache['protocols'].items():
+                        for stake in (protocol_data.get('staked') or []):
+                            token = (stake.get('token') or 'ADA').upper()
+                            amount = float(stake.get('amount', 0))
+                            if amount > 0:
+                                price_data = prices.get(token, {})
+                                price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
+                                pp_rows.append({
+                                    'user_id': user_id, 'symbol': token, 'quantity': amount,
+                                    'source_type': 'staking', 'source_detail': protocol_name,
+                                    'chain': 'cardano', 'last_price_usd': price,
+                                })
+                        # Include pending rewards as a separate position
+                        reward_token = protocol_data.get('reward_token')
+                        pending_rewards = float(protocol_data.get('pending_rewards', 0))
+                        if reward_token and pending_rewards > 0:
+                            reward_token_upper = reward_token.upper()
+                            price_data = prices.get(reward_token_upper, {})
+                            price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
+                            pp_rows.append({
+                                'user_id': user_id, 'symbol': reward_token_upper, 'quantity': pending_rewards,
+                                'source_type': 'staking', 'source_detail': f"{protocol_name}_rewards",
+                                'chain': 'cardano', 'last_price_usd': price,
+                            })
+            except Exception as e:
+                logger.debug(f"Offchain collector: staking portfolio positions failed: {e}")
+
+            # DeFi positions from cached DeFi summary
+            try:
+                defi_cache = await _gc(f"defi_summary_{user_id}", user_id=user_id)
+                if not defi_cache:
+                    defi_cache = await _gc("defi_summary", user_id=user_id)
+                if defi_cache and defi_cache.get('all_positions'):
+                    for pos in defi_cache['all_positions']:
+                        token = (pos.get('token') or '').upper()
+                        quantity = float(pos.get('quantity', 0))
+                        if token and quantity > 0:
+                            price_data = prices.get(token, {})
+                            price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
+                            protocol = pos.get('protocol', 'defi')
+                            pp_rows.append({
+                                'user_id': user_id, 'symbol': token, 'quantity': quantity,
+                                'source_type': 'defi', 'source_detail': protocol,
+                                'chain': 'cardano', 'last_price_usd': price,
+                            })
+            except Exception as e:
+                logger.debug(f"Offchain collector: defi portfolio positions failed: {e}")
+
             if pp_rows:
                 await upsert_portfolio_positions_batch(pp_rows)
                 logger.debug(f"Offchain collector: wrote {len(pp_rows)} portfolio positions for user {user_id}")
