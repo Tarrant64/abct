@@ -251,7 +251,7 @@ async def _run_compute(user_id: int, exchange: Optional[str], include_wallets: b
         _compute_progress[user_id] = {
             "stage": "error",
             "progress": 0,
-            "details": str(e)
+            "details": "Computation failed. Check server logs."
         }
         logger.error(f"Error computing P&L: {e}")
 
@@ -314,7 +314,7 @@ async def _run_wallet_compute(user_id: int, blockchain: Optional[str]):
         _compute_progress[user_id] = {
             "stage": "error",
             "progress": 0,
-            "details": str(e)
+            "details": "Computation failed. Check server logs."
         }
         logger.error(f"Error computing wallet P&L: {e}")
 

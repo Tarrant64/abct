@@ -131,8 +131,8 @@ async def _background_fetch_task(user_id: int, days: int, blockchain: Optional[s
         import traceback as tb_mod
         logger.error(f"Background fetch failed for user {user_id}: {e}")
         background_tasks[user_id]['status'] = 'failed'
-        background_tasks[user_id]['message'] = f'Error: {str(e)}'
-        background_tasks[user_id]['error'] = str(e)
+        background_tasks[user_id]['message'] = 'Transaction fetch failed. Check server logs.'
+        background_tasks[user_id]['error'] = 'internal_error'
         # Surface to system logs page
         try:
             from services.logging_service import get_logging_service
@@ -253,7 +253,7 @@ async def refresh_transaction_history(
 
     except Exception as e:
         logger.error(f"Error refreshing transaction history: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Transaction refresh failed")
 
 
 @router.post("/refresh/full")
@@ -329,8 +329,8 @@ async def _background_full_resync_task(user_id: int, days: int, blockchain: Opti
         import traceback as tb_mod
         logger.error(f"Full resync failed for user {user_id}: {e}")
         background_tasks[user_id]['status'] = 'failed'
-        background_tasks[user_id]['message'] = f'Full resync error: {str(e)}'
-        background_tasks[user_id]['error'] = str(e)
+        background_tasks[user_id]['message'] = 'Full resync failed. Check server logs.'
+        background_tasks[user_id]['error'] = 'internal_error'
         try:
             from services.logging_service import get_logging_service
             svc = get_logging_service()

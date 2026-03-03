@@ -2208,9 +2208,6 @@ async def get_asset_wallet_breakdown(
         'total_value_usd': total_value,
         'sources': sources,
     }
-    if debug_info:
-        result['_debug'] = debug_info
-
     await set_cache(cache_key, result, MOBILE_CACHE_TTL, user_id=user_id)
     return result
 
