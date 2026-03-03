@@ -473,42 +473,71 @@ async def get_flow_summary(
             cursor = await db.execute(sql, params)
             rows = await cursor.fetchall()
 
-            for row in rows:
-                chain = row["blockchain"]
-                direction = row["direction"]
-                raw_amount = row["amount_val"] or 0
-                amount = _normalize_amount(raw_amount, chain, row["token_symbol"] or "")
-                from_addr = row["from_address"] or ""
-                to_addr = row["to_address"] or ""
+        if not rows:
+            rows = []
 
-                # Determine counterparty
-                counterparty = to_addr if direction == "sent" else from_addr
-                norm_cp = counterparty.lower() if chain.lower() != "cardano" else counterparty
+        # Collect unique token symbols for batch price lookup
+        symbols = set()
+        for row in rows:
+            sym = row["token_symbol"]
+            if sym:
+                symbols.add(sym.upper())
 
-                if counterparty:
-                    unique_counterparties.add((norm_cp, chain))
+        # Batch fetch current prices (same pattern as get_large_transactions)
+        prices = {}
+        if symbols:
+            try:
+                prices = await pricing_service.get_prices(list(symbols))
+            except Exception as e:
+                logger.debug(f"Price fetch for flow summary failed: {e}")
 
-                # Chain aggregation
-                if chain not in chains:
-                    chains[chain] = {"sent": 0.0, "received": 0.0, "tx_count": 0}
-                chains[chain]["tx_count"] += 1
+        for row in rows:
+            chain = row["blockchain"]
+            direction = row["direction"]
+            sym = (row["token_symbol"] or "").upper()
+            raw_amount = row["amount_val"] or 0
+            amount = _normalize_amount(raw_amount, chain, sym)
+            from_addr = row["from_address"] or ""
+            to_addr = row["to_address"] or ""
 
+            # Convert to USD
+            price = prices.get(sym, 0)
+            # Stablecoins default to $1 (same as large-transactions)
+            if sym in ("USDC", "USDT", "DAI", "BUSD") and price == 0:
+                price = 1.0
+            usd_amount = amount * price
+
+            # Determine counterparty
+            counterparty = to_addr if direction == "sent" else from_addr
+            norm_cp = counterparty.lower() if chain.lower() != "cardano" else counterparty
+
+            if counterparty:
+                unique_counterparties.add((norm_cp, chain))
+
+            # Self-transfer detection
+            is_self = norm_cp in own_addresses
+            if is_self:
+                self_transfers += 1
+
+            # Chain aggregation
+            if chain not in chains:
+                chains[chain] = {"sent": 0.0, "received": 0.0, "tx_count": 0}
+            chains[chain]["tx_count"] += 1
+
+            # Exclude self-transfer amounts from totals and chain breakdown
+            if not is_self:
                 if direction == "sent":
-                    total_sent += amount
-                    chains[chain]["sent"] += amount
+                    total_sent += usd_amount
+                    chains[chain]["sent"] += usd_amount
                     # Check if sending to CEX (deposit)
                     if counterparty and identify_address(counterparty, chain):
                         cex_deposits += 1
                 else:
-                    total_received += amount
-                    chains[chain]["received"] += amount
+                    total_received += usd_amount
+                    chains[chain]["received"] += usd_amount
                     # Check if receiving from CEX (withdrawal)
                     if counterparty and identify_address(counterparty, chain):
                         cex_withdrawals += 1
-
-                # Self-transfer detection
-                if norm_cp in own_addresses:
-                    self_transfers += 1
 
         # Round chain values
         for c in chains:
@@ -548,6 +577,10 @@ async def get_flow_summary(
                         exchange_usd_out += usd
         except Exception as e:
             logger.debug(f"Exchange USD flow query failed: {e}")
+
+        # Incorporate exchange USD flows into overall totals
+        total_received += exchange_usd_in
+        total_sent += exchange_usd_out
 
         result = {
             "total_sent": round(total_sent, 2),
