@@ -118,9 +118,9 @@
                         <select id="daysFilter" onchange="loadTransactions()">
                             <option value="7">Last 7 days</option>
                             <option value="30">Last 30 days</option>
-                            <option value="90" selected>Last 90 days</option>
+                            <option value="90">Last 90 days</option>
                             <option value="365">Last year</option>
-                            <option value="99999">All time</option>
+                            <option value="99999" selected>All time</option>
                         </select>
                     </div>
 
@@ -173,6 +173,9 @@
 
                     <button class="btn btn-primary" onclick="refreshTransactions()" title="Fetch latest transactions from blockchains">
                         &#128260; Refresh
+                    </button>
+                    <button class="btn btn-secondary" onclick="fullResyncTransactions()" title="Full historical resync - fetches ALL transactions back to earliest available">
+                        &#128472; Full Resync
                     </button>
                 </div>
             </section>

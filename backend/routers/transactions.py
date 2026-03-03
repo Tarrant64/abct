@@ -256,6 +256,90 @@ async def refresh_transaction_history(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/refresh/full")
+async def start_full_resync(
+    background_tasks_runner: BackgroundTasks,
+    user_id: int = Depends(verify_session),
+    blockchain: Optional[str] = Query(None, description="Resync specific blockchain only")
+):
+    """
+    Start a full historical resync of all transaction data.
+
+    Unlike /refresh/start, this:
+    - Bypasses incremental logic (fetches ALL transactions, not just newer ones)
+    - Uses higher pagination limits to reach back to 2021+
+    - Resets EVM startblock to 0 for complete history
+    - Uses INSERT OR IGNORE so existing transactions are not duplicated
+
+    This is a long-running operation. Poll /refresh/status for progress.
+    """
+    if user_id in background_tasks and background_tasks[user_id].get('status') == 'running':
+        return {
+            'success': False,
+            'message': 'Transaction fetch already in progress',
+            'task_id': user_id
+        }
+
+    # Use a very large day range to cover all history
+    days = 99999
+
+    background_tasks[user_id] = {
+        'task_id': user_id,
+        'status': 'starting',
+        'message': 'Starting full historical resync...',
+        'started_at': datetime.now().isoformat(),
+        'days': days,
+        'blockchain': blockchain,
+        'is_full_resync': True
+    }
+
+    background_tasks_runner.add_task(
+        _background_full_resync_task, user_id, days, blockchain
+    )
+
+    return {
+        'success': True,
+        'message': 'Full historical resync started',
+        'task_id': user_id
+    }
+
+
+async def _background_full_resync_task(user_id: int, days: int, blockchain: Optional[str]):
+    """Background task for full historical resync."""
+    try:
+        background_tasks[user_id]['status'] = 'running'
+        background_tasks[user_id]['message'] = 'Full resync: fetching all historical transactions...'
+
+        logger.info(f"Full resync started for user {user_id}, blockchain={blockchain}")
+
+        counts = await transaction_history_service.fetch_transactions(
+            user_id, days, blockchain, force_full=True
+        )
+
+        total = sum(counts.values())
+        background_tasks[user_id]['status'] = 'completed'
+        background_tasks[user_id]['message'] = f'Full resync complete: {total} transactions'
+        background_tasks[user_id]['counts'] = counts
+        background_tasks[user_id]['total_fetched'] = total
+        background_tasks[user_id]['completed_at'] = datetime.now().isoformat()
+
+        logger.info(f"Full resync completed for user {user_id}: {counts}")
+
+    except Exception as e:
+        import traceback as tb_mod
+        logger.error(f"Full resync failed for user {user_id}: {e}")
+        background_tasks[user_id]['status'] = 'failed'
+        background_tasks[user_id]['message'] = f'Full resync error: {str(e)}'
+        background_tasks[user_id]['error'] = str(e)
+        try:
+            from services.logging_service import get_logging_service
+            svc = get_logging_service()
+            await svc.error("transactions", f"Full resync failed: {e}",
+                           traceback=tb_mod.format_exc())
+        except Exception:
+            pass
+
+
 @router.post("/refresh/wallets")
 async def start_wallet_refresh(
     background_tasks_runner: BackgroundTasks,

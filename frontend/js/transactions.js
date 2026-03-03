@@ -108,6 +108,41 @@ async function refreshTransactions() {
 }
 
 /**
+ * Full historical resync - fetches ALL transactions from the beginning of time
+ */
+async function fullResyncTransactions() {
+    const blockchain = document.getElementById('blockchainFilter').value;
+
+    if (!confirm('This will fetch ALL historical transactions from your wallets. ' +
+                 'This may take several minutes depending on how many wallets and transactions you have. ' +
+                 'Continue?')) {
+        return;
+    }
+
+    const params = new URLSearchParams({
+        ...(blockchain && { blockchain })
+    });
+
+    try {
+        const response = await authFetch(`/transactions/refresh/full?${params}`, {
+            method: 'POST'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showFetchIndicator('Full resync: fetching all historical transactions...', 'running');
+            startStatusPolling();
+        } else {
+            showStatus(data.message || 'Error starting full resync', 'error');
+        }
+    } catch (error) {
+        console.error('Error starting full resync:', error);
+        showStatus('Failed to start full resync', 'error');
+    }
+}
+
+/**
  * Check fetch status (on page load)
  */
 async function checkFetchStatus() {

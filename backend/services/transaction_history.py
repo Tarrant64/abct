@@ -15,6 +15,7 @@ through the exchanges router as they use different APIs and data models.
 
 import logging
 import json
+import asyncio
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict
 import aiosqlite
@@ -125,7 +126,7 @@ class TransactionHistoryService:
 
             min_time = int((datetime.utcnow() - timedelta(days=days)).timestamp())
             events = await engine_db.get_events(
-                user_id, chain=blockchain, min_time=min_time, limit=5000
+                user_id, chain=blockchain, min_time=min_time, limit=25000
             )
             if not events:
                 chain_label = blockchain or "all chains"
@@ -231,7 +232,8 @@ class TransactionHistoryService:
         user_id: int,
         days: int = 7,
         blockchain: str = None,
-        wallet_ids: List[int] = None
+        wallet_ids: List[int] = None,
+        force_full: bool = False
     ) -> Dict[str, int]:
         """
         Fetch transactions from all wallets for a user.
@@ -244,6 +246,7 @@ class TransactionHistoryService:
             days: Number of days of transaction history
             blockchain: Filter by specific blockchain (None for all)
             wallet_ids: Optional list of wallet IDs to fetch for (None for all)
+            force_full: If True, skip incremental logic and fetch full history
 
         Returns:
             Dict with counts of transactions fetched per blockchain
@@ -325,7 +328,7 @@ class TransactionHistoryService:
                 # For EVM chains: use block-based incremental fetching
                 startblock = 0
                 evm_chains = {'ethereum', 'polygon', 'base', 'bsc', 'arbitrum', 'avalanche'}
-                if chain in evm_chains:
+                if chain in evm_chains and not force_full:
                     highest_block = await self._get_highest_block(user_id, wallet_id, chain)
                     if highest_block:
                         startblock = highest_block + 1
@@ -339,12 +342,14 @@ class TransactionHistoryService:
                     logger.info(f"Existing transactions: newest={newest}, oldest={oldest}")
 
                 transactions = await self._fetch_blockchain_transactions(
-                    chain, address, days, startblock=startblock
+                    chain, address, days, startblock=startblock,
+                    force_full=force_full
                 )
 
                 if transactions:
                     # For non-EVM chains, filter by date (EVM uses startblock instead)
-                    if bounds and chain not in evm_chains:
+                    # Skip this filter during force_full to allow backfilling old data
+                    if bounds and chain not in evm_chains and not force_full:
                         newest_dt = datetime.fromisoformat(bounds['newest']) if isinstance(bounds['newest'], str) else bounds['newest']
 
                         original_count = len(transactions)
@@ -380,7 +385,8 @@ class TransactionHistoryService:
         blockchain: str,
         address: str,
         days: int,
-        startblock: int = 0
+        startblock: int = 0,
+        force_full: bool = False
     ) -> List[dict]:
         """
         Fetch transactions from blockchain-specific service.
@@ -390,17 +396,20 @@ class TransactionHistoryService:
             address: Wallet address
             days: Number of days of history
             startblock: Block number to start from (EVM chains only, 0 for full history)
+            force_full: If True, fetch all available history (higher limits)
 
         Returns:
             List of raw transactions from blockchain API
         """
-        # EVM chains support paginated fetching via Etherscan (up to 10k per page).
-        # Non-EVM chains keep the old conservative limit.
         evm_chains = {'ethereum', 'polygon', 'base', 'bsc', 'arbitrum', 'avalanche'}
         if blockchain in evm_chains:
             limit = 10000
         else:
-            limit = min(500, days * 20)
+            # For full backfill, use a generous limit; otherwise use the old formula
+            if force_full:
+                limit = 5000
+            else:
+                limit = min(500, days * 20)
 
         try:
             if blockchain == 'cardano':
@@ -419,8 +428,13 @@ class TransactionHistoryService:
             return []
 
     async def _fetch_cardano_transactions(self, address: str, limit: int) -> List[dict]:
-        """Fetch Cardano transactions via Blockfrost."""
-        import httpx
+        """Fetch Cardano transactions via Blockfrost with full pagination.
+
+        Paginates through all transaction hashes (100 per page, max 50 pages),
+        then fetches details and UTXOs for each transaction.
+        Includes rate-limit delays between API calls.
+        """
+        MAX_PAGES = 50  # Safety cap: 50 pages x 100 = up to 5000 tx hashes
 
         try:
             # Get Blockfrost API key
@@ -431,55 +445,86 @@ class TransactionHistoryService:
 
             headers = {"project_id": blockfrost_key}
 
-            # Get address transactions
-            response = await blockfrost_fetch(
-                f"/addresses/{address}/transactions",
-                headers=headers,
-                params={"count": limit, "order": "desc"},
-                timeout=30.0
-            )
+            # --- Paginate through all transaction hashes (ascending for full history) ---
+            all_tx_hashes = []
+            page = 1
 
-            if response.status_code == 404:
-                # Address has no transactions
+            while page <= MAX_PAGES and len(all_tx_hashes) < limit:
+                response = await blockfrost_fetch(
+                    f"/addresses/{address}/transactions",
+                    headers=headers,
+                    params={"count": 100, "page": page, "order": "asc"},
+                    timeout=30.0
+                )
+
+                if response.status_code == 404:
+                    break  # Address has no transactions
+                if response.status_code != 200:
+                    logger.error(f"Blockfrost transactions page {page} error: {response.status_code}")
+                    break
+
+                page_data = response.json()
+                if not page_data:
+                    break
+
+                all_tx_hashes.extend(page_data)
+
+                # If fewer than 100 results, we've reached the end
+                if len(page_data) < 100:
+                    break
+
+                page += 1
+                # Rate-limit delay between pages (Blockfrost: 10 req/s free tier)
+                await asyncio.sleep(0.15)
+
+            if not all_tx_hashes:
                 return []
 
-            if response.status_code != 200:
-                logger.error(f"Blockfrost transactions error: {response.status_code}")
-                return []
+            # Trim to limit
+            all_tx_hashes = all_tx_hashes[:limit]
+            await _syslog("info", f"Cardano: fetched {len(all_tx_hashes)} tx hashes "
+                          f"in {page} page(s) for {address[:20]}...")
 
-            tx_hashes = response.json()
-
-            # Fetch details for each transaction
+            # --- Fetch details and UTXOs for each transaction ---
             detailed_txs = []
-            for tx_info in tx_hashes[:limit]:
+            for i, tx_info in enumerate(all_tx_hashes):
                 tx_hash = tx_info.get('tx_hash')
                 if not tx_hash:
                     continue
 
-                # Get transaction details
-                tx_response = await blockfrost_fetch(
-                    f"/txs/{tx_hash}",
-                    headers=headers,
-                    timeout=30.0
-                )
-
-                if tx_response.status_code == 200:
-                    tx_detail = tx_response.json()
-
-                    # Get UTXOs for the transaction
-                    utxo_response = await blockfrost_fetch(
-                        f"/txs/{tx_hash}/utxos",
+                try:
+                    # Get transaction details
+                    tx_response = await blockfrost_fetch(
+                        f"/txs/{tx_hash}",
                         headers=headers,
                         timeout=30.0
                     )
 
-                    if utxo_response.status_code == 200:
-                        utxos = utxo_response.json()
-                        tx_detail['utxos'] = utxos
+                    if tx_response.status_code == 200:
+                        tx_detail = tx_response.json()
 
-                    detailed_txs.append(tx_detail)
+                        # Get UTXOs for the transaction
+                        utxo_response = await blockfrost_fetch(
+                            f"/txs/{tx_hash}/utxos",
+                            headers=headers,
+                            timeout=30.0
+                        )
 
-            logger.info(f"Fetched {len(detailed_txs)} Cardano transactions")
+                        if utxo_response.status_code == 200:
+                            utxos = utxo_response.json()
+                            tx_detail['utxos'] = utxos
+
+                        detailed_txs.append(tx_detail)
+
+                    # Rate-limit delay every 5 detail fetches
+                    if (i + 1) % 5 == 0:
+                        await asyncio.sleep(0.2)
+
+                except Exception as e:
+                    logger.warning(f"Error fetching Cardano tx details {tx_hash[:16]}...: {e}")
+                    continue
+
+            logger.info(f"Fetched {len(detailed_txs)} Cardano transactions (from {len(all_tx_hashes)} hashes)")
             return detailed_txs
 
         except Exception as e:
@@ -497,84 +542,118 @@ class TransactionHistoryService:
         """Fetch Ethereum transactions via Etherscan (legacy wrapper)."""
         return await self._fetch_evm_transactions('ethereum', address, limit)
 
-    async def _fetch_bitcoin_transactions(self, address: str, limit: int) -> List[dict]:
+    async def _fetch_bitcoin_transactions_from_api(
+        self, address: str, limit: int, base_url: str, source_name: str
+    ) -> List[dict]:
+        """Fetch Bitcoin transactions from Blockstream/Mempool API with pagination.
+
+        Both APIs return 25 transactions per page and support pagination via
+        the last_seen_txid parameter: /address/{addr}/txs/chain/{last_txid}
+
+        Args:
+            address: Bitcoin wallet address
+            limit: Maximum total transactions to fetch
+            base_url: API base URL (Blockstream or Mempool.space)
+            source_name: Human-readable name for logging
+
+        Returns:
+            List of detailed transaction dicts
         """
-        Fetch Bitcoin transactions from Blockstream API with Mempool.space fallback.
-
-        Uses smart fetching to avoid re-fetching existing transactions.
-        """
-        import httpx
-        from config import MEMPOOL_BASE_URL
-
-        # Try Blockstream first
-        try:
-            client = get_client("blockfrost", timeout=30.0)
-            # Get transaction list
-            response = await client.get(
-                f"{bitcoin_service.base_url}/address/{address}/txs"
-            )
-
-            if response.status_code != 200:
-                logger.warning(f"Blockstream API error: {response.status_code}, trying Mempool.space fallback")
-                # Try Mempool.space fallback
-                return await self._fetch_bitcoin_transactions_mempool(address, limit)
-
-            txs = response.json()[:limit]
-
-            # Fetch full details for each transaction to get inputs/outputs
-            detailed_txs = []
-            for tx in txs:
-                tx_response = await client.get(
-                    f"{bitcoin_service.base_url}/tx/{tx['txid']}"
-                )
-                if tx_response.status_code == 200:
-                    detailed_txs.append(tx_response.json())
-
-            logger.info(f"Fetched {len(detailed_txs)} Bitcoin transactions from Blockstream")
-            return detailed_txs
-
-        except Exception as e:
-            logger.error(f"Blockstream error: {e}, trying Mempool.space fallback")
-            return await self._fetch_bitcoin_transactions_mempool(address, limit)
-
-    async def _fetch_bitcoin_transactions_mempool(self, address: str, limit: int) -> List[dict]:
-        """Fetch Bitcoin transactions from Mempool.space API (fallback)."""
-        import httpx
-        from config import MEMPOOL_BASE_URL
+        MAX_PAGES = 80  # Safety cap: 80 pages x 25 = up to 2000 txs
 
         try:
             client = get_client("blockfrost", timeout=30.0)
-            # Mempool.space has the same API format as Blockstream
-            response = await client.get(
-                f"{MEMPOOL_BASE_URL}/address/{address}/txs"
-            )
+            all_txs = []
+            last_txid = None
+            page = 0
 
-            if response.status_code != 200:
-                logger.error(f"Mempool.space API error: {response.status_code}")
+            while page < MAX_PAGES and len(all_txs) < limit:
+                if last_txid:
+                    url = f"{base_url}/address/{address}/txs/chain/{last_txid}"
+                else:
+                    url = f"{base_url}/address/{address}/txs"
+
+                response = await client.get(url)
+
+                if response.status_code != 200:
+                    if page == 0:
+                        logger.warning(f"{source_name} API error: {response.status_code}")
+                        return []  # Return empty so caller can try fallback
+                    break  # Partial results are fine
+
+                page_txs = response.json()
+                if not page_txs:
+                    break
+
+                all_txs.extend(page_txs)
+
+                # If fewer than 25, we've reached the end
+                if len(page_txs) < 25:
+                    break
+
+                # The last txid is used for the next page cursor
+                last_txid = page_txs[-1].get('txid')
+                if not last_txid:
+                    break
+
+                page += 1
+                await asyncio.sleep(0.2)  # Rate-limit delay
+
+            # Trim to limit
+            all_txs = all_txs[:limit]
+
+            if not all_txs:
                 return []
 
-            txs = response.json()[:limit]
+            await _syslog("info", f"Bitcoin: fetched {len(all_txs)} tx summaries "
+                          f"from {source_name} in {page + 1} page(s)")
 
-            # Fetch full details
-            detailed_txs = []
-            for tx in txs:
-                tx_response = await client.get(
-                    f"{MEMPOOL_BASE_URL}/tx/{tx['txid']}"
-                )
-                if tx_response.status_code == 200:
-                    detailed_txs.append(tx_response.json())
-
-            logger.info(f"Fetched {len(detailed_txs)} Bitcoin transactions from Mempool.space (fallback)")
-            return detailed_txs
+            # The list endpoint already returns full transaction data including
+            # inputs/outputs, so we don't need separate detail fetches.
+            # The txs endpoint returns the same format as /tx/{txid}.
+            logger.info(f"Fetched {len(all_txs)} Bitcoin transactions from {source_name}")
+            return all_txs
 
         except Exception as e:
-            logger.error(f"Mempool.space error: {e}")
+            logger.error(f"{source_name} error: {e}")
             return []
 
+    async def _fetch_bitcoin_transactions(self, address: str, limit: int) -> List[dict]:
+        """Fetch Bitcoin transactions from Blockstream API with Mempool.space fallback.
+
+        Uses paginated fetching to retrieve full history.
+        """
+        # Try Blockstream first
+        txs = await self._fetch_bitcoin_transactions_from_api(
+            address, limit, bitcoin_service.base_url, "Blockstream"
+        )
+        if txs:
+            return txs
+
+        # Fallback to Mempool.space
+        from config import MEMPOOL_BASE_URL
+        logger.info("Blockstream returned no results, trying Mempool.space fallback")
+        return await self._fetch_bitcoin_transactions_from_api(
+            address, limit, MEMPOOL_BASE_URL, "Mempool.space"
+        )
+
+    async def _fetch_bitcoin_transactions_mempool(self, address: str, limit: int) -> List[dict]:
+        """Fetch Bitcoin transactions from Mempool.space API (fallback). Legacy wrapper."""
+        from config import MEMPOOL_BASE_URL
+        return await self._fetch_bitcoin_transactions_from_api(
+            address, limit, MEMPOOL_BASE_URL, "Mempool.space"
+        )
+
     async def _fetch_solana_transactions(self, address: str, limit: int) -> List[dict]:
-        """Fetch Solana transactions using Helius API."""
-        import httpx
+        """Fetch Solana transactions using Helius API with pagination.
+
+        Helius enhanced transactions endpoint supports pagination via the
+        'before' parameter (pass the last signature to get the next page).
+        Each page returns up to 100 transactions.
+        """
         from config import HELIUS_BASE_URL
+        MAX_PAGES = 50  # Safety cap: 50 pages x 100 = up to 5000 txs
+        PAGE_SIZE = 100
 
         try:
             # Get Helius API key
@@ -584,24 +663,52 @@ class TransactionHistoryService:
                 return []
 
             client = get_client("blockfrost", timeout=30.0)
+            all_transactions = []
+            before_sig = None
+            page = 0
 
-            # Get transaction signatures for the address
-            # Using Helius enhanced transactions endpoint
-            response = await client.get(
-                f"{HELIUS_BASE_URL}/addresses/{address}/transactions",
-                params={
+            while page < MAX_PAGES and len(all_transactions) < limit:
+                params = {
                     "api-key": helius_key,
-                    "limit": limit
+                    "limit": min(PAGE_SIZE, limit - len(all_transactions))
                 }
-            )
+                if before_sig:
+                    params["before"] = before_sig
 
-            if response.status_code != 200:
-                logger.error(f"Helius transactions error: {response.status_code}")
-                return []
+                response = await client.get(
+                    f"{HELIUS_BASE_URL}/addresses/{address}/transactions",
+                    params=params
+                )
 
-            transactions = response.json()
-            logger.info(f"Fetched {len(transactions)} Solana transactions")
-            return transactions
+                if response.status_code != 200:
+                    if page == 0:
+                        logger.error(f"Helius transactions error: {response.status_code}")
+                        return []
+                    break  # Partial results are fine
+
+                page_txs = response.json()
+                if not page_txs:
+                    break
+
+                all_transactions.extend(page_txs)
+
+                # If fewer than PAGE_SIZE, we've reached the end
+                if len(page_txs) < PAGE_SIZE:
+                    break
+
+                # Get the last signature for pagination cursor
+                last_tx = page_txs[-1]
+                before_sig = last_tx.get('signature')
+                if not before_sig:
+                    break
+
+                page += 1
+                await asyncio.sleep(0.15)  # Rate-limit delay
+
+            all_transactions = all_transactions[:limit]
+            logger.info(f"Fetched {len(all_transactions)} Solana transactions "
+                        f"in {page + 1} page(s)")
+            return all_transactions
 
         except Exception as e:
             logger.error(f"Error fetching Solana transactions: {e}")
@@ -1099,7 +1206,7 @@ class TransactionHistoryService:
             search_pattern = f"%{search}%"
             params.extend([search_pattern] * 5)
 
-        query += " ORDER BY th.tx_time DESC LIMIT 1000"
+        query += " ORDER BY th.tx_time DESC LIMIT 10000"
 
         async with aiosqlite.connect(DATABASE_PATH) as db:
             db.row_factory = aiosqlite.Row
@@ -1132,7 +1239,7 @@ class TransactionHistoryService:
 
         # Re-sort merged results by tx_time descending
         v1_results.sort(key=lambda x: x.get('tx_time') or '', reverse=True)
-        return v1_results[:1000]
+        return v1_results[:10000]
 
 
     # ------------------------------------------------------------------
