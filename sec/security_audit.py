@@ -48,7 +48,8 @@ class SecurityAuditor:
             "venv",
             ".pytest_cache",
             "backups",
-            "archive"
+            "archive",
+            "EXCLUDE"
         ]
 
         self._filter_excluded_files()

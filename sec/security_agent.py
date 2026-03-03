@@ -64,9 +64,14 @@ class SecurityAgent:
             print(f"  Fix: {f.recommendation}")
 
     def prompt_user(self, question: str) -> bool:
-        """Prompt user for yes/no decision"""
+        """Prompt user for yes/no decision. Returns True in non-interactive mode."""
+        if not sys.stdin.isatty():
+            return True
         while True:
-            response = input(f"\n{question} (y/n): ").strip().lower()
+            try:
+                response = input(f"\n{question} (y/n): ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                return True
             if response in ['y', 'yes']:
                 return True
             elif response in ['n', 'no']:
@@ -148,9 +153,34 @@ class SecurityAgent:
             if len(check_findings) > 3:
                 print(f"    ... and {len(check_findings) - 3} more")
 
+    def _load_baseline(self) -> set:
+        """Load baseline finding signatures from last saved audit report."""
+        baseline_path = self.project_root / "sec" / "baseline_audit.json"
+        if not baseline_path.exists():
+            return set()
+        try:
+            with open(baseline_path) as f:
+                data = json.load(f)
+            return {
+                f"{item['check_id']}:{item['file_path']}:{item['line_number']}"
+                for item in data.get("findings", [])
+            }
+        except Exception:
+            return set()
+
+    def save_baseline(self):
+        """Snapshot current findings as the accepted baseline."""
+        report = self.auditor.generate_report(format="json")
+        baseline_path = self.project_root / "sec" / "baseline_audit.json"
+        baseline_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(baseline_path, "w") as f:
+            f.write(report)
+        print(f"\n✓ Baseline saved to {baseline_path}")
+
     def run_pre_push_check(self, remote: str = None, url: str = None) -> int:
         """
-        Run pre-push security check
+        Run pre-push security check.
+        Only blocks on NEW findings not present in the baseline.
         Returns: 0 to allow push, 1 to block push
         """
         critical_high, medium, low = self.run_audit()
@@ -161,47 +191,64 @@ class SecurityAgent:
             print("\n✓ No security issues found. Safe to push!")
             return 0
 
-        # Display all findings
-        if critical_high:
-            self.display_findings(critical_high, "CRITICAL/HIGH SEVERITY ISSUES (BLOCKING)")
+        # Separate new findings from pre-existing baseline
+        baseline = self._load_baseline()
+        def is_new(f):
+            sig = f"{f.check_id}:{f.file_path}:{f.line_number}"
+            return sig not in baseline
 
-        if medium:
-            self.display_findings(medium, "MEDIUM SEVERITY ISSUES (WARNING)")
+        new_critical_high = [f for f in critical_high if is_new(f)]
+        new_medium = [f for f in medium if is_new(f)]
+        new_low = [f for f in low if is_new(f)]
+        new_total = len(new_critical_high) + len(new_medium) + len(new_low)
 
-        if low:
-            self.display_findings(low, "LOW SEVERITY ISSUES (INFO)")
+        # Display new findings (if any)
+        if new_critical_high:
+            self.display_findings(new_critical_high, "NEW CRITICAL/HIGH SEVERITY ISSUES (BLOCKING)")
+        if new_medium:
+            self.display_findings(new_medium, "NEW MEDIUM SEVERITY ISSUES (WARNING)")
+        if new_low:
+            self.display_findings(new_low, "NEW LOW SEVERITY ISSUES (INFO)")
 
+        # Summary
         print("\n" + "=" * 80)
-        print(f"TOTAL: {len(critical_high)} Critical/High, {len(medium)} Medium, {len(low)} Low")
+        baseline_count = total_issues - new_total
+        print(f"NEW ISSUES: {new_total} ({len(new_critical_high)} critical/high, "
+              f"{len(new_medium)} medium, {len(new_low)} low)")
+        if baseline_count > 0:
+            print(f"PRE-EXISTING (baseline): {baseline_count} (not blocking)")
         print("=" * 80)
 
-        # Handle critical/high issues
-        if critical_high:
-            print("\n⚠️  CRITICAL/HIGH severity issues found!")
+        # Only block on NEW critical/high issues
+        if new_critical_high:
+            print("\n⚠️  NEW critical/high severity issues found!")
             print("These issues should be fixed before pushing to production.")
-
-            self.suggest_fixes(critical_high)
+            self.suggest_fixes(new_critical_high)
 
             if self.prompt_user("Would you like to fix these issues before pushing?"):
                 print("\nPlease fix the issues listed above and try pushing again.")
                 print("Blocking push until issues are resolved.")
                 return 1
             else:
-                print("\n⚠️  WARNING: Proceeding with push despite critical/high issues!")
+                print("\n⚠️  WARNING: Proceeding with push despite new critical/high issues!")
                 if not self.prompt_user("Are you sure you want to continue?"):
                     print("Push cancelled.")
                     return 1
 
-        # Handle medium/low issues (warning only)
-        if medium or low:
-            print(f"\nℹ️  Found {len(medium)} medium and {len(low)} low severity issues.")
-            print("These are informational warnings and won't block the push.")
+        # Warn about new medium/low issues but don't block
+        if new_medium or new_low:
+            print(f"\nℹ️  Found {len(new_medium)} new medium and {len(new_low)} new low severity issues.")
+            print("These are warnings and won't block the push.")
+            if new_medium:
+                self.suggest_fixes(new_medium)
 
-            if medium:
-                print("\nMedium severity issues should be addressed in future commits.")
-                self.suggest_fixes(medium)
+        # If no new issues at all, just let it through
+        if new_total == 0:
+            print(f"\n✓ No new security issues. {baseline_count} pre-existing issues in baseline.")
+            print("Proceeding with push...")
+            return 0
 
-        # Ask if user wants to proceed
+        # Ask if user wants to proceed (only when there are new non-critical findings)
         if not self.prompt_user("Proceed with git push?"):
             print("Push cancelled by user.")
             return 1
@@ -238,6 +285,8 @@ def main():
                        help="Git remote URL (for pre-push hook)")
     parser.add_argument("--save-report", type=str,
                        help="Save audit report to file")
+    parser.add_argument("--save-baseline", action="store_true",
+                       help="Snapshot current findings as accepted baseline")
 
     args = parser.parse_args()
 
@@ -252,6 +301,13 @@ def main():
 
     # Create agent
     agent = SecurityAgent(project_root)
+
+    if args.save_baseline:
+        agent.run_audit()
+        agent.save_baseline()
+        print(f"Baseline contains {len(agent.auditor.findings)} findings.")
+        print("Future pushes will only block on NEW issues not in this baseline.")
+        sys.exit(0)
 
     if args.mode == "pre-push":
         # Run pre-push check

@@ -89,6 +89,7 @@ tmp/
 # Security audit reports (contain vulnerability details)
 sec/last_audit.json
 sec/audit_report*.json
+sec/baseline_audit.json
 *.audit.json
 
 # NFT images cache
