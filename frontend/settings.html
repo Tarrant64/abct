@@ -6,10 +6,10 @@
     <title>Settings - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771815026">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1772567608">
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <script defer src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
-    <script src="/static/js/session-auth.js?v=1771815026"></script>
+    <script src="/static/js/session-auth.js?v=1772567608"></script>
     <script>
         // XSS Protection - Safe HTML rendering (needed before app.js)
         function setSafeHTML(element, html) {
@@ -4739,6 +4739,56 @@
             </div>
 
             <div class="section-card collector-section">
+                <h3>On-Chain Engine Backfill</h3>
+                <p style="color: #9ca3af; font-size: 0.875rem; margin: 8px 0 16px;">
+                    Re-indexes blockchain data from genesis for selected chains. Use this to fill in historical portfolio data that predates your tracker installation.
+                </p>
+                <div class="collector-last-run" id="engineBackfillLastRun">Last backfill: Loading...</div>
+
+                <div style="display: grid; grid-template-columns: repeat(3, auto); gap: 8px 20px; margin-bottom: 16px;">
+                    <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-primary, #eaeaea); cursor: pointer;">
+                        <input type="checkbox" class="engine-chain-cb" value="cardano" checked> Cardano
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-primary, #eaeaea); cursor: pointer;">
+                        <input type="checkbox" class="engine-chain-cb" value="bitcoin" checked> Bitcoin
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-primary, #eaeaea); cursor: pointer;">
+                        <input type="checkbox" class="engine-chain-cb" value="ethereum" checked> Ethereum
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-primary, #eaeaea); cursor: pointer;">
+                        <input type="checkbox" class="engine-chain-cb" value="solana" checked> Solana
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-primary, #eaeaea); cursor: pointer;">
+                        <input type="checkbox" class="engine-chain-cb" value="polygon" checked> Polygon
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-primary, #eaeaea); cursor: pointer;">
+                        <input type="checkbox" class="engine-chain-cb" value="base" checked> Base
+                    </label>
+                </div>
+
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-primary, #eaeaea); cursor: pointer; margin-bottom: 16px;" title="When enabled, re-processes all historical data even if previously indexed. Recommended for first-time backfill.">
+                    <input type="checkbox" id="engineForceFull" checked> Force full re-index
+                </label>
+
+                <div class="collector-form-row">
+                    <button class="btn btn-primary" id="engineBackfillBtn" onclick="startEngineBackfill()">Start Backfill</button>
+                </div>
+
+                <div id="engineBackfillProgress" style="display: none; margin-top: 12px; padding: 14px; background: var(--bg-secondary, #1e1e2e); border: 1px solid var(--border-color, #30363d); border-radius: 8px;">
+                    <div class="progress-bar-container">
+                        <div class="progress-bar-fill" id="engineProgressBar" style="width: 0%"></div>
+                    </div>
+                    <div id="engineStageBreakdown" style="font-size: 12px; color: var(--text-secondary, #888); margin-top: 8px; font-family: monospace; line-height: 1.6;"></div>
+                    <div id="engineErrorCount" style="font-size: 12px; color: #dc3545; margin-top: 4px; display: none;"></div>
+                    <div style="margin-top: 12px;">
+                        <button class="btn btn-danger" onclick="cancelEngineBackfill()" style="font-size: 12px; padding: 6px 14px;">Cancel Backfill</button>
+                    </div>
+                </div>
+
+                <div class="collector-status" id="engineStatus"></div>
+            </div>
+
+            <div class="section-card collector-section">
                 <h3>Exchange Transaction History</h3>
                 <p style="color: #9ca3af; font-size: 0.875rem; margin: 8px 0 16px;">
                     Fetches full transaction history from your connected exchanges and stores it locally for analytics.
@@ -5841,7 +5891,7 @@
     </footer>
 
     <!-- App JS (provides changeTheme, loadSavedTheme, togglePrivacyMode, initializePrivacyMode, authFetch) -->
-    <script src="/static/js/app.js?v=1771815026"></script>
+    <script src="/static/js/app.js?v=1772567608"></script>
 
     <!-- ==================== Tab Switching Logic ==================== -->
     <script>
@@ -8939,6 +8989,9 @@
             } catch (e) {
                 console.error('Failed to load collectors tab:', e);
             }
+
+            // Check for in-progress engine backfills
+            if (typeof checkEngineBackfillOnLoad === 'function') checkEngineBackfillOnLoad();
         }
 
         function populateWalletDropdown(listId, selectId) {
@@ -9306,6 +9359,152 @@
             } finally {
                 btn.disabled = false;
                 btn.textContent = origText;
+            }
+        }
+
+        // === Engine Backfill ===
+        let engineBackfillPollTimer = null;
+        let engineBackfillId = null;
+
+        async function startEngineBackfill() {
+            const chains = Array.from(document.querySelectorAll('.engine-chain-cb:checked')).map(cb => cb.value);
+            if (chains.length === 0) {
+                setCollectorStatus('engineStatus', 'failed', 'Please select at least one chain.');
+                return;
+            }
+            const forceFull = document.getElementById('engineForceFull').checked;
+            const btn = document.getElementById('engineBackfillBtn');
+            btn.disabled = true;
+            btn.textContent = 'Starting...';
+            setCollectorStatus('engineStatus', 'running', 'Initiating backfill...');
+
+            try {
+                const res = await authFetch('/engine/backfill', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chains, force_full: forceFull, domains: ['index', 'hydrate', 'normalize', 'enrich_price'] })
+                });
+                if (!res.ok) {
+                    const text = await res.text();
+                    throw new Error('Server returned ' + res.status + ': ' + text.substring(0, 200));
+                }
+                const data = await res.json();
+                engineBackfillId = data.backfill_id || data.id;
+                document.getElementById('engineBackfillProgress').style.display = '';
+                document.getElementById('engineStatus').className = 'collector-status';
+                document.getElementById('engineStatus').style.display = 'none';
+                btn.textContent = 'Backfill Running...';
+                pollEngineBackfillStatus(engineBackfillId);
+            } catch (e) {
+                setCollectorStatus('engineStatus', 'failed', 'Error: ' + e.message);
+                btn.disabled = false;
+                btn.textContent = 'Start Backfill';
+            }
+        }
+
+        function pollEngineBackfillStatus(backfillId) {
+            if (engineBackfillPollTimer) clearInterval(engineBackfillPollTimer);
+            engineBackfillPollTimer = setInterval(async () => {
+                try {
+                    const res = await authFetch('/engine/backfill/' + backfillId + '/status');
+                    if (!res.ok) throw new Error('Status check failed');
+                    const data = await res.json();
+
+                    // Update progress bar
+                    const pct = data.progress_pct != null ? data.progress_pct : 0;
+                    document.getElementById('engineProgressBar').style.width = pct + '%';
+
+                    // Update stage breakdown
+                    if (data.stages) {
+                        const stageText = Object.entries(data.stages)
+                            .map(([name, s]) => name.toUpperCase() + ': ' + (s.done || 0) + '/' + (s.total || '?'))
+                            .join(' &nbsp;|&nbsp; ');
+                        document.getElementById('engineStageBreakdown').innerHTML = stageText;
+                    }
+
+                    // Update error count
+                    const errEl = document.getElementById('engineErrorCount');
+                    if (data.error_count > 0) {
+                        errEl.style.display = '';
+                        errEl.textContent = 'Errors: ' + data.error_count;
+                    } else {
+                        errEl.style.display = 'none';
+                    }
+
+                    // Terminal states
+                    if (data.status === 'completed') {
+                        clearInterval(engineBackfillPollTimer);
+                        engineBackfillPollTimer = null;
+                        document.getElementById('engineBackfillProgress').style.display = 'none';
+                        setCollectorStatus('engineStatus', 'completed', 'Backfill completed successfully.');
+                        resetEngineBackfillBtn();
+                    } else if (data.status === 'failed') {
+                        clearInterval(engineBackfillPollTimer);
+                        engineBackfillPollTimer = null;
+                        document.getElementById('engineBackfillProgress').style.display = 'none';
+                        setCollectorStatus('engineStatus', 'failed', data.message || 'Backfill failed.');
+                        resetEngineBackfillBtn();
+                    } else if (data.status === 'cancelled') {
+                        clearInterval(engineBackfillPollTimer);
+                        engineBackfillPollTimer = null;
+                        document.getElementById('engineBackfillProgress').style.display = 'none';
+                        setCollectorStatus('engineStatus', 'failed', 'Backfill was cancelled.');
+                        resetEngineBackfillBtn();
+                    }
+                } catch (e) {
+                    console.error('Engine backfill poll error:', e);
+                }
+            }, 4000);
+        }
+
+        async function cancelEngineBackfill() {
+            if (!engineBackfillId) return;
+            try {
+                await authFetch('/engine/backfill/' + engineBackfillId + '/cancel', { method: 'POST' });
+            } catch (e) {
+                console.error('Cancel error:', e);
+            }
+            if (engineBackfillPollTimer) {
+                clearInterval(engineBackfillPollTimer);
+                engineBackfillPollTimer = null;
+            }
+            document.getElementById('engineBackfillProgress').style.display = 'none';
+            setCollectorStatus('engineStatus', 'failed', 'Backfill cancelled.');
+            resetEngineBackfillBtn();
+        }
+
+        function resetEngineBackfillBtn() {
+            const btn = document.getElementById('engineBackfillBtn');
+            btn.disabled = false;
+            btn.textContent = 'Start Backfill';
+        }
+
+        async function checkEngineBackfillOnLoad() {
+            try {
+                const res = await authFetch('/engine/backfills');
+                if (!res.ok) return;
+                const data = await res.json();
+                const backfills = data.backfills || data || [];
+                const active = backfills.find(b => b.status === 'running' || b.status === 'planning');
+                if (active) {
+                    engineBackfillId = active.backfill_id || active.id;
+                    document.getElementById('engineBackfillProgress').style.display = '';
+                    const btn = document.getElementById('engineBackfillBtn');
+                    btn.disabled = true;
+                    btn.textContent = 'Backfill Running...';
+                    pollEngineBackfillStatus(engineBackfillId);
+                }
+
+                // Update last run info
+                const last = backfills.find(b => b.status === 'completed');
+                if (last) {
+                    const d = new Date(last.completed_at || last.updated_at);
+                    document.getElementById('engineBackfillLastRun').textContent = 'Last backfill: ' + d.toLocaleString();
+                } else {
+                    document.getElementById('engineBackfillLastRun').textContent = 'Last backfill: Never';
+                }
+            } catch (e) {
+                document.getElementById('engineBackfillLastRun').textContent = 'Last backfill: Unable to check';
             }
         }
 

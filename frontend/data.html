@@ -6,7 +6,7 @@
     <title>Data & Analytics - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1771815026">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1772567608">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <!-- Chart.js for analytics -->
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
@@ -19,7 +19,7 @@
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1771815026"></script>
+    <script src="/static/js/session-auth.js?v=1772567608"></script>
     <style>
         /* Wallet Manager Styles */
         .wallet-manager {
@@ -1368,6 +1368,7 @@
                             <button class="stream-range-btn" data-range="6m" onclick="window.portfolioStream?.loadData('6m')">6M</button>
                             <button class="stream-range-btn active" data-range="1y" onclick="window.portfolioStream?.loadData('1y')">1Y</button>
                             <button class="stream-range-btn" data-range="all" onclick="window.portfolioStream?.loadData('all')">All</button>
+                            <a href="/settings.html#collectors" style="font-size: 11px; color: var(--text-secondary, #888); text-decoration: none; margin-left: 8px; align-self: center;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">Missing history?</a>
                         </div>
                     </div>
                     <div id="portfolioStreamLegend" class="stream-legend"></div>
@@ -2255,21 +2256,21 @@
         }
     </script>
 
-    <script src="/static/js/app.js?v=1771815026"></script>
+    <script src="/static/js/app.js?v=1772567608"></script>
 
     <!-- Transaction scripts -->
-    <script src="/static/js/transactions.js?v=1771815026"></script>
-    <script src="/static/js/transaction-analytics.js?v=1771815026"></script>
+    <script src="/static/js/transactions.js?v=1772567608"></script>
+    <script src="/static/js/transaction-analytics.js?v=1772567608"></script>
     <!-- Advanced Analytics tab -->
-    <script src="/static/js/analytics-tab.js?v=1771815026"></script>
+    <script src="/static/js/analytics-tab.js?v=1772567608"></script>
     <!-- Sankey flow diagram -->
-    <script src="/static/js/sankey-chart.js?v=1771815026"></script>
+    <script src="/static/js/sankey-chart.js?v=1772567608"></script>
     <!-- Streamgraph (chain history) -->
-    <script src="/static/js/stream-chart.js?v=1771815026"></script>
+    <script src="/static/js/stream-chart.js?v=1772567608"></script>
     <!-- Wallet Intelligence tab -->
-    <script src="/static/js/wallet-intelligence.js?v=1771815026"></script>
+    <script src="/static/js/wallet-intelligence.js?v=1772567608"></script>
     <!-- Crypto Market tab -->
-    <script src="/static/js/crypto-market.js?v=1771815026"></script>
+    <script src="/static/js/crypto-market.js?v=1772567608"></script>
 
     <script>
         // Main tab switching function
