@@ -12,3 +12,4 @@ bip_utils==2.9.3
 slowapi==0.1.9
 bcrypt==4.1.2
 apscheduler==3.10.4
+asyncpg==0.29.0

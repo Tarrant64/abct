@@ -46,7 +46,7 @@ import os
 # Add backend directory to Python path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from config import PROJECT_ROOT, DATA_DIR, CERTS_DIR, DEFAULT_CERT_PATH, DEFAULT_KEY_PATH, NFT_SCHEDULER_ENABLED
+from config import PROJECT_ROOT, DATA_DIR, CERTS_DIR, DEFAULT_CERT_PATH, DEFAULT_KEY_PATH, NFT_SCHEDULER_ENABLED, DBSYNC_PG_ENABLED
 from database import init_db, init_encryption, migrate_encrypt_api_keys
 from nft_image_database import init_nft_image_db
 from routers import wallets, portfolio, defi, prices, exchanges, nfts, custom_tokens, settings, security, logs, nft_scheduler as nft_scheduler_router, backup, auth, dashboard, mobile, nmkr, cache, spam, transactions, demo, cloudflare, system, balance_history, analytics, intelligence, search, pnl
@@ -425,6 +425,30 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.debug(f"Blockfrost sync check error: {e}")
 
+    # --- DB Sync direct access (optional — only when DBSYNC_PG_HOST is set) ---
+    async def _init_dbsync_pool():
+        """Initialize direct PostgreSQL connection to DB Sync if configured."""
+        if not DBSYNC_PG_ENABLED:
+            logger.info("DB Sync direct access: DISABLED (DBSYNC_PG_HOST not set)")
+            return
+        try:
+            from services.cardano_db import get_pool, is_available, ASYNCPG_AVAILABLE
+            if not ASYNCPG_AVAILABLE:
+                logger.warning("DB Sync direct access: CONFIGURED but asyncpg not installed")
+                return
+            pool = await get_pool()
+            if pool and await is_available():
+                from services.cardano_db_queries import check_schema_version
+                version = await check_schema_version()
+                logger.info(f"DB Sync direct access: ENABLED (schema v{version})")
+                await log_service.info("dbsync", f"Direct DB access enabled (schema v{version})")
+            else:
+                logger.warning("DB Sync direct access: CONFIGURED but UNAVAILABLE, using Blockfrost")
+                await log_service.warning("dbsync", "Direct DB access configured but connection failed")
+        except Exception as e:
+            logger.warning(f"DB Sync direct access init failed: {e} — using Blockfrost")
+            await log_service.warning("dbsync", f"Direct DB access init failed: {e}")
+
     # Track all background tasks for graceful cancellation on shutdown
     _background_tasks = []
 
@@ -433,6 +457,7 @@ async def lifespan(app: FastAPI):
     _background_tasks.append(asyncio.create_task(collect_nft_prices_background()))
     _background_tasks.append(asyncio.create_task(_run_health_checks_background()))
     _background_tasks.append(asyncio.create_task(_check_blockfrost_ryo_health()))
+    _background_tasks.append(asyncio.create_task(_init_dbsync_pool()))
     _background_tasks.append(asyncio.create_task(_periodic_blockfrost_sync_check()))
     _background_tasks.append(asyncio.create_task(_seed_defi_logos_background()))
 
@@ -859,6 +884,14 @@ async def lifespan(app: FastAPI):
         logger.info("Shutting down NFT scheduler...")
         await nft_scheduler.stop()
 
+        # Close DB Sync connection pool (if active)
+        if DBSYNC_PG_ENABLED:
+            try:
+                from services.cardano_db import close_pool
+                await close_pool()
+            except Exception as e:
+                logger.warning(f"Error closing DB Sync pool: {e}")
+
         # Close all shared HTTP clients
         logger.info("Closing shared HTTP clients...")
         from services.http_client import close_all
@@ -1134,7 +1167,14 @@ async def transactions_redirect():
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "service": "ABCT"}
+    result = {"status": "healthy", "service": "ABCT"}
+    if DBSYNC_PG_ENABLED:
+        try:
+            from services.cardano_db import is_available
+            result["dbsync_direct"] = "connected" if await is_available() else "unavailable"
+        except Exception:
+            result["dbsync_direct"] = "error"
+    return result
 
 @app.get("/api/config/public")
 async def public_config():

@@ -260,6 +260,18 @@ CACHE_TTL_PERSISTENT = 604800  # 7 days - portfolio summary, native assets
 BALANCE_CACHE_TTL = CACHE_TTL_HOT
 
 # NFT Image Cache Settings
+# DB Sync PostgreSQL (direct read-only access — OPTIONAL)
+# When DBSYNC_PG_HOST is empty/unset, direct DB access is disabled entirely.
+# All existing Blockfrost code paths remain fully functional.
+DBSYNC_PG_HOST = os.getenv("DBSYNC_PG_HOST", "")
+DBSYNC_PG_PORT = int(os.getenv("DBSYNC_PG_PORT", "5432"))
+DBSYNC_PG_DATABASE = os.getenv("DBSYNC_PG_DATABASE", "cexplorer")
+DBSYNC_PG_USER = os.getenv("DBSYNC_PG_USER", "abct_readonly")
+DBSYNC_PG_PASSWORD = os.getenv("DBSYNC_PG_PASSWORD", "")
+DBSYNC_PG_MIN_CONNECTIONS = int(os.getenv("DBSYNC_PG_MIN_POOL", "2"))
+DBSYNC_PG_MAX_CONNECTIONS = int(os.getenv("DBSYNC_PG_MAX_POOL", "10"))
+DBSYNC_PG_ENABLED = bool(DBSYNC_PG_HOST)
+
 NFT_IMAGE_CACHE_ENABLED = os.getenv("NFT_IMAGE_CACHE_ENABLED", "false").lower() == "true"
 NFT_IMAGE_MAX_SIZE_MB = int(os.getenv("NFT_IMAGE_MAX_SIZE_MB", "20"))
 NFT_IMAGE_THUMBNAIL_SIZE = int(os.getenv("NFT_IMAGE_THUMBNAIL_SIZE", "150"))
