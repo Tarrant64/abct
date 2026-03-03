@@ -366,6 +366,15 @@ class BackfillOrchestrator:
                 logger.info(f"Backfill {backfill_id}: auto-materializing to wallet_daily_balances...")
                 await materializer.materialize_onchain(user_id)
                 logger.info(f"Backfill {backfill_id}: materialization complete")
+                # Clear unified chart cache so the portfolio history chart shows new data
+                try:
+                    from database import clear_cache
+                    for r in ['24h', '1w', '1m', '3m', '6m', '1y', 'all']:
+                        await clear_cache(f"unified_chart_{user_id}_{r}", user_id=user_id)
+                        await clear_cache(f"unified_chart_{user_id}_{r}_by_chain", user_id=user_id)
+                    logger.info(f"Backfill {backfill_id}: cleared unified chart cache")
+                except Exception as cache_err:
+                    logger.warning(f"Backfill {backfill_id}: cache clear failed: {cache_err}")
             except Exception as e:
                 logger.warning(f"Backfill {backfill_id}: auto-materialize failed: {e}")
 

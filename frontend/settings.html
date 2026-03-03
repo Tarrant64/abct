@@ -8950,6 +8950,16 @@
     <script>
         let collectorWallets = [];
 
+        // SQLite CURRENT_TIMESTAMP stores UTC but returns naive strings (no Z suffix).
+        // Append Z so JavaScript Date parses them as UTC instead of local time.
+        function parseUTCTimestamp(ts) {
+            if (!ts) return new Date(NaN);
+            if (typeof ts === 'string' && !ts.endsWith('Z') && !ts.includes('+')) {
+                ts = ts.replace(' ', 'T') + 'Z';
+            }
+            return new Date(ts);
+        }
+
         async function loadCollectorsTab() {
             try {
                 // Fetch wallets
@@ -8967,7 +8977,7 @@
                     const txData = await txRunRes.json();
                     const txEl = document.getElementById('txLastRun');
                     if (txData.last_run) {
-                        const d = new Date(txData.last_run);
+                        const d = parseUTCTimestamp(txData.last_run);
                         txEl.textContent = 'Last run: ' + d.toLocaleString();
                     } else {
                         txEl.textContent = 'Last run: Never';
@@ -8980,7 +8990,7 @@
                     const balData = await balRunRes.json();
                     const balEl = document.getElementById('balLastRun');
                     if (balData.run && balData.run.started_at) {
-                        const d = new Date(balData.run.started_at);
+                        const d = parseUTCTimestamp(balData.run.started_at);
                         balEl.textContent = 'Last run: ' + d.toLocaleString();
                     } else {
                         balEl.textContent = 'Last run: Never';
@@ -9436,7 +9446,7 @@
                         clearInterval(engineBackfillPollTimer);
                         engineBackfillPollTimer = null;
                         document.getElementById('engineBackfillProgress').style.display = 'none';
-                        setCollectorStatus('engineStatus', 'completed', 'Backfill completed successfully.');
+                        setCollectorStatus('engineStatus', 'completed', 'Backfill completed. Chart cache cleared — reload the Data page to see updated history.');
                         resetEngineBackfillBtn();
                     } else if (data.status === 'failed') {
                         clearInterval(engineBackfillPollTimer);
@@ -9498,7 +9508,7 @@
                 // Update last run info
                 const last = backfills.find(b => b.status === 'completed');
                 if (last) {
-                    const d = new Date(last.completed_at || last.updated_at);
+                    const d = parseUTCTimestamp(last.completed_at || last.updated_at);
                     document.getElementById('engineBackfillLastRun').textContent = 'Last backfill: ' + d.toLocaleString();
                 } else {
                     document.getElementById('engineBackfillLastRun').textContent = 'Last backfill: Never';
