@@ -184,6 +184,7 @@ class BackfillRequest(BaseModel):
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     wallet_ids: Optional[List[int]] = None
+    force_full: bool = False  # Skip incremental detection — re-index from genesis
     domains: List[WorkDomain] = [
         WorkDomain.INDEX,
         WorkDomain.HYDRATE,

@@ -182,7 +182,7 @@ class BackfillOrchestrator:
                 return resumable['id']
 
         # 3. Create new backfill (incremental if prior completed backfill exists)
-        has_prior = await engine_db.get_latest_backfill_by_status(user_id, ['completed'])
+        has_prior = None if request.force_full else await engine_db.get_latest_backfill_by_status(user_id, ['completed'])
 
         backfill_id = await engine_db.create_backfill(
             user_id=user_id,
@@ -193,7 +193,8 @@ class BackfillOrchestrator:
         )
 
         logger.info(f"Created backfill {backfill_id} for user {user_id}: "
-                     f"chains={chains}, domains={domains}, incremental={has_prior is not None}")
+                     f"chains={chains}, domains={domains}, force_full={request.force_full}, "
+                     f"incremental={has_prior is not None}")
 
         # Stage A: Expand wallets into account subjects
         try:
@@ -412,7 +413,18 @@ class BackfillOrchestrator:
         """Generate hydrate work units from indexed tx IDs."""
         units = []
         for chain in chains:
-            tx_ids = await engine_db.get_unhydrated_tx_ids(chain, limit=10000)
+            # Fetch ALL unhydrated tx IDs (loop in batches to avoid missing long histories)
+            tx_ids = []
+            batch_size = 10000
+            offset = 0
+            while True:
+                batch = await engine_db.get_unhydrated_tx_ids(chain, limit=batch_size, offset=offset)
+                if not batch:
+                    break
+                tx_ids.extend(batch)
+                if len(batch) < batch_size:
+                    break
+                offset += batch_size
             subjects = await engine_db.get_account_subjects(user_id, chain=chain)
 
             # Get unique accounts that need hydration

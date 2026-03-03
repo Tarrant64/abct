@@ -406,15 +406,15 @@ async def get_tx_ids_for_account(chain: str, account_id: str,
         return [row[0] for row in await cursor.fetchall()]
 
 
-async def get_unhydrated_tx_ids(chain: str, limit: int = 100) -> List[str]:
+async def get_unhydrated_tx_ids(chain: str, limit: int = 100, offset: int = 0) -> List[str]:
     """Get tx IDs that have been indexed but not yet hydrated."""
     async with aiosqlite.connect(str(DATABASE_PATH)) as db:
         cursor = await db.execute(
             """SELECT DISTINCT ti.tx_id FROM engine_tx_index ti
                LEFT JOIN engine_tx_raw tr ON ti.chain = tr.chain AND ti.tx_id = tr.tx_id
                WHERE ti.chain = ? AND tr.id IS NULL
-               LIMIT ?""",
-            (chain, limit)
+               LIMIT ? OFFSET ?""",
+            (chain, limit, offset)
         )
         return [row[0] for row in await cursor.fetchall()]
 
