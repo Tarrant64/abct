@@ -2259,7 +2259,8 @@ a.btn:active {
     color: #00d4ff;
 }
 
-[data-theme="cypherpunk1"] .spinner-small {
+[data-theme="cypherpunk1"] .spinner-small,
+[data-theme="cypherpunk1"] .stat-refresh-spinner {
     border-color: rgba(0, 212, 255, 0.3);
     border-top-color: #00d4ff;
 }
@@ -2950,6 +2951,25 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
 
 .portfolio-stat .stat-sub.positive { color: #00d26a; }
 .portfolio-stat .stat-sub.negative { color: #ff4757; }
+
+/* Stale-while-revalidate: inline refresh spinner next to stat values */
+.stat-refresh-spinner {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border: 1.5px solid rgba(0, 210, 106, 0.25);
+    border-top-color: var(--accent-success, #00d26a);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-left: 6px;
+    opacity: 0.7;
+}
+
+/* Cached/stale values shown slightly dimmed until fresh data arrives */
+.stat-value.stale-value {
+    opacity: 0.6;
+}
 
 /* Responsive: stack on mobile */
 @media (max-width: 768px) {
@@ -9912,6 +9932,11 @@ body.privacy-mode a[data-href] {
 
 [data-theme="light"] .portfolio-divider {
     background: #e5e7eb;
+}
+
+[data-theme="light"] .stat-refresh-spinner {
+    border-color: rgba(0, 150, 80, 0.2);
+    border-top-color: #00966a;
 }
 
 [data-theme="light"] .top-holding-item {

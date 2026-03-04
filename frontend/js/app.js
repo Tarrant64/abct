@@ -616,31 +616,47 @@ async function loadPortfolioInstant() {
         const data = await response.json();
         if (!data.has_positions) return false;
 
-        // Skip DOM updates when display is locked (cached value is already shown)
-        if (!_portfolioDisplayLocked) {
-            // Update total display
-            const totalValueEl = document.getElementById('totalPortfolioValue');
-            if (totalValueEl) setSafeHTML(totalValueEl, formatUSDBlur(data.total_usd));
+        // Always update DOM with instant data — it's authoritative (DB + in-memory prices).
+        // If display is locked (background tasks still running), keep spinners on breakdown
+        // to indicate more data is coming, but show the DB values instead of stale cache.
+        const totalValueEl = document.getElementById('totalPortfolioValue');
+        if (totalValueEl) setSafeHTML(totalValueEl, formatUSDBlur(data.total_usd));
 
-            // Update breakdown
-            const bd = data.breakdown || {};
-            const liquidTotal = (bd.chain || 0) + (bd.exchange || 0) + (bd.tracked_token || 0) + (bd.custom_token || 0);
-            const stakedTotal = (bd.staking || 0) + (bd.defi || 0);
-            const nftsTotal = bd.nft || 0;
+        // Update breakdown
+        const bd = data.breakdown || {};
+        const liquidTotal = (bd.chain || 0) + (bd.exchange || 0) + (bd.tracked_token || 0) + (bd.custom_token || 0);
+        const stakedTotal = (bd.staking || 0) + (bd.defi || 0);
+        const nftsTotal = bd.nft || 0;
 
-            const liquidEl = document.getElementById('breakdownLiquid');
-            const stakedEl = document.getElementById('breakdownStaked');
-            const nftsEl = document.getElementById('breakdownNfts');
+        const liquidEl = document.getElementById('breakdownLiquid');
+        const stakedEl = document.getElementById('breakdownStaked');
+        const nftsEl = document.getElementById('breakdownNfts');
+
+        if (_portfolioDisplayLocked) {
+            // Display is locked: show instant values WITH spinners (more data still loading)
+            if (liquidEl) setStatValueWithSpinner(liquidEl, formatUSD(liquidTotal));
+            if (stakedEl) setStatValueWithSpinner(stakedEl, formatUSD(stakedTotal));
+            if (nftsEl) setStatValueWithSpinner(nftsEl, formatUSD(nftsTotal));
+        } else {
+            // Display is unlocked: show final values, remove spinners
             if (liquidEl) liquidEl.textContent = formatUSD(liquidTotal);
             if (stakedEl) stakedEl.textContent = formatUSD(stakedTotal);
             if (nftsEl) nftsEl.textContent = formatUSD(nftsTotal);
+            removeBreakdownRefreshIndicators();
         }
 
-        // Cache for next visit
+        // Cache for next visit (total + breakdown)
         if (data.total_usd > 0) {
+            const bd = data.breakdown || {};
+            const cachedLiquid = (bd.chain || 0) + (bd.exchange || 0) + (bd.tracked_token || 0) + (bd.custom_token || 0);
+            const cachedStaked = (bd.staking || 0) + (bd.defi || 0);
+            const cachedNfts = bd.nft || 0;
             try {
                 localStorage.setItem('cachedPortfolioTotal', JSON.stringify({
                     total: data.total_usd,
+                    liquid: cachedLiquid,
+                    staked: cachedStaked,
+                    nfts: cachedNfts,
                     timestamp: Date.now()
                 }));
             } catch (e) { /* localStorage full */ }
@@ -743,11 +759,17 @@ function updateTotalPortfolioValue() {
     if (stakedEl) stakedEl.textContent = formatUSD(stakedTotal);
     if (nftsEl) nftsEl.textContent = formatUSD(nftsTotal);
 
-    // Cache for instant load on next visit
+    // Remove stale styling and refresh spinners — fresh calculated data is now showing
+    removeBreakdownRefreshIndicators();
+
+    // Cache for instant load on next visit (total + breakdown)
     if (totalValue > 0) {
         try {
             localStorage.setItem('cachedPortfolioTotal', JSON.stringify({
                 total: totalValue,
+                liquid: liquidTotal,
+                staked: stakedTotal,
+                nfts: nftsTotal,
                 timestamp: Date.now()
             }));
         } catch (e) { /* localStorage full or unavailable */ }
@@ -858,6 +880,9 @@ function updatePortfolioDonut() {
         if (container) container.style.display = 'none';
         return;
     }
+
+    // Cache donut allocations for instant restore on next page load
+    cacheDonutChartData(allocations);
 
     // Show container
     const container = document.getElementById('portfolioDonutContainer');
@@ -1000,16 +1025,286 @@ function resetDonutHighlight() {
     portfolioDonutChart.update('none');
 }
 
-// Restore cached portfolio total for instant display on page load (before API calls complete)
+// Restore cached portfolio total + breakdown for instant display on page load (before API calls)
 function restoreCachedPortfolioTotal() {
     try {
         const cached = JSON.parse(localStorage.getItem('cachedPortfolioTotal'));
         if (!cached || !cached.total) return;
         // Only use cache if less than 24 hours old
         if (Date.now() - cached.timestamp > 86400000) return;
+
+        // Restore main total
         const totalValueEl = document.getElementById('totalPortfolioValue');
         if (totalValueEl) setSafeHTML(totalValueEl, formatUSDBlur(cached.total));
+
+        // Restore breakdown values (Liquid / Staked / NFTs) with stale styling + refresh indicator
+        if (cached.liquid !== undefined || cached.staked !== undefined || cached.nfts !== undefined) {
+            const breakdownIds = [
+                { id: 'breakdownLiquid', value: cached.liquid },
+                { id: 'breakdownStaked', value: cached.staked },
+                { id: 'breakdownNfts', value: cached.nfts }
+            ];
+            for (const item of breakdownIds) {
+                const el = document.getElementById(item.id);
+                if (el && item.value !== undefined) {
+                    // Set value text and append inline spinner
+                    setStatValueWithSpinner(el, formatUSD(item.value));
+                    el.classList.add('stale-value');
+                }
+            }
+        }
+
+        // Render donut chart with cached data (will be overwritten by fresh data later)
+        if (cached.liquid > 0 || cached.staked > 0 || cached.nfts > 0) {
+            lastTotalPortfolioValue = cached.total;
+            // Attempt to restore cached donut chart data.
+            // If Chart.js isn't loaded yet (defer scripts may not have executed),
+            // retry after a short delay.
+            if (typeof Chart !== 'undefined') {
+                restoreCachedDonutChart();
+            } else {
+                setTimeout(() => {
+                    if (!portfolioDonutChart) restoreCachedDonutChart();
+                }, 100);
+            }
+        }
     } catch (e) { /* parse error or missing */ }
+}
+
+// Set a stat-value element's text with an inline refresh spinner appended
+function setStatValueWithSpinner(el, text) {
+    // Clear existing content
+    el.textContent = '';
+    // Add text as a text node
+    el.appendChild(document.createTextNode(text));
+    // Append inline spinner
+    if (!el.querySelector('.stat-refresh-spinner')) {
+        const spinner = document.createElement('span');
+        spinner.className = 'stat-refresh-spinner';
+        spinner.title = 'Refreshing...';
+        el.appendChild(spinner);
+    }
+}
+
+// Remove stale styling and refresh spinners from breakdown values
+function removeBreakdownRefreshIndicators() {
+    const ids = ['breakdownLiquid', 'breakdownStaked', 'breakdownNfts'];
+    for (const id of ids) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.classList.remove('stale-value');
+            const spinner = el.querySelector('.stat-refresh-spinner');
+            if (spinner) spinner.remove();
+        }
+    }
+}
+
+// Show refresh spinners next to breakdown values (used during manual refresh)
+function showBreakdownRefreshIndicators() {
+    const ids = ['breakdownLiquid', 'breakdownStaked', 'breakdownNfts'];
+    for (const id of ids) {
+        const el = document.getElementById(id);
+        if (el) {
+            // Get current text content (excluding any existing spinner)
+            const currentText = el.childNodes[0]?.textContent || el.textContent || '--';
+            setStatValueWithSpinner(el, currentText);
+        }
+    }
+}
+
+// Restore cached sidebar stats (7-day change, tx count, market cap, top holdings)
+// Called immediately on DOMContentLoaded to eliminate blank states
+function restoreCachedSidebarStats() {
+    try {
+        const cached = JSON.parse(localStorage.getItem('cachedSidebarStats'));
+        if (!cached || Date.now() - cached.timestamp > 86400000) return; // 24h TTL
+
+        // Restore 7-day change
+        if (cached.change7d) {
+            const valueEl = document.getElementById('change7dValue');
+            const pctEl = document.getElementById('change7dPercent');
+            if (valueEl && cached.change7d.value) {
+                setStatValueWithSpinner(valueEl, cached.change7d.value);
+                valueEl.className = 'stat-value stale-value ' + (cached.change7d.className || '');
+            }
+            if (pctEl && cached.change7d.pct) {
+                pctEl.textContent = cached.change7d.pct;
+                pctEl.className = 'stat-sub ' + (cached.change7d.pctClassName || '');
+            }
+        }
+
+        // Restore transaction count
+        if (cached.txCount !== undefined) {
+            const el = document.getElementById('txCount7dValue');
+            if (el) {
+                setStatValueWithSpinner(el, String(cached.txCount));
+                el.classList.add('stale-value');
+            }
+        }
+
+        // Restore global market cap
+        if (cached.globalMarket) {
+            const container = document.getElementById('globalMarketStat');
+            if (container && cached.globalMarket.html) {
+                container.innerHTML = cached.globalMarket.html;
+            }
+        }
+
+        // Restore top holdings pills
+        if (cached.topHoldings) {
+            const container = document.getElementById('topHoldings');
+            if (container && cached.topHoldings.html) {
+                container.innerHTML = cached.topHoldings.html;
+            }
+        }
+    } catch (e) { /* parse error or missing */ }
+}
+
+// Cache sidebar stats for instant restore on next visit
+function cacheSidebarStats() {
+    try {
+        const change7dValue = document.getElementById('change7dValue');
+        const change7dPct = document.getElementById('change7dPercent');
+        const txCount = document.getElementById('txCount7dValue');
+        const globalMarket = document.getElementById('globalMarketStat');
+        const topHoldings = document.getElementById('topHoldings');
+
+        const data = { timestamp: Date.now() };
+
+        if (change7dValue && change7dValue.textContent !== '--') {
+            data.change7d = {
+                value: change7dValue.textContent,
+                className: change7dValue.className.replace('stat-value', '').replace('stale-value', '').trim(),
+                pct: change7dPct ? change7dPct.textContent : '',
+                pctClassName: change7dPct ? change7dPct.className.replace('stat-sub', '').trim() : ''
+            };
+        }
+
+        if (txCount && txCount.textContent !== '--') {
+            data.txCount = txCount.textContent;
+        }
+
+        if (globalMarket && globalMarket.innerHTML.trim()) {
+            data.globalMarket = { html: globalMarket.innerHTML };
+        }
+
+        if (topHoldings && topHoldings.innerHTML.trim()) {
+            data.topHoldings = { html: topHoldings.innerHTML };
+        }
+
+        localStorage.setItem('cachedSidebarStats', JSON.stringify(data));
+    } catch (e) { /* localStorage full */ }
+}
+
+// Cache donut chart allocation data for instant restore on next page load
+function cacheDonutChartData(allocations) {
+    if (!allocations || allocations.length === 0) return;
+    try {
+        // Store only what we need: label, color, usd value
+        const slim = allocations.map(a => ({ label: a.label, color: a.color, usd: a.usd }));
+        localStorage.setItem('cachedDonutData', JSON.stringify({
+            allocations: slim,
+            timestamp: Date.now()
+        }));
+    } catch (e) { /* localStorage full */ }
+}
+
+// Restore donut chart from cached data (called before API data is available)
+function restoreCachedDonutChart() {
+    try {
+        const cached = JSON.parse(localStorage.getItem('cachedDonutData'));
+        if (!cached || !cached.allocations || cached.allocations.length === 0) return;
+        // Only use if less than 24 hours old
+        if (Date.now() - cached.timestamp > 86400000) return;
+
+        const canvas = document.getElementById('portfolioDonutChart');
+        if (!canvas || typeof Chart === 'undefined') return;
+
+        const labels = cached.allocations.map(a => a.label);
+        const data = cached.allocations.map(a => a.usd);
+        const colors = cached.allocations.map(a => a.color);
+        const totalUsd = data.reduce((s, v) => s + v, 0);
+
+        if (totalUsd === 0) return;
+
+        // Show container
+        const container = document.getElementById('portfolioDonutContainer');
+        if (container) container.style.display = 'flex';
+
+        // Set center text
+        const displayTotal = lastTotalPortfolioValue > 0 ? lastTotalPortfolioValue : totalUsd;
+        setDonutCenterText('Total Balance', formatUSD(displayTotal), '');
+
+        // Create chart if it doesn't exist yet
+        if (!portfolioDonutChart) {
+            portfolioDonutChart = new Chart(canvas, {
+                type: 'doughnut',
+                data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0, borderRadius: 2, spacing: 2 }] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    cutout: '68%',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            enabled: true,
+                            callbacks: {
+                                label: function(context) {
+                                    const currentAllocs = getChainAllocations();
+                                    const currentTotal = lastTotalPortfolioValue > 0 ? lastTotalPortfolioValue : currentAllocs.reduce((s, a) => s + a.usd, 0);
+                                    const alloc = currentAllocs[context.dataIndex];
+                                    if (!alloc) return '';
+                                    const pct = ((alloc.usd / currentTotal) * 100).toFixed(1);
+                                    return `${alloc.symbol}  ${pct}%`;
+                                },
+                                title: function() { return ''; }
+                            },
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            bodyColor: '#fff',
+                            bodyFont: { size: 13, weight: 'bold' },
+                            padding: { top: 6, bottom: 6, left: 10, right: 10 },
+                            cornerRadius: 8,
+                            displayColors: true,
+                            boxWidth: 10, boxHeight: 10, boxPadding: 4,
+                        },
+                    },
+                    layout: { padding: 4 },
+                    animation: { duration: 400, easing: 'easeOutQuart' },
+                    onClick: (evt, elements) => {
+                        const currentAllocs = getChainAllocations();
+                        const currentAllocTotal = currentAllocs.reduce((s, a) => s + a.usd, 0);
+                        const currentDisplayTotal = lastTotalPortfolioValue > 0 ? lastTotalPortfolioValue : currentAllocTotal;
+                        if (!elements.length) {
+                            donutSelectedIndex = -1;
+                            resetDonutHighlight();
+                            setDonutCenterText('Total Balance', formatUSD(currentDisplayTotal), '');
+                            return;
+                        }
+                        const idx = elements[0].index;
+                        if (donutSelectedIndex === idx) {
+                            donutSelectedIndex = -1;
+                            resetDonutHighlight();
+                            setDonutCenterText('Total Balance', formatUSD(currentDisplayTotal), '');
+                        } else {
+                            donutSelectedIndex = idx;
+                            highlightDonutSegment(idx);
+                            const a = currentAllocs[idx];
+                            if (a) {
+                                const pct = ((a.usd / currentDisplayTotal) * 100).toFixed(1) + '%';
+                                setDonutCenterText(a.label, formatUSD(a.usd), pct);
+                            }
+                        }
+                    },
+                    onHover: (evt, elements) => {
+                        canvas.style.cursor = elements.length ? 'pointer' : 'default';
+                    }
+                }
+            });
+            console.log('[Cache] Rendered donut chart from cached data');
+        }
+    } catch (e) {
+        console.warn('[Cache] Failed to restore donut chart:', e);
+    }
 }
 
 // Get top N holdings by USD value from wallet/staking/defi data
@@ -1151,6 +1446,7 @@ async function load7DayPortfolioChange() {
 
         valueEl.textContent = (isPositive ? '+' : '-') + formatUSD(Math.abs(dollarChange));
         valueEl.className = 'stat-value ' + (isPositive ? 'positive' : 'negative');
+        valueEl.classList.remove('stale-value');
 
         if (pctEl) {
             pctEl.textContent = sign + pctChange.toFixed(1) + '%';
@@ -1160,6 +1456,7 @@ async function load7DayPortfolioChange() {
         console.error('[Portfolio] Failed to load 7-day change:', e);
         valueEl.textContent = '--';
         valueEl.className = 'stat-value';
+        valueEl.classList.remove('stale-value');
         if (pctEl) { pctEl.textContent = ''; pctEl.className = 'stat-sub'; }
     }
 }
@@ -1174,9 +1471,11 @@ async function load7DayTransactionCount() {
         if (!response.ok) throw new Error('API error');
         const data = await response.json();
         el.textContent = (data.total_transactions || 0).toLocaleString();
+        el.classList.remove('stale-value');
     } catch (e) {
         console.error('[Portfolio] Failed to load 7-day tx count:', e);
         el.textContent = '--';
+        el.classList.remove('stale-value');
     }
 }
 
@@ -7858,6 +8157,9 @@ async function globalRefreshAll() {
 
     showStatus('Refreshing all data...');
 
+    // Show refresh spinners next to breakdown values (stale-while-revalidate)
+    showBreakdownRefreshIndicators();
+
     try {
         // 1. Refresh prices
         await loadPrices();
@@ -7883,6 +8185,8 @@ async function globalRefreshAll() {
                     if (liquidEl) liquidEl.textContent = formatUSD(liquidTotal);
                     if (stakedEl) stakedEl.textContent = formatUSD(stakedTotal);
                     if (nftsEl) nftsEl.textContent = formatUSD(nftsTotal);
+                    // Fresh data arrived — remove refresh indicators
+                    removeBreakdownRefreshIndicators();
                 }
             }
         } catch (e) {
@@ -7961,6 +8265,8 @@ async function globalRefreshAll() {
             btn.classList.remove('refreshing');
             btn.disabled = false;
         }
+        // Always clean up refresh indicators when refresh completes (success or failure)
+        removeBreakdownRefreshIndicators();
     }
 }
 
@@ -10304,20 +10610,24 @@ function destroyAssetDetailChart() {
 
 // Initial load
 document.addEventListener('DOMContentLoaded', async () => {
+    // Load saved theme preference (synchronous, no API calls)
+    loadSavedTheme();
+
+    // Initialize privacy mode from localStorage (synchronous)
+    initializePrivacyMode();
+
+    // Show last known portfolio total instantly — BEFORE any network requests.
+    // This is the critical path for eliminating blank/-- states on load.
+    restoreCachedPortfolioTotal();
+
+    // Restore cached sidebar stats (7-day change, tx count, market cap, top holdings)
+    restoreCachedSidebarStats();
+
     // Load LogoKit token from backend (must complete before any logo URLs are generated)
     await initLogokitToken();
 
-    // Load saved theme preference
-    loadSavedTheme();
-
-    // Initialize privacy mode from localStorage
-    initializePrivacyMode();
-
     // Initialize global search in header
     initGlobalSearch();
-
-    // Show last known portfolio total instantly (before any API calls)
-    restoreCachedPortfolioTotal();
 
     // Lock the portfolio display on overview page: after the cached value is shown,
     // prevent intermediate updates from flickering the total. Unlocked after all data loads.
@@ -10437,6 +10747,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             _portfolioDisplayLocked = false;  // Unlock display — allow DOM updates now
             initCardanoPriceStream();
             updateTotalPortfolioValue();  // Final recalculation — direct, not debounced
+            // Cache sidebar stats (7-day change, tx count, market cap, top holdings) for next visit
+            setTimeout(cacheSidebarStats, 500);
             checkV2CollectionStatus();
             preFetchAssetBreakdowns();
         });
