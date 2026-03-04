@@ -1528,6 +1528,7 @@ def _merge_holding(holdings: dict, key: str, amount: float, price: float,
 async def get_all_holdings(
     user_id: int = Depends(verify_session),
     refresh: bool = Query(False, description="Force refresh"),
+    include_all: bool = Query(False, description="Include zero-value/dust tokens"),
 ):
     """
     Unified list of ALL holdings: L1 chains, native tokens, DeFi positions,
@@ -1535,11 +1536,12 @@ async def get_all_holdings(
 
     Merges quantities for the same token across sources (e.g. staked + unstaked INDY).
     Includes 7-day sparkline price data for charting.
+    When include_all=true, also includes tokens with no price data or zero value.
     """
     from database import get_all_wallets
 
-    # Check cache first (5-min HOT TTL)
-    cache_key = f"all_holdings_{user_id}"
+    # Check cache first (5-min HOT TTL) — separate cache for include_all mode
+    cache_key = f"all_holdings_{user_id}" + ("_all" if include_all else "")
     if not refresh:
         cached = await get_cache(cache_key, user_id=user_id)
         if cached:
@@ -1630,6 +1632,32 @@ async def get_all_holdings(
             'logo_url': asset.get('logo_url') or (token_meta.get('image_url') if token_meta else None) or logokit_service.get_crypto_logo_url(ticker, size=64),
             'source': 'token',
         }
+
+    # --- 2b. Non-valuable native tokens (zero-value/dust, only when include_all) ---
+    if include_all:
+        for asset in assets_data.get('assets', []):
+            ticker = (asset.get('ticker') or asset.get('asset_name', '')).upper()
+            if not ticker:
+                continue
+            # Skip if already included from valuable_assets or L1 chains
+            if ticker in holdings or ticker in _PRICE_SYMBOL.values():
+                continue
+            # This token has no price or zero value
+            raw_qty = asset.get('total_quantity_raw', 0)
+            decimals = asset.get('decimals', 0) or 0
+            human_qty = raw_qty / (10 ** decimals) if decimals > 0 else raw_qty
+            token_meta = await metadata_cache.get_metadata(ticker)
+            holdings[ticker] = {
+                'symbol': ticker,
+                'name': asset.get('asset_name', ticker),
+                'amount': asset.get('total_quantity', human_qty),
+                'price_usd': asset.get('price_usd') or 0,
+                'value_usd': asset.get('value_usd') or 0,
+                'price_change_24h': 0,
+                'wallet_count': asset.get('wallet_count', 0),
+                'logo_url': asset.get('logo_url') or (token_meta.get('image_url') if token_meta else None) or logokit_service.get_crypto_logo_url(ticker, size=64),
+                'source': 'token',
+            }
 
     # --- 3. DeFi governance tokens (from wallet UTXOs) ---
     if defi_data and defi_data.get('all_positions'):

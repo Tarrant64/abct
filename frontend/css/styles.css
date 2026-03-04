@@ -6337,6 +6337,75 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     font-style: italic;
 }
 
+/* Show All toggle button styles */
+.show-all-toggle {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--bg-secondary, rgba(255,255,255,0.1));
+    transition: all 0.2s ease;
+}
+
+.show-all-toggle:hover {
+    color: var(--text-primary);
+    border-color: var(--accent-color, #00d26a);
+}
+
+.show-all-toggle input[type="checkbox"] {
+    accent-color: var(--accent-color, #00d26a);
+    cursor: pointer;
+}
+
+/* Show All button for native tokens list */
+.btn-show-all-tokens {
+    display: block;
+    margin: 12px auto;
+    padding: 8px 20px;
+    background: var(--bg-secondary, rgba(255,255,255,0.05));
+    border: 1px solid var(--border-color, #30363d);
+    color: var(--text-secondary);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s ease;
+}
+
+.btn-show-all-tokens:hover {
+    background: var(--bg-hover, rgba(255,255,255,0.1));
+    color: var(--text-primary);
+    border-color: var(--accent-color, #00d26a);
+}
+
+/* Wallet-level show all bar */
+.wallet-show-all-bar {
+    display: flex;
+    justify-content: flex-end;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border-color, #30363d);
+}
+
+/* Dust token row styling — slightly dimmed */
+.dust-token {
+    opacity: 0.55;
+}
+
+.dust-token:hover {
+    opacity: 0.85;
+}
+
+/* Other tokens count badge */
+.other-tokens-count {
+    color: var(--text-secondary);
+    font-size: 0.85em;
+    font-weight: 400;
+}
+
 /* Summary styling */
 #nativeTokensSummary {
     display: flex;

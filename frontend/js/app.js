@@ -2544,213 +2544,250 @@ async function toggleDashboardWalletAssets(walletId) {
         if (assets.length === 0 && !nativeBalance) {
             container.innerHTML = '<div style="text-align: center; padding: 10px; color: #888;">No assets found</div>';
         } else {
-            const blockchain = data.blockchain || 'cardano';
-            const isCardano = blockchain === 'cardano';
-
-            // Sort assets by total_value_usd descending
-            assets.sort((a, b) => {
-                const aVal = parseFloat(a.total_value_usd) || 0;
-                const bVal = parseFloat(b.total_value_usd) || 0;
-                return bVal - aVal;
-            });
-
-            // Calculate total portfolio value for percentage calculations (include native balance)
-            let totalPortfolioValue = 0;
-            if (nativeBalance) {
-                totalPortfolioValue += parseFloat(nativeBalance.total_value_usd) || 0;
-            }
-            assets.forEach(asset => {
-                totalPortfolioValue += parseFloat(asset.total_value_usd) || 0;
-            });
-
-            // Build table layout with native token pricing
-            // Determine native token symbol
-            const nativeSymbols = {
-                'cardano': 'ADA',
-                'bitcoin': 'BTC',
-                'ethereum': 'ETH',
-                'solana': 'SOL',
-                'polygon': 'POL',
-                'base': 'ETH'
-            };
-            const nativeSymbol = nativeSymbols[blockchain] || 'Token';
-
-            // Check if we should use table layout (when we have native pricing)
-            const useTableLayout = assets.some(a => a.price_native || a.price_ada) || nativeBalance;
-
-            if (useTableLayout) {
-                let html = `
-                    <div class="assets-table-wrapper">
-                        <table class="assets-table">
-                            <thead>
-                                <tr>
-                                    <th>Asset</th>
-                                    <th>${nativeSymbol} Price</th>
-                                    <th>Owned</th>
-                                    <th>${nativeSymbol}</th>
-                                    <th>$</th>
-                                    <th>% of Portfolio</th>
-                                    <th>Ignore</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                `;
-
-                // Always show native token first (pinned to top)
-                if (nativeBalance) {
-                    const actualQty = parseFloat(nativeBalance.actual_quantity) || 0;
-                    const totalValueUsd = parseFloat(nativeBalance.total_value_usd) || 0;
-                    const percentage = totalPortfolioValue > 0 ? (totalValueUsd / totalPortfolioValue * 100) : 0;
-
-                    const ticker = nativeBalance.ticker || nativeSymbol;
-                    const tokenName = nativeBalance.token_name || blockchain;
-
-                    const ownedStr = actualQty.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 });
-                    const totalNativeStr = actualQty.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 });
-                    const totalUsdStr = totalValueUsd > 0 ? '$' + totalValueUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '$0.00';
-
-                    html += `
-                        <tr class="native-asset-row">
-                            <td class="asset-name-cell">
-                                <div class="asset-ticker">${ticker}</div>
-                                <div class="asset-name-small">${tokenName}</div>
-                            </td>
-                            <td>1.000000</td>
-                            <td>${ownedStr}</td>
-                            <td class="ada-value">${totalNativeStr}</td>
-                            <td>${totalUsdStr}</td>
-                            <td>
-                                <div class="portfolio-bar-wrapper">
-                                    <div class="portfolio-bar" style="width: ${percentage}%"></div>
-                                    <span class="portfolio-pct">${percentage.toFixed(1)}%</span>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="ignore-na">-</span>
-                            </td>
-                        </tr>
-                    `;
-                }
-
-                // Then show all other assets sorted by value
-                assets.forEach(asset => {
-                    const actualQty = parseFloat(asset.actual_quantity) || 0;
-                    const ticker = asset.ticker || asset.asset_name?.substring(0, 10) || 'Unknown';
-                    const displayName = asset.token_name || asset.asset_name || 'Unknown';
-                    const logoUrl = asset.logo_url || '';
-
-                    // Use generic native price or fallback to ADA price for backwards compatibility
-                    const priceNative = parseFloat(asset.price_native || asset.price_ada) || 0;
-                    const totalNative = parseFloat(asset.total_native || asset.total_ada) || 0;
-                    const totalValueUsd = parseFloat(asset.total_value_usd) || 0;
-
-                    // Only show if we have pricing data and value >= $1
-                    if (totalValueUsd < 1.00 && priceNative === 0) {
-                        return;
-                    }
-
-                    // Format values
-                    const priceNativeStr = priceNative > 0 ? priceNative.toFixed(6) : 'N/A';
-                    const ownedStr = actualQty.toLocaleString('en-US', { maximumFractionDigits: 2 });
-                    const totalNativeStr = totalNative > 0 ? totalNative.toLocaleString('en-US', { maximumFractionDigits: 6 }) : '0';
-                    const totalUsdStr = totalValueUsd > 0 ? '$' + totalValueUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '$0.00';
-
-                    // Calculate percentage
-                    const percentage = totalPortfolioValue > 0 ? (totalValueUsd / totalPortfolioValue * 100) : 0;
-
-                    // Get ignore status
-                    const assetId = asset.id;
-                    const isIgnored = asset.ignored === 1 || asset.ignored === true;
-
-                    html += `
-                        <tr class="${isIgnored ? 'asset-ignored' : ''}">
-                            <td class="asset-name-cell">
-                                ${logoUrl ? `<img src="${logoUrl}" alt="${displayName}" class="token-logo" onerror="this.style.display='none';">` : ''}
-                                <div style="flex: 1;">
-                                    <div class="asset-ticker">${ticker}</div>
-                                    <div class="asset-name-small">${displayName}</div>
-                                </div>
-                            </td>
-                            <td>${priceNativeStr}</td>
-                            <td>${ownedStr}</td>
-                            <td class="ada-value">${totalNativeStr}</td>
-                            <td>${totalUsdStr}</td>
-                            <td>
-                                <div class="portfolio-bar-wrapper">
-                                    <div class="portfolio-bar" style="width: ${percentage}%"></div>
-                                    <span class="portfolio-pct">${percentage.toFixed(1)}%</span>
-                                </div>
-                            </td>
-                            <td>
-                                <label class="ignore-toggle">
-                                    <input type="checkbox" ${isIgnored ? 'checked' : ''}
-                                           onchange="toggleAssetIgnore(${assetId}, this.checked)">
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </td>
-                        </tr>
-                    `;
-                });
-
-                html += `
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-                container.innerHTML = html;
-            } else {
-                // Non-Cardano: use grid layout
-                let html = '<div class="assets-grid">';
-                assets.forEach(asset => {
-                    const actualQty = parseFloat(asset.actual_quantity) || 0;
-                    const quantity = actualQty >= 1000000
-                        ? (actualQty / 1000000).toFixed(2) + 'M'
-                        : actualQty >= 1000
-                        ? (actualQty / 1000).toFixed(2) + 'K'
-                        : actualQty.toLocaleString('en-US', { maximumFractionDigits: 6 });
-
-                    const ticker = asset.ticker || asset.asset_name?.substring(0, 10) || 'Unknown';
-                    const displayName = asset.token_name || asset.asset_name || 'Unknown';
-                    const logoUrl = asset.logo_url || '';
-                    const totalValue = parseFloat(asset.total_value_usd) || 0;
-                    const priceUsd = parseFloat(asset.price_usd) || 0;
-
-                    const showPrice = totalValue >= 1.00;
-                    let priceDisplay = '';
-                    if (showPrice && priceUsd > 0) {
-                        const priceStr = priceUsd >= 1
-                            ? '$' + priceUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                            : priceUsd >= 0.01
-                            ? '$' + priceUsd.toFixed(4)
-                            : '$' + priceUsd.toFixed(8);
-                        priceDisplay = `<div class="asset-price">${priceStr}</div>`;
-                    } else if (showPrice) {
-                        priceDisplay = '<div class="asset-price">N/A</div>';
-                    }
-
-                    html += `
-                        <div class="asset-item">
-                            ${logoUrl ? `<img src="${logoUrl}" alt="${displayName}" class="token-logo" onerror="this.style.display='none';">` : ''}
-                            <div class="asset-info">
-                                <div class="asset-ticker">${ticker}</div>
-                                <div class="asset-name">${displayName}</div>
-                            </div>
-                            <div class="asset-values">
-                                <div class="asset-quantity">${quantity}</div>
-                                ${priceDisplay}
-                            </div>
-                        </div>
-                    `;
-                });
-                html += '</div>';
-                container.innerHTML = html;
-            }
+            // Store all assets on the container for re-rendering when toggling show-all
+            container._walletAssetsData = { assets, nativeBalance, blockchain: data.blockchain || 'cardano' };
+            _renderWalletAssetsContent(container, walletId);
         }
 
         container.dataset.loaded = 'true';
     } catch (error) {
         console.error('Error loading wallet assets:', error);
         container.innerHTML = '<div style="text-align: center; padding: 10px; color: #dc3545;">Failed to load assets</div>';
+    }
+}
+
+// Render wallet assets with optional show-all filtering
+function _renderWalletAssetsContent(container, walletId) {
+    const { assets, nativeBalance, blockchain } = container._walletAssetsData;
+    const showAll = localStorage.getItem('walletAssetsShowAll') === 'true';
+
+    // Sort assets by total_value_usd descending
+    const sortedAssets = [...assets].sort((a, b) => {
+        const aVal = parseFloat(a.total_value_usd) || 0;
+        const bVal = parseFloat(b.total_value_usd) || 0;
+        return bVal - aVal;
+    });
+
+    // Calculate total portfolio value for percentage calculations (include native balance)
+    let totalPortfolioValue = 0;
+    if (nativeBalance) {
+        totalPortfolioValue += parseFloat(nativeBalance.total_value_usd) || 0;
+    }
+    sortedAssets.forEach(asset => {
+        totalPortfolioValue += parseFloat(asset.total_value_usd) || 0;
+    });
+
+    // Determine native token symbol
+    const nativeSymbols = {
+        'cardano': 'ADA',
+        'bitcoin': 'BTC',
+        'ethereum': 'ETH',
+        'solana': 'SOL',
+        'polygon': 'POL',
+        'base': 'ETH'
+    };
+    const nativeSymbol = nativeSymbols[blockchain] || 'Token';
+
+    // Count how many assets are filtered out (for show-all toggle label)
+    const dustCount = sortedAssets.filter(a => {
+        const totalValueUsd = parseFloat(a.total_value_usd) || 0;
+        const priceNative = parseFloat(a.price_native || a.price_ada) || 0;
+        return totalValueUsd < 1.00 && priceNative === 0;
+    }).length;
+
+    // Check if we should use table layout (when we have native pricing)
+    const useTableLayout = sortedAssets.some(a => a.price_native || a.price_ada) || nativeBalance;
+
+    // Show All toggle button
+    const showAllToggleHtml = dustCount > 0 ? `
+        <div class="wallet-show-all-bar">
+            <label class="toggle-label show-all-toggle">
+                <input type="checkbox" class="wallet-show-all-cb" data-wallet-id="${walletId}" ${showAll ? 'checked' : ''}>
+                Show All (${dustCount} hidden)
+            </label>
+        </div>
+    ` : '';
+
+    if (useTableLayout) {
+        let html = showAllToggleHtml + `
+            <div class="assets-table-wrapper">
+                <table class="assets-table">
+                    <thead>
+                        <tr>
+                            <th>Asset</th>
+                            <th>${nativeSymbol} Price</th>
+                            <th>Owned</th>
+                            <th>${nativeSymbol}</th>
+                            <th>$</th>
+                            <th>% of Portfolio</th>
+                            <th>Ignore</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        // Always show native token first (pinned to top)
+        if (nativeBalance) {
+            const actualQty = parseFloat(nativeBalance.actual_quantity) || 0;
+            const totalValueUsd = parseFloat(nativeBalance.total_value_usd) || 0;
+            const percentage = totalPortfolioValue > 0 ? (totalValueUsd / totalPortfolioValue * 100) : 0;
+
+            const ticker = nativeBalance.ticker || nativeSymbol;
+            const tokenName = nativeBalance.token_name || blockchain;
+
+            const ownedStr = actualQty.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 });
+            const totalNativeStr = actualQty.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 });
+            const totalUsdStr = totalValueUsd > 0 ? '$' + totalValueUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '$0.00';
+
+            html += `
+                <tr class="native-asset-row">
+                    <td class="asset-name-cell">
+                        <div class="asset-ticker">${ticker}</div>
+                        <div class="asset-name-small">${tokenName}</div>
+                    </td>
+                    <td>1.000000</td>
+                    <td>${ownedStr}</td>
+                    <td class="ada-value">${totalNativeStr}</td>
+                    <td>${totalUsdStr}</td>
+                    <td>
+                        <div class="portfolio-bar-wrapper">
+                            <div class="portfolio-bar" style="width: ${percentage}%"></div>
+                            <span class="portfolio-pct">${percentage.toFixed(1)}%</span>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="ignore-na">-</span>
+                    </td>
+                </tr>
+            `;
+        }
+
+        // Then show assets sorted by value
+        sortedAssets.forEach(asset => {
+            const actualQty = parseFloat(asset.actual_quantity) || 0;
+            const ticker = asset.ticker || asset.asset_name?.substring(0, 10) || 'Unknown';
+            const displayName = asset.token_name || asset.asset_name || 'Unknown';
+            const logoUrl = asset.logo_url || '';
+
+            // Use generic native price or fallback to ADA price for backwards compatibility
+            const priceNative = parseFloat(asset.price_native || asset.price_ada) || 0;
+            const totalNative = parseFloat(asset.total_native || asset.total_ada) || 0;
+            const totalValueUsd = parseFloat(asset.total_value_usd) || 0;
+
+            // Filter out dust unless Show All is enabled
+            if (!showAll && totalValueUsd < 1.00 && priceNative === 0) {
+                return;
+            }
+
+            // Format values
+            const priceNativeStr = priceNative > 0 ? priceNative.toFixed(6) : 'N/A';
+            const ownedStr = actualQty.toLocaleString('en-US', { maximumFractionDigits: 2 });
+            const totalNativeStr = totalNative > 0 ? totalNative.toLocaleString('en-US', { maximumFractionDigits: 6 }) : '0';
+            const totalUsdStr = totalValueUsd > 0 ? '$' + totalValueUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '$0.00';
+
+            // Calculate percentage
+            const percentage = totalPortfolioValue > 0 ? (totalValueUsd / totalPortfolioValue * 100) : 0;
+
+            // Get ignore status
+            const assetId = asset.id;
+            const isIgnored = asset.ignored === 1 || asset.ignored === true;
+
+            html += `
+                <tr class="${isIgnored ? 'asset-ignored' : ''}${totalValueUsd < 1.00 && priceNative === 0 ? ' dust-token' : ''}">
+                    <td class="asset-name-cell">
+                        ${logoUrl ? `<img src="${logoUrl}" alt="${displayName}" class="token-logo" onerror="this.style.display='none';">` : ''}
+                        <div style="flex: 1;">
+                            <div class="asset-ticker">${ticker}</div>
+                            <div class="asset-name-small">${displayName}</div>
+                        </div>
+                    </td>
+                    <td>${priceNativeStr}</td>
+                    <td>${ownedStr}</td>
+                    <td class="ada-value">${totalNativeStr}</td>
+                    <td>${totalUsdStr}</td>
+                    <td>
+                        <div class="portfolio-bar-wrapper">
+                            <div class="portfolio-bar" style="width: ${percentage}%"></div>
+                            <span class="portfolio-pct">${percentage.toFixed(1)}%</span>
+                        </div>
+                    </td>
+                    <td>
+                        <label class="ignore-toggle">
+                            <input type="checkbox" ${isIgnored ? 'checked' : ''}
+                                   onchange="toggleAssetIgnore(${assetId}, this.checked)">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </td>
+                </tr>
+            `;
+        });
+
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+        container.innerHTML = html;
+    } else {
+        // Non-Cardano: use grid layout
+        let html = showAllToggleHtml + '<div class="assets-grid">';
+        sortedAssets.forEach(asset => {
+            const actualQty = parseFloat(asset.actual_quantity) || 0;
+            const quantity = actualQty >= 1000000
+                ? (actualQty / 1000000).toFixed(2) + 'M'
+                : actualQty >= 1000
+                ? (actualQty / 1000).toFixed(2) + 'K'
+                : actualQty.toLocaleString('en-US', { maximumFractionDigits: 6 });
+
+            const ticker = asset.ticker || asset.asset_name?.substring(0, 10) || 'Unknown';
+            const displayName = asset.token_name || asset.asset_name || 'Unknown';
+            const logoUrl = asset.logo_url || '';
+            const totalValue = parseFloat(asset.total_value_usd) || 0;
+            const priceUsd = parseFloat(asset.price_usd) || 0;
+
+            // Filter out zero-value tokens unless Show All is enabled
+            if (!showAll && totalValue < 1.00 && priceUsd === 0) {
+                return;
+            }
+
+            const showPrice = totalValue >= 0.01 || priceUsd > 0;
+            let priceDisplay = '';
+            if (showPrice && priceUsd > 0) {
+                const priceStr = priceUsd >= 1
+                    ? '$' + priceUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                    : priceUsd >= 0.01
+                    ? '$' + priceUsd.toFixed(4)
+                    : '$' + priceUsd.toFixed(8);
+                priceDisplay = `<div class="asset-price">${priceStr}</div>`;
+            } else if (totalValue > 0) {
+                priceDisplay = '<div class="asset-price">N/A</div>';
+            }
+
+            html += `
+                <div class="asset-item${totalValue < 1.00 && priceUsd === 0 ? ' dust-token' : ''}">
+                    ${logoUrl ? `<img src="${logoUrl}" alt="${displayName}" class="token-logo" onerror="this.style.display='none';">` : ''}
+                    <div class="asset-info">
+                        <div class="asset-ticker">${ticker}</div>
+                        <div class="asset-name">${displayName}</div>
+                    </div>
+                    <div class="asset-values">
+                        <div class="asset-quantity">${quantity}</div>
+                        ${priceDisplay}
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    // Attach show-all toggle handler
+    const showAllCb = container.querySelector('.wallet-show-all-cb');
+    if (showAllCb) {
+        showAllCb.addEventListener('change', function() {
+            localStorage.setItem('walletAssetsShowAll', this.checked);
+            _renderWalletAssetsContent(container, walletId);
+        });
     }
 }
 
@@ -3165,9 +3202,12 @@ function renderNativeAssets(valuableAssets, allAssets) {
 
     // Show other assets without prices (no toggles needed)
     const otherAssets = allAssets.filter(a => !a.value_usd);
+    const nativeTokensShowAll = localStorage.getItem('nativeTokensShowAll') === 'true';
+    const displayLimit = nativeTokensShowAll ? otherAssets.length : 30;
+
     if (otherAssets.length > 0) {
-        html += '<div class="assets-section-header">Other Tokens (No Price Data)</div>';
-        html += otherAssets.slice(0, 30).map(asset => {
+        html += `<div class="assets-section-header">Other Tokens (No Price Data) <span class="other-tokens-count">(${otherAssets.length})</span></div>`;
+        html += otherAssets.slice(0, displayLimit).map(asset => {
             const displayName = asset.ticker || asset.asset_name || 'Unknown';
             const qty = asset.total_quantity_formatted || asset.total_quantity_raw?.toLocaleString() || '0';
             const blockchain = asset.blockchain || 'cardano';
@@ -3193,11 +3233,25 @@ function renderNativeAssets(valuableAssets, allAssets) {
         }).join('');
 
         if (otherAssets.length > 30) {
-            html += `<p class="more-tokens-note">And ${otherAssets.length - 30} more tokens...</p>`;
+            if (nativeTokensShowAll) {
+                html += `<button class="btn-show-all-tokens" id="nativeTokensShowAllBtn">Show Less</button>`;
+            } else {
+                html += `<button class="btn-show-all-tokens" id="nativeTokensShowAllBtn">Show All ${otherAssets.length} Tokens</button>`;
+            }
         }
     }
 
     setSafeHTML(tokensList, html);
+
+    // Attach show-all button handler
+    const showAllBtn = document.getElementById('nativeTokensShowAllBtn');
+    if (showAllBtn) {
+        showAllBtn.addEventListener('click', () => {
+            const current = localStorage.getItem('nativeTokensShowAll') === 'true';
+            localStorage.setItem('nativeTokensShowAll', !current);
+            renderNativeAssets(valuableAssets, allAssets);
+        });
+    }
 }
 
 // Flag to prevent race conditions during toggle
@@ -11092,23 +11146,42 @@ async function loadAllHoldings() {
         settingsBtn._listenerAdded = true;
     }
 
+    // Restore showZeroBalances state from localStorage
+    const checkbox = document.getElementById('showZeroBalances');
+    const savedShowAll = localStorage.getItem('holdingsShowAll') === 'true';
+    if (checkbox) {
+        checkbox.checked = savedShowAll;
+    }
+
+    // Show the toggle (always visible now)
+    const toggleWrap = document.getElementById('zeroBalanceToggle');
+    if (toggleWrap) toggleWrap.style.display = '';
+
     try {
         if (loading) loading.style.display = 'flex';
-        const response = await authFetch(`${API_BASE}/portfolio/all-holdings`);
+        // Include all tokens from backend when show-all is enabled
+        const includeAll = savedShowAll ? '&include_all=true' : '';
+        const response = await authFetch(`${API_BASE}/portfolio/all-holdings?${includeAll}`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         _holdingsData = data;
 
-        // Show toggle if there are any zero-balance holdings
-        const hasZero = data.holdings.some(h => (h.value_usd || 0) <= 0);
-        const toggleWrap = document.getElementById('zeroBalanceToggle');
-        if (toggleWrap) toggleWrap.style.display = hasZero ? '' : 'none';
-
-        const checkbox = document.getElementById('showZeroBalances');
         if (checkbox && !checkbox._holdingsListenerAdded) {
-            checkbox.addEventListener('change', () => renderAllHoldings(_holdingsData.holdings, body));
+            checkbox.addEventListener('change', async () => {
+                const showAll = checkbox.checked;
+                localStorage.setItem('holdingsShowAll', showAll);
+                // Re-fetch with include_all when toggling on to get zero-value tokens from backend
+                if (showAll && !_holdingsData._includesAll) {
+                    await loadAllHoldings();
+                } else {
+                    renderAllHoldings(_holdingsData.holdings, body);
+                }
+            });
             checkbox._holdingsListenerAdded = true;
         }
+
+        // Track whether this data includes all tokens
+        _holdingsData._includesAll = savedShowAll;
 
         renderAllHoldings(data.holdings, body);
     } catch (e) {
