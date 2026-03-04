@@ -3,7 +3,7 @@
 Personal multi-chain portfolio tracker built Cardano-first.
 
 ![Version](https://img.shields.io/badge/version-1.15.2-brightgreen.svg)
-![Build](https://img.shields.io/badge/build-1771794638-blue.svg)
+![Build](https://img.shields.io/badge/build-1772667842-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.109-teal.svg)
@@ -55,20 +55,28 @@ Protocol adapters detect positions automatically — no manual tracking needed:
 - **Solana** (15): Marinade, Jito, Orca, Raydium, Drift, MarginFi, Kamino, Jupiter Perps, Blazestake, and more
 
 ### Portfolio & Analytics
-- **Dashboard**: Dynamic blockchain cards, allocation donut chart, market heatmap, global market cap widget
-- **P&L Analytics**: Cost basis tracking with FIFO/LIFO/Average methods — per-asset and portfolio-wide realized and unrealized P&L
+- **Dashboard**: Dynamic blockchain cards, allocation donut chart, market heatmap, global market cap widget, unified All Assets table with zero-balance toggle
+- **P&L Analytics**: Cost basis tracking with FIFO/LIFO/Average methods — per-asset and portfolio-wide realized and unrealized P&L, dedicated P&L tab on Assets page with self-custody wallet transaction ingestion
 - **Per-Wallet History**: Daily balance tracking per wallet/exchange/staking position with unified chart
-- **Transaction Analytics**: Multi-chain transaction history with filtering, analytics, and portfolio vs. BTC relative strength
+- **Transaction Analytics**: Multi-chain transaction history with full paginated fetching, filtering, analytics, and portfolio vs. BTC relative strength
+- **Security / Privacy**: Token approval monitoring, address poisoning scanner, Cardano Shield threat feed, spam token detection, Railgun contract detection, Zcash shielded pool stats, per-wallet privacy scoring, Monero and Secret Network support
 - **DePIN Tracking**: Iagon (Cardano) and Helium (Solana) infrastructure protocol monitoring
-- **Privacy & ZK**: Monero manual balance, Secret Network, Zcash shielded pool stats, Railgun contract detection, per-wallet privacy scoring
 - **DeFi Monitoring**: Auto-detected staking positions with APY and rewards across 100+ protocols
-- **NFT Collection**: Browse NFTs with floor price valuations across Cardano, Ethereum, and Solana
+- **NFT Collection**: Browse NFTs with floor price valuations across Cardano, Ethereum, and Solana, mobile-optimized scroll pagination
+- **Global Search**: Search across wallets, DeFi positions, staking, governance, and exchange results
+- **Per-Asset Charts**: Detailed token modal with per-asset price charting and enriched metadata
 
 ### Infrastructure
 - **Self-Hosted**: Your data stays on your machine — no telemetry, no external analytics
 - **Docker Ready**: Single container deployment with multi-arch builds (amd64/arm64)
 - **CI/CD**: Automated Docker Hub publishing and Docker Scout vulnerability scanning via GitHub Actions
-- **V2 Data Architecture**: Per-source daily balances, materializer pipeline, off-chain collector
+- **V2 Data Architecture**: Per-source daily balances, materializer pipeline, off-chain collector with engine backfill UI
+- **Blockfrost RYO**: Optional self-hosted Blockfrost node integration with automatic external fallback
+- **DB Sync Direct Access**: Optional PostgreSQL connection to Cardano DB Sync via `pg_cardano`
+- **Multi-Provider EVM**: Alchemy + Ankr EVM indexers for multi-provider fallback on Ethereum data
+- **Stale-While-Revalidate UX**: Cached dashboard data displayed instantly, refreshed in background to eliminate load flicker
+- **Chart Designer**: Customizable portfolio chart styling in Settings
+- **Wallet Auto-Detect**: Automatic blockchain detection when adding wallet addresses
 - **5 Themes**: Dark Mode, Light, Cypherpunk, Ocean Depths, Sunset Horizon
 - **Privacy Mode**: Hide sensitive financial data and URLs with one click
 - **Cloudflare Tunnel**: Built-in secure remote access (auto-restores across container rebuilds)
@@ -151,6 +159,10 @@ ETHERSCAN_API_KEY=your_key_here      # Ethereum/Arbitrum/Avalanche/BNB/Base
 ALCHEMY_API_KEY=your_key_here        # Ethereum/Polygon/Base NFTs
 HELIUS_API_KEY=your_key_here         # Solana
 
+# OPTIONAL: Self-hosted Cardano infrastructure
+BLOCKFROST_RYO_URL=http://your-node:3000  # Self-hosted Blockfrost (auto-fallback to hosted)
+PG_CARDANO_DSN=postgresql://...           # Direct DB Sync access
+
 # OPTIONAL: Authentication
 ABCT_REQUIRE_AUTH=false              # Set to false for localhost-only
 ```
@@ -164,9 +176,14 @@ All API keys should be **read-only**. Never grant withdrawal or trading permissi
 - **Read-Only Access**: Cannot move funds, only view balances
 - **Local Database**: All data stored in local SQLite files
 - **Encrypted API Keys**: API keys encrypted at rest
-- **Optional Authentication**: Session-based auth with login page
+- **Optional Authentication**: Session-based auth with login page, authenticated pricing endpoints
 - **HTTPS Support**: SSL/TLS with self-signed or custom certificates
-- **DOMPurify**: Client-side XSS protection on all HTML rendering
+- **DOMPurify + setSafeHTML**: Client-side XSS protection on all HTML rendering including cached data
+- **Sanitized API Responses**: Error messages scrubbed of internal details
+- **Token Approval Monitoring**: Track and review EVM token approvals
+- **Address Poisoning Detection**: Scanner for address poisoning attack patterns
+- **Cardano Shield**: Threat feed integration with CF Token Registry scanner
+- **Spam Token Detection**: Inline detection and filtering of spam/scam tokens
 - **Rate Limiting**: API endpoint protection against abuse
 - **Secure Logging**: Audit trails with sensitive data redaction
 
@@ -174,14 +191,27 @@ See [SECURITY.md](SECURITY.md) for full details.
 
 ## What's New
 
-### v1.15.x — 53 Chains, Privacy & ZK, CoinPaprika Pricing (February 2026)
+### v1.15.x — 53 Chains, Security/Privacy, P&L Engine, Infrastructure (Feb–Mar 2026)
+- **Security / Privacy Tab**: Renamed and expanded from Privacy & ZK — now includes token approval monitoring, address poisoning scanner, Cardano Shield threat feed with CF Token Registry scanner, inline spam token detection, plus original privacy analysis and Zcash shielded pool stats
+- **P&L Engine Overhaul**: Self-custody wallet transaction ingestion, async background computation, progress tracking, SQLite optimization, and dedicated P&L tab on the Assets page
+- **Portfolio Data Pipeline Refactor**: Separated quantities from prices for more accurate portfolio valuation
+- **Blockfrost RYO Integration**: Self-hosted Blockfrost node support with conditional rate limits and automatic external fallback
+- **DB Sync Direct Access**: Optional `pg_cardano` PostgreSQL connection for direct Cardano DB Sync queries
+- **Engine Backfill UI**: New backfill controls in Settings > Data Collectors with force-full option
+- **Stale-While-Revalidate UX**: Cached dashboard/sidebar data displayed instantly, background refresh eliminates page load flicker
+- **Chart Designer**: Full-width preview with 3-column controls grid, added to Settings
+- **Wallet Auto-Detect**: Automatic blockchain detection when adding new wallet addresses
+- **Global Search**: Search across wallets, DeFi, staking, governance, and exchange results with standardized header
+- **All Assets Table**: Unified view of all holdings on dashboard with zero-balance/dust token toggles
+- **Per-Asset Charting**: Enriched token detail modal with per-asset price charts
+- **Multi-Provider EVM Fallback**: Alchemy + Ankr indexers added alongside Etherscan (migrated from deprecated V1 to V2 API)
+- **CoinGecko Resilience**: Multi-source pricing redundancy with CoinPaprika fallback
+- **Mobile API Improvements**: Wallet breakdown endpoint, refresh params, sparkline data, image URLs for watchOS, proper staking/NFT/exchange totals
+- **Full Transaction History**: Paginated fetchers for complete historical transaction data across chains
 - **Privacy Chains**: Monero (XMR, manual balance) and Secret Network (SCRT, SecretSaturn LCD API)
-- **Privacy & ZK Tab**: Dedicated privacy page with holdings, privacy analysis, shielded pool stats, and education
-- **Privacy Detection**: Railgun contract interaction detection across Ethereum/Polygon/BSC/Arbitrum
-- **Zcash Enhancements**: Shielded pool stats and per-wallet privacy scoring (0/50/100)
-- **CoinPaprika Pricing**: New free pricing fallback (25k calls/month, no API key) inserted between Coinbase and DefiLlama
-- **Token Image Cache**: Local caching of token logos eliminates CoinGecko CDN dependency
-- **Token Metadata Cache**: SQLite-based metadata cache for supply, rank, ATH/ATL data
+- **CoinPaprika Pricing**: Free pricing fallback (25k calls/month, no API key) between Coinbase and DefiLlama
+- **Token Caching**: Local image cache (eliminates CoinGecko CDN dependency) and SQLite metadata cache for supply, rank, ATH/ATL
+- **Security Hardening**: Sanitized error messages in API responses, innerHTML sanitization with setSafeHTML, authenticated `/prices/*` endpoints
 
 ### v1.14.0 — 51 Chains, Cosmos IBC, 80+ DeFi Protocols (February 2026)
 - **Chain Depth Expansion**: 34 → 51 chains across 5 new categories
@@ -239,7 +269,7 @@ Built with [FastAPI](https://fastapi.tiangolo.com/), [Chart.js](https://www.char
 ### Blockchain Data Providers
 
 **Cardano**: [Blockfrost](https://blockfrost.io/), [TapTools](https://www.taptools.io/), [CExplorer](https://cexplorer.io/), [Koios](https://koios.rest/)
-**Ethereum & EVM**: [Alchemy](https://www.alchemy.com/), [Etherscan](https://etherscan.io/), [Basescan](https://basescan.org/), [Polygonscan](https://polygonscan.com/)
+**Ethereum & EVM**: [Alchemy](https://www.alchemy.com/), [Ankr](https://www.ankr.com/), [Etherscan](https://etherscan.io/), [Basescan](https://basescan.org/), [Polygonscan](https://polygonscan.com/)
 **Solana**: [Helius](https://www.helius.dev/) · **Bitcoin**: [Blockstream](https://blockstream.info/) · **Algorand**: [Pera Wallet](https://developer.perawallet.app/), [Tatum](https://tatum.io/)
 **TON**: [TON Center](https://toncenter.com/) · **Stellar**: [Horizon API](https://horizon.stellar.org/) · **Substrate**: [Subscan](https://subscan.io/)
 **Cosmos IBC**: Public LCD nodes (Osmosis, Celestia, Injective, dYdX, Sei, Akash)
@@ -260,5 +290,5 @@ For detailed API information including rate limits and pricing, see [API Provide
 
 ---
 
-**Current Version:** v1.15.2 (BUILD 1771794638)
-**Last Updated:** February 25, 2026
+**Current Version:** v1.15.2 (BUILD 1772667842)
+**Last Updated:** March 4, 2026
