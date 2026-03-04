@@ -620,7 +620,10 @@ async function loadPortfolioInstant() {
         // If display is locked (background tasks still running), keep spinners on breakdown
         // to indicate more data is coming, but show the DB values instead of stale cache.
         const totalValueEl = document.getElementById('totalPortfolioValue');
-        if (totalValueEl) setSafeHTML(totalValueEl, formatUSDBlur(data.total_usd));
+        if (totalValueEl) {
+            totalValueEl.classList.remove('stale-value');
+            setSafeHTML(totalValueEl, formatUSDBlur(data.total_usd));
+        }
 
         // Update breakdown
         const bd = data.breakdown || {};
@@ -645,22 +648,9 @@ async function loadPortfolioInstant() {
             removeBreakdownRefreshIndicators();
         }
 
-        // Cache for next visit (total + breakdown)
-        if (data.total_usd > 0) {
-            const bd = data.breakdown || {};
-            const cachedLiquid = (bd.chain || 0) + (bd.exchange || 0) + (bd.tracked_token || 0) + (bd.custom_token || 0);
-            const cachedStaked = (bd.staking || 0) + (bd.defi || 0);
-            const cachedNfts = bd.nft || 0;
-            try {
-                localStorage.setItem('cachedPortfolioTotal', JSON.stringify({
-                    total: data.total_usd,
-                    liquid: cachedLiquid,
-                    staked: cachedStaked,
-                    nfts: cachedNfts,
-                    timestamp: Date.now()
-                }));
-            } catch (e) { /* localStorage full */ }
-        }
+        // NOTE: Do NOT cache here — this is intermediate data (DB + in-memory prices only).
+        // Caching happens in updateTotalPortfolioValue() after ALL data sources have loaded,
+        // ensuring the cached value reflects the complete portfolio (exchanges, NFTs, DeFi, etc.).
 
         // Show freshness indicator if positions > 4 hours old
         if (data.freshness && data.freshness.oldest) {
@@ -748,7 +738,8 @@ function updateTotalPortfolioValue() {
     // The final unlock call will invoke this function again for a clean update.
     if (_portfolioDisplayLocked) return;
 
-    // Update total display
+    // Update total display — remove stale styling from cached restore
+    totalValueEl.classList.remove('stale-value');
     setSafeHTML(totalValueEl, formatUSDBlur(totalValue));
 
     // Update breakdown section
@@ -1033,9 +1024,12 @@ function restoreCachedPortfolioTotal() {
         // Only use cache if less than 24 hours old
         if (Date.now() - cached.timestamp > 86400000) return;
 
-        // Restore main total
+        // Restore main total with stale styling (dimmed to signal it's a cached value)
         const totalValueEl = document.getElementById('totalPortfolioValue');
-        if (totalValueEl) setSafeHTML(totalValueEl, formatUSDBlur(cached.total));
+        if (totalValueEl) {
+            setSafeHTML(totalValueEl, formatUSDBlur(cached.total));
+            totalValueEl.classList.add('stale-value');
+        }
 
         // Restore breakdown values (Liquid / Staked / NFTs) with stale styling + refresh indicator
         if (cached.liquid !== undefined || cached.staked !== undefined || cached.nfts !== undefined) {
@@ -1059,13 +1053,18 @@ function restoreCachedPortfolioTotal() {
             lastTotalPortfolioValue = cached.total;
             // Attempt to restore cached donut chart data.
             // If Chart.js isn't loaded yet (defer scripts may not have executed),
-            // retry after a short delay.
+            // retry with progressive delays until it's available.
             if (typeof Chart !== 'undefined') {
                 restoreCachedDonutChart();
             } else {
-                setTimeout(() => {
-                    if (!portfolioDonutChart) restoreCachedDonutChart();
-                }, 100);
+                const retryDelays = [50, 150, 400, 800];
+                for (const delay of retryDelays) {
+                    setTimeout(() => {
+                        if (!portfolioDonutChart && typeof Chart !== 'undefined') {
+                            restoreCachedDonutChart();
+                        }
+                    }, delay);
+                }
             }
         }
     } catch (e) { /* parse error or missing */ }
