@@ -1146,7 +1146,7 @@ function restoreCachedSidebarStats() {
         if (cached.globalMarket) {
             const container = document.getElementById('globalMarketStat');
             if (container && cached.globalMarket.html) {
-                container.innerHTML = cached.globalMarket.html;
+                setSafeHTML(container, cached.globalMarket.html);
             }
         }
 
@@ -1154,7 +1154,7 @@ function restoreCachedSidebarStats() {
         if (cached.topHoldings) {
             const container = document.getElementById('topHoldings');
             if (container && cached.topHoldings.html) {
-                container.innerHTML = cached.topHoldings.html;
+                setSafeHTML(container, cached.topHoldings.html);
             }
         }
     } catch (e) { /* parse error or missing */ }
