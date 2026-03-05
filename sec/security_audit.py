@@ -103,8 +103,12 @@ class SecurityAuditor:
                             check_lines = lines[i:min(i+5, len(lines))]
                             has_auth = any(
                                 'Depends(verify_admin)' in l or
+                                'Depends(verify_session)' in l or
+                                'Depends(verify_session_sse)' in l or
+                                'Depends(verify_session_optional)' in l or
                                 'Depends(require_localhost)' in l or
-                                'user: str = Depends' in l
+                                'user: str = Depends' in l or
+                                'user_id: int = Depends' in l
                                 for l in check_lines
                             )
 
@@ -132,10 +136,14 @@ class SecurityAuditor:
                     lines = f.readlines()
 
                 for i, line in enumerate(lines, 1):
-                    # Check for unsafe innerHTML usage
-                    if 'innerHTML' in line and 'DOMPurify' not in line and 'setSafeHTML' not in line:
+                    # Check for unsafe innerHTML assignment (write, not read)
+                    if '.innerHTML' in line and 'DOMPurify' not in line and 'setSafeHTML' not in line:
                         # Skip comments
                         if line.strip().startswith('//') or line.strip().startswith('*'):
+                            continue
+                        # Skip innerHTML reads (no assignment operator after innerHTML)
+                        # Match patterns like `.innerHTML =` but not `.innerHTML.trim()` or `.innerHTML}`
+                        if not re.search(r'\.innerHTML\s*=', line):
                             continue
 
                         self.add_finding(
