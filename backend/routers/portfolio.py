@@ -3806,7 +3806,7 @@ async def get_blockchain_price_chart(
         import traceback
         logger.error(f"Error fetching price chart for {blockchain}: {str(e)}")
         logger.error(traceback.format_exc())
-        raise HTTPException(500, f"Error fetching price chart: {str(e)}")
+        raise HTTPException(500, "Internal server error while fetching price chart")
 
 
 # ── Demo mode helper functions ──────────────────────────────────────────────

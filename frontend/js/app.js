@@ -329,11 +329,12 @@ async function checkCoinGeckoQuota() {
         const banner = document.createElement('div');
         banner.id = 'cg-quota-banner';
         banner.className = `quota-banner quota-${data.status}`;
-        banner.innerHTML = `
+        setSafeHTML(banner, `
             <span class="quota-icon">${data.status === 'critical' ? '🔴' : '🟡'}</span>
             <span>CoinGecko API: ${data.message}${data.status === 'critical' ? ' — Fallback sources active' : ' — Consider reducing refresh frequency'}</span>
-            <button onclick="this.parentElement.remove(); _quotaWarningDismissed = true;" class="quota-dismiss">&times;</button>
-        `;
+            <button class="quota-dismiss">&times;</button>
+        `);
+        banner.querySelector('.quota-dismiss')?.addEventListener('click', function() { this.parentElement.remove(); _quotaWarningDismissed = true; });
 
         const main = document.querySelector('main') || document.body;
         main.insertBefore(banner, main.firstChild);
@@ -1358,7 +1359,7 @@ function renderTopHoldings() {
 
     const top = getTopHoldings(3);
     if (top.length === 0) {
-        container.innerHTML = '';
+        setSafeHTML(container, '');
         return;
     }
 
@@ -1392,7 +1393,7 @@ async function loadGlobalMarketCap() {
         const change = data.market_cap_change_percentage_24h || 0;
 
         if (mcap === 0) {
-            container.innerHTML = '';
+            setSafeHTML(container, '');
             return;
         }
 
@@ -1852,13 +1853,13 @@ function fallbackCopy(text, button) {
 
 function showCopySuccess(button) {
     const originalHTML = button.innerHTML;
-    button.innerHTML = `
+    setSafeHTML(button, `
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
             <polyline points="20 6 9 17 4 12"></polyline>
         </svg>
-    `;
+    `);
     setTimeout(() => {
-        button.innerHTML = originalHTML;
+        setSafeHTML(button, originalHTML);
     }, 1500);
 }
 
@@ -2189,7 +2190,7 @@ function updateChainFilterTabs(chainData) {
     activeChains.forEach(chain => {
         html += `<button class="chain-tab" data-chain="${chain}" onclick="filterSelfCustodyByChain('${chain}')">${chainDisplayNames[chain] || chain}</button>`;
     });
-    container.innerHTML = html;
+    setSafeHTML(container, html);
 }
 
 function renderWalletsGrouped(cardanoStakeGroups, bitcoinWallets, ethereumWallets = [], solanaWallets = [], polygonWallets = [], baseWallets = [], algorandWallets = [], bscWallets = [], arbitrumWallets = [], avalancheWallets = [], tronWallets = []) {
@@ -2353,8 +2354,7 @@ function renderWalletsGrouped(cardanoStakeGroups, bitcoinWallets, ethereumWallet
     html += renderBlockchainSection('avalanche', avalancheWallets, 'AVAX', 8);
     html += renderBlockchainSection('tron', tronWallets, 'TRX', 6);
 
-    // Use innerHTML directly for internally generated HTML (not user input)
-    walletsList.innerHTML = html;
+    setSafeHTML(walletsList, html);
 
     // Populate dynamic chain filter tabs
     updateChainFilterTabs({
@@ -2467,7 +2467,7 @@ function attachDashboardWalletEventListeners() {
 async function syncSingleWallet(address, btn) {
     const origHTML = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<span class="sync-icon spinning">&#8635;</span>';
+    setSafeHTML(btn, '<span class="sync-icon spinning">&#8635;</span>');
 
     // Map unit to price key
     const unitToPriceKey = { ADA: 'ADA', BTC: 'BTC', ETH: 'ETH', SOL: 'SOL', MATIC: 'MATIC', POL: 'MATIC', ALGO: 'ALGO', BNB: 'BNB', AVAX: 'AVAX', TRX: 'TRX' };
@@ -2499,20 +2499,20 @@ async function syncSingleWallet(address, btn) {
                 }
             }
 
-            btn.innerHTML = '<span class="sync-icon">&#10003;</span>';
+            setSafeHTML(btn, '<span class="sync-icon">&#10003;</span>');
         } else {
-            btn.innerHTML = '<span class="sync-icon">&#10007;</span>';
+            setSafeHTML(btn, '<span class="sync-icon">&#10007;</span>');
         }
 
         setTimeout(() => {
-            btn.innerHTML = origHTML;
+            setSafeHTML(btn, origHTML);
             btn.disabled = false;
         }, 3000);
     } catch (err) {
         console.error('Sync wallet error:', err);
-        btn.innerHTML = '<span class="sync-icon">&#10007;</span>';
+        setSafeHTML(btn, '<span class="sync-icon">&#10007;</span>');
         setTimeout(() => {
-            btn.innerHTML = origHTML;
+            setSafeHTML(btn, origHTML);
             btn.disabled = false;
         }, 3000);
     }
@@ -2542,7 +2542,7 @@ async function toggleDashboardWalletAssets(walletId) {
         const nativeBalance = data.native_balance;
 
         if (assets.length === 0 && !nativeBalance) {
-            container.innerHTML = '<div style="text-align: center; padding: 10px; color: #888;">No assets found</div>';
+            setSafeHTML(container, '<div style="text-align: center; padding: 10px; color: #888;">No assets found</div>');
         } else {
             // Store all assets on the container for re-rendering when toggling show-all
             container._walletAssetsData = { assets, nativeBalance, blockchain: data.blockchain || 'cardano' };
@@ -2552,7 +2552,7 @@ async function toggleDashboardWalletAssets(walletId) {
         container.dataset.loaded = 'true';
     } catch (error) {
         console.error('Error loading wallet assets:', error);
-        container.innerHTML = '<div style="text-align: center; padding: 10px; color: #dc3545;">Failed to load assets</div>';
+        setSafeHTML(container, '<div style="text-align: center; padding: 10px; color: #dc3545;">Failed to load assets</div>');
     }
 }
 
@@ -2727,7 +2727,7 @@ function _renderWalletAssetsContent(container, walletId) {
                 </table>
             </div>
         `;
-        container.innerHTML = html;
+        setSafeHTML(container, html);
     } else {
         // Non-Cardano: use grid layout
         let html = showAllToggleHtml + '<div class="assets-grid">';
@@ -2778,7 +2778,7 @@ function _renderWalletAssetsContent(container, walletId) {
             `;
         });
         html += '</div>';
-        container.innerHTML = html;
+        setSafeHTML(container, html);
     }
 
     // Attach show-all toggle handler
@@ -4461,7 +4461,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
             html += `
                 <div class="defi-gov-card staked">
                     <div class="card-header">
-                        <span class="token-logo-wrap"><img src="${getLogoKitUrl('ADA', 32)}" alt="ADA" class="token-logo-staking" onerror="this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>ADA</span>'"></span>
+                        <span class="token-logo-wrap"><img src="${getLogoKitUrl('ADA', 32)}" alt="ADA" class="token-logo-staking"></span>
                         <span class="protocol-name"><span class="chain-badge cardano" title="Cardano">ADA</span> ADA Delegation</span>
                         <span class="liquid-badge">\uD83D\uDCA7 Liquid</span>
                     </div>
@@ -4560,7 +4560,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
             html += `
                 <div class="defi-gov-card staked">
                     <div class="card-header">
-                        <span class="token-logo-wrap"><img src="${tokenLogoUrl}" alt="${displayName}" class="token-logo-staking" onerror="this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>${displayName.slice(0,3)}</span>'"></span>
+                        <span class="token-logo-wrap"><img src="${tokenLogoUrl}" alt="${displayName}" class="token-logo-staking"></span>
                         <span class="protocol-name">${chainBadge} ${pos.protocol}</span>
                         <span class="liquid-badge">\uD83D\uDCA7 Liquid</span>
                     </div>
@@ -4822,7 +4822,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
 
             html += `
                 <div class="defi-gov-line stable-line">
-                    <span class="line-logo"><img src="${stableLogoUrl}" alt="${symbol}" onerror="this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>${symbol.slice(0,3)}</span>'"></span>
+                    <span class="line-logo"><img src="${stableLogoUrl}" alt="${symbol}" class="line-logo-img"></span>
                     <span class="line-token">${symbol}</span>
                     <span class="line-chains">${chainBadges}</span>
                     <span class="line-amount" title="${breakdown}">${blurValue(total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}))}</span>
@@ -4861,7 +4861,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
 
                 html += `
                     <div class="defi-gov-line stable-line hidden-stable">
-                        <span class="line-logo"><img src="${hiddenStableLogoUrl}" alt="${symbol}" onerror="this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>${symbol.slice(0,3)}</span>'"></span>
+                        <span class="line-logo"><img src="${hiddenStableLogoUrl}" alt="${symbol}" class="line-logo-img"></span>
                         <span class="line-token">${symbol}</span>
                         <span class="line-chains">${chainBadges}</span>
                         <span class="line-amount">${blurValue(total.toLocaleString(undefined, {minimumFractionDigits: 4, maximumFractionDigits: 6}))}</span>
@@ -4936,7 +4936,13 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
     content.querySelectorAll('.token-logo-staking').forEach(img => {
         img.addEventListener('error', function() {
             const alt = this.alt || '';
-            this.parentElement.innerHTML = `<span class="logo-fallback">${alt.slice(0,3)}</span>`;
+            setSafeHTML(this.parentElement, `<span class="logo-fallback">${alt.slice(0,3)}</span>`);
+        });
+    });
+    content.querySelectorAll('.line-logo-img').forEach(img => {
+        img.addEventListener('error', function() {
+            const alt = this.alt || '';
+            setSafeHTML(this.parentElement, `<span class="logo-fallback">${alt.slice(0,3)}</span>`);
         });
     });
 
@@ -5031,7 +5037,7 @@ function renderGovernanceContent(defiData, allStaking = {}) {
             const logoFallback = t.token.slice(0, 3);
             html += `
                 <div class="defi-gov-line">
-                    <span class="line-logo"><img src="${tokenLogoUrl}" alt="${t.token}" onerror="this.parentElement.innerHTML='<span class=\\'logo-fallback\\'>${logoFallback}</span>'"></span>
+                    <span class="line-logo"><img src="${tokenLogoUrl}" alt="${t.token}" class="line-logo-img"></span>
                     <span class="line-token">${getGovChainBadge(t.blockchain)} ${t.token}</span>
                     <span class="line-amount">${amountHtml}</span>
                     <span class="line-value">${formatUSDBlur(t.usdValue)}</span>
@@ -5146,7 +5152,7 @@ async function refreshDepinCard(protocol, btn) {
     // Show scanning state on card
     if (cardEl) {
         const msgEl = cardEl.querySelector('.card-timeout-msg, .card-loading-msg');
-        if (msgEl) msgEl.innerHTML = '<span class="depin-spinner"></span> Scanning staking data...';
+        if (msgEl) setSafeHTML(msgEl, '<span class="depin-spinner"></span> Scanning staking data...');
     }
 
     try {
@@ -5242,7 +5248,7 @@ async function refreshDepinCard(protocol, btn) {
             if (newBtn) newBtn.addEventListener('click', () => refreshDepinCard(protocol, newBtn));
             // Attach image error handler
             const img = cardEl.querySelector('.token-logo-staking');
-            if (img) img.addEventListener('error', function() { this.parentElement.innerHTML = `<span class="logo-fallback">${token.slice(0,3)}</span>`; });
+            if (img) img.addEventListener('error', function() { setSafeHTML(this.parentElement, `<span class="logo-fallback">${token.slice(0,3)}</span>`); });
             cardEl.classList.remove('depin-timeout', 'depin-no-data', 'depin-loading');
 
             // Update frontend localStorage cache so data persists across renders
@@ -5633,7 +5639,7 @@ function renderExchangeAssets(assets) {
 async function syncExchangeBalance(exchangeId, btn) {
     const origHTML = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<span class="sync-icon spinning">&#8635;</span> Syncing...';
+    setSafeHTML(btn, '<span class="sync-icon spinning">&#8635;</span> Syncing...');
 
     // Map exchangeId to route segment (underscore → hyphen for URL)
     const routeName = exchangeId.replace(/_/g, '-');
@@ -5669,16 +5675,16 @@ async function syncExchangeBalance(exchangeId, btn) {
         recalcExchangeTotals();
         scheduleUpdateTotalPortfolioValue();
 
-        btn.innerHTML = '<span class="sync-icon">&#10003;</span> Done';
+        setSafeHTML(btn, '<span class="sync-icon">&#10003;</span> Done');
         setTimeout(() => {
-            btn.innerHTML = origHTML;
+            setSafeHTML(btn, origHTML);
             btn.disabled = false;
         }, 3000);
     } catch (err) {
         console.error('Sync exchange balance error:', err);
-        btn.innerHTML = '<span class="sync-icon">&#10007;</span> Failed';
+        setSafeHTML(btn, '<span class="sync-icon">&#10007;</span> Failed');
         setTimeout(() => {
-            btn.innerHTML = origHTML;
+            setSafeHTML(btn, origHTML);
             btn.disabled = false;
         }, 3000);
     }
@@ -10156,7 +10162,7 @@ function initGlobalSearch() {
 
     const container = document.createElement('div');
     container.className = 'global-search-container';
-    container.innerHTML = `
+    setSafeHTML(container, `
         <button class="global-search-btn" id="globalSearchBtn" title="Search (Ctrl+K)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="11" cy="11" r="8"/>
@@ -10173,7 +10179,7 @@ function initGlobalSearch() {
             </button>
         </div>
         <div class="global-search-results" id="globalSearchResults"></div>
-    `;
+    `);
 
     const avatar = controls.querySelector('.user-avatar-container');
     if (avatar) {
@@ -10265,7 +10271,7 @@ function initGlobalSearch() {
         const q = query.toLowerCase();
 
         // Show spinner
-        results.innerHTML = '<div class="search-spinner"></div>';
+        setSafeHTML(results, '<div class="search-spinner"></div>');
         results.classList.add('visible');
 
         // Search pages locally (instant)
@@ -10359,7 +10365,7 @@ function initGlobalSearch() {
         if (typeof DOMPurify !== 'undefined') {
             results.innerHTML = DOMPurify.sanitize(html, { ADD_ATTR: ['data-search-nav'] });
         } else {
-            results.innerHTML = html;
+            results.textContent = 'Search unavailable (sanitizer not loaded)';
         }
 
         // Attach click handlers (DOMPurify strips inline handlers)
@@ -11663,7 +11669,7 @@ async function openAssetBreakdown(blockchain) {
         // No cache or stale - show loading state
         totalValue.textContent = 'Loading...';
         assetCount.textContent = '...';
-        legendDiv.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-secondary);">Loading asset data...</div>';
+        setSafeHTML(legendDiv, '<div style="text-align: center; padding: 20px; color: var(--text-secondary);">Loading asset data...</div>');
         updateDeFiLlamaMetrics(null);
 
         // Fetch DeFillama metrics in parallel
@@ -11691,13 +11697,14 @@ async function openAssetBreakdown(blockchain) {
         console.error('Error loading asset breakdown:', error);
 
         // Show error in modal instead of closing it
-        legendDiv.innerHTML = `
+        setSafeHTML(legendDiv, `
             <div style="text-align: center; padding: 20px; color: #dc3545;">
                 <h3>Error Loading Asset Breakdown</h3>
                 <p>${error.message || 'Unknown error occurred'}</p>
-                <button onclick="closeAssetBreakdownModal()" style="margin-top: 15px; padding: 8px 16px; background: var(--accent-color); border: none; border-radius: 4px; color: white; cursor: pointer;">Close</button>
+                <button class="breakdown-error-close" style="margin-top: 15px; padding: 8px 16px; background: var(--accent-color); border: none; border-radius: 4px; color: white; cursor: pointer;">Close</button>
             </div>
-        `;
+        `);
+        legendDiv.querySelector('.breakdown-error-close')?.addEventListener('click', () => closeAssetBreakdownModal());
         totalValue.textContent = 'Error';
         assetCount.textContent = '-';
     }
@@ -11761,13 +11768,13 @@ function renderBreakdownLegend(items) {
     const legendDiv = document.getElementById('breakdownLegend');
 
     // Render compact legend items matching slider 2 style
-    legendDiv.innerHTML = items.map((item, index) => {
+    setSafeHTML(legendDiv, items.map((item, index) => {
         const logoHtml = item.logo_url
-            ? `<img src="${item.logo_url}" alt="${item.symbol}" class="breakdown-token-logo" onerror="this.style.display='none';">`
+            ? `<img src="${item.logo_url}" alt="${item.symbol}" class="breakdown-token-logo">`
             : '';
 
         return `
-            <div class="breakdown-legend-item-compact" data-index="${index}" onclick="selectBreakdownSegment(${index})">
+            <div class="breakdown-legend-item-compact" data-index="${index}">
                 ${logoHtml}
                 <div class="breakdown-legend-info">
                     <div class="breakdown-legend-symbol">${item.symbol}</div>
@@ -11776,7 +11783,14 @@ function renderBreakdownLegend(items) {
                 <div class="breakdown-legend-percentage">${item.percentage.toFixed(1)}%</div>
             </div>
         `;
-    }).join('');
+    }).join(''));
+    legendDiv.querySelectorAll('.breakdown-legend-item-compact').forEach(el => {
+        const idx = parseInt(el.dataset.index);
+        el.addEventListener('click', () => selectBreakdownSegment(idx));
+    });
+    legendDiv.querySelectorAll('.breakdown-token-logo').forEach(img => {
+        img.addEventListener('error', function() { this.style.display = 'none'; });
+    });
 
     // Store items for selection
     window.breakdownLegendItems = items;
@@ -12267,7 +12281,7 @@ function renderPortfolioHeatmap() {
     const filtered = coins.filter(c => c.value_usd >= 10);
 
     if (filtered.length === 0) {
-        container.innerHTML = '<div style="text-align:center;color:#888;padding:40px;">No token data available</div>';
+        setSafeHTML(container, '<div style="text-align:center;color:#888;padding:40px;">No token data available</div>');
         return;
     }
 
@@ -12322,7 +12336,7 @@ function renderPortfolioHeatmap() {
             `</div>`;
     }
 
-    container.innerHTML = `<div style="position:relative;width:${containerWidth}px;height:${totalHeight}px;">${tilesHtml}</div>`;
+    setSafeHTML(container, `<div style="position:relative;width:${containerWidth}px;height:${totalHeight}px;">${tilesHtml}</div>`);
 }
 
 // Squarified treemap layout algorithm
@@ -12697,7 +12711,7 @@ function selectCoinSegment(index) {
 
 function renderCoinLegend(coins, colors) {
     const legendDiv = document.getElementById('coinAllocationLegend');
-    legendDiv.innerHTML = coins.map((coin, index) => {
+    setSafeHTML(legendDiv, coins.map((coin, index) => {
         // Use logo_url from backend data, or fallback to LogoKit for "Other" case
         const tokenLogoUrl = coin.logo_url || (
             coin.symbol !== 'Other'
@@ -12706,8 +12720,8 @@ function renderCoinLegend(coins, colors) {
         );
 
         return `
-            <div class="analytics-legend-item-compact" onclick="selectCoinSegment(${index})">
-                ${tokenLogoUrl ? `<img src="${tokenLogoUrl}" alt="${coin.symbol}" class="coin-legend-logo" onerror="this.style.display='none'">` : ''}
+            <div class="analytics-legend-item-compact" data-coin-index="${index}">
+                ${tokenLogoUrl ? `<img src="${tokenLogoUrl}" alt="${coin.symbol}" class="coin-legend-logo">` : ''}
                 <div class="legend-compact-label">
                     <div class="legend-top-row">
                         <span class="legend-symbol">${coin.symbol}</span>
@@ -12717,7 +12731,14 @@ function renderCoinLegend(coins, colors) {
                 </div>
             </div>
         `;
-    }).join('');
+    }).join(''));
+    legendDiv.querySelectorAll('.analytics-legend-item-compact').forEach(el => {
+        const idx = parseInt(el.dataset.coinIndex);
+        el.addEventListener('click', () => selectCoinSegment(idx));
+    });
+    legendDiv.querySelectorAll('.coin-legend-logo').forEach(img => {
+        img.addEventListener('error', function() { this.style.display = 'none'; });
+    });
 }
 
 function renderCategoryAllocationChart() {
@@ -12839,11 +12860,8 @@ function selectCategorySegment(index) {
 
 function renderCategoryLegend(categories, colors) {
     const legendDiv = document.getElementById('categoryAllocationLegend');
-    legendDiv.innerHTML = categories.map((category, index) => `
-        <div class="analytics-legend-item-compact"
-             onclick="selectCategorySegment(${index})"
-             onmouseenter="showCategoryTooltip(event, ${index})"
-             onmouseleave="hideCategoryTooltip()">
+    setSafeHTML(legendDiv, categories.map((category, index) => `
+        <div class="analytics-legend-item-compact" data-cat-index="${index}">
             <div class="legend-compact-label">
                 <div class="legend-top-row">
                     <span class="legend-symbol">${category.category}</span>
@@ -12852,7 +12870,13 @@ function renderCategoryLegend(categories, colors) {
                 <span class="legend-percentage-compact">${category.percentage.toFixed(1)}%</span>
             </div>
         </div>
-    `).join('');
+    `).join(''));
+    legendDiv.querySelectorAll('.analytics-legend-item-compact').forEach(el => {
+        const idx = parseInt(el.dataset.catIndex);
+        el.addEventListener('click', () => selectCategorySegment(idx));
+        el.addEventListener('mouseenter', (e) => showCategoryTooltip(e, idx));
+        el.addEventListener('mouseleave', () => hideCategoryTooltip());
+    });
 }
 
 function showCategoryTooltip(event, categoryIndex) {
@@ -12897,7 +12921,7 @@ function showCategoryTooltip(event, categoryIndex) {
     }
 
     html += `</div>`;
-    tooltip.innerHTML = html;
+    setSafeHTML(tooltip, html);
 
     // Position tooltip
     document.body.appendChild(tooltip);
