@@ -49,7 +49,8 @@ class SecurityAuditor:
             ".pytest_cache",
             "backups",
             "archive",
-            "EXCLUDE"
+            "EXCLUDE",
+            "/sec/"
         ]
 
         self._filter_excluded_files()
