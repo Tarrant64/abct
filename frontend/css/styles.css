@@ -2841,6 +2841,15 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
 .holding-change.positive { color: #00d26a; }
 .holding-change.negative { color: #ff4757; }
 
+.holding-pnl {
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.holding-pnl.positive { color: #00d26a; }
+.holding-pnl.negative { color: #ff4757; }
+.holding-pnl.neutral { color: var(--text-secondary, #8b95a5); }
+
 /* Global Market Stat */
 .global-market-stat {
     margin-top: 10px;

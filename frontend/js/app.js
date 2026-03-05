@@ -10890,6 +10890,7 @@ const HOLDINGS_DEFAULT_COLUMNS = [
     { id: 'name', label: 'Name', sortable: true, fixed: true, visible: true },
     { id: 'amount', label: 'Amount', sortable: true, visible: true },
     { id: 'price_change_24h', label: '24h', sortable: true, visible: true },
+    { id: 'pnl_24h', label: '24h P&L', sortable: true, visible: true },
     { id: 'sparkline', label: 'Price Graph', sortable: false, visible: true },
     { id: 'price_usd', label: 'Price', sortable: true, visible: true },
     { id: 'value_usd', label: 'Total', sortable: true, visible: true },
@@ -10972,6 +10973,20 @@ function _holdingCellHtml(colId, h) {
             const changeClass = change > 0 ? 'positive' : change < 0 ? 'negative' : 'neutral';
             const changeSign = change > 0 ? '+' : '';
             return `<td class="text-right"><span class="holding-change ${changeClass}">${changeSign}${change.toFixed(2)}%</span></td>`;
+        }
+        case 'pnl_24h': {
+            const pnlChange = h.price_change_24h || 0;
+            const pnlValue = h.value_usd || 0;
+            // P&L = current_value - value_24h_ago
+            // value_24h_ago = current_value / (1 + change/100)
+            const pnl = (pnlChange !== 0 && pnlValue > 0)
+                ? pnlValue - (pnlValue / (1 + pnlChange / 100))
+                : 0;
+            const pnlClass = pnl > 0 ? 'positive' : pnl < 0 ? 'negative' : 'neutral';
+            const pnlSign = pnl > 0 ? '+' : '';
+            const pnlStr = pnl !== 0 ? pnlSign + '$' + Math.abs(pnl).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '--';
+            const pnlDisplay = pnl < 0 ? '-$' + Math.abs(pnl).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : pnlStr;
+            return `<td class="text-right"><span class="holding-pnl ${pnlClass}">${blurValue(pnlDisplay)}</span></td>`;
         }
         case 'sparkline':
             return `<td><div class="holding-sparkline-slot" data-symbol="${symbol}"></div></td>`;
@@ -11226,6 +11241,10 @@ function renderAllHoldings(holdings, container) {
                 return _holdingsSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
             case 'amount': va = a.amount || 0; vb = b.amount || 0; break;
             case 'price_change_24h': va = a.price_change_24h || 0; vb = b.price_change_24h || 0; break;
+            case 'pnl_24h': {
+                const _pnl = (v) => { const c = v.price_change_24h || 0; const val = v.value_usd || 0; return (c !== 0 && val > 0) ? val - (val / (1 + c / 100)) : 0; };
+                va = _pnl(a); vb = _pnl(b); break;
+            }
             case 'price_usd': va = a.price_usd || 0; vb = b.price_usd || 0; break;
             case 'market_cap': va = a.market_cap || 0; vb = b.market_cap || 0; break;
             case 'volume_24h': va = a.volume_24h || 0; vb = b.volume_24h || 0; break;
