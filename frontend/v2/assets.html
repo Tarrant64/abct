@@ -104,7 +104,18 @@
             loadAssetsPage();
         });
 
+        let assetPrices = {};
+
         async function loadAssetsPage() {
+            // Load prices first for wallet value calculations
+            try {
+                const priceResp = await v2Fetch('/prices/all');
+                if (priceResp.ok) {
+                    const priceData = await priceResp.json();
+                    assetPrices = priceData.prices || priceData || {};
+                }
+            } catch(e) { console.error('Prices load error:', e); }
+
             // Load wallets
             try {
                 const resp = await v2Fetch('/wallets');
@@ -123,7 +134,7 @@
                 }
             } catch(e) { console.error('Exchanges load error:', e); }
 
-            // Load DeFi
+            // Load DeFi & Staking
             try {
                 const resp = await v2Fetch('/defi/summary');
                 if (resp.ok) {
@@ -156,16 +167,36 @@
                 setSafeHTML(container, '<div class="v2-empty" style="padding:48px"><div class="v2-empty-title">No wallets added</div><div class="v2-empty-desc">Add your first wallet to start tracking.</div></div>');
                 return;
             }
-            let html = '<table class="v2-table"><thead><tr><th>Label</th><th>Address</th><th>Blockchain</th><th class="right">Balance</th><th class="right">Value</th></tr></thead><tbody>';
+
+            // Map blockchain to native token symbol for price lookup
+            const chainSymbols = {
+                'cardano': 'ADA', 'bitcoin': 'BTC', 'ethereum': 'ETH', 'solana': 'SOL',
+                'polygon': 'MATIC', 'base': 'ETH', 'algorand': 'ALGO', 'bsc': 'BNB',
+                'arbitrum': 'ETH', 'avalanche': 'AVAX', 'tron': 'TRX', 'xrp': 'XRP',
+                'dogecoin': 'DOGE', 'litecoin': 'LTC',
+            };
+
+            let html = '<table class="v2-table"><thead><tr><th>Label</th><th>Address</th><th>Blockchain</th><th class="right">Balance</th><th class="right">Value</th><th class="right">Assets</th></tr></thead><tbody>';
             wallets.forEach(w => {
                 const addr = w.address || '';
                 const short = addr.length > 16 ? addr.slice(0,8) + '...' + addr.slice(-8) : addr;
+                const balance = w.balance || 0;
+                const chain = (w.blockchain || 'unknown').toLowerCase();
+                const symbol = chainSymbols[chain] || chain.toUpperCase();
+                const unit = w.balance_unit || symbol;
+
+                // Compute value from balance and price
+                const priceInfo = assetPrices[symbol] || {};
+                const price = typeof priceInfo === 'object' ? (priceInfo.usd || 0) : (priceInfo || 0);
+                const valueUsd = balance * price;
+
                 html += `<tr>
                     <td><strong>${escapeHtml(w.label || w.name || 'Wallet')}</strong></td>
                     <td style="font-family:monospace;font-size:12px;color:var(--v2-text-secondary)">${escapeHtml(short)}</td>
-                    <td><span class="v2-chain-badge">${escapeHtml(w.blockchain || 'unknown')}</span></td>
-                    <td class="right v2-blur">${formatAmount(w.balance || 0)}</td>
-                    <td class="right v2-blur">${formatCurrency(w.value_usd || 0)}</td>
+                    <td><span class="v2-chain-badge">${escapeHtml(chain)}</span></td>
+                    <td class="right v2-blur">${formatAmount(balance)} <span style="font-size:11px;color:var(--v2-text-muted)">${escapeHtml(unit)}</span></td>
+                    <td class="right v2-blur">${formatCurrency(valueUsd)}</td>
+                    <td class="right">${w.native_assets_count || 0}</td>
                 </tr>`;
             });
             html += '</tbody></table>';
@@ -194,30 +225,19 @@
 
         function renderDefiTab(data) {
             const container = document.getElementById('defiContent');
-            const positions = data.positions || data.protocols || [];
-            if (!positions.length && !data.staking) {
+            // DeFi summary returns all_positions (governance tokens)
+            const positions = data.all_positions || data.positions || data.protocols || [];
+            if (!positions.length) {
                 setSafeHTML(container, '<div class="v2-empty" style="padding:48px"><div class="v2-empty-title">No DeFi positions detected</div><div class="v2-empty-desc">DeFi positions are auto-detected from your wallet addresses.</div></div>');
                 return;
             }
-            let html = '<table class="v2-table"><thead><tr><th>Protocol</th><th>Type</th><th>Chain</th><th class="right">Value</th><th class="right">APY</th></tr></thead><tbody>';
-            if (data.staking && Array.isArray(data.staking)) {
-                data.staking.forEach(s => {
-                    html += `<tr>
-                        <td><strong>${escapeHtml(s.protocol || s.pool || 'Staking')}</strong></td>
-                        <td>Staking</td>
-                        <td><span class="v2-chain-badge">${escapeHtml(s.blockchain || s.chain || 'cardano')}</span></td>
-                        <td class="right v2-blur">${formatCurrency(s.value_usd || 0)}</td>
-                        <td class="right">${s.apy ? s.apy.toFixed(1) + '%' : '--'}</td>
-                    </tr>`;
-                });
-            }
+            let html = '<table class="v2-table"><thead><tr><th>Protocol</th><th>Token</th><th>Type</th><th class="right">Quantity</th></tr></thead><tbody>';
             positions.forEach(p => {
                 html += `<tr>
                     <td><strong>${escapeHtml(p.protocol || p.name || 'DeFi')}</strong></td>
-                    <td>${escapeHtml(p.type || 'Position')}</td>
-                    <td><span class="v2-chain-badge">${escapeHtml(p.blockchain || p.chain || '')}</span></td>
-                    <td class="right v2-blur">${formatCurrency(p.value_usd || 0)}</td>
-                    <td class="right">${p.apy ? p.apy.toFixed(1) + '%' : '--'}</td>
+                    <td>${escapeHtml(p.token || p.asset_name || '')}</td>
+                    <td>${escapeHtml(p.type_label || p.type || 'Position')}</td>
+                    <td class="right v2-blur">${formatAmount(p.quantity || 0)}</td>
                 </tr>`;
             });
             html += '</tbody></table>';

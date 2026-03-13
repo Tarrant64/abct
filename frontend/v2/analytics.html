@@ -86,9 +86,9 @@
                 const resp = await v2Fetch('/prices/global');
                 if (resp.ok) {
                     const data = await resp.json();
-                    setText('globalMcap', formatCompact(data.total_market_cap_usd || data.total_market_cap || 0));
-                    setText('global24hVol', formatCompact(data.total_24h_volume_usd || data.total_volume || 0));
-                    setText('btcDominance', (data.btc_dominance || data.bitcoin_dominance_percentage || 0).toFixed(1) + '%');
+                    setText('globalMcap', formatCompact(data.total_market_cap_usd || 0));
+                    setText('global24hVol', formatCompact(data.total_volume_usd || 0));
+                    setText('btcDominance', (data.btc_dominance || 0).toFixed(1) + '%');
                     setText('activeCryptos', (data.active_cryptocurrencies || 0).toLocaleString());
                 }
             } catch(e) { console.error('Global market error:', e); }
@@ -102,18 +102,18 @@
                 }
             } catch(e) { console.error('Top movers error:', e); }
 
-            // Chain allocation from portfolio
+            // Chain allocation from portfolio (use all-holdings for accurate per-chain values)
             try {
-                const resp = await v2Fetch('/portfolio/summary');
+                const resp = await v2Fetch('/portfolio/all-holdings');
                 if (resp.ok) {
                     const data = await resp.json();
                     renderAllocationChart(data);
                 }
             } catch(e) { console.error('Allocation error:', e); }
 
-            // Relative strength
+            // Relative strength (multi-asset comparison)
             try {
-                const resp = await v2Fetch('/analytics/relative-strength');
+                const resp = await v2Fetch('/analytics/relative-strength?days=30');
                 if (resp.ok) {
                     const data = await resp.json();
                     renderRelativeStrength(data);
@@ -123,38 +123,63 @@
 
         function renderTopMovers(data) {
             const container = document.getElementById('topMovers');
-            const gainers = data.gainers || [];
-            const losers = data.losers || [];
+            const movers = data.movers || [];
+
+            if (!movers.length) {
+                setSafeHTML(container, '<div class="v2-empty" style="padding:32px"><div class="v2-empty-title">No market movers data</div></div>');
+                return;
+            }
+
+            // Split into gainers (positive change) and losers (negative change)
+            const gainers = movers.filter(m => (m.change_24h || 0) > 0).slice(0, 5);
+            const losers = movers.filter(m => (m.change_24h || 0) < 0).slice(0, 5);
 
             let html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">';
             html += '<div><div style="font-size:12px;font-weight:600;color:var(--v2-accent);margin-bottom:8px;">Top Gainers</div>';
-            (gainers.slice(0, 5) || []).forEach(g => {
+            gainers.forEach(g => {
                 html += `<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;">
                     <span>${escapeHtml(g.symbol || g.name || '?')}</span>
-                    <span class="v2-value-positive">+${(g.change_24h || g.price_change_percentage_24h || 0).toFixed(1)}%</span>
+                    <span class="v2-value-positive">+${(g.change_24h || 0).toFixed(1)}%</span>
                 </div>`;
             });
+            if (!gainers.length) html += '<div style="padding:6px 0;font-size:12px;color:var(--v2-text-muted)">No gainers</div>';
             html += '</div>';
             html += '<div><div style="font-size:12px;font-weight:600;color:var(--v2-red);margin-bottom:8px;">Top Losers</div>';
-            (losers.slice(0, 5) || []).forEach(l => {
+            losers.forEach(l => {
                 html += `<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;">
                     <span>${escapeHtml(l.symbol || l.name || '?')}</span>
-                    <span class="v2-value-negative">${(l.change_24h || l.price_change_percentage_24h || 0).toFixed(1)}%</span>
+                    <span class="v2-value-negative">${(l.change_24h || 0).toFixed(1)}%</span>
                 </div>`;
             });
+            if (!losers.length) html += '<div style="padding:6px 0;font-size:12px;color:var(--v2-text-muted)">No losers</div>';
             html += '</div></div>';
             setSafeHTML(container, html);
         }
 
         function renderAllocationChart(data) {
             const canvas = document.getElementById('allocationChart');
-            if (!canvas || !data.chains) return;
+            if (!canvas) return;
 
-            const chains = Object.entries(data.chains).filter(([_, v]) => (v.total_value_usd || v.total || 0) > 0);
-            chains.sort((a, b) => (b[1].total_value_usd || b[1].total || 0) - (a[1].total_value_usd || a[1].total || 0));
+            const holdings = data.holdings || [];
+            if (!holdings.length) {
+                const parent = canvas.parentElement;
+                setSafeHTML(parent, '<div class="v2-empty" style="padding:32px"><div class="v2-empty-title">No holdings data</div></div>');
+                return;
+            }
 
-            const labels = chains.map(([name]) => name.charAt(0).toUpperCase() + name.slice(1));
-            const values = chains.map(([_, v]) => v.total_value_usd || v.total || 0);
+            // Group holdings by source type for allocation chart
+            const sourceMap = {};
+            holdings.forEach(h => {
+                const source = h.source || 'other';
+                const label = source === 'chain' ? 'Wallets' : source === 'token' ? 'Tokens' : source === 'exchange' ? 'Exchanges' : source === 'staking' ? 'Staking' : source === 'defi' ? 'DeFi' : source.charAt(0).toUpperCase() + source.slice(1);
+                sourceMap[label] = (sourceMap[label] || 0) + (h.value_usd || 0);
+            });
+
+            const entries = Object.entries(sourceMap).filter(([_, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+            if (!entries.length) return;
+
+            const labels = entries.map(([name]) => name);
+            const values = entries.map(([_, v]) => v);
             const colors = ['#0033ad', '#627eea', '#f7931a', '#14f195', '#8247e5', '#e84142', '#2775ca', '#00d4ff', '#ff6b35', '#ffd700'];
 
             new Chart(canvas.getContext('2d'), {
@@ -170,7 +195,10 @@
                     plugins: {
                         legend: {
                             position: 'right',
-                            labels: { color: 'var(--v2-text-secondary)', font: { size: 11 }, padding: 8, usePointStyle: true, pointStyleWidth: 8 }
+                            labels: {
+                                color: getComputedStyle(document.documentElement).getPropertyValue('--v2-text-secondary').trim() || '#8a93a6',
+                                font: { size: 11 }, padding: 8, usePointStyle: true, pointStyleWidth: 8
+                            }
                         },
                         tooltip: {
                             callbacks: { label: (ctx) => `${ctx.label}: ${formatCurrency(ctx.raw)}` }
@@ -184,37 +212,59 @@
             const canvas = document.getElementById('relStrengthChart');
             if (!canvas) return;
 
-            const points = data.data || data.history || [];
-            if (!points.length) return;
+            const assets = data.assets || {};
+            const assetKeys = Object.keys(assets);
 
-            const labels = points.map(p => {
-                try { return new Date(p.date || p.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); } catch { return ''; }
+            if (!assetKeys.length) {
+                const parent = canvas.parentElement;
+                setSafeHTML(parent, '<div class="v2-empty" style="padding:40px"><div class="v2-empty-title">No relative strength data available</div><div class="v2-empty-desc">Market data needed for relative strength analysis.</div></div>');
+                return;
+            }
+
+            // Use the first asset's dates as labels
+            const firstAsset = assets[assetKeys[0]] || [];
+            const labels = firstAsset.map(p => {
+                try { return new Date(p.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); } catch { return ''; }
             });
-            const portfolioValues = points.map(p => p.portfolio_normalized || p.portfolio || 0);
-            const btcValues = points.map(p => p.btc_normalized || p.btc || 0);
+
+            // Asset colors
+            const assetColors = { 'BTC': '#f7931a', 'ETH': '#627eea', 'SOL': '#14f195', 'ADA': '#0033ad', 'POL': '#8247e5' };
 
             const style = getComputedStyle(document.documentElement);
-            const accentColor = style.getPropertyValue('--v2-accent').trim() || '#00d26a';
+            const textColor = style.getPropertyValue('--v2-chart-text').trim() || '#5a6475';
+            const gridColor = style.getPropertyValue('--v2-chart-grid').trim() || 'rgba(255,255,255,0.04)';
+
+            const datasets = assetKeys.map(symbol => ({
+                label: symbol,
+                data: (assets[symbol] || []).map(p => p.change_pct || 0),
+                borderColor: assetColors[symbol] || '#888',
+                borderWidth: 2,
+                pointRadius: 0,
+                fill: false,
+                tension: 0.3,
+            }));
 
             new Chart(canvas.getContext('2d'), {
                 type: 'line',
-                data: {
-                    labels,
-                    datasets: [
-                        { label: 'Portfolio', data: portfolioValues, borderColor: accentColor, borderWidth: 2, pointRadius: 0, fill: false, tension: 0.3 },
-                        { label: 'BTC', data: btcValues, borderColor: '#f7931a', borderWidth: 2, pointRadius: 0, fill: false, tension: 0.3 }
-                    ]
-                },
+                data: { labels, datasets },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { labels: { color: 'var(--v2-text-secondary)', font: { size: 11 } } },
-                        tooltip: { mode: 'index', intersect: false }
+                        legend: { labels: { color: textColor, font: { size: 11 } } },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y >= 0 ? '+' : ''}${ctx.parsed.y.toFixed(1)}%` }
+                        }
                     },
                     scales: {
-                        x: { grid: { color: 'var(--v2-chart-grid)' }, ticks: { color: 'var(--v2-chart-text)', font: { size: 10 }, maxTicksLimit: 8 }, border: { display: false } },
-                        y: { grid: { color: 'var(--v2-chart-grid)' }, ticks: { color: 'var(--v2-chart-text)', font: { size: 10 } }, border: { display: false } }
+                        x: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 10 }, maxTicksLimit: 8 }, border: { display: false } },
+                        y: {
+                            grid: { color: gridColor },
+                            ticks: { color: textColor, font: { size: 10 }, callback: (val) => (val >= 0 ? '+' : '') + val.toFixed(0) + '%' },
+                            border: { display: false }
+                        }
                     }
                 }
             });

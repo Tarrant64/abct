@@ -188,44 +188,43 @@ async function loadHoldings() {
 }
 
 function extractHoldingsFromSummary(data) {
-    // Build holdings array from V1 summary format
+    // Build holdings array from V1 portfolio/summary format
+    // The summary has chain names as top-level keys (cardano, bitcoin, etc.)
     const holdings = [];
-    if (data.chains) {
-        Object.entries(data.chains).forEach(([chain, chainData]) => {
-            if (chainData.native_balance && chainData.native_balance > 0) {
-                const symbol = chainData.symbol || chain.toUpperCase();
-                const price = v2State.prices[symbol] || 0;
-                const value = chainData.native_balance * price;
-                holdings.push({
-                    symbol: symbol,
-                    name: chainData.name || symbol,
-                    blockchain: chain,
-                    amount: chainData.native_balance,
-                    price_usd: price,
-                    value_usd: value,
-                    change_24h: 0,
-                    logo_url: null,
-                });
-            }
-            // Add tokens
-            if (chainData.tokens) {
-                chainData.tokens.forEach(token => {
-                    if (token.balance && token.balance > 0) {
-                        holdings.push({
-                            symbol: token.ticker || token.symbol || '???',
-                            name: token.name || token.ticker || 'Unknown',
-                            blockchain: chain,
-                            amount: token.balance,
-                            price_usd: token.price_usd || 0,
-                            value_usd: token.value_usd || (token.balance * (token.price_usd || 0)),
-                            change_24h: 0,
-                            logo_url: token.logo_url || null,
-                        });
-                    }
-                });
-            }
+    const chainSymbols = {
+        'cardano': { symbol: 'ADA', name: 'Cardano', balanceKey: 'total_ada' },
+        'bitcoin': { symbol: 'BTC', name: 'Bitcoin', balanceKey: 'total_btc' },
+        'ethereum': { symbol: 'ETH', name: 'Ethereum', balanceKey: 'total_eth' },
+        'solana': { symbol: 'SOL', name: 'Solana', balanceKey: 'total_sol' },
+        'polygon': { symbol: 'MATIC', name: 'Polygon', balanceKey: 'total_matic' },
+        'base': { symbol: 'ETH', name: 'Base (ETH)', balanceKey: 'total_eth' },
+        'algorand': { symbol: 'ALGO', name: 'Algorand', balanceKey: 'total_algo' },
+        'bsc': { symbol: 'BNB', name: 'BNB Chain', balanceKey: 'total_bnb' },
+        'arbitrum': { symbol: 'ETH', name: 'Arbitrum (ETH)', balanceKey: 'total_eth' },
+        'avalanche': { symbol: 'AVAX', name: 'Avalanche', balanceKey: 'total_avax' },
+    };
+
+    Object.entries(chainSymbols).forEach(([chain, info]) => {
+        const chainData = data[chain];
+        if (!chainData) return;
+        const balance = chainData[info.balanceKey] || 0;
+        if (balance <= 0) return;
+
+        const priceInfo = v2State.prices[info.symbol] || {};
+        const price = typeof priceInfo === 'object' ? (priceInfo.usd || 0) : (priceInfo || 0);
+        const value = balance * price;
+        holdings.push({
+            symbol: info.symbol,
+            name: info.name,
+            blockchain: chain,
+            amount: balance,
+            price_usd: price,
+            value_usd: value,
+            price_change_24h: typeof priceInfo === 'object' ? (priceInfo.usd_24h_change || 0) : 0,
+            logo_url: null,
         });
-    }
+    });
+
     // Sum totals
     let totalValue = holdings.reduce((sum, h) => sum + (h.value_usd || 0), 0);
     v2State.holdings = holdings;
@@ -238,9 +237,12 @@ function extractHoldingsFromSummary(data) {
 // ============================================================================
 
 function renderPortfolioHero(data) {
-    const total = data.total_value_usd || data.total_portfolio_value || 0;
-    const liquid = data.liquid_value_usd || data.liquid || 0;
-    const staked = data.staked_value_usd || data.staked || 0;
+    const total = data.total_usd || data.total_value_usd || data.total_portfolio_value || 0;
+
+    // Breakdown from /portfolio/instant: {chain, exchange, tracked_token, custom_token, staking, defi, nft}
+    const bd = data.breakdown || {};
+    const liquid = (bd.chain || 0) + (bd.exchange || 0) + (bd.tracked_token || 0) + (bd.custom_token || 0);
+    const staked = (bd.staking || 0) + (bd.defi || 0);
 
     // Remove skeleton, show value
     const heroEl = document.getElementById('heroValue');
@@ -437,7 +439,7 @@ async function loadChart(range) {
 // ============================================================================
 
 function renderTxStats(data) {
-    const count = data.total_count || data.count || 0;
+    const count = data.total_transactions || data.total_count || data.count || 0;
     setText('statTx7d', count.toLocaleString());
 }
 
@@ -488,8 +490,8 @@ function renderAssetsTable() {
                 vb = b.value_usd || 0;
                 break;
             case 'change':
-                va = a.change_24h || 0;
-                vb = b.change_24h || 0;
+                va = a.price_change_24h || a.change_24h || 0;
+                vb = b.price_change_24h || b.change_24h || 0;
                 break;
             case 'allocation':
                 va = v2State.totalPortfolioValue > 0 ? (a.value_usd || 0) / v2State.totalPortfolioValue : 0;
@@ -522,7 +524,7 @@ function renderAssetsTable() {
         const value = h.value_usd || 0;
         const price = h.price_usd || 0;
         const amount = h.amount || 0;
-        const change = h.change_24h || 0;
+        const change = h.price_change_24h || h.change_24h || 0;
         const alloc = v2State.totalPortfolioValue > 0 ? (value / v2State.totalPortfolioValue * 100) : 0;
         const changeClass = change >= 0 ? 'v2-value-positive' : 'v2-value-negative';
         const symbol = h.symbol || '???';
@@ -566,7 +568,7 @@ function renderAssetsTable() {
     // Render sparklines after table is in DOM
     requestAnimationFrame(() => {
         holdings.forEach((h, idx) => {
-            renderSparkline(idx, h.change_24h || 0);
+            renderSparkline(idx, h.price_change_24h || h.change_24h || 0);
         });
     });
 }
@@ -783,7 +785,7 @@ function changeTheme(theme) {
     if (v2State.holdings.length > 0) {
         setTimeout(() => {
             v2State.holdings.forEach((h, idx) => {
-                renderSparkline(idx, h.change_24h || 0);
+                renderSparkline(idx, h.price_change_24h || h.change_24h || 0);
             });
         }, 150);
     }
@@ -976,10 +978,15 @@ function setSafeHTML(element, html) {
     if (typeof DOMPurify !== 'undefined') {
         // Allow onclick/onchange/onerror since all V2 HTML is developer-authored
         // (no user-supplied content flows into event handler strings)
-        element.innerHTML = DOMPurify.sanitize(html, { ADD_ATTR: ['onclick', 'onchange', 'onerror'] }); // eslint-disable-line
+        // FORCE_BODY ensures table elements are preserved correctly
+        element.innerHTML = DOMPurify.sanitize(html, {
+            ADD_ATTR: ['onclick', 'onchange', 'onerror'],
+            ADD_TAGS: ['table', 'thead', 'tbody', 'tr', 'th', 'td', 'canvas'],
+            FORCE_BODY: true,
+        }); // eslint-disable-line
     } else {
-        console.warn('DOMPurify not loaded, falling back to textContent');
-        element.textContent = html;
+        // DOMPurify not yet loaded — use innerHTML directly since all V2 HTML is developer-authored
+        element.innerHTML = html;
     }
 }
 

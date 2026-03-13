@@ -61,87 +61,136 @@
 
         async function loadDefi() {
             try {
-                const resp = await v2Fetch('/defi/summary');
-                if (!resp.ok) throw new Error('Failed');
-                const data = await resp.json();
-                renderDefi(data);
+                // Load DeFi summary and all-holdings in parallel
+                // DeFi summary has governance token positions
+                // All-holdings has staking positions with values
+                const [defiResp, holdingsResp, instantResp] = await Promise.allSettled([
+                    v2Fetch('/defi/summary'),
+                    v2Fetch('/portfolio/all-holdings'),
+                    v2Fetch('/portfolio/instant'),
+                ]);
+
+                let defiData = null;
+                let holdingsData = null;
+                let instantData = null;
+
+                if (defiResp.status === 'fulfilled' && defiResp.value.ok) {
+                    defiData = await defiResp.value.json();
+                }
+                if (holdingsResp.status === 'fulfilled' && holdingsResp.value.ok) {
+                    holdingsData = await holdingsResp.value.json();
+                }
+                if (instantResp.status === 'fulfilled' && instantResp.value.ok) {
+                    instantData = await instantResp.value.json();
+                }
+
+                renderDefi(defiData, holdingsData, instantData);
             } catch(e) {
+                console.error('DeFi load error:', e);
                 setSafeHTML(document.getElementById('protocolGrid'), '<div class="v2-empty" style="grid-column:1/-1"><div class="v2-empty-title">Could not load DeFi data</div></div>');
             }
         }
 
-        function renderDefi(data) {
-            let totalDefi = 0;
-            let totalStaked = 0;
-            let protocols = new Set();
+        function renderDefi(defiData, holdingsData, instantData) {
+            // Extract staking and DeFi holdings from all-holdings
+            const allHoldings = holdingsData ? (holdingsData.holdings || []) : [];
+            const stakingHoldings = allHoldings.filter(h => h.source === 'staking');
+            const defiHoldings = allHoldings.filter(h => h.source === 'defi');
 
-            // Parse various response formats
-            const positions = data.positions || data.protocols || [];
-            const staking = data.staking || [];
+            // Get totals from instant breakdown
+            const bd = instantData ? (instantData.breakdown || {}) : {};
+            const totalStaked = bd.staking || 0;
+            const totalDefi = bd.defi || 0;
 
-            staking.forEach(s => {
-                totalStaked += (s.value_usd || 0);
-                protocols.add(s.protocol || s.pool || 'Staking');
-            });
-            positions.forEach(p => {
-                totalDefi += (p.value_usd || 0);
-                protocols.add(p.protocol || p.name || 'DeFi');
-            });
+            // Count protocols from defi summary
+            const defiPositions = defiData ? (defiData.all_positions || []) : [];
+            const protocolNames = new Set();
+            defiPositions.forEach(p => protocolNames.add(p.protocol || 'Unknown'));
+            stakingHoldings.forEach(h => protocolNames.add('Staking'));
 
             setText('defiTotal', formatCurrency(totalDefi + totalStaked));
             setText('stakedTotal', formatCurrency(totalStaked));
-            setText('protocolCount', protocols.size.toString());
+            setText('protocolCount', (protocolNames.size || (stakingHoldings.length > 0 ? 1 : 0) + (defiPositions.length > 0 ? defiPositions.length : 0)).toString());
 
             const grid = document.getElementById('protocolGrid');
 
-            if (staking.length === 0 && positions.length === 0) {
+            if (stakingHoldings.length === 0 && defiPositions.length === 0 && defiHoldings.length === 0) {
                 setSafeHTML(grid, '<div class="v2-empty" style="grid-column:1/-1;padding:64px"><div class="v2-empty-icon" style="font-size:48px;opacity:0.2">&#127981;</div><div class="v2-empty-title">No DeFi positions detected</div><div class="v2-empty-desc">DeFi positions and staking are auto-detected from your wallet addresses. Add wallets to see positions here.</div></div>');
                 return;
             }
 
             let html = '';
 
-            // Group staking by protocol
-            const stakingByProtocol = {};
-            staking.forEach(s => {
-                const key = s.protocol || s.pool || 'Cardano Staking';
-                if (!stakingByProtocol[key]) stakingByProtocol[key] = [];
-                stakingByProtocol[key].push(s);
-            });
-
-            Object.entries(stakingByProtocol).forEach(([name, items]) => {
-                const totalVal = items.reduce((s, i) => s + (i.value_usd || 0), 0);
+            // Staking positions from all-holdings
+            if (stakingHoldings.length > 0) {
+                const stakingTotal = stakingHoldings.reduce((sum, h) => sum + (h.value_usd || 0), 0);
                 html += `<div class="protocol-card">
                     <div class="protocol-header">
                         <div>
-                            <div class="protocol-name">${escapeHtml(name)}</div>
-                            <span class="v2-chain-badge protocol-chain">${escapeHtml(items[0]?.blockchain || items[0]?.chain || 'cardano')}</span>
+                            <div class="protocol-name">Staked Assets</div>
+                            <span class="v2-chain-badge protocol-chain">cardano</span>
                         </div>
-                        <div class="v2-stat-value v2-blur" style="font-size:16px">${formatCurrency(totalVal)}</div>
+                        <div class="v2-stat-value v2-blur" style="font-size:16px">${formatCurrency(stakingTotal)}</div>
                     </div>
                     <div class="protocol-positions">`;
-                items.forEach(i => {
+                stakingHoldings.forEach(h => {
                     html += `<div class="position-row">
-                        <span>${escapeHtml(i.token || i.symbol || i.asset || 'Token')}: <span class="v2-blur">${formatAmount(i.amount || 0)}</span></span>
-                        <span class="v2-blur">${formatCurrency(i.value_usd || 0)}</span>
+                        <span>${escapeHtml(h.symbol || h.name || 'Token')}: <span class="v2-blur">${formatAmount(h.amount || 0)}</span></span>
+                        <span class="v2-blur">${formatCurrency(h.value_usd || 0)}</span>
                     </div>`;
                 });
-                if (items[0]?.apy) html += `<div class="position-row"><span style="color:var(--v2-accent)">APY</span><span style="color:var(--v2-accent)">${items[0].apy.toFixed(1)}%</span></div>`;
                 html += '</div></div>';
-            });
+            }
 
-            positions.forEach(p => {
+            // DeFi governance positions from defi summary
+            if (defiPositions.length > 0) {
+                // Group by protocol
+                const byProtocol = {};
+                defiPositions.forEach(p => {
+                    const key = p.protocol || 'Unknown';
+                    if (!byProtocol[key]) byProtocol[key] = [];
+                    byProtocol[key].push(p);
+                });
+
+                Object.entries(byProtocol).forEach(([name, items]) => {
+                    html += `<div class="protocol-card">
+                        <div class="protocol-header">
+                            <div>
+                                <div class="protocol-name">${escapeHtml(name)}</div>
+                                <span class="v2-chain-badge protocol-chain">cardano</span>
+                                <span class="v2-badge v2-badge-neutral" style="margin-left:4px">Governance</span>
+                            </div>
+                        </div>
+                        <div class="protocol-positions">`;
+                    items.forEach(p => {
+                        html += `<div class="position-row">
+                            <span>${escapeHtml(p.token || p.asset_name || 'Token')}: <span class="v2-blur">${formatAmount(p.quantity || 0)}</span></span>
+                            <span style="font-size:12px;color:var(--v2-text-muted)">${escapeHtml(p.type_label || p.type || '')}</span>
+                        </div>`;
+                    });
+                    html += '</div></div>';
+                });
+            }
+
+            // DeFi holdings from all-holdings (tokens sourced from DeFi protocols)
+            if (defiHoldings.length > 0) {
+                const defiTotal = defiHoldings.reduce((sum, h) => sum + (h.value_usd || 0), 0);
                 html += `<div class="protocol-card">
                     <div class="protocol-header">
                         <div>
-                            <div class="protocol-name">${escapeHtml(p.protocol || p.name || 'Protocol')}</div>
-                            <span class="v2-chain-badge protocol-chain">${escapeHtml(p.blockchain || p.chain || '')}</span>
-                            <span class="v2-badge v2-badge-neutral" style="margin-left:4px">${escapeHtml(p.type || 'Position')}</span>
+                            <div class="protocol-name">DeFi Token Holdings</div>
                         </div>
-                        <div class="v2-stat-value v2-blur" style="font-size:16px">${formatCurrency(p.value_usd || 0)}</div>
+                        <div class="v2-stat-value v2-blur" style="font-size:16px">${formatCurrency(defiTotal)}</div>
                     </div>
-                </div>`;
-            });
+                    <div class="protocol-positions">`;
+                defiHoldings.forEach(h => {
+                    html += `<div class="position-row">
+                        <span>${escapeHtml(h.symbol || h.name || 'Token')}: <span class="v2-blur">${formatAmount(h.amount || 0)}</span></span>
+                        <span class="v2-blur">${formatCurrency(h.value_usd || 0)}</span>
+                    </div>`;
+                });
+                html += '</div></div>';
+            }
 
             setSafeHTML(grid, html);
         }
