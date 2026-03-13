@@ -750,7 +750,7 @@ function setActiveNav() {
     const path = window.location.pathname;
     document.querySelectorAll('.v2-nav-item').forEach(item => {
         const href = item.getAttribute('href');
-        if (href === path || (path === '/v2' && href === '/v2/') || (path === '/v2/' && href === '/v2/')) {
+        if (href === path || (path === '/next' && href === '/next/') || (path === '/next/' && href === '/next/')) {
             item.classList.add('active');
         } else {
             item.classList.remove('active');
@@ -878,20 +878,20 @@ async function handleSearch(event) {
 
 function navigateTo(page) {
     const routes = {
-        'dashboard': '/v2/',
-        'assets': '/v2/assets',
-        'nfts': '/v2/nfts',
-        'defi': '/v2/defi',
-        'exchanges': '/v2/exchanges',
-        'analytics': '/v2/analytics',
-        'transactions': '/v2/transactions',
-        'pnl': '/v2/pnl',
-        'security': '/v2/security',
-        'wallets': '/v2/wallets',
-        'settings': '/v2/settings',
-        'help': '/v2/help',
+        'dashboard': '/next/',
+        'assets': '/next/assets',
+        'nfts': '/next/nfts',
+        'defi': '/next/defi',
+        'exchanges': '/next/exchanges',
+        'analytics': '/next/analytics',
+        'transactions': '/next/transactions',
+        'pnl': '/next/pnl',
+        'security': '/next/security',
+        'wallets': '/next/wallets',
+        'settings': '/next/settings',
+        'help': '/next/help',
     };
-    const url = routes[page] || '/v2/';
+    const url = routes[page] || '/next/';
     window.location.href = url;
 }
 

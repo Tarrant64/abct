@@ -1070,28 +1070,28 @@ app.mount("/static", StaticFiles(directory=str(frontend_path)), name="static")
 
 # Mount V2 static files
 v2_path = frontend_path / "v2"
-app.mount("/v2/static", StaticFiles(directory=str(v2_path)), name="v2-static")
+app.mount("/next/static", StaticFiles(directory=str(v2_path)), name="v2-static")
 
 # ============================================================================
 # V2 FRONTEND ROUTES
 # ============================================================================
-# V2 is a parallel professional UI at /v2/* using the same backend APIs.
+# V2 is a parallel professional UI at /next/* using the same backend APIs.
 # V1 remains untouched at all existing URLs.
 
-@app.get("/v2")
+@app.get("/next")
 async def v2_redirect():
-    """Redirect /v2 to /v2/."""
-    return RedirectResponse(url="/v2/", status_code=301)
+    """Redirect /next to /next/."""
+    return RedirectResponse(url="/next/", status_code=301)
 
-@app.get("/v2/")
+@app.get("/next/")
 async def v2_dashboard():
     """Serve the V2 dashboard."""
     return FileResponse(str(v2_path / "index.html"))
 
-@app.get("/v2/{page}")
+@app.get("/next/{page}")
 async def v2_pages(page: str):
     """Serve V2 sub-pages. All pages use the same SPA shell (index.html).
-    Note: /v2/static/* is handled by the StaticFiles mount above (mounts take priority)."""
+    Note: /next/static/* is handled by the StaticFiles mount above (mounts take priority)."""
     v2_page_file = v2_path / f"{page}.html"
     if v2_page_file.exists():
         return FileResponse(str(v2_page_file))

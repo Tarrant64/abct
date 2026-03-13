@@ -78,7 +78,7 @@ Protocol adapters detect positions automatically — no manual tracking needed:
 - **Chart Designer**: Customizable portfolio chart styling in Settings
 - **Wallet Auto-Detect**: Automatic blockchain detection when adding wallet addresses
 - **8 Themes**: Dark Mode, Light, Cypherpunk, Ocean Depths, Sunset Horizon, Cypher, Cypher 2, Cypher 3
-- **V2 Frontend**: Professional parallel dashboard at `/v2/` with collapsible sidebar navigation, portfolio hero with interactive chart, sortable assets table, and dedicated pages for all features
+- **V2 Frontend**: Professional parallel dashboard at `/next/` with collapsible sidebar navigation, portfolio hero with interactive chart, sortable assets table, and dedicated pages for all features
 - **Privacy Mode**: Hide sensitive financial data and URLs with one click
 - **Cloudflare Tunnel**: Built-in secure remote access (auto-restores across container rebuilds)
 - **Encrypted API Keys**: All keys encrypted at rest in the database
@@ -193,7 +193,7 @@ See [SECURITY.md](SECURITY.md) for full details.
 ## What's New
 
 ### V2 Frontend — Professional Dashboard Redesign (March 2026)
-- **Parallel V2 UI**: Accessible at `/v2/` — V1 remains fully intact at existing URLs
+- **Parallel V2 UI**: Accessible at `/next/` — V1 remains fully intact at existing URLs
 - **Sidebar Navigation**: Collapsible left sidebar with icon + text labels across 3 sections (Portfolio, Analytics, System)
 - **Dashboard**: Portfolio hero with total value, 24h change, interactive Chart.js history chart with range selector (1W/1M/3M/6M/1Y/ALL), 6 stat cards, sortable assets table with sparklines
 - **12 Dedicated Pages**: Dashboard, Assets (tabbed: Wallets/Exchanges/DeFi/Custom Tokens/P&L), NFTs (grid gallery with chain filters), DeFi & Staking, Exchanges, Analytics, Transactions, P&L, Security, Wallets, Settings (8 tabs), Help & Guide
@@ -267,7 +267,7 @@ See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 - **[API Providers](docs/API_PROVIDERS.md)** — API provider details and rate limits
 - **[Password Reset](docs/guides/PASSWORD_RESET_GUIDE.md)** — Reset admin credentials
 - **In-App Help** — Built-in Help & Guide page with setup walkthroughs
-- **V2 Frontend** — Access at `/v2/` for the redesigned sidebar-navigation dashboard
+- **V2 Frontend** — Access at `/next/` for the redesigned sidebar-navigation dashboard
 
 ### V2 Navigation Structure
 
@@ -277,7 +277,7 @@ See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 | **Analytics** | Analytics, Transactions, P&L, Security |
 | **System** | Wallets, Settings, Help |
 
-V2 files live under `frontend/v2/` with shared CSS (`css/v2.css`), core JS (`js/v2-app.js`), and sidebar shell (`js/v2-shell.js`). Backend serves V2 at `/v2/` via `main.py` routes — no new API endpoints required.
+V2 files live under `frontend/v2/` with shared CSS (`css/v2.css`), core JS (`js/v2-app.js`), and sidebar shell (`js/v2-shell.js`). Backend serves V2 at `/next/` via `main.py` routes — no new API endpoints required.
 
 ## License
 

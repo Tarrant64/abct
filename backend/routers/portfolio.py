@@ -2651,7 +2651,7 @@ async def backfill_history_prices(user_id: int = Depends(verify_session)):
     return {"status": "completed", "total_updated": total_updated, "symbols": results}
 
 
-@router.get("/v2/health")
+@router.get("/next/health")
 async def get_v2_health(user_id: int = Depends(verify_session)):
     """
     V2 data health check. Returns counts and date ranges for all V2 data tables.
