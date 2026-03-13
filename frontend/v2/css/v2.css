@@ -521,17 +521,11 @@ a:hover { opacity: 0.85; }
 }
 
 .v2-sidebar-logo .logo-icon {
-    width: 32px;
-    height: 32px;
-    min-width: 32px;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
     border-radius: 8px;
-    background: var(--v2-accent);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    font-size: 14px;
-    color: #000;
+    object-fit: contain;
 }
 
 .v2-sidebar-logo .logo-text {
@@ -1234,15 +1228,14 @@ a:hover { opacity: 0.85; }
     color: var(--v2-text-muted);
 }
 
-/* Privacy blur */
+/* Privacy blur — only blur when privacy mode is active */
 .v2-blur {
-    filter: blur(8px);
-    user-select: none;
     transition: filter var(--v2-transition);
 }
 
 body.privacy-mode .v2-blur {
-    filter: blur(8px) !important;
+    filter: blur(8px);
+    user-select: none;
 }
 
 
