@@ -153,7 +153,7 @@
             const container = document.getElementById('walletsTable');
             const wallets = data.wallets || data || [];
             if (!wallets.length) {
-                container.innerHTML = '<div class="v2-empty" style="padding:48px"><div class="v2-empty-title">No wallets added</div><div class="v2-empty-desc">Add your first wallet to start tracking.</div></div>';
+                setSafeHTML(container, '<div class="v2-empty" style="padding:48px"><div class="v2-empty-title">No wallets added</div><div class="v2-empty-desc">Add your first wallet to start tracking.</div></div>');
                 return;
             }
             let html = '<table class="v2-table"><thead><tr><th>Label</th><th>Address</th><th>Blockchain</th><th class="right">Balance</th><th class="right">Value</th></tr></thead><tbody>';
@@ -169,14 +169,14 @@
                 </tr>`;
             });
             html += '</tbody></table>';
-            container.innerHTML = html;
+            setSafeHTML(container, html);
         }
 
         function renderExchangesTab(data) {
             const container = document.getElementById('exchangesContent');
             const exchanges = data.exchanges || [];
             if (!exchanges.length) {
-                container.innerHTML = '<div class="v2-empty" style="padding:48px"><div class="v2-empty-title">No exchanges connected</div><div class="v2-empty-desc">Connect exchange API keys in Settings.</div></div>';
+                setSafeHTML(container, '<div class="v2-empty" style="padding:48px"><div class="v2-empty-title">No exchanges connected</div><div class="v2-empty-desc">Connect exchange API keys in Settings.</div></div>');
                 return;
             }
             let html = '<table class="v2-table"><thead><tr><th>Exchange</th><th class="right">Assets</th><th class="right">Total Value</th><th>Status</th></tr></thead><tbody>';
@@ -189,14 +189,14 @@
                 </tr>`;
             });
             html += '</tbody></table>';
-            container.innerHTML = html;
+            setSafeHTML(container, html);
         }
 
         function renderDefiTab(data) {
             const container = document.getElementById('defiContent');
             const positions = data.positions || data.protocols || [];
             if (!positions.length && !data.staking) {
-                container.innerHTML = '<div class="v2-empty" style="padding:48px"><div class="v2-empty-title">No DeFi positions detected</div><div class="v2-empty-desc">DeFi positions are auto-detected from your wallet addresses.</div></div>';
+                setSafeHTML(container, '<div class="v2-empty" style="padding:48px"><div class="v2-empty-title">No DeFi positions detected</div><div class="v2-empty-desc">DeFi positions are auto-detected from your wallet addresses.</div></div>');
                 return;
             }
             let html = '<table class="v2-table"><thead><tr><th>Protocol</th><th>Type</th><th>Chain</th><th class="right">Value</th><th class="right">APY</th></tr></thead><tbody>';
@@ -221,14 +221,14 @@
                 </tr>`;
             });
             html += '</tbody></table>';
-            container.innerHTML = html;
+            setSafeHTML(container, html);
         }
 
         function renderCustomTokensTab(data) {
             const container = document.getElementById('customTokensContent');
             const tokens = data.tokens || data || [];
             if (!tokens.length) {
-                container.innerHTML = '<div class="v2-empty" style="padding:48px"><div class="v2-empty-title">No custom tokens</div><div class="v2-empty-desc">Track additional tokens by adding them manually.</div></div>';
+                setSafeHTML(container, '<div class="v2-empty" style="padding:48px"><div class="v2-empty-title">No custom tokens</div><div class="v2-empty-desc">Track additional tokens by adding them manually.</div></div>');
                 return;
             }
             let html = '<table class="v2-table"><thead><tr><th>Token</th><th>Symbol</th><th class="right">Amount</th><th class="right">Price</th><th class="right">Value</th></tr></thead><tbody>';
@@ -242,7 +242,7 @@
                 </tr>`;
             });
             html += '</tbody></table>';
-            container.innerHTML = html;
+            setSafeHTML(container, html);
         }
 
         function showAddWalletModal() {

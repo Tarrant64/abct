@@ -66,7 +66,7 @@
                 const data = await resp.json();
                 renderDefi(data);
             } catch(e) {
-                document.getElementById('protocolGrid').innerHTML = '<div class="v2-empty" style="grid-column:1/-1"><div class="v2-empty-title">Could not load DeFi data</div></div>';
+                setSafeHTML(document.getElementById('protocolGrid'), '<div class="v2-empty" style="grid-column:1/-1"><div class="v2-empty-title">Could not load DeFi data</div></div>');
             }
         }
 
@@ -95,7 +95,7 @@
             const grid = document.getElementById('protocolGrid');
 
             if (staking.length === 0 && positions.length === 0) {
-                grid.innerHTML = '<div class="v2-empty" style="grid-column:1/-1;padding:64px"><div class="v2-empty-icon" style="font-size:48px;opacity:0.2">&#127981;</div><div class="v2-empty-title">No DeFi positions detected</div><div class="v2-empty-desc">DeFi positions and staking are auto-detected from your wallet addresses. Add wallets to see positions here.</div></div>';
+                setSafeHTML(grid, '<div class="v2-empty" style="grid-column:1/-1;padding:64px"><div class="v2-empty-icon" style="font-size:48px;opacity:0.2">&#127981;</div><div class="v2-empty-title">No DeFi positions detected</div><div class="v2-empty-desc">DeFi positions and staking are auto-detected from your wallet addresses. Add wallets to see positions here.</div></div>');
                 return;
             }
 
@@ -143,7 +143,7 @@
                 </div>`;
             });
 
-            grid.innerHTML = html;
+            setSafeHTML(grid, html);
         }
 
         async function refreshDefi() {

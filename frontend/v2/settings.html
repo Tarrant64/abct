@@ -182,7 +182,7 @@
             const container = document.getElementById('apiKeysList');
             const apis = data.apis || data || [];
             if (!apis.length) {
-                container.innerHTML = '<div class="v2-empty"><div class="v2-empty-title">No API keys configured</div></div>';
+                setSafeHTML(container, '<div class="v2-empty"><div class="v2-empty-title">No API keys configured</div></div>');
                 return;
             }
             let html = '<table class="v2-table"><thead><tr><th>Service</th><th>Type</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
@@ -196,7 +196,7 @@
                 </tr>`;
             });
             html += '</tbody></table>';
-            container.innerHTML = html;
+            setSafeHTML(container, html);
         }
 
         function renderCacheStats(data) {
@@ -215,7 +215,7 @@
             if (stats.api_responses !== undefined) {
                 html += `<div class="v2-stat-card"><div class="v2-stat-label">API Cache</div><div class="v2-stat-value">${(stats.api_responses || 0).toLocaleString()}</div></div>`;
             }
-            container.innerHTML = html || '<div class="v2-stat-card"><div class="v2-stat-label">Cache Status</div><div class="v2-stat-value">Loaded</div></div>';
+            setSafeHTML(container, html || '<div class="v2-stat-card"><div class="v2-stat-label">Cache Status</div><div class="v2-stat-value">Loaded</div></div>');
         }
 
         async function loadLogs() {
@@ -229,12 +229,12 @@
                         el.textContent = 'No recent logs.';
                         return;
                     }
-                    el.innerHTML = logs.map(l => {
+                    setSafeHTML(el, logs.map(l => {
                         const time = l.timestamp ? new Date(l.timestamp).toLocaleTimeString() : '';
                         const level = l.level || 'INFO';
                         const color = level === 'ERROR' ? 'var(--v2-red)' : level === 'WARNING' ? 'var(--v2-orange)' : 'var(--v2-text-secondary)';
                         return `<div style="padding:2px 0;"><span style="color:var(--v2-text-muted)">${escapeHtml(time)}</span> <span style="color:${color};font-weight:600">[${escapeHtml(level)}]</span> <span>${escapeHtml(l.message || l.msg || '')}</span></div>`;
-                    }).join('');
+                    }).join(''));
                 }
             } catch(e) {
                 document.getElementById('logsContent').textContent = 'Failed to load logs.';

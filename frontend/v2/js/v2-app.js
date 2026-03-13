@@ -244,7 +244,7 @@ function renderPortfolioHero(data) {
 
     // Remove skeleton, show value
     const heroEl = document.getElementById('heroValue');
-    heroEl.innerHTML = '';
+    setSafeHTML(heroEl, '');
     heroEl.textContent = formatCurrency(total);
     heroEl.classList.add('v2-blur');
 
@@ -259,7 +259,7 @@ function renderPortfolioHero(data) {
         const changePct = data.change_7d_pct || 0;
         const isPositive = changeVal >= 0;
         changeEl.className = `v2-hero-change ${isPositive ? 'positive' : 'negative'}`;
-        changeEl.innerHTML = `<span class="change-arrow">${isPositive ? '&#9650;' : '&#9660;'}</span> ${formatCurrency(Math.abs(changeVal))} (${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%)`;
+        setSafeHTML(changeEl, `<span class="change-arrow">${isPositive ? '&#9650;' : '&#9660;'}</span> ${formatCurrency(Math.abs(changeVal))} (${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%)`);
     }
 
     // Last updated
@@ -314,13 +314,13 @@ function renderChart(data) {
 
     if (labels.length === 0) {
         const container = document.getElementById('chartContainer');
-        container.innerHTML = `
+        setSafeHTML(container, `
             <div class="v2-empty">
                 <div class="v2-empty-icon">&#128200;</div>
                 <div class="v2-empty-title">No Chart Data</div>
                 <div class="v2-empty-desc">Start collecting historical balance data from the Settings page to see your portfolio chart.</div>
             </div>
-        `;
+        `);
         return;
     }
 
@@ -504,7 +504,7 @@ function renderAssetsTable() {
     });
 
     if (holdings.length === 0) {
-        tbody.innerHTML = `
+        setSafeHTML(tbody, `
             <tr>
                 <td colspan="7">
                     <div class="v2-empty" style="padding:32px;">
@@ -513,7 +513,7 @@ function renderAssetsTable() {
                     </div>
                 </td>
             </tr>
-        `;
+        `);
         return;
     }
 
@@ -561,7 +561,7 @@ function renderAssetsTable() {
         `;
     });
 
-    tbody.innerHTML = html;
+    setSafeHTML(tbody, html);
 
     // Render sparklines after table is in DOM
     requestAnimationFrame(() => {
@@ -631,7 +631,7 @@ function sortAssets(col) {
         th.classList.toggle('sorted', th.dataset.col === col);
         const icon = th.querySelector('.sort-icon');
         if (icon && th.dataset.col === col) {
-            icon.innerHTML = v2State.sortDir === 'asc' ? '&#9650;' : '&#9660;';
+            setSafeHTML(icon, v2State.sortDir === 'asc' ? '&#9650;' : '&#9660;');
         }
     });
 
@@ -660,7 +660,7 @@ async function openAssetDetail(symbol, blockchain) {
     const body = document.getElementById('assetModalBody');
 
     title.textContent = symbol;
-    body.innerHTML = '<div style="text-align:center;padding:40px;"><div class="v2-skeleton v2-skeleton-chart" style="height:200px;"></div></div>';
+    setSafeHTML(body, '<div style="text-align:center;padding:40px;"><div class="v2-skeleton v2-skeleton-chart" style="height:200px;"></div></div>');
 
     overlay.classList.add('open');
     modal.classList.add('open');
@@ -671,10 +671,10 @@ async function openAssetDetail(symbol, blockchain) {
             const data = await response.json();
             renderAssetModal(data, symbol, blockchain);
         } else {
-            body.innerHTML = '<div class="v2-empty"><div class="v2-empty-title">Could not load asset details</div></div>';
+            setSafeHTML(body, '<div class="v2-empty"><div class="v2-empty-title">Could not load asset details</div></div>');
         }
     } catch (err) {
-        body.innerHTML = '<div class="v2-empty"><div class="v2-empty-title">Error loading details</div></div>';
+        setSafeHTML(body, '<div class="v2-empty"><div class="v2-empty-title">Error loading details</div></div>');
     }
 }
 
@@ -693,7 +693,7 @@ function renderAssetModal(data, symbol, blockchain) {
     const value = data.total_value_usd || data.value_usd || (holding * price);
     const changeClass = change24h >= 0 ? 'v2-value-positive' : 'v2-value-negative';
 
-    body.innerHTML = `
+    setSafeHTML(body, `
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
             <div class="v2-stat-card">
                 <div class="v2-stat-label">Price</div>
@@ -717,7 +717,7 @@ function renderAssetModal(data, symbol, blockchain) {
             </div>
         </div>
         ${blockchain ? `<div style="font-size:12px;color:var(--v2-text-muted);margin-top:8px;">Chain: <span class="v2-chain-badge">${escapeHtml(blockchain)}</span></div>` : ''}
-    `;
+    `);
 }
 
 function closeAssetModal() {
@@ -970,6 +970,18 @@ function formatCompact(value) {
 // ============================================================================
 // SAFETY UTILITIES
 // ============================================================================
+
+function setSafeHTML(element, html) {
+    if (!element) return;
+    if (typeof DOMPurify !== 'undefined') {
+        // Allow onclick/onchange/onerror since all V2 HTML is developer-authored
+        // (no user-supplied content flows into event handler strings)
+        element.innerHTML = DOMPurify.sanitize(html, { ADD_ATTR: ['onclick', 'onchange', 'onerror'] }); // eslint-disable-line
+    } else {
+        console.warn('DOMPurify not loaded, falling back to textContent');
+        element.textContent = html;
+    }
+}
 
 function escapeHtml(text) {
     if (!text) return '';

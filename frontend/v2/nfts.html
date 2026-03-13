@@ -123,7 +123,7 @@
                 renderNftGrid();
             } catch (err) {
                 console.error('NFT load error:', err);
-                document.getElementById('nftGrid').innerHTML = '<div class="v2-empty"><div class="v2-empty-title">Could not load NFTs</div></div>';
+                setSafeHTML(document.getElementById('nftGrid'), '<div class="v2-empty"><div class="v2-empty-title">Could not load NFTs</div></div>');
             }
         }
 
@@ -138,7 +138,7 @@
             let nfts = currentNftChain === 'all' ? allNfts : allNfts.filter(n => n._chain === currentNftChain);
 
             if (!nfts.length) {
-                grid.innerHTML = '<div class="v2-empty" style="grid-column:1/-1;padding:64px"><div class="v2-empty-icon">&#127912;</div><div class="v2-empty-title">No NFTs found</div><div class="v2-empty-desc">NFTs from your wallets will appear here.</div></div>';
+                setSafeHTML(grid, '<div class="v2-empty" style="grid-column:1/-1;padding:64px"><div class="v2-empty-icon">&#127912;</div><div class="v2-empty-title">No NFTs found</div><div class="v2-empty-desc">NFTs from your wallets will appear here.</div></div>');
                 return;
             }
 
@@ -171,7 +171,7 @@
                 </div>`;
             });
 
-            grid.innerHTML = html;
+            setSafeHTML(grid, html);
         }
 
         async function refreshNfts() {

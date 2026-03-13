@@ -80,7 +80,7 @@
                 const data = await resp.json();
                 renderWallets(data);
             } catch(e) {
-                document.getElementById('walletList').innerHTML = '<div class="v2-empty"><div class="v2-empty-title">Could not load wallets</div></div>';
+                setSafeHTML(document.getElementById('walletList'), '<div class="v2-empty"><div class="v2-empty-title">Could not load wallets</div></div>');
             }
         }
 
@@ -89,7 +89,7 @@
             const wallets = data.wallets || data || [];
 
             if (!wallets.length) {
-                container.innerHTML = '<div class="v2-empty" style="padding:48px"><div class="v2-empty-icon" style="font-size:48px;opacity:0.2">&#128091;</div><div class="v2-empty-title">No wallets added yet</div><div class="v2-empty-desc">Add your first wallet above to start tracking your portfolio.</div></div>';
+                setSafeHTML(container, '<div class="v2-empty" style="padding:48px"><div class="v2-empty-icon" style="font-size:48px;opacity:0.2">&#128091;</div><div class="v2-empty-title">No wallets added yet</div><div class="v2-empty-desc">Add your first wallet above to start tracking your portfolio.</div></div>');
                 return;
             }
 
@@ -126,7 +126,7 @@
                     </div>
                 </div>`;
             });
-            container.innerHTML = html;
+            setSafeHTML(container, html);
         }
 
         async function addWallet() {

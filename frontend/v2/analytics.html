@@ -143,7 +143,7 @@
                 </div>`;
             });
             html += '</div></div>';
-            container.innerHTML = html;
+            setSafeHTML(container, html);
         }
 
         function renderAllocationChart(data) {

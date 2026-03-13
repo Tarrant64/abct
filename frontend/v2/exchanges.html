@@ -61,7 +61,7 @@
                 const data = await resp.json();
                 renderExchanges(data);
             } catch(e) {
-                document.getElementById('exchangeList').innerHTML = '<div class="v2-empty"><div class="v2-empty-title">Could not load exchanges</div></div>';
+                setSafeHTML(document.getElementById('exchangeList'), '<div class="v2-empty"><div class="v2-empty-title">Could not load exchanges</div></div>');
             }
         }
 
@@ -81,7 +81,7 @@
 
             const container = document.getElementById('exchangeList');
             if (!exchanges.length) {
-                container.innerHTML = '<div class="v2-empty" style="padding:64px"><div class="v2-empty-icon" style="font-size:48px;opacity:0.2">&#127970;</div><div class="v2-empty-title">No exchanges connected</div><div class="v2-empty-desc">Connect exchange API keys in Settings to see your exchange balances here.</div><a href="/v2/settings" class="v2-btn v2-btn-primary" style="margin-top:16px">Go to Settings</a></div>';
+                setSafeHTML(container, '<div class="v2-empty" style="padding:64px"><div class="v2-empty-icon" style="font-size:48px;opacity:0.2">&#127970;</div><div class="v2-empty-title">No exchanges connected</div><div class="v2-empty-desc">Connect exchange API keys in Settings to see your exchange balances here.</div><a href="/v2/settings" class="v2-btn v2-btn-primary" style="margin-top:16px">Go to Settings</a></div>');
                 return;
             }
 
@@ -120,7 +120,7 @@
 
                 html += '</div></div>';
             });
-            container.innerHTML = html;
+            setSafeHTML(container, html);
         }
 
         function toggleExchange(idx) {

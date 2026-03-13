@@ -88,7 +88,7 @@
                     renderPrivacyWallets(data);
                 }
             } catch(e) {
-                document.getElementById('privacyWallets').innerHTML = '<div style="padding:20px;color:var(--v2-text-muted);text-align:center">Privacy analysis available after scanning</div>';
+                setSafeHTML(document.getElementById('privacyWallets'), '<div style="padding:20px;color:var(--v2-text-muted);text-align:center">Privacy analysis available after scanning</div>');
             }
         }
 
@@ -97,7 +97,7 @@
             const wallets = data.wallets || data || [];
 
             if (!wallets.length) {
-                container.innerHTML = '<div style="padding:20px;color:var(--v2-text-muted);text-align:center">No privacy data yet. Run a scan to analyze your wallets.</div>';
+                setSafeHTML(container, '<div style="padding:20px;color:var(--v2-text-muted);text-align:center">No privacy data yet. Run a scan to analyze your wallets.</div>');
                 return;
             }
 
@@ -117,7 +117,7 @@
                 </tr>`;
             });
             html += '</tbody></table>';
-            container.innerHTML = html;
+            setSafeHTML(container, html);
         }
 
         async function scanPoisoning() {

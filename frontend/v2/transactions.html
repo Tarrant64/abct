@@ -121,7 +121,7 @@
                 }
             } catch(e) {
                 console.error('Tx load error:', e);
-                document.getElementById('txTableBody').innerHTML = '<tr><td colspan="7"><div class="v2-empty"><div class="v2-empty-title">Could not load transactions</div></div></td></tr>';
+                setSafeHTML(document.getElementById('txTableBody'), '<tr><td colspan="7"><div class="v2-empty"><div class="v2-empty-title">Could not load transactions</div></div></td></tr>');
             }
         }
 
@@ -130,7 +130,7 @@
             const tbody = document.getElementById('txTableBody');
 
             if (!txs.length) {
-                tbody.innerHTML = '<tr><td colspan="7"><div class="v2-empty" style="padding:32px"><div class="v2-empty-title">No transactions found</div><div class="v2-empty-desc">Refresh to fetch latest transactions from your wallets.</div></div></td></tr>';
+                setSafeHTML(tbody, '<tr><td colspan="7"><div class="v2-empty" style="padding:32px"><div class="v2-empty-title">No transactions found</div><div class="v2-empty-desc">Refresh to fetch latest transactions from your wallets.</div></div></td></tr>');
                 return;
             }
 
@@ -160,7 +160,7 @@
                     <td style="font-family:monospace;font-size:11px;color:var(--v2-text-muted)">${escapeHtml(shortHash)}</td>
                 </tr>`;
             });
-            tbody.innerHTML = html;
+            setSafeHTML(tbody, html);
 
             // Pagination
             const total = data.total || txs.length;
@@ -171,9 +171,9 @@
                 for (let i = 0; i < Math.min(pages, 10); i++) {
                     pagHtml += `<button class="v2-btn v2-btn-sm ${i === txPage ? 'v2-btn-primary' : 'v2-btn-ghost'}" onclick="txPage=${i};loadTransactionPage()">${i + 1}</button>`;
                 }
-                pag.innerHTML = pagHtml;
+                setSafeHTML(pag, pagHtml);
             } else {
-                pag.innerHTML = '';
+                setSafeHTML(pag, '');
             }
         }
 

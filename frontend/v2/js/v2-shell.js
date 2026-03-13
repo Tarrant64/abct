@@ -63,7 +63,7 @@ function v2InitShell(activePage) {
     // Inject sidebar
     const sidebarEl = document.getElementById('v2Sidebar');
     if (sidebarEl) {
-        sidebarEl.innerHTML = `
+        setSafeHTML(sidebarEl, `
             <div class="v2-sidebar-logo" onclick="window.location='/v2/'">
                 <div class="logo-icon">AB</div>
                 <span class="logo-text">ABCT</span>
@@ -79,13 +79,13 @@ function v2InitShell(activePage) {
                     <span class="nav-text">Collapse</span>
                 </button>
             </div>
-        `;
+        `);
     }
 
     // Inject user dropdown in topbar
     const userMenu = document.querySelector('.v2-user-menu');
     if (userMenu && !document.getElementById('userDropdown')) {
-        userMenu.innerHTML = `
+        setSafeHTML(userMenu, `
             <div class="v2-avatar" onclick="toggleUserMenu()">?</div>
             <div class="v2-user-dropdown" id="userDropdown">
                 <div class="v2-user-dropdown-header" id="userDropdownName">User</div>
@@ -100,7 +100,7 @@ function v2InitShell(activePage) {
                 <div class="v2-user-dropdown-divider"></div>
                 <button class="v2-user-dropdown-item logout" onclick="logout()">Logout</button>
             </div>
-        `;
+        `);
     }
 
     // Apply saved state

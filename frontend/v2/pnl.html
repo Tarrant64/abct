@@ -90,14 +90,14 @@
                 }
             } catch(e) {
                 console.error('P&L load error:', e);
-                document.getElementById('pnlTableBody').innerHTML = '<tr><td colspan="6"><div class="v2-empty"><div class="v2-empty-title">P&L data not available</div><div class="v2-empty-desc">Click "Compute P&L" to calculate profit and loss from your transaction history.</div></div></td></tr>';
+                setSafeHTML(document.getElementById('pnlTableBody'), '<tr><td colspan="6"><div class="v2-empty"><div class="v2-empty-title">P&L data not available</div><div class="v2-empty-desc">Click "Compute P&L" to calculate profit and loss from your transaction history.</div></div></td></tr>');
             }
         }
 
         function renderPnlTable(assets) {
             const tbody = document.getElementById('pnlTableBody');
             if (!assets.length) {
-                tbody.innerHTML = '<tr><td colspan="6"><div class="v2-empty" style="padding:32px"><div class="v2-empty-title">No P&L data computed yet</div><div class="v2-empty-desc">Click "Compute P&L" to calculate from your transactions.</div></div></td></tr>';
+                setSafeHTML(tbody, '<tr><td colspan="6"><div class="v2-empty" style="padding:32px"><div class="v2-empty-title">No P&L data computed yet</div><div class="v2-empty-desc">Click "Compute P&L" to calculate from your transactions.</div></div></td></tr>');
                 return;
             }
 
@@ -120,7 +120,7 @@
                     <td class="right ${rtClass}">${returnPct >= 0 ? '+' : ''}${returnPct.toFixed(2)}%</td>
                 </tr>`;
             });
-            tbody.innerHTML = html;
+            setSafeHTML(tbody, html);
         }
 
         async function computePnl() {
