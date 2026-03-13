@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark-mode">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transactions - ABCT V2</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
+    <link rel="stylesheet" href="/v2/static/css/v2.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+    <script src="/static/js/session-auth.js?v=1772669294"></script>
+</head>
+<body>
+    <div class="v2-layout" id="v2Layout">
+        <nav class="v2-sidebar" id="v2Sidebar"></nav>
+        <main class="v2-main">
+            <header class="v2-topbar">
+                <div class="v2-topbar-left"><span class="v2-topbar-title">Transactions</span></div>
+                <div class="v2-topbar-right">
+                    <button class="v2-sync-btn" id="txRefreshBtn" onclick="refreshTransactions()"><span class="sync-icon">&#10227;</span> Refresh</button>
+                    <div class="v2-user-menu"></div>
+                </div>
+            </header>
+
+            <div class="v2-content">
+                <!-- Stats -->
+                <div class="v2-stats-grid v2-fade-in" style="margin-bottom:24px;">
+                    <div class="v2-stat-card"><div class="v2-stat-label">Total Transactions</div><div class="v2-stat-value" id="txTotal"><span class="v2-skeleton v2-skeleton-value"></span></div></div>
+                    <div class="v2-stat-card"><div class="v2-stat-label">Last 7 Days</div><div class="v2-stat-value" id="tx7d"><span class="v2-skeleton v2-skeleton-value"></span></div></div>
+                    <div class="v2-stat-card"><div class="v2-stat-label">Chains Active</div><div class="v2-stat-value" id="txChains"><span class="v2-skeleton v2-skeleton-value"></span></div></div>
+                </div>
+
+                <!-- Filters -->
+                <div class="v2-card" style="margin-bottom:24px;padding:16px;">
+                    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+                        <select class="v2-table-filter" id="txChainFilter" onchange="loadTransactionPage()" style="min-width:120px">
+                            <option value="">All Chains</option>
+                            <option value="cardano">Cardano</option>
+                            <option value="ethereum">Ethereum</option>
+                            <option value="bitcoin">Bitcoin</option>
+                            <option value="solana">Solana</option>
+                        </select>
+                        <select class="v2-table-filter" id="txTypeFilter" onchange="loadTransactionPage()" style="min-width:120px">
+                            <option value="">All Types</option>
+                            <option value="sent">Sent</option>
+                            <option value="received">Received</option>
+                            <option value="swap">Swap</option>
+                            <option value="stake">Stake</option>
+                        </select>
+                        <input type="text" class="v2-table-filter" placeholder="Search transactions..." id="txSearch" style="flex:1;min-width:200px" onkeyup="if(event.key==='Enter')loadTransactionPage()">
+                    </div>
+                </div>
+
+                <!-- Transactions Table -->
+                <div class="v2-table-wrapper" id="txTableWrapper">
+                    <table class="v2-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Asset</th>
+                                <th>Chain</th>
+                                <th class="right">Amount</th>
+                                <th class="right">Value</th>
+                                <th>Hash</th>
+                            </tr>
+                        </thead>
+                        <tbody id="txTableBody">
+                            <tr><td colspan="7"><div style="padding:40px;text-align:center;"><div class="v2-skeleton v2-skeleton-chart" style="height:200px"></div></div></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <div style="display:flex;justify-content:center;gap:8px;margin-top:16px;" id="txPagination"></div>
+            </div>
+
+            <footer class="v2-footer">ABCT V2 | Transactions</footer>
+        </main>
+    </div>
+
+    <script src="/v2/static/js/v2-app.js"></script>
+    <script src="/v2/static/js/v2-shell.js"></script>
+    <script>
+        let txPage = 0;
+        const txLimit = 50;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            v2InitShell('transactions');
+            loadTransactionStats();
+            loadTransactionPage();
+        });
+
+        async function loadTransactionStats() {
+            try {
+                const resp = await v2Fetch('/transactions/stats');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    setText('txTotal', (data.total_count || 0).toLocaleString());
+                    setText('tx7d', (data.count_7d || data.recent_count || 0).toLocaleString());
+                    setText('txChains', (data.chain_count || Object.keys(data.by_chain || {}).length || 0).toLocaleString());
+                }
+            } catch(e) { console.error(e); }
+        }
+
+        async function loadTransactionPage() {
+            const chain = document.getElementById('txChainFilter').value;
+            const type = document.getElementById('txTypeFilter').value;
+            const search = document.getElementById('txSearch').value;
+
+            let url = `/transactions?offset=${txPage * txLimit}&limit=${txLimit}`;
+            if (chain) url += `&blockchain=${chain}`;
+            if (type) url += `&type=${type}`;
+            if (search) url += `&search=${encodeURIComponent(search)}`;
+
+            try {
+                const resp = await v2Fetch(url);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    renderTransactions(data);
+                }
+            } catch(e) {
+                console.error('Tx load error:', e);
+                document.getElementById('txTableBody').innerHTML = '<tr><td colspan="7"><div class="v2-empty"><div class="v2-empty-title">Could not load transactions</div></div></td></tr>';
+            }
+        }
+
+        function renderTransactions(data) {
+            const txs = data.transactions || data || [];
+            const tbody = document.getElementById('txTableBody');
+
+            if (!txs.length) {
+                tbody.innerHTML = '<tr><td colspan="7"><div class="v2-empty" style="padding:32px"><div class="v2-empty-title">No transactions found</div><div class="v2-empty-desc">Refresh to fetch latest transactions from your wallets.</div></div></td></tr>';
+                return;
+            }
+
+            let html = '';
+            txs.forEach(tx => {
+                const date = tx.timestamp || tx.date || '';
+                const fmtDate = date ? new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) : '--';
+                const time = date ? new Date(date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '';
+                const type = tx.type || tx.direction || 'transfer';
+                const asset = tx.asset || tx.symbol || tx.token || '';
+                const chain = tx.blockchain || tx.chain || '';
+                const amount = tx.amount || 0;
+                const value = tx.value_usd || 0;
+                const hash = tx.tx_hash || tx.hash || '';
+                const shortHash = hash ? hash.slice(0, 8) + '...' + hash.slice(-6) : '--';
+
+                const typeColors = { sent: 'v2-value-negative', received: 'v2-value-positive', swap: '', stake: 'v2-value-positive' };
+                const typeClass = typeColors[type.toLowerCase()] || '';
+
+                html += `<tr>
+                    <td><div>${escapeHtml(fmtDate)}</div><div style="font-size:11px;color:var(--v2-text-muted)">${escapeHtml(time)}</div></td>
+                    <td><span class="v2-badge v2-badge-neutral">${escapeHtml(type)}</span></td>
+                    <td><strong>${escapeHtml(asset)}</strong></td>
+                    <td><span class="v2-chain-badge">${escapeHtml(chain)}</span></td>
+                    <td class="right ${typeClass}">${type.toLowerCase() === 'sent' ? '-' : '+'}${formatAmount(Math.abs(amount))}</td>
+                    <td class="right v2-blur">${value > 0 ? formatCurrency(value) : '--'}</td>
+                    <td style="font-family:monospace;font-size:11px;color:var(--v2-text-muted)">${escapeHtml(shortHash)}</td>
+                </tr>`;
+            });
+            tbody.innerHTML = html;
+
+            // Pagination
+            const total = data.total || txs.length;
+            const pages = Math.ceil(total / txLimit);
+            const pag = document.getElementById('txPagination');
+            if (pages > 1) {
+                let pagHtml = '';
+                for (let i = 0; i < Math.min(pages, 10); i++) {
+                    pagHtml += `<button class="v2-btn v2-btn-sm ${i === txPage ? 'v2-btn-primary' : 'v2-btn-ghost'}" onclick="txPage=${i};loadTransactionPage()">${i + 1}</button>`;
+                }
+                pag.innerHTML = pagHtml;
+            } else {
+                pag.innerHTML = '';
+            }
+        }
+
+        async function refreshTransactions() {
+            const btn = document.getElementById('txRefreshBtn');
+            btn.classList.add('syncing');
+            showToast('Refreshing transactions...', 'success');
+            try {
+                await v2Fetch('/transactions/refresh', { method: 'POST' });
+                await loadTransactionPage();
+                await loadTransactionStats();
+                showToast('Transactions refreshed', 'success');
+            } catch(e) { showToast('Refresh failed', 'error'); }
+            btn.classList.remove('syncing');
+        }
+    </script>
+</body>
+</html>

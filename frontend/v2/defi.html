@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark-mode">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeFi & Staking - ABCT V2</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
+    <link rel="stylesheet" href="/v2/static/css/v2.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+    <script src="/static/js/session-auth.js?v=1772669294"></script>
+    <style>
+        .protocol-card { background: var(--v2-bg-card); border: 1px solid var(--v2-border); border-radius: var(--v2-radius-lg); padding: 16px; transition: all 0.2s; }
+        .protocol-card:hover { border-color: var(--v2-border-light); }
+        .protocol-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .protocol-name { font-size: 15px; font-weight: 600; color: var(--v2-text-heading); }
+        .protocol-chain { font-size: 11px; }
+        .protocol-positions { margin-top: 8px; }
+        .position-row { display: flex; justify-content: space-between; padding: 6px 0; border-top: 1px solid var(--v2-border); font-size: 13px; }
+        .position-row:first-child { border-top: none; }
+        .protocol-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+    </style>
+</head>
+<body>
+    <div class="v2-layout" id="v2Layout">
+        <nav class="v2-sidebar" id="v2Sidebar"></nav>
+        <main class="v2-main">
+            <header class="v2-topbar">
+                <div class="v2-topbar-left"><span class="v2-topbar-title">DeFi & Staking</span></div>
+                <div class="v2-topbar-right">
+                    <button class="v2-sync-btn" onclick="refreshDefi()"><span class="sync-icon">&#10227;</span> Refresh</button>
+                    <div class="v2-user-menu"></div>
+                </div>
+            </header>
+
+            <div class="v2-content">
+                <!-- Summary -->
+                <div class="v2-stats-grid v2-fade-in" style="margin-bottom:24px">
+                    <div class="v2-stat-card"><div class="v2-stat-label">Total DeFi Value</div><div class="v2-stat-value v2-blur" id="defiTotal"><span class="v2-skeleton v2-skeleton-value"></span></div></div>
+                    <div class="v2-stat-card"><div class="v2-stat-label">Staked Value</div><div class="v2-stat-value v2-blur" id="stakedTotal"><span class="v2-skeleton v2-skeleton-value"></span></div></div>
+                    <div class="v2-stat-card"><div class="v2-stat-label">Protocols</div><div class="v2-stat-value" id="protocolCount"><span class="v2-skeleton v2-skeleton-value"></span></div></div>
+                </div>
+
+                <!-- Protocol Cards -->
+                <div class="protocol-grid v2-fade-in" id="protocolGrid">
+                    <div class="v2-skeleton" style="height:200px;border-radius:var(--v2-radius-lg)"></div>
+                    <div class="v2-skeleton" style="height:200px;border-radius:var(--v2-radius-lg)"></div>
+                </div>
+            </div>
+
+            <footer class="v2-footer">ABCT V2 | DeFi & Staking</footer>
+        </main>
+    </div>
+
+    <script src="/v2/static/js/v2-app.js"></script>
+    <script src="/v2/static/js/v2-shell.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            v2InitShell('defi');
+            loadDefi();
+        });
+
+        async function loadDefi() {
+            try {
+                const resp = await v2Fetch('/defi/summary');
+                if (!resp.ok) throw new Error('Failed');
+                const data = await resp.json();
+                renderDefi(data);
+            } catch(e) {
+                document.getElementById('protocolGrid').innerHTML = '<div class="v2-empty" style="grid-column:1/-1"><div class="v2-empty-title">Could not load DeFi data</div></div>';
+            }
+        }
+
+        function renderDefi(data) {
+            let totalDefi = 0;
+            let totalStaked = 0;
+            let protocols = new Set();
+
+            // Parse various response formats
+            const positions = data.positions || data.protocols || [];
+            const staking = data.staking || [];
+
+            staking.forEach(s => {
+                totalStaked += (s.value_usd || 0);
+                protocols.add(s.protocol || s.pool || 'Staking');
+            });
+            positions.forEach(p => {
+                totalDefi += (p.value_usd || 0);
+                protocols.add(p.protocol || p.name || 'DeFi');
+            });
+
+            setText('defiTotal', formatCurrency(totalDefi + totalStaked));
+            setText('stakedTotal', formatCurrency(totalStaked));
+            setText('protocolCount', protocols.size.toString());
+
+            const grid = document.getElementById('protocolGrid');
+
+            if (staking.length === 0 && positions.length === 0) {
+                grid.innerHTML = '<div class="v2-empty" style="grid-column:1/-1;padding:64px"><div class="v2-empty-icon" style="font-size:48px;opacity:0.2">&#127981;</div><div class="v2-empty-title">No DeFi positions detected</div><div class="v2-empty-desc">DeFi positions and staking are auto-detected from your wallet addresses. Add wallets to see positions here.</div></div>';
+                return;
+            }
+
+            let html = '';
+
+            // Group staking by protocol
+            const stakingByProtocol = {};
+            staking.forEach(s => {
+                const key = s.protocol || s.pool || 'Cardano Staking';
+                if (!stakingByProtocol[key]) stakingByProtocol[key] = [];
+                stakingByProtocol[key].push(s);
+            });
+
+            Object.entries(stakingByProtocol).forEach(([name, items]) => {
+                const totalVal = items.reduce((s, i) => s + (i.value_usd || 0), 0);
+                html += `<div class="protocol-card">
+                    <div class="protocol-header">
+                        <div>
+                            <div class="protocol-name">${escapeHtml(name)}</div>
+                            <span class="v2-chain-badge protocol-chain">${escapeHtml(items[0]?.blockchain || items[0]?.chain || 'cardano')}</span>
+                        </div>
+                        <div class="v2-stat-value v2-blur" style="font-size:16px">${formatCurrency(totalVal)}</div>
+                    </div>
+                    <div class="protocol-positions">`;
+                items.forEach(i => {
+                    html += `<div class="position-row">
+                        <span>${escapeHtml(i.token || i.symbol || i.asset || 'Token')}: <span class="v2-blur">${formatAmount(i.amount || 0)}</span></span>
+                        <span class="v2-blur">${formatCurrency(i.value_usd || 0)}</span>
+                    </div>`;
+                });
+                if (items[0]?.apy) html += `<div class="position-row"><span style="color:var(--v2-accent)">APY</span><span style="color:var(--v2-accent)">${items[0].apy.toFixed(1)}%</span></div>`;
+                html += '</div></div>';
+            });
+
+            positions.forEach(p => {
+                html += `<div class="protocol-card">
+                    <div class="protocol-header">
+                        <div>
+                            <div class="protocol-name">${escapeHtml(p.protocol || p.name || 'Protocol')}</div>
+                            <span class="v2-chain-badge protocol-chain">${escapeHtml(p.blockchain || p.chain || '')}</span>
+                            <span class="v2-badge v2-badge-neutral" style="margin-left:4px">${escapeHtml(p.type || 'Position')}</span>
+                        </div>
+                        <div class="v2-stat-value v2-blur" style="font-size:16px">${formatCurrency(p.value_usd || 0)}</div>
+                    </div>
+                </div>`;
+            });
+
+            grid.innerHTML = html;
+        }
+
+        async function refreshDefi() {
+            showToast('Refreshing DeFi data...', 'success');
+            try {
+                await v2Fetch('/defi/summary?refresh=true');
+                await loadDefi();
+                showToast('DeFi data refreshed', 'success');
+            } catch(e) { showToast('Refresh failed', 'error'); }
+        }
+    </script>
+</body>
+</html>

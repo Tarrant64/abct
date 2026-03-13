@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark-mode">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P&L - ABCT V2</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
+    <link rel="stylesheet" href="/v2/static/css/v2.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+    <script src="/static/js/session-auth.js?v=1772669294"></script>
+</head>
+<body>
+    <div class="v2-layout" id="v2Layout">
+        <nav class="v2-sidebar" id="v2Sidebar"></nav>
+        <main class="v2-main">
+            <header class="v2-topbar">
+                <div class="v2-topbar-left"><span class="v2-topbar-title">Profit & Loss</span></div>
+                <div class="v2-topbar-right">
+                    <button class="v2-btn v2-btn-primary" onclick="computePnl()">Compute P&L</button>
+                    <div class="v2-user-menu"></div>
+                </div>
+            </header>
+
+            <div class="v2-content">
+                <div class="v2-stats-grid v2-fade-in" style="margin-bottom:24px">
+                    <div class="v2-stat-card"><div class="v2-stat-label">Total Cost Basis</div><div class="v2-stat-value v2-blur" id="pnlCostBasis"><span class="v2-skeleton v2-skeleton-value"></span></div></div>
+                    <div class="v2-stat-card"><div class="v2-stat-label">Unrealized P&L</div><div class="v2-stat-value" id="pnlUnrealized"><span class="v2-skeleton v2-skeleton-value"></span></div></div>
+                    <div class="v2-stat-card"><div class="v2-stat-label">Realized P&L</div><div class="v2-stat-value" id="pnlRealized"><span class="v2-skeleton v2-skeleton-value"></span></div></div>
+                    <div class="v2-stat-card"><div class="v2-stat-label">Return %</div><div class="v2-stat-value" id="pnlReturn"><span class="v2-skeleton v2-skeleton-value"></span></div></div>
+                </div>
+
+                <!-- P&L Table -->
+                <div class="v2-table-wrapper v2-fade-in">
+                    <table class="v2-table">
+                        <thead>
+                            <tr>
+                                <th>Asset</th>
+                                <th class="right">Cost Basis</th>
+                                <th class="right">Current Value</th>
+                                <th class="right">Unrealized P&L</th>
+                                <th class="right">Realized P&L</th>
+                                <th class="right">Return %</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pnlTableBody">
+                            <tr><td colspan="6"><div style="padding:40px;text-align:center"><div class="v2-skeleton v2-skeleton-chart" style="height:200px"></div></div></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <footer class="v2-footer">ABCT V2 | P&L</footer>
+        </main>
+    </div>
+
+    <script src="/v2/static/js/v2-app.js"></script>
+    <script src="/v2/static/js/v2-shell.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            v2InitShell('pnl');
+            loadPnl();
+        });
+
+        async function loadPnl() {
+            try {
+                const [summaryResp, unrealizedResp] = await Promise.allSettled([
+                    v2Fetch('/pnl/summary'),
+                    v2Fetch('/pnl/unrealized'),
+                ]);
+
+                if (summaryResp.status === 'fulfilled' && summaryResp.value.ok) {
+                    const data = await summaryResp.value.json();
+                    setText('pnlCostBasis', formatCurrency(data.total_cost_basis || 0));
+                    setText('pnlRealized', formatCurrency(data.total_realized || 0));
+                    const returnPct = data.total_return_pct || 0;
+                    const retEl = document.getElementById('pnlReturn');
+                    retEl.textContent = (returnPct >= 0 ? '+' : '') + returnPct.toFixed(2) + '%';
+                    retEl.style.color = returnPct >= 0 ? 'var(--v2-accent)' : 'var(--v2-red)';
+                }
+
+                if (unrealizedResp.status === 'fulfilled' && unrealizedResp.value.ok) {
+                    const data = await unrealizedResp.value.json();
+                    const totalUnrealized = data.total_unrealized || 0;
+                    const el = document.getElementById('pnlUnrealized');
+                    el.textContent = formatCurrency(totalUnrealized);
+                    el.style.color = totalUnrealized >= 0 ? 'var(--v2-accent)' : 'var(--v2-red)';
+
+                    renderPnlTable(data.assets || data.by_asset || []);
+                }
+            } catch(e) {
+                console.error('P&L load error:', e);
+                document.getElementById('pnlTableBody').innerHTML = '<tr><td colspan="6"><div class="v2-empty"><div class="v2-empty-title">P&L data not available</div><div class="v2-empty-desc">Click "Compute P&L" to calculate profit and loss from your transaction history.</div></div></td></tr>';
+            }
+        }
+
+        function renderPnlTable(assets) {
+            const tbody = document.getElementById('pnlTableBody');
+            if (!assets.length) {
+                tbody.innerHTML = '<tr><td colspan="6"><div class="v2-empty" style="padding:32px"><div class="v2-empty-title">No P&L data computed yet</div><div class="v2-empty-desc">Click "Compute P&L" to calculate from your transactions.</div></div></td></tr>';
+                return;
+            }
+
+            let html = '';
+            assets.sort((a, b) => Math.abs(b.unrealized_pnl || 0) - Math.abs(a.unrealized_pnl || 0));
+            assets.forEach(a => {
+                const unrealized = a.unrealized_pnl || 0;
+                const realized = a.realized_pnl || 0;
+                const returnPct = a.return_pct || 0;
+                const urClass = unrealized >= 0 ? 'v2-value-positive' : 'v2-value-negative';
+                const rlClass = realized >= 0 ? 'v2-value-positive' : 'v2-value-negative';
+                const rtClass = returnPct >= 0 ? 'v2-value-positive' : 'v2-value-negative';
+
+                html += `<tr>
+                    <td><strong>${escapeHtml(a.symbol || a.asset || '?')}</strong></td>
+                    <td class="right v2-blur">${formatCurrency(a.cost_basis || 0)}</td>
+                    <td class="right v2-blur">${formatCurrency(a.current_value || 0)}</td>
+                    <td class="right ${urClass}">${unrealized >= 0 ? '+' : ''}${formatCurrency(unrealized)}</td>
+                    <td class="right ${rlClass}">${realized >= 0 ? '+' : ''}${formatCurrency(realized)}</td>
+                    <td class="right ${rtClass}">${returnPct >= 0 ? '+' : ''}${returnPct.toFixed(2)}%</td>
+                </tr>`;
+            });
+            tbody.innerHTML = html;
+        }
+
+        async function computePnl() {
+            showToast('Computing P&L... this may take a moment', 'success');
+            try {
+                await v2Fetch('/pnl/compute', { method: 'POST' });
+                setTimeout(() => loadPnl(), 3000);
+            } catch(e) { showToast('P&L computation failed', 'error'); }
+        }
+    </script>
+</body>
+</html>

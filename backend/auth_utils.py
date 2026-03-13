@@ -26,6 +26,10 @@ async def verify_session(authorization: Optional[str] = Header(None)) -> int:
         async def protected_endpoint(user_id: int = Depends(verify_session)):
             ...
 
+    Implements sliding window session renewal: if a session has consumed more
+    than half its lifetime, the expiry is extended. This ensures active users
+    are never logged out unexpectedly.
+
     Args:
         authorization: Authorization header value (Bearer token)
 
@@ -35,6 +39,9 @@ async def verify_session(authorization: Optional[str] = Header(None)) -> int:
     Raises:
         HTTPException: 401 if token is missing or invalid (when auth required)
     """
+    # Default session lifetime for renewal (30 days in minutes)
+    SESSION_LIFETIME_MINUTES = 43200
+
     # If auth not required, still check for a valid session token
     # so demo users get demo data instead of admin data
     if not is_auth_required():
@@ -59,7 +66,7 @@ async def verify_session(authorization: Optional[str] = Header(None)) -> int:
     token = authorization[7:]  # Remove "Bearer " prefix
 
     # Import database functions here to avoid circular imports
-    from database import get_session, delete_session, cleanup_expired_sessions
+    from database import get_session, delete_session, cleanup_expired_sessions, renew_session
 
     # Clean expired sessions from database
     await cleanup_expired_sessions()
@@ -82,6 +89,13 @@ async def verify_session(authorization: Optional[str] = Header(None)) -> int:
             detail="Session expired. Please login again.",
             headers={"WWW-Authenticate": "Bearer"}
         )
+
+    # Sliding window renewal: extend session if more than half its lifetime
+    # has elapsed. This avoids a DB write on every single request while still
+    # keeping active sessions alive indefinitely.
+    remaining = (expires_at - datetime.utcnow()).total_seconds() / 60
+    if remaining < SESSION_LIFETIME_MINUTES / 2:
+        await renew_session(token, SESSION_LIFETIME_MINUTES)
 
     return session_data['user_id']
 
@@ -137,8 +151,11 @@ async def verify_session_sse(
     token: Optional[str] = Query(None)
 ) -> int:
     """Verify session for SSE endpoints that use EventSource.
-    EventSource can't send headers, so also accepts token as query param."""
-    from database import get_session, cleanup_expired_sessions
+    EventSource can't send headers, so also accepts token as query param.
+    Also performs sliding window session renewal."""
+    from database import get_session, cleanup_expired_sessions, renew_session
+
+    SESSION_LIFETIME_MINUTES = 43200  # 30 days
 
     actual_token = None
     if authorization and authorization.startswith("Bearer "):
@@ -163,5 +180,10 @@ async def verify_session_sse(
         if not is_auth_required():
             return 1
         raise HTTPException(status_code=401, detail="Session expired")
+
+    # Sliding window renewal for SSE sessions too
+    remaining = (expires_at - datetime.utcnow()).total_seconds() / 60
+    if remaining < SESSION_LIFETIME_MINUTES / 2:
+        await renew_session(actual_token, SESSION_LIFETIME_MINUTES)
 
     return session_data['user_id']

@@ -5,7 +5,7 @@ Secret Network (SCRT) uses Bech32 addresses starting with 'secret1'.
 Wallet balances are fully public and queryable via the REST API.
 Smart contract state is private (encrypted via Intel SGX TEE).
 
-API: Secret Foundation LCD at https://lcd.mainnet.secretsaturn.net
+API: Secret Foundation LCD at https://secret-4.api.trivium.network:1317
 """
 
 import logging
@@ -18,7 +18,7 @@ from services.http_client import get_client
 
 logger = logging.getLogger(__name__)
 
-SECRET_LCD_URL = "https://lcd.mainnet.secretsaturn.net"
+SECRET_LCD_URL = "https://secret-4.api.trivium.network:1317"
 USCRT_DIVISOR = 1_000_000  # 1 SCRT = 1,000,000 uscrt
 
 # Known privacy contract addresses on Secret Network

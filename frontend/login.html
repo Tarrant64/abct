@@ -359,8 +359,16 @@
                         localStorage.removeItem('is_demo');
                     }
 
-                    // Redirect to dashboard
-                    window.location.href = '/';
+                    // Redirect to the page the user was on before being
+                    // sent to login (set by session-auth.js), or dashboard
+                    const params = new URLSearchParams(window.location.search);
+                    const redirectTo = params.get('redirect');
+                    // Only allow relative redirects (prevent open redirect attacks)
+                    if (redirectTo && redirectTo.startsWith('/')) {
+                        window.location.href = redirectTo;
+                    } else {
+                        window.location.href = '/';
+                    }
                 } else {
                     showError(data.message || 'Login failed. Please check your credentials.');
                 }

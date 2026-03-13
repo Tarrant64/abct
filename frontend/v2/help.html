@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark-mode">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Help - ABCT V2</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
+    <link rel="stylesheet" href="/v2/static/css/v2.css">
+    <script src="/static/js/session-auth.js?v=1772669294"></script>
+    <style>
+        .help-section { margin-bottom: 24px; }
+        .help-section h2 { font-size: 18px; font-weight: 600; color: var(--v2-text-heading); margin-bottom: 12px; }
+        .help-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+        .help-card { background: var(--v2-bg-card); border: 1px solid var(--v2-border); border-radius: var(--v2-radius-lg); padding: 20px; }
+        .help-card h3 { font-size: 14px; font-weight: 600; color: var(--v2-text-heading); margin-bottom: 8px; }
+        .help-card p { font-size: 13px; color: var(--v2-text-secondary); line-height: 1.6; }
+        .help-stat-row { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 24px; }
+        .help-stat { text-align: center; }
+        .help-stat-num { font-size: 28px; font-weight: 700; color: var(--v2-accent-text); }
+        .help-stat-label { font-size: 12px; color: var(--v2-text-secondary); }
+    </style>
+</head>
+<body>
+    <div class="v2-layout" id="v2Layout">
+        <nav class="v2-sidebar" id="v2Sidebar"></nav>
+        <main class="v2-main">
+            <header class="v2-topbar">
+                <div class="v2-topbar-left"><span class="v2-topbar-title">Help & Guide</span></div>
+                <div class="v2-topbar-right"><div class="v2-user-menu"></div></div>
+            </header>
+
+            <div class="v2-content">
+                <!-- Quick Stats -->
+                <div class="help-stat-row v2-fade-in">
+                    <div class="help-stat"><div class="help-stat-num">53</div><div class="help-stat-label">Blockchains</div></div>
+                    <div class="help-stat"><div class="help-stat-num">42</div><div class="help-stat-label">Exchanges</div></div>
+                    <div class="help-stat"><div class="help-stat-num">80+</div><div class="help-stat-label">DeFi Protocols</div></div>
+                    <div class="help-stat"><div class="help-stat-num">8</div><div class="help-stat-label">Themes</div></div>
+                </div>
+
+                <div class="help-section v2-fade-in">
+                    <h2>Getting Started</h2>
+                    <div class="help-grid">
+                        <div class="help-card">
+                            <h3>1. Add Wallets</h3>
+                            <p>Go to the Wallets page and add your blockchain addresses. ABCT auto-detects the chain from the address format. Cardano stake addresses automatically group all related wallets.</p>
+                        </div>
+                        <div class="help-card">
+                            <h3>2. Connect Exchanges</h3>
+                            <p>Add read-only API keys for your exchanges in Settings > API Keys. ABCT supports 42 exchanges including Coinbase, Binance, Kraken, and many more.</p>
+                        </div>
+                        <div class="help-card">
+                            <h3>3. Configure API Keys</h3>
+                            <p>Some chains require API keys for full functionality. Free keys are available for most services. Check Settings > API Keys for the full list.</p>
+                        </div>
+                        <div class="help-card">
+                            <h3>4. Explore Your Portfolio</h3>
+                            <p>The Dashboard shows your complete portfolio with charts, allocation breakdowns, and asset tables. Click any asset for detailed information and price charts.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="help-section v2-fade-in">
+                    <h2>Features</h2>
+                    <div class="help-grid">
+                        <div class="help-card">
+                            <h3>DeFi & Staking</h3>
+                            <p>Auto-detection of staking positions and DeFi protocol interactions across 80+ protocols. See your yields, rewards, and LP positions in one place.</p>
+                        </div>
+                        <div class="help-card">
+                            <h3>NFT Collections</h3>
+                            <p>Browse your NFTs across Cardano, Ethereum, Solana, Polygon, Base, and more. Floor price valuations keep your NFT portfolio value accurate.</p>
+                        </div>
+                        <div class="help-card">
+                            <h3>Transaction History</h3>
+                            <p>Full multi-chain transaction history with filtering, analytics, and export capabilities. Track every on-chain movement across all your wallets.</p>
+                        </div>
+                        <div class="help-card">
+                            <h3>P&L Tracking</h3>
+                            <p>Cost basis calculation with FIFO/LIFO/Average methods. Per-asset and portfolio-wide realized and unrealized profit & loss tracking.</p>
+                        </div>
+                        <div class="help-card">
+                            <h3>Privacy & Security</h3>
+                            <p>Token approval monitoring, address poisoning scanner, Cardano Shield threat feed, spam detection, and per-wallet privacy scoring.</p>
+                        </div>
+                        <div class="help-card">
+                            <h3>Global Search</h3>
+                            <p>Search across wallets, DeFi positions, staking, governance, and exchange results from the top bar search.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="help-section v2-fade-in">
+                    <h2>V2 Navigation Guide</h2>
+                    <div class="v2-card">
+                        <table class="v2-table">
+                            <thead><tr><th>Page</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td><strong>Dashboard</strong></td><td>Portfolio overview with total value, charts, and top assets</td></tr>
+                                <tr><td><strong>Assets</strong></td><td>Detailed view of wallets, exchanges, DeFi positions, and custom tokens</td></tr>
+                                <tr><td><strong>NFTs</strong></td><td>NFT collection browser with multi-chain support</td></tr>
+                                <tr><td><strong>DeFi & Staking</strong></td><td>DeFi protocol positions and staking rewards</td></tr>
+                                <tr><td><strong>Exchanges</strong></td><td>Exchange balances and connected accounts</td></tr>
+                                <tr><td><strong>Analytics</strong></td><td>Market data, allocation charts, and portfolio analytics</td></tr>
+                                <tr><td><strong>Transactions</strong></td><td>Multi-chain transaction history with filters</td></tr>
+                                <tr><td><strong>P&L</strong></td><td>Profit & loss tracking and cost basis analysis</td></tr>
+                                <tr><td><strong>Security</strong></td><td>Privacy scoring, approval monitoring, and threat detection</td></tr>
+                                <tr><td><strong>Wallets</strong></td><td>Add, remove, and manage tracked wallets</td></tr>
+                                <tr><td><strong>Settings</strong></td><td>API keys, cache, logs, security, backups, and system controls</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="v2-card v2-fade-in" style="text-align:center;padding:32px;">
+                    <p style="color:var(--v2-text-secondary);margin-bottom:12px;">Need the full help documentation?</p>
+                    <a href="/help.html" class="v2-btn v2-btn-secondary">Open Full Help Guide (V1)</a>
+                </div>
+            </div>
+
+            <footer class="v2-footer">ABCT V2 | Help & Guide</footer>
+        </main>
+    </div>
+
+    <script src="/v2/static/js/v2-app.js"></script>
+    <script src="/v2/static/js/v2-shell.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            v2InitShell('help');
+        });
+    </script>
+</body>
+</html>

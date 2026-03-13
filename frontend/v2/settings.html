@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark-mode">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - ABCT V2</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
+    <link rel="stylesheet" href="/v2/static/css/v2.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+    <script src="/static/js/session-auth.js?v=1772669294"></script>
+</head>
+<body>
+    <div class="v2-layout" id="v2Layout">
+        <nav class="v2-sidebar" id="v2Sidebar"></nav>
+        <main class="v2-main">
+            <header class="v2-topbar">
+                <div class="v2-topbar-left"><span class="v2-topbar-title">Settings</span></div>
+                <div class="v2-topbar-right"><div class="v2-user-menu"></div></div>
+            </header>
+
+            <div class="v2-content">
+                <div class="v2-tabs" id="settingsTabs">
+                    <button class="v2-tab active" data-tab="apis" onclick="switchSettingsTab('apis')">API Keys</button>
+                    <button class="v2-tab" data-tab="services" onclick="switchSettingsTab('services')">Services</button>
+                    <button class="v2-tab" data-tab="cache" onclick="switchSettingsTab('cache')">Cache</button>
+                    <button class="v2-tab" data-tab="logs" onclick="switchSettingsTab('logs')">Logs</button>
+                    <button class="v2-tab" data-tab="security" onclick="switchSettingsTab('security')">Security</button>
+                    <button class="v2-tab" data-tab="backup" onclick="switchSettingsTab('backup')">Backup</button>
+                    <button class="v2-tab" data-tab="chart" onclick="switchSettingsTab('chart')">Chart Designer</button>
+                    <button class="v2-tab" data-tab="system" onclick="switchSettingsTab('system')">System</button>
+                </div>
+
+                <!-- API Keys Tab -->
+                <div id="tabApis" class="settings-tab-content">
+                    <div class="v2-card">
+                        <div class="v2-card-header">
+                            <span class="v2-card-title">API Keys & Connections</span>
+                            <button class="v2-btn v2-btn-secondary v2-btn-sm" onclick="reloadApis()">Reload</button>
+                        </div>
+                        <div id="apiKeysList">
+                            <div class="v2-skeleton v2-skeleton-chart" style="height:200px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Services Tab -->
+                <div id="tabServices" class="settings-tab-content" style="display:none">
+                    <div class="v2-card">
+                        <div class="v2-card-header"><span class="v2-card-title">Data Collectors & Services</span></div>
+                        <div id="servicesList">
+                            <div class="v2-skeleton v2-skeleton-chart" style="height:200px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cache Tab -->
+                <div id="tabCache" class="settings-tab-content" style="display:none">
+                    <div class="v2-card">
+                        <div class="v2-card-header"><span class="v2-card-title">Cache Management</span></div>
+                        <div class="v2-stats-grid" id="cacheStats" style="margin-bottom:20px"></div>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                            <button class="v2-btn v2-btn-secondary" onclick="clearCache('token-logos')">Clear Token Logos</button>
+                            <button class="v2-btn v2-btn-secondary" onclick="clearCache('nft-images')">Clear NFT Images</button>
+                            <button class="v2-btn v2-btn-secondary" onclick="clearCache('api-cache')">Clear API Cache</button>
+                            <button class="v2-btn v2-btn-secondary" onclick="clearCache('staking-cache')">Clear Staking Cache</button>
+                            <button class="v2-btn v2-btn-primary" onclick="clearCache('all')" style="background:var(--v2-red)">Clear All</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Logs Tab -->
+                <div id="tabLogs" class="settings-tab-content" style="display:none">
+                    <div class="v2-card">
+                        <div class="v2-card-header">
+                            <span class="v2-card-title">Application Logs</span>
+                            <button class="v2-btn v2-btn-secondary v2-btn-sm" onclick="loadLogs()">Refresh</button>
+                        </div>
+                        <div id="logsContent" style="max-height:600px;overflow-y:auto;font-family:monospace;font-size:12px;padding:12px;background:var(--v2-bg-input);border-radius:var(--v2-radius-md);color:var(--v2-text-secondary);">
+                            Loading...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Security Tab -->
+                <div id="tabSecurity" class="settings-tab-content" style="display:none">
+                    <div class="v2-card">
+                        <div class="v2-card-header"><span class="v2-card-title">Security Settings</span></div>
+                        <div id="securityContent">
+                            <p style="color:var(--v2-text-secondary);padding:20px;">Security settings loaded from the backend. Manage HTTPS certificates, session settings, and access controls here.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Backup Tab -->
+                <div id="tabBackup" class="settings-tab-content" style="display:none">
+                    <div class="v2-card">
+                        <div class="v2-card-header"><span class="v2-card-title">Backup & Restore</span></div>
+                        <div style="display:flex;gap:12px;margin-bottom:20px;">
+                            <button class="v2-btn v2-btn-primary" onclick="exportBackup()">Export Backup</button>
+                            <button class="v2-btn v2-btn-secondary" onclick="importBackup()">Import Backup</button>
+                        </div>
+                        <div id="backupInfo" style="color:var(--v2-text-secondary);font-size:13px;">Loading backup info...</div>
+                    </div>
+                </div>
+
+                <!-- Chart Designer Tab -->
+                <div id="tabChart" class="settings-tab-content" style="display:none">
+                    <div class="v2-card">
+                        <div class="v2-card-header"><span class="v2-card-title">Chart Designer</span></div>
+                        <p style="color:var(--v2-text-secondary);padding:20px;">Customize your portfolio chart appearance. Available in the full settings view.</p>
+                        <a href="/settings.html#chart-designer" class="v2-btn v2-btn-secondary" style="display:inline-flex;margin:0 20px 20px;">Open Chart Designer (V1)</a>
+                    </div>
+                </div>
+
+                <!-- System Tab -->
+                <div id="tabSystem" class="settings-tab-content" style="display:none">
+                    <div class="v2-card">
+                        <div class="v2-card-header"><span class="v2-card-title">System Controls</span></div>
+                        <div style="display:flex;gap:12px;">
+                            <button class="v2-btn v2-btn-secondary" onclick="restartBackend()">Restart Backend</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <footer class="v2-footer">ABCT V2 | Settings</footer>
+        </main>
+    </div>
+
+    <script src="/v2/static/js/v2-app.js"></script>
+    <script src="/v2/static/js/v2-shell.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            v2InitShell('settings');
+            // Check URL hash for direct tab navigation
+            const hash = window.location.hash.replace('#', '');
+            if (hash) switchSettingsTab(hash);
+            loadSettingsData();
+        });
+
+        function switchSettingsTab(tab) {
+            document.querySelectorAll('.v2-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+            document.querySelectorAll('.settings-tab-content').forEach(c => c.style.display = 'none');
+            const target = document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1));
+            if (target) target.style.display = 'block';
+        }
+
+        async function loadSettingsData() {
+            // Load API keys
+            try {
+                const resp = await v2Fetch('/settings/apis');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    renderApiKeys(data);
+                }
+            } catch(e) { console.error(e); }
+
+            // Load cache stats
+            try {
+                const resp = await v2Fetch('/api/cache/stats');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    renderCacheStats(data);
+                }
+            } catch(e) { console.error(e); }
+
+            // Load backup info
+            try {
+                const resp = await v2Fetch('/backup/info');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    const el = document.getElementById('backupInfo');
+                    el.textContent = `Database size: ${data.database_size || 'Unknown'} | Last backup: ${data.last_backup || 'Never'}`;
+                }
+            } catch(e) {}
+
+            // Load logs
+            loadLogs();
+        }
+
+        function renderApiKeys(data) {
+            const container = document.getElementById('apiKeysList');
+            const apis = data.apis || data || [];
+            if (!apis.length) {
+                container.innerHTML = '<div class="v2-empty"><div class="v2-empty-title">No API keys configured</div></div>';
+                return;
+            }
+            let html = '<table class="v2-table"><thead><tr><th>Service</th><th>Type</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+            apis.forEach(api => {
+                const hasKey = api.has_key || api.configured || api.api_key;
+                html += `<tr>
+                    <td><strong>${escapeHtml(api.name || api.service || api.id)}</strong></td>
+                    <td>${escapeHtml(api.type || api.auth_method || 'API Key')}</td>
+                    <td><span class="v2-badge ${hasKey ? 'v2-badge-green' : 'v2-badge-neutral'}">${hasKey ? 'Configured' : 'Not Set'}</span></td>
+                    <td><button class="v2-btn v2-btn-ghost v2-btn-sm" onclick="showToast('Edit in V1 Settings for full functionality')">Edit</button></td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function renderCacheStats(data) {
+            const container = document.getElementById('cacheStats');
+            const stats = data.stats || data;
+            let html = '';
+            if (stats.total_entries !== undefined) {
+                html += `<div class="v2-stat-card"><div class="v2-stat-label">Cache Entries</div><div class="v2-stat-value">${(stats.total_entries || 0).toLocaleString()}</div></div>`;
+            }
+            if (stats.token_logos !== undefined) {
+                html += `<div class="v2-stat-card"><div class="v2-stat-label">Token Logos</div><div class="v2-stat-value">${(stats.token_logos || 0).toLocaleString()}</div></div>`;
+            }
+            if (stats.nft_images !== undefined) {
+                html += `<div class="v2-stat-card"><div class="v2-stat-label">NFT Images</div><div class="v2-stat-value">${(stats.nft_images || 0).toLocaleString()}</div></div>`;
+            }
+            if (stats.api_responses !== undefined) {
+                html += `<div class="v2-stat-card"><div class="v2-stat-label">API Cache</div><div class="v2-stat-value">${(stats.api_responses || 0).toLocaleString()}</div></div>`;
+            }
+            container.innerHTML = html || '<div class="v2-stat-card"><div class="v2-stat-label">Cache Status</div><div class="v2-stat-value">Loaded</div></div>';
+        }
+
+        async function loadLogs() {
+            try {
+                const resp = await v2Fetch('/logs/recent?limit=100');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    const logs = data.logs || data || [];
+                    const el = document.getElementById('logsContent');
+                    if (!logs.length) {
+                        el.textContent = 'No recent logs.';
+                        return;
+                    }
+                    el.innerHTML = logs.map(l => {
+                        const time = l.timestamp ? new Date(l.timestamp).toLocaleTimeString() : '';
+                        const level = l.level || 'INFO';
+                        const color = level === 'ERROR' ? 'var(--v2-red)' : level === 'WARNING' ? 'var(--v2-orange)' : 'var(--v2-text-secondary)';
+                        return `<div style="padding:2px 0;"><span style="color:var(--v2-text-muted)">${escapeHtml(time)}</span> <span style="color:${color};font-weight:600">[${escapeHtml(level)}]</span> <span>${escapeHtml(l.message || l.msg || '')}</span></div>`;
+                    }).join('');
+                }
+            } catch(e) {
+                document.getElementById('logsContent').textContent = 'Failed to load logs.';
+            }
+        }
+
+        async function clearCache(type) {
+            try {
+                const resp = await v2Fetch(`/api/cache/clear/${type}`, { method: 'POST' });
+                if (resp.ok) {
+                    showToast(`Cache cleared: ${type}`, 'success');
+                    loadSettingsData();
+                } else {
+                    showToast('Failed to clear cache', 'error');
+                }
+            } catch(e) {
+                showToast('Cache clear error', 'error');
+            }
+        }
+
+        async function reloadApis() {
+            try {
+                await v2Fetch('/settings/apis/reload', { method: 'POST' });
+                showToast('APIs reloaded', 'success');
+                loadSettingsData();
+            } catch(e) { showToast('Reload failed', 'error'); }
+        }
+
+        async function exportBackup() {
+            try {
+                const resp = await v2Fetch('/backup/export', { method: 'POST' });
+                if (resp.ok) {
+                    const blob = await resp.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `abct-backup-${new Date().toISOString().split('T')[0]}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showToast('Backup exported', 'success');
+                }
+            } catch(e) { showToast('Export failed', 'error'); }
+        }
+
+        function importBackup() {
+            showToast('Import available in V1 Settings for full restore wizard', 'success');
+        }
+
+        async function restartBackend() {
+            if (!confirm('Restart the ABCT backend? This will briefly interrupt service.')) return;
+            try {
+                await v2Fetch('/api/system/restart-backend', { method: 'POST' });
+                showToast('Backend restarting...', 'warning');
+            } catch(e) { showToast('Restart failed', 'error'); }
+        }
+    </script>
+</body>
+</html>

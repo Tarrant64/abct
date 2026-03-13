@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark-mode">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assets - ABCT V2</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
+    <link rel="stylesheet" href="/v2/static/css/v2.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+    <script src="/static/js/session-auth.js?v=1772669294"></script>
+</head>
+<body>
+    <div class="v2-layout" id="v2Layout">
+        <nav class="v2-sidebar" id="v2Sidebar"></nav>
+        <main class="v2-main">
+            <header class="v2-topbar">
+                <div class="v2-topbar-left"><span class="v2-topbar-title">Assets</span></div>
+                <div class="v2-topbar-right">
+                    <div class="v2-search"><span class="v2-search-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span><input type="text" placeholder="Search assets..." id="globalSearch"></div>
+                    <div class="v2-user-menu"></div>
+                </div>
+            </header>
+
+            <div class="v2-content">
+                <!-- Tabs: Wallets | Exchanges | DeFi | Custom Tokens | P&L -->
+                <div class="v2-tabs" id="assetTabs">
+                    <button class="v2-tab active" data-tab="wallets" onclick="switchAssetTab('wallets')">Wallets</button>
+                    <button class="v2-tab" data-tab="exchanges" onclick="switchAssetTab('exchanges')">Exchanges</button>
+                    <button class="v2-tab" data-tab="defi" onclick="switchAssetTab('defi')">DeFi & Staking</button>
+                    <button class="v2-tab" data-tab="custom" onclick="switchAssetTab('custom')">Custom Tokens</button>
+                    <button class="v2-tab" data-tab="pnl" onclick="switchAssetTab('pnl')">P&L</button>
+                </div>
+
+                <!-- Tab Content -->
+                <div id="tabWallets" class="tab-content">
+                    <div class="v2-table-header">
+                        <span class="v2-table-title">Blockchain Wallets</span>
+                        <button class="v2-btn v2-btn-primary" onclick="showAddWalletModal()">+ Add Wallet</button>
+                    </div>
+                    <div class="v2-table-wrapper" id="walletsTable">
+                        <div style="padding:40px;text-align:center;color:var(--v2-text-muted);">
+                            <div class="v2-skeleton v2-skeleton-chart" style="height:200px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tabExchanges" class="tab-content" style="display:none">
+                    <div class="v2-table-header">
+                        <span class="v2-table-title">Exchange Connections</span>
+                    </div>
+                    <div class="v2-table-wrapper" id="exchangesContent">
+                        <div style="padding:40px;text-align:center;color:var(--v2-text-muted);">
+                            <div class="v2-skeleton v2-skeleton-chart" style="height:200px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tabDefi" class="tab-content" style="display:none">
+                    <div class="v2-table-header">
+                        <span class="v2-table-title">DeFi & Staking Positions</span>
+                    </div>
+                    <div class="v2-table-wrapper" id="defiContent">
+                        <div style="padding:40px;text-align:center;color:var(--v2-text-muted);">
+                            <div class="v2-skeleton v2-skeleton-chart" style="height:200px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tabCustom" class="tab-content" style="display:none">
+                    <div class="v2-table-header">
+                        <span class="v2-table-title">Custom Tracked Tokens</span>
+                        <button class="v2-btn v2-btn-primary" onclick="showAddTokenModal()">+ Add Token</button>
+                    </div>
+                    <div class="v2-table-wrapper" id="customTokensContent">
+                        <div style="padding:40px;text-align:center;color:var(--v2-text-muted);">
+                            <div class="v2-skeleton v2-skeleton-chart" style="height:200px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tabPnl" class="tab-content" style="display:none">
+                    <div class="v2-table-header">
+                        <span class="v2-table-title">Profit & Loss</span>
+                        <button class="v2-btn v2-btn-secondary" onclick="computePnl()">Compute P&L</button>
+                    </div>
+                    <div id="pnlContent">
+                        <div style="padding:40px;text-align:center;color:var(--v2-text-muted);">
+                            <div class="v2-skeleton v2-skeleton-chart" style="height:200px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <footer class="v2-footer">ABCT V2 | Assets</footer>
+        </main>
+    </div>
+
+    <script src="/v2/static/js/v2-app.js"></script>
+    <script src="/v2/static/js/v2-shell.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            v2InitShell('assets');
+            loadAssetsPage();
+        });
+
+        async function loadAssetsPage() {
+            // Load wallets
+            try {
+                const resp = await v2Fetch('/wallets');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    renderWalletsTab(data);
+                }
+            } catch(e) { console.error('Wallets load error:', e); }
+
+            // Load exchanges
+            try {
+                const resp = await v2Fetch('/exchanges/all');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    renderExchangesTab(data);
+                }
+            } catch(e) { console.error('Exchanges load error:', e); }
+
+            // Load DeFi
+            try {
+                const resp = await v2Fetch('/defi/summary');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    renderDefiTab(data);
+                }
+            } catch(e) { console.error('DeFi load error:', e); }
+
+            // Load Custom Tokens
+            try {
+                const resp = await v2Fetch('/custom-tokens');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    renderCustomTokensTab(data);
+                }
+            } catch(e) { console.error('Custom tokens load error:', e); }
+        }
+
+        function switchAssetTab(tab) {
+            document.querySelectorAll('.v2-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+            document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+            const target = document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1));
+            if (target) target.style.display = 'block';
+        }
+
+        function renderWalletsTab(data) {
+            const container = document.getElementById('walletsTable');
+            const wallets = data.wallets || data || [];
+            if (!wallets.length) {
+                container.innerHTML = '<div class="v2-empty" style="padding:48px"><div class="v2-empty-title">No wallets added</div><div class="v2-empty-desc">Add your first wallet to start tracking.</div></div>';
+                return;
+            }
+            let html = '<table class="v2-table"><thead><tr><th>Label</th><th>Address</th><th>Blockchain</th><th class="right">Balance</th><th class="right">Value</th></tr></thead><tbody>';
+            wallets.forEach(w => {
+                const addr = w.address || '';
+                const short = addr.length > 16 ? addr.slice(0,8) + '...' + addr.slice(-8) : addr;
+                html += `<tr>
+                    <td><strong>${escapeHtml(w.label || w.name || 'Wallet')}</strong></td>
+                    <td style="font-family:monospace;font-size:12px;color:var(--v2-text-secondary)">${escapeHtml(short)}</td>
+                    <td><span class="v2-chain-badge">${escapeHtml(w.blockchain || 'unknown')}</span></td>
+                    <td class="right v2-blur">${formatAmount(w.balance || 0)}</td>
+                    <td class="right v2-blur">${formatCurrency(w.value_usd || 0)}</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function renderExchangesTab(data) {
+            const container = document.getElementById('exchangesContent');
+            const exchanges = data.exchanges || [];
+            if (!exchanges.length) {
+                container.innerHTML = '<div class="v2-empty" style="padding:48px"><div class="v2-empty-title">No exchanges connected</div><div class="v2-empty-desc">Connect exchange API keys in Settings.</div></div>';
+                return;
+            }
+            let html = '<table class="v2-table"><thead><tr><th>Exchange</th><th class="right">Assets</th><th class="right">Total Value</th><th>Status</th></tr></thead><tbody>';
+            exchanges.forEach(ex => {
+                html += `<tr>
+                    <td><strong>${escapeHtml(ex.name || ex.exchange || 'Exchange')}</strong></td>
+                    <td class="right">${ex.asset_count || (ex.balances ? ex.balances.length : 0)}</td>
+                    <td class="right v2-blur">${formatCurrency(ex.total_usd || 0)}</td>
+                    <td><span class="v2-badge ${ex.status === 'connected' || ex.connected ? 'v2-badge-green' : 'v2-badge-red'}">${ex.status || (ex.connected ? 'Connected' : 'Error')}</span></td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function renderDefiTab(data) {
+            const container = document.getElementById('defiContent');
+            const positions = data.positions || data.protocols || [];
+            if (!positions.length && !data.staking) {
+                container.innerHTML = '<div class="v2-empty" style="padding:48px"><div class="v2-empty-title">No DeFi positions detected</div><div class="v2-empty-desc">DeFi positions are auto-detected from your wallet addresses.</div></div>';
+                return;
+            }
+            let html = '<table class="v2-table"><thead><tr><th>Protocol</th><th>Type</th><th>Chain</th><th class="right">Value</th><th class="right">APY</th></tr></thead><tbody>';
+            if (data.staking && Array.isArray(data.staking)) {
+                data.staking.forEach(s => {
+                    html += `<tr>
+                        <td><strong>${escapeHtml(s.protocol || s.pool || 'Staking')}</strong></td>
+                        <td>Staking</td>
+                        <td><span class="v2-chain-badge">${escapeHtml(s.blockchain || s.chain || 'cardano')}</span></td>
+                        <td class="right v2-blur">${formatCurrency(s.value_usd || 0)}</td>
+                        <td class="right">${s.apy ? s.apy.toFixed(1) + '%' : '--'}</td>
+                    </tr>`;
+                });
+            }
+            positions.forEach(p => {
+                html += `<tr>
+                    <td><strong>${escapeHtml(p.protocol || p.name || 'DeFi')}</strong></td>
+                    <td>${escapeHtml(p.type || 'Position')}</td>
+                    <td><span class="v2-chain-badge">${escapeHtml(p.blockchain || p.chain || '')}</span></td>
+                    <td class="right v2-blur">${formatCurrency(p.value_usd || 0)}</td>
+                    <td class="right">${p.apy ? p.apy.toFixed(1) + '%' : '--'}</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function renderCustomTokensTab(data) {
+            const container = document.getElementById('customTokensContent');
+            const tokens = data.tokens || data || [];
+            if (!tokens.length) {
+                container.innerHTML = '<div class="v2-empty" style="padding:48px"><div class="v2-empty-title">No custom tokens</div><div class="v2-empty-desc">Track additional tokens by adding them manually.</div></div>';
+                return;
+            }
+            let html = '<table class="v2-table"><thead><tr><th>Token</th><th>Symbol</th><th class="right">Amount</th><th class="right">Price</th><th class="right">Value</th></tr></thead><tbody>';
+            tokens.forEach(t => {
+                html += `<tr>
+                    <td><strong>${escapeHtml(t.name || t.token_name || 'Token')}</strong></td>
+                    <td>${escapeHtml(t.symbol || t.ticker || '')}</td>
+                    <td class="right v2-blur">${formatAmount(t.amount || t.quantity || 0)}</td>
+                    <td class="right">${formatPrice(t.price_usd || t.price || 0)}</td>
+                    <td class="right v2-blur">${formatCurrency(t.value_usd || 0)}</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function showAddWalletModal() {
+            showToast('Wallet management available on the Wallets page', 'success');
+            setTimeout(() => window.location = '/v2/wallets', 1500);
+        }
+        function showAddTokenModal() {
+            showToast('Token management available in Settings', 'success');
+        }
+        function computePnl() {
+            showToast('P&L computation started...', 'success');
+            v2Fetch('/pnl/compute', { method: 'POST' }).catch(() => {});
+        }
+    </script>
+</body>
+</html>

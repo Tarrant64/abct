@@ -1,8 +1,12 @@
 """
-Mina Protocol Service - Fetches wallet data using the MinaExplorer GraphQL API.
+Mina Protocol Service - Fetches wallet data using a public Mina GraphQL node.
 
 Native unit: nanomina (10^9 nanomina = 1 MINA).
-API: https://graphql.minaexplorer.com (no key required)
+API: https://mina-mainnet-graphql.aurowallet.com/graphql (no key required)
+
+Note: The original MinaExplorer GraphQL endpoint (graphql.minaexplorer.com) is DNS dead
+as of March 2026. This endpoint uses the Auro Wallet public Mina daemon node, which
+requires PublicKey! type (not String!) for the account query variable.
 """
 
 import logging
@@ -15,12 +19,12 @@ from services.http_client import get_client
 
 logger = logging.getLogger(__name__)
 
-MINA_GRAPHQL_URL = "https://graphql.minaexplorer.com"
+MINA_GRAPHQL_URL = "https://mina-mainnet-graphql.aurowallet.com/graphql"
 NANOMINA_DIVISOR = 10 ** 9  # 1 MINA = 10^9 nanomina
 
 
 class MinaService:
-    """Service for fetching Mina Protocol wallet data via MinaExplorer GraphQL."""
+    """Service for fetching Mina Protocol wallet data via public Mina daemon GraphQL node."""
 
     def __init__(self):
         self.graphql_url = MINA_GRAPHQL_URL
@@ -42,7 +46,7 @@ class MinaService:
         try:
             client = get_client("mina_explorer", timeout=30.0)
             query = """
-            query AccountBalance($publicKey: String!) {
+            query AccountBalance($publicKey: PublicKey!) {
               account(publicKey: $publicKey) {
                 balance {
                   total
@@ -58,7 +62,7 @@ class MinaService:
             )
 
             if response.status_code != 200:
-                logger.error(f"Mina Explorer GraphQL error: {response.status_code}")
+                logger.error(f"Mina GraphQL error: {response.status_code}")
                 return None
 
             data = response.json()
@@ -73,7 +77,7 @@ class MinaService:
                     "address": address,
                     "balance_mina": 0.0,
                     "blockchain": "mina",
-                    "source": "mina_explorer",
+                    "source": "mina_graphql",
                 }
 
             total_nanomina = int(account.get("balance", {}).get("total", 0))
@@ -83,7 +87,7 @@ class MinaService:
                 "address": address,
                 "balance_mina": balance_mina,
                 "blockchain": "mina",
-                "source": "mina_explorer",
+                "source": "mina_graphql",
             }
 
         except Exception as e:

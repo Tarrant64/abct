@@ -2874,6 +2874,27 @@ async def get_session(token: str) -> Optional[dict]:
         return dict(row)
 
 
+async def renew_session(token: str, expires_minutes: int = 43200):
+    """
+    Extend a session's expiry time (sliding window renewal).
+
+    Called when a session is successfully verified and has consumed more than
+    half its lifetime. This ensures active users are never logged out
+    unexpectedly while keeping the session invalidatable via logout/DB delete.
+
+    Args:
+        token: Session token to renew
+        expires_minutes: New expiration time in minutes from now (default: 30 days)
+    """
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        new_expires = (datetime.utcnow() + timedelta(minutes=expires_minutes)).isoformat()
+        await db.execute(
+            "UPDATE sessions SET expires_at = ? WHERE token = ?",
+            (new_expires, token)
+        )
+        await db.commit()
+
+
 async def delete_session(token: str):
     """Delete a session from the database."""
     async with aiosqlite.connect(DATABASE_PATH) as db:

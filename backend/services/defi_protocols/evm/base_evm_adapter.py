@@ -28,7 +28,7 @@ ALCHEMY_CHAIN_URLS = {
 
 # Public RPCs for chains without Alchemy support
 PUBLIC_RPC_URLS = {
-    'fantom': 'https://rpc.ftm.tools',
+    'fantom': 'https://rpcapi.fantom.network',
     'cronos': 'https://evm.cronos.org',
     'gnosis': 'https://rpc.gnosischain.com',
     'moonbeam': 'https://rpc.api.moonbeam.network',

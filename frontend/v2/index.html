@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark-mode">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ABCT - Portfolio Dashboard</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="stylesheet" href="/v2/static/css/v2.css">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+    <script defer src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+    <script src="/static/js/session-auth.js?v=1772669294"></script>
+</head>
+<body>
+    <div class="v2-layout" id="v2Layout">
+        <!-- Sidebar injected by v2-shell.js -->
+        <nav class="v2-sidebar" id="v2Sidebar"></nav>
+
+        <!-- Main Content -->
+        <main class="v2-main">
+            <!-- Top Bar -->
+            <header class="v2-topbar">
+                <div class="v2-topbar-left">
+                    <span class="v2-topbar-title" id="pageTitle">Dashboard</span>
+                </div>
+                <div class="v2-topbar-right">
+                    <div class="v2-search">
+                        <span class="v2-search-icon">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        </span>
+                        <input type="text" placeholder="Search assets, wallets..." id="globalSearch" onkeyup="handleSearch(event)">
+                    </div>
+                    <button class="v2-topbar-btn" onclick="togglePrivacy()" title="Privacy Mode">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                    <div class="v2-user-menu"></div>
+                </div>
+            </header>
+
+            <!-- Page Content -->
+            <div class="v2-content" id="pageContent">
+                <!-- Hero: Portfolio Value -->
+                <div class="v2-hero v2-fade-in">
+                    <div class="v2-card-header" style="margin-bottom: 4px;">
+                        <span class="v2-card-title">Total Portfolio Value</span>
+                        <button class="v2-sync-btn" id="syncAllBtn" onclick="syncAll()">
+                            <span class="sync-icon">&#10227;</span>
+                            Sync All
+                        </button>
+                    </div>
+                    <div class="v2-hero-value v2-blur" id="heroValue">
+                        <span class="v2-skeleton v2-skeleton-value" id="heroSkeleton"></span>
+                    </div>
+                    <div class="v2-hero-change" id="heroChange"></div>
+                    <div class="v2-hero-sub" id="heroSub">
+                        <span id="heroLastUpdated">Loading...</span>
+                    </div>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="v2-stats-grid v2-fade-in" id="statsGrid">
+                    <div class="v2-stat-card">
+                        <div class="v2-stat-label">Liquid Assets</div>
+                        <div class="v2-stat-value v2-blur" id="statLiquid">
+                            <span class="v2-skeleton v2-skeleton-value"></span>
+                        </div>
+                    </div>
+                    <div class="v2-stat-card">
+                        <div class="v2-stat-label">Staked</div>
+                        <div class="v2-stat-value v2-blur" id="statStaked">
+                            <span class="v2-skeleton v2-skeleton-value"></span>
+                        </div>
+                    </div>
+                    <div class="v2-stat-card">
+                        <div class="v2-stat-label">NFTs</div>
+                        <div class="v2-stat-value v2-blur" id="statNfts">
+                            <span class="v2-skeleton v2-skeleton-value"></span>
+                        </div>
+                    </div>
+                    <div class="v2-stat-card">
+                        <div class="v2-stat-label">Exchanges</div>
+                        <div class="v2-stat-value v2-blur" id="statExchanges">
+                            <span class="v2-skeleton v2-skeleton-value"></span>
+                        </div>
+                    </div>
+                    <div class="v2-stat-card">
+                        <div class="v2-stat-label">7-Day Change</div>
+                        <div class="v2-stat-value" id="stat7dChange">
+                            <span class="v2-skeleton v2-skeleton-value"></span>
+                        </div>
+                        <div class="v2-stat-sub" id="stat7dPct"></div>
+                    </div>
+                    <div class="v2-stat-card">
+                        <div class="v2-stat-label">Transactions (7d)</div>
+                        <div class="v2-stat-value" id="statTx7d">
+                            <span class="v2-skeleton v2-skeleton-value"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Portfolio Chart -->
+                <div class="v2-chart-section v2-fade-in">
+                    <div class="v2-chart-header">
+                        <span class="v2-table-title">Portfolio History</span>
+                        <div class="v2-chart-ranges" id="chartRanges">
+                            <button class="v2-range-btn active" data-range="1w" onclick="loadChart('1w')">1W</button>
+                            <button class="v2-range-btn" data-range="1m" onclick="loadChart('1m')">1M</button>
+                            <button class="v2-range-btn" data-range="3m" onclick="loadChart('3m')">3M</button>
+                            <button class="v2-range-btn" data-range="6m" onclick="loadChart('6m')">6M</button>
+                            <button class="v2-range-btn" data-range="1y" onclick="loadChart('1y')">1Y</button>
+                            <button class="v2-range-btn" data-range="all" onclick="loadChart('all')">ALL</button>
+                        </div>
+                    </div>
+                    <div class="v2-chart-container" id="chartContainer">
+                        <div class="v2-chart-canvas-wrapper">
+                            <canvas id="portfolioChart"></canvas>
+                        </div>
+                        <div class="v2-skeleton v2-skeleton-chart" id="chartSkeleton" style="position:absolute;inset:20px;"></div>
+                    </div>
+                </div>
+
+                <!-- Assets Table -->
+                <div class="v2-table-section v2-fade-in">
+                    <div class="v2-table-header">
+                        <span class="v2-table-title">Your Assets</span>
+                        <div class="v2-table-controls">
+                            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--v2-text-secondary);cursor:pointer;">
+                                <input type="checkbox" id="showZeroToggle" onchange="toggleZeroBalances()"> Show all
+                            </label>
+                            <input type="text" class="v2-table-filter" placeholder="Filter assets..." id="assetFilter" onkeyup="filterAssets()">
+                        </div>
+                    </div>
+                    <div class="v2-table-wrapper">
+                        <table class="v2-table" id="assetsTable">
+                            <thead>
+                                <tr>
+                                    <th onclick="sortAssets('name')" class="sorted" data-col="name">Asset <span class="sort-icon">&#9650;</span></th>
+                                    <th onclick="sortAssets('price')" class="right" data-col="price">Price <span class="sort-icon">&#9650;</span></th>
+                                    <th class="right" style="width:90px;">7d Chart</th>
+                                    <th onclick="sortAssets('holdings')" class="right" data-col="holdings">Holdings <span class="sort-icon">&#9650;</span></th>
+                                    <th onclick="sortAssets('value')" class="right" data-col="value">Value <span class="sort-icon">&#9650;</span></th>
+                                    <th onclick="sortAssets('change')" class="right" data-col="change">24h <span class="sort-icon">&#9650;</span></th>
+                                    <th onclick="sortAssets('allocation')" class="right" data-col="allocation">Alloc. <span class="sort-icon">&#9650;</span></th>
+                                </tr>
+                            </thead>
+                            <tbody id="assetsTableBody">
+                                <!-- Loading skeletons -->
+                                <tr class="v2-skeleton-row-tr"><td colspan="7"><div class="v2-skeleton-row"><div class="v2-skeleton v2-skeleton-circle"></div><div style="flex:1"><div class="v2-skeleton v2-skeleton-text short"></div></div><div class="v2-skeleton v2-skeleton-text xs" style="width:80px"></div></div></td></tr>
+                                <tr class="v2-skeleton-row-tr"><td colspan="7"><div class="v2-skeleton-row"><div class="v2-skeleton v2-skeleton-circle"></div><div style="flex:1"><div class="v2-skeleton v2-skeleton-text short"></div></div><div class="v2-skeleton v2-skeleton-text xs" style="width:80px"></div></div></td></tr>
+                                <tr class="v2-skeleton-row-tr"><td colspan="7"><div class="v2-skeleton-row"><div class="v2-skeleton v2-skeleton-circle"></div><div style="flex:1"><div class="v2-skeleton v2-skeleton-text short"></div></div><div class="v2-skeleton v2-skeleton-text xs" style="width:80px"></div></div></td></tr>
+                                <tr class="v2-skeleton-row-tr"><td colspan="7"><div class="v2-skeleton-row"><div class="v2-skeleton v2-skeleton-circle"></div><div style="flex:1"><div class="v2-skeleton v2-skeleton-text short"></div></div><div class="v2-skeleton v2-skeleton-text xs" style="width:80px"></div></div></td></tr>
+                                <tr class="v2-skeleton-row-tr"><td colspan="7"><div class="v2-skeleton-row"><div class="v2-skeleton v2-skeleton-circle"></div><div style="flex:1"><div class="v2-skeleton v2-skeleton-text short"></div></div><div class="v2-skeleton v2-skeleton-text xs" style="width:80px"></div></div></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <footer class="v2-footer">
+                ABCT V2 Dashboard | <span id="appVersion" style="opacity:0.6">v1.15.3</span>
+            </footer>
+        </main>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="v2-toast-container" id="toastContainer"></div>
+
+    <!-- Asset Detail Modal (shared) -->
+    <div class="v2-modal-overlay" id="assetModalOverlay" onclick="closeAssetModal()"></div>
+    <div class="v2-modal" id="assetModal" style="max-width:700px;min-width:500px;">
+        <div class="v2-modal-header">
+            <span class="v2-modal-title" id="assetModalTitle">Asset Detail</span>
+            <button class="v2-modal-close" onclick="closeAssetModal()">&times;</button>
+        </div>
+        <div class="v2-modal-body" id="assetModalBody">
+            <!-- Filled dynamically -->
+        </div>
+    </div>
+
+    <!-- V2 App Scripts -->
+    <script src="/v2/static/js/v2-app.js"></script>
+    <script src="/v2/static/js/v2-shell.js"></script>
+    <script>
+        // v2-shell.js injects sidebar and user menu; v2-app.js DOMContentLoaded
+        // handles dashboard data loading (guarded by heroValue element check)
+        document.addEventListener('DOMContentLoaded', () => {
+            v2InitShell('dashboard');
+        });
+    </script>
+</body>
+</html>

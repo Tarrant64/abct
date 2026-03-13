@@ -11,7 +11,7 @@ Personal multi-chain portfolio tracker built Cardano-first.
 ![Docker](https://img.shields.io/badge/docker-ready-blue.svg)
 ![Exchanges](https://img.shields.io/badge/exchanges-42-purple.svg)
 ![DeFi](https://img.shields.io/badge/defi_protocols-80%2B-orange.svg)
-![Themes](https://img.shields.io/badge/themes-5-purple.svg)
+![Themes](https://img.shields.io/badge/themes-8-purple.svg)
 
 **Website**: [abettercryptotracker.com](https://abettercryptotracker.com)
 
@@ -77,7 +77,8 @@ Protocol adapters detect positions automatically — no manual tracking needed:
 - **Stale-While-Revalidate UX**: Cached dashboard data displayed instantly, refreshed in background to eliminate load flicker
 - **Chart Designer**: Customizable portfolio chart styling in Settings
 - **Wallet Auto-Detect**: Automatic blockchain detection when adding wallet addresses
-- **5 Themes**: Dark Mode, Light, Cypherpunk, Ocean Depths, Sunset Horizon
+- **8 Themes**: Dark Mode, Light, Cypherpunk, Ocean Depths, Sunset Horizon, Cypher, Cypher 2, Cypher 3
+- **V2 Frontend**: Professional parallel dashboard at `/v2/` with collapsible sidebar navigation, portfolio hero with interactive chart, sortable assets table, and dedicated pages for all features
 - **Privacy Mode**: Hide sensitive financial data and URLs with one click
 - **Cloudflare Tunnel**: Built-in secure remote access (auto-restores across container rebuilds)
 - **Encrypted API Keys**: All keys encrypted at rest in the database
@@ -191,6 +192,15 @@ See [SECURITY.md](SECURITY.md) for full details.
 
 ## What's New
 
+### V2 Frontend — Professional Dashboard Redesign (March 2026)
+- **Parallel V2 UI**: Accessible at `/v2/` — V1 remains fully intact at existing URLs
+- **Sidebar Navigation**: Collapsible left sidebar with icon + text labels across 3 sections (Portfolio, Analytics, System)
+- **Dashboard**: Portfolio hero with total value, 24h change, interactive Chart.js history chart with range selector (1W/1M/3M/6M/1Y/ALL), 6 stat cards, sortable assets table with sparklines
+- **12 Dedicated Pages**: Dashboard, Assets (tabbed: Wallets/Exchanges/DeFi/Custom Tokens/P&L), NFTs (grid gallery with chain filters), DeFi & Staking, Exchanges, Analytics, Transactions, P&L, Security, Wallets, Settings (8 tabs), Help & Guide
+- **8 Theme Support**: All themes work across V2 — Dark Mode (default), Light, Cypherpunk, Ocean Depths, Sunset Horizon, Cypher, Cypher 2, Cypher 3
+- **Same Backend**: Zero backend changes — V2 consumes the same API endpoints as V1
+- **Professional Polish**: Loading skeletons, smooth transitions, privacy mode toggle, toast notifications, responsive design, DOMPurify XSS protection
+
 ### v1.15.x — 53 Chains, Security/Privacy, P&L Engine, Infrastructure (Feb–Mar 2026)
 - **Security / Privacy Tab**: Renamed and expanded from Privacy & ZK — now includes token approval monitoring, address poisoning scanner, Cardano Shield threat feed with CF Token Registry scanner, inline spam token detection, plus original privacy analysis and Zcash shielded pool stats
 - **P&L Engine Overhaul**: Self-custody wallet transaction ingestion, async background computation, progress tracking, SQLite optimization, and dedicated P&L tab on the Assets page
@@ -257,6 +267,17 @@ See [CHANGELOG.md](CHANGELOG.md) for complete version history.
 - **[API Providers](docs/API_PROVIDERS.md)** — API provider details and rate limits
 - **[Password Reset](docs/guides/PASSWORD_RESET_GUIDE.md)** — Reset admin credentials
 - **In-App Help** — Built-in Help & Guide page with setup walkthroughs
+- **V2 Frontend** — Access at `/v2/` for the redesigned sidebar-navigation dashboard
+
+### V2 Navigation Structure
+
+| Section | Pages |
+|---------|-------|
+| **Portfolio** | Dashboard, Assets, NFTs, DeFi & Staking, Exchanges |
+| **Analytics** | Analytics, Transactions, P&L, Security |
+| **System** | Wallets, Settings, Help |
+
+V2 files live under `frontend/v2/` with shared CSS (`css/v2.css`), core JS (`js/v2-app.js`), and sidebar shell (`js/v2-shell.js`). Backend serves V2 at `/v2/` via `main.py` routes — no new API endpoints required.
 
 ## License
 

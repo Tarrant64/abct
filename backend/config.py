@@ -170,7 +170,7 @@ ALCHEMY_LINEA_URL = "https://linea-mainnet.g.alchemy.com"
 ALCHEMY_SCROLL_URL = "https://scroll-mainnet.g.alchemy.com"
 
 # Public RPC URLs for non-Alchemy EVM chains
-FANTOM_RPC_URL = "https://rpc.ftm.tools"
+FANTOM_RPC_URL = "https://rpcapi.fantom.network"
 CRONOS_RPC_URL = "https://evm.cronos.org"
 GNOSIS_RPC_URL = "https://rpc.gnosischain.com"
 MOONBEAM_RPC_URL = "https://rpc.api.moonbeam.network"
@@ -194,7 +194,7 @@ BLOCKCYPHER_DOGE_URL = "https://api.blockcypher.com/v1/doge/main"
 BLOCKCHAIR_ZEC_URL = "https://api.blockchair.com/zcash"
 TZKT_BASE_URL = "https://api.tzkt.io/v1"
 HIRO_BASE_URL = "https://api.mainnet.hiro.so"
-VECHAIN_THOR_URL = "https://mainnet.veblocks.net"
+VECHAIN_THOR_URL = "https://mainnet.vechain.org"
 COSMOS_LCD_URL = "https://cosmos-rest.publicnode.com"
 NEAR_RPC_URL = "https://rpc.mainnet.near.org"
 NEARBLOCKS_API_URL = "https://api.nearblocks.io/v1"
@@ -216,7 +216,7 @@ KAIA_RPC_URL = "https://public-en.node.kaia.io"
 ERGO_EXPLORER_URL = "https://explorer.ergoplatform.com/api/v1"
 IOTA_RPC_URL = "https://api.mainnet.iota.cafe"
 WAVES_NODE_URL = "https://nodes.wavesnodes.com"
-MINA_GRAPHQL_URL = "https://graphql.minaexplorer.com"
+MINA_GRAPHQL_URL = "https://mina-mainnet-graphql.aurowallet.com/graphql"
 ZILLIQA_API_URL = "https://api.zilliqa.com"
 
 # Etherscan V2 unified API (single endpoint, chain selected by chainid param)
@@ -280,7 +280,7 @@ NFT_IMAGE_MOBILE_SIZE = int(os.getenv("NFT_IMAGE_MOBILE_SIZE", "400"))
 # IPFS Gateways (fallback order)
 IPFS_GATEWAYS = [
     "https://ipfs.io/ipfs/",
-    "https://cloudflare-ipfs.com/ipfs/",
+    "https://dweb.link/ipfs/",
     "https://gateway.pinata.cloud/ipfs/",
 ]
 

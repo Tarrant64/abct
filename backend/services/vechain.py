@@ -6,7 +6,7 @@ from services.http_client import get_client
 
 logger = logging.getLogger(__name__)
 
-VECHAIN_THOR_BASE_URL = "https://mainnet.veblocks.net"
+VECHAIN_THOR_BASE_URL = "https://mainnet.vechain.org"
 
 
 class VeChainService:

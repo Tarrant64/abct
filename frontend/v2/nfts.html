@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark-mode">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NFTs - ABCT V2</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
+    <link rel="stylesheet" href="/v2/static/css/v2.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+    <script src="/static/js/session-auth.js?v=1772669294"></script>
+    <style>
+        .nft-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+        .nft-card { background: var(--v2-bg-card); border: 1px solid var(--v2-border); border-radius: var(--v2-radius-lg); overflow: hidden; transition: all 0.2s; cursor: pointer; }
+        .nft-card:hover { border-color: var(--v2-border-light); transform: translateY(-2px); box-shadow: var(--v2-shadow-md); }
+        .nft-card-img { width: 100%; aspect-ratio: 1; background: var(--v2-bg-input); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .nft-card-img img { width: 100%; height: 100%; object-fit: cover; }
+        .nft-card-img .placeholder { font-size: 48px; opacity: 0.15; }
+        .nft-card-info { padding: 12px; }
+        .nft-card-name { font-size: 13px; font-weight: 600; color: var(--v2-text-heading); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .nft-card-collection { font-size: 11px; color: var(--v2-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .nft-card-value { font-size: 12px; color: var(--v2-accent-text); margin-top: 6px; font-weight: 600; }
+        .nft-chain-tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+        .nft-chain-tab { padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 500; border: 1px solid var(--v2-border-input); background: var(--v2-bg-input); color: var(--v2-text-secondary); cursor: pointer; transition: all 0.2s; }
+        .nft-chain-tab:hover { border-color: var(--v2-text-muted); }
+        .nft-chain-tab.active { background: var(--v2-accent-muted); border-color: var(--v2-accent); color: var(--v2-accent-text); }
+    </style>
+</head>
+<body>
+    <div class="v2-layout" id="v2Layout">
+        <nav class="v2-sidebar" id="v2Sidebar"></nav>
+        <main class="v2-main">
+            <header class="v2-topbar">
+                <div class="v2-topbar-left"><span class="v2-topbar-title">NFT Collection</span></div>
+                <div class="v2-topbar-right">
+                    <button class="v2-sync-btn" onclick="refreshNfts()"><span class="sync-icon">&#10227;</span> Refresh</button>
+                    <div class="v2-user-menu"></div>
+                </div>
+            </header>
+
+            <div class="v2-content v2-content-wide">
+                <!-- Summary Cards -->
+                <div class="v2-stats-grid v2-fade-in" style="margin-bottom:24px">
+                    <div class="v2-stat-card">
+                        <div class="v2-stat-label">Total NFT Value</div>
+                        <div class="v2-stat-value v2-blur" id="nftTotalValue">--</div>
+                    </div>
+                    <div class="v2-stat-card">
+                        <div class="v2-stat-label">Total NFTs</div>
+                        <div class="v2-stat-value" id="nftTotalCount">--</div>
+                    </div>
+                    <div class="v2-stat-card">
+                        <div class="v2-stat-label">Collections</div>
+                        <div class="v2-stat-value" id="nftCollectionCount">--</div>
+                    </div>
+                </div>
+
+                <!-- Chain Filter -->
+                <div class="nft-chain-tabs" id="nftChainTabs">
+                    <button class="nft-chain-tab active" data-chain="all" onclick="filterNftChain('all')">All Chains</button>
+                    <button class="nft-chain-tab" data-chain="cardano" onclick="filterNftChain('cardano')">Cardano</button>
+                    <button class="nft-chain-tab" data-chain="ethereum" onclick="filterNftChain('ethereum')">Ethereum</button>
+                    <button class="nft-chain-tab" data-chain="solana" onclick="filterNftChain('solana')">Solana</button>
+                    <button class="nft-chain-tab" data-chain="polygon" onclick="filterNftChain('polygon')">Polygon</button>
+                    <button class="nft-chain-tab" data-chain="base" onclick="filterNftChain('base')">Base</button>
+                </div>
+
+                <!-- NFT Grid -->
+                <div class="nft-grid" id="nftGrid">
+                    <div class="v2-skeleton" style="height:300px;border-radius:var(--v2-radius-lg)"></div>
+                    <div class="v2-skeleton" style="height:300px;border-radius:var(--v2-radius-lg)"></div>
+                    <div class="v2-skeleton" style="height:300px;border-radius:var(--v2-radius-lg)"></div>
+                    <div class="v2-skeleton" style="height:300px;border-radius:var(--v2-radius-lg)"></div>
+                </div>
+            </div>
+
+            <footer class="v2-footer">ABCT V2 | NFTs</footer>
+        </main>
+    </div>
+
+    <script src="/v2/static/js/v2-app.js"></script>
+    <script src="/v2/static/js/v2-shell.js"></script>
+    <script>
+        let allNfts = [];
+        let currentNftChain = 'all';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            v2InitShell('nfts');
+            loadNfts();
+        });
+
+        async function loadNfts() {
+            try {
+                // Load from each chain
+                const chains = ['cardano', 'ethereum', 'solana', 'polygon', 'base'];
+                const promises = chains.map(chain =>
+                    v2Fetch(`/nfts/${chain === 'cardano' ? '' : chain}`).then(r => r.ok ? r.json() : { nfts: [] }).catch(() => ({ nfts: [] }))
+                );
+
+                // Also load summary
+                const summaryResp = await v2Fetch('/nfts/all/summary');
+                if (summaryResp.ok) {
+                    const summary = await summaryResp.json();
+                    setText('nftTotalValue', formatCurrency(summary.total_value_usd || 0));
+                    setText('nftTotalCount', (summary.total_count || 0).toLocaleString());
+                    setText('nftCollectionCount', (summary.collection_count || 0).toLocaleString());
+                }
+
+                const results = await Promise.allSettled(promises);
+                allNfts = [];
+                results.forEach((result, idx) => {
+                    if (result.status === 'fulfilled') {
+                        const data = result.value;
+                        const chainNfts = data.nfts || data.collections || data || [];
+                        if (Array.isArray(chainNfts)) {
+                            chainNfts.forEach(nft => {
+                                nft._chain = chains[idx];
+                                allNfts.push(nft);
+                            });
+                        }
+                    }
+                });
+
+                renderNftGrid();
+            } catch (err) {
+                console.error('NFT load error:', err);
+                document.getElementById('nftGrid').innerHTML = '<div class="v2-empty"><div class="v2-empty-title">Could not load NFTs</div></div>';
+            }
+        }
+
+        function filterNftChain(chain) {
+            currentNftChain = chain;
+            document.querySelectorAll('.nft-chain-tab').forEach(t => t.classList.toggle('active', t.dataset.chain === chain));
+            renderNftGrid();
+        }
+
+        function renderNftGrid() {
+            const grid = document.getElementById('nftGrid');
+            let nfts = currentNftChain === 'all' ? allNfts : allNfts.filter(n => n._chain === currentNftChain);
+
+            if (!nfts.length) {
+                grid.innerHTML = '<div class="v2-empty" style="grid-column:1/-1;padding:64px"><div class="v2-empty-icon">&#127912;</div><div class="v2-empty-title">No NFTs found</div><div class="v2-empty-desc">NFTs from your wallets will appear here.</div></div>';
+                return;
+            }
+
+            // Flatten collections into individual NFTs if needed
+            let items = [];
+            nfts.forEach(nft => {
+                if (nft.assets && Array.isArray(nft.assets)) {
+                    nft.assets.forEach(a => items.push({ ...a, _chain: nft._chain, _collection: nft.name || nft.policy_id }));
+                } else {
+                    items.push(nft);
+                }
+            });
+
+            let html = '';
+            items.slice(0, 60).forEach(nft => {
+                const name = nft.name || nft.asset_name || nft.token_name || 'Unnamed';
+                const collection = nft._collection || nft.collection || nft.policy_id || '';
+                const imgUrl = nft.image_url || nft.image || nft.thumbnail || '';
+                const value = nft.floor_price_usd || nft.value_usd || 0;
+
+                html += `<div class="nft-card">
+                    <div class="nft-card-img">
+                        ${imgUrl ? `<img src="${escapeAttr(imgUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><span class="placeholder" style="display:none">&#127912;</span>` : '<span class="placeholder">&#127912;</span>'}
+                    </div>
+                    <div class="nft-card-info">
+                        <div class="nft-card-name" title="${escapeAttr(name)}">${escapeHtml(name)}</div>
+                        <div class="nft-card-collection">${escapeHtml(collection)}</div>
+                        ${value > 0 ? `<div class="nft-card-value">${formatCurrency(value)}</div>` : ''}
+                    </div>
+                </div>`;
+            });
+
+            grid.innerHTML = html;
+        }
+
+        async function refreshNfts() {
+            showToast('Refreshing NFTs...', 'success');
+            await loadNfts();
+        }
+    </script>
+</body>
+</html>

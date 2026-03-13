@@ -105,7 +105,7 @@ EVM_CHAINS = {
     'fantom': {
         'name': 'Fantom Opera',
         'alchemy_base': None,
-        'public_rpc': 'https://rpc.ftm.tools',
+        'public_rpc': 'https://rpcapi.fantom.network',
         'native_symbol': 'FTM',
         'balance_key': 'balance_ftm',
         'opensea_chain': None,

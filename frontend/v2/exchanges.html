@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark-mode">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exchanges - ABCT V2</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
+    <link rel="stylesheet" href="/v2/static/css/v2.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+    <script src="/static/js/session-auth.js?v=1772669294"></script>
+    <style>
+        .exchange-card { background: var(--v2-bg-card); border: 1px solid var(--v2-border); border-radius: var(--v2-radius-lg); overflow: hidden; transition: all 0.2s; margin-bottom: 16px; }
+        .exchange-card:hover { border-color: var(--v2-border-light); }
+        .exchange-card-header { display: flex; justify-content: space-between; align-items: center; padding: 16px; cursor: pointer; }
+        .exchange-name { font-size: 16px; font-weight: 600; color: var(--v2-text-heading); }
+        .exchange-value { font-size: 18px; font-weight: 700; color: var(--v2-text-heading); }
+        .exchange-assets { padding: 0 16px 16px; display: none; }
+        .exchange-assets.open { display: block; }
+    </style>
+</head>
+<body>
+    <div class="v2-layout" id="v2Layout">
+        <nav class="v2-sidebar" id="v2Sidebar"></nav>
+        <main class="v2-main">
+            <header class="v2-topbar">
+                <div class="v2-topbar-left"><span class="v2-topbar-title">Exchanges</span></div>
+                <div class="v2-topbar-right">
+                    <button class="v2-sync-btn" onclick="refreshExchanges()"><span class="sync-icon">&#10227;</span> Refresh All</button>
+                    <div class="v2-user-menu"></div>
+                </div>
+            </header>
+
+            <div class="v2-content">
+                <div class="v2-stats-grid v2-fade-in" style="margin-bottom:24px">
+                    <div class="v2-stat-card"><div class="v2-stat-label">Total Exchange Value</div><div class="v2-stat-value v2-blur" id="exTotal"><span class="v2-skeleton v2-skeleton-value"></span></div></div>
+                    <div class="v2-stat-card"><div class="v2-stat-label">Connected Exchanges</div><div class="v2-stat-value" id="exCount"><span class="v2-skeleton v2-skeleton-value"></span></div></div>
+                    <div class="v2-stat-card"><div class="v2-stat-label">Total Assets</div><div class="v2-stat-value" id="exAssetCount"><span class="v2-skeleton v2-skeleton-value"></span></div></div>
+                </div>
+
+                <div id="exchangeList" class="v2-fade-in">
+                    <div class="v2-skeleton v2-skeleton-chart" style="height:200px;"></div>
+                </div>
+            </div>
+
+            <footer class="v2-footer">ABCT V2 | Exchanges</footer>
+        </main>
+    </div>
+
+    <script src="/v2/static/js/v2-app.js"></script>
+    <script src="/v2/static/js/v2-shell.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            v2InitShell('exchanges');
+            loadExchanges();
+        });
+
+        async function loadExchanges() {
+            try {
+                const resp = await v2Fetch('/exchanges/all');
+                if (!resp.ok) throw new Error('Failed');
+                const data = await resp.json();
+                renderExchanges(data);
+            } catch(e) {
+                document.getElementById('exchangeList').innerHTML = '<div class="v2-empty"><div class="v2-empty-title">Could not load exchanges</div></div>';
+            }
+        }
+
+        function renderExchanges(data) {
+            const exchanges = data.exchanges || [];
+            let totalValue = 0;
+            let totalAssets = 0;
+
+            exchanges.forEach(ex => {
+                totalValue += (ex.total_usd || 0);
+                totalAssets += (ex.balances ? ex.balances.length : ex.asset_count || 0);
+            });
+
+            setText('exTotal', formatCurrency(totalValue));
+            setText('exCount', exchanges.length.toString());
+            setText('exAssetCount', totalAssets.toString());
+
+            const container = document.getElementById('exchangeList');
+            if (!exchanges.length) {
+                container.innerHTML = '<div class="v2-empty" style="padding:64px"><div class="v2-empty-icon" style="font-size:48px;opacity:0.2">&#127970;</div><div class="v2-empty-title">No exchanges connected</div><div class="v2-empty-desc">Connect exchange API keys in Settings to see your exchange balances here.</div><a href="/v2/settings" class="v2-btn v2-btn-primary" style="margin-top:16px">Go to Settings</a></div>';
+                return;
+            }
+
+            let html = '';
+            exchanges.forEach((ex, idx) => {
+                const name = ex.name || ex.exchange || 'Exchange';
+                const total = ex.total_usd || 0;
+                const balances = ex.balances || [];
+                const status = ex.connected !== false;
+
+                html += `<div class="exchange-card">
+                    <div class="exchange-card-header" onclick="toggleExchange(${idx})">
+                        <div style="display:flex;align-items:center;gap:12px;">
+                            <div class="exchange-name">${escapeHtml(name)}</div>
+                            <span class="v2-badge ${status ? 'v2-badge-green' : 'v2-badge-red'}">${status ? 'Connected' : 'Error'}</span>
+                        </div>
+                        <div class="exchange-value v2-blur">${formatCurrency(total)}</div>
+                    </div>
+                    <div class="exchange-assets" id="exAssets_${idx}">`;
+
+                if (balances.length) {
+                    html += '<table class="v2-table"><thead><tr><th>Asset</th><th class="right">Amount</th><th class="right">Value</th></tr></thead><tbody>';
+                    balances.sort((a, b) => (b.value_usd || 0) - (a.value_usd || 0));
+                    balances.forEach(b => {
+                        if ((b.value_usd || 0) < 0.01 && (b.amount || b.balance || 0) < 0.0001) return;
+                        html += `<tr>
+                            <td><strong>${escapeHtml(b.symbol || b.asset || b.currency || '?')}</strong></td>
+                            <td class="right v2-blur">${formatAmount(b.amount || b.balance || b.free || 0)}</td>
+                            <td class="right v2-blur">${formatCurrency(b.value_usd || 0)}</td>
+                        </tr>`;
+                    });
+                    html += '</tbody></table>';
+                } else {
+                    html += '<div style="padding:16px;text-align:center;color:var(--v2-text-muted);font-size:13px;">No balance data available</div>';
+                }
+
+                html += '</div></div>';
+            });
+            container.innerHTML = html;
+        }
+
+        function toggleExchange(idx) {
+            const el = document.getElementById(`exAssets_${idx}`);
+            if (el) el.classList.toggle('open');
+        }
+
+        async function refreshExchanges() {
+            showToast('Refreshing exchanges...', 'success');
+            try {
+                await v2Fetch('/exchanges/all?refresh=true');
+                await loadExchanges();
+                showToast('Exchanges refreshed', 'success');
+            } catch(e) { showToast('Refresh failed', 'error'); }
+        }
+    </script>
+</body>
+</html>

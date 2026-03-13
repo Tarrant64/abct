@@ -28,12 +28,19 @@ from config import DATABASE_PATH
 # Initialize auth_utils with session store
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import auth_utils
-from database import create_session, get_session, delete_session, cleanup_expired_sessions
+from database import create_session, get_session, delete_session, cleanup_expired_sessions, renew_session
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
-# Session timeout in minutes
-SESSION_TIMEOUT_MINUTES = 480  # 8 hours
+# Session timeout configuration
+# Short-lived session (no "remember me"): 8 hours
+SESSION_TIMEOUT_SHORT_MINUTES = 480  # 8 hours
+# Long-lived session ("remember me" / default): 30 days
+# For a personal dashboard, long sessions reduce re-login friction.
+# Sessions are still invalidatable via logout and DB-backed for persistence.
+SESSION_TIMEOUT_LONG_MINUTES = 43200  # 30 days
+# Default to long-lived sessions (remember me is the default behavior)
+SESSION_TIMEOUT_MINUTES = SESSION_TIMEOUT_LONG_MINUTES
 
 
 class LoginRequest(BaseModel):
@@ -293,6 +300,14 @@ async def verify_token(token: Optional[str] = None):
     if expires_at < datetime.utcnow():
         await delete_session(token)
         return TokenVerifyResponse(valid=False)
+
+    # Sliding window session renewal: extend session expiry on each successful
+    # verification so active users never get logged out unexpectedly.
+    # Only renew if the session has less than half its lifetime remaining,
+    # to avoid writing to DB on every single page load.
+    remaining = (expires_at - datetime.utcnow()).total_seconds() / 60
+    if remaining < SESSION_TIMEOUT_MINUTES / 2:
+        await renew_session(token, SESSION_TIMEOUT_MINUTES)
 
     return TokenVerifyResponse(
         valid=True,
