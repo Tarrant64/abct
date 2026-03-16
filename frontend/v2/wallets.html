@@ -23,6 +23,34 @@
         .add-wallet-form .field { display: flex; flex-direction: column; gap: 4px; }
         .add-wallet-form label { font-size: 12px; color: var(--v2-text-secondary); }
         .add-wallet-form input, .add-wallet-form select { padding: 8px 12px; background: var(--v2-bg-input); border: 1px solid var(--v2-border-input); border-radius: var(--v2-radius-sm); color: var(--v2-text-primary); font-size: 13px; }
+
+        /* Chain filter bar */
+        .chain-filter-bar { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; padding: 8px; background: var(--v2-bg-card); border: 1px solid var(--v2-border); border-radius: var(--v2-radius-md); }
+        .chain-filter-btn { padding: 5px 14px; border-radius: 16px; font-size: 12px; font-weight: 500; border: 1px solid var(--v2-border-input); background: transparent; color: var(--v2-text-secondary); cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 6px; }
+        .chain-filter-btn:hover { border-color: var(--v2-text-muted); color: var(--v2-text-primary); }
+        .chain-filter-btn.active { background: var(--v2-accent-muted); border-color: var(--v2-accent); color: var(--v2-accent-text); }
+        .chain-filter-btn .chain-count { background: var(--v2-bg-input); padding: 1px 6px; border-radius: 10px; font-size: 10px; }
+        .chain-filter-btn.active .chain-count { background: rgba(0,210,106,0.25); }
+        .chain-filter-btn.chain-cardano.active { background: rgba(0, 51, 173, 0.15); border-color: #5c9eff; color: #5c9eff; }
+        .chain-filter-btn.chain-bitcoin.active { background: rgba(247, 147, 26, 0.15); border-color: #f7931a; color: #f7931a; }
+        .chain-filter-btn.chain-ethereum.active { background: rgba(98, 126, 234, 0.15); border-color: #8ba4f5; color: #8ba4f5; }
+        .chain-filter-btn.chain-solana.active { background: rgba(20, 241, 149, 0.15); border-color: #3dffb3; color: #3dffb3; }
+        .chain-filter-btn.chain-polygon.active { background: rgba(130, 71, 229, 0.15); border-color: #a673f0; color: #a673f0; }
+        .chain-filter-btn.chain-base.active { background: rgba(0, 82, 255, 0.15); border-color: #5c9eff; color: #5c9eff; }
+
+        /* Stake group header */
+        .stake-group { margin-bottom: 16px; }
+        .stake-group-title { font-size: 12px; font-weight: 600; color: var(--v2-text-muted); padding: 8px 0 6px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--v2-border); margin-bottom: 8px; }
+        .stake-group-title .stake-addr { font-family: monospace; font-size: 11px; font-weight: 400; }
+
+        /* Expandable native tokens */
+        .wallet-tokens-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--v2-accent-text); cursor: pointer; margin-top: 8px; padding: 3px 8px; border: 1px solid var(--v2-border-input); border-radius: var(--v2-radius-sm); background: transparent; transition: all 0.2s; }
+        .wallet-tokens-toggle:hover { background: var(--v2-accent-muted); border-color: var(--v2-accent); }
+        .wallet-tokens-list { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--v2-border); }
+        .wallet-tokens-list.show { display: block; }
+        .token-item { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 12px; }
+        .token-item-name { color: var(--v2-text-secondary); }
+        .token-item-qty { color: var(--v2-text-primary); font-family: monospace; }
     </style>
 </head>
 <body>
@@ -55,6 +83,9 @@
                     <div style="margin-top:8px;font-size:12px;color:var(--v2-text-muted);">Blockchain will be auto-detected from the address format.</div>
                 </div>
 
+                <!-- Chain Filter Tabs -->
+                <div class="chain-filter-bar" id="chainFilterBar"></div>
+
                 <!-- Wallet List -->
                 <div class="v2-fade-in" id="walletList">
                     <div class="v2-skeleton v2-skeleton-chart" style="height:200px;"></div>
@@ -68,10 +99,13 @@
     <script src="/next/static/js/v2-app.js"></script>
     <script src="/next/static/js/v2-shell.js"></script>
     <script>
+        let wallets = [];
+        let currentChainFilter = 'all';
+
         document.addEventListener('DOMContentLoaded', () => {
             v2InitShell('wallets');
 
-            // Attach event listeners (no inline handlers for DOMPurify safety)
+            // Attach event listeners (no inline handlers)
             document.getElementById('refreshAllBtn').addEventListener('click', refreshAllWallets);
             document.getElementById('addWalletBtn').addEventListener('click', addWallet);
 
@@ -83,65 +117,99 @@
                 const resp = await v2Fetch('/wallets');
                 if (!resp.ok) {
                     const errData = await resp.json().catch(() => ({}));
-                    throw new Error(errData.detail || `HTTP ${resp.status}`);
+                    throw new Error(errData.detail || 'HTTP ' + resp.status);
                 }
                 const data = await resp.json();
-                renderWallets(data);
+                wallets = data.wallets || data || [];
+                renderChainFilters();
+                renderWallets();
             } catch(e) {
                 console.error('Wallet load error:', e);
                 setSafeHTML(document.getElementById('walletList'),
-                    `<div class="v2-empty"><div class="v2-empty-title">Could not load wallets</div><div class="v2-empty-desc">${escapeHtml(e.message || 'Unknown error')}</div></div>`);
+                    '<div class="v2-empty"><div class="v2-empty-title">Could not load wallets</div><div class="v2-empty-desc">' + escapeHtml(e.message || 'Unknown error') + '</div></div>');
             }
         }
 
-        function renderWallets(data) {
-            const container = document.getElementById('walletList');
-            const wallets = data.wallets || data || [];
+        function renderChainFilters() {
+            const container = document.getElementById('chainFilterBar');
+            if (!container) return;
 
-            if (!wallets.length) {
-                setSafeHTML(container, '<div class="v2-empty" style="padding:48px"><div class="v2-empty-icon" style="font-size:48px;opacity:0.2">&#128091;</div><div class="v2-empty-title">No wallets added yet</div><div class="v2-empty-desc">Add your first wallet above to start tracking your portfolio.</div></div>');
+            const chainCounts = {};
+            wallets.forEach(w => {
+                const chain = (w.blockchain || 'unknown').toLowerCase();
+                chainCounts[chain] = (chainCounts[chain] || 0) + 1;
+            });
+
+            let html = '<button class="chain-filter-btn active" data-chain="all">All <span class="chain-count">' + wallets.length + '</span></button>';
+            const orderedChains = ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base', 'algorand', 'bsc', 'arbitrum', 'avalanche', 'tron', 'xrp'];
+            const seenChains = new Set(orderedChains);
+
+            orderedChains.forEach(chain => {
+                if (chainCounts[chain]) {
+                    html += '<button class="chain-filter-btn chain-' + escapeAttr(chain) + '" data-chain="' + escapeAttr(chain) + '">' + escapeHtml(chain.charAt(0).toUpperCase() + chain.slice(1)) + ' <span class="chain-count">' + chainCounts[chain] + '</span></button>';
+                }
+            });
+            Object.keys(chainCounts).forEach(chain => {
+                if (!seenChains.has(chain)) {
+                    html += '<button class="chain-filter-btn chain-' + escapeAttr(chain) + '" data-chain="' + escapeAttr(chain) + '">' + escapeHtml(chain.charAt(0).toUpperCase() + chain.slice(1)) + ' <span class="chain-count">' + chainCounts[chain] + '</span></button>';
+                }
+            });
+
+            setSafeHTML(container, html);
+
+            container.querySelectorAll('.chain-filter-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    currentChainFilter = btn.dataset.chain;
+                    container.querySelectorAll('.chain-filter-btn').forEach(b => b.classList.toggle('active', b.dataset.chain === currentChainFilter));
+                    renderWallets();
+                });
+            });
+        }
+
+        function renderWallets() {
+            const container = document.getElementById('walletList');
+            const filtered = currentChainFilter === 'all'
+                ? wallets
+                : wallets.filter(w => (w.blockchain || '').toLowerCase() === currentChainFilter);
+
+            if (!filtered.length) {
+                setSafeHTML(container, '<div class="v2-empty" style="padding:48px"><div class="v2-empty-title">' + (currentChainFilter === 'all' ? 'No wallets added yet' : 'No ' + escapeHtml(currentChainFilter) + ' wallets') + '</div><div class="v2-empty-desc">' + (currentChainFilter === 'all' ? 'Add your first wallet above to start tracking your portfolio.' : 'Switch to All to see all wallets.') + '</div></div>');
                 return;
             }
 
-            // Backend returns balance (native amount) and balance_unit but no value_usd.
-            // We display what's available.
-            let html = '';
-            wallets.forEach(w => {
-                const addr = w.address || '';
-                const label = w.label || w.name || 'Wallet';
-                const blockchain = w.blockchain || 'unknown';
-                const balance = parseFloat(w.balance) || 0;
-                const balanceUnit = w.balance_unit || w.symbol || blockchain.toUpperCase();
-                const valueUsd = parseFloat(w.value_usd) || 0;
-                const tokenCount = w.native_assets_count || 0;
+            // Group Cardano wallets by stake address
+            const stakeGroups = {};
+            const ungrouped = [];
 
-                html += `<div class="wallet-card" data-address="${escapeAttr(addr)}">
-                    <div class="wallet-card-header">
-                        <div>
-                            <div class="wallet-card-label">${escapeHtml(label)}</div>
-                            <div style="margin-top:2px;"><span class="v2-chain-badge chain-${escapeAttr(blockchain.toLowerCase())}">${escapeHtml(blockchain)}</span>${tokenCount > 0 ? ` <span style="font-size:11px;color:var(--v2-text-muted);margin-left:6px;">${tokenCount} token${tokenCount !== 1 ? 's' : ''}</span>` : ''}</div>
-                        </div>
-                        <div class="wallet-actions">
-                            <button class="v2-btn v2-btn-ghost v2-btn-sm wallet-refresh-btn" data-addr="${escapeAttr(addr)}" title="Refresh">&#10227;</button>
-                            <button class="v2-btn v2-btn-ghost v2-btn-sm wallet-delete-btn" data-addr="${escapeAttr(addr)}" title="Delete" style="color:var(--v2-red)">&#10005;</button>
-                        </div>
-                    </div>
-                    <div class="wallet-card-addr">${escapeHtml(addr)}</div>
-                    <div class="wallet-card-stats">
-                        <div class="wallet-card-stat">
-                            <div class="wallet-card-stat-label">Balance</div>
-                            <div class="wallet-card-stat-value v2-blur">${formatAmount(balance)} ${escapeHtml(balanceUnit)}</div>
-                        </div>
-                        ${valueUsd > 0 ? `<div class="wallet-card-stat">
-                            <div class="wallet-card-stat-label">Value</div>
-                            <div class="wallet-card-stat-value v2-blur">${formatCurrency(valueUsd)}</div>
-                        </div>` : ''}
-                    </div>
-                </div>`;
+            filtered.forEach(w => {
+                const chain = (w.blockchain || 'unknown').toLowerCase();
+                if (chain === 'cardano' && w.stake_address) {
+                    if (!stakeGroups[w.stake_address]) {
+                        stakeGroups[w.stake_address] = [];
+                    }
+                    stakeGroups[w.stake_address].push(w);
+                } else {
+                    ungrouped.push(w);
+                }
             });
+
+            let html = '';
+
+            // Render stake groups
+            Object.entries(stakeGroups).forEach(([stakeAddr, groupWallets]) => {
+                const shortStake = stakeAddr.slice(0, 12) + '...' + stakeAddr.slice(-6);
+                html += '<div class="stake-group">';
+                html += '<div class="stake-group-title"><span>Cardano Stake Key:</span> <span class="stake-addr">' + escapeHtml(shortStake) + '</span> <span style="color:var(--v2-text-muted);">(' + groupWallets.length + ' wallet' + (groupWallets.length > 1 ? 's' : '') + ')</span></div>';
+                groupWallets.forEach(w => { html += renderWalletCard(w); });
+                html += '</div>';
+            });
+
+            // Render ungrouped
+            ungrouped.forEach(w => { html += renderWalletCard(w); });
+
             setSafeHTML(container, html);
 
-            // Attach event listeners after rendering (DOMPurify may strip onclick handlers)
+            // Attach event listeners after rendering
             container.querySelectorAll('.wallet-refresh-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -154,6 +222,93 @@
                     deleteWallet(btn.dataset.addr);
                 });
             });
+            container.querySelectorAll('.wallet-tokens-toggle').forEach(btn => {
+                btn.addEventListener('click', () => toggleTokens(btn.dataset.addr));
+            });
+        }
+
+        function renderWalletCard(w) {
+            const addr = w.address || '';
+            const label = w.label || w.name || 'Wallet';
+            const blockchain = (w.blockchain || 'unknown').toLowerCase();
+            const balance = parseFloat(w.balance) || 0;
+            const balanceUnit = w.balance_unit || w.symbol || blockchain.toUpperCase();
+            const valueUsd = parseFloat(w.value_usd) || 0;
+            const tokenCount = parseInt(w.native_assets_count) || 0;
+
+            let html = '<div class="wallet-card" data-address="' + escapeAttr(addr) + '">';
+            html += '<div class="wallet-card-header"><div>';
+            html += '<div class="wallet-card-label">' + escapeHtml(label) + '</div>';
+            html += '<div style="margin-top:2px;"><span class="v2-chain-badge chain-' + escapeAttr(blockchain) + '">' + escapeHtml(blockchain) + '</span>';
+            if (tokenCount > 0) {
+                html += ' <span style="font-size:11px;color:var(--v2-text-muted);margin-left:6px;">' + tokenCount + ' token' + (tokenCount !== 1 ? 's' : '') + '</span>';
+            }
+            html += '</div></div>';
+            html += '<div class="wallet-actions">';
+            html += '<button class="v2-btn v2-btn-ghost v2-btn-sm wallet-refresh-btn" data-addr="' + escapeAttr(addr) + '" title="Refresh">&#10227;</button>';
+            html += '<button class="v2-btn v2-btn-ghost v2-btn-sm wallet-delete-btn" data-addr="' + escapeAttr(addr) + '" title="Delete" style="color:var(--v2-red)">&#10005;</button>';
+            html += '</div></div>';
+            html += '<div class="wallet-card-addr">' + escapeHtml(addr) + '</div>';
+            html += '<div class="wallet-card-stats">';
+            html += '<div class="wallet-card-stat"><div class="wallet-card-stat-label">Balance</div><div class="wallet-card-stat-value v2-blur">' + formatAmount(balance) + ' ' + escapeHtml(balanceUnit) + '</div></div>';
+            if (valueUsd > 0) {
+                html += '<div class="wallet-card-stat"><div class="wallet-card-stat-label">Value</div><div class="wallet-card-stat-value v2-blur">' + formatCurrency(valueUsd) + '</div></div>';
+            }
+            html += '</div>';
+
+            // Expandable token list
+            if (tokenCount > 0) {
+                html += '<button class="wallet-tokens-toggle" data-addr="' + escapeAttr(addr) + '"><span style="font-size:9px;">&#9654;</span> Show ' + tokenCount + ' tokens</button>';
+                html += '<div class="wallet-tokens-list" id="tokens-' + escapeAttr(addr) + '"><span style="font-size:12px;color:var(--v2-text-muted);">Loading...</span></div>';
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        async function toggleTokens(address) {
+            const list = document.getElementById('tokens-' + address);
+            if (!list) return;
+
+            const btn = document.querySelector('.wallet-tokens-toggle[data-addr="' + address + '"]');
+            const isVisible = list.classList.contains('show');
+
+            if (isVisible) {
+                list.classList.remove('show');
+                const tokenCount = parseInt(btn.textContent.match(/\d+/)?.[0]) || 0;
+                if (btn) btn.innerHTML = '<span style="font-size:9px;">&#9654;</span> Show ' + tokenCount + ' tokens';
+            } else {
+                list.classList.add('show');
+                if (btn) btn.innerHTML = '<span style="font-size:9px;">&#9660;</span> Hide tokens';
+
+                // Load if not yet loaded
+                if (list.dataset.loaded !== 'true') {
+                    try {
+                        const resp = await v2Fetch('/wallets/' + encodeURIComponent(address) + '/native-assets');
+                        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                        const data = await resp.json();
+                        const assets = data.assets || data.native_assets || data || [];
+
+                        if (!assets.length) {
+                            setSafeHTML(list, '<span style="font-size:12px;color:var(--v2-text-muted);">No native tokens found</span>');
+                        } else {
+                            let html = '';
+                            assets.slice(0, 50).forEach(a => {
+                                const name = a.name || a.asset_name || a.ticker || 'Unknown';
+                                const qty = parseFloat(a.quantity) || parseFloat(a.amount) || 0;
+                                html += '<div class="token-item"><span class="token-item-name">' + escapeHtml(name) + '</span><span class="token-item-qty v2-blur">' + formatAmount(qty) + '</span></div>';
+                            });
+                            if (assets.length > 50) {
+                                html += '<div style="font-size:11px;color:var(--v2-text-muted);padding-top:4px;">+ ' + (assets.length - 50) + ' more tokens</div>';
+                            }
+                            setSafeHTML(list, html);
+                        }
+                        list.dataset.loaded = 'true';
+                    } catch(e) {
+                        setSafeHTML(list, '<span style="font-size:12px;color:var(--v2-red);">Failed to load: ' + escapeHtml(e.message) + '</span>');
+                    }
+                }
+            }
         }
 
         async function addWallet() {
@@ -182,7 +337,7 @@
         async function refreshWallet(address) {
             showToast('Refreshing wallet...', 'success');
             try {
-                await v2Fetch(`/wallets/${encodeURIComponent(address)}/refresh`, { method: 'POST' });
+                await v2Fetch('/wallets/' + encodeURIComponent(address) + '/refresh', { method: 'POST' });
                 await loadWallets();
             } catch(e) { showToast('Refresh failed', 'error'); }
         }
@@ -190,7 +345,7 @@
         async function deleteWallet(address) {
             if (!confirm('Delete this wallet? This cannot be undone.')) return;
             try {
-                const resp = await v2Fetch(`/wallets/${encodeURIComponent(address)}`, { method: 'DELETE' });
+                const resp = await v2Fetch('/wallets/' + encodeURIComponent(address), { method: 'DELETE' });
                 if (resp.ok) {
                     showToast('Wallet deleted', 'success');
                     loadWallets();

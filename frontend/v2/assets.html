@@ -9,6 +9,65 @@
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <script src="/static/js/session-auth.js?v=1772669294"></script>
+    <style>
+        /* Chain filter tabs */
+        .chain-filter-bar { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; padding: 8px; background: var(--v2-bg-card); border: 1px solid var(--v2-border); border-radius: var(--v2-radius-md); }
+        .chain-filter-btn { padding: 5px 14px; border-radius: 16px; font-size: 12px; font-weight: 500; border: 1px solid var(--v2-border-input); background: transparent; color: var(--v2-text-secondary); cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 6px; }
+        .chain-filter-btn:hover { border-color: var(--v2-text-muted); color: var(--v2-text-primary); }
+        .chain-filter-btn.active { background: var(--v2-accent-muted); border-color: var(--v2-accent); color: var(--v2-accent-text); }
+        .chain-filter-btn .chain-count { background: var(--v2-bg-input); padding: 1px 6px; border-radius: 10px; font-size: 10px; }
+        .chain-filter-btn.active .chain-count { background: rgba(0,210,106,0.25); }
+        /* Chain-specific active colors */
+        .chain-filter-btn.chain-cardano.active { background: rgba(0, 51, 173, 0.15); border-color: #5c9eff; color: #5c9eff; }
+        .chain-filter-btn.chain-bitcoin.active { background: rgba(247, 147, 26, 0.15); border-color: #f7931a; color: #f7931a; }
+        .chain-filter-btn.chain-ethereum.active { background: rgba(98, 126, 234, 0.15); border-color: #8ba4f5; color: #8ba4f5; }
+        .chain-filter-btn.chain-solana.active { background: rgba(20, 241, 149, 0.15); border-color: #3dffb3; color: #3dffb3; }
+        .chain-filter-btn.chain-polygon.active { background: rgba(130, 71, 229, 0.15); border-color: #a673f0; color: #a673f0; }
+        .chain-filter-btn.chain-base.active { background: rgba(0, 82, 255, 0.15); border-color: #5c9eff; color: #5c9eff; }
+
+        /* Expandable wallet rows */
+        .wallet-row-expandable { cursor: pointer; }
+        .wallet-row-expandable:hover { background: var(--v2-bg-table-row-hover); }
+        .wallet-expand-icon { display: inline-block; width: 16px; margin-right: 4px; transition: transform 0.2s; color: var(--v2-text-muted); font-size: 10px; }
+        .wallet-expand-icon.expanded { transform: rotate(90deg); }
+        .wallet-assets-row { display: none; }
+        .wallet-assets-row.show { display: table-row; }
+        .wallet-assets-row td { padding: 0 !important; }
+        .wallet-native-assets { padding: 8px 16px 12px 40px; background: var(--v2-bg-card); border-bottom: 1px solid var(--v2-border); }
+        .native-asset-item { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 12px; }
+        .native-asset-name { color: var(--v2-text-secondary); }
+        .native-asset-qty { color: var(--v2-text-primary); font-family: monospace; }
+
+        /* Stake group header */
+        .stake-group-header-row { background: var(--v2-bg-table-header); }
+        .stake-group-header-row td { padding: 8px 12px !important; font-size: 12px; font-weight: 600; color: var(--v2-text-muted); border-bottom: 1px solid var(--v2-border); }
+
+        /* Governance tab styles */
+        .gov-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+        .gov-card { background: var(--v2-bg-card); border: 1px solid var(--v2-border); border-radius: var(--v2-radius-lg); padding: 16px; transition: border-color 0.2s; }
+        .gov-card:hover { border-color: var(--v2-border-light); }
+        .gov-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+        .gov-card-logo { width: 32px; height: 32px; border-radius: 50%; background: var(--v2-bg-input); }
+        .gov-card-name { font-size: 14px; font-weight: 600; color: var(--v2-text-heading); }
+        .gov-card-chain { font-size: 11px; color: var(--v2-text-muted); }
+        .gov-card-amount { font-size: 18px; font-weight: 700; color: var(--v2-text-heading); margin-bottom: 2px; }
+        .gov-card-value { font-size: 13px; color: var(--v2-text-secondary); margin-bottom: 8px; }
+        .gov-card-breakdown { font-size: 11px; color: var(--v2-text-muted); margin-bottom: 10px; }
+        .gov-card-actions { display: flex; gap: 8px; }
+        .gov-card-actions a { font-size: 12px; color: var(--v2-accent-text); text-decoration: none; padding: 4px 10px; border: 1px solid var(--v2-accent); border-radius: var(--v2-radius-sm); transition: all 0.2s; }
+        .gov-card-actions a:hover { background: var(--v2-accent-muted); }
+
+        /* Governance delegation section */
+        .gov-delegation-section { margin-bottom: 24px; }
+        .gov-delegation-card { background: var(--v2-bg-card); border: 1px solid var(--v2-border); border-radius: var(--v2-radius-lg); padding: 16px; margin-bottom: 12px; }
+        .gov-delegation-title { font-size: 14px; font-weight: 600; color: var(--v2-text-heading); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+        .gov-delegation-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 13px; }
+        .gov-delegation-label { color: var(--v2-text-muted); min-width: 60px; }
+        .gov-delegation-value { color: var(--v2-text-primary); }
+        .gov-delegation-value a { color: var(--v2-accent-text); text-decoration: none; }
+        .gov-delegation-value a:hover { text-decoration: underline; }
+        .gov-subsection-title { font-size: 13px; font-weight: 600; color: var(--v2-text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; margin-top: 20px; }
+    </style>
 </head>
 <body>
     <div class="v2-layout" id="v2Layout">
@@ -23,21 +82,24 @@
             </header>
 
             <div class="v2-content">
-                <!-- Tabs: Wallets | Exchanges | DeFi | Custom Tokens | P&L -->
+                <!-- Tabs: Wallets | Exchanges | DeFi | Governance | Custom Tokens | P&L -->
                 <div class="v2-tabs" id="assetTabs">
-                    <button class="v2-tab active" data-tab="wallets" onclick="switchAssetTab('wallets')">Wallets</button>
-                    <button class="v2-tab" data-tab="exchanges" onclick="switchAssetTab('exchanges')">Exchanges</button>
-                    <button class="v2-tab" data-tab="defi" onclick="switchAssetTab('defi')">DeFi & Staking</button>
-                    <button class="v2-tab" data-tab="custom" onclick="switchAssetTab('custom')">Custom Tokens</button>
-                    <button class="v2-tab" data-tab="pnl" onclick="switchAssetTab('pnl')">P&L</button>
+                    <button class="v2-tab active" data-tab="wallets">Wallets</button>
+                    <button class="v2-tab" data-tab="exchanges">Exchanges</button>
+                    <button class="v2-tab" data-tab="defi">DeFi & Staking</button>
+                    <button class="v2-tab" data-tab="governance">Governance</button>
+                    <button class="v2-tab" data-tab="custom">Custom Tokens</button>
+                    <button class="v2-tab" data-tab="pnl">P&L</button>
                 </div>
 
                 <!-- Tab Content -->
                 <div id="tabWallets" class="tab-content">
                     <div class="v2-table-header">
                         <span class="v2-table-title">Blockchain Wallets</span>
-                        <button class="v2-btn v2-btn-primary" onclick="showAddWalletModal()">+ Add Wallet</button>
+                        <button class="v2-btn v2-btn-primary" id="addWalletBtn">+ Add Wallet</button>
                     </div>
+                    <!-- Chain filter tabs -->
+                    <div class="chain-filter-bar" id="walletChainFilter"></div>
                     <div class="v2-table-wrapper" id="walletsTable">
                         <div style="padding:40px;text-align:center;color:var(--v2-text-muted);">
                             <div class="v2-skeleton v2-skeleton-chart" style="height:200px;"></div>
@@ -67,10 +129,22 @@
                     </div>
                 </div>
 
+                <div id="tabGovernance" class="tab-content" style="display:none">
+                    <div class="v2-table-header">
+                        <span class="v2-table-title">Governance</span>
+                        <span id="govSummary" style="font-size:13px;color:var(--v2-text-muted);"></span>
+                    </div>
+                    <div id="governanceContent">
+                        <div style="padding:40px;text-align:center;color:var(--v2-text-muted);">
+                            <div class="v2-skeleton v2-skeleton-chart" style="height:200px;"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="tabCustom" class="tab-content" style="display:none">
                     <div class="v2-table-header">
                         <span class="v2-table-title">Custom Tracked Tokens</span>
-                        <button class="v2-btn v2-btn-primary" onclick="showAddTokenModal()">+ Add Token</button>
+                        <button class="v2-btn v2-btn-primary" id="addTokenBtn">+ Add Token</button>
                     </div>
                     <div class="v2-table-wrapper" id="customTokensContent">
                         <div style="padding:40px;text-align:center;color:var(--v2-text-muted);">
@@ -82,7 +156,7 @@
                 <div id="tabPnl" class="tab-content" style="display:none">
                     <div class="v2-table-header">
                         <span class="v2-table-title">Profit & Loss</span>
-                        <button class="v2-btn v2-btn-secondary" onclick="computePnl()">Compute P&L</button>
+                        <button class="v2-btn v2-btn-secondary" id="computePnlBtn">Compute P&L</button>
                     </div>
                     <div id="pnlContent">
                         <div style="padding:40px;text-align:center;color:var(--v2-text-muted);">
@@ -99,12 +173,37 @@
     <script src="/next/static/js/v2-app.js"></script>
     <script src="/next/static/js/v2-shell.js"></script>
     <script>
+        let assetPrices = {};
+        let allWallets = [];
+        let currentWalletChainFilter = 'all';
+        let defiSummaryData = null;
+        let governanceLoaded = false;
+        let stakingDataByWallet = {};
+
+        // Governance links (mirrors V1 GOVERNANCE_LINKS)
+        const GOVERNANCE_LINKS = {
+            'INDY': { url: 'https://app.indigoprotocol.io/governance', name: 'Indigo' },
+            'LQ': { url: 'https://liqwid-rewards.sundaeswap.finance/', name: 'Liqwid' },
+            'MIN': { url: 'https://app.minswap.org/governance', name: 'Minswap' },
+            'SUNDAE': { url: 'https://governance.sundaeswap.finance/', name: 'SundaeSwap' },
+            'STRIKE': { url: 'https://app.strikefinance.io/staking', name: 'Strike' },
+            'LENFI': { url: 'https://app.lenfi.io/governance', name: 'Lenfi' },
+            'VYFI': { url: 'https://app.vyfi.io/governance', name: 'VyFi' },
+        };
+
         document.addEventListener('DOMContentLoaded', () => {
             v2InitShell('assets');
+
+            // Attach tab handlers via addEventListener (no inline onclick)
+            document.querySelectorAll('#assetTabs .v2-tab').forEach(btn => {
+                btn.addEventListener('click', () => switchAssetTab(btn.dataset.tab));
+            });
+            document.getElementById('addWalletBtn').addEventListener('click', showAddWalletModal);
+            document.getElementById('addTokenBtn').addEventListener('click', showAddTokenModal);
+            document.getElementById('computePnlBtn').addEventListener('click', computePnl);
+
             loadAssetsPage();
         });
-
-        let assetPrices = {};
 
         async function loadAssetsPage() {
             // Load prices first for wallet value calculations
@@ -121,7 +220,9 @@
                 const resp = await v2Fetch('/wallets');
                 if (resp.ok) {
                     const data = await resp.json();
-                    renderWalletsTab(data);
+                    allWallets = data.wallets || data || [];
+                    renderWalletChainFilters();
+                    renderWalletsTab();
                 }
             } catch(e) { console.error('Wallets load error:', e); }
 
@@ -138,8 +239,8 @@
             try {
                 const resp = await v2Fetch('/defi/summary');
                 if (resp.ok) {
-                    const data = await resp.json();
-                    renderDefiTab(data);
+                    defiSummaryData = await resp.json();
+                    renderDefiTab(defiSummaryData);
                 }
             } catch(e) { console.error('DeFi load error:', e); }
 
@@ -154,21 +255,79 @@
         }
 
         function switchAssetTab(tab) {
-            document.querySelectorAll('.v2-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+            document.querySelectorAll('#assetTabs .v2-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
             document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
             const target = document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1));
             if (target) target.style.display = 'block';
+
+            // Lazy-load governance on first visit
+            if (tab === 'governance' && !governanceLoaded) {
+                governanceLoaded = true;
+                loadGovernanceTab();
+            }
+
+            // Update URL hash
+            window.location.hash = tab;
         }
 
-        function renderWalletsTab(data) {
+        // ==========================================
+        // Chain Filter Tabs for Wallets
+        // ==========================================
+        function renderWalletChainFilters() {
+            const container = document.getElementById('walletChainFilter');
+            if (!container) return;
+
+            // Count wallets per chain
+            const chainCounts = {};
+            allWallets.forEach(w => {
+                const chain = (w.blockchain || 'unknown').toLowerCase();
+                chainCounts[chain] = (chainCounts[chain] || 0) + 1;
+            });
+
+            // Build filter buttons
+            let html = '<button class="chain-filter-btn active" data-chain="all">All <span class="chain-count">' + allWallets.length + '</span></button>';
+            const orderedChains = ['cardano', 'bitcoin', 'ethereum', 'solana', 'polygon', 'base', 'algorand', 'bsc', 'arbitrum', 'avalanche', 'tron', 'xrp'];
+            const seenChains = new Set(orderedChains);
+
+            // Add ordered chains that have wallets
+            orderedChains.forEach(chain => {
+                if (chainCounts[chain]) {
+                    html += `<button class="chain-filter-btn chain-${escapeAttr(chain)}" data-chain="${escapeAttr(chain)}">${escapeHtml(chain.charAt(0).toUpperCase() + chain.slice(1))} <span class="chain-count">${chainCounts[chain]}</span></button>`;
+                }
+            });
+            // Add any other chains not in the ordered list
+            Object.keys(chainCounts).forEach(chain => {
+                if (!seenChains.has(chain)) {
+                    html += `<button class="chain-filter-btn chain-${escapeAttr(chain)}" data-chain="${escapeAttr(chain)}">${escapeHtml(chain.charAt(0).toUpperCase() + chain.slice(1))} <span class="chain-count">${chainCounts[chain]}</span></button>`;
+                }
+            });
+
+            setSafeHTML(container, html);
+
+            // Attach event listeners
+            container.querySelectorAll('.chain-filter-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    currentWalletChainFilter = btn.dataset.chain;
+                    container.querySelectorAll('.chain-filter-btn').forEach(b => b.classList.toggle('active', b.dataset.chain === currentWalletChainFilter));
+                    renderWalletsTab();
+                });
+            });
+        }
+
+        // ==========================================
+        // Wallets Tab with Chain Filtering + Expandable Rows
+        // ==========================================
+        function renderWalletsTab() {
             const container = document.getElementById('walletsTable');
-            const wallets = data.wallets || data || [];
+            let wallets = currentWalletChainFilter === 'all'
+                ? allWallets
+                : allWallets.filter(w => (w.blockchain || '').toLowerCase() === currentWalletChainFilter);
+
             if (!wallets.length) {
-                setSafeHTML(container, '<div class="v2-empty" style="padding:48px"><div class="v2-empty-title">No wallets added</div><div class="v2-empty-desc">Add your first wallet to start tracking.</div></div>');
+                setSafeHTML(container, '<div class="v2-empty" style="padding:48px"><div class="v2-empty-title">No wallets found</div><div class="v2-empty-desc">' + (currentWalletChainFilter === 'all' ? 'Add your first wallet to start tracking.' : 'No ' + escapeHtml(currentWalletChainFilter) + ' wallets.') + '</div></div>');
                 return;
             }
 
-            // Map blockchain to native token symbol for price lookup
             const chainSymbols = {
                 'cardano': 'ADA', 'bitcoin': 'BTC', 'ethereum': 'ETH', 'solana': 'SOL',
                 'polygon': 'MATIC', 'base': 'ETH', 'algorand': 'ALGO', 'bsc': 'BNB',
@@ -176,33 +335,124 @@
                 'dogecoin': 'DOGE', 'litecoin': 'LTC',
             };
 
-            let html = '<table class="v2-table"><thead><tr><th>Label</th><th>Address</th><th>Blockchain</th><th class="right">Balance</th><th class="right">Value</th><th class="right">Assets</th></tr></thead><tbody>';
+            // Group Cardano wallets by stake address
+            const stakeGroups = {};
+            const ungrouped = [];
+
             wallets.forEach(w => {
-                const addr = w.address || '';
-                const short = addr.length > 16 ? addr.slice(0,8) + '...' + addr.slice(-8) : addr;
-                const balance = parseFloat(w.balance) || 0;
                 const chain = (w.blockchain || 'unknown').toLowerCase();
-                const symbol = chainSymbols[chain] || chain.toUpperCase();
-                const unit = w.balance_unit || symbol;
-
-                // Compute value from balance and price
-                const priceInfo = assetPrices[symbol] || {};
-                const price = typeof priceInfo === 'object' ? (priceInfo.usd || 0) : (priceInfo || 0);
-                const valueUsd = balance * price;
-
-                html += `<tr>
-                    <td><strong>${escapeHtml(w.label || w.name || 'Wallet')}</strong></td>
-                    <td style="font-family:monospace;font-size:12px;color:var(--v2-text-secondary)">${escapeHtml(short)}</td>
-                    <td><span class="v2-chain-badge chain-${escapeAttr(chain)}">${escapeHtml(chain)}</span></td>
-                    <td class="right v2-blur">${formatAmount(balance)} <span style="font-size:11px;color:var(--v2-text-muted)">${escapeHtml(unit)}</span></td>
-                    <td class="right v2-blur">${formatCurrency(valueUsd)}</td>
-                    <td class="right">${w.native_assets_count || 0}</td>
-                </tr>`;
+                if (chain === 'cardano' && w.stake_address) {
+                    if (!stakeGroups[w.stake_address]) {
+                        stakeGroups[w.stake_address] = [];
+                    }
+                    stakeGroups[w.stake_address].push(w);
+                } else {
+                    ungrouped.push(w);
+                }
             });
+
+            let html = '<table class="v2-table"><thead><tr><th>Label</th><th>Address</th><th>Blockchain</th><th class="right">Balance</th><th class="right">Value</th><th class="right">Assets</th></tr></thead><tbody>';
+
+            // Render stake-grouped Cardano wallets first
+            Object.entries(stakeGroups).forEach(([stakeAddr, groupWallets]) => {
+                const shortStake = stakeAddr.slice(0, 12) + '...' + stakeAddr.slice(-6);
+                html += `<tr class="stake-group-header-row"><td colspan="6">Stake Key: <span style="font-family:monospace;font-size:11px;">${escapeHtml(shortStake)}</span> (${groupWallets.length} wallet${groupWallets.length > 1 ? 's' : ''})</td></tr>`;
+                groupWallets.forEach(w => { html += renderWalletRow(w, chainSymbols); });
+            });
+
+            // Render ungrouped wallets
+            ungrouped.forEach(w => { html += renderWalletRow(w, chainSymbols); });
+
             html += '</tbody></table>';
             setSafeHTML(container, html);
+
+            // Attach expand handlers
+            container.querySelectorAll('.wallet-row-expandable').forEach(row => {
+                row.addEventListener('click', () => toggleWalletExpand(row.dataset.address));
+            });
         }
 
+        function renderWalletRow(w, chainSymbols) {
+            const addr = w.address || '';
+            const short = addr.length > 16 ? addr.slice(0, 8) + '...' + addr.slice(-8) : addr;
+            const balance = parseFloat(w.balance) || 0;
+            const chain = (w.blockchain || 'unknown').toLowerCase();
+            const symbol = chainSymbols[chain] || chain.toUpperCase();
+            const unit = w.balance_unit || symbol;
+            const priceInfo = assetPrices[symbol] || {};
+            const price = typeof priceInfo === 'object' ? (parseFloat(priceInfo.usd) || 0) : (parseFloat(priceInfo) || 0);
+            const valueUsd = balance * price;
+            const tokenCount = parseInt(w.native_assets_count) || 0;
+            const hasTokens = tokenCount > 0;
+
+            let html = `<tr class="wallet-row-expandable" data-address="${escapeAttr(addr)}">
+                <td>${hasTokens ? '<span class="wallet-expand-icon" data-addr="' + escapeAttr(addr) + '">&#9654;</span>' : '<span style="display:inline-block;width:20px;"></span>'}<strong>${escapeHtml(w.label || w.name || 'Wallet')}</strong></td>
+                <td style="font-family:monospace;font-size:12px;color:var(--v2-text-secondary)">${escapeHtml(short)}</td>
+                <td><span class="v2-chain-badge chain-${escapeAttr(chain)}">${escapeHtml(chain)}</span></td>
+                <td class="right v2-blur">${formatAmount(balance)} <span style="font-size:11px;color:var(--v2-text-muted)">${escapeHtml(unit)}</span></td>
+                <td class="right v2-blur">${formatCurrency(valueUsd)}</td>
+                <td class="right">${tokenCount}</td>
+            </tr>`;
+
+            // Hidden expandable row for native assets
+            if (hasTokens) {
+                html += `<tr class="wallet-assets-row" id="assets-${escapeAttr(addr)}"><td colspan="6"><div class="wallet-native-assets" id="native-${escapeAttr(addr)}"><span style="font-size:12px;color:var(--v2-text-muted);">Loading native assets...</span></div></td></tr>`;
+            }
+
+            return html;
+        }
+
+        function toggleWalletExpand(address) {
+            const assetsRow = document.getElementById('assets-' + address);
+            if (!assetsRow) return;
+
+            const icon = document.querySelector('.wallet-expand-icon[data-addr="' + address + '"]');
+            const isVisible = assetsRow.classList.contains('show');
+
+            if (isVisible) {
+                assetsRow.classList.remove('show');
+                if (icon) icon.classList.remove('expanded');
+            } else {
+                assetsRow.classList.add('show');
+                if (icon) icon.classList.add('expanded');
+                // Load native assets if not yet loaded
+                const container = document.getElementById('native-' + address);
+                if (container && container.dataset.loaded !== 'true') {
+                    loadNativeAssets(address, container);
+                }
+            }
+        }
+
+        async function loadNativeAssets(address, container) {
+            try {
+                const resp = await v2Fetch('/wallets/' + encodeURIComponent(address) + '/native-assets');
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                const data = await resp.json();
+                const assets = data.assets || data.native_assets || data || [];
+
+                if (!assets.length) {
+                    setSafeHTML(container, '<span style="font-size:12px;color:var(--v2-text-muted);">No native tokens found</span>');
+                } else {
+                    let html = '';
+                    assets.slice(0, 50).forEach(a => {
+                        const name = a.name || a.asset_name || a.ticker || 'Unknown';
+                        const qty = parseFloat(a.quantity) || parseFloat(a.amount) || 0;
+                        html += `<div class="native-asset-item"><span class="native-asset-name">${escapeHtml(name)}</span><span class="native-asset-qty v2-blur">${formatAmount(qty)}</span></div>`;
+                    });
+                    if (assets.length > 50) {
+                        html += '<div style="font-size:11px;color:var(--v2-text-muted);padding-top:4px;">+ ' + (assets.length - 50) + ' more tokens</div>';
+                    }
+                    setSafeHTML(container, html);
+                }
+                container.dataset.loaded = 'true';
+            } catch(e) {
+                setSafeHTML(container, '<span style="font-size:12px;color:var(--v2-red);">Failed to load: ' + escapeHtml(e.message) + '</span>');
+            }
+        }
+
+        // ==========================================
+        // Exchanges Tab
+        // ==========================================
         function renderExchangesTab(data) {
             const container = document.getElementById('exchangesContent');
             const exchanges = data.exchanges || [];
@@ -214,8 +464,8 @@
             exchanges.forEach(ex => {
                 html += `<tr>
                     <td><strong>${escapeHtml(ex.name || ex.exchange || 'Exchange')}</strong></td>
-                    <td class="right">${ex.asset_count || (ex.assets ? ex.assets.length : 0)}</td>
-                    <td class="right v2-blur">${formatCurrency(ex.total_usd || 0)}</td>
+                    <td class="right">${parseInt(ex.asset_count) || (ex.assets ? ex.assets.length : 0)}</td>
+                    <td class="right v2-blur">${formatCurrency(parseFloat(ex.total_usd) || 0)}</td>
                     <td><span class="v2-badge ${ex.error ? 'v2-badge-red' : 'v2-badge-green'}">${ex.error ? 'Error' : 'Connected'}</span></td>
                 </tr>`;
             });
@@ -223,9 +473,11 @@
             setSafeHTML(container, html);
         }
 
+        // ==========================================
+        // DeFi Tab
+        // ==========================================
         function renderDefiTab(data) {
             const container = document.getElementById('defiContent');
-            // DeFi summary returns all_positions (governance tokens)
             const positions = data.all_positions || data.positions || data.protocols || [];
             if (!positions.length) {
                 setSafeHTML(container, '<div class="v2-empty" style="padding:48px"><div class="v2-empty-title">No DeFi positions detected</div><div class="v2-empty-desc">DeFi positions are auto-detected from your wallet addresses.</div></div>');
@@ -237,13 +489,240 @@
                     <td><strong>${escapeHtml(p.protocol || p.name || 'DeFi')}</strong></td>
                     <td>${escapeHtml(p.token || p.asset_name || '')}</td>
                     <td>${escapeHtml(p.type_label || p.type || 'Position')}</td>
-                    <td class="right v2-blur">${formatAmount(p.quantity || 0)}</td>
+                    <td class="right v2-blur">${formatAmount(parseFloat(p.quantity) || 0)}</td>
                 </tr>`;
             });
             html += '</tbody></table>';
             setSafeHTML(container, html);
         }
 
+        // ==========================================
+        // Governance Tab (Priority 2 Feature 1)
+        // ==========================================
+        async function loadGovernanceTab() {
+            const container = document.getElementById('governanceContent');
+
+            // Load staking data for all Cardano wallets + DeFi summary in parallel
+            const cardanoWallets = allWallets.filter(w => (w.blockchain || '').toLowerCase() === 'cardano');
+
+            const promises = cardanoWallets.map(w =>
+                v2Fetch('/wallets/' + encodeURIComponent(w.address) + '/governance')
+                    .then(r => r.ok ? r.json() : null)
+                    .catch(() => null)
+            );
+
+            // Also load staking data for governance token totals
+            const stakingPromises = cardanoWallets.map(w =>
+                v2Fetch('/defi/staking/' + encodeURIComponent(w.address))
+                    .then(r => r.ok ? r.json() : null)
+                    .catch(() => null)
+            );
+
+            const [govResults, stakingResults] = await Promise.all([
+                Promise.all(promises),
+                Promise.all(stakingPromises),
+            ]);
+
+            // Build governance delegation info
+            const delegations = [];
+            cardanoWallets.forEach((w, i) => {
+                const gov = govResults[i];
+                if (gov && gov.has_stake_key) {
+                    delegations.push({ wallet: w, gov });
+                }
+            });
+
+            // Build staking map for governance tokens
+            const allStaking = {};
+            stakingResults.forEach(result => {
+                if (!result || !result.protocols) return;
+                Object.entries(result.protocols).forEach(([protocol, data]) => {
+                    if (!allStaking[protocol]) {
+                        allStaking[protocol] = { staked: {}, blockchain: data.blockchain || 'cardano' };
+                    }
+                    (data.staked || []).forEach(s => {
+                        const token = (s.token || '').toUpperCase();
+                        if (!allStaking[protocol].staked[token]) {
+                            allStaking[protocol].staked[token] = { amount: 0, logo_url: s.logo_url };
+                        }
+                        allStaking[protocol].staked[token].amount += parseFloat(s.amount) || 0;
+                        if (s.logo_url && !allStaking[protocol].staked[token].logo_url) {
+                            allStaking[protocol].staked[token].logo_url = s.logo_url;
+                        }
+                    });
+                });
+            });
+
+            renderGovernanceContent(delegations, allStaking, defiSummaryData);
+        }
+
+        function renderGovernanceContent(delegations, allStaking, defiData) {
+            const container = document.getElementById('governanceContent');
+            const summaryEl = document.getElementById('govSummary');
+
+            let html = '';
+            let totalGovValue = 0;
+            let govTokenCount = 0;
+
+            // ---- Section 1: Delegation Info ----
+            if (delegations.length > 0) {
+                html += '<div class="gov-subsection-title">Cardano Delegation</div><div class="gov-delegation-section">';
+
+                // Deduplicate by stake key
+                const seenStakeKeys = new Set();
+                delegations.forEach(({ wallet, gov }) => {
+                    const stakeKey = gov.stake_address || wallet.stake_address || wallet.address;
+                    if (seenStakeKeys.has(stakeKey)) return;
+                    seenStakeKeys.add(stakeKey);
+
+                    const shortStake = stakeKey.length > 20 ? stakeKey.slice(0, 12) + '...' + stakeKey.slice(-6) : stakeKey;
+
+                    html += '<div class="gov-delegation-card">';
+                    html += '<div class="gov-delegation-title"><span style="font-size:16px;">&#127944;</span> ' + escapeHtml(wallet.label || 'Cardano Wallet') + ' <span style="font-size:11px;color:var(--v2-text-muted);font-weight:400;">' + escapeHtml(shortStake) + '</span></div>';
+
+                    // Pool delegation
+                    if (gov.pool && gov.pool.pool_id) {
+                        const poolDisplay = gov.pool.ticker ? '[' + escapeHtml(gov.pool.ticker) + '] ' + escapeHtml(gov.pool.name || '') : escapeHtml(gov.pool.pool_id.slice(0, 16) + '...');
+                        const poolLink = 'https://cexplorer.io/pool/' + encodeURIComponent(gov.pool.pool_id);
+                        html += '<div class="gov-delegation-row"><span class="gov-delegation-label">Pool:</span><span class="gov-delegation-value v2-blur"><a href="' + escapeAttr(poolLink) + '" target="_blank" rel="noopener">' + poolDisplay + '</a></span></div>';
+                    } else {
+                        html += '<div class="gov-delegation-row"><span class="gov-delegation-label">Pool:</span><span class="gov-delegation-value" style="color:var(--v2-text-muted);">Not delegated</span></div>';
+                    }
+
+                    // DRep delegation
+                    if (gov.drep && gov.drep.delegated) {
+                        const drepId = gov.drep.drep_id || '';
+                        const isSpecial = drepId === 'drep_always_abstain' || drepId === 'drep_always_no_confidence';
+                        const drepDisplay = gov.drep.drep_name || (drepId.length > 16 ? drepId.slice(0, 8) + '...' + drepId.slice(-4) : drepId);
+                        const drepLink = !isSpecial && drepId ? 'https://cexplorer.io/drep/' + encodeURIComponent(drepId) : null;
+                        html += '<div class="gov-delegation-row"><span class="gov-delegation-label">DRep:</span><span class="gov-delegation-value v2-blur">';
+                        if (drepLink) {
+                            html += '<a href="' + escapeAttr(drepLink) + '" target="_blank" rel="noopener">' + escapeHtml(drepDisplay) + '</a>';
+                        } else {
+                            html += escapeHtml(drepDisplay);
+                        }
+                        html += '</span></div>';
+                    } else {
+                        html += '<div class="gov-delegation-row"><span class="gov-delegation-label">DRep:</span><span class="gov-delegation-value" style="color:var(--v2-text-muted);">Not delegated</span></div>';
+                    }
+
+                    // Pending rewards
+                    if (gov.rewards && parseFloat(gov.rewards.withdrawable) > 0) {
+                        html += '<div class="gov-delegation-row"><span class="gov-delegation-label">Rewards:</span><span class="gov-delegation-value v2-blur">' + formatAmount(parseFloat(gov.rewards.withdrawable)) + ' ADA pending</span></div>';
+                    }
+
+                    html += '</div>';
+                });
+
+                html += '</div>';
+            }
+
+            // ---- Section 2: Governance Tokens ----
+            const govTokenMap = {};
+
+            // From DeFi summary positions (wallet-held governance tokens)
+            if (defiData && defiData.positions_by_category) {
+                const govPositions = defiData.positions_by_category['Governance Tokens'] || [];
+                govPositions.forEach(pos => {
+                    const token = pos.asset_name || pos.token || '';
+                    if (!token) return;
+                    if (!govTokenMap[token]) {
+                        govTokenMap[token] = { wallet: 0, staked: 0, blockchain: pos.blockchain || 'cardano', logo_url: null };
+                    }
+                    govTokenMap[token].wallet += parseFloat(pos.quantity) || 0;
+                    if (pos.logo_url && !govTokenMap[token].logo_url) {
+                        govTokenMap[token].logo_url = pos.logo_url;
+                    }
+                });
+            }
+
+            // From staked tokens that have governance links
+            Object.entries(allStaking).forEach(([protocol, data]) => {
+                Object.entries(data.staked || {}).forEach(([token, stakeData]) => {
+                    if (GOVERNANCE_LINKS[token]) {
+                        if (!govTokenMap[token]) {
+                            govTokenMap[token] = { wallet: 0, staked: 0, blockchain: data.blockchain || 'cardano', logo_url: null };
+                        }
+                        govTokenMap[token].staked += parseFloat(stakeData.amount) || 0;
+                        if (stakeData.logo_url && !govTokenMap[token].logo_url) {
+                            govTokenMap[token].logo_url = stakeData.logo_url;
+                        }
+                    }
+                });
+            });
+
+            // Build sorted list
+            const govTokens = Object.entries(govTokenMap)
+                .map(([token, data]) => {
+                    const total = data.wallet + data.staked;
+                    const priceInfo = assetPrices[token] || {};
+                    const tokenPrice = typeof priceInfo === 'object' ? (parseFloat(priceInfo.usd) || 0) : (parseFloat(priceInfo) || 0);
+                    const usdValue = total * tokenPrice;
+                    return { token, wallet: data.wallet, staked: data.staked, total, usdValue, blockchain: data.blockchain, logo_url: data.logo_url };
+                })
+                .filter(t => t.usdValue >= 1)
+                .sort((a, b) => b.usdValue - a.usdValue);
+
+            if (govTokens.length > 0) {
+                html += '<div class="gov-subsection-title">Governance Tokens</div>';
+                html += '<div class="gov-card-grid">';
+
+                govTokens.forEach(t => {
+                    totalGovValue += t.usdValue;
+                    govTokenCount++;
+
+                    const govInfo = GOVERNANCE_LINKS[t.token];
+                    const logoUrl = t.logo_url || ('https://img.logokit.com/crypto/' + encodeURIComponent(t.token) + '?size=32');
+                    const totalFmt = t.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+                    let breakdownText = '';
+                    if (t.staked > 0 && t.wallet > 0) {
+                        breakdownText = t.wallet.toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' in wallet + ' + t.staked.toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' staked';
+                    } else if (t.staked > 0) {
+                        breakdownText = 'All staked';
+                    } else {
+                        breakdownText = 'In wallet';
+                    }
+
+                    html += `<div class="gov-card">
+                        <div class="gov-card-header">
+                            <img class="gov-card-logo" src="${escapeAttr(logoUrl)}" alt="" onerror="this.style.display='none'">
+                            <div>
+                                <div class="gov-card-name">${escapeHtml(t.token)}</div>
+                                <div class="gov-card-chain"><span class="v2-chain-badge chain-${escapeAttr(t.blockchain)}">${escapeHtml(t.blockchain)}</span></div>
+                            </div>
+                        </div>
+                        <div class="gov-card-amount v2-blur">${escapeHtml(totalFmt)} ${escapeHtml(t.token)}</div>
+                        <div class="gov-card-value v2-blur">${formatCurrency(t.usdValue)}</div>
+                        <div class="gov-card-breakdown">${escapeHtml(breakdownText)}</div>
+                        <div class="gov-card-actions">
+                            ${govInfo ? '<a href="' + escapeAttr(govInfo.url) + '" target="_blank" rel="noopener">Vote on ' + escapeHtml(govInfo.name) + '</a>' : ''}
+                        </div>
+                    </div>`;
+                });
+
+                html += '</div>';
+            }
+
+            // Empty state
+            if (!html) {
+                html = '<div class="v2-empty" style="padding:48px"><div class="v2-empty-title">No governance data</div><div class="v2-empty-desc">Governance info is loaded from Cardano wallets. Add wallets to see delegation and governance token data.</div></div>';
+            }
+
+            setSafeHTML(container, html);
+
+            // Update summary
+            if (summaryEl) {
+                let parts = [];
+                if (govTokenCount > 0) parts.push(govTokenCount + ' tokens');
+                if (totalGovValue > 0) parts.push(formatCurrency(totalGovValue));
+                summaryEl.textContent = parts.join(' | ');
+            }
+        }
+
+        // ==========================================
+        // Custom Tokens Tab
+        // ==========================================
         function renderCustomTokensTab(data) {
             const container = document.getElementById('customTokensContent');
             const tokens = data.tokens || data || [];
@@ -256,15 +735,18 @@
                 html += `<tr>
                     <td><strong>${escapeHtml(t.name || t.token_name || 'Token')}</strong></td>
                     <td>${escapeHtml(t.symbol || t.ticker || '')}</td>
-                    <td class="right v2-blur">${formatAmount(t.amount || t.quantity || 0)}</td>
-                    <td class="right">${formatPrice(t.price_usd || t.price || 0)}</td>
-                    <td class="right v2-blur">${formatCurrency(t.value_usd || 0)}</td>
+                    <td class="right v2-blur">${formatAmount(parseFloat(t.amount || t.quantity) || 0)}</td>
+                    <td class="right">${formatPrice(parseFloat(t.price_usd || t.price) || 0)}</td>
+                    <td class="right v2-blur">${formatCurrency(parseFloat(t.value_usd) || 0)}</td>
                 </tr>`;
             });
             html += '</tbody></table>';
             setSafeHTML(container, html);
         }
 
+        // ==========================================
+        // Actions
+        // ==========================================
         function showAddWalletModal() {
             showToast('Wallet management available on the Wallets page', 'success');
             setTimeout(() => window.location = '/next/wallets', 1500);
@@ -275,6 +757,12 @@
         function computePnl() {
             showToast('P&L computation started...', 'success');
             v2Fetch('/pnl/compute', { method: 'POST' }).catch(() => {});
+        }
+
+        // Handle hash-based tab navigation
+        const hash = window.location.hash.replace('#', '');
+        if (hash && ['wallets', 'exchanges', 'defi', 'governance', 'custom', 'pnl'].includes(hash)) {
+            document.addEventListener('DOMContentLoaded', () => switchAssetTab(hash));
         }
     </script>
 </body>

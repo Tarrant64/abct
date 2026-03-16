@@ -580,6 +580,18 @@ function renderAssetsTable() {
         });
     });
 
+    // Attach chain badge click handlers for blockchain breakdown modal
+    tbody.querySelectorAll('.v2-chain-badge').forEach(badge => {
+        badge.style.cursor = 'pointer';
+        badge.addEventListener('click', (e) => {
+            e.stopPropagation(); // Don't trigger the row click
+            const chain = badge.textContent.trim().toLowerCase();
+            if (chain && typeof openChainBreakdown === 'function') {
+                openChainBreakdown(chain);
+            }
+        });
+    });
+
     // Render sparklines after table is in DOM
     requestAnimationFrame(() => {
         holdings.forEach((h, idx) => {
@@ -1787,5 +1799,215 @@ function setText(id, text) {
         // Remove any skeleton children
         const skeletons = el.querySelectorAll('.v2-skeleton');
         skeletons.forEach(s => s.remove());
+    }
+}
+
+
+// ============================================================================
+// BLOCKCHAIN BREAKDOWN MODAL (Priority 2 Feature 3)
+// ============================================================================
+// Opens when clicking a chain badge/name in the portfolio or elsewhere.
+// Shows: DeFiLlama metrics (mcap, TVL, stables, volume), your holdings on that chain,
+// supply metrics, donut breakdown.
+
+let _chainBreakdownChart = null;
+
+function initChainBreakdownModal() {
+    // Create the modal if it doesn't exist
+    if (document.getElementById('chainBreakdownModal')) return;
+
+    const modalHtml = `
+        <div class="v2-modal-overlay" id="chainBreakdownModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:500;display:none;justify-content:center;align-items:center;">
+            <div style="background:var(--v2-bg-modal);border:1px solid var(--v2-border);border-radius:var(--v2-radius-xl);width:90%;max-width:640px;max-height:90vh;overflow-y:auto;box-shadow:var(--v2-shadow-lg);position:relative;">
+                <button id="chainBreakdownClose" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,0.1);border:none;color:var(--v2-text-primary);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;z-index:10;">&times;</button>
+                <div style="padding:24px;">
+                    <h3 style="font-size:18px;font-weight:700;color:var(--v2-text-heading);margin:0 0 16px;" id="cbdChainName">Chain Breakdown</h3>
+
+                    <!-- DeFiLlama metrics -->
+                    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;" id="cbdMetrics">
+                        <div style="background:var(--v2-bg-input);border-radius:var(--v2-radius-sm);padding:10px;text-align:center;">
+                            <div style="font-size:10px;color:var(--v2-text-muted);text-transform:uppercase;">Market Cap</div>
+                            <div style="font-size:14px;font-weight:600;color:var(--v2-text-heading);" id="cbdMcap">--</div>
+                        </div>
+                        <div style="background:var(--v2-bg-input);border-radius:var(--v2-radius-sm);padding:10px;text-align:center;">
+                            <div style="font-size:10px;color:var(--v2-text-muted);text-transform:uppercase;">TVL</div>
+                            <div style="font-size:14px;font-weight:600;color:var(--v2-text-heading);" id="cbdTvl">--</div>
+                        </div>
+                        <div style="background:var(--v2-bg-input);border-radius:var(--v2-radius-sm);padding:10px;text-align:center;">
+                            <div style="font-size:10px;color:var(--v2-text-muted);text-transform:uppercase;">Stablecoins</div>
+                            <div style="font-size:14px;font-weight:600;color:var(--v2-text-heading);" id="cbdStables">--</div>
+                        </div>
+                        <div style="background:var(--v2-bg-input);border-radius:var(--v2-radius-sm);padding:10px;text-align:center;">
+                            <div style="font-size:10px;color:var(--v2-text-muted);text-transform:uppercase;">24h Volume</div>
+                            <div style="font-size:14px;font-weight:600;color:var(--v2-text-heading);" id="cbdVolume">--</div>
+                        </div>
+                    </div>
+
+                    <!-- Holdings summary -->
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">
+                        <div style="background:var(--v2-bg-input);border-radius:var(--v2-radius-sm);padding:12px;">
+                            <div style="font-size:11px;color:var(--v2-text-muted);">Your Holdings</div>
+                            <div style="font-size:18px;font-weight:700;color:var(--v2-text-heading);" id="cbdHoldings">--</div>
+                        </div>
+                        <div style="background:var(--v2-bg-input);border-radius:var(--v2-radius-sm);padding:12px;">
+                            <div style="font-size:11px;color:var(--v2-text-muted);">Asset Types</div>
+                            <div style="font-size:18px;font-weight:700;color:var(--v2-text-heading);" id="cbdAssetCount">--</div>
+                        </div>
+                    </div>
+
+                    <!-- Donut chart -->
+                    <div style="display:flex;gap:20px;align-items:center;min-height:200px;" id="cbdChartArea">
+                        <div style="flex:1;max-width:240px;"><canvas id="cbdDonut" width="240" height="240"></canvas></div>
+                        <div style="flex:1;font-size:12px;" id="cbdLegend"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    const div = document.createElement('div');
+    div.innerHTML = modalHtml;
+    document.body.appendChild(div.firstElementChild);
+
+    // Close handlers
+    document.getElementById('chainBreakdownClose').addEventListener('click', closeChainBreakdown);
+    document.getElementById('chainBreakdownModal').addEventListener('click', (e) => {
+        if (e.target.id === 'chainBreakdownModal') closeChainBreakdown();
+    });
+}
+
+async function openChainBreakdown(blockchain) {
+    initChainBreakdownModal();
+    const modal = document.getElementById('chainBreakdownModal');
+    modal.style.display = 'flex';
+
+    const chainName = blockchain.charAt(0).toUpperCase() + blockchain.slice(1);
+    setText('cbdChainName', chainName + ' Breakdown');
+
+    // Reset
+    ['cbdMcap', 'cbdTvl', 'cbdStables', 'cbdVolume', 'cbdHoldings', 'cbdAssetCount'].forEach(id => setText(id, '...'));
+    setSafeHTML(document.getElementById('cbdLegend'), '');
+
+    // Fetch chain breakdown metrics from backend
+    try {
+        const resp = await v2Fetch('/analytics/chain-breakdown/' + encodeURIComponent(blockchain));
+        if (resp.ok) {
+            const data = await resp.json();
+            if (data.success) {
+                setText('cbdTvl', data.tvl ? formatCompact(parseFloat(data.tvl)) : 'N/A');
+                setText('cbdStables', data.stablecoin_supply > 0 ? formatCompact(parseFloat(data.stablecoin_supply)) : 'N/A');
+                setText('cbdVolume', data.dex_volume_24h ? formatCompact(parseFloat(data.dex_volume_24h)) : 'N/A');
+            }
+        }
+    } catch(e) { console.error('Chain breakdown error:', e); }
+
+    // Fetch market cap from prices
+    const chainSymbolMap = { 'cardano': 'ADA', 'ethereum': 'ETH', 'bitcoin': 'BTC', 'solana': 'SOL', 'polygon': 'MATIC', 'base': 'ETH' };
+    const priceSymbol = chainSymbolMap[blockchain];
+    try {
+        const priceResp = await v2Fetch('/prices/all');
+        if (priceResp.ok) {
+            const priceData = await priceResp.json();
+            const prices = priceData.prices || priceData || {};
+            const p = prices[priceSymbol] || {};
+            if (typeof p === 'object' && p.market_cap) {
+                setText('cbdMcap', formatCompact(parseFloat(p.market_cap)));
+            } else {
+                setText('cbdMcap', 'N/A');
+            }
+        }
+    } catch(e) { setText('cbdMcap', 'N/A'); }
+
+    // Fetch holdings for this chain from all-holdings
+    try {
+        const resp = await v2Fetch('/portfolio/all-holdings');
+        if (resp.ok) {
+            const data = await resp.json();
+            const holdings = (data.holdings || []).filter(h => {
+                const hChain = (h.chain || h.blockchain || h.source || '').toLowerCase();
+                return hChain === blockchain || (blockchain === 'base' && hChain === 'base');
+            });
+
+            const totalValue = holdings.reduce((s, h) => s + (parseFloat(h.value_usd) || 0), 0);
+            setText('cbdHoldings', formatCurrency(totalValue));
+            setText('cbdAssetCount', holdings.length.toString());
+
+            // Render donut chart
+            renderChainDonut(holdings, blockchain);
+        }
+    } catch(e) {
+        console.error('Holdings fetch error:', e);
+        setText('cbdHoldings', 'N/A');
+    }
+}
+
+function renderChainDonut(holdings, blockchain) {
+    const canvas = document.getElementById('cbdDonut');
+    if (!canvas) return;
+
+    if (_chainBreakdownChart) {
+        _chainBreakdownChart.destroy();
+        _chainBreakdownChart = null;
+    }
+
+    const filtered = holdings.filter(h => (parseFloat(h.value_usd) || 0) > 0).sort((a, b) => (parseFloat(b.value_usd) || 0) - (parseFloat(a.value_usd) || 0));
+    if (!filtered.length) {
+        setSafeHTML(document.getElementById('cbdChartArea'), '<div style="text-align:center;padding:40px;color:var(--v2-text-muted);">No holdings on this chain</div>');
+        return;
+    }
+
+    // Top 8 + others
+    const top = filtered.slice(0, 8);
+    const otherValue = filtered.slice(8).reduce((s, h) => s + (parseFloat(h.value_usd) || 0), 0);
+
+    const labels = top.map(h => h.symbol || h.name || 'Unknown');
+    const values = top.map(h => parseFloat(h.value_usd) || 0);
+    if (otherValue > 0) {
+        labels.push('Other');
+        values.push(otherValue);
+    }
+
+    const colors = ['#0033ad', '#627eea', '#f7931a', '#14f195', '#8247e5', '#e84142', '#2775ca', '#00d4ff', '#666'];
+
+    _chainBreakdownChart = new Chart(canvas.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels,
+            datasets: [{ data: values, backgroundColor: colors.slice(0, labels.length), borderWidth: 0 }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            cutout: '60%',
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: { label: (ctx) => ctx.label + ': ' + formatCurrency(ctx.raw) }
+                }
+            }
+        }
+    });
+
+    // Render legend
+    const totalValue = values.reduce((s, v) => s + v, 0);
+    let legendHtml = '';
+    labels.forEach((label, i) => {
+        const pct = totalValue > 0 ? ((values[i] / totalValue) * 100).toFixed(1) : 0;
+        legendHtml += '<div style="display:flex;align-items:center;gap:8px;padding:3px 0;">' +
+            '<span style="width:10px;height:10px;border-radius:50%;background:' + colors[i] + ';flex-shrink:0;"></span>' +
+            '<span style="color:var(--v2-text-primary);flex:1;">' + escapeHtml(label) + '</span>' +
+            '<span class="v2-blur" style="color:var(--v2-text-secondary);">' + formatCurrency(values[i]) + '</span>' +
+            '<span style="color:var(--v2-text-muted);min-width:40px;text-align:right;">' + pct + '%</span>' +
+            '</div>';
+    });
+    setSafeHTML(document.getElementById('cbdLegend'), legendHtml);
+}
+
+function closeChainBreakdown() {
+    const modal = document.getElementById('chainBreakdownModal');
+    if (modal) modal.style.display = 'none';
+    if (_chainBreakdownChart) {
+        _chainBreakdownChart.destroy();
+        _chainBreakdownChart = null;
     }
 }

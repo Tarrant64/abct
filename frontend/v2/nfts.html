@@ -19,7 +19,7 @@
         .nft-card-name { font-size: 13px; font-weight: 600; color: var(--v2-text-heading); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .nft-card-collection { font-size: 11px; color: var(--v2-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .nft-card-value { font-size: 12px; color: var(--v2-accent-text); margin-top: 6px; font-weight: 600; }
-        .nft-chain-tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+        .nft-chain-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
         .nft-chain-tab { padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 500; border: 1px solid var(--v2-border-input); background: var(--v2-bg-input); color: var(--v2-text-secondary); cursor: pointer; transition: all 0.2s; }
         .nft-chain-tab:hover { border-color: var(--v2-text-muted); }
         .nft-chain-tab.active { background: var(--v2-accent-muted); border-color: var(--v2-accent); color: var(--v2-accent-text); }
@@ -28,6 +28,42 @@
         .nft-chain-tab.chain-solana.active { background: rgba(20, 241, 149, 0.15); border-color: #3dffb3; color: #3dffb3; }
         .nft-chain-tab.chain-polygon.active { background: rgba(130, 71, 229, 0.15); border-color: #a673f0; color: #a673f0; }
         .nft-chain-tab.chain-base.active { background: rgba(0, 82, 255, 0.15); border-color: #5c9eff; color: #5c9eff; }
+
+        /* Sort controls */
+        .nft-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
+        .nft-sort-controls { display: flex; gap: 6px; align-items: center; }
+        .nft-sort-label { font-size: 12px; color: var(--v2-text-muted); }
+        .nft-sort-btn { padding: 4px 12px; border-radius: var(--v2-radius-sm); font-size: 12px; font-weight: 500; border: 1px solid var(--v2-border-input); background: transparent; color: var(--v2-text-secondary); cursor: pointer; transition: all 0.2s; }
+        .nft-sort-btn:hover { border-color: var(--v2-text-muted); }
+        .nft-sort-btn.active { background: var(--v2-accent-muted); border-color: var(--v2-accent); color: var(--v2-accent-text); }
+        .nft-group-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--v2-text-secondary); cursor: pointer; }
+        .nft-group-toggle input { cursor: pointer; }
+
+        /* Collection section headers */
+        .nft-collection-header { grid-column: 1 / -1; padding: 12px 0 4px; border-bottom: 1px solid var(--v2-border); margin-bottom: 8px; }
+        .nft-collection-name { font-size: 14px; font-weight: 600; color: var(--v2-text-heading); }
+        .nft-collection-count { font-size: 12px; color: var(--v2-text-muted); margin-left: 8px; }
+
+        /* NFT Detail Modal */
+        .nft-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 500; justify-content: center; align-items: center; }
+        .nft-modal-overlay.active { display: flex; }
+        .nft-modal { background: var(--v2-bg-modal); border: 1px solid var(--v2-border); border-radius: var(--v2-radius-xl); width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; box-shadow: var(--v2-shadow-lg); }
+        .nft-modal-close { position: absolute; top: 12px; right: 12px; background: rgba(0,0,0,0.5); border: none; color: white; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; z-index: 10; }
+        .nft-modal-img { width: 100%; max-height: 400px; object-fit: contain; background: var(--v2-bg-input); border-radius: var(--v2-radius-xl) var(--v2-radius-xl) 0 0; position: relative; }
+        .nft-modal-img img { width: 100%; max-height: 400px; object-fit: contain; }
+        .nft-modal-body { padding: 20px; }
+        .nft-modal-name { font-size: 20px; font-weight: 700; color: var(--v2-text-heading); margin-bottom: 4px; }
+        .nft-modal-collection { font-size: 14px; color: var(--v2-text-muted); margin-bottom: 12px; }
+        .nft-modal-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+        .nft-modal-meta-item { }
+        .nft-modal-meta-label { font-size: 11px; color: var(--v2-text-muted); }
+        .nft-modal-meta-value { font-size: 14px; font-weight: 600; color: var(--v2-text-heading); }
+        .nft-modal-traits { }
+        .nft-modal-traits-title { font-size: 13px; font-weight: 600; color: var(--v2-text-heading); margin-bottom: 8px; }
+        .nft-trait-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px; }
+        .nft-trait { background: var(--v2-bg-input); border: 1px solid var(--v2-border-input); border-radius: var(--v2-radius-sm); padding: 6px 10px; }
+        .nft-trait-name { font-size: 10px; color: var(--v2-text-muted); text-transform: uppercase; }
+        .nft-trait-value { font-size: 12px; color: var(--v2-text-primary); font-weight: 500; }
     </style>
 </head>
 <body>
@@ -69,12 +105,39 @@
                     <button class="nft-chain-tab chain-base" data-chain="base">Base</button>
                 </div>
 
+                <!-- Sort & Group Controls -->
+                <div class="nft-controls">
+                    <div class="nft-sort-controls">
+                        <span class="nft-sort-label">Sort:</span>
+                        <button class="nft-sort-btn active" data-sort="value">By Value</button>
+                        <button class="nft-sort-btn" data-sort="name">By Name</button>
+                    </div>
+                    <label class="nft-group-toggle">
+                        <input type="checkbox" id="groupByCollection">
+                        Group by Collection
+                    </label>
+                </div>
+
                 <!-- NFT Grid -->
                 <div class="nft-grid" id="nftGrid">
                     <div class="v2-skeleton" style="height:300px;border-radius:var(--v2-radius-lg)"></div>
                     <div class="v2-skeleton" style="height:300px;border-radius:var(--v2-radius-lg)"></div>
                     <div class="v2-skeleton" style="height:300px;border-radius:var(--v2-radius-lg)"></div>
                     <div class="v2-skeleton" style="height:300px;border-radius:var(--v2-radius-lg)"></div>
+                </div>
+            </div>
+
+            <!-- NFT Detail Modal -->
+            <div class="nft-modal-overlay" id="nftDetailModal">
+                <div class="nft-modal" style="position:relative;">
+                    <button class="nft-modal-close" id="nftModalClose">&times;</button>
+                    <div class="nft-modal-img" id="nftModalImg"></div>
+                    <div class="nft-modal-body" id="nftModalBody">
+                        <div class="nft-modal-name" id="nftModalName"></div>
+                        <div class="nft-modal-collection" id="nftModalCollection"></div>
+                        <div class="nft-modal-meta" id="nftModalMeta"></div>
+                        <div class="nft-modal-traits" id="nftModalTraits"></div>
+                    </div>
                 </div>
             </div>
 
@@ -87,36 +150,54 @@
     <script>
         let allNfts = [];
         let currentNftChain = 'all';
+        let currentSort = 'value';
+        let groupByCollection = false;
 
         document.addEventListener('DOMContentLoaded', () => {
             v2InitShell('nfts');
             loadNfts();
 
-            // Attach chain tab click handlers (avoid inline onclick stripped by DOMPurify)
+            // Chain tab handlers
             document.querySelectorAll('.nft-chain-tab').forEach(tab => {
                 tab.addEventListener('click', () => filterNftChain(tab.dataset.chain));
             });
             document.getElementById('refreshNftsBtn').addEventListener('click', refreshNfts);
+
+            // Sort handlers
+            document.querySelectorAll('.nft-sort-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    currentSort = btn.dataset.sort;
+                    document.querySelectorAll('.nft-sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort === currentSort));
+                    renderNftGrid();
+                });
+            });
+
+            // Group toggle
+            document.getElementById('groupByCollection').addEventListener('change', (e) => {
+                groupByCollection = e.target.checked;
+                renderNftGrid();
+            });
+
+            // Modal close handlers
+            document.getElementById('nftModalClose').addEventListener('click', closeNftModal);
+            document.getElementById('nftDetailModal').addEventListener('click', (e) => {
+                if (e.target === document.getElementById('nftDetailModal')) closeNftModal();
+            });
         });
 
         async function loadNfts() {
             try {
-                // Load from each chain
                 const chains = ['cardano', 'ethereum', 'solana', 'polygon', 'base'];
                 const promises = chains.map(chain =>
-                    v2Fetch(`/nfts/${chain === 'cardano' ? '' : chain}`).then(r => r.ok ? r.json() : { nfts: [] }).catch(() => ({ nfts: [] }))
+                    v2Fetch('/nfts/' + (chain === 'cardano' ? '' : chain)).then(r => r.ok ? r.json() : { nfts: [] }).catch(() => ({ nfts: [] }))
                 );
 
                 // Also load summary
                 const summaryResp = await v2Fetch('/nfts/all/summary');
                 if (summaryResp.ok) {
                     const summary = await summaryResp.json();
-                    setText('nftTotalValue', formatCurrency(summary.total_value_usd || 0));
-                    setText('nftTotalCount', (summary.total_count || 0).toLocaleString());
-                    // collection_count not in /nfts/all/summary — compute from chains
-                    const chainData = summary.chains || {};
-                    const chainsWithNfts = Object.values(chainData).filter(c => (c.total_count || 0) > 0).length;
-                    setText('nftCollectionCount', chainsWithNfts.toString());
+                    setText('nftTotalValue', formatCurrency(parseFloat(summary.total_value_usd) || 0));
+                    setText('nftTotalCount', (parseInt(summary.total_count) || 0).toLocaleString());
                 }
 
                 const results = await Promise.allSettled(promises);
@@ -134,11 +215,31 @@
                     }
                 });
 
+                // Count unique collections
+                const collectionSet = new Set();
+                flattenNfts(allNfts).forEach(n => {
+                    const col = n._collection || n.collection || n.policy_id || '';
+                    if (col) collectionSet.add(col);
+                });
+                setText('nftCollectionCount', collectionSet.size.toString());
+
                 renderNftGrid();
             } catch (err) {
                 console.error('NFT load error:', err);
                 setSafeHTML(document.getElementById('nftGrid'), '<div class="v2-empty"><div class="v2-empty-title">Could not load NFTs</div></div>');
             }
+        }
+
+        function flattenNfts(nfts) {
+            let items = [];
+            nfts.forEach(nft => {
+                if (nft.assets && Array.isArray(nft.assets)) {
+                    nft.assets.forEach(a => items.push({ ...a, _chain: nft._chain, _collection: nft.name || nft.policy_id }));
+                } else {
+                    items.push(nft);
+                }
+            });
+            return items;
         }
 
         function filterNftChain(chain) {
@@ -150,47 +251,176 @@
         function renderNftGrid() {
             const grid = document.getElementById('nftGrid');
             let nfts = currentNftChain === 'all' ? allNfts : allNfts.filter(n => n._chain === currentNftChain);
+            let items = flattenNfts(nfts);
 
-            if (!nfts.length) {
-                setSafeHTML(grid, '<div class="v2-empty" style="grid-column:1/-1;padding:64px"><div class="v2-empty-icon">&#127912;</div><div class="v2-empty-title">No NFTs found</div><div class="v2-empty-desc">NFTs from your wallets will appear here.</div></div>');
+            if (!items.length) {
+                setSafeHTML(grid, '<div class="v2-empty" style="grid-column:1/-1;padding:64px"><div class="v2-empty-title">No NFTs found</div><div class="v2-empty-desc">NFTs from your wallets will appear here.</div></div>');
                 return;
             }
 
-            // Flatten collections into individual NFTs if needed
-            let items = [];
-            nfts.forEach(nft => {
-                if (nft.assets && Array.isArray(nft.assets)) {
-                    nft.assets.forEach(a => items.push({ ...a, _chain: nft._chain, _collection: nft.name || nft.policy_id }));
-                } else {
-                    items.push(nft);
-                }
-            });
+            // Sort
+            if (currentSort === 'value') {
+                items.sort((a, b) => (parseFloat(b.floor_price_usd || b.value_usd) || 0) - (parseFloat(a.floor_price_usd || a.value_usd) || 0));
+            } else if (currentSort === 'name') {
+                items.sort((a, b) => (a.name || a.asset_name || '').localeCompare(b.name || b.asset_name || ''));
+            }
 
             let html = '';
-            items.slice(0, 60).forEach(nft => {
-                const name = nft.name || nft.asset_name || nft.token_name || 'Unnamed';
-                const collection = nft._collection || nft.collection || nft.policy_id || '';
-                const imgUrl = nft.image_url || nft.image || nft.thumbnail || '';
-                const value = nft.floor_price_usd || nft.value_usd || 0;
 
-                html += `<div class="nft-card">
-                    <div class="nft-card-img">
-                        ${imgUrl ? `<img src="${escapeAttr(imgUrl)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><span class="placeholder" style="display:none">&#127912;</span>` : '<span class="placeholder">&#127912;</span>'}
-                    </div>
-                    <div class="nft-card-info">
-                        <div class="nft-card-name" title="${escapeAttr(name)}">${escapeHtml(name)}</div>
-                        <div class="nft-card-collection">${escapeHtml(collection)}</div>
-                        <div style="margin-top:4px;"><span class="v2-chain-badge chain-${escapeAttr(nft._chain || '')}">${escapeHtml(nft._chain || '')}</span></div>
-                        ${value > 0 ? `<div class="nft-card-value">${formatCurrency(value)}</div>` : ''}
-                    </div>
-                </div>`;
-            });
+            if (groupByCollection) {
+                // Group by collection
+                const groups = {};
+                items.forEach(nft => {
+                    const col = nft._collection || nft.collection || nft.policy_id || 'Uncategorized';
+                    if (!groups[col]) groups[col] = [];
+                    groups[col].push(nft);
+                });
+
+                // Sort groups by total value
+                const sortedGroups = Object.entries(groups).sort((a, b) => {
+                    const valA = a[1].reduce((s, n) => s + (parseFloat(n.floor_price_usd || n.value_usd) || 0), 0);
+                    const valB = b[1].reduce((s, n) => s + (parseFloat(n.floor_price_usd || n.value_usd) || 0), 0);
+                    return valB - valA;
+                });
+
+                sortedGroups.forEach(([collection, nftItems]) => {
+                    html += '<div class="nft-collection-header"><span class="nft-collection-name">' + escapeHtml(collection) + '</span><span class="nft-collection-count">' + nftItems.length + ' NFT' + (nftItems.length > 1 ? 's' : '') + '</span></div>';
+                    nftItems.slice(0, 30).forEach(nft => { html += renderNftCard(nft); });
+                });
+            } else {
+                items.slice(0, 100).forEach(nft => { html += renderNftCard(nft); });
+            }
 
             setSafeHTML(grid, html);
+
+            // Attach click handlers to cards for detail modal
+            grid.querySelectorAll('.nft-card').forEach(card => {
+                card.addEventListener('click', () => openNftDetail(card.dataset.nftIdx));
+            });
+        }
+
+        function renderNftCard(nft) {
+            const name = nft.name || nft.asset_name || nft.token_name || 'Unnamed';
+            const collection = nft._collection || nft.collection || nft.policy_id || '';
+            const imgUrl = nft.image_url || nft.image || nft.thumbnail || '';
+            const value = parseFloat(nft.floor_price_usd || nft.value_usd) || 0;
+
+            // Store nft data on a global indexed array for modal retrieval
+            const idx = _nftDetailStore.length;
+            _nftDetailStore.push(nft);
+
+            return '<div class="nft-card" data-nft-idx="' + idx + '">' +
+                '<div class="nft-card-img">' +
+                (imgUrl ? '<img src="' + escapeAttr(imgUrl) + '" alt="" loading="lazy" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'"><span class="placeholder" style="display:none">&#127912;</span>' : '<span class="placeholder">&#127912;</span>') +
+                '</div>' +
+                '<div class="nft-card-info">' +
+                '<div class="nft-card-name" title="' + escapeAttr(name) + '">' + escapeHtml(name) + '</div>' +
+                '<div class="nft-card-collection">' + escapeHtml(collection) + '</div>' +
+                '<div style="margin-top:4px;"><span class="v2-chain-badge chain-' + escapeAttr(nft._chain || '') + '">' + escapeHtml(nft._chain || '') + '</span></div>' +
+                (value > 0 ? '<div class="nft-card-value">' + formatCurrency(value) + '</div>' : '') +
+                '</div></div>';
+        }
+
+        // ==========================================
+        // NFT Detail Modal
+        // ==========================================
+        const _nftDetailStore = [];
+
+        function openNftDetail(idx) {
+            const nft = _nftDetailStore[parseInt(idx)];
+            if (!nft) return;
+
+            const modal = document.getElementById('nftDetailModal');
+            const imgContainer = document.getElementById('nftModalImg');
+            const nameEl = document.getElementById('nftModalName');
+            const collEl = document.getElementById('nftModalCollection');
+            const metaEl = document.getElementById('nftModalMeta');
+            const traitsEl = document.getElementById('nftModalTraits');
+
+            const name = nft.name || nft.asset_name || nft.token_name || 'Unnamed';
+            const collection = nft._collection || nft.collection || nft.policy_id || '';
+            const imgUrl = nft.image_url || nft.image || nft.thumbnail || '';
+            const value = parseFloat(nft.floor_price_usd || nft.value_usd) || 0;
+            const chain = nft._chain || '';
+
+            // Image
+            if (imgUrl) {
+                setSafeHTML(imgContainer, '<img src="' + escapeAttr(imgUrl) + '" alt="' + escapeAttr(name) + '" onerror="this.parentElement.innerHTML=\'<div style=padding:80px;text-align:center;font-size:64px;opacity:0.15>&#127912;</div>\'">');
+            } else {
+                setSafeHTML(imgContainer, '<div style="padding:80px;text-align:center;font-size:64px;opacity:0.15">&#127912;</div>');
+            }
+
+            // Name & collection
+            nameEl.textContent = name;
+            collEl.textContent = collection;
+
+            // Metadata grid
+            let metaHtml = '';
+            if (chain) {
+                metaHtml += '<div class="nft-modal-meta-item"><div class="nft-modal-meta-label">Blockchain</div><div class="nft-modal-meta-value"><span class="v2-chain-badge chain-' + escapeAttr(chain) + '">' + escapeHtml(chain) + '</span></div></div>';
+            }
+            if (value > 0) {
+                metaHtml += '<div class="nft-modal-meta-item"><div class="nft-modal-meta-label">Floor Price</div><div class="nft-modal-meta-value v2-blur">' + formatCurrency(value) + '</div></div>';
+            }
+            if (nft.quantity || nft.amount) {
+                metaHtml += '<div class="nft-modal-meta-item"><div class="nft-modal-meta-label">Quantity</div><div class="nft-modal-meta-value">' + (parseInt(nft.quantity || nft.amount) || 1) + '</div></div>';
+            }
+            if (nft.rarity) {
+                metaHtml += '<div class="nft-modal-meta-item"><div class="nft-modal-meta-label">Rarity</div><div class="nft-modal-meta-value">' + escapeHtml(String(nft.rarity)) + '</div></div>';
+            }
+            if (nft.policy_id) {
+                const shortPolicy = nft.policy_id.length > 20 ? nft.policy_id.slice(0, 10) + '...' + nft.policy_id.slice(-6) : nft.policy_id;
+                metaHtml += '<div class="nft-modal-meta-item" style="grid-column:1/-1"><div class="nft-modal-meta-label">Policy ID</div><div class="nft-modal-meta-value" style="font-family:monospace;font-size:12px;">' + escapeHtml(shortPolicy) + '</div></div>';
+            }
+            if (nft.token_id || nft.asset_id) {
+                const id = nft.token_id || nft.asset_id;
+                const shortId = String(id).length > 20 ? String(id).slice(0, 10) + '...' : String(id);
+                metaHtml += '<div class="nft-modal-meta-item" style="grid-column:1/-1"><div class="nft-modal-meta-label">Token ID</div><div class="nft-modal-meta-value" style="font-family:monospace;font-size:12px;">' + escapeHtml(shortId) + '</div></div>';
+            }
+            setSafeHTML(metaEl, metaHtml);
+
+            // Traits
+            const traits = nft.traits || nft.attributes || nft.metadata || null;
+            if (traits && typeof traits === 'object') {
+                let traitItems = [];
+                if (Array.isArray(traits)) {
+                    traits.forEach(t => {
+                        if (t.trait_type && t.value !== undefined) {
+                            traitItems.push({ name: t.trait_type, value: String(t.value) });
+                        }
+                    });
+                } else {
+                    Object.entries(traits).forEach(([key, val]) => {
+                        if (typeof val === 'string' || typeof val === 'number') {
+                            traitItems.push({ name: key, value: String(val) });
+                        }
+                    });
+                }
+
+                if (traitItems.length > 0) {
+                    let traitHtml = '<div class="nft-modal-traits-title">Traits</div><div class="nft-trait-grid">';
+                    traitItems.slice(0, 20).forEach(t => {
+                        traitHtml += '<div class="nft-trait"><div class="nft-trait-name">' + escapeHtml(t.name) + '</div><div class="nft-trait-value">' + escapeHtml(t.value) + '</div></div>';
+                    });
+                    traitHtml += '</div>';
+                    setSafeHTML(traitsEl, traitHtml);
+                } else {
+                    traitsEl.innerHTML = '';
+                }
+            } else {
+                traitsEl.innerHTML = '';
+            }
+
+            modal.classList.add('active');
+        }
+
+        function closeNftModal() {
+            document.getElementById('nftDetailModal').classList.remove('active');
         }
 
         async function refreshNfts() {
             showToast('Refreshing NFTs...', 'success');
+            _nftDetailStore.length = 0;
             await loadNfts();
         }
     </script>
