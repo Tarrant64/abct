@@ -1572,6 +1572,19 @@ body.privacy-mode .v2-blur {
 
 
 /* ============================================================================
+   SEARCH RESULTS DROPDOWN
+   ============================================================================ */
+
+.v2-search-results {
+    scrollbar-width: thin;
+    scrollbar-color: var(--v2-border) transparent;
+}
+.v2-search-results::-webkit-scrollbar { width: 6px; }
+.v2-search-results::-webkit-scrollbar-track { background: transparent; }
+.v2-search-results::-webkit-scrollbar-thumb { background: var(--v2-border); border-radius: 3px; }
+
+
+/* ============================================================================
    DROPDOWN MENUS
    ============================================================================ */
 
@@ -1715,7 +1728,14 @@ body.privacy-mode .v2-blur {
 
 .v2-modal-body {
     padding: 20px 24px 24px;
+    max-height: 75vh;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--v2-border) transparent;
 }
+.v2-modal-body::-webkit-scrollbar { width: 6px; }
+.v2-modal-body::-webkit-scrollbar-track { background: transparent; }
+.v2-modal-body::-webkit-scrollbar-thumb { background: var(--v2-border); border-radius: 3px; }
 
 
 /* ============================================================================

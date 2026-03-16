@@ -126,11 +126,13 @@
             // Staking positions from all-holdings
             if (stakingHoldings.length > 0) {
                 const stakingTotal = stakingHoldings.reduce((sum, h) => sum + (parseFloat(h.value_usd) || 0), 0);
+                // Determine chain from staking holdings
+                const stakingChain = (stakingHoldings[0].blockchain || 'cardano').toLowerCase();
                 html += `<div class="protocol-card">
                     <div class="protocol-header">
                         <div>
                             <div class="protocol-name">Staked Assets</div>
-                            <span class="v2-chain-badge protocol-chain">cardano</span>
+                            <span class="v2-chain-badge chain-${escapeAttr(stakingChain)} protocol-chain">${escapeHtml(stakingChain)}</span>
                         </div>
                         <div class="v2-stat-value v2-blur" style="font-size:16px">${formatCurrency(stakingTotal)}</div>
                     </div>
@@ -155,11 +157,12 @@
                 });
 
                 Object.entries(byProtocol).forEach(([name, items]) => {
+                    const protoChain = (items[0].blockchain || items[0].chain || 'cardano').toLowerCase();
                     html += `<div class="protocol-card">
                         <div class="protocol-header">
                             <div>
                                 <div class="protocol-name">${escapeHtml(name)}</div>
-                                <span class="v2-chain-badge protocol-chain">cardano</span>
+                                <span class="v2-chain-badge chain-${escapeAttr(protoChain)} protocol-chain">${escapeHtml(protoChain)}</span>
                                 <span class="v2-badge v2-badge-neutral" style="margin-left:4px">Governance</span>
                             </div>
                         </div>

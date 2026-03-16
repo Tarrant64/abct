@@ -120,8 +120,9 @@
                 const rlClass = realized >= 0 ? 'v2-value-positive' : 'v2-value-negative';
                 const rtClass = returnPct >= 0 ? 'v2-value-positive' : 'v2-value-negative';
 
+                const pnlChain = (a.blockchain || a.chain || '').toLowerCase();
                 html += `<tr>
-                    <td><strong>${escapeHtml(a.token_symbol || a.symbol || a.asset || '?')}</strong></td>
+                    <td><strong>${escapeHtml(a.token_symbol || a.symbol || a.asset || '?')}</strong>${pnlChain ? ' <span class="v2-chain-badge chain-' + escapeAttr(pnlChain) + '">' + escapeHtml(pnlChain) + '</span>' : ''}</td>
                     <td class="right v2-blur">${formatCurrency(parseFloat(a.total_invested) || 0)}</td>
                     <td class="right v2-blur">${formatCurrency(parseFloat(a.current_value) || 0)}</td>
                     <td class="right ${urClass}">${unrealized >= 0 ? '+' : ''}${formatCurrency(unrealized)}</td>

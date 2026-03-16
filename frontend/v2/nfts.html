@@ -23,6 +23,11 @@
         .nft-chain-tab { padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 500; border: 1px solid var(--v2-border-input); background: var(--v2-bg-input); color: var(--v2-text-secondary); cursor: pointer; transition: all 0.2s; }
         .nft-chain-tab:hover { border-color: var(--v2-text-muted); }
         .nft-chain-tab.active { background: var(--v2-accent-muted); border-color: var(--v2-accent); color: var(--v2-accent-text); }
+        .nft-chain-tab.chain-cardano.active { background: rgba(0, 82, 255, 0.15); border-color: #5c9eff; color: #5c9eff; }
+        .nft-chain-tab.chain-ethereum.active { background: rgba(98, 126, 234, 0.15); border-color: #8ba4f5; color: #8ba4f5; }
+        .nft-chain-tab.chain-solana.active { background: rgba(20, 241, 149, 0.15); border-color: #3dffb3; color: #3dffb3; }
+        .nft-chain-tab.chain-polygon.active { background: rgba(130, 71, 229, 0.15); border-color: #a673f0; color: #a673f0; }
+        .nft-chain-tab.chain-base.active { background: rgba(0, 82, 255, 0.15); border-color: #5c9eff; color: #5c9eff; }
     </style>
 </head>
 <body>
@@ -57,11 +62,11 @@
                 <!-- Chain Filter -->
                 <div class="nft-chain-tabs" id="nftChainTabs">
                     <button class="nft-chain-tab active" data-chain="all">All Chains</button>
-                    <button class="nft-chain-tab" data-chain="cardano">Cardano</button>
-                    <button class="nft-chain-tab" data-chain="ethereum">Ethereum</button>
-                    <button class="nft-chain-tab" data-chain="solana">Solana</button>
-                    <button class="nft-chain-tab" data-chain="polygon">Polygon</button>
-                    <button class="nft-chain-tab" data-chain="base">Base</button>
+                    <button class="nft-chain-tab chain-cardano" data-chain="cardano">Cardano</button>
+                    <button class="nft-chain-tab chain-ethereum" data-chain="ethereum">Ethereum</button>
+                    <button class="nft-chain-tab chain-solana" data-chain="solana">Solana</button>
+                    <button class="nft-chain-tab chain-polygon" data-chain="polygon">Polygon</button>
+                    <button class="nft-chain-tab chain-base" data-chain="base">Base</button>
                 </div>
 
                 <!-- NFT Grid -->
@@ -175,6 +180,7 @@
                     <div class="nft-card-info">
                         <div class="nft-card-name" title="${escapeAttr(name)}">${escapeHtml(name)}</div>
                         <div class="nft-card-collection">${escapeHtml(collection)}</div>
+                        <div style="margin-top:4px;"><span class="v2-chain-badge chain-${escapeAttr(nft._chain || '')}">${escapeHtml(nft._chain || '')}</span></div>
                         ${value > 0 ? `<div class="nft-card-value">${formatCurrency(value)}</div>` : ''}
                     </div>
                 </div>`;

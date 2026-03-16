@@ -26,11 +26,12 @@
                     <span class="v2-topbar-title" id="pageTitle">Dashboard</span>
                 </div>
                 <div class="v2-topbar-right">
-                    <div class="v2-search">
+                    <div class="v2-search" style="position:relative;">
                         <span class="v2-search-icon">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                         </span>
-                        <input type="text" placeholder="Search assets, wallets..." id="globalSearch" onkeyup="handleSearch(event)">
+                        <input type="text" placeholder="Search assets, wallets..." id="globalSearch">
+                        <div class="v2-search-results" id="searchResults" style="display:none;position:absolute;top:100%;left:0;right:0;margin-top:6px;background:var(--v2-bg-dropdown);border:1px solid var(--v2-border);border-radius:var(--v2-radius-md);box-shadow:var(--v2-shadow-dropdown);z-index:300;max-height:400px;overflow-y:auto;"></div>
                     </div>
                     <button class="v2-topbar-btn" onclick="togglePrivacy()" title="Privacy Mode">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -100,10 +101,41 @@
                     </div>
                 </div>
 
+                <!-- Portfolio Donut + Top Holdings -->
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:0;" class="v2-fade-in">
+                    <!-- Donut Chart -->
+                    <div class="v2-card" style="padding:20px;">
+                        <div class="v2-card-header"><span class="v2-card-title">Chain Allocation</span></div>
+                        <div id="donutContainer" style="display:flex;align-items:center;justify-content:center;position:relative;height:240px;">
+                            <canvas id="portfolioDonut" style="max-height:220px;"></canvas>
+                            <div id="donutCenter" style="position:absolute;text-align:center;pointer-events:none;">
+                                <div id="donutCenterLabel" style="font-size:11px;color:var(--v2-text-muted);">Total</div>
+                                <div id="donutCenterValue" style="font-size:16px;font-weight:700;color:var(--v2-text-heading);" class="v2-blur">--</div>
+                                <div id="donutCenterSub" style="font-size:11px;color:var(--v2-text-muted);"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Top Holdings -->
+                    <div class="v2-card" style="padding:20px;">
+                        <div class="v2-card-header"><span class="v2-card-title">Top Holdings</span></div>
+                        <div id="topHoldingsContainer" style="display:flex;flex-direction:column;gap:12px;padding-top:8px;">
+                            <div class="v2-skeleton v2-skeleton-text" style="height:40px"></div>
+                            <div class="v2-skeleton v2-skeleton-text" style="height:40px"></div>
+                            <div class="v2-skeleton v2-skeleton-text" style="height:40px"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Portfolio Chart -->
                 <div class="v2-chart-section v2-fade-in">
                     <div class="v2-chart-header">
-                        <span class="v2-table-title">Portfolio History</span>
+                        <div style="display:flex;align-items:center;gap:12px;">
+                            <span class="v2-table-title">Portfolio History</span>
+                            <button class="v2-btn v2-btn-ghost v2-btn-sm" id="collectHistoryBtn" title="Collect balance history data">
+                                <span class="sync-icon" style="font-size:14px;">&#8635;</span> Collect History
+                            </button>
+                            <span id="collectStatus" style="font-size:11px;color:var(--v2-text-muted);display:none;"></span>
+                        </div>
                         <div class="v2-chart-ranges" id="chartRanges">
                             <button class="v2-range-btn active" data-range="1w" onclick="loadChart('1w')">1W</button>
                             <button class="v2-range-btn" data-range="1m" onclick="loadChart('1m')">1M</button>
