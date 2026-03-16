@@ -149,7 +149,7 @@ function openChangePasswordModal() {
         modal.id = 'changePwModal';
         modal.className = 'v2-modal';
         modal.style.maxWidth = '420px';
-        modal.innerHTML = '<div class="v2-modal-header"><span class="v2-modal-title">Change Password</span><button class="v2-modal-close" id="changePwClose">&times;</button></div>' +
+        setSafeHTML(modal, '<div class="v2-modal-header"><span class="v2-modal-title">Change Password</span><button class="v2-modal-close" id="changePwClose">&times;</button></div>' +
             '<div class="v2-modal-body" style="padding:20px;">' +
             '<div id="changePwError" style="display:none;background:rgba(255,82,82,0.1);border:1px solid rgba(255,82,82,0.3);border-radius:8px;color:var(--v2-red,#ff5252);padding:10px;font-size:13px;text-align:center;margin-bottom:12px;"></div>' +
             '<div id="changePwSuccess" style="display:none;background:rgba(0,210,106,0.1);border:1px solid rgba(0,210,106,0.3);border-radius:8px;color:var(--v2-accent);padding:10px;font-size:13px;text-align:center;margin-bottom:12px;"></div>' +
@@ -158,7 +158,7 @@ function openChangePasswordModal() {
             '<div><label style="display:block;font-size:12px;color:var(--v2-text-secondary);margin-bottom:4px;">New Password</label><input type="password" id="cpwNew" style="width:100%;background:var(--v2-bg-input);border:1px solid var(--v2-border-input);border-radius:8px;color:var(--v2-text-primary);padding:10px 14px;font-size:14px;outline:none;box-sizing:border-box;" autocomplete="new-password"></div>' +
             '<div><label style="display:block;font-size:12px;color:var(--v2-text-secondary);margin-bottom:4px;">Confirm New Password</label><input type="password" id="cpwConfirm" style="width:100%;background:var(--v2-bg-input);border:1px solid var(--v2-border-input);border-radius:8px;color:var(--v2-text-primary);padding:10px 14px;font-size:14px;outline:none;box-sizing:border-box;" autocomplete="new-password"></div>' +
             '<button id="cpwSubmitBtn" style="background:var(--v2-accent);color:var(--v2-bg-base);border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;">Change Password</button>' +
-            '</div></div>';
+            '</div></div>');
         document.body.appendChild(modal);
 
         document.getElementById('changePwClose').addEventListener('click', closeChangePasswordModal);

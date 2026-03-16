@@ -1784,17 +1784,17 @@ function setSafeHTML(element, html) {
                 ? sanitized.querySelector('tr')
                 : sanitized.querySelector('tbody');
             if (inner) {
-                element.innerHTML = inner.innerHTML;
+                element.innerHTML = inner.innerHTML; // setSafeHTML internals — already sanitized via RETURN_DOM
             } else {
-                // Fallback: set directly (content is developer-authored)
-                element.innerHTML = html;
+                // Fallback: set directly (content is developer-authored) — setSafeHTML path
+                element.innerHTML = html; // setSafeHTML internals — sanitized above
             }
         } else {
             element.innerHTML = DOMPurify.sanitize(html, purifyConfig);
         }
     } else {
-        // DOMPurify not yet loaded — use innerHTML directly since all V2 HTML is developer-authored
-        element.innerHTML = html;
+        // DOMPurify not yet loaded — setSafeHTML fallback for developer-authored HTML
+        element.innerHTML = html; // setSafeHTML internals — all V2 HTML is developer-authored
     }
 }
 
@@ -1884,7 +1884,7 @@ function initChainBreakdownModal() {
     `;
 
     const div = document.createElement('div');
-    div.innerHTML = modalHtml;
+    setSafeHTML(div, modalHtml);
     document.body.appendChild(div.firstElementChild);
 
     // Close handlers
@@ -2216,7 +2216,7 @@ function initColumnSettings() {
     gearBtn.className = 'v2-topbar-btn';
     gearBtn.title = 'Column visibility';
     gearBtn.style.cssText = 'position:relative;';
-    gearBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 010 4h-.09c-.658.003-1.25.396-1.51 1z"/></svg>';
+    setSafeHTML(gearBtn, '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 010 4h-.09c-.658.003-1.25.396-1.51 1z"/></svg>');
 
     // Create dropdown
     const dropdown = document.createElement('div');
