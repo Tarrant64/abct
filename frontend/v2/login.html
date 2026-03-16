@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark-mode">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - ABCT</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="stylesheet" href="/next/static/css/v2.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+    <style>
+        body { background: var(--v2-bg-base); margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .login-container { width: 100%; max-width: 420px; padding: 20px; }
+        .login-card { background: var(--v2-bg-card); border: 1px solid var(--v2-border); border-radius: var(--v2-radius-xl); padding: 40px; box-shadow: var(--v2-shadow-lg); }
+        .login-header { text-align: center; margin-bottom: 32px; }
+        .login-header img { max-width: 260px; width: 100%; height: auto; margin: 0 auto; display: block; }
+        .login-form { display: flex; flex-direction: column; gap: 20px; }
+        .login-field { display: flex; flex-direction: column; gap: 6px; }
+        .login-field label { color: var(--v2-text-secondary); font-size: 13px; font-weight: 500; }
+        .login-field input { background: var(--v2-bg-input); border: 1px solid var(--v2-border-input); border-radius: var(--v2-radius-md); color: var(--v2-text-primary); font-size: 14px; padding: 12px 16px; transition: all 0.2s; outline: none; }
+        .login-field input:focus { border-color: var(--v2-accent); box-shadow: 0 0 0 3px var(--v2-accent-muted); }
+        .login-field input::placeholder { color: var(--v2-text-muted); }
+        .login-btn { background: var(--v2-accent); color: var(--v2-bg-base); border: none; border-radius: var(--v2-radius-md); padding: 13px 24px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s; margin-top: 4px; }
+        .login-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .login-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .login-error { background: rgba(255, 82, 82, 0.1); border: 1px solid rgba(255, 82, 82, 0.3); border-radius: var(--v2-radius-md); color: var(--v2-red, #ff5252); padding: 12px 16px; font-size: 13px; text-align: center; display: none; }
+        .login-error.show { display: block; animation: slideDown 0.25s ease; }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+        .login-footer { text-align: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--v2-border); }
+        .login-footer p { color: var(--v2-text-muted); font-size: 12px; line-height: 1.6; margin: 0; }
+        .login-footer code { background: var(--v2-bg-input); padding: 2px 6px; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 12px; color: var(--v2-text-primary); }
+        .demo-box { margin-top: 16px; padding: 14px; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: var(--v2-radius-md); }
+        .demo-box p { margin: 0; font-size: 12px; color: #f59e0b; line-height: 1.6; }
+        .demo-box .demo-title { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+        .demo-box .demo-sub { font-size: 11px; color: #d97706; margin-top: 6px; }
+        .login-version { position: fixed; bottom: 10px; right: 10px; color: var(--v2-text-muted); font-size: 11px; opacity: 0.5; }
+        .login-spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(0,0,0,0.2); border-top-color: currentColor; border-radius: 50%; animation: spin 0.6s linear infinite; margin-left: 8px; vertical-align: middle; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <img src="/static/abct-logo2.png" alt="ABCT - A Better Crypto Tracker">
+            </div>
+
+            <div class="login-error" id="errorMessage"></div>
+
+            <form class="login-form" id="loginForm">
+                <div class="login-field">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username" placeholder="Enter username" autocomplete="username" required autofocus>
+                </div>
+                <div class="login-field">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" placeholder="Enter password" autocomplete="current-password" required>
+                </div>
+                <button type="submit" class="login-btn" id="loginBtn">Login</button>
+            </form>
+
+            <div class="login-footer">
+                <p>
+                    <strong>Default credentials:</strong><br>
+                    Username: <code>admin</code> / Password: <code>satoshi</code>
+                </p>
+                <div class="demo-box">
+                    <p class="demo-title">Try Demo Mode</p>
+                    <p>Username: <code style="background:rgba(245,158,11,0.15);color:#f59e0b">demo</code> / Password: <code style="background:rgba(245,158,11,0.15);color:#f59e0b">demo</code></p>
+                    <p class="demo-sub">View simulated portfolio data</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="login-version">ABCT V2</div>
+    </div>
+
+    <script>
+        // Apply saved theme
+        (function() {
+            const saved = localStorage.getItem('abct_theme') || 'dark-mode';
+            document.documentElement.setAttribute('data-theme', saved);
+        })();
+
+        function showError(msg) {
+            const el = document.getElementById('errorMessage');
+            el.textContent = msg;
+            el.classList.add('show');
+            setTimeout(function() { el.classList.remove('show'); }, 5000);
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const errEl = document.getElementById('errorMessage');
+            errEl.classList.remove('show');
+
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const btn = document.getElementById('loginBtn');
+
+            if (!username || !password) {
+                showError('Please enter both username and password');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Logging in...';
+
+            try {
+                const response = await fetch('/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username, password: password })
+                });
+                const data = await response.json();
+
+                if (data.success && data.token) {
+                    localStorage.setItem('abct_token', data.token);
+                    localStorage.setItem('abct_username', username);
+
+                    if (username.toLowerCase() === 'demo') {
+                        localStorage.setItem('is_demo', 'true');
+                    } else {
+                        localStorage.removeItem('is_demo');
+                    }
+
+                    // Redirect safely
+                    var params = new URLSearchParams(window.location.search);
+                    var redirectTo = params.get('redirect');
+                    if (redirectTo && redirectTo.startsWith('/')) {
+                        window.location.href = redirectTo;
+                    } else {
+                        window.location.href = '/next/';
+                    }
+                } else {
+                    showError(data.message || 'Login failed. Please check your credentials.');
+                }
+            } catch (err) {
+                console.error('Login error:', err);
+                showError('Connection error. Please check if the server is running.');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Login';
+            }
+        });
+
+        // Keyboard shortcuts for dev convenience
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+                e.preventDefault();
+                document.getElementById('username').value = 'demo';
+                document.getElementById('password').value = 'demo';
+            } else if (e.ctrlKey && e.key === 'd') {
+                e.preventDefault();
+                document.getElementById('username').value = 'admin';
+                document.getElementById('password').value = 'satoshi';
+            }
+        });
+
+        // Clear token on logout redirect
+        if (window.location.search.indexOf('logout=1') !== -1) {
+            localStorage.removeItem('abct_token');
+            localStorage.removeItem('abct_username');
+            localStorage.removeItem('is_demo');
+        }
+    </script>
+</body>
+</html>

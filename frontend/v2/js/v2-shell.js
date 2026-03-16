@@ -97,6 +97,7 @@ function v2InitShell(activePage) {
                 <div class="v2-user-dropdown-divider"></div>
                 <button class="v2-user-dropdown-item" onclick="window.location='/next/settings'">Settings</button>
                 <button class="v2-user-dropdown-item" onclick="window.location='/next/help'">Help & Guide</button>
+                <button class="v2-user-dropdown-item" onclick="openChangePasswordModal()">Change Password</button>
                 <div class="v2-user-dropdown-divider"></div>
                 <button class="v2-user-dropdown-item logout" onclick="logout()">Logout</button>
             </div>
@@ -127,9 +128,125 @@ function v2InitShell(activePage) {
     });
 }
 
+// ============================================================================
+// CHANGE PASSWORD MODAL
+// ============================================================================
+
+function openChangePasswordModal() {
+    // Close user menu
+    var dd = document.getElementById('userDropdown');
+    if (dd) dd.classList.remove('open');
+
+    // Create modal if not present
+    if (!document.getElementById('changePwOverlay')) {
+        var overlay = document.createElement('div');
+        overlay.id = 'changePwOverlay';
+        overlay.className = 'v2-modal-overlay';
+        overlay.addEventListener('click', closeChangePasswordModal);
+        document.body.appendChild(overlay);
+
+        var modal = document.createElement('div');
+        modal.id = 'changePwModal';
+        modal.className = 'v2-modal';
+        modal.style.maxWidth = '420px';
+        modal.innerHTML = '<div class="v2-modal-header"><span class="v2-modal-title">Change Password</span><button class="v2-modal-close" id="changePwClose">&times;</button></div>' +
+            '<div class="v2-modal-body" style="padding:20px;">' +
+            '<div id="changePwError" style="display:none;background:rgba(255,82,82,0.1);border:1px solid rgba(255,82,82,0.3);border-radius:8px;color:var(--v2-red,#ff5252);padding:10px;font-size:13px;text-align:center;margin-bottom:12px;"></div>' +
+            '<div id="changePwSuccess" style="display:none;background:rgba(0,210,106,0.1);border:1px solid rgba(0,210,106,0.3);border-radius:8px;color:var(--v2-accent);padding:10px;font-size:13px;text-align:center;margin-bottom:12px;"></div>' +
+            '<div style="display:flex;flex-direction:column;gap:14px;">' +
+            '<div><label style="display:block;font-size:12px;color:var(--v2-text-secondary);margin-bottom:4px;">Current Password</label><input type="password" id="cpwCurrent" style="width:100%;background:var(--v2-bg-input);border:1px solid var(--v2-border-input);border-radius:8px;color:var(--v2-text-primary);padding:10px 14px;font-size:14px;outline:none;box-sizing:border-box;" autocomplete="current-password"></div>' +
+            '<div><label style="display:block;font-size:12px;color:var(--v2-text-secondary);margin-bottom:4px;">New Password</label><input type="password" id="cpwNew" style="width:100%;background:var(--v2-bg-input);border:1px solid var(--v2-border-input);border-radius:8px;color:var(--v2-text-primary);padding:10px 14px;font-size:14px;outline:none;box-sizing:border-box;" autocomplete="new-password"></div>' +
+            '<div><label style="display:block;font-size:12px;color:var(--v2-text-secondary);margin-bottom:4px;">Confirm New Password</label><input type="password" id="cpwConfirm" style="width:100%;background:var(--v2-bg-input);border:1px solid var(--v2-border-input);border-radius:8px;color:var(--v2-text-primary);padding:10px 14px;font-size:14px;outline:none;box-sizing:border-box;" autocomplete="new-password"></div>' +
+            '<button id="cpwSubmitBtn" style="background:var(--v2-accent);color:var(--v2-bg-base);border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;">Change Password</button>' +
+            '</div></div>';
+        document.body.appendChild(modal);
+
+        document.getElementById('changePwClose').addEventListener('click', closeChangePasswordModal);
+        document.getElementById('cpwSubmitBtn').addEventListener('click', submitChangePassword);
+    }
+
+    // Reset fields
+    document.getElementById('cpwCurrent').value = '';
+    document.getElementById('cpwNew').value = '';
+    document.getElementById('cpwConfirm').value = '';
+    document.getElementById('changePwError').style.display = 'none';
+    document.getElementById('changePwSuccess').style.display = 'none';
+
+    document.getElementById('changePwOverlay').classList.add('open');
+    document.getElementById('changePwModal').classList.add('open');
+}
+
+function closeChangePasswordModal() {
+    var overlay = document.getElementById('changePwOverlay');
+    var modal = document.getElementById('changePwModal');
+    if (overlay) overlay.classList.remove('open');
+    if (modal) modal.classList.remove('open');
+}
+
+async function submitChangePassword() {
+    var errEl = document.getElementById('changePwError');
+    var successEl = document.getElementById('changePwSuccess');
+    var btn = document.getElementById('cpwSubmitBtn');
+    errEl.style.display = 'none';
+    successEl.style.display = 'none';
+
+    var current = document.getElementById('cpwCurrent').value;
+    var newPw = document.getElementById('cpwNew').value;
+    var confirm = document.getElementById('cpwConfirm').value;
+
+    if (!current || !newPw || !confirm) {
+        errEl.textContent = 'All fields are required';
+        errEl.style.display = 'block';
+        return;
+    }
+    if (newPw.length < 8) {
+        errEl.textContent = 'New password must be at least 8 characters';
+        errEl.style.display = 'block';
+        return;
+    }
+    if (newPw !== confirm) {
+        errEl.textContent = 'New passwords do not match';
+        errEl.style.display = 'block';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Changing...';
+
+    try {
+        var token = localStorage.getItem('abct_token');
+        var resp = await fetch('/auth/change-password', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + token
+            },
+            body: JSON.stringify({ current_password: current, new_password: newPw })
+        });
+        var data = await resp.json();
+
+        if (resp.ok && data.success) {
+            successEl.textContent = 'Password changed successfully';
+            successEl.style.display = 'block';
+            setTimeout(closeChangePasswordModal, 1500);
+        } else {
+            errEl.textContent = data.detail || data.message || 'Failed to change password';
+            errEl.style.display = 'block';
+        }
+    } catch(e) {
+        errEl.textContent = 'Connection error';
+        errEl.style.display = 'block';
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Change Password';
+}
+
 // Export for use in page scripts
 if (typeof window !== 'undefined') {
     window.v2InitShell = v2InitShell;
     window.V2_NAV = V2_NAV;
     window.V2_THEMES = V2_THEMES;
+    window.openChangePasswordModal = openChangePasswordModal;
+    window.closeChangePasswordModal = closeChangePasswordModal;
 }

@@ -71,6 +71,41 @@
 
                 <!-- Pagination -->
                 <div style="display:flex;justify-content:center;gap:8px;margin-top:16px;" id="txPagination"></div>
+
+                <!-- Transaction Analytics -->
+                <div class="v2-card v2-fade-in" style="margin-top:24px;">
+                    <div class="v2-card-header">
+                        <span class="v2-card-title">Transaction Activity</span>
+                        <div style="display:flex;gap:4px;" id="txAnalyticsPeriodBar">
+                            <button class="v2-range-btn" data-days="7">7D</button>
+                            <button class="v2-range-btn active" data-days="30">30D</button>
+                            <button class="v2-range-btn" data-days="90">90D</button>
+                            <button class="v2-range-btn" data-days="365">1Y</button>
+                        </div>
+                    </div>
+
+                    <!-- Blockchain Activity Chart -->
+                    <div style="margin-bottom:16px;">
+                        <div style="font-size:12px;font-weight:600;color:var(--v2-text-heading);margin-bottom:8px;">By Chain</div>
+                        <div id="txChainIndicators" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;"></div>
+                        <div id="txAnalyticsLoading" style="display:flex;align-items:center;justify-content:center;height:250px;">
+                            <span class="v2-skeleton v2-skeleton-chart" style="height:200px;width:100%;"></span>
+                        </div>
+                        <div id="txAnalyticsEmpty" style="display:none;text-align:center;padding:40px;color:var(--v2-text-muted);">No analytics data available</div>
+                        <div id="txAnalyticsChartContainer" style="display:none;height:250px;"><canvas id="txAnalyticsChart"></canvas></div>
+                    </div>
+
+                    <!-- CEX Activity Chart -->
+                    <div>
+                        <div style="font-size:12px;font-weight:600;color:var(--v2-text-heading);margin-bottom:8px;">Exchange Trades</div>
+                        <div id="txCexIndicators" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;"></div>
+                        <div id="txCexLoading" style="display:flex;align-items:center;justify-content:center;height:200px;">
+                            <span class="v2-skeleton v2-skeleton-chart" style="height:160px;width:100%;"></span>
+                        </div>
+                        <div id="txCexEmpty" style="display:none;text-align:center;padding:32px;color:var(--v2-text-muted);">No exchange data</div>
+                        <div id="txCexChartContainer" style="display:none;height:200px;"><canvas id="txCexChart"></canvas></div>
+                    </div>
+                </div>
             </div>
 
             <footer class="v2-footer">ABCT V2 | Transactions</footer>
@@ -96,6 +131,7 @@
 
             loadTransactionStats();
             loadTransactionPage();
+            initTxAnalytics();
         });
 
         async function loadTransactionStats() {
@@ -182,6 +218,229 @@
             const totalCount = data.total_count || txs.length;
             setText('txTotal', totalCount.toLocaleString());
             setSafeHTML(pag, '');
+        }
+
+        // ==========================================
+        // Transaction Analytics Charts
+        // ==========================================
+        var _txAnalyticsChart = null;
+        var _txCexChart = null;
+        var _txAnalyticsData = null;
+        var _txCexData = null;
+        var _txSelectedChains = new Set();
+        var _txSelectedExchanges = new Set();
+
+        var TX_CHAIN_COLORS = {
+            'cardano': { normal: '#5c9eff', fill: 'rgba(92,158,255,0.3)' },
+            'ethereum': { normal: '#8ba4f5', fill: 'rgba(139,164,245,0.3)' },
+            'bitcoin': { normal: '#ffb74d', fill: 'rgba(255,183,77,0.3)' },
+            'solana': { normal: '#3dffb3', fill: 'rgba(61,255,179,0.3)' },
+            'polygon': { normal: '#a673f0', fill: 'rgba(166,115,240,0.3)' },
+            'base': { normal: '#5c9eff', fill: 'rgba(92,158,255,0.3)' }
+        };
+        var CEX_COLORS = {
+            'coinbase': { normal: '#0052ff', fill: 'rgba(0,82,255,0.3)' },
+            'binance': { normal: '#f0b90b', fill: 'rgba(240,185,11,0.3)' },
+            'binance_us': { normal: '#d4a017', fill: 'rgba(212,160,23,0.3)' }
+        };
+        var CEX_NAMES = { 'coinbase': 'Coinbase', 'binance': 'Binance', 'binance_us': 'Binance US' };
+
+        function initTxAnalytics() {
+            // Period buttons
+            document.querySelectorAll('#txAnalyticsPeriodBar .v2-range-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('#txAnalyticsPeriodBar .v2-range-btn').forEach(function(b) { b.classList.toggle('active', b === btn); });
+                    var days = parseInt(btn.dataset.days);
+                    loadTxAnalytics(days);
+                    loadTxCexAnalytics(days);
+                });
+            });
+            loadTxAnalytics(30);
+            loadTxCexAnalytics(30);
+        }
+
+        async function loadTxAnalytics(days) {
+            var loading = document.getElementById('txAnalyticsLoading');
+            var empty = document.getElementById('txAnalyticsEmpty');
+            var chartContainer = document.getElementById('txAnalyticsChartContainer');
+            if (loading) loading.style.display = 'flex';
+            if (empty) empty.style.display = 'none';
+            if (chartContainer) chartContainer.style.display = 'none';
+
+            try {
+                var resp = await v2Fetch('/transactions/analytics/by-chain?days=' + days);
+                var data = await resp.json();
+                if (data.success && data.buckets && data.buckets.length > 0) {
+                    _txAnalyticsData = data;
+                    renderTxAnalyticsChart(data);
+                    renderTxChainIndicators(data.chains || {});
+                    if (loading) loading.style.display = 'none';
+                    if (chartContainer) chartContainer.style.display = 'block';
+                } else {
+                    if (loading) loading.style.display = 'none';
+                    if (empty) empty.style.display = 'block';
+                }
+            } catch(e) {
+                console.error('Tx analytics error:', e);
+                if (loading) loading.style.display = 'none';
+                if (empty) empty.style.display = 'block';
+            }
+        }
+
+        function renderTxAnalyticsChart(data) {
+            var canvas = document.getElementById('txAnalyticsChart');
+            if (!canvas) return;
+            if (_txAnalyticsChart) { _txAnalyticsChart.destroy(); _txAnalyticsChart = null; }
+
+            var style = getComputedStyle(document.documentElement);
+            var textColor = style.getPropertyValue('--v2-chart-text').trim() || '#5a6475';
+            var gridColor = style.getPropertyValue('--v2-chart-grid').trim() || 'rgba(255,255,255,0.04)';
+
+            var datasets = [];
+            var noneSelected = _txSelectedChains.size === 0;
+
+            Object.entries(data.chains || {}).forEach(function(entry) {
+                var chain = entry[0]; var counts = entry[1];
+                var isSelected = _txSelectedChains.has(chain);
+                var colors = TX_CHAIN_COLORS[chain] || { normal: '#888', fill: 'rgba(136,136,136,0.3)' };
+                var borderColor, fillColor, borderWidth;
+                if (noneSelected) { borderColor = colors.normal; fillColor = colors.fill; borderWidth = 2; }
+                else if (isSelected) { borderColor = colors.normal; fillColor = colors.fill; borderWidth = 3; }
+                else { borderColor = 'rgba(136,136,136,0.15)'; fillColor = 'rgba(136,136,136,0.03)'; borderWidth = 1; }
+
+                datasets.push({ label: chain.charAt(0).toUpperCase() + chain.slice(1), data: counts, borderColor: borderColor, backgroundColor: fillColor, borderWidth: borderWidth, pointRadius: 0, tension: 0.4, fill: true });
+            });
+
+            _txAnalyticsChart = new Chart(canvas.getContext('2d'), {
+                type: 'line',
+                data: { labels: data.buckets, datasets: datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y + ' tx'; } } }
+                    },
+                    scales: {
+                        x: { grid: { color: gridColor }, ticks: { color: textColor, maxTicksLimit: 10, font: { size: 10 } }, border: { display: false } },
+                        y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor, precision: 0, font: { size: 10 } }, border: { display: false } }
+                    }
+                }
+            });
+        }
+
+        function renderTxChainIndicators(chains) {
+            var container = document.getElementById('txChainIndicators');
+            if (!container) return;
+            container.innerHTML = '';
+            var allChains = ['cardano', 'ethereum', 'bitcoin', 'solana', 'polygon', 'base'];
+            allChains.forEach(function(chain) {
+                var isSelected = _txSelectedChains.has(chain);
+                var colors = TX_CHAIN_COLORS[chain] || { normal: '#888' };
+                var btn = document.createElement('button');
+                btn.className = 'v2-range-btn' + (isSelected ? ' active' : '');
+                btn.style.cssText = 'display:flex;align-items:center;gap:4px;';
+                var dot = '<span style="width:8px;height:8px;border-radius:50%;background:' + colors.normal + ';display:inline-block;"></span>';
+                var totalCount = chains[chain] ? chains[chain].reduce(function(s,c){return s+c;}, 0) : 0;
+                btn.innerHTML = dot + ' ' + (chain.charAt(0).toUpperCase() + chain.slice(1)) + ' <span style="opacity:0.6">' + totalCount + '</span>';
+                btn.addEventListener('click', function() {
+                    if (_txSelectedChains.has(chain)) _txSelectedChains.delete(chain);
+                    else _txSelectedChains.add(chain);
+                    btn.classList.toggle('active', _txSelectedChains.has(chain));
+                    if (_txAnalyticsData) renderTxAnalyticsChart(_txAnalyticsData);
+                });
+                container.appendChild(btn);
+            });
+        }
+
+        async function loadTxCexAnalytics(days) {
+            var loading = document.getElementById('txCexLoading');
+            var empty = document.getElementById('txCexEmpty');
+            var chartContainer = document.getElementById('txCexChartContainer');
+            if (loading) loading.style.display = 'flex';
+            if (empty) empty.style.display = 'none';
+            if (chartContainer) chartContainer.style.display = 'none';
+
+            try {
+                var resp = await v2Fetch('/exchanges/analytics/by-exchange?days=' + days);
+                var data = await resp.json();
+                if (data.success && data.buckets && data.buckets.length > 0 && Object.keys(data.exchanges || {}).length > 0) {
+                    _txCexData = data;
+                    renderTxCexChart(data);
+                    renderTxCexIndicators(data.exchanges || {});
+                    if (loading) loading.style.display = 'none';
+                    if (chartContainer) chartContainer.style.display = 'block';
+                } else {
+                    if (loading) loading.style.display = 'none';
+                    if (empty) empty.style.display = 'block';
+                }
+            } catch(e) {
+                console.error('CEX analytics error:', e);
+                if (loading) loading.style.display = 'none';
+                if (empty) empty.style.display = 'block';
+            }
+        }
+
+        function renderTxCexChart(data) {
+            var canvas = document.getElementById('txCexChart');
+            if (!canvas) return;
+            if (_txCexChart) { _txCexChart.destroy(); _txCexChart = null; }
+
+            var style = getComputedStyle(document.documentElement);
+            var textColor = style.getPropertyValue('--v2-chart-text').trim() || '#5a6475';
+            var gridColor = style.getPropertyValue('--v2-chart-grid').trim() || 'rgba(255,255,255,0.04)';
+
+            var datasets = [];
+            var noneSelected = _txSelectedExchanges.size === 0;
+
+            Object.entries(data.exchanges || {}).forEach(function(entry) {
+                var exchange = entry[0]; var counts = entry[1];
+                var isSelected = _txSelectedExchanges.has(exchange);
+                var colors = CEX_COLORS[exchange] || { normal: '#888', fill: 'rgba(136,136,136,0.3)' };
+                var borderColor, fillColor, borderWidth;
+                if (noneSelected) { borderColor = colors.normal; fillColor = colors.fill; borderWidth = 2; }
+                else if (isSelected) { borderColor = colors.normal; fillColor = colors.fill; borderWidth = 3; }
+                else { borderColor = 'rgba(136,136,136,0.15)'; fillColor = 'rgba(136,136,136,0.03)'; borderWidth = 1; }
+                datasets.push({ label: CEX_NAMES[exchange] || exchange, data: counts, borderColor: borderColor, backgroundColor: fillColor, borderWidth: borderWidth, pointRadius: 0, tension: 0.4, fill: true });
+            });
+
+            _txCexChart = new Chart(canvas.getContext('2d'), {
+                type: 'line',
+                data: { labels: data.buckets, datasets: datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y + ' trade(s)'; } } } },
+                    scales: {
+                        x: { grid: { color: gridColor }, ticks: { color: textColor, maxTicksLimit: 10, font: { size: 10 } }, border: { display: false } },
+                        y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor, precision: 0, font: { size: 10 } }, border: { display: false } }
+                    }
+                }
+            });
+        }
+
+        function renderTxCexIndicators(exchanges) {
+            var container = document.getElementById('txCexIndicators');
+            if (!container) return;
+            container.innerHTML = '';
+            var allExchanges = ['coinbase', 'binance', 'binance_us'];
+            allExchanges.forEach(function(exchange) {
+                var isSelected = _txSelectedExchanges.has(exchange);
+                var colors = CEX_COLORS[exchange] || { normal: '#888' };
+                var btn = document.createElement('button');
+                btn.className = 'v2-range-btn' + (isSelected ? ' active' : '');
+                btn.style.cssText = 'display:flex;align-items:center;gap:4px;';
+                var dot = '<span style="width:8px;height:8px;border-radius:50%;background:' + colors.normal + ';display:inline-block;"></span>';
+                var totalCount = exchanges[exchange] ? exchanges[exchange].reduce(function(s,c){return s+c;}, 0) : 0;
+                btn.innerHTML = dot + ' ' + (CEX_NAMES[exchange] || exchange) + ' <span style="opacity:0.6">' + totalCount + '</span>';
+                btn.addEventListener('click', function() {
+                    if (_txSelectedExchanges.has(exchange)) _txSelectedExchanges.delete(exchange);
+                    else _txSelectedExchanges.add(exchange);
+                    btn.classList.toggle('active', _txSelectedExchanges.has(exchange));
+                    if (_txCexData) renderTxCexChart(_txCexData);
+                });
+                container.appendChild(btn);
+            });
         }
 
         async function refreshTransactions() {

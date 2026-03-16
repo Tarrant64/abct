@@ -420,14 +420,20 @@ function renderChart(data) {
 async function loadChart(range) {
     v2State.currentChartRange = range;
 
-    // Update active button
-    document.querySelectorAll('.v2-range-btn').forEach(btn => {
+    // Update active button (only range buttons, not the by-chain toggle)
+    document.querySelectorAll('.v2-chart-ranges .v2-range-btn[data-range]').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.range === range);
     });
 
     // Show skeleton
     const skeleton = document.getElementById('chartSkeleton');
     if (skeleton) skeleton.style.display = 'block';
+
+    // If by-chain mode is active, load by-chain chart instead
+    if (typeof _byChainMode !== 'undefined' && _byChainMode) {
+        loadByChainChart(range);
+        return;
+    }
 
     try {
         const response = await v2Fetch(`${API_BASE}/balance-history/data?range=${range}`);
@@ -598,6 +604,11 @@ function renderAssetsTable() {
             renderSparkline(idx, h.price_change_24h || h.change_24h || 0);
         });
     });
+
+    // Apply column visibility settings
+    if (typeof applyColumnVisibility === 'function') {
+        applyColumnVisibility();
+    }
 }
 
 function renderSparkline(idx, change) {
@@ -1677,7 +1688,14 @@ function showToast(message, type = 'success') {
 
 function logout() {
     localStorage.removeItem('abct_token');
-    window.location.href = '/login.html';
+    localStorage.removeItem('abct_username');
+    localStorage.removeItem('is_demo');
+    // Redirect to V2 login if on /next/ path, otherwise V1 login
+    if (window.location.pathname.indexOf('/next') === 0) {
+        window.location.href = '/next/login?logout=1';
+    } else {
+        window.location.href = '/login.html?logout=1';
+    }
 }
 
 
@@ -2011,3 +2029,290 @@ function closeChainBreakdown() {
         _chainBreakdownChart = null;
     }
 }
+
+
+// ============================================================================
+// "BY CHAIN" CHART TOGGLE
+// ============================================================================
+
+let _byChainMode = false;
+let _byChainChartInstance = null;
+
+function initByChainToggle() {
+    const chartHeader = document.querySelector('.v2-chart-header');
+    if (!chartHeader) return;
+
+    // Insert toggle button after the range buttons
+    const rangesDiv = document.getElementById('chartRanges');
+    if (!rangesDiv) return;
+
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'v2-range-btn';
+    toggleBtn.id = 'byChainToggle';
+    toggleBtn.title = 'Toggle between total and by-chain view';
+    toggleBtn.textContent = 'By Chain';
+    toggleBtn.style.marginLeft = '8px';
+    toggleBtn.addEventListener('click', toggleByChainMode);
+    rangesDiv.appendChild(toggleBtn);
+}
+
+function toggleByChainMode() {
+    _byChainMode = !_byChainMode;
+    const btn = document.getElementById('byChainToggle');
+    if (btn) btn.classList.toggle('active', _byChainMode);
+
+    if (_byChainMode) {
+        loadByChainChart(v2State.currentChartRange);
+    } else {
+        // Restore normal chart
+        if (_byChainChartInstance) {
+            _byChainChartInstance.destroy();
+            _byChainChartInstance = null;
+        }
+        if (v2State.chartData) {
+            renderChart(v2State.chartData);
+        }
+    }
+}
+
+async function loadByChainChart(range) {
+    try {
+        const resp = await v2Fetch(API_BASE + '/portfolio/chart/unified?by_chain=true&range=' + encodeURIComponent(range));
+        if (!resp.ok) return;
+        const result = await resp.json();
+        if (!result.data || result.data.length < 2) return;
+        renderByChainChart(result);
+    } catch(e) {
+        console.error('By-chain chart error:', e);
+    }
+}
+
+function renderByChainChart(result) {
+    const canvas = document.getElementById('portfolioChart');
+    if (!canvas) return;
+
+    // Destroy existing charts
+    if (v2State.chartInstance) {
+        v2State.chartInstance.destroy();
+        v2State.chartInstance = null;
+    }
+    if (_byChainChartInstance) {
+        _byChainChartInstance.destroy();
+        _byChainChartInstance = null;
+    }
+
+    const skeleton = document.getElementById('chartSkeleton');
+    if (skeleton) skeleton.style.display = 'none';
+
+    const data = result.data;
+    const chainSet = new Set();
+    data.forEach(function(d) {
+        if (d.chains) Object.keys(d.chains).forEach(function(k) { chainSet.add(k); });
+    });
+    const chains = Array.from(chainSet);
+
+    const chainColors = {
+        'cardano': '#0033ad', 'bitcoin': '#f7931a', 'ethereum': '#627eea',
+        'solana': '#14f195', 'polygon': '#8247e5', 'base': '#0052ff',
+        'algorand': '#00d2c2', 'bsc': '#f3ba2f', 'arbitrum': '#28a0f0',
+        'avalanche': '#e84142',
+    };
+
+    const labels = data.map(function(d) {
+        try { return new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
+        catch(e) { return ''; }
+    });
+
+    const chainAvgs = chains.map(function(chain) {
+        const avg = data.reduce(function(s, d) { return s + (parseFloat(d.chains && d.chains[chain]) || 0); }, 0) / data.length;
+        return { chain: chain, avg: avg };
+    }).sort(function(a, b) { return b.avg - a.avg; });
+
+    const datasets = chainAvgs.map(function(item) {
+        const color = chainColors[item.chain] || '#888';
+        return {
+            label: item.chain.charAt(0).toUpperCase() + item.chain.slice(1),
+            data: data.map(function(d) { return parseFloat(d.chains && d.chains[item.chain]) || 0; }),
+            backgroundColor: color + '40',
+            borderColor: color,
+            borderWidth: 1.5,
+            fill: true,
+            pointRadius: 0,
+            tension: 0.3,
+        };
+    });
+
+    const style = getComputedStyle(document.documentElement);
+    const gridColor = style.getPropertyValue('--v2-chart-grid').trim() || 'rgba(255,255,255,0.04)';
+    const textColor = style.getPropertyValue('--v2-chart-text').trim() || '#5a6475';
+
+    _byChainChartInstance = new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: { labels: labels, datasets: datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { labels: { color: textColor, font: { size: 10 }, usePointStyle: true, pointStyleWidth: 8, padding: 8 } },
+                tooltip: {
+                    mode: 'index', intersect: false,
+                    callbacks: {
+                        label: function(ctx) { return ctx.dataset.label + ': ' + formatCurrency(ctx.parsed.y); },
+                        footer: function(items) {
+                            var total = items.reduce(function(s, i) { return s + (parseFloat(i.parsed.y) || 0); }, 0);
+                            return 'Total: ' + formatCurrency(total);
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 10 }, maxTicksLimit: 8 }, border: { display: false }, stacked: true },
+                y: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 10 }, callback: function(val) { return formatCompact(val); } }, border: { display: false }, stacked: true }
+            }
+        }
+    });
+}
+
+
+// ============================================================================
+// COLUMN SETTINGS GEAR
+// ============================================================================
+
+const ASSETS_COLUMNS = [
+    { key: 'name', label: 'Asset', default: true },
+    { key: 'price', label: 'Price', default: true },
+    { key: 'sparkline', label: '7d Chart', default: true },
+    { key: 'holdings', label: 'Holdings', default: true },
+    { key: 'value', label: 'Value', default: true },
+    { key: 'change', label: '24h Change', default: true },
+    { key: 'allocation', label: 'Allocation', default: true },
+];
+
+function getVisibleColumns() {
+    const saved = localStorage.getItem('v2_visible_columns');
+    if (saved) {
+        try { return JSON.parse(saved); } catch(e) {}
+    }
+    return ASSETS_COLUMNS.map(function(c) { return c.key; });
+}
+
+function saveVisibleColumns(cols) {
+    localStorage.setItem('v2_visible_columns', JSON.stringify(cols));
+}
+
+function initColumnSettings() {
+    const tableHeader = document.querySelector('.v2-table-header');
+    if (!tableHeader) return;
+
+    // Check if gear already exists
+    if (document.getElementById('colSettingsBtn')) return;
+
+    const controls = tableHeader.querySelector('.v2-table-controls');
+    if (!controls) return;
+
+    const gearBtn = document.createElement('button');
+    gearBtn.id = 'colSettingsBtn';
+    gearBtn.className = 'v2-topbar-btn';
+    gearBtn.title = 'Column visibility';
+    gearBtn.style.cssText = 'position:relative;';
+    gearBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 010 4h-.09c-.658.003-1.25.396-1.51 1z"/></svg>';
+
+    // Create dropdown
+    const dropdown = document.createElement('div');
+    dropdown.id = 'colSettingsDropdown';
+    dropdown.style.cssText = 'display:none;position:absolute;top:100%;right:0;margin-top:6px;background:var(--v2-bg-dropdown);border:1px solid var(--v2-border);border-radius:8px;padding:8px;box-shadow:var(--v2-shadow-dropdown);z-index:200;min-width:160px;';
+
+    const visible = getVisibleColumns();
+    ASSETS_COLUMNS.forEach(function(col) {
+        const label = document.createElement('label');
+        label.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:12px;color:var(--v2-text-secondary);cursor:pointer;border-radius:4px;';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = visible.indexOf(col.key) !== -1;
+        cb.dataset.colKey = col.key;
+        cb.addEventListener('change', function() {
+            var cols = [];
+            dropdown.querySelectorAll('input[type="checkbox"]').forEach(function(input) {
+                if (input.checked) cols.push(input.dataset.colKey);
+            });
+            saveVisibleColumns(cols);
+            applyColumnVisibility();
+        });
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(col.label));
+        dropdown.appendChild(label);
+    });
+
+    gearBtn.appendChild(dropdown);
+    controls.appendChild(gearBtn);
+
+    gearBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('#colSettingsBtn')) {
+            dropdown.style.display = 'none';
+        }
+    });
+
+    // Apply on init
+    applyColumnVisibility();
+}
+
+function applyColumnVisibility() {
+    const visible = getVisibleColumns();
+    const table = document.getElementById('assetsTable');
+    if (!table) return;
+
+    // Column index mapping
+    const colKeys = ['name', 'price', 'sparkline', 'holdings', 'value', 'change', 'allocation'];
+
+    // Hide/show columns in thead and tbody
+    table.querySelectorAll('tr').forEach(function(row) {
+        var cells = row.querySelectorAll('th, td');
+        // Skip rows with colspan (loading skeletons, empty states)
+        if (cells.length === 1 && cells[0].getAttribute('colspan')) return;
+        if (cells.length < colKeys.length) return;
+
+        colKeys.forEach(function(key, idx) {
+            if (cells[idx]) {
+                cells[idx].style.display = visible.indexOf(key) !== -1 ? '' : 'none';
+            }
+        });
+    });
+}
+
+
+// ============================================================================
+// DEMO MODE
+// ============================================================================
+
+function isDemoMode() {
+    return localStorage.getItem('is_demo') === 'true';
+}
+
+function showDemoAlert() {
+    showToast('This feature is disabled in demo mode', 'error');
+}
+
+
+// ============================================================================
+// INIT HOOKS — called from DOMContentLoaded
+// ============================================================================
+
+// Add by-chain toggle and column settings when dashboard loads
+(function() {
+    var origLoad = window.onload;
+    window.addEventListener('load', function() {
+        // Only init these on the dashboard (index.html)
+        if (document.getElementById('portfolioChart')) {
+            initByChainToggle();
+        }
+        if (document.getElementById('assetsTable')) {
+            initColumnSettings();
+        }
+    });
+})();

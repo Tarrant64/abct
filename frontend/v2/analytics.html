@@ -88,15 +88,74 @@
                     <div style="height:300px;"><canvas id="relStrengthChart"></canvas></div>
                 </div>
 
-                <!-- Sankey placeholder -->
+                <!-- Wallet Intelligence -->
                 <div class="v2-card v2-fade-in" style="margin-bottom:24px">
-                    <div class="v2-card-header"><span class="v2-card-title">Portfolio Flow</span></div>
-                    <div id="sankeyArea" style="min-height:200px;display:flex;align-items:center;justify-content:center;">
-                        <div style="text-align:center;padding:40px;color:var(--v2-text-muted);">
-                            <div style="font-size:32px;opacity:0.2;margin-bottom:12px;">&#128202;</div>
-                            <div style="font-size:14px;">Sankey Flow Chart</div>
-                            <div style="font-size:12px;margin-top:4px;">Requires D3.js — will be available in a future update.</div>
+                    <div class="v2-card-header">
+                        <span class="v2-card-title">Wallet Intelligence</span>
+                        <div style="display:flex;gap:4px;">
+                            <select class="v2-table-filter" id="intelChainFilter" style="min-width:100px;font-size:12px;padding:4px 8px;">
+                                <option value="">All Chains</option>
+                                <option value="cardano">Cardano</option>
+                                <option value="ethereum">Ethereum</option>
+                                <option value="bitcoin">Bitcoin</option>
+                                <option value="solana">Solana</option>
+                            </select>
+                            <div class="stream-range-bar" id="intelPeriodBar" style="margin-bottom:0">
+                                <button class="stream-range-btn" data-days="30">30D</button>
+                                <button class="stream-range-btn" data-days="90">90D</button>
+                                <button class="stream-range-btn active" data-days="365">1Y</button>
+                                <button class="stream-range-btn" data-days="0">All</button>
+                            </div>
                         </div>
+                    </div>
+
+                    <!-- Flow Summary Cards -->
+                    <div class="v2-stats-grid" id="intelStats" style="margin-bottom:16px">
+                        <div class="v2-stat-card"><div class="v2-stat-label">Counterparties</div><div class="v2-stat-value" id="intelCpCount">--</div></div>
+                        <div class="v2-stat-card"><div class="v2-stat-label">CEX Interactions</div><div class="v2-stat-value" id="intelCexCount">--</div><div class="v2-stat-sub" id="intelCexSub" style="font-size:11px"></div></div>
+                        <div class="v2-stat-card"><div class="v2-stat-label">Self Transfers</div><div class="v2-stat-value" id="intelSelfCount">--</div></div>
+                        <div class="v2-stat-card"><div class="v2-stat-label">Net Flow</div><div class="v2-stat-value" id="intelNetFlow">--</div><div class="v2-stat-sub" id="intelNetFlowSub" style="font-size:11px"></div></div>
+                    </div>
+
+                    <!-- Charts row -->
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+                        <div style="background:var(--v2-bg-input);border-radius:var(--v2-radius-md);padding:16px;">
+                            <div style="font-size:12px;font-weight:600;color:var(--v2-text-heading);margin-bottom:8px;">Flow Breakdown</div>
+                            <div style="height:200px;"><canvas id="intelFlowDoughnut"></canvas></div>
+                        </div>
+                        <div style="background:var(--v2-bg-input);border-radius:var(--v2-radius-md);padding:16px;">
+                            <div style="font-size:12px;font-weight:600;color:var(--v2-text-heading);margin-bottom:8px;">Chain Flow</div>
+                            <div style="height:200px;"><canvas id="intelChainBars"></canvas></div>
+                        </div>
+                    </div>
+
+                    <!-- Activity Heatmap -->
+                    <div style="background:var(--v2-bg-input);border-radius:var(--v2-radius-md);padding:16px;margin-bottom:16px;position:relative;">
+                        <div style="font-size:12px;font-weight:600;color:var(--v2-text-heading);margin-bottom:8px;">Activity Heatmap (UTC)</div>
+                        <div id="intelHeatmapContainer" style="overflow-x:auto;"></div>
+                        <div id="intelHeatmapTooltip" style="display:none;position:absolute;background:var(--v2-bg-dropdown);border:1px solid var(--v2-border);border-radius:6px;padding:6px 10px;font-size:11px;color:var(--v2-text-primary);pointer-events:none;white-space:nowrap;z-index:10;transform:translateX(-50%);"></div>
+                    </div>
+
+                    <!-- Counterparties Table -->
+                    <div style="margin-bottom:16px;">
+                        <div style="font-size:12px;font-weight:600;color:var(--v2-text-heading);margin-bottom:8px;">Top Counterparties</div>
+                        <div class="v2-table-wrapper" style="max-height:400px;overflow-y:auto;">
+                            <table class="v2-table">
+                                <thead><tr>
+                                    <th>Address</th><th>Label</th><th>Chain</th><th>Tx</th>
+                                    <th class="right">Sent</th><th class="right">Received</th><th>First</th><th>Last</th>
+                                </tr></thead>
+                                <tbody id="intelCpBody"><tr><td colspan="8" style="text-align:center;padding:24px;color:var(--v2-text-muted);">Loading...</td></tr></tbody>
+                            </table>
+                        </div>
+                        <div id="intelCpPagination" style="display:flex;justify-content:center;gap:8px;margin-top:8px;"></div>
+                    </div>
+
+                    <!-- Empty State -->
+                    <div id="intelEmptyState" style="display:none;text-align:center;padding:40px;color:var(--v2-text-muted);">
+                        <div style="font-size:32px;opacity:0.2;margin-bottom:12px;">&#128270;</div>
+                        <div style="font-size:14px;">No wallet intelligence data</div>
+                        <div style="font-size:12px;margin-top:4px;">Transaction data is needed for flow analysis.</div>
                     </div>
                 </div>
             </div>
@@ -113,6 +172,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             v2InitShell('analytics');
             loadAnalytics();
+            initIntelligence();
 
             // Stream chart range buttons
             document.querySelectorAll('#streamRangeBar .stream-range-btn').forEach(btn => {
@@ -395,6 +455,311 @@
                     }
                 }
             };
+        }
+
+        // ==========================================
+        // Wallet Intelligence
+        // ==========================================
+        let _intelDays = 365;
+        let _intelChain = '';
+        let _intelFlowChart = null;
+        let _intelBarChart = null;
+        let _intelCpAll = [];
+        let _intelCpPage = 1;
+        const _intelCpPageSize = 15;
+
+        function initIntelligence() {
+            // Period buttons
+            document.querySelectorAll('#intelPeriodBar .stream-range-btn').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('#intelPeriodBar .stream-range-btn').forEach(function(b) { b.classList.toggle('active', b === btn); });
+                    _intelDays = parseInt(btn.dataset.days);
+                    loadIntelligenceData();
+                });
+            });
+            // Chain filter
+            document.getElementById('intelChainFilter').addEventListener('change', function() {
+                _intelChain = this.value;
+                loadIntelligenceData();
+            });
+            loadIntelligenceData();
+        }
+
+        async function loadIntelligenceData() {
+            var params = new URLSearchParams();
+            params.set('days', _intelDays);
+            if (_intelChain) params.set('blockchain', _intelChain);
+            var qs = params.toString();
+
+            try {
+                var results = await Promise.allSettled([
+                    v2Fetch('/intelligence/flow-summary?' + qs),
+                    v2Fetch('/intelligence/counterparties?' + qs + '&limit=200'),
+                    v2Fetch('/intelligence/activity-heatmap?' + qs),
+                ]);
+
+                var flowData = null;
+                var counterData = null;
+                var heatData = null;
+
+                if (results[0].status === 'fulfilled' && results[0].value.ok) {
+                    flowData = await results[0].value.json();
+                }
+                if (results[1].status === 'fulfilled' && results[1].value.ok) {
+                    counterData = await results[1].value.json();
+                }
+                if (results[2].status === 'fulfilled' && results[2].value.ok) {
+                    heatData = await results[2].value.json();
+                }
+
+                var hasData = flowData && flowData.success && (parseFloat(flowData.total_sent) > 0 || parseFloat(flowData.total_received) > 0);
+                var emptyEl = document.getElementById('intelEmptyState');
+
+                if (!hasData && (!counterData || !counterData.counterparties || counterData.counterparties.length === 0)) {
+                    if (emptyEl) emptyEl.style.display = 'block';
+                    document.getElementById('intelStats').style.display = 'none';
+                    return;
+                } else {
+                    if (emptyEl) emptyEl.style.display = 'none';
+                    document.getElementById('intelStats').style.display = '';
+                }
+
+                if (flowData && flowData.success) {
+                    renderIntelSummary(flowData);
+                    renderIntelFlowDoughnut(flowData);
+                    renderIntelChainBars(flowData);
+                }
+                if (counterData && counterData.success) {
+                    _intelCpAll = counterData.counterparties || [];
+                    _intelCpPage = 1;
+                    renderIntelCpPage();
+                }
+                if (heatData && heatData.success) {
+                    renderIntelHeatmap(heatData.heatmap || []);
+                }
+            } catch(e) {
+                console.error('Intelligence load error:', e);
+            }
+        }
+
+        function renderIntelSummary(data) {
+            setText('intelCpCount', (parseInt(data.unique_counterparties) || 0).toLocaleString());
+            var totalCex = (parseInt(data.cex_deposits) || 0) + (parseInt(data.cex_withdrawals) || 0);
+            setText('intelCexCount', totalCex.toLocaleString());
+            var cexSub = (parseInt(data.cex_deposits) || 0) + ' deposits / ' + (parseInt(data.cex_withdrawals) || 0) + ' withdrawals';
+            if (parseInt(data.exchange_trades) > 0) cexSub += ' (' + data.exchange_trades + ' exchange trades)';
+            setText('intelCexSub', cexSub);
+            setText('intelSelfCount', (parseInt(data.self_transfers) || 0).toLocaleString());
+
+            var net = parseFloat(data.net_flow) || 0;
+            var netEl = document.getElementById('intelNetFlow');
+            if (netEl) {
+                netEl.textContent = formatCurrency(Math.abs(net));
+                netEl.style.color = net >= 0 ? 'var(--v2-accent)' : 'var(--v2-red, #ff5252)';
+            }
+            var subEl = document.getElementById('intelNetFlowSub');
+            if (subEl) {
+                setSafeHTML(subEl, '<span style="color:var(--v2-red,#ff5252)">Sent ' + formatCurrency(parseFloat(data.total_sent) || 0) + '</span> / <span style="color:var(--v2-accent)">Recv ' + formatCurrency(parseFloat(data.total_received) || 0) + '</span>');
+            }
+        }
+
+        function renderIntelFlowDoughnut(data) {
+            var canvas = document.getElementById('intelFlowDoughnut');
+            if (!canvas) return;
+            if (_intelFlowChart) { _intelFlowChart.destroy(); _intelFlowChart = null; }
+
+            var cexDep = parseInt(data.cex_deposits) || 0;
+            var cexWith = parseInt(data.cex_withdrawals) || 0;
+            var selfTx = parseInt(data.self_transfers) || 0;
+            var chains = data.chains || {};
+            var totalTx = 0;
+            Object.values(chains).forEach(function(c) { totalTx += (parseInt(c.tx_count) || 0); });
+            var extSend = Math.max(0, Math.round(totalTx / 2) - cexDep - selfTx);
+            var extRecv = Math.max(0, totalTx - Math.round(totalTx / 2) - cexWith);
+
+            var style = getComputedStyle(document.documentElement);
+            var textColor = style.getPropertyValue('--v2-text-secondary').trim() || '#8a93a6';
+
+            _intelFlowChart = new Chart(canvas.getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['CEX Deposits', 'CEX Withdrawals', 'Self-Transfers', 'External Sends', 'External Receives'],
+                    datasets: [{ data: [cexDep, cexWith, selfTx, extSend, extRecv], backgroundColor: ['#ef4444', '#22c55e', '#3b82f6', '#f97316', '#a855f7'], borderWidth: 0, hoverOffset: 6 }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, cutout: '55%',
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: textColor, font: { size: 10 }, padding: 8, usePointStyle: true, pointStyleWidth: 8 } },
+                        tooltip: { callbacks: { label: function(ctx) { var total = ctx.dataset.data.reduce(function(a,b) { return a+b; }, 0); var pct = total > 0 ? ((ctx.parsed/total)*100).toFixed(1) : 0; return ' ' + ctx.label + ': ' + ctx.parsed + ' tx (' + pct + '%)'; } } }
+                    }
+                }
+            });
+        }
+
+        function renderIntelChainBars(data) {
+            var canvas = document.getElementById('intelChainBars');
+            if (!canvas) return;
+            if (_intelBarChart) { _intelBarChart.destroy(); _intelBarChart = null; }
+
+            var chains = data.chains || {};
+            var chainNames = Object.keys(chains);
+            if (!chainNames.length) return;
+
+            var style = getComputedStyle(document.documentElement);
+            var textColor = style.getPropertyValue('--v2-text-secondary').trim() || '#8a93a6';
+            var gridColor = style.getPropertyValue('--v2-chart-grid').trim() || 'rgba(255,255,255,0.04)';
+
+            var labels = chainNames.map(function(c) { return c.charAt(0).toUpperCase() + c.slice(1); });
+            var sentData = chainNames.map(function(c) { return -(parseFloat(chains[c].sent) || 0); });
+            var recvData = chainNames.map(function(c) { return parseFloat(chains[c].received) || 0; });
+
+            _intelBarChart = new Chart(canvas.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'Sent', data: sentData, backgroundColor: '#ef4444', borderRadius: 4 },
+                        { label: 'Received', data: recvData, backgroundColor: '#22c55e', borderRadius: 4 }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+                    scales: {
+                        x: { grid: { color: gridColor }, ticks: { color: textColor, callback: function(v) { return formatCompact(Math.abs(v)); } } },
+                        y: { grid: { display: false }, ticks: { color: textColor } }
+                    },
+                    plugins: {
+                        legend: { labels: { color: textColor, usePointStyle: true, pointStyleWidth: 8 } },
+                        tooltip: { callbacks: { label: function(ctx) { return ' ' + ctx.dataset.label + ': ' + formatCurrency(Math.abs(ctx.parsed.x)); } } }
+                    }
+                }
+            });
+        }
+
+        function renderIntelHeatmap(heatmap) {
+            var container = document.getElementById('intelHeatmapContainer');
+            if (!container) return;
+
+            var style = getComputedStyle(document.documentElement);
+            var textColor = style.getPropertyValue('--v2-text-muted').trim() || '#5a6475';
+            var cellBg = style.getPropertyValue('--v2-bg-card').trim() || '#1a1a2e';
+
+            var cellSize = 24; var cellGap = 2; var labelWidth = 36; var labelHeight = 20;
+            var cols = 24; var rows = 7;
+            var width = labelWidth + cols * (cellSize + cellGap);
+            var height = labelHeight + rows * (cellSize + cellGap) + 4;
+
+            var lookup = {}; var maxCount = 1;
+            heatmap.forEach(function(e) {
+                var key = e.day + '-' + e.hour;
+                lookup[key] = e.count;
+                if (e.count > maxCount) maxCount = e.count;
+            });
+
+            var dayLabels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+            var svg = '<svg width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + ' ' + height + '" xmlns="http://www.w3.org/2000/svg" style="display:block;max-width:100%;">';
+
+            // Hour labels
+            for (var h = 0; h < cols; h++) {
+                if (h % 4 === 0) {
+                    var x = labelWidth + h * (cellSize + cellGap) + cellSize / 2;
+                    var label = h === 0 ? '12a' : h < 12 ? h + 'a' : h === 12 ? '12p' : (h-12) + 'p';
+                    svg += '<text x="' + x + '" y="12" text-anchor="middle" fill="' + textColor + '" font-size="9">' + label + '</text>';
+                }
+            }
+
+            for (var d = 0; d < rows; d++) {
+                var y = labelHeight + d * (cellSize + cellGap);
+                svg += '<text x="0" y="' + (y + cellSize/2 + 3) + '" fill="' + textColor + '" font-size="9">' + dayLabels[d] + '</text>';
+                for (var hh = 0; hh < cols; hh++) {
+                    var cx = labelWidth + hh * (cellSize + cellGap);
+                    var key = d + '-' + hh;
+                    var count = lookup[key] || 0;
+                    var intensity = count / maxCount;
+                    var fill = count === 0 ? cellBg : 'rgba(102,126,234,' + (0.15 + intensity * 0.85).toFixed(2) + ')';
+                    svg += '<rect x="' + cx + '" y="' + y + '" width="' + cellSize + '" height="' + cellSize + '" rx="3" fill="' + fill + '" data-count="' + count + '" data-day="' + d + '" data-hour="' + hh + '"/>';
+                }
+            }
+            svg += '</svg>';
+            container.innerHTML = svg;
+
+            // Tooltip on hover
+            container.querySelectorAll('rect').forEach(function(rect) {
+                rect.addEventListener('mouseenter', function(evt) {
+                    var dayIdx = parseInt(rect.getAttribute('data-day'));
+                    var hour = parseInt(rect.getAttribute('data-hour'));
+                    var cnt = parseInt(rect.getAttribute('data-count'));
+                    var dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                    var hourLabel = hour === 0 ? '12AM' : hour < 12 ? hour + 'AM' : hour === 12 ? '12PM' : (hour-12) + 'PM';
+                    var tooltip = document.getElementById('intelHeatmapTooltip');
+                    tooltip.textContent = dayNames[dayIdx] + ' ' + hourLabel + ' UTC - ' + cnt + ' tx';
+                    tooltip.style.display = 'block';
+                    var r = rect.getBoundingClientRect();
+                    var cr = container.getBoundingClientRect();
+                    tooltip.style.left = (r.left - cr.left + r.width/2) + 'px';
+                    tooltip.style.top = (r.top - cr.top - 28) + 'px';
+                });
+                rect.addEventListener('mouseleave', function() {
+                    document.getElementById('intelHeatmapTooltip').style.display = 'none';
+                });
+            });
+        }
+
+        function renderIntelCpPage() {
+            var tbody = document.getElementById('intelCpBody');
+            if (!_intelCpAll.length) {
+                setSafeHTML(tbody, '<tr><td colspan="8" style="text-align:center;color:var(--v2-text-muted);padding:24px;">No counterparty data</td></tr>');
+                renderIntelCpPagination();
+                return;
+            }
+            var start = (_intelCpPage - 1) * _intelCpPageSize;
+            var page = _intelCpAll.slice(start, start + _intelCpPageSize);
+            var html = '';
+            page.forEach(function(cp) {
+                var addr = cp.address || '';
+                var trunc = addr.length > 16 ? addr.slice(0,8) + '...' + addr.slice(-6) : addr;
+                var chain = (cp.blockchain || '').charAt(0).toUpperCase() + (cp.blockchain || '').slice(1);
+                var badgeClass = cp.label_type === 'cex' ? 'v2-value-positive' : cp.label_type === 'self' ? '' : '';
+                var sent = parseFloat(cp.total_sent) || 0;
+                var recv = parseFloat(cp.total_received) || 0;
+                var firstSeen = cp.first_seen ? new Date(cp.first_seen).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'2-digit'}) : '--';
+                var lastSeen = cp.last_seen ? new Date(cp.last_seen).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'2-digit'}) : '--';
+                html += '<tr>' +
+                    '<td style="font-family:monospace;font-size:11px;" title="' + escapeAttr(addr) + '">' + escapeHtml(trunc) + '</td>' +
+                    '<td><span style="font-size:11px;padding:2px 8px;border-radius:10px;background:' + (cp.label_type === 'cex' ? 'rgba(239,68,68,0.15);color:#ef4444' : cp.label_type === 'self' ? 'rgba(59,130,246,0.15);color:#3b82f6' : 'rgba(148,163,184,0.15);color:#94a3b8') + '">' + escapeHtml(cp.label || 'Unknown') + '</span></td>' +
+                    '<td><span class="v2-chain-badge chain-' + escapeAttr((cp.blockchain||'').toLowerCase()) + '">' + escapeHtml(chain) + '</span></td>' +
+                    '<td>' + (parseInt(cp.tx_count) || 0) + '</td>' +
+                    '<td class="right v2-blur" style="color:var(--v2-red,#ff5252)">' + (sent > 0 ? formatCurrency(sent) : '--') + '</td>' +
+                    '<td class="right v2-blur" style="color:var(--v2-accent)">' + (recv > 0 ? formatCurrency(recv) : '--') + '</td>' +
+                    '<td style="font-size:11px">' + firstSeen + '</td>' +
+                    '<td style="font-size:11px">' + lastSeen + '</td>' +
+                    '</tr>';
+            });
+            setSafeHTML(tbody, html);
+            renderIntelCpPagination();
+        }
+
+        function renderIntelCpPagination() {
+            var container = document.getElementById('intelCpPagination');
+            var total = _intelCpAll.length;
+            var totalPages = Math.max(1, Math.ceil(total / _intelCpPageSize));
+            if (total === 0) { container.innerHTML = ''; return; }
+            var start = (_intelCpPage - 1) * _intelCpPageSize + 1;
+            var end = Math.min(_intelCpPage * _intelCpPageSize, total);
+            setSafeHTML(container, '<span style="font-size:12px;color:var(--v2-text-muted)">' + start + '-' + end + ' of ' + total + '</span>');
+            // Add prev/next buttons
+            var prevBtn = document.createElement('button');
+            prevBtn.className = 'stream-range-btn';
+            prevBtn.textContent = 'Prev';
+            prevBtn.disabled = _intelCpPage <= 1;
+            prevBtn.addEventListener('click', function() { if (_intelCpPage > 1) { _intelCpPage--; renderIntelCpPage(); } });
+            var nextBtn = document.createElement('button');
+            nextBtn.className = 'stream-range-btn';
+            nextBtn.textContent = 'Next';
+            nextBtn.disabled = _intelCpPage >= totalPages;
+            nextBtn.addEventListener('click', function() { if (_intelCpPage < totalPages) { _intelCpPage++; renderIntelCpPage(); } });
+            container.appendChild(prevBtn);
+            container.appendChild(nextBtn);
         }
 
         function renderRelativeStrength(data) {

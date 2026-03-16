@@ -44,6 +44,21 @@
         .nft-collection-name { font-size: 14px; font-weight: 600; color: var(--v2-text-heading); }
         .nft-collection-count { font-size: 12px; color: var(--v2-text-muted); margin-left: 8px; }
 
+        /* NFT Wall (Gallery Mode) */
+        .nft-wall-overlay { display: none; position: fixed; inset: 0; z-index: 600; background: var(--v2-bg-base); overflow-y: auto; }
+        .nft-wall-overlay.active { display: block; }
+        .nft-wall-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-bottom: 1px solid var(--v2-border); }
+        .nft-wall-header h2 { margin: 0; font-size: 20px; color: var(--v2-text-heading); }
+        .nft-wall-close { background: var(--v2-bg-input); border: 1px solid var(--v2-border); color: var(--v2-text-primary); padding: 8px 16px; border-radius: var(--v2-radius-md); cursor: pointer; font-size: 13px; }
+        .nft-wall-close:hover { border-color: var(--v2-text-muted); }
+        .nft-wall-masonry { column-count: 4; column-gap: 12px; padding: 20px 24px; }
+        .nft-wall-item { break-inside: avoid; margin-bottom: 12px; border-radius: var(--v2-radius-lg); overflow: hidden; cursor: pointer; transition: transform 0.2s; }
+        .nft-wall-item:hover { transform: scale(1.02); }
+        .nft-wall-item img { width: 100%; display: block; }
+        .nft-wall-item .nft-wall-label { padding: 8px 10px; background: var(--v2-bg-card); font-size: 11px; color: var(--v2-text-heading); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        @media (max-width: 1200px) { .nft-wall-masonry { column-count: 3; } }
+        @media (max-width: 800px) { .nft-wall-masonry { column-count: 2; } }
+
         /* NFT Detail Modal */
         .nft-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 500; justify-content: center; align-items: center; }
         .nft-modal-overlay.active { display: flex; }
@@ -112,10 +127,13 @@
                         <button class="nft-sort-btn active" data-sort="value">By Value</button>
                         <button class="nft-sort-btn" data-sort="name">By Name</button>
                     </div>
-                    <label class="nft-group-toggle">
-                        <input type="checkbox" id="groupByCollection">
-                        Group by Collection
-                    </label>
+                    <div style="display:flex;gap:12px;align-items:center;">
+                        <label class="nft-group-toggle">
+                            <input type="checkbox" id="groupByCollection">
+                            Group by Collection
+                        </label>
+                        <button class="nft-sort-btn" id="nftWallBtn" title="Full-screen gallery view">Gallery Mode</button>
+                    </div>
                 </div>
 
                 <!-- NFT Grid -->
@@ -139,6 +157,15 @@
                         <div class="nft-modal-traits" id="nftModalTraits"></div>
                     </div>
                 </div>
+            </div>
+
+            <!-- NFT Wall (Gallery Mode) -->
+            <div class="nft-wall-overlay" id="nftWallOverlay">
+                <div class="nft-wall-header">
+                    <h2>NFT Gallery</h2>
+                    <button class="nft-wall-close" id="nftWallClose">Exit Gallery</button>
+                </div>
+                <div class="nft-wall-masonry" id="nftWallMasonry"></div>
             </div>
 
             <footer class="v2-footer">ABCT V2 | NFTs</footer>
@@ -177,6 +204,9 @@
                 groupByCollection = e.target.checked;
                 renderNftGrid();
             });
+
+            // NFT Wall
+            initNftWall();
 
             // Modal close handlers
             document.getElementById('nftModalClose').addEventListener('click', closeNftModal);
@@ -416,6 +446,63 @@
 
         function closeNftModal() {
             document.getElementById('nftDetailModal').classList.remove('active');
+        }
+
+        // ==========================================
+        // NFT Wall (Gallery Mode)
+        // ==========================================
+        function initNftWall() {
+            document.getElementById('nftWallBtn').addEventListener('click', openNftWall);
+            document.getElementById('nftWallClose').addEventListener('click', closeNftWall);
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && document.getElementById('nftWallOverlay').classList.contains('active')) {
+                    closeNftWall();
+                }
+            });
+        }
+
+        function openNftWall() {
+            var masonry = document.getElementById('nftWallMasonry');
+            var items = flattenNfts(allNfts);
+            // Filter to those with images only
+            items = items.filter(function(n) { return n.image_url || n.image || n.thumbnail; });
+            if (!items.length) {
+                masonry.innerHTML = '<div style="text-align:center;padding:80px;color:var(--v2-text-muted);font-size:14px;">No NFTs with images to display.</div>';
+            } else {
+                var html = '';
+                items.forEach(function(nft, idx) {
+                    var imgUrl = nft.image_url || nft.image || nft.thumbnail || '';
+                    var name = nft.name || nft.asset_name || nft.token_name || 'Unnamed';
+                    html += '<div class="nft-wall-item" data-wall-idx="' + idx + '">' +
+                        '<img src="' + escapeAttr(imgUrl) + '" alt="" loading="lazy" onerror="this.parentElement.style.display=\'none\'">' +
+                        '<div class="nft-wall-label">' + escapeHtml(name) + '</div></div>';
+                });
+                masonry.innerHTML = html;
+                // Clicking an item in the wall opens the detail modal
+                masonry.querySelectorAll('.nft-wall-item').forEach(function(item) {
+                    item.addEventListener('click', function() {
+                        // Find matching nft in detail store
+                        var wallIdx = parseInt(item.dataset.wallIdx);
+                        var nft = items[wallIdx];
+                        if (nft) {
+                            // Push into _nftDetailStore if not already there
+                            var storeIdx = _nftDetailStore.indexOf(nft);
+                            if (storeIdx === -1) {
+                                storeIdx = _nftDetailStore.length;
+                                _nftDetailStore.push(nft);
+                            }
+                            openNftDetail(storeIdx);
+                        }
+                    });
+                });
+            }
+            document.getElementById('nftWallOverlay').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeNftWall() {
+            document.getElementById('nftWallOverlay').classList.remove('active');
+            document.body.style.overflow = '';
         }
 
         async function refreshNfts() {
