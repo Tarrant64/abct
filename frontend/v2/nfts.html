@@ -32,7 +32,7 @@
             <header class="v2-topbar">
                 <div class="v2-topbar-left"><span class="v2-topbar-title">NFT Collection</span></div>
                 <div class="v2-topbar-right">
-                    <button class="v2-sync-btn" onclick="refreshNfts()"><span class="sync-icon">&#10227;</span> Refresh</button>
+                    <button class="v2-sync-btn" id="refreshNftsBtn"><span class="sync-icon">&#10227;</span> Refresh</button>
                     <div class="v2-user-menu"></div>
                 </div>
             </header>
@@ -56,12 +56,12 @@
 
                 <!-- Chain Filter -->
                 <div class="nft-chain-tabs" id="nftChainTabs">
-                    <button class="nft-chain-tab active" data-chain="all" onclick="filterNftChain('all')">All Chains</button>
-                    <button class="nft-chain-tab" data-chain="cardano" onclick="filterNftChain('cardano')">Cardano</button>
-                    <button class="nft-chain-tab" data-chain="ethereum" onclick="filterNftChain('ethereum')">Ethereum</button>
-                    <button class="nft-chain-tab" data-chain="solana" onclick="filterNftChain('solana')">Solana</button>
-                    <button class="nft-chain-tab" data-chain="polygon" onclick="filterNftChain('polygon')">Polygon</button>
-                    <button class="nft-chain-tab" data-chain="base" onclick="filterNftChain('base')">Base</button>
+                    <button class="nft-chain-tab active" data-chain="all">All Chains</button>
+                    <button class="nft-chain-tab" data-chain="cardano">Cardano</button>
+                    <button class="nft-chain-tab" data-chain="ethereum">Ethereum</button>
+                    <button class="nft-chain-tab" data-chain="solana">Solana</button>
+                    <button class="nft-chain-tab" data-chain="polygon">Polygon</button>
+                    <button class="nft-chain-tab" data-chain="base">Base</button>
                 </div>
 
                 <!-- NFT Grid -->
@@ -86,6 +86,12 @@
         document.addEventListener('DOMContentLoaded', () => {
             v2InitShell('nfts');
             loadNfts();
+
+            // Attach chain tab click handlers (avoid inline onclick stripped by DOMPurify)
+            document.querySelectorAll('.nft-chain-tab').forEach(tab => {
+                tab.addEventListener('click', () => filterNftChain(tab.dataset.chain));
+            });
+            document.getElementById('refreshNftsBtn').addEventListener('click', refreshNfts);
         });
 
         async function loadNfts() {
@@ -102,7 +108,10 @@
                     const summary = await summaryResp.json();
                     setText('nftTotalValue', formatCurrency(summary.total_value_usd || 0));
                     setText('nftTotalCount', (summary.total_count || 0).toLocaleString());
-                    setText('nftCollectionCount', (summary.collection_count || 0).toLocaleString());
+                    // collection_count not in /nfts/all/summary — compute from chains
+                    const chainData = summary.chains || {};
+                    const chainsWithNfts = Object.values(chainData).filter(c => (c.total_count || 0) > 0).length;
+                    setText('nftCollectionCount', chainsWithNfts.toString());
                 }
 
                 const results = await Promise.allSettled(promises);

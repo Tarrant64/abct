@@ -20,14 +20,14 @@
 
             <div class="v2-content">
                 <div class="v2-tabs" id="settingsTabs">
-                    <button class="v2-tab active" data-tab="apis" onclick="switchSettingsTab('apis')">API Keys</button>
-                    <button class="v2-tab" data-tab="services" onclick="switchSettingsTab('services')">Services</button>
-                    <button class="v2-tab" data-tab="cache" onclick="switchSettingsTab('cache')">Cache</button>
-                    <button class="v2-tab" data-tab="logs" onclick="switchSettingsTab('logs')">Logs</button>
-                    <button class="v2-tab" data-tab="security" onclick="switchSettingsTab('security')">Security</button>
-                    <button class="v2-tab" data-tab="backup" onclick="switchSettingsTab('backup')">Backup</button>
-                    <button class="v2-tab" data-tab="chart" onclick="switchSettingsTab('chart')">Chart Designer</button>
-                    <button class="v2-tab" data-tab="system" onclick="switchSettingsTab('system')">System</button>
+                    <button class="v2-tab active" data-tab="apis">API Keys</button>
+                    <button class="v2-tab" data-tab="services">Services</button>
+                    <button class="v2-tab" data-tab="cache">Cache</button>
+                    <button class="v2-tab" data-tab="logs">Logs</button>
+                    <button class="v2-tab" data-tab="security">Security</button>
+                    <button class="v2-tab" data-tab="backup">Backup</button>
+                    <button class="v2-tab" data-tab="chart">Chart Designer</button>
+                    <button class="v2-tab" data-tab="system">System</button>
                 </div>
 
                 <!-- API Keys Tab -->
@@ -35,7 +35,7 @@
                     <div class="v2-card">
                         <div class="v2-card-header">
                             <span class="v2-card-title">API Keys & Connections</span>
-                            <button class="v2-btn v2-btn-secondary v2-btn-sm" onclick="reloadApis()">Reload</button>
+                            <button class="v2-btn v2-btn-secondary v2-btn-sm" id="reloadApisBtn">Reload</button>
                         </div>
                         <div id="apiKeysList">
                             <div class="v2-skeleton v2-skeleton-chart" style="height:200px;"></div>
@@ -58,12 +58,12 @@
                     <div class="v2-card">
                         <div class="v2-card-header"><span class="v2-card-title">Cache Management</span></div>
                         <div class="v2-stats-grid" id="cacheStats" style="margin-bottom:20px"></div>
-                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                            <button class="v2-btn v2-btn-secondary" onclick="clearCache('token-logos')">Clear Token Logos</button>
-                            <button class="v2-btn v2-btn-secondary" onclick="clearCache('nft-images')">Clear NFT Images</button>
-                            <button class="v2-btn v2-btn-secondary" onclick="clearCache('api-cache')">Clear API Cache</button>
-                            <button class="v2-btn v2-btn-secondary" onclick="clearCache('staking-cache')">Clear Staking Cache</button>
-                            <button class="v2-btn v2-btn-primary" onclick="clearCache('all')" style="background:var(--v2-red)">Clear All</button>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;" id="cacheBtns">
+                            <button class="v2-btn v2-btn-secondary" data-cache="token-logos">Clear Token Logos</button>
+                            <button class="v2-btn v2-btn-secondary" data-cache="nft-images">Clear NFT Images</button>
+                            <button class="v2-btn v2-btn-secondary" data-cache="api-cache">Clear API Cache</button>
+                            <button class="v2-btn v2-btn-secondary" data-cache="staking-cache">Clear Staking Cache</button>
+                            <button class="v2-btn v2-btn-primary" data-cache="all" style="background:var(--v2-red)">Clear All</button>
                         </div>
                     </div>
                 </div>
@@ -73,7 +73,7 @@
                     <div class="v2-card">
                         <div class="v2-card-header">
                             <span class="v2-card-title">Application Logs</span>
-                            <button class="v2-btn v2-btn-secondary v2-btn-sm" onclick="loadLogs()">Refresh</button>
+                            <button class="v2-btn v2-btn-secondary v2-btn-sm" id="refreshLogsBtn">Refresh</button>
                         </div>
                         <div id="logsContent" style="max-height:600px;overflow-y:auto;font-family:monospace;font-size:12px;padding:12px;background:var(--v2-bg-input);border-radius:var(--v2-radius-md);color:var(--v2-text-secondary);">
                             Loading...
@@ -96,8 +96,8 @@
                     <div class="v2-card">
                         <div class="v2-card-header"><span class="v2-card-title">Backup & Restore</span></div>
                         <div style="display:flex;gap:12px;margin-bottom:20px;">
-                            <button class="v2-btn v2-btn-primary" onclick="exportBackup()">Export Backup</button>
-                            <button class="v2-btn v2-btn-secondary" onclick="importBackup()">Import Backup</button>
+                            <button class="v2-btn v2-btn-primary" id="exportBackupBtn">Export Backup</button>
+                            <button class="v2-btn v2-btn-secondary" id="importBackupBtn">Import Backup</button>
                         </div>
                         <div id="backupInfo" style="color:var(--v2-text-secondary);font-size:13px;">Loading backup info...</div>
                     </div>
@@ -117,7 +117,7 @@
                     <div class="v2-card">
                         <div class="v2-card-header"><span class="v2-card-title">System Controls</span></div>
                         <div style="display:flex;gap:12px;">
-                            <button class="v2-btn v2-btn-secondary" onclick="restartBackend()">Restart Backend</button>
+                            <button class="v2-btn v2-btn-secondary" id="restartBackendBtn">Restart Backend</button>
                         </div>
                     </div>
                 </div>
@@ -132,6 +132,24 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             v2InitShell('settings');
+
+            // Attach tab click handlers (avoid inline onclick)
+            document.querySelectorAll('#settingsTabs .v2-tab').forEach(tab => {
+                tab.addEventListener('click', () => switchSettingsTab(tab.dataset.tab));
+            });
+
+            // Attach button handlers
+            document.getElementById('reloadApisBtn').addEventListener('click', reloadApis);
+            document.getElementById('refreshLogsBtn').addEventListener('click', loadLogs);
+            document.getElementById('exportBackupBtn').addEventListener('click', exportBackup);
+            document.getElementById('importBackupBtn').addEventListener('click', importBackup);
+            document.getElementById('restartBackendBtn').addEventListener('click', restartBackend);
+
+            // Cache clear buttons
+            document.querySelectorAll('#cacheBtns [data-cache]').forEach(btn => {
+                btn.addEventListener('click', () => clearCache(btn.dataset.cache));
+            });
+
             // Check URL hash for direct tab navigation
             const hash = window.location.hash.replace('#', '');
             if (hash) switchSettingsTab(hash);
@@ -170,7 +188,11 @@
                 if (resp.ok) {
                     const data = await resp.json();
                     const el = document.getElementById('backupInfo');
-                    el.textContent = `Database size: ${data.database_size || 'Unknown'} | Last backup: ${data.last_backup || 'Never'}`;
+                    // Backend returns: {backup_format_version, abct_version, tables: {name: {record_count, has_data, ...}}}
+                    const tables = data.tables || {};
+                    const totalRecords = Object.values(tables).reduce((s, t) => s + (t.record_count || 0), 0);
+                    const tablesWithData = Object.values(tables).filter(t => t.has_data).length;
+                    el.textContent = `Format v${data.backup_format_version || '?'} | ${tablesWithData} tables with data | ${totalRecords.toLocaleString()} total records`;
                 }
             } catch(e) {}
 
@@ -180,40 +202,65 @@
 
         function renderApiKeys(data) {
             const container = document.getElementById('apiKeysList');
-            const apis = data.apis || data || [];
-            if (!apis.length) {
+            // Backend /settings/apis returns: {categories: {cat: {name, apis: [...]}}, total_apis, configured_count}
+            const categories = data.categories || {};
+            const catKeys = Object.keys(categories);
+            if (!catKeys.length) {
                 setSafeHTML(container, '<div class="v2-empty"><div class="v2-empty-title">No API keys configured</div></div>');
                 return;
             }
-            let html = '<table class="v2-table"><thead><tr><th>Service</th><th>Type</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
-            apis.forEach(api => {
-                const hasKey = api.has_key || api.configured || api.api_key;
-                html += `<tr>
-                    <td><strong>${escapeHtml(api.name || api.service || api.id)}</strong></td>
-                    <td>${escapeHtml(api.type || api.auth_method || 'API Key')}</td>
-                    <td><span class="v2-badge ${hasKey ? 'v2-badge-green' : 'v2-badge-neutral'}">${hasKey ? 'Configured' : 'Not Set'}</span></td>
-                    <td><button class="v2-btn v2-btn-ghost v2-btn-sm" onclick="showToast('Edit in V1 Settings for full functionality')">Edit</button></td>
-                </tr>`;
+            let html = '';
+            catKeys.forEach(catKey => {
+                const cat = categories[catKey];
+                const apis = cat.apis || [];
+                if (!apis.length) return;
+                html += `<div style="margin-bottom:16px;"><div style="font-size:13px;font-weight:600;color:var(--v2-text-heading);margin-bottom:8px;text-transform:capitalize">${escapeHtml(cat.name || catKey)}</div>`;
+                html += '<table class="v2-table"><thead><tr><th>Service</th><th>Pricing</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+                apis.forEach(api => {
+                    const hasKey = api.configured;
+                    const pricingBadge = api.pricing === 'free' ? 'v2-badge-green' : api.pricing === 'paid' ? 'v2-badge-red' : 'v2-badge-neutral';
+                    html += `<tr>
+                        <td><strong>${escapeHtml(api.name || api.id)}</strong><div style="font-size:11px;color:var(--v2-text-muted);margin-top:2px">${escapeHtml(api.description || '')}</div></td>
+                        <td><span class="v2-badge ${pricingBadge}">${escapeHtml(api.pricing || 'unknown')}</span></td>
+                        <td><span class="v2-badge ${hasKey ? 'v2-badge-green' : 'v2-badge-neutral'}">${hasKey ? 'Configured' : 'Not Set'}</span></td>
+                        <td><button class="v2-btn v2-btn-ghost v2-btn-sm" data-action="edit-api" data-api-id="${escapeAttr(api.id)}">Edit</button></td>
+                    </tr>`;
+                });
+                html += '</tbody></table></div>';
             });
-            html += '</tbody></table>';
+
+            // Show configured count summary
+            const configuredCount = data.configured_count || 0;
+            const totalApis = data.total_apis || 0;
+            html = `<div style="font-size:12px;color:var(--v2-text-muted);margin-bottom:12px">${configuredCount} of ${totalApis} APIs configured</div>` + html;
+
             setSafeHTML(container, html);
+
+            // Attach edit button handlers after render
+            container.querySelectorAll('[data-action="edit-api"]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    showToast('Edit in V1 Settings for full functionality');
+                });
+            });
         }
 
         function renderCacheStats(data) {
             const container = document.getElementById('cacheStats');
-            const stats = data.stats || data;
+            // Backend /api/cache/stats returns: {token_logos: {count, description}, nft_images: {count, size_mb}, ...}
             let html = '';
-            if (stats.total_entries !== undefined) {
-                html += `<div class="v2-stat-card"><div class="v2-stat-label">Cache Entries</div><div class="v2-stat-value">${(stats.total_entries || 0).toLocaleString()}</div></div>`;
+            const stats = data || {};
+            if (stats.token_logos) {
+                html += `<div class="v2-stat-card"><div class="v2-stat-label">Token Logos</div><div class="v2-stat-value">${(stats.token_logos.count || 0).toLocaleString()}</div></div>`;
             }
-            if (stats.token_logos !== undefined) {
-                html += `<div class="v2-stat-card"><div class="v2-stat-label">Token Logos</div><div class="v2-stat-value">${(stats.token_logos || 0).toLocaleString()}</div></div>`;
+            if (stats.nft_images) {
+                const sizeMb = stats.nft_images.size_mb ? ` (${stats.nft_images.size_mb}MB)` : '';
+                html += `<div class="v2-stat-card"><div class="v2-stat-label">NFT Images</div><div class="v2-stat-value">${(stats.nft_images.count || 0).toLocaleString()}${sizeMb}</div></div>`;
             }
-            if (stats.nft_images !== undefined) {
-                html += `<div class="v2-stat-card"><div class="v2-stat-label">NFT Images</div><div class="v2-stat-value">${(stats.nft_images || 0).toLocaleString()}</div></div>`;
+            if (stats.nft_floor_prices) {
+                html += `<div class="v2-stat-card"><div class="v2-stat-label">NFT Floor Prices</div><div class="v2-stat-value">${(stats.nft_floor_prices.count || 0).toLocaleString()}</div></div>`;
             }
-            if (stats.api_responses !== undefined) {
-                html += `<div class="v2-stat-card"><div class="v2-stat-label">API Cache</div><div class="v2-stat-value">${(stats.api_responses || 0).toLocaleString()}</div></div>`;
+            if (stats.portfolio_snapshots) {
+                html += `<div class="v2-stat-card"><div class="v2-stat-label">Snapshots</div><div class="v2-stat-value">${(stats.portfolio_snapshots.count || 0).toLocaleString()}</div></div>`;
             }
             setSafeHTML(container, html || '<div class="v2-stat-card"><div class="v2-stat-label">Cache Status</div><div class="v2-stat-value">Loaded</div></div>');
         }

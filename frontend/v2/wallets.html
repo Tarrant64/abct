@@ -76,11 +76,16 @@
         async function loadWallets() {
             try {
                 const resp = await v2Fetch('/wallets');
-                if (!resp.ok) throw new Error('Failed to load wallets');
+                if (!resp.ok) {
+                    const errData = await resp.json().catch(() => ({}));
+                    throw new Error(errData.detail || `HTTP ${resp.status}`);
+                }
                 const data = await resp.json();
                 renderWallets(data);
             } catch(e) {
-                setSafeHTML(document.getElementById('walletList'), '<div class="v2-empty"><div class="v2-empty-title">Could not load wallets</div></div>');
+                console.error('Wallet load error:', e);
+                setSafeHTML(document.getElementById('walletList'),
+                    `<div class="v2-empty"><div class="v2-empty-title">Could not load wallets</div><div class="v2-empty-desc">${escapeHtml(e.message || 'Unknown error')}</div></div>`);
             }
         }
 
@@ -93,40 +98,57 @@
                 return;
             }
 
-            // Group by stake address or blockchain
+            // Backend returns balance (native amount) and balance_unit but no value_usd.
+            // We display what's available.
             let html = '';
             wallets.forEach(w => {
                 const addr = w.address || '';
                 const label = w.label || w.name || 'Wallet';
                 const blockchain = w.blockchain || 'unknown';
                 const balance = w.balance || 0;
+                const balanceUnit = w.balance_unit || w.symbol || blockchain.toUpperCase();
                 const valueUsd = w.value_usd || 0;
+                const tokenCount = w.native_assets_count || 0;
 
-                html += `<div class="wallet-card">
+                html += `<div class="wallet-card" data-address="${escapeAttr(addr)}">
                     <div class="wallet-card-header">
                         <div>
                             <div class="wallet-card-label">${escapeHtml(label)}</div>
-                            <div style="margin-top:2px;"><span class="v2-chain-badge">${escapeHtml(blockchain)}</span></div>
+                            <div style="margin-top:2px;"><span class="v2-chain-badge">${escapeHtml(blockchain)}</span>${tokenCount > 0 ? ` <span style="font-size:11px;color:var(--v2-text-muted);margin-left:6px;">${tokenCount} token${tokenCount !== 1 ? 's' : ''}</span>` : ''}</div>
                         </div>
                         <div class="wallet-actions">
-                            <button class="v2-btn v2-btn-ghost v2-btn-sm" onclick="refreshWallet('${escapeAttr(addr)}')" title="Refresh">&#10227;</button>
-                            <button class="v2-btn v2-btn-ghost v2-btn-sm" onclick="deleteWallet('${escapeAttr(addr)}')" title="Delete" style="color:var(--v2-red)">&#10005;</button>
+                            <button class="v2-btn v2-btn-ghost v2-btn-sm wallet-refresh-btn" data-addr="${escapeAttr(addr)}" title="Refresh">&#10227;</button>
+                            <button class="v2-btn v2-btn-ghost v2-btn-sm wallet-delete-btn" data-addr="${escapeAttr(addr)}" title="Delete" style="color:var(--v2-red)">&#10005;</button>
                         </div>
                     </div>
                     <div class="wallet-card-addr">${escapeHtml(addr)}</div>
                     <div class="wallet-card-stats">
                         <div class="wallet-card-stat">
                             <div class="wallet-card-stat-label">Balance</div>
-                            <div class="wallet-card-stat-value v2-blur">${formatAmount(balance)} ${escapeHtml(w.symbol || blockchain.toUpperCase())}</div>
+                            <div class="wallet-card-stat-value v2-blur">${formatAmount(balance)} ${escapeHtml(balanceUnit)}</div>
                         </div>
-                        <div class="wallet-card-stat">
+                        ${valueUsd > 0 ? `<div class="wallet-card-stat">
                             <div class="wallet-card-stat-label">Value</div>
                             <div class="wallet-card-stat-value v2-blur">${formatCurrency(valueUsd)}</div>
-                        </div>
+                        </div>` : ''}
                     </div>
                 </div>`;
             });
             setSafeHTML(container, html);
+
+            // Attach event listeners after rendering (DOMPurify may strip onclick handlers)
+            container.querySelectorAll('.wallet-refresh-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    refreshWallet(btn.dataset.addr);
+                });
+            });
+            container.querySelectorAll('.wallet-delete-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteWallet(btn.dataset.addr);
+                });
+            });
         }
 
         async function addWallet() {

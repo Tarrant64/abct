@@ -17,7 +17,7 @@
             <header class="v2-topbar">
                 <div class="v2-topbar-left"><span class="v2-topbar-title">Profit & Loss</span></div>
                 <div class="v2-topbar-right">
-                    <button class="v2-btn v2-btn-primary" onclick="computePnl()">Compute P&L</button>
+                    <button class="v2-btn v2-btn-primary" id="computePnlBtn">Compute P&L</button>
                     <div class="v2-user-menu"></div>
                 </div>
             </header>
@@ -60,10 +60,13 @@
         document.addEventListener('DOMContentLoaded', () => {
             v2InitShell('pnl');
             loadPnl();
+            document.getElementById('computePnlBtn').addEventListener('click', computePnl);
         });
 
         async function loadPnl() {
             try {
+                // /pnl/summary returns: {total_invested, current_value, total_unrealized, total_realized, total_pnl, pnl_percent, ...}
+                // /pnl/unrealized returns: array of {token_symbol, total_invested, current_value, unrealized_gain, unrealized_pct, ...}
                 const [summaryResp, unrealizedResp] = await Promise.allSettled([
                     v2Fetch('/pnl/summary'),
                     v2Fetch('/pnl/unrealized'),
@@ -71,9 +74,11 @@
 
                 if (summaryResp.status === 'fulfilled' && summaryResp.value.ok) {
                     const data = await summaryResp.value.json();
-                    setText('pnlCostBasis', formatCurrency(data.total_cost_basis || 0));
-                    setText('pnlRealized', formatCurrency(data.total_realized || 0));
-                    const returnPct = data.total_return_pct || 0;
+                    // Backend field: total_invested (not total_cost_basis)
+                    setText('pnlCostBasis', formatCurrency(parseFloat(data.total_invested) || 0));
+                    setText('pnlRealized', formatCurrency(parseFloat(data.total_realized) || 0));
+                    // Backend field: pnl_percent (not total_return_pct)
+                    const returnPct = parseFloat(data.pnl_percent) || 0;
                     const retEl = document.getElementById('pnlReturn');
                     retEl.textContent = (returnPct >= 0 ? '+' : '') + returnPct.toFixed(2) + '%';
                     retEl.style.color = returnPct >= 0 ? 'var(--v2-accent)' : 'var(--v2-red)';
@@ -81,12 +86,14 @@
 
                 if (unrealizedResp.status === 'fulfilled' && unrealizedResp.value.ok) {
                     const data = await unrealizedResp.value.json();
-                    const totalUnrealized = data.total_unrealized || 0;
+                    // /pnl/unrealized returns a flat ARRAY of per-token items, not {total_unrealized, assets}
+                    const items = Array.isArray(data) ? data : (data.assets || data.by_asset || []);
+                    const totalUnrealized = items.reduce((sum, i) => sum + (parseFloat(i.unrealized_gain) || 0), 0);
                     const el = document.getElementById('pnlUnrealized');
                     el.textContent = formatCurrency(totalUnrealized);
                     el.style.color = totalUnrealized >= 0 ? 'var(--v2-accent)' : 'var(--v2-red)';
 
-                    renderPnlTable(data.assets || data.by_asset || []);
+                    renderPnlTable(items);
                 }
             } catch(e) {
                 console.error('P&L load error:', e);
@@ -102,19 +109,21 @@
             }
 
             let html = '';
-            assets.sort((a, b) => Math.abs(b.unrealized_pnl || 0) - Math.abs(a.unrealized_pnl || 0));
+            // Backend fields: token_symbol, total_invested, current_value, unrealized_gain, unrealized_pct
+            assets.sort((a, b) => Math.abs(parseFloat(b.unrealized_gain) || 0) - Math.abs(parseFloat(a.unrealized_gain) || 0));
             assets.forEach(a => {
-                const unrealized = a.unrealized_pnl || 0;
-                const realized = a.realized_pnl || 0;
-                const returnPct = a.return_pct || 0;
+                const unrealized = parseFloat(a.unrealized_gain) || 0;
+                // realized_pnl not in per-asset unrealized response; show '--' or 0
+                const realized = parseFloat(a.realized_pnl) || 0;
+                const returnPct = parseFloat(a.unrealized_pct) || 0;
                 const urClass = unrealized >= 0 ? 'v2-value-positive' : 'v2-value-negative';
                 const rlClass = realized >= 0 ? 'v2-value-positive' : 'v2-value-negative';
                 const rtClass = returnPct >= 0 ? 'v2-value-positive' : 'v2-value-negative';
 
                 html += `<tr>
-                    <td><strong>${escapeHtml(a.symbol || a.asset || '?')}</strong></td>
-                    <td class="right v2-blur">${formatCurrency(a.cost_basis || 0)}</td>
-                    <td class="right v2-blur">${formatCurrency(a.current_value || 0)}</td>
+                    <td><strong>${escapeHtml(a.token_symbol || a.symbol || a.asset || '?')}</strong></td>
+                    <td class="right v2-blur">${formatCurrency(parseFloat(a.total_invested) || 0)}</td>
+                    <td class="right v2-blur">${formatCurrency(parseFloat(a.current_value) || 0)}</td>
                     <td class="right ${urClass}">${unrealized >= 0 ? '+' : ''}${formatCurrency(unrealized)}</td>
                     <td class="right ${rlClass}">${realized >= 0 ? '+' : ''}${formatCurrency(realized)}</td>
                     <td class="right ${rtClass}">${returnPct >= 0 ? '+' : ''}${returnPct.toFixed(2)}%</td>

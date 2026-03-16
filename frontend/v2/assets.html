@@ -214,9 +214,9 @@
             exchanges.forEach(ex => {
                 html += `<tr>
                     <td><strong>${escapeHtml(ex.name || ex.exchange || 'Exchange')}</strong></td>
-                    <td class="right">${ex.asset_count || (ex.balances ? ex.balances.length : 0)}</td>
+                    <td class="right">${ex.asset_count || (ex.assets ? ex.assets.length : 0)}</td>
                     <td class="right v2-blur">${formatCurrency(ex.total_usd || 0)}</td>
-                    <td><span class="v2-badge ${ex.status === 'connected' || ex.connected ? 'v2-badge-green' : 'v2-badge-red'}">${ex.status || (ex.connected ? 'Connected' : 'Error')}</span></td>
+                    <td><span class="v2-badge ${ex.error ? 'v2-badge-red' : 'v2-badge-green'}">${ex.error ? 'Error' : 'Connected'}</span></td>
                 </tr>`;
             });
             html += '</tbody></table>';

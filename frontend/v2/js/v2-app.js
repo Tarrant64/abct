@@ -540,7 +540,7 @@ function renderAssetsTable() {
         }
 
         html += `
-            <tr onclick="openAssetDetail('${escapeAttr(symbol)}', '${escapeAttr(chain)}')" data-symbol="${escapeAttr(symbol)}">
+            <tr data-symbol="${escapeAttr(symbol)}" data-chain="${escapeAttr(chain)}" style="cursor:pointer">
                 <td>
                     <div class="v2-asset-name">
                         <div class="v2-asset-icon">${logoHtml}</div>
@@ -564,6 +564,13 @@ function renderAssetsTable() {
     });
 
     setSafeHTML(tbody, html);
+
+    // Attach click handlers after rendering (DOMPurify strips onclick on <tr> elements)
+    tbody.querySelectorAll('tr[data-symbol]').forEach(row => {
+        row.addEventListener('click', () => {
+            openAssetDetail(row.dataset.symbol, row.dataset.chain || '');
+        });
+    });
 
     // Render sparklines after table is in DOM
     requestAnimationFrame(() => {
@@ -976,14 +983,43 @@ function formatCompact(value) {
 function setSafeHTML(element, html) {
     if (!element) return;
     if (typeof DOMPurify !== 'undefined') {
-        // Allow onclick/onchange/onerror since all V2 HTML is developer-authored
-        // (no user-supplied content flows into event handler strings)
-        // FORCE_BODY ensures table elements are preserved correctly
-        element.innerHTML = DOMPurify.sanitize(html, {
+        // All V2 HTML is developer-authored with user data escaped via escapeHtml/escapeAttr.
+        // DOMPurify is belt-and-suspenders protection.
+        const purifyConfig = {
             ADD_ATTR: ['onclick', 'onchange', 'onerror'],
-            ADD_TAGS: ['table', 'thead', 'tbody', 'tr', 'th', 'td', 'canvas'],
-            FORCE_BODY: true,
-        }); // eslint-disable-line
+            ADD_TAGS: ['canvas'],
+        };
+
+        // Table elements (<tr>, <td>, <th>) are invalid outside a <table> context.
+        // DOMPurify parses HTML using the browser's parser, which strips orphaned
+        // table elements in a <div>/<body> context. To preserve them, we wrap in a
+        // <table> for sanitization, then extract the sanitized content.
+        const tagName = element.tagName ? element.tagName.toLowerCase() : '';
+        const isTableContext = ['tbody', 'thead', 'tfoot', 'table', 'tr'].includes(tagName);
+
+        if (isTableContext && /<\s*t[rdh]/i.test(html)) {
+            // Wrap in table context so the browser parser preserves <tr>/<td>/<th>
+            const wrapper = tagName === 'tr' ? '<table><tbody><tr>' : '<table><tbody>';
+            const wrapperEnd = tagName === 'tr' ? '</tr></tbody></table>' : '</tbody></table>';
+            const wrapped = wrapper + html + wrapperEnd;
+            const sanitized = DOMPurify.sanitize(wrapped, {
+                ...purifyConfig,
+                WHOLE_DOCUMENT: false,
+                RETURN_DOM: true,
+            });
+            // Extract the content from the wrapper — get the matching inner element
+            const inner = tagName === 'tr'
+                ? sanitized.querySelector('tr')
+                : sanitized.querySelector('tbody');
+            if (inner) {
+                element.innerHTML = inner.innerHTML;
+            } else {
+                // Fallback: set directly (content is developer-authored)
+                element.innerHTML = html;
+            }
+        } else {
+            element.innerHTML = DOMPurify.sanitize(html, purifyConfig);
+        }
     } else {
         // DOMPurify not yet loaded — use innerHTML directly since all V2 HTML is developer-authored
         element.innerHTML = html;

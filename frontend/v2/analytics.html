@@ -131,15 +131,15 @@
             }
 
             // Split into gainers (positive change) and losers (negative change)
-            const gainers = movers.filter(m => (m.change_24h || 0) > 0).slice(0, 5);
-            const losers = movers.filter(m => (m.change_24h || 0) < 0).slice(0, 5);
+            const gainers = movers.filter(m => (parseFloat(m.change_24h) || 0) > 0).slice(0, 5);
+            const losers = movers.filter(m => (parseFloat(m.change_24h) || 0) < 0).slice(0, 5);
 
             let html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">';
             html += '<div><div style="font-size:12px;font-weight:600;color:var(--v2-accent);margin-bottom:8px;">Top Gainers</div>';
             gainers.forEach(g => {
                 html += `<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;">
                     <span>${escapeHtml(g.symbol || g.name || '?')}</span>
-                    <span class="v2-value-positive">+${(g.change_24h || 0).toFixed(1)}%</span>
+                    <span class="v2-value-positive">+${(parseFloat(g.change_24h) || 0).toFixed(1)}%</span>
                 </div>`;
             });
             if (!gainers.length) html += '<div style="padding:6px 0;font-size:12px;color:var(--v2-text-muted)">No gainers</div>';
@@ -148,7 +148,7 @@
             losers.forEach(l => {
                 html += `<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;">
                     <span>${escapeHtml(l.symbol || l.name || '?')}</span>
-                    <span class="v2-value-negative">${(l.change_24h || 0).toFixed(1)}%</span>
+                    <span class="v2-value-negative">${(parseFloat(l.change_24h) || 0).toFixed(1)}%</span>
                 </div>`;
             });
             if (!losers.length) html += '<div style="padding:6px 0;font-size:12px;color:var(--v2-text-muted)">No losers</div>';
@@ -168,11 +168,18 @@
             }
 
             // Group holdings by source type for allocation chart
+            // Backend source values: chain, native_token, L1 chain, token, exchange, staking, defi_summary, defi, etc.
             const sourceMap = {};
             holdings.forEach(h => {
-                const source = h.source || 'other';
-                const label = source === 'chain' ? 'Wallets' : source === 'token' ? 'Tokens' : source === 'exchange' ? 'Exchanges' : source === 'staking' ? 'Staking' : source === 'defi' ? 'DeFi' : source.charAt(0).toUpperCase() + source.slice(1);
-                sourceMap[label] = (sourceMap[label] || 0) + (h.value_usd || 0);
+                const source = (h.source || 'other').toLowerCase();
+                let label;
+                if (source === 'chain' || source === 'l1 chain' || source === 'native_token') label = 'Wallets';
+                else if (source === 'token' || source === 'tracked_token' || source === 'custom_token') label = 'Tokens';
+                else if (source === 'exchange') label = 'Exchanges';
+                else if (source === 'staking') label = 'Staking';
+                else if (source === 'defi' || source === 'defi_summary') label = 'DeFi';
+                else label = source.charAt(0).toUpperCase() + source.slice(1);
+                sourceMap[label] = (sourceMap[label] || 0) + (parseFloat(h.value_usd) || 0);
             });
 
             const entries = Object.entries(sourceMap).filter(([_, v]) => v > 0).sort((a, b) => b[1] - a[1]);

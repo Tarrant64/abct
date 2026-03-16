@@ -72,7 +72,8 @@
 
             exchanges.forEach(ex => {
                 totalValue += (ex.total_usd || 0);
-                totalAssets += (ex.balances ? ex.balances.length : ex.asset_count || 0);
+                // Backend returns 'assets' array and 'asset_count', not 'balances'
+                totalAssets += (ex.assets ? ex.assets.length : ex.asset_count || 0);
             });
 
             setText('exTotal', formatCurrency(totalValue));
@@ -89,38 +90,50 @@
             exchanges.forEach((ex, idx) => {
                 const name = ex.name || ex.exchange || 'Exchange';
                 const total = ex.total_usd || 0;
-                const balances = ex.balances || [];
-                const status = ex.connected !== false;
+                // Backend returns 'assets', not 'balances'
+                const assets = ex.assets || [];
+                // Check for error field (set by backend when exchange fetch fails)
+                const hasError = !!ex.error;
 
                 html += `<div class="exchange-card">
-                    <div class="exchange-card-header" onclick="toggleExchange(${idx})">
+                    <div class="exchange-card-header" data-exchange-idx="${idx}">
                         <div style="display:flex;align-items:center;gap:12px;">
                             <div class="exchange-name">${escapeHtml(name)}</div>
-                            <span class="v2-badge ${status ? 'v2-badge-green' : 'v2-badge-red'}">${status ? 'Connected' : 'Error'}</span>
+                            <span class="v2-badge ${hasError ? 'v2-badge-red' : 'v2-badge-green'}">${hasError ? 'Error' : 'Connected'}</span>
                         </div>
                         <div class="exchange-value v2-blur">${formatCurrency(total)}</div>
                     </div>
                     <div class="exchange-assets" id="exAssets_${idx}">`;
 
-                if (balances.length) {
+                if (hasError) {
+                    html += `<div style="padding:16px;text-align:center;color:var(--v2-red);font-size:13px;">Error: ${escapeHtml(ex.error)}</div>`;
+                } else if (assets.length) {
                     html += '<table class="v2-table"><thead><tr><th>Asset</th><th class="right">Amount</th><th class="right">Value</th></tr></thead><tbody>';
-                    balances.sort((a, b) => (b.value_usd || 0) - (a.value_usd || 0));
-                    balances.forEach(b => {
-                        if ((b.value_usd || 0) < 0.01 && (b.amount || b.balance || 0) < 0.0001) return;
+                    // Backend uses usd_value, not value_usd
+                    assets.sort((a, b) => (b.usd_value || 0) - (a.usd_value || 0));
+                    assets.forEach(b => {
+                        if ((b.usd_value || 0) < 0.01 && (b.amount || b.balance || 0) < 0.0001) return;
                         html += `<tr>
                             <td><strong>${escapeHtml(b.symbol || b.asset || b.currency || '?')}</strong></td>
                             <td class="right v2-blur">${formatAmount(b.amount || b.balance || b.free || 0)}</td>
-                            <td class="right v2-blur">${formatCurrency(b.value_usd || 0)}</td>
+                            <td class="right v2-blur">${formatCurrency(b.usd_value || 0)}</td>
                         </tr>`;
                     });
                     html += '</tbody></table>';
                 } else {
-                    html += '<div style="padding:16px;text-align:center;color:var(--v2-text-muted);font-size:13px;">No balance data available</div>';
+                    html += '<div style="padding:16px;text-align:center;color:var(--v2-text-muted);font-size:13px;">Connected &mdash; no holdings above threshold</div>';
                 }
 
                 html += '</div></div>';
             });
             setSafeHTML(container, html);
+
+            // Attach click handlers after rendering (DOMPurify may strip onclick)
+            container.querySelectorAll('.exchange-card-header[data-exchange-idx]').forEach(header => {
+                header.addEventListener('click', () => {
+                    toggleExchange(parseInt(header.dataset.exchangeIdx));
+                });
+            });
         }
 
         function toggleExchange(idx) {

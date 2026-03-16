@@ -31,10 +31,10 @@
                 <div class="v2-card v2-fade-in" style="margin-bottom:24px">
                     <div class="v2-card-header"><span class="v2-card-title">Security Scans</span></div>
                     <div style="display:flex;gap:12px;flex-wrap:wrap;">
-                        <button class="v2-btn v2-btn-secondary" onclick="scanPoisoning()">Scan for Address Poisoning</button>
-                        <button class="v2-btn v2-btn-secondary" onclick="scanSpam()">Detect Spam Tokens</button>
-                        <button class="v2-btn v2-btn-secondary" onclick="scanCardanoShield()">Cardano Shield Check</button>
-                        <button class="v2-btn v2-btn-secondary" onclick="checkApprovals()">Check Token Approvals</button>
+                        <button class="v2-btn v2-btn-secondary" id="scanPoisoningBtn">Scan for Address Poisoning</button>
+                        <button class="v2-btn v2-btn-secondary" id="scanSpamBtn">Detect Spam Tokens</button>
+                        <button class="v2-btn v2-btn-secondary" id="scanCardanoShieldBtn">Cardano Shield Check</button>
+                        <button class="v2-btn v2-btn-secondary" id="checkApprovalsBtn">Check Token Approvals</button>
                     </div>
                 </div>
 
@@ -57,28 +57,48 @@
         document.addEventListener('DOMContentLoaded', () => {
             v2InitShell('security');
             loadSecurity();
+
+            // Attach button handlers (avoid inline onclick)
+            document.getElementById('scanPoisoningBtn').addEventListener('click', scanPoisoning);
+            document.getElementById('scanSpamBtn').addEventListener('click', scanSpam);
+            document.getElementById('scanCardanoShieldBtn').addEventListener('click', scanCardanoShield);
+            document.getElementById('checkApprovalsBtn').addEventListener('click', checkApprovals);
         });
 
         async function loadSecurity() {
-            // Privacy stats
-            try {
-                const resp = await v2Fetch('/privacy/stats');
-                if (resp.ok) {
-                    const data = await resp.json();
-                    setText('privacyScore', (data.average_score || data.overall_score || '--') + (typeof data.average_score === 'number' ? '/100' : ''));
-                    setText('approvalCount', (data.total_approvals || 0).toLocaleString());
-                    setText('threatCount', (data.threat_count || 0).toLocaleString());
-                }
-            } catch(e) { console.error(e); }
+            // /privacy/stats returns: {zcash: {...}, monero: {...}, secret_network: {...}}
+            // It does NOT have average_score, total_approvals, or threat_count.
+            // Those stats come from other endpoints.
 
-            // Spam count
+            // Privacy score — derive from wallet summary
+            // Approvals — from /privacy/approvals/wallets
+            // Threats — not directly available; show '--' until a scan is run
+
+            // Spam count from /spam/status
             try {
                 const resp = await v2Fetch('/spam/status');
                 if (resp.ok) {
                     const data = await resp.json();
-                    setText('spamCount', (data.hidden_count || data.spam_count || 0).toLocaleString());
+                    // Backend returns: {configured, hidden_tokens_count}
+                    setText('spamCount', (data.hidden_tokens_count || 0).toLocaleString());
                 }
             } catch(e) {}
+
+            // Approval count from /privacy/approvals/wallets
+            try {
+                const resp = await v2Fetch('/privacy/approvals/wallets');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    // Backend returns: {wallets: [...], total: N}
+                    setText('approvalCount', (data.total || 0).toLocaleString());
+                }
+            } catch(e) {}
+
+            // Threat count — no direct endpoint; default to '--'
+            setText('threatCount', '--');
+
+            // Privacy score — derive from wallet summary scores
+            setText('privacyScore', '--');
 
             // Wallet privacy summary
             try {
@@ -86,6 +106,14 @@
                 if (resp.ok) {
                     const data = await resp.json();
                     renderPrivacyWallets(data);
+
+                    // Compute average privacy score from wallets that have one
+                    const wallets = data.wallets || [];
+                    const scored = wallets.filter(w => w.static_privacy_score !== null);
+                    if (scored.length > 0) {
+                        const avg = scored.reduce((s, w) => s + w.static_privacy_score, 0) / scored.length;
+                        setText('privacyScore', Math.round(avg) + '/100');
+                    }
                 }
             } catch(e) {
                 setSafeHTML(document.getElementById('privacyWallets'), '<div style="padding:20px;color:var(--v2-text-muted);text-align:center">Privacy analysis available after scanning</div>');
@@ -97,22 +125,26 @@
             const wallets = data.wallets || data || [];
 
             if (!wallets.length) {
-                setSafeHTML(container, '<div style="padding:20px;color:var(--v2-text-muted);text-align:center">No privacy data yet. Run a scan to analyze your wallets.</div>');
+                setSafeHTML(container, '<div style="padding:20px;color:var(--v2-text-muted);text-align:center">No privacy-relevant wallets found. Add ZCash, Monero, or EVM wallets to see privacy scores.</div>');
                 return;
             }
 
             let html = '<table class="v2-table"><thead><tr><th>Wallet</th><th>Chain</th><th class="right">Score</th><th>Level</th></tr></thead><tbody>';
             wallets.forEach(w => {
-                const score = w.score || w.privacy_score || 0;
-                const level = score >= 80 ? 'High' : score >= 50 ? 'Medium' : 'Low';
-                const levelClass = score >= 80 ? 'v2-badge-green' : score >= 50 ? 'v2-badge-neutral' : 'v2-badge-red';
+                // Backend field: static_privacy_score (null means needs on-demand scan)
+                const score = w.static_privacy_score;
+                const hasScore = score !== null && score !== undefined;
+                const scoreNum = hasScore ? score : 0;
+                const level = !hasScore ? 'Scan Required' : scoreNum >= 80 ? 'High' : scoreNum >= 50 ? 'Medium' : 'Low';
+                const levelClass = !hasScore ? 'v2-badge-neutral' : scoreNum >= 80 ? 'v2-badge-green' : scoreNum >= 50 ? 'v2-badge-neutral' : 'v2-badge-red';
                 const addr = w.address || '';
                 const shortAddr = addr.length > 16 ? addr.slice(0,8) + '...' + addr.slice(-6) : addr;
+                const label = w.label ? escapeHtml(w.label) + ' ' : '';
 
                 html += `<tr>
-                    <td style="font-family:monospace;font-size:12px">${escapeHtml(shortAddr)}</td>
-                    <td><span class="v2-chain-badge">${escapeHtml(w.blockchain || w.chain || '')}</span></td>
-                    <td class="right"><strong>${score}/100</strong></td>
+                    <td style="font-family:monospace;font-size:12px">${label}<span style="opacity:0.7">${escapeHtml(shortAddr)}</span></td>
+                    <td><span class="v2-chain-badge">${escapeHtml(w.blockchain || '')}</span></td>
+                    <td class="right"><strong>${hasScore ? score + '/100' : '--'}</strong></td>
                     <td><span class="v2-badge ${levelClass}">${level}</span></td>
                 </tr>`;
             });
@@ -153,9 +185,11 @@
                 const resp = await v2Fetch('/privacy/approvals/wallets');
                 if (resp.ok) {
                     const data = await resp.json();
-                    const total = data.total_approvals || (data.wallets || []).reduce((s, w) => s + (w.approval_count || 0), 0);
-                    setText('approvalCount', total.toLocaleString());
-                    showToast(`Found ${total} token approvals`, 'success');
+                    // Backend returns: {wallets: [...], total: N} — total is wallet count, not approval count
+                    // Each wallet needs individual /privacy/approvals/wallet/{id} call for approval details
+                    const walletCount = data.total || (data.wallets || []).length;
+                    setText('approvalCount', walletCount.toLocaleString() + ' wallets');
+                    showToast(`Found ${walletCount} EVM wallets for approval checks`, 'success');
                 }
             } catch(e) { showToast('Check failed', 'error'); }
         }

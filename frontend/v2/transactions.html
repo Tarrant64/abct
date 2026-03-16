@@ -144,10 +144,12 @@
                 const fmtDate = date ? new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' }) : '--';
                 const time = date ? new Date(date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '';
                 const direction = tx.direction || tx.type || 'transfer';
-                const asset = tx.token || tx.asset || tx.symbol || '';
+                // Backend uses token_symbol (DB column name), not token/asset/symbol
+                const asset = tx.token_symbol || tx.token || tx.asset || tx.symbol || '';
                 const chain = tx.blockchain || tx.chain || '';
                 const amount = tx.amount || 0;
-                const value = tx.value_usd || 0;
+                // DB schema has no value_usd; estimate from metadata or show '--'
+                const value = tx.value_usd || tx.native_amount || 0;
                 const hash = tx.tx_hash || tx.hash || '';
                 const shortHash = hash ? hash.slice(0, 8) + '...' + hash.slice(-6) : '--';
 
@@ -159,7 +161,7 @@
                     <td><span class="v2-badge v2-badge-neutral">${escapeHtml(direction)}</span></td>
                     <td><strong>${escapeHtml(asset)}</strong></td>
                     <td><span class="v2-chain-badge">${escapeHtml(chain)}</span></td>
-                    <td class="right ${typeClass}">${direction.toLowerCase() === 'sent' ? '-' : '+'}${formatAmount(Math.abs(amount))}</td>
+                    <td class="right ${typeClass}">${direction.toLowerCase() === 'sent' ? '-' : '+'}${formatAmount(Math.abs(parseFloat(amount) || 0))}</td>
                     <td class="right v2-blur">${value > 0 ? formatCurrency(value) : '--'}</td>
                     <td style="font-family:monospace;font-size:11px;color:var(--v2-text-muted)">${escapeHtml(shortHash)}</td>
                 </tr>`;

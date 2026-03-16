@@ -27,7 +27,7 @@
             <header class="v2-topbar">
                 <div class="v2-topbar-left"><span class="v2-topbar-title">DeFi & Staking</span></div>
                 <div class="v2-topbar-right">
-                    <button class="v2-sync-btn" onclick="refreshDefi()"><span class="sync-icon">&#10227;</span> Refresh</button>
+                    <button class="v2-sync-btn" id="refreshDefiBtn"><span class="sync-icon">&#10227;</span> Refresh</button>
                     <div class="v2-user-menu"></div>
                 </div>
             </header>
@@ -57,6 +57,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             v2InitShell('defi');
             loadDefi();
+            document.getElementById('refreshDefiBtn').addEventListener('click', refreshDefi);
         });
 
         async function loadDefi() {
@@ -93,14 +94,15 @@
 
         function renderDefi(defiData, holdingsData, instantData) {
             // Extract staking and DeFi holdings from all-holdings
+            // Backend source field uses: 'staking', 'defi_summary', 'defi' (varies by path)
             const allHoldings = holdingsData ? (holdingsData.holdings || []) : [];
             const stakingHoldings = allHoldings.filter(h => h.source === 'staking');
-            const defiHoldings = allHoldings.filter(h => h.source === 'defi');
+            const defiHoldings = allHoldings.filter(h => h.source === 'defi' || h.source === 'defi_summary');
 
             // Get totals from instant breakdown
             const bd = instantData ? (instantData.breakdown || {}) : {};
-            const totalStaked = bd.staking || 0;
-            const totalDefi = bd.defi || 0;
+            const totalStaked = parseFloat(bd.staking) || 0;
+            const totalDefi = parseFloat(bd.defi) || 0;
 
             // Count protocols from defi summary
             const defiPositions = defiData ? (defiData.all_positions || []) : [];
@@ -123,7 +125,7 @@
 
             // Staking positions from all-holdings
             if (stakingHoldings.length > 0) {
-                const stakingTotal = stakingHoldings.reduce((sum, h) => sum + (h.value_usd || 0), 0);
+                const stakingTotal = stakingHoldings.reduce((sum, h) => sum + (parseFloat(h.value_usd) || 0), 0);
                 html += `<div class="protocol-card">
                     <div class="protocol-header">
                         <div>
@@ -135,8 +137,8 @@
                     <div class="protocol-positions">`;
                 stakingHoldings.forEach(h => {
                     html += `<div class="position-row">
-                        <span>${escapeHtml(h.symbol || h.name || 'Token')}: <span class="v2-blur">${formatAmount(h.amount || 0)}</span></span>
-                        <span class="v2-blur">${formatCurrency(h.value_usd || 0)}</span>
+                        <span>${escapeHtml(h.symbol || h.name || 'Token')}: <span class="v2-blur">${formatAmount(parseFloat(h.amount) || 0)}</span></span>
+                        <span class="v2-blur">${formatCurrency(parseFloat(h.value_usd) || 0)}</span>
                     </div>`;
                 });
                 html += '</div></div>';
@@ -164,7 +166,7 @@
                         <div class="protocol-positions">`;
                     items.forEach(p => {
                         html += `<div class="position-row">
-                            <span>${escapeHtml(p.token || p.asset_name || 'Token')}: <span class="v2-blur">${formatAmount(p.quantity || 0)}</span></span>
+                            <span>${escapeHtml(p.token || p.asset_name || 'Token')}: <span class="v2-blur">${formatAmount(parseFloat(p.quantity) || 0)}</span></span>
                             <span style="font-size:12px;color:var(--v2-text-muted)">${escapeHtml(p.type_label || p.type || '')}</span>
                         </div>`;
                     });
@@ -174,7 +176,7 @@
 
             // DeFi holdings from all-holdings (tokens sourced from DeFi protocols)
             if (defiHoldings.length > 0) {
-                const defiTotal = defiHoldings.reduce((sum, h) => sum + (h.value_usd || 0), 0);
+                const defiTotal = defiHoldings.reduce((sum, h) => sum + (parseFloat(h.value_usd) || 0), 0);
                 html += `<div class="protocol-card">
                     <div class="protocol-header">
                         <div>
@@ -185,8 +187,8 @@
                     <div class="protocol-positions">`;
                 defiHoldings.forEach(h => {
                     html += `<div class="position-row">
-                        <span>${escapeHtml(h.symbol || h.name || 'Token')}: <span class="v2-blur">${formatAmount(h.amount || 0)}</span></span>
-                        <span class="v2-blur">${formatCurrency(h.value_usd || 0)}</span>
+                        <span>${escapeHtml(h.symbol || h.name || 'Token')}: <span class="v2-blur">${formatAmount(parseFloat(h.amount) || 0)}</span></span>
+                        <span class="v2-blur">${formatCurrency(parseFloat(h.value_usd) || 0)}</span>
                     </div>`;
                 });
                 html += '</div></div>';
