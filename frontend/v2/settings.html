@@ -196,8 +196,63 @@
                 }
             } catch(e) {}
 
+            // Load services/startup status
+            try {
+                const [startupResp, statusResp] = await Promise.all([
+                    v2Fetch('/api/startup-status'),
+                    v2Fetch('/api/status')
+                ]);
+                const startupData = startupResp.ok ? await startupResp.json() : {};
+                const statusData = statusResp.ok ? await statusResp.json() : {};
+                renderServices(startupData, statusData);
+            } catch(e) { console.error('Services load error:', e); }
+
             // Load logs
             loadLogs();
+        }
+
+        function renderServices(startup, apiStatus) {
+            const container = document.getElementById('servicesList');
+            let html = '';
+
+            // Backend startup status: {database: "ready", nft_image_db: "ready", snapshot_check: "ready", nft_prices: "ready", nft_scheduler: "ready|pending|loading"}
+            const services = [
+                { key: 'database', label: 'Database', desc: 'Main SQLite database' },
+                { key: 'nft_image_db', label: 'NFT Image DB', desc: 'NFT image cache database' },
+                { key: 'snapshot_check', label: 'Snapshot Check', desc: 'Portfolio snapshot validation' },
+                { key: 'nft_prices', label: 'NFT Prices', desc: 'NFT floor price collector' },
+                { key: 'nft_scheduler', label: 'NFT Scheduler', desc: 'Background NFT data collection' },
+            ];
+
+            html += '<table class="v2-table"><thead><tr><th>Service</th><th>Status</th></tr></thead><tbody>';
+            services.forEach(svc => {
+                const status = startup[svc.key] || 'unknown';
+                const badgeClass = status === 'ready' ? 'v2-badge-green' : status === 'loading' ? 'v2-badge-neutral' : status === 'error' ? 'v2-badge-red' : 'v2-badge-neutral';
+                html += `<tr>
+                    <td><strong>${escapeHtml(svc.label)}</strong><div style="font-size:11px;color:var(--v2-text-muted);margin-top:2px">${escapeHtml(svc.desc)}</div></td>
+                    <td><span class="v2-badge ${badgeClass}">${escapeHtml(status)}</span></td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+
+            // API status section
+            if (apiStatus.apis && typeof apiStatus.apis === 'object') {
+                html += '<div style="margin-top:20px;font-size:13px;font-weight:600;color:var(--v2-text-heading);margin-bottom:8px">API Connectivity</div>';
+                html += '<table class="v2-table"><thead><tr><th>API</th><th>Status</th></tr></thead><tbody>';
+                Object.entries(apiStatus.apis).forEach(([name, status]) => {
+                    const badgeClass = status === 'configured' || status === 'available' ? 'v2-badge-green' : 'v2-badge-red';
+                    html += `<tr>
+                        <td style="text-transform:capitalize"><strong>${escapeHtml(name)}</strong></td>
+                        <td><span class="v2-badge ${badgeClass}">${escapeHtml(String(status))}</span></td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+            }
+
+            // Server status
+            html += `<div style="margin-top:16px;font-size:12px;color:var(--v2-text-muted)">Server Status: ${escapeHtml(apiStatus.status || 'unknown')} | Supported Chains: ${escapeHtml((apiStatus.supported_blockchains || []).join(', '))}</div>`;
+
+            setSafeHTML(container, html);
         }
 
         function renderApiKeys(data) {
@@ -246,23 +301,37 @@
 
         function renderCacheStats(data) {
             const container = document.getElementById('cacheStats');
-            // Backend /api/cache/stats returns: {token_logos: {count, description}, nft_images: {count, size_mb}, ...}
+            // Backend /api/cache/stats returns: {token_logos: {count, description}, nft_images: {count, size_mb}, nft_floor_prices: {count, ...}, portfolio_snapshots: {count, ...}, api_cache: {count, ...}, database_sizes: {portfolio_db, nft_images_db}}
             let html = '';
             const stats = data || {};
+
+            // Helper: safely extract count from a stat object
+            function statCount(obj) {
+                if (!obj || typeof obj !== 'object') return 0;
+                return parseInt(obj.count, 10) || 0;
+            }
+
             if (stats.token_logos) {
-                html += `<div class="v2-stat-card"><div class="v2-stat-label">Token Logos</div><div class="v2-stat-value">${(stats.token_logos.count || 0).toLocaleString()}</div></div>`;
+                html += `<div class="v2-stat-card"><div class="v2-stat-label">Token Logos</div><div class="v2-stat-value">${statCount(stats.token_logos).toLocaleString()}</div><div class="v2-stat-desc">${escapeHtml(stats.token_logos.description || '')}</div></div>`;
             }
             if (stats.nft_images) {
-                const sizeMb = stats.nft_images.size_mb ? ` (${stats.nft_images.size_mb}MB)` : '';
-                html += `<div class="v2-stat-card"><div class="v2-stat-label">NFT Images</div><div class="v2-stat-value">${(stats.nft_images.count || 0).toLocaleString()}${sizeMb}</div></div>`;
+                const sizeMb = stats.nft_images.size_mb ? ` (${parseFloat(stats.nft_images.size_mb).toFixed(1)}MB)` : '';
+                html += `<div class="v2-stat-card"><div class="v2-stat-label">NFT Images</div><div class="v2-stat-value">${statCount(stats.nft_images).toLocaleString()}${escapeHtml(sizeMb)}</div><div class="v2-stat-desc">${escapeHtml(stats.nft_images.description || '')}</div></div>`;
             }
             if (stats.nft_floor_prices) {
-                html += `<div class="v2-stat-card"><div class="v2-stat-label">NFT Floor Prices</div><div class="v2-stat-value">${(stats.nft_floor_prices.count || 0).toLocaleString()}</div></div>`;
+                html += `<div class="v2-stat-card"><div class="v2-stat-label">NFT Floor Prices</div><div class="v2-stat-value">${statCount(stats.nft_floor_prices).toLocaleString()}</div></div>`;
             }
             if (stats.portfolio_snapshots) {
-                html += `<div class="v2-stat-card"><div class="v2-stat-label">Snapshots</div><div class="v2-stat-value">${(stats.portfolio_snapshots.count || 0).toLocaleString()}</div></div>`;
+                html += `<div class="v2-stat-card"><div class="v2-stat-label">Snapshots</div><div class="v2-stat-value">${statCount(stats.portfolio_snapshots).toLocaleString()}</div></div>`;
             }
-            setSafeHTML(container, html || '<div class="v2-stat-card"><div class="v2-stat-label">Cache Status</div><div class="v2-stat-value">Loaded</div></div>');
+            if (stats.api_cache) {
+                html += `<div class="v2-stat-card"><div class="v2-stat-label">API Cache</div><div class="v2-stat-value">${statCount(stats.api_cache).toLocaleString()}</div></div>`;
+            }
+            if (stats.database_sizes && typeof stats.database_sizes === 'object') {
+                const totalMb = (parseFloat(stats.database_sizes.portfolio_db) || 0) + (parseFloat(stats.database_sizes.nft_images_db) || 0);
+                html += `<div class="v2-stat-card"><div class="v2-stat-label">Database Size</div><div class="v2-stat-value">${totalMb.toFixed(1)} MB</div></div>`;
+            }
+            setSafeHTML(container, html || '<div class="v2-stat-card"><div class="v2-stat-label">Cache Status</div><div class="v2-stat-value">No data</div></div>');
         }
 
         async function loadLogs() {

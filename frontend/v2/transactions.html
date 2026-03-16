@@ -17,7 +17,7 @@
             <header class="v2-topbar">
                 <div class="v2-topbar-left"><span class="v2-topbar-title">Transactions</span></div>
                 <div class="v2-topbar-right">
-                    <button class="v2-sync-btn" id="txRefreshBtn" onclick="refreshTransactions()"><span class="sync-icon">&#10227;</span> Refresh</button>
+                    <button class="v2-sync-btn" id="txRefreshBtn"><span class="sync-icon">&#10227;</span> Refresh</button>
                     <div class="v2-user-menu"></div>
                 </div>
             </header>
@@ -33,19 +33,19 @@
                 <!-- Filters -->
                 <div class="v2-card" style="margin-bottom:24px;padding:16px;">
                     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-                        <select class="v2-table-filter" id="txChainFilter" onchange="loadTransactionPage()" style="min-width:120px">
+                        <select class="v2-table-filter" id="txChainFilter" style="min-width:120px">
                             <option value="">All Chains</option>
                             <option value="cardano">Cardano</option>
                             <option value="ethereum">Ethereum</option>
                             <option value="bitcoin">Bitcoin</option>
                             <option value="solana">Solana</option>
                         </select>
-                        <select class="v2-table-filter" id="txTypeFilter" onchange="loadTransactionPage()" style="min-width:120px">
+                        <select class="v2-table-filter" id="txTypeFilter" style="min-width:120px">
                             <option value="">All Directions</option>
                             <option value="sent">Sent</option>
                             <option value="received">Received</option>
                         </select>
-                        <input type="text" class="v2-table-filter" placeholder="Search transactions..." id="txSearch" style="flex:1;min-width:200px" onkeyup="if(event.key==='Enter')loadTransactionPage()">
+                        <input type="text" class="v2-table-filter" placeholder="Search transactions..." id="txSearch" style="flex:1;min-width:200px">
                     </div>
                 </div>
 
@@ -85,6 +85,15 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             v2InitShell('transactions');
+
+            // Attach event listeners (no inline handlers for DOMPurify safety)
+            document.getElementById('txRefreshBtn').addEventListener('click', refreshTransactions);
+            document.getElementById('txChainFilter').addEventListener('change', loadTransactionPage);
+            document.getElementById('txTypeFilter').addEventListener('change', loadTransactionPage);
+            document.getElementById('txSearch').addEventListener('keyup', (e) => {
+                if (e.key === 'Enter') loadTransactionPage();
+            });
+
             loadTransactionStats();
             loadTransactionPage();
         });
@@ -158,9 +167,9 @@
 
                 html += `<tr>
                     <td><div>${escapeHtml(fmtDate)}</div><div style="font-size:11px;color:var(--v2-text-muted)">${escapeHtml(time)}</div></td>
-                    <td><span class="v2-badge v2-badge-neutral">${escapeHtml(direction)}</span></td>
+                    <td><span class="v2-direction-badge direction-${escapeAttr(direction.toLowerCase())}">${escapeHtml(direction)}</span></td>
                     <td><strong>${escapeHtml(asset)}</strong></td>
-                    <td><span class="v2-chain-badge">${escapeHtml(chain)}</span></td>
+                    <td><span class="v2-chain-badge chain-${escapeAttr(chain.toLowerCase())}">${escapeHtml(chain)}</span></td>
                     <td class="right ${typeClass}">${direction.toLowerCase() === 'sent' ? '-' : '+'}${formatAmount(Math.abs(parseFloat(amount) || 0))}</td>
                     <td class="right v2-blur">${value > 0 ? formatCurrency(value) : '--'}</td>
                     <td style="font-family:monospace;font-size:11px;color:var(--v2-text-muted)">${escapeHtml(shortHash)}</td>

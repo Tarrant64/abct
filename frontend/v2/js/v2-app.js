@@ -941,38 +941,47 @@ function logout() {
 // ============================================================================
 
 function formatCurrency(value) {
-    if (value === null || value === undefined || isNaN(value)) return '$0.00';
+    if (value === null || value === undefined) return '$0.00';
+    const num = typeof value === 'number' ? value : parseFloat(value);
+    if (isNaN(num)) return '$0.00';
     return new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: 'USD',
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
-    }).format(value);
+    }).format(num);
 }
 
 function formatPrice(value) {
-    if (!value || value === 0) return '$0.00';
-    if (value < 0.01) return '$' + value.toFixed(6);
-    if (value < 1) return '$' + value.toFixed(4);
-    return formatCurrency(value);
+    if (value === null || value === undefined) return '$0.00';
+    const num = typeof value === 'number' ? value : parseFloat(value);
+    if (isNaN(num) || num === 0) return '$0.00';
+    if (num < 0.01) return '$' + num.toFixed(6);
+    if (num < 1) return '$' + num.toFixed(4);
+    return formatCurrency(num);
 }
 
 function formatAmount(value) {
-    if (!value || value === 0) return '0';
-    if (value >= 1e9) return (value / 1e9).toFixed(2) + 'B';
-    if (value >= 1e6) return (value / 1e6).toFixed(2) + 'M';
-    if (value >= 1e4) return value.toLocaleString('en-US', { maximumFractionDigits: 0 });
-    if (value >= 1) return value.toLocaleString('en-US', { maximumFractionDigits: 2 });
-    return value.toFixed(6);
+    // Ensure numeric — API may return strings, objects, or null
+    if (value === null || value === undefined) return '0';
+    const num = typeof value === 'number' ? value : parseFloat(value);
+    if (isNaN(num) || num === 0) return '0';
+    if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
+    if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+    if (num >= 1e4) return num.toLocaleString('en-US', { maximumFractionDigits: 0 });
+    if (num >= 1) return num.toLocaleString('en-US', { maximumFractionDigits: 2 });
+    return num.toFixed(6);
 }
 
 function formatCompact(value) {
-    if (!value) return '$0';
-    if (value >= 1e12) return '$' + (value / 1e12).toFixed(1) + 'T';
-    if (value >= 1e9) return '$' + (value / 1e9).toFixed(1) + 'B';
-    if (value >= 1e6) return '$' + (value / 1e6).toFixed(1) + 'M';
-    if (value >= 1e3) return '$' + (value / 1e3).toFixed(1) + 'K';
-    return formatCurrency(value);
+    if (value === null || value === undefined) return '$0';
+    const num = typeof value === 'number' ? value : parseFloat(value);
+    if (isNaN(num) || num === 0) return '$0';
+    if (num >= 1e12) return '$' + (num / 1e12).toFixed(1) + 'T';
+    if (num >= 1e9) return '$' + (num / 1e9).toFixed(1) + 'B';
+    if (num >= 1e6) return '$' + (num / 1e6).toFixed(1) + 'M';
+    if (num >= 1e3) return '$' + (num / 1e3).toFixed(1) + 'K';
+    return formatCurrency(num);
 }
 
 

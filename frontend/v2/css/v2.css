@@ -965,6 +965,12 @@ a:hover { opacity: 0.85; }
     letter-spacing: -0.01em;
 }
 
+.v2-stat-desc {
+    font-size: 11px;
+    color: var(--v2-text-muted);
+    margin-top: 4px;
+}
+
 .v2-stat-sub {
     font-size: 12px;
     color: var(--v2-text-muted);
@@ -1387,14 +1393,181 @@ body.privacy-mode .v2-blur {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 2px 8px;
-    font-size: 10px;
+    padding: 3px 10px;
+    font-size: 11px;
     font-weight: 600;
-    border-radius: 4px;
+    border-radius: 6px;
     background: rgba(255, 255, 255, 0.05);
     color: var(--v2-text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+    text-transform: capitalize;
+    letter-spacing: 0.02em;
+}
+
+/* Chain-specific badge colors (dark theme) */
+.v2-chain-badge.chain-cardano {
+    background: rgba(0, 82, 255, 0.2);
+    color: #5c9eff;
+    border: 1px solid rgba(92, 158, 255, 0.25);
+}
+.v2-chain-badge.chain-ethereum {
+    background: rgba(98, 126, 234, 0.2);
+    color: #8ba4f5;
+    border: 1px solid rgba(139, 164, 245, 0.25);
+}
+.v2-chain-badge.chain-bitcoin {
+    background: rgba(247, 147, 26, 0.2);
+    color: #ffb74d;
+    border: 1px solid rgba(255, 183, 77, 0.25);
+}
+.v2-chain-badge.chain-solana {
+    background: rgba(20, 241, 149, 0.2);
+    color: #3dffb3;
+    border: 1px solid rgba(61, 255, 179, 0.25);
+}
+.v2-chain-badge.chain-polygon {
+    background: rgba(130, 71, 229, 0.2);
+    color: #a673f0;
+    border: 1px solid rgba(166, 115, 240, 0.25);
+}
+.v2-chain-badge.chain-base {
+    background: rgba(0, 82, 255, 0.2);
+    color: #5c9eff;
+    border: 1px solid rgba(92, 158, 255, 0.25);
+}
+.v2-chain-badge.chain-arbitrum {
+    background: rgba(40, 159, 237, 0.2);
+    color: #51b0f5;
+    border: 1px solid rgba(40, 159, 237, 0.25);
+}
+.v2-chain-badge.chain-avalanche {
+    background: rgba(232, 65, 66, 0.2);
+    color: #f06667;
+    border: 1px solid rgba(232, 65, 66, 0.25);
+}
+.v2-chain-badge.chain-bsc {
+    background: rgba(240, 185, 11, 0.2);
+    color: #f0b90b;
+    border: 1px solid rgba(240, 185, 11, 0.25);
+}
+.v2-chain-badge.chain-tron {
+    background: rgba(235, 0, 41, 0.2);
+    color: #ff4d6a;
+    border: 1px solid rgba(235, 0, 41, 0.25);
+}
+.v2-chain-badge.chain-xrp {
+    background: rgba(35, 41, 47, 0.4);
+    color: #a0aab4;
+    border: 1px solid rgba(160, 170, 180, 0.25);
+}
+.v2-chain-badge.chain-algorand {
+    background: rgba(0, 0, 0, 0.2);
+    color: #c4c4c4;
+    border: 1px solid rgba(196, 196, 196, 0.25);
+}
+.v2-chain-badge.chain-cosmos {
+    background: rgba(46, 49, 72, 0.3);
+    color: #7b80c0;
+    border: 1px solid rgba(123, 128, 192, 0.25);
+}
+.v2-chain-badge.chain-near {
+    background: rgba(0, 236, 151, 0.15);
+    color: #00d897;
+    border: 1px solid rgba(0, 216, 151, 0.25);
+}
+.v2-chain-badge.chain-ton {
+    background: rgba(0, 136, 204, 0.2);
+    color: #33a8e0;
+    border: 1px solid rgba(0, 136, 204, 0.25);
+}
+
+/* CEX exchange chain badges */
+.v2-chain-badge.chain-coinbase {
+    background: rgba(0, 82, 255, 0.2);
+    color: #4d8bff;
+    border: 1px solid rgba(0, 82, 255, 0.25);
+}
+.v2-chain-badge.chain-binance {
+    background: rgba(240, 185, 11, 0.2);
+    color: #f0b90b;
+    border: 1px solid rgba(240, 185, 11, 0.25);
+}
+
+/* Direction badges */
+.v2-direction-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 6px;
+    text-transform: capitalize;
+}
+.v2-direction-badge.direction-sent {
+    background: rgba(214, 48, 49, 0.15);
+    color: #ff5252;
+    border: 1px solid rgba(214, 48, 49, 0.25);
+}
+.v2-direction-badge.direction-received {
+    background: rgba(0, 210, 106, 0.15);
+    color: #00d26a;
+    border: 1px solid rgba(0, 210, 106, 0.25);
+}
+.v2-direction-badge.direction-buy {
+    background: rgba(0, 210, 106, 0.15);
+    color: #00d26a;
+    border: 1px solid rgba(0, 210, 106, 0.25);
+}
+.v2-direction-badge.direction-sell {
+    background: rgba(214, 48, 49, 0.15);
+    color: #ff5252;
+    border: 1px solid rgba(214, 48, 49, 0.25);
+}
+.v2-direction-badge.direction-transfer {
+    background: rgba(68, 138, 255, 0.15);
+    color: #448aff;
+    border: 1px solid rgba(68, 138, 255, 0.25);
+}
+
+/* Light theme overrides for chain and direction badges */
+[data-theme="light"] .v2-chain-badge.chain-cardano {
+    background: rgba(0, 51, 173, 0.08);
+    color: #0033ad;
+}
+[data-theme="light"] .v2-chain-badge.chain-ethereum {
+    background: rgba(98, 126, 234, 0.08);
+    color: #4a5fd8;
+}
+[data-theme="light"] .v2-chain-badge.chain-bitcoin {
+    background: rgba(247, 147, 26, 0.08);
+    color: #f7931a;
+}
+[data-theme="light"] .v2-chain-badge.chain-solana {
+    background: rgba(20, 241, 149, 0.08);
+    color: #00bf88;
+}
+[data-theme="light"] .v2-chain-badge.chain-polygon {
+    background: rgba(130, 71, 229, 0.08);
+    color: #8247E5;
+}
+[data-theme="light"] .v2-chain-badge.chain-base {
+    background: rgba(0, 82, 255, 0.08);
+    color: #0052ff;
+}
+[data-theme="light"] .v2-direction-badge.direction-sent {
+    background: rgba(214, 48, 49, 0.08);
+    color: #c92a2a;
+}
+[data-theme="light"] .v2-direction-badge.direction-received {
+    background: rgba(0, 184, 148, 0.08);
+    color: #00a884;
+}
+[data-theme="light"] .v2-direction-badge.direction-buy {
+    background: rgba(0, 184, 148, 0.08);
+    color: #00a884;
+}
+[data-theme="light"] .v2-direction-badge.direction-sell {
+    background: rgba(214, 48, 49, 0.08);
+    color: #c92a2a;
 }
 
 

@@ -180,7 +180,7 @@
             wallets.forEach(w => {
                 const addr = w.address || '';
                 const short = addr.length > 16 ? addr.slice(0,8) + '...' + addr.slice(-8) : addr;
-                const balance = w.balance || 0;
+                const balance = parseFloat(w.balance) || 0;
                 const chain = (w.blockchain || 'unknown').toLowerCase();
                 const symbol = chainSymbols[chain] || chain.toUpperCase();
                 const unit = w.balance_unit || symbol;
@@ -193,7 +193,7 @@
                 html += `<tr>
                     <td><strong>${escapeHtml(w.label || w.name || 'Wallet')}</strong></td>
                     <td style="font-family:monospace;font-size:12px;color:var(--v2-text-secondary)">${escapeHtml(short)}</td>
-                    <td><span class="v2-chain-badge">${escapeHtml(chain)}</span></td>
+                    <td><span class="v2-chain-badge chain-${escapeAttr(chain)}">${escapeHtml(chain)}</span></td>
                     <td class="right v2-blur">${formatAmount(balance)} <span style="font-size:11px;color:var(--v2-text-muted)">${escapeHtml(unit)}</span></td>
                     <td class="right v2-blur">${formatCurrency(valueUsd)}</td>
                     <td class="right">${w.native_assets_count || 0}</td>

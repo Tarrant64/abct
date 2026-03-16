@@ -32,7 +32,7 @@
             <header class="v2-topbar">
                 <div class="v2-topbar-left"><span class="v2-topbar-title">Wallet Management</span></div>
                 <div class="v2-topbar-right">
-                    <button class="v2-sync-btn" onclick="refreshAllWallets()"><span class="sync-icon">&#10227;</span> Refresh All</button>
+                    <button class="v2-sync-btn" id="refreshAllBtn"><span class="sync-icon">&#10227;</span> Refresh All</button>
                     <div class="v2-user-menu"></div>
                 </div>
             </header>
@@ -50,7 +50,7 @@
                             <label>Label (optional)</label>
                             <input type="text" id="newWalletLabel" placeholder="My Wallet">
                         </div>
-                        <button class="v2-btn v2-btn-primary" onclick="addWallet()">Add</button>
+                        <button class="v2-btn v2-btn-primary" id="addWalletBtn">Add</button>
                     </div>
                     <div style="margin-top:8px;font-size:12px;color:var(--v2-text-muted);">Blockchain will be auto-detected from the address format.</div>
                 </div>
@@ -70,6 +70,11 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             v2InitShell('wallets');
+
+            // Attach event listeners (no inline handlers for DOMPurify safety)
+            document.getElementById('refreshAllBtn').addEventListener('click', refreshAllWallets);
+            document.getElementById('addWalletBtn').addEventListener('click', addWallet);
+
             loadWallets();
         });
 
@@ -105,16 +110,16 @@
                 const addr = w.address || '';
                 const label = w.label || w.name || 'Wallet';
                 const blockchain = w.blockchain || 'unknown';
-                const balance = w.balance || 0;
+                const balance = parseFloat(w.balance) || 0;
                 const balanceUnit = w.balance_unit || w.symbol || blockchain.toUpperCase();
-                const valueUsd = w.value_usd || 0;
+                const valueUsd = parseFloat(w.value_usd) || 0;
                 const tokenCount = w.native_assets_count || 0;
 
                 html += `<div class="wallet-card" data-address="${escapeAttr(addr)}">
                     <div class="wallet-card-header">
                         <div>
                             <div class="wallet-card-label">${escapeHtml(label)}</div>
-                            <div style="margin-top:2px;"><span class="v2-chain-badge">${escapeHtml(blockchain)}</span>${tokenCount > 0 ? ` <span style="font-size:11px;color:var(--v2-text-muted);margin-left:6px;">${tokenCount} token${tokenCount !== 1 ? 's' : ''}</span>` : ''}</div>
+                            <div style="margin-top:2px;"><span class="v2-chain-badge chain-${escapeAttr(blockchain.toLowerCase())}">${escapeHtml(blockchain)}</span>${tokenCount > 0 ? ` <span style="font-size:11px;color:var(--v2-text-muted);margin-left:6px;">${tokenCount} token${tokenCount !== 1 ? 's' : ''}</span>` : ''}</div>
                         </div>
                         <div class="wallet-actions">
                             <button class="v2-btn v2-btn-ghost v2-btn-sm wallet-refresh-btn" data-addr="${escapeAttr(addr)}" title="Refresh">&#10227;</button>
