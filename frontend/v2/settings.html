@@ -73,8 +73,26 @@
                     <div class="v2-card">
                         <div class="v2-card-header">
                             <span class="v2-card-title">Application Logs</span>
-                            <button class="v2-btn v2-btn-secondary v2-btn-sm" id="refreshLogsBtn">Refresh</button>
+                            <div style="display:flex;gap:8px;align-items:center;">
+                                <select id="logLevelFilter" style="padding:4px 8px;border-radius:var(--v2-radius-sm);border:1px solid var(--v2-border-input);background:var(--v2-bg-input);color:var(--v2-text-primary);font-size:12px;">
+                                    <option value="">All Levels</option>
+                                    <option value="ERROR">ERROR</option>
+                                    <option value="WARNING">WARNING</option>
+                                    <option value="INFO">INFO</option>
+                                    <option value="DEBUG">DEBUG</option>
+                                </select>
+                                <input type="text" id="logSearchInput" placeholder="Search logs..." style="padding:4px 8px;border-radius:var(--v2-radius-sm);border:1px solid var(--v2-border-input);background:var(--v2-bg-input);color:var(--v2-text-primary);font-size:12px;width:140px;">
+                                <label style="font-size:11px;color:var(--v2-text-muted);display:flex;align-items:center;gap:4px;cursor:pointer;">
+                                    <input type="checkbox" id="logAutoScroll" checked style="accent-color:var(--v2-accent);">Auto
+                                </label>
+                                <label style="font-size:11px;color:var(--v2-text-muted);display:flex;align-items:center;gap:4px;cursor:pointer;">
+                                    <input type="checkbox" id="logStreamToggle" style="accent-color:var(--v2-accent);">Live
+                                </label>
+                                <button class="v2-btn v2-btn-secondary v2-btn-sm" id="refreshLogsBtn">Refresh</button>
+                                <button class="v2-btn v2-btn-ghost v2-btn-sm" id="clearLogsBtn" style="color:var(--v2-red)">Clear</button>
+                            </div>
                         </div>
+                        <div id="logStats" style="font-size:11px;color:var(--v2-text-muted);padding:4px 0 8px;display:none;"></div>
                         <div id="logsContent" style="max-height:600px;overflow-y:auto;font-family:monospace;font-size:12px;padding:12px;background:var(--v2-bg-input);border-radius:var(--v2-radius-md);color:var(--v2-text-secondary);">
                             Loading...
                         </div>
@@ -83,23 +101,69 @@
 
                 <!-- Security Tab -->
                 <div id="tabSecurity" class="settings-tab-content" style="display:none">
+                    <div class="v2-card" style="margin-bottom:16px;">
+                        <div class="v2-card-header"><span class="v2-card-title">SSL / HTTPS</span></div>
+                        <div id="sslContent">
+                            <div class="v2-skeleton" style="height:80px;"></div>
+                        </div>
+                    </div>
                     <div class="v2-card">
-                        <div class="v2-card-header"><span class="v2-card-title">Security Settings</span></div>
-                        <div id="securityContent">
-                            <p style="color:var(--v2-text-secondary);padding:20px;">Security settings loaded from the backend. Manage HTTPS certificates, session settings, and access controls here.</p>
+                        <div class="v2-card-header"><span class="v2-card-title">Cloudflare Tunnel</span></div>
+                        <div id="cloudflareContent">
+                            <div class="v2-skeleton" style="height:80px;"></div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Backup Tab -->
                 <div id="tabBackup" class="settings-tab-content" style="display:none">
-                    <div class="v2-card">
-                        <div class="v2-card-header"><span class="v2-card-title">Backup & Restore</span></div>
-                        <div style="display:flex;gap:12px;margin-bottom:20px;">
-                            <button class="v2-btn v2-btn-primary" id="exportBackupBtn">Export Backup</button>
-                            <button class="v2-btn v2-btn-secondary" id="importBackupBtn">Import Backup</button>
+                    <div class="v2-card" style="margin-bottom:16px;">
+                        <div class="v2-card-header"><span class="v2-card-title">Export Backup</span></div>
+                        <div style="padding:0 0 16px;">
+                            <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+                                <label style="font-size:12px;color:var(--v2-text-secondary);display:flex;align-items:center;gap:4px;cursor:pointer;">
+                                    <input type="checkbox" id="backupIncludeApis" checked style="accent-color:var(--v2-accent);">Include API Keys
+                                </label>
+                                <label style="font-size:12px;color:var(--v2-text-secondary);display:flex;align-items:center;gap:4px;cursor:pointer;">
+                                    <input type="checkbox" id="backupIncludeCustomTokens" checked style="accent-color:var(--v2-accent);">Custom Tokens
+                                </label>
+                                <label style="font-size:12px;color:var(--v2-text-secondary);display:flex;align-items:center;gap:4px;cursor:pointer;">
+                                    <input type="checkbox" id="backupIncludeNfts" checked style="accent-color:var(--v2-accent);">NFT Collections
+                                </label>
+                                <label style="font-size:12px;color:var(--v2-text-secondary);display:flex;align-items:center;gap:4px;cursor:pointer;">
+                                    <input type="checkbox" id="backupOptimizeCardano" checked style="accent-color:var(--v2-accent);">Optimize Cardano
+                                </label>
+                            </div>
+                            <div style="display:flex;gap:12px;">
+                                <button class="v2-btn v2-btn-primary" id="exportBackupBtn">Export Backup</button>
+                                <button class="v2-btn v2-btn-secondary" id="exportEnvBtn">Export .env</button>
+                            </div>
                         </div>
-                        <div id="backupInfo" style="color:var(--v2-text-secondary);font-size:13px;">Loading backup info...</div>
+                        <div id="backupInfo" style="color:var(--v2-text-secondary);font-size:13px;padding-top:8px;border-top:1px solid var(--v2-border);">Loading backup info...</div>
+                    </div>
+                    <div class="v2-card">
+                        <div class="v2-card-header"><span class="v2-card-title">Import / Restore</span></div>
+                        <div style="padding:0 0 16px;">
+                            <p style="color:var(--v2-text-secondary);font-size:13px;margin-bottom:12px;">Upload a previously exported ABCT backup JSON file to restore your configuration.</p>
+                            <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+                                <select id="importMode" style="padding:6px 10px;border-radius:var(--v2-radius-sm);border:1px solid var(--v2-border-input);background:var(--v2-bg-input);color:var(--v2-text-primary);font-size:13px;">
+                                    <option value="merge">Merge (keep existing, add new)</option>
+                                    <option value="replace">Replace (delete all, then import)</option>
+                                </select>
+                                <label style="font-size:12px;color:var(--v2-text-secondary);display:flex;align-items:center;gap:4px;cursor:pointer;">
+                                    <input type="checkbox" id="importSkipApis" style="accent-color:var(--v2-accent);">Skip API Keys
+                                </label>
+                            </div>
+                            <div style="display:flex;gap:12px;align-items:center;">
+                                <input type="file" id="importFileInput" accept=".json" style="display:none;">
+                                <button class="v2-btn v2-btn-secondary" id="importBackupBtn">Choose Backup File...</button>
+                                <span id="importFileName" style="font-size:12px;color:var(--v2-text-muted);"></span>
+                            </div>
+                            <div id="importPreview" style="display:none;margin-top:12px;padding:12px;background:var(--v2-bg-input);border-radius:var(--v2-radius-md);font-size:12px;"></div>
+                            <div id="importActions" style="display:none;margin-top:12px;">
+                                <button class="v2-btn v2-btn-primary" id="confirmImportBtn">Confirm Import</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -114,10 +178,18 @@
 
                 <!-- System Tab -->
                 <div id="tabSystem" class="settings-tab-content" style="display:none">
-                    <div class="v2-card">
+                    <div class="v2-card" style="margin-bottom:16px;">
                         <div class="v2-card-header"><span class="v2-card-title">System Controls</span></div>
-                        <div style="display:flex;gap:12px;">
+                        <div style="display:flex;gap:12px;flex-wrap:wrap;">
                             <button class="v2-btn v2-btn-secondary" id="restartBackendBtn">Restart Backend</button>
+                            <button class="v2-btn v2-btn-secondary" id="restartServerBtn" style="border-color:var(--v2-red);color:var(--v2-red);">Restart Server</button>
+                            <button class="v2-btn v2-btn-secondary" id="optimizeDbBtn">Optimize Databases</button>
+                        </div>
+                    </div>
+                    <div class="v2-card">
+                        <div class="v2-card-header"><span class="v2-card-title">Startup Tasks</span></div>
+                        <div id="startupTasksContent">
+                            <div class="v2-skeleton" style="height:100px;"></div>
                         </div>
                     </div>
                 </div>
@@ -127,49 +199,138 @@
         </main>
     </div>
 
+    <!-- API Key Edit Modal -->
+    <div class="v2-modal-overlay" id="apiEditOverlay">
+        <div class="v2-modal" id="apiEditModal" style="max-width:480px;">
+            <div class="v2-modal-header">
+                <span class="v2-modal-title" id="apiEditTitle">Edit API Key</span>
+                <button class="v2-modal-close" id="apiEditClose">&times;</button>
+            </div>
+            <div class="v2-modal-body">
+                <div id="apiEditDesc" style="font-size:12px;color:var(--v2-text-muted);margin-bottom:16px;"></div>
+                <div id="apiEditFields">
+                    <div style="margin-bottom:12px;">
+                        <label style="display:block;font-size:12px;color:var(--v2-text-secondary);margin-bottom:4px;">API Key</label>
+                        <input type="password" id="apiEditKey" style="width:100%;padding:8px 12px;border:1px solid var(--v2-border-input);border-radius:var(--v2-radius-sm);background:var(--v2-bg-input);color:var(--v2-text-primary);font-family:monospace;font-size:13px;" placeholder="Enter API key">
+                    </div>
+                    <div id="apiEditSecretRow" style="margin-bottom:12px;display:none;">
+                        <label style="display:block;font-size:12px;color:var(--v2-text-secondary);margin-bottom:4px;">API Secret</label>
+                        <input type="password" id="apiEditSecret" style="width:100%;padding:8px 12px;border:1px solid var(--v2-border-input);border-radius:var(--v2-radius-sm);background:var(--v2-bg-input);color:var(--v2-text-primary);font-family:monospace;font-size:13px;" placeholder="Enter API secret">
+                    </div>
+                    <div id="apiEditPassphraseRow" style="margin-bottom:12px;display:none;">
+                        <label style="display:block;font-size:12px;color:var(--v2-text-secondary);margin-bottom:4px;">API Passphrase</label>
+                        <input type="password" id="apiEditPassphrase" style="width:100%;padding:8px 12px;border:1px solid var(--v2-border-input);border-radius:var(--v2-radius-sm);background:var(--v2-bg-input);color:var(--v2-text-primary);font-family:monospace;font-size:13px;" placeholder="Enter passphrase">
+                    </div>
+                    <div id="apiEditFileRow" style="margin-bottom:12px;display:none;">
+                        <label style="display:block;font-size:12px;color:var(--v2-text-secondary);margin-bottom:4px;">Upload Credential File</label>
+                        <input type="file" id="apiEditFile" accept=".json" style="font-size:12px;color:var(--v2-text-secondary);">
+                        <div id="apiEditFileHint" style="font-size:11px;color:var(--v2-text-muted);margin-top:4px;"></div>
+                    </div>
+                </div>
+                <div id="apiEditTestResult" style="display:none;margin-bottom:12px;padding:8px 12px;border-radius:var(--v2-radius-sm);font-size:12px;"></div>
+                <div style="display:flex;gap:8px;justify-content:space-between;margin-top:16px;">
+                    <div style="display:flex;gap:8px;">
+                        <button class="v2-btn v2-btn-primary v2-btn-sm" id="apiEditSave">Save & Test</button>
+                        <button class="v2-btn v2-btn-secondary v2-btn-sm" id="apiEditTest">Test Only</button>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <a id="apiEditDocs" href="#" target="_blank" style="font-size:11px;color:var(--v2-text-link);text-decoration:none;">Docs</a>
+                        <button class="v2-btn v2-btn-ghost v2-btn-sm" id="apiEditDelete" style="color:var(--v2-red);">Delete</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="/next/static/js/v2-app.js"></script>
     <script src="/next/static/js/v2-shell.js"></script>
     <script>
+        // ====================================================================
+        // STATE
+        // ====================================================================
+        let _apiData = null;         // Cached API listing data
+        let _editingApiId = null;    // Currently editing API id
+        let _logEventSource = null;  // SSE connection for live logs
+        let _importBackupData = null; // Staged backup data for import
+
+        // ====================================================================
+        // INIT
+        // ====================================================================
         document.addEventListener('DOMContentLoaded', () => {
             v2InitShell('settings');
 
-            // Attach tab click handlers (avoid inline onclick)
+            // Tab click handlers
             document.querySelectorAll('#settingsTabs .v2-tab').forEach(tab => {
                 tab.addEventListener('click', () => switchSettingsTab(tab.dataset.tab));
             });
 
-            // Attach button handlers
+            // API Keys
             document.getElementById('reloadApisBtn').addEventListener('click', reloadApis);
-            document.getElementById('refreshLogsBtn').addEventListener('click', loadLogs);
-            document.getElementById('exportBackupBtn').addEventListener('click', exportBackup);
-            document.getElementById('importBackupBtn').addEventListener('click', importBackup);
-            document.getElementById('restartBackendBtn').addEventListener('click', restartBackend);
 
-            // Cache clear buttons
+            // Logs
+            document.getElementById('refreshLogsBtn').addEventListener('click', loadLogs);
+            document.getElementById('clearLogsBtn').addEventListener('click', clearLogs);
+            document.getElementById('logLevelFilter').addEventListener('change', loadLogs);
+            document.getElementById('logSearchInput').addEventListener('input', filterLogsDisplay);
+            document.getElementById('logStreamToggle').addEventListener('change', toggleLogStream);
+
+            // Cache
             document.querySelectorAll('#cacheBtns [data-cache]').forEach(btn => {
                 btn.addEventListener('click', () => clearCache(btn.dataset.cache));
             });
 
+            // Backup
+            document.getElementById('exportBackupBtn').addEventListener('click', exportBackup);
+            document.getElementById('exportEnvBtn').addEventListener('click', exportEnvFile);
+            document.getElementById('importBackupBtn').addEventListener('click', () => document.getElementById('importFileInput').click());
+            document.getElementById('importFileInput').addEventListener('change', handleImportFileSelect);
+            document.getElementById('confirmImportBtn').addEventListener('click', confirmImport);
+
+            // System
+            document.getElementById('restartBackendBtn').addEventListener('click', restartBackend);
+            document.getElementById('restartServerBtn').addEventListener('click', restartServer);
+            document.getElementById('optimizeDbBtn').addEventListener('click', optimizeDb);
+
+            // API Edit Modal
+            document.getElementById('apiEditClose').addEventListener('click', closeApiEditModal);
+            document.getElementById('apiEditOverlay').addEventListener('click', (e) => {
+                if (e.target === e.currentTarget) closeApiEditModal();
+            });
+            document.getElementById('apiEditSave').addEventListener('click', saveApiKey);
+            document.getElementById('apiEditTest').addEventListener('click', testApiKey);
+            document.getElementById('apiEditDelete').addEventListener('click', deleteApiKey);
+
             // Check URL hash for direct tab navigation
             const hash = window.location.hash.replace('#', '');
             if (hash) switchSettingsTab(hash);
+
             loadSettingsData();
         });
 
+        // ====================================================================
+        // TAB SWITCHING
+        // ====================================================================
         function switchSettingsTab(tab) {
             document.querySelectorAll('.v2-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
             document.querySelectorAll('.settings-tab-content').forEach(c => c.style.display = 'none');
             const target = document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1));
             if (target) target.style.display = 'block';
+
+            // Load tab-specific data on first visit
+            if (tab === 'security') loadSecurityData();
+            if (tab === 'system') loadSystemData();
         }
 
+        // ====================================================================
+        // DATA LOADING (initial)
+        // ====================================================================
         async function loadSettingsData() {
             // Load API keys
             try {
                 const resp = await v2Fetch('/settings/apis');
                 if (resp.ok) {
-                    const data = await resp.json();
-                    renderApiKeys(data);
+                    _apiData = await resp.json();
+                    renderApiKeys(_apiData);
                 }
             } catch(e) { console.error(e); }
 
@@ -187,12 +348,7 @@
                 const resp = await v2Fetch('/backup/info');
                 if (resp.ok) {
                     const data = await resp.json();
-                    const el = document.getElementById('backupInfo');
-                    // Backend returns: {backup_format_version, abct_version, tables: {name: {record_count, has_data, ...}}}
-                    const tables = data.tables || {};
-                    const totalRecords = Object.values(tables).reduce((s, t) => s + (t.record_count || 0), 0);
-                    const tablesWithData = Object.values(tables).filter(t => t.has_data).length;
-                    el.textContent = `Format v${data.backup_format_version || '?'} | ${tablesWithData} tables with data | ${totalRecords.toLocaleString()} total records`;
+                    renderBackupInfo(data);
                 }
             } catch(e) {}
 
@@ -211,11 +367,318 @@
             loadLogs();
         }
 
+        // ====================================================================
+        // API KEYS — Rendering
+        // ====================================================================
+        function renderApiKeys(data) {
+            const container = document.getElementById('apiKeysList');
+            const categories = data.categories || {};
+            const catKeys = Object.keys(categories);
+            if (!catKeys.length) {
+                setSafeHTML(container, '<div class="v2-empty"><div class="v2-empty-title">No API keys configured</div></div>');
+                return;
+            }
+            let html = '';
+            const configuredCount = data.configured_count || 0;
+            const totalApis = data.total_apis || 0;
+            html += `<div style="font-size:12px;color:var(--v2-text-muted);margin-bottom:12px">${configuredCount} of ${totalApis} APIs configured</div>`;
+
+            catKeys.forEach(catKey => {
+                const cat = categories[catKey];
+                const apis = cat.apis || [];
+                if (!apis.length) return;
+                html += `<div style="margin-bottom:16px;"><div style="font-size:13px;font-weight:600;color:var(--v2-text-heading);margin-bottom:8px;text-transform:capitalize">${escapeHtml(cat.name || catKey)}</div>`;
+                html += '<table class="v2-table"><thead><tr><th>Service</th><th>Pricing</th><th>Status</th><th style="width:180px;">Actions</th></tr></thead><tbody>';
+                apis.forEach(api => {
+                    const hasKey = api.configured;
+                    const pricingBadge = api.pricing === 'free' ? 'v2-badge-green' : api.pricing === 'paid' ? 'v2-badge-red' : 'v2-badge-neutral';
+                    const statusBadge = hasKey ? (api.enabled ? 'v2-badge-green' : 'v2-badge-neutral') : 'v2-badge-neutral';
+                    const statusText = hasKey ? (api.enabled ? 'Active' : 'Disabled') : 'Not Set';
+                    // Last test info
+                    let testInfo = '';
+                    if (api.last_test_status === 'success') {
+                        testInfo = '<span style="color:var(--v2-accent);font-size:10px;margin-left:4px;">Verified</span>';
+                    } else if (api.last_test_status === 'failed') {
+                        testInfo = '<span style="color:var(--v2-red);font-size:10px;margin-left:4px;">Failed</span>';
+                    }
+                    html += `<tr>
+                        <td><strong>${escapeHtml(api.name || api.id)}</strong><div style="font-size:11px;color:var(--v2-text-muted);margin-top:2px">${escapeHtml(api.description || '')}</div></td>
+                        <td><span class="v2-badge ${pricingBadge}">${escapeHtml(api.pricing || 'unknown')}</span></td>
+                        <td><span class="v2-badge ${statusBadge}">${escapeHtml(statusText)}</span>${testInfo}</td>
+                        <td>
+                            <div style="display:flex;gap:4px;">
+                                <button class="v2-btn v2-btn-ghost v2-btn-sm" data-action="edit-api" data-api-id="${escapeAttr(api.id)}">Edit</button>
+                                <button class="v2-btn v2-btn-ghost v2-btn-sm" data-action="test-api" data-api-id="${escapeAttr(api.id)}" ${hasKey ? '' : 'disabled style="opacity:0.4"'}>Test</button>
+                                ${hasKey ? `<button class="v2-btn v2-btn-ghost v2-btn-sm" data-action="toggle-api" data-api-id="${escapeAttr(api.id)}" data-enabled="${api.enabled ? 'true' : 'false'}">${api.enabled ? 'Disable' : 'Enable'}</button>` : ''}
+                            </div>
+                        </td>
+                    </tr>`;
+                });
+                html += '</tbody></table></div>';
+            });
+
+            setSafeHTML(container, html);
+
+            // Attach handlers
+            container.querySelectorAll('[data-action="edit-api"]').forEach(btn => {
+                btn.addEventListener('click', () => openApiEditModal(btn.dataset.apiId));
+            });
+            container.querySelectorAll('[data-action="test-api"]').forEach(btn => {
+                btn.addEventListener('click', () => quickTestApi(btn.dataset.apiId, btn));
+            });
+            container.querySelectorAll('[data-action="toggle-api"]').forEach(btn => {
+                btn.addEventListener('click', () => toggleApiEnabled(btn.dataset.apiId, btn.dataset.enabled === 'true'));
+            });
+        }
+
+        // ====================================================================
+        // API KEYS — Edit Modal
+        // ====================================================================
+        function openApiEditModal(apiId) {
+            _editingApiId = apiId;
+            // Find API info from cached data
+            let apiInfo = null;
+            if (_apiData) {
+                for (const cat of Object.values(_apiData.categories || {})) {
+                    const found = (cat.apis || []).find(a => a.id === apiId);
+                    if (found) { apiInfo = found; break; }
+                }
+            }
+            if (!apiInfo) {
+                showToast('API not found', 'error');
+                return;
+            }
+
+            document.getElementById('apiEditTitle').textContent = apiInfo.name || apiId;
+            document.getElementById('apiEditDesc').textContent = apiInfo.description || '';
+            document.getElementById('apiEditKey').value = '';
+            document.getElementById('apiEditSecret').value = '';
+            document.getElementById('apiEditPassphrase').value = '';
+            document.getElementById('apiEditTestResult').style.display = 'none';
+
+            // Show/hide fields based on API requirements
+            document.getElementById('apiEditSecretRow').style.display = apiInfo.requires_secret ? 'block' : 'none';
+            document.getElementById('apiEditPassphraseRow').style.display = apiInfo.requires_passphrase ? 'block' : 'none';
+            document.getElementById('apiEditFileRow').style.display = apiInfo.requires_file_upload ? 'block' : 'none';
+            if (apiInfo.file_upload_hint) {
+                document.getElementById('apiEditFileHint').textContent = apiInfo.file_upload_hint;
+            }
+
+            // Hide regular key input if file-upload only
+            document.getElementById('apiEditKey').parentElement.style.display = apiInfo.requires_file_upload ? 'none' : 'block';
+
+            // Docs link
+            const docsLink = document.getElementById('apiEditDocs');
+            if (apiInfo.docs_url) {
+                docsLink.href = apiInfo.docs_url;
+                docsLink.style.display = 'inline';
+            } else {
+                docsLink.style.display = 'none';
+            }
+
+            // Show delete only if configured
+            document.getElementById('apiEditDelete').style.display = apiInfo.configured ? 'inline-flex' : 'none';
+
+            // Open modal
+            document.getElementById('apiEditOverlay').classList.add('open');
+            document.getElementById('apiEditModal').classList.add('open');
+
+            // Focus the key input
+            if (!apiInfo.requires_file_upload) {
+                setTimeout(() => document.getElementById('apiEditKey').focus(), 100);
+            }
+        }
+
+        function closeApiEditModal() {
+            document.getElementById('apiEditOverlay').classList.remove('open');
+            document.getElementById('apiEditModal').classList.remove('open');
+            _editingApiId = null;
+        }
+
+        async function saveApiKey() {
+            if (!_editingApiId) return;
+            const apiId = _editingApiId;
+
+            // Check if this is a file upload API
+            const fileInput = document.getElementById('apiEditFile');
+            if (fileInput.parentElement.style.display !== 'none' && fileInput.files.length > 0) {
+                // File upload flow
+                const formData = new FormData();
+                formData.append('file', fileInput.files[0]);
+                try {
+                    const resp = await v2Fetch(`/settings/apis/${encodeURIComponent(apiId)}/upload`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await resp.json();
+                    if (resp.ok) {
+                        showApiTestResult(data.test_result || {}, data.message);
+                        showToast(data.message || 'Saved', 'success');
+                        reloadApiList();
+                    } else {
+                        showToast(data.detail || 'Upload failed', 'error');
+                    }
+                } catch(e) {
+                    showToast('Upload error', 'error');
+                }
+                return;
+            }
+
+            const apiKey = document.getElementById('apiEditKey').value.trim();
+            if (!apiKey) {
+                showToast('API key is required', 'error');
+                return;
+            }
+            const body = { api_key: apiKey };
+            const secretVal = document.getElementById('apiEditSecret').value.trim();
+            const passphraseVal = document.getElementById('apiEditPassphrase').value.trim();
+            if (secretVal) body.api_secret = secretVal;
+            if (passphraseVal) body.api_passphrase = passphraseVal;
+
+            try {
+                document.getElementById('apiEditSave').disabled = true;
+                document.getElementById('apiEditSave').textContent = 'Saving...';
+
+                const resp = await v2Fetch(`/settings/apis/${encodeURIComponent(apiId)}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    showApiTestResult(data.test_result || {}, data.message);
+                    showToast(data.message || 'Saved', data.enabled ? 'success' : 'warning');
+                    reloadApiList();
+                } else {
+                    showToast(data.detail || 'Save failed', 'error');
+                }
+            } catch(e) {
+                showToast('Save error', 'error');
+            } finally {
+                document.getElementById('apiEditSave').disabled = false;
+                document.getElementById('apiEditSave').textContent = 'Save & Test';
+            }
+        }
+
+        async function testApiKey() {
+            if (!_editingApiId) return;
+            try {
+                document.getElementById('apiEditTest').disabled = true;
+                document.getElementById('apiEditTest').textContent = 'Testing...';
+
+                const resp = await v2Fetch(`/settings/apis/${encodeURIComponent(_editingApiId)}/test`);
+                const data = await resp.json();
+                showApiTestResult(data);
+            } catch(e) {
+                showToast('Test error', 'error');
+            } finally {
+                document.getElementById('apiEditTest').disabled = false;
+                document.getElementById('apiEditTest').textContent = 'Test Only';
+            }
+        }
+
+        function showApiTestResult(result, extraMsg) {
+            const el = document.getElementById('apiEditTestResult');
+            if (!result || !result.tested) {
+                if (extraMsg) {
+                    el.style.display = 'block';
+                    el.style.background = 'var(--v2-accent-muted)';
+                    el.style.color = 'var(--v2-accent)';
+                    el.textContent = extraMsg;
+                }
+                return;
+            }
+            el.style.display = 'block';
+            if (result.success) {
+                el.style.background = 'var(--v2-accent-muted)';
+                el.style.color = 'var(--v2-accent)';
+                el.textContent = result.message || 'Test passed';
+            } else {
+                el.style.background = 'var(--v2-red-muted)';
+                el.style.color = 'var(--v2-red)';
+                el.textContent = result.message || 'Test failed';
+            }
+        }
+
+        async function deleteApiKey() {
+            if (!_editingApiId) return;
+            if (!confirm('Delete this API key? The service will be disabled.')) return;
+            try {
+                const resp = await v2Fetch(`/settings/apis/${encodeURIComponent(_editingApiId)}`, { method: 'DELETE' });
+                if (resp.ok) {
+                    showToast('API key deleted', 'success');
+                    closeApiEditModal();
+                    reloadApiList();
+                } else {
+                    const data = await resp.json();
+                    showToast(data.detail || 'Delete failed', 'error');
+                }
+            } catch(e) {
+                showToast('Delete error', 'error');
+            }
+        }
+
+        async function quickTestApi(apiId, btn) {
+            const origText = btn.textContent;
+            btn.textContent = '...';
+            btn.disabled = true;
+            try {
+                const resp = await v2Fetch(`/settings/apis/${encodeURIComponent(apiId)}/test`);
+                const data = await resp.json();
+                if (data.success) {
+                    showToast(`${apiId}: Test passed`, 'success');
+                } else {
+                    showToast(`${apiId}: ${data.message || 'Test failed'}`, 'error');
+                }
+            } catch(e) {
+                showToast(`${apiId}: Test error`, 'error');
+            } finally {
+                btn.textContent = origText;
+                btn.disabled = false;
+            }
+        }
+
+        async function toggleApiEnabled(apiId, currentlyEnabled) {
+            try {
+                const resp = await v2Fetch(`/settings/apis/${encodeURIComponent(apiId)}/enabled`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: !currentlyEnabled })
+                });
+                if (resp.ok) {
+                    showToast(`${apiId} ${currentlyEnabled ? 'disabled' : 'enabled'}`, 'success');
+                    reloadApiList();
+                }
+            } catch(e) {
+                showToast('Toggle failed', 'error');
+            }
+        }
+
+        async function reloadApiList() {
+            try {
+                const resp = await v2Fetch('/settings/apis');
+                if (resp.ok) {
+                    _apiData = await resp.json();
+                    renderApiKeys(_apiData);
+                }
+            } catch(e) { console.error(e); }
+        }
+
+        async function reloadApis() {
+            try {
+                await v2Fetch('/settings/apis/reload', { method: 'POST' });
+                showToast('API caches reloaded', 'success');
+                reloadApiList();
+            } catch(e) { showToast('Reload failed', 'error'); }
+        }
+
+        // ====================================================================
+        // SERVICES
+        // ====================================================================
         function renderServices(startup, apiStatus) {
             const container = document.getElementById('servicesList');
             let html = '';
 
-            // Backend startup status: {database: "ready", nft_image_db: "ready", snapshot_check: "ready", nft_prices: "ready", nft_scheduler: "ready|pending|loading"}
             const services = [
                 { key: 'database', label: 'Database', desc: 'Main SQLite database' },
                 { key: 'nft_image_db', label: 'NFT Image DB', desc: 'NFT image cache database' },
@@ -235,7 +698,6 @@
             });
             html += '</tbody></table>';
 
-            // API status section
             if (apiStatus.apis && typeof apiStatus.apis === 'object') {
                 html += '<div style="margin-top:20px;font-size:13px;font-weight:600;color:var(--v2-text-heading);margin-bottom:8px">API Connectivity</div>';
                 html += '<table class="v2-table"><thead><tr><th>API</th><th>Status</th></tr></thead><tbody>';
@@ -249,63 +711,19 @@
                 html += '</tbody></table>';
             }
 
-            // Server status
             html += `<div style="margin-top:16px;font-size:12px;color:var(--v2-text-muted)">Server Status: ${escapeHtml(apiStatus.status || 'unknown')} | Supported Chains: ${escapeHtml((apiStatus.supported_blockchains || []).join(', '))}</div>`;
 
             setSafeHTML(container, html);
         }
 
-        function renderApiKeys(data) {
-            const container = document.getElementById('apiKeysList');
-            // Backend /settings/apis returns: {categories: {cat: {name, apis: [...]}}, total_apis, configured_count}
-            const categories = data.categories || {};
-            const catKeys = Object.keys(categories);
-            if (!catKeys.length) {
-                setSafeHTML(container, '<div class="v2-empty"><div class="v2-empty-title">No API keys configured</div></div>');
-                return;
-            }
-            let html = '';
-            catKeys.forEach(catKey => {
-                const cat = categories[catKey];
-                const apis = cat.apis || [];
-                if (!apis.length) return;
-                html += `<div style="margin-bottom:16px;"><div style="font-size:13px;font-weight:600;color:var(--v2-text-heading);margin-bottom:8px;text-transform:capitalize">${escapeHtml(cat.name || catKey)}</div>`;
-                html += '<table class="v2-table"><thead><tr><th>Service</th><th>Pricing</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
-                apis.forEach(api => {
-                    const hasKey = api.configured;
-                    const pricingBadge = api.pricing === 'free' ? 'v2-badge-green' : api.pricing === 'paid' ? 'v2-badge-red' : 'v2-badge-neutral';
-                    html += `<tr>
-                        <td><strong>${escapeHtml(api.name || api.id)}</strong><div style="font-size:11px;color:var(--v2-text-muted);margin-top:2px">${escapeHtml(api.description || '')}</div></td>
-                        <td><span class="v2-badge ${pricingBadge}">${escapeHtml(api.pricing || 'unknown')}</span></td>
-                        <td><span class="v2-badge ${hasKey ? 'v2-badge-green' : 'v2-badge-neutral'}">${hasKey ? 'Configured' : 'Not Set'}</span></td>
-                        <td><button class="v2-btn v2-btn-ghost v2-btn-sm" data-action="edit-api" data-api-id="${escapeAttr(api.id)}">Edit</button></td>
-                    </tr>`;
-                });
-                html += '</tbody></table></div>';
-            });
-
-            // Show configured count summary
-            const configuredCount = data.configured_count || 0;
-            const totalApis = data.total_apis || 0;
-            html = `<div style="font-size:12px;color:var(--v2-text-muted);margin-bottom:12px">${configuredCount} of ${totalApis} APIs configured</div>` + html;
-
-            setSafeHTML(container, html);
-
-            // Attach edit button handlers after render
-            container.querySelectorAll('[data-action="edit-api"]').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    showToast('Edit in V1 Settings for full functionality');
-                });
-            });
-        }
-
+        // ====================================================================
+        // CACHE
+        // ====================================================================
         function renderCacheStats(data) {
             const container = document.getElementById('cacheStats');
-            // Backend /api/cache/stats returns: {token_logos: {count, description}, nft_images: {count, size_mb}, nft_floor_prices: {count, ...}, portfolio_snapshots: {count, ...}, api_cache: {count, ...}, database_sizes: {portfolio_db, nft_images_db}}
             let html = '';
             const stats = data || {};
 
-            // Helper: safely extract count from a stat object
             function statCount(obj) {
                 if (!obj || typeof obj !== 'object') return 0;
                 return parseInt(obj.count, 10) || 0;
@@ -334,35 +752,14 @@
             setSafeHTML(container, html || '<div class="v2-stat-card"><div class="v2-stat-label">Cache Status</div><div class="v2-stat-value">No data</div></div>');
         }
 
-        async function loadLogs() {
-            try {
-                const resp = await v2Fetch('/logs/recent?limit=100');
-                if (resp.ok) {
-                    const data = await resp.json();
-                    const logs = data.logs || data || [];
-                    const el = document.getElementById('logsContent');
-                    if (!logs.length) {
-                        el.textContent = 'No recent logs.';
-                        return;
-                    }
-                    setSafeHTML(el, logs.map(l => {
-                        const time = l.timestamp ? new Date(l.timestamp).toLocaleTimeString() : '';
-                        const level = l.level || 'INFO';
-                        const color = level === 'ERROR' ? 'var(--v2-red)' : level === 'WARNING' ? 'var(--v2-orange)' : 'var(--v2-text-secondary)';
-                        return `<div style="padding:2px 0;"><span style="color:var(--v2-text-muted)">${escapeHtml(time)}</span> <span style="color:${color};font-weight:600">[${escapeHtml(level)}]</span> <span>${escapeHtml(l.message || l.msg || '')}</span></div>`;
-                    }).join(''));
-                }
-            } catch(e) {
-                document.getElementById('logsContent').textContent = 'Failed to load logs.';
-            }
-        }
-
         async function clearCache(type) {
             try {
                 const resp = await v2Fetch(`/api/cache/clear/${type}`, { method: 'POST' });
                 if (resp.ok) {
                     showToast(`Cache cleared: ${type}`, 'success');
-                    loadSettingsData();
+                    // Reload cache stats
+                    const statsResp = await v2Fetch('/api/cache/stats');
+                    if (statsResp.ok) renderCacheStats(await statsResp.json());
                 } else {
                     showToast('Failed to clear cache', 'error');
                 }
@@ -371,17 +768,399 @@
             }
         }
 
-        async function reloadApis() {
+        // ====================================================================
+        // LOGS — Full Viewer
+        // ====================================================================
+        let _allLogs = []; // In-memory log buffer for client-side filtering
+
+        async function loadLogs() {
+            const level = document.getElementById('logLevelFilter').value;
+            const params = new URLSearchParams({ limit: '200' });
+            if (level) params.set('level', level);
+
             try {
-                await v2Fetch('/settings/apis/reload', { method: 'POST' });
-                showToast('APIs reloaded', 'success');
-                loadSettingsData();
-            } catch(e) { showToast('Reload failed', 'error'); }
+                const resp = await v2Fetch(`/logs/recent?${params.toString()}`);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    _allLogs = data.logs || data || [];
+                    renderLogs();
+
+                    // Load stats
+                    const statsResp = await v2Fetch('/logs/stats');
+                    if (statsResp.ok) {
+                        const statsData = await statsResp.json();
+                        const st = statsData.stats || {};
+                        const statsEl = document.getElementById('logStats');
+                        statsEl.style.display = 'block';
+                        statsEl.textContent = `Buffer: ${st.buffer_size || 0} entries | Subscribers: ${st.subscriber_count || 0} | Levels: ${Object.entries(st.level_counts || {}).map(([k,v]) => `${k}:${v}`).join(', ')}`;
+                    }
+                }
+            } catch(e) {
+                document.getElementById('logsContent').textContent = 'Failed to load logs.';
+            }
+        }
+
+        function renderLogs() {
+            const el = document.getElementById('logsContent');
+            const searchTerm = (document.getElementById('logSearchInput').value || '').toLowerCase();
+
+            let filtered = _allLogs;
+            if (searchTerm) {
+                filtered = filtered.filter(l => {
+                    const msg = (l.message || l.msg || '').toLowerCase();
+                    const src = (l.source || '').toLowerCase();
+                    return msg.includes(searchTerm) || src.includes(searchTerm);
+                });
+            }
+
+            if (!filtered.length) {
+                el.textContent = 'No matching logs.';
+                return;
+            }
+
+            setSafeHTML(el, filtered.map(l => {
+                const time = l.timestamp ? new Date(l.timestamp).toLocaleTimeString() : '';
+                const level = l.level || 'INFO';
+                const color = level === 'ERROR' ? 'var(--v2-red)' : level === 'WARNING' ? 'var(--v2-orange)' : level === 'DEBUG' ? 'var(--v2-text-muted)' : 'var(--v2-text-secondary)';
+                const source = l.source ? `<span style="color:var(--v2-accent);font-size:10px;">[${escapeHtml(l.source)}]</span> ` : '';
+                return `<div style="padding:2px 0;border-bottom:1px solid var(--v2-border-light);"><span style="color:var(--v2-text-muted)">${escapeHtml(time)}</span> <span style="color:${color};font-weight:600">[${escapeHtml(level)}]</span> ${source}<span>${escapeHtml(l.message || l.msg || '')}</span></div>`;
+            }).join(''));
+
+            // Auto-scroll
+            if (document.getElementById('logAutoScroll').checked) {
+                el.scrollTop = el.scrollHeight;
+            }
+        }
+
+        function filterLogsDisplay() {
+            renderLogs();
+        }
+
+        function toggleLogStream() {
+            const checked = document.getElementById('logStreamToggle').checked;
+            if (checked) {
+                startLogStream();
+            } else {
+                stopLogStream();
+            }
+        }
+
+        function startLogStream() {
+            stopLogStream(); // Clean up existing
+            const token = localStorage.getItem('abct_token');
+            const url = `/logs/stream${token ? '?token=' + encodeURIComponent(token) : ''}`;
+            try {
+                _logEventSource = new EventSource(url);
+                _logEventSource.onmessage = (event) => {
+                    try {
+                        const entry = JSON.parse(event.data);
+                        if (entry.event === 'connected' || entry.event === 'ping') return;
+                        // Apply level filter
+                        const levelFilter = document.getElementById('logLevelFilter').value;
+                        if (levelFilter && entry.level !== levelFilter) return;
+
+                        _allLogs.push(entry);
+                        // Keep buffer bounded
+                        if (_allLogs.length > 500) _allLogs.shift();
+                        renderLogs();
+                    } catch(e) { /* ignore parse errors */ }
+                };
+                _logEventSource.onerror = () => {
+                    // Auto-reconnect is built into EventSource
+                    console.warn('Log stream error, will auto-reconnect');
+                };
+            } catch(e) {
+                console.error('Failed to start log stream:', e);
+                document.getElementById('logStreamToggle').checked = false;
+            }
+        }
+
+        function stopLogStream() {
+            if (_logEventSource) {
+                _logEventSource.close();
+                _logEventSource = null;
+            }
+        }
+
+        async function clearLogs() {
+            if (!confirm('Clear all application logs? This cannot be undone.')) return;
+            try {
+                const resp = await v2Fetch('/logs', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ confirm: true })
+                });
+                if (resp.ok) {
+                    showToast('Logs cleared', 'success');
+                    _allLogs = [];
+                    renderLogs();
+                } else {
+                    showToast('Failed to clear logs', 'error');
+                }
+            } catch(e) {
+                showToast('Clear logs error', 'error');
+            }
+        }
+
+        // ====================================================================
+        // SECURITY — SSL + Cloudflare
+        // ====================================================================
+        let _securityLoaded = false;
+
+        async function loadSecurityData() {
+            if (_securityLoaded) return;
+            _securityLoaded = true;
+
+            // Load SSL settings
+            try {
+                const resp = await v2Fetch('/security/settings');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    renderSslSettings(data);
+                }
+            } catch(e) {
+                document.getElementById('sslContent').textContent = 'Failed to load SSL settings.';
+            }
+
+            // Load Cloudflare tunnel status
+            try {
+                const resp = await v2Fetch('/cloudflare/status');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    renderCloudflareStatus(data);
+                }
+            } catch(e) {
+                document.getElementById('cloudflareContent').textContent = 'Cloudflare tunnel not available.';
+            }
+        }
+
+        function renderSslSettings(data) {
+            const container = document.getElementById('sslContent');
+            const mode = data.ssl_mode || 'http';
+            const running = data.running_mode || 'http';
+            const restart = data.restart_required;
+            const cert = data.certificate;
+
+            let html = '<table class="v2-table"><tbody>';
+            html += `<tr><td style="width:160px;"><strong>Configured Mode</strong></td><td><span class="v2-badge ${mode === 'http' ? 'v2-badge-neutral' : 'v2-badge-green'}">${escapeHtml(mode)}</span></td></tr>`;
+            html += `<tr><td><strong>Running Mode</strong></td><td><span class="v2-badge ${running === mode ? 'v2-badge-green' : 'v2-badge-neutral'}">${escapeHtml(running)}</span>${restart ? ' <span style="color:var(--v2-orange);font-size:11px;">(restart required)</span>' : ''}</td></tr>`;
+
+            if (cert) {
+                html += `<tr><td><strong>Certificate</strong></td><td>`;
+                html += `Type: ${escapeHtml(data.cert_type || 'unknown')}`;
+                if (cert.subject) html += ` | Subject: ${escapeHtml(cert.subject)}`;
+                if (cert.expires_at) {
+                    const exp = new Date(cert.expires_at);
+                    const now = new Date();
+                    const daysLeft = Math.ceil((exp - now) / (1000 * 60 * 60 * 24));
+                    const expBadge = daysLeft < 30 ? 'v2-badge-red' : 'v2-badge-green';
+                    html += ` | Expires: <span class="v2-badge ${expBadge}">${exp.toLocaleDateString()} (${daysLeft}d)</span>`;
+                }
+                html += `</td></tr>`;
+            }
+            html += '</tbody></table>';
+
+            html += '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">';
+            html += '<button class="v2-btn v2-btn-secondary v2-btn-sm" id="sslGenCert">Generate Self-Signed Cert</button>';
+            if (data.ssl_mode !== 'http') {
+                html += '<button class="v2-btn v2-btn-ghost v2-btn-sm" id="sslResetHttp" style="color:var(--v2-orange);">Reset to HTTP</button>';
+            }
+            html += '</div>';
+
+            setSafeHTML(container, html);
+
+            // Attach handlers
+            const genBtn = document.getElementById('sslGenCert');
+            if (genBtn) {
+                genBtn.addEventListener('click', async () => {
+                    genBtn.disabled = true;
+                    genBtn.textContent = 'Generating...';
+                    try {
+                        const resp = await v2Fetch('/security/certificate/generate', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ hostname: 'localhost', valid_days: 365 })
+                        });
+                        if (resp.ok) {
+                            showToast('Certificate generated', 'success');
+                            _securityLoaded = false;
+                            loadSecurityData();
+                        } else {
+                            const d = await resp.json();
+                            showToast(d.detail || 'Generate failed', 'error');
+                        }
+                    } catch(e) { showToast('Generate error', 'error'); }
+                    genBtn.disabled = false;
+                    genBtn.textContent = 'Generate Self-Signed Cert';
+                });
+            }
+
+            const resetBtn = document.getElementById('sslResetHttp');
+            if (resetBtn) {
+                resetBtn.addEventListener('click', async () => {
+                    try {
+                        const resp = await v2Fetch('/security/settings', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ssl_mode: 'http' })
+                        });
+                        if (resp.ok) {
+                            showToast('SSL mode set to HTTP (restart required)', 'success');
+                            _securityLoaded = false;
+                            loadSecurityData();
+                        }
+                    } catch(e) { showToast('Reset failed', 'error'); }
+                });
+            }
+        }
+
+        function renderCloudflareStatus(data) {
+            const container = document.getElementById('cloudflareContent');
+            let html = '<table class="v2-table"><tbody>';
+            html += `<tr><td style="width:160px;"><strong>Installed</strong></td><td><span class="v2-badge ${data.installed ? 'v2-badge-green' : 'v2-badge-neutral'}">${data.installed ? 'Yes' : 'No'}</span></td></tr>`;
+            html += `<tr><td><strong>Running</strong></td><td><span class="v2-badge ${data.running ? 'v2-badge-green' : 'v2-badge-neutral'}">${data.running ? 'Running' : (data.service_state || 'Stopped')}</span></td></tr>`;
+            html += `<tr><td><strong>Token Saved</strong></td><td><span class="v2-badge ${data.token_saved ? 'v2-badge-green' : 'v2-badge-neutral'}">${data.token_saved ? 'Yes' : 'No'}</span></td></tr>`;
+
+            if (data.install_progress && (data.install_progress.active || data.install_progress.step)) {
+                const prog = data.install_progress;
+                html += `<tr><td><strong>Install Progress</strong></td><td>${escapeHtml(prog.step || '')}${prog.error ? ` <span style="color:var(--v2-red);">Error: ${escapeHtml(prog.error)}</span>` : ''}</td></tr>`;
+            }
+            html += '</tbody></table>';
+
+            html += '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">';
+            if (!data.installed || !data.token_saved) {
+                html += '<div style="display:flex;gap:8px;align-items:center;">';
+                html += '<input type="text" id="cfTokenInput" placeholder="Cloudflare tunnel token" style="padding:6px 10px;border:1px solid var(--v2-border-input);border-radius:var(--v2-radius-sm);background:var(--v2-bg-input);color:var(--v2-text-primary);font-size:12px;width:260px;font-family:monospace;">';
+                html += '<button class="v2-btn v2-btn-primary v2-btn-sm" id="cfSetupBtn">Setup Tunnel</button>';
+                html += '</div>';
+            } else {
+                if (data.running) {
+                    html += '<button class="v2-btn v2-btn-secondary v2-btn-sm" id="cfStopBtn">Stop Tunnel</button>';
+                } else {
+                    html += '<button class="v2-btn v2-btn-primary v2-btn-sm" id="cfStartBtn">Start Tunnel</button>';
+                }
+                html += '<button class="v2-btn v2-btn-ghost v2-btn-sm" id="cfRemoveBtn" style="color:var(--v2-red);">Remove Tunnel</button>';
+            }
+            html += '</div>';
+
+            setSafeHTML(container, html);
+
+            // Attach handlers
+            const setupBtn = document.getElementById('cfSetupBtn');
+            if (setupBtn) {
+                setupBtn.addEventListener('click', async () => {
+                    const token = document.getElementById('cfTokenInput').value.trim();
+                    if (!token) { showToast('Token required', 'error'); return; }
+                    setupBtn.disabled = true;
+                    setupBtn.textContent = 'Installing...';
+                    try {
+                        const resp = await v2Fetch('/cloudflare/setup', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ token: token })
+                        });
+                        if (resp.ok) {
+                            showToast('Installation started, polling status...', 'success');
+                            pollCloudflareStatus();
+                        } else {
+                            const d = await resp.json();
+                            showToast(d.detail || 'Setup failed', 'error');
+                        }
+                    } catch(e) { showToast('Setup error', 'error'); }
+                    setupBtn.disabled = false;
+                    setupBtn.textContent = 'Setup Tunnel';
+                });
+            }
+
+            const startBtn = document.getElementById('cfStartBtn');
+            if (startBtn) {
+                startBtn.addEventListener('click', async () => {
+                    try {
+                        await v2Fetch('/cloudflare/start', { method: 'POST' });
+                        showToast('Tunnel starting...', 'success');
+                        setTimeout(() => { _securityLoaded = false; loadSecurityData(); }, 2000);
+                    } catch(e) { showToast('Start failed', 'error'); }
+                });
+            }
+
+            const stopBtn = document.getElementById('cfStopBtn');
+            if (stopBtn) {
+                stopBtn.addEventListener('click', async () => {
+                    try {
+                        await v2Fetch('/cloudflare/stop', { method: 'POST' });
+                        showToast('Tunnel stopped', 'success');
+                        _securityLoaded = false;
+                        loadSecurityData();
+                    } catch(e) { showToast('Stop failed', 'error'); }
+                });
+            }
+
+            const removeBtn = document.getElementById('cfRemoveBtn');
+            if (removeBtn) {
+                removeBtn.addEventListener('click', async () => {
+                    if (!confirm('Remove Cloudflare tunnel completely? Token will be deleted.')) return;
+                    try {
+                        await v2Fetch('/cloudflare/remove', { method: 'DELETE' });
+                        showToast('Tunnel removed', 'success');
+                        _securityLoaded = false;
+                        loadSecurityData();
+                    } catch(e) { showToast('Remove failed', 'error'); }
+                });
+            }
+        }
+
+        function pollCloudflareStatus() {
+            let attempts = 0;
+            const interval = setInterval(async () => {
+                attempts++;
+                if (attempts > 30) { clearInterval(interval); return; } // 60s timeout
+                try {
+                    const resp = await v2Fetch('/cloudflare/status');
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        renderCloudflareStatus(data);
+                        if (!data.install_progress || !data.install_progress.active) {
+                            clearInterval(interval);
+                            if (data.running) showToast('Tunnel is running', 'success');
+                        }
+                    }
+                } catch(e) { /* continue polling */ }
+            }, 2000);
+        }
+
+        // ====================================================================
+        // BACKUP — Export + Import
+        // ====================================================================
+        function renderBackupInfo(data) {
+            const el = document.getElementById('backupInfo');
+            const tables = data.tables || {};
+            const totalRecords = Object.values(tables).reduce((s, t) => s + (t.record_count || 0), 0);
+            const tablesWithData = Object.values(tables).filter(t => t.has_data).length;
+            let html = `<div style="margin-bottom:8px;">Format v${escapeHtml(data.backup_format_version || '?')} | ABCT v${escapeHtml(data.abct_version || '?')} | ${tablesWithData} tables with data | ${totalRecords.toLocaleString()} total records</div>`;
+            html += '<table class="v2-table" style="font-size:12px;"><thead><tr><th>Table</th><th>Records</th><th>Sensitive</th></tr></thead><tbody>';
+            Object.entries(tables).forEach(([name, info]) => {
+                html += `<tr><td>${escapeHtml(name)}<div style="font-size:10px;color:var(--v2-text-muted);">${escapeHtml(info.description || '')}</div></td>`;
+                html += `<td>${(info.record_count || 0).toLocaleString()}</td>`;
+                html += `<td>${info.sensitive ? '<span class="v2-badge v2-badge-red">Yes</span>' : '<span class="v2-badge v2-badge-neutral">No</span>'}</td></tr>`;
+            });
+            html += '</tbody></table>';
+            setSafeHTML(el, html);
         }
 
         async function exportBackup() {
             try {
-                const resp = await v2Fetch('/backup/export', { method: 'POST' });
+                const options = {
+                    include_api_keys: document.getElementById('backupIncludeApis').checked,
+                    include_security_settings: false,
+                    include_custom_tokens: document.getElementById('backupIncludeCustomTokens').checked,
+                    include_nft_collections: document.getElementById('backupIncludeNfts').checked,
+                    optimize_cardano: document.getElementById('backupOptimizeCardano').checked
+                };
+                const resp = await v2Fetch('/backup/export', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(options)
+                });
                 if (resp.ok) {
                     const blob = await resp.blob();
                     const url = URL.createObjectURL(blob);
@@ -391,12 +1170,204 @@
                     a.click();
                     URL.revokeObjectURL(url);
                     showToast('Backup exported', 'success');
+                } else {
+                    showToast('Export failed', 'error');
                 }
-            } catch(e) { showToast('Export failed', 'error'); }
+            } catch(e) { showToast('Export error', 'error'); }
         }
 
-        function importBackup() {
-            showToast('Import available in V1 Settings for full restore wizard', 'success');
+        async function exportEnvFile() {
+            try {
+                const resp = await v2Fetch('/backup/export-env');
+                if (resp.ok) {
+                    const blob = await resp.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `abct-env-${new Date().toISOString().split('T')[0]}.txt`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showToast('.env exported - store securely!', 'warning');
+                } else {
+                    const d = await resp.json();
+                    showToast(d.detail || '.env export failed', 'error');
+                }
+            } catch(e) { showToast('.env export error', 'error'); }
+        }
+
+        function handleImportFileSelect() {
+            const fileInput = document.getElementById('importFileInput');
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            document.getElementById('importFileName').textContent = file.name;
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const content = e.target.result;
+                _importBackupData = content;
+
+                // Preview the import
+                try {
+                    const mode = document.getElementById('importMode').value;
+                    const skipApis = document.getElementById('importSkipApis').checked;
+                    const resp = await v2Fetch('/backup/preview', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            mode: mode,
+                            skip_api_keys: skipApis,
+                            skip_security_settings: true,
+                            backup_data: content
+                        })
+                    });
+                    const preview = await resp.json();
+                    renderImportPreview(preview);
+                } catch(err) {
+                    document.getElementById('importPreview').style.display = 'block';
+                    document.getElementById('importPreview').textContent = 'Failed to preview backup file.';
+                    document.getElementById('importActions').style.display = 'none';
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function renderImportPreview(preview) {
+            const el = document.getElementById('importPreview');
+            el.style.display = 'block';
+
+            if (!preview.valid) {
+                el.style.color = 'var(--v2-red)';
+                el.textContent = 'Invalid backup: ' + (preview.errors || []).join(', ');
+                document.getElementById('importActions').style.display = 'none';
+                return;
+            }
+
+            el.style.color = 'var(--v2-text-secondary)';
+            let html = '';
+            const info = preview.summary.backup_info || {};
+            html += `<div style="margin-bottom:8px;"><strong>Backup Info:</strong> Format v${escapeHtml(info.format_version || '?')} | ABCT v${escapeHtml(info.abct_version || '?')} | Exported: ${escapeHtml(info.export_date || '?')}${info.age_days !== undefined ? ` (${info.age_days} days ago)` : ''}</div>`;
+
+            if (preview.summary.tables) {
+                html += '<table class="v2-table" style="font-size:11px;"><thead><tr><th>Table</th><th>Records</th><th>Action</th></tr></thead><tbody>';
+                Object.entries(preview.summary.tables).forEach(([name, t]) => {
+                    html += `<tr><td>${escapeHtml(name)}</td><td>${t.count}</td><td><span class="v2-badge ${t.action === 'skip' ? 'v2-badge-neutral' : 'v2-badge-green'}">${escapeHtml(t.action)}</span></td></tr>`;
+                });
+                html += '</tbody></table>';
+            }
+
+            if (preview.warnings && preview.warnings.length) {
+                html += '<div style="margin-top:8px;color:var(--v2-orange);font-size:11px;">';
+                preview.warnings.forEach(w => {
+                    html += `<div style="padding:2px 0;">${escapeHtml(w)}</div>`;
+                });
+                html += '</div>';
+            }
+
+            setSafeHTML(el, html);
+            document.getElementById('importActions').style.display = 'block';
+        }
+
+        async function confirmImport() {
+            if (!_importBackupData) {
+                showToast('No backup file loaded', 'error');
+                return;
+            }
+            const mode = document.getElementById('importMode').value;
+            if (mode === 'replace') {
+                if (!confirm('REPLACE mode will DELETE ALL existing data before importing. Are you sure?')) return;
+            }
+
+            const btn = document.getElementById('confirmImportBtn');
+            btn.disabled = true;
+            btn.textContent = 'Importing...';
+
+            try {
+                const resp = await v2Fetch('/backup/import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        mode: mode,
+                        skip_api_keys: document.getElementById('importSkipApis').checked,
+                        skip_security_settings: true,
+                        backup_data: _importBackupData
+                    })
+                });
+                const data = await resp.json();
+                if (resp.ok && data.success) {
+                    showToast('Import complete!', 'success');
+                    // Show summary
+                    const tables = data.tables_processed || {};
+                    const imported = Object.values(tables).reduce((s, t) => s + (t.imported || 0), 0);
+                    const skipped = Object.values(tables).reduce((s, t) => s + (t.skipped || 0), 0);
+                    document.getElementById('importPreview').textContent = `Import complete: ${imported} imported, ${skipped} skipped.`;
+                    document.getElementById('importActions').style.display = 'none';
+                    _importBackupData = null;
+                    // Reload settings data
+                    loadSettingsData();
+                } else {
+                    showToast(data.detail || 'Import failed', 'error');
+                }
+            } catch(e) {
+                showToast('Import error', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Confirm Import';
+            }
+        }
+
+        // ====================================================================
+        // SYSTEM — Restart + Startup Tasks
+        // ====================================================================
+        let _systemLoaded = false;
+
+        async function loadSystemData() {
+            if (_systemLoaded) return;
+            _systemLoaded = true;
+
+            try {
+                const resp = await v2Fetch('/settings/startup-tasks');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    renderStartupTasks(data);
+                }
+            } catch(e) {
+                document.getElementById('startupTasksContent').textContent = 'Failed to load startup tasks.';
+            }
+        }
+
+        function renderStartupTasks(data) {
+            const container = document.getElementById('startupTasksContent');
+            const tasks = data.tasks || [];
+
+            if (!tasks.length) {
+                container.textContent = 'No startup task data available.';
+                return;
+            }
+
+            let html = '<table class="v2-table" style="font-size:12px;"><thead><tr><th>Task</th><th>Last Run</th><th>Status</th></tr></thead><tbody>';
+            tasks.forEach(t => {
+                const lastRun = t.last_run ? new Date(t.last_run).toLocaleString() : 'Never';
+                const status = t.in_cooldown ? 'Cooldown' : (t.last_run ? 'Ready' : 'Pending');
+                const badgeClass = t.in_cooldown ? 'v2-badge-neutral' : (t.last_run ? 'v2-badge-green' : 'v2-badge-neutral');
+                html += `<tr><td>${escapeHtml(t.task_name || t.name || 'unknown')}</td><td style="color:var(--v2-text-muted);">${escapeHtml(lastRun)}</td><td><span class="v2-badge ${badgeClass}">${escapeHtml(status)}</span></td></tr>`;
+            });
+            html += '</tbody></table>';
+
+            // Rate limits
+            const limits = data.rate_limits || [];
+            if (limits.length) {
+                html += '<div style="margin-top:16px;font-size:13px;font-weight:600;color:var(--v2-text-heading);margin-bottom:8px;">Rate Limit Status</div>';
+                html += '<table class="v2-table" style="font-size:12px;"><thead><tr><th>API</th><th>Used / Limit</th><th>Resets</th></tr></thead><tbody>';
+                limits.forEach(l => {
+                    const pct = l.limit ? Math.round((l.used / l.limit) * 100) : 0;
+                    const badgeClass = pct >= 80 ? 'v2-badge-red' : pct >= 50 ? 'v2-badge-neutral' : 'v2-badge-green';
+                    html += `<tr><td>${escapeHtml(l.api_name || 'unknown')}</td><td><span class="v2-badge ${badgeClass}">${l.used || 0} / ${l.limit || '?'}</span></td><td style="color:var(--v2-text-muted);">${l.resets_at ? new Date(l.resets_at).toLocaleTimeString() : '-'}</td></tr>`;
+                });
+                html += '</tbody></table>';
+            }
+
+            setSafeHTML(container, html);
         }
 
         async function restartBackend() {
@@ -405,6 +1376,39 @@
                 await v2Fetch('/api/system/restart-backend', { method: 'POST' });
                 showToast('Backend restarting...', 'warning');
             } catch(e) { showToast('Restart failed', 'error'); }
+        }
+
+        async function restartServer() {
+            if (!confirm('Restart the entire server/container? All services will restart.')) return;
+            if (!confirm('This is a full server restart. Are you absolutely sure?')) return;
+            try {
+                await v2Fetch('/api/system/restart-server', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ confirm: true })
+                });
+                showToast('Server rebooting...', 'warning');
+            } catch(e) { showToast('Restart failed', 'error'); }
+        }
+
+        async function optimizeDb() {
+            try {
+                const btn = document.getElementById('optimizeDbBtn');
+                btn.disabled = true;
+                btn.textContent = 'Optimizing...';
+                const resp = await v2Fetch('/api/cache/optimize', { method: 'POST' });
+                if (resp.ok) {
+                    showToast('Databases optimized', 'success');
+                } else {
+                    showToast('Optimize failed', 'error');
+                }
+                btn.disabled = false;
+                btn.textContent = 'Optimize Databases';
+            } catch(e) {
+                showToast('Optimize error', 'error');
+                document.getElementById('optimizeDbBtn').disabled = false;
+                document.getElementById('optimizeDbBtn').textContent = 'Optimize Databases';
+            }
         }
     </script>
 </body>
