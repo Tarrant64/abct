@@ -103,9 +103,30 @@
                 <!-- Security Tab -->
                 <div id="tabSecurity" class="settings-tab-content" style="display:none">
                     <div class="v2-card" style="margin-bottom:16px;">
-                        <div class="v2-card-header"><span class="v2-card-title">SSL / HTTPS</span></div>
+                        <div class="v2-card-header"><span class="v2-card-title">HTTPS / SSL Configuration</span></div>
                         <div id="sslContent">
-                            <div class="v2-skeleton" style="height:80px;"></div>
+                            <div style="padding:4px 0 12px;">
+                                <p style="color:var(--v2-text-secondary);font-size:13px;line-height:1.6;margin:0 0 16px;">
+                                    ABCT uses a <strong style="color:var(--v2-text-primary);">reverse proxy</strong> for HTTPS termination.
+                                    This provides better security, easier certificate management, and works seamlessly with Docker deployments.
+                                </p>
+
+                                <div style="background:var(--v2-bg-input);border:1px solid var(--v2-border);border-radius:var(--v2-radius-md);padding:16px;margin-bottom:12px;">
+                                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                                        <span style="font-size:15px;">&#9432;</span>
+                                        <strong style="color:var(--v2-text-heading);font-size:13px;">Recommended: Nginx Proxy Manager</strong>
+                                    </div>
+                                    <ol style="margin:0;padding-left:20px;color:var(--v2-text-secondary);font-size:12px;line-height:1.8;">
+                                        <li>Point your reverse proxy to <code style="background:var(--v2-bg-card);padding:2px 6px;border-radius:4px;font-size:11px;color:var(--v2-accent);">http://&lt;container-ip&gt;:8081</code></li>
+                                        <li>Configure your SSL certificate (Let's Encrypt for public domains, or self-signed for local access)</li>
+                                        <li>Nginx Proxy Manager web UI is typically at <code style="background:var(--v2-bg-card);padding:2px 6px;border-radius:4px;font-size:11px;color:var(--v2-accent);">port 81</code> on your server</li>
+                                    </ol>
+                                </div>
+
+                                <p style="color:var(--v2-text-muted);font-size:12px;margin:0;">
+                                    <strong>Alternative:</strong> Cloudflare Tunnel is also supported — see configuration below.
+                                </p>
+                            </div>
                         </div>
                     </div>
                     <div class="v2-card">
@@ -1086,7 +1107,7 @@
         }
 
         // ====================================================================
-        // SECURITY — SSL + Cloudflare
+        // SECURITY — Cloudflare Tunnel (SSL section is static HTML)
         // ====================================================================
         let _securityLoaded = false;
 
@@ -1094,16 +1115,7 @@
             if (_securityLoaded) return;
             _securityLoaded = true;
 
-            // Load SSL settings
-            try {
-                const resp = await v2Fetch('/security/settings');
-                if (resp.ok) {
-                    const data = await resp.json();
-                    renderSslSettings(data);
-                }
-            } catch(e) {
-                document.getElementById('sslContent').textContent = 'Failed to load SSL settings.';
-            }
+            // SSL section is now static HTML (reverse proxy info) — no API call needed
 
             // Load Cloudflare tunnel status
             try {
@@ -1114,86 +1126,6 @@
                 }
             } catch(e) {
                 document.getElementById('cloudflareContent').textContent = 'Cloudflare tunnel not available.';
-            }
-        }
-
-        function renderSslSettings(data) {
-            const container = document.getElementById('sslContent');
-            const mode = data.ssl_mode || 'http';
-            const running = data.running_mode || 'http';
-            const restart = data.restart_required;
-            const cert = data.certificate;
-
-            let html = '<table class="v2-table"><tbody>';
-            html += `<tr><td style="width:160px;"><strong>Configured Mode</strong></td><td><span class="v2-badge ${mode === 'http' ? 'v2-badge-neutral' : 'v2-badge-green'}">${escapeHtml(mode)}</span></td></tr>`;
-            html += `<tr><td><strong>Running Mode</strong></td><td><span class="v2-badge ${running === mode ? 'v2-badge-green' : 'v2-badge-neutral'}">${escapeHtml(running)}</span>${restart ? ' <span style="color:var(--v2-orange);font-size:11px;">(restart required)</span>' : ''}</td></tr>`;
-
-            if (cert) {
-                html += `<tr><td><strong>Certificate</strong></td><td>`;
-                html += `Type: ${escapeHtml(data.cert_type || 'unknown')}`;
-                if (cert.subject) html += ` | Subject: ${escapeHtml(cert.subject)}`;
-                if (cert.expires_at) {
-                    const exp = new Date(cert.expires_at);
-                    const now = new Date();
-                    const daysLeft = Math.ceil((exp - now) / (1000 * 60 * 60 * 24));
-                    const expBadge = daysLeft < 30 ? 'v2-badge-red' : 'v2-badge-green';
-                    html += ` | Expires: <span class="v2-badge ${expBadge}">${exp.toLocaleDateString()} (${daysLeft}d)</span>`;
-                }
-                html += `</td></tr>`;
-            }
-            html += '</tbody></table>';
-
-            html += '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">';
-            html += '<button class="v2-btn v2-btn-secondary v2-btn-sm" id="sslGenCert">Generate Self-Signed Cert</button>';
-            if (data.ssl_mode !== 'http') {
-                html += '<button class="v2-btn v2-btn-ghost v2-btn-sm" id="sslResetHttp" style="color:var(--v2-orange);">Reset to HTTP</button>';
-            }
-            html += '</div>';
-
-            setSafeHTML(container, html);
-
-            // Attach handlers
-            const genBtn = document.getElementById('sslGenCert');
-            if (genBtn) {
-                genBtn.addEventListener('click', async () => {
-                    genBtn.disabled = true;
-                    genBtn.textContent = 'Generating...';
-                    try {
-                        const resp = await v2Fetch('/security/certificate/generate', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ hostname: 'localhost', valid_days: 365 })
-                        });
-                        if (resp.ok) {
-                            showToast('Certificate generated', 'success');
-                            _securityLoaded = false;
-                            loadSecurityData();
-                        } else {
-                            const d = await resp.json();
-                            showToast(d.detail || 'Generate failed', 'error');
-                        }
-                    } catch(e) { showToast('Generate error', 'error'); }
-                    genBtn.disabled = false;
-                    genBtn.textContent = 'Generate Self-Signed Cert';
-                });
-            }
-
-            const resetBtn = document.getElementById('sslResetHttp');
-            if (resetBtn) {
-                resetBtn.addEventListener('click', async () => {
-                    try {
-                        const resp = await v2Fetch('/security/settings', {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ ssl_mode: 'http' })
-                        });
-                        if (resp.ok) {
-                            showToast('SSL mode set to HTTP (restart required)', 'success');
-                            _securityLoaded = false;
-                            loadSecurityData();
-                        }
-                    } catch(e) { showToast('Reset failed', 'error'); }
-                });
             }
         }
 
