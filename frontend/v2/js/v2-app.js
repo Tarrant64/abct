@@ -166,14 +166,24 @@ async function loadDashboard() {
     }
 }
 
-async function loadHoldings() {
+async function loadHoldings(refresh = false) {
     try {
-        const response = await v2Fetch(`${API_BASE}/portfolio/all-holdings`);
+        const url = refresh ? `${API_BASE}/portfolio/all-holdings?refresh=true` : `${API_BASE}/portfolio/all-holdings`;
+        const response = await v2Fetch(url);
         if (!response.ok) throw new Error('Failed to load holdings');
 
         const data = await response.json();
         v2State.holdings = data.holdings || [];
-        v2State.totalPortfolioValue = data.total_value_usd || 0;
+        v2State.totalPortfolioValue = parseFloat(data.total_value_usd) || 0;
+
+        // Update the hero value with the comprehensive all-holdings total.
+        // The /portfolio/instant total may miss tracked/custom tokens that
+        // all-holdings includes, so reconcile the hero if it's lower.
+        const heroEl = document.getElementById('heroValue');
+        if (heroEl && v2State.totalPortfolioValue > 0) {
+            heroEl.textContent = formatCurrency(v2State.totalPortfolioValue);
+        }
+
         renderAssetsTable();
         renderPortfolioDonut();
         renderTopHoldings();
@@ -215,11 +225,11 @@ function extractHoldingsFromSummary(data) {
     Object.entries(chainSymbols).forEach(([chain, info]) => {
         const chainData = data[chain];
         if (!chainData) return;
-        const balance = chainData[info.balanceKey] || 0;
+        const balance = parseFloat(chainData[info.balanceKey]) || 0;
         if (balance <= 0) return;
 
         const priceInfo = v2State.prices[info.symbol] || {};
-        const price = typeof priceInfo === 'object' ? (priceInfo.usd || 0) : (priceInfo || 0);
+        const price = typeof priceInfo === 'object' ? (parseFloat(priceInfo.usd) || 0) : (parseFloat(priceInfo) || 0);
         const value = balance * price;
         holdings.push({
             symbol: info.symbol,
@@ -245,12 +255,12 @@ function extractHoldingsFromSummary(data) {
 // ============================================================================
 
 function renderPortfolioHero(data) {
-    const total = data.total_usd || data.total_value_usd || data.total_portfolio_value || 0;
+    const total = parseFloat(data.total_usd) || parseFloat(data.total_value_usd) || parseFloat(data.total_portfolio_value) || 0;
 
     // Breakdown from /portfolio/instant: {chain, exchange, tracked_token, custom_token, staking, defi, nft}
     const bd = data.breakdown || {};
-    const liquid = (bd.chain || 0) + (bd.exchange || 0) + (bd.tracked_token || 0) + (bd.custom_token || 0);
-    const staked = (bd.staking || 0) + (bd.defi || 0);
+    const liquid = (parseFloat(bd.chain) || 0) + (parseFloat(bd.exchange) || 0) + (parseFloat(bd.tracked_token) || 0) + (parseFloat(bd.custom_token) || 0);
+    const staked = (parseFloat(bd.staking) || 0) + (parseFloat(bd.defi) || 0);
 
     // Remove skeleton, show value
     const heroEl = document.getElementById('heroValue');
@@ -1142,16 +1152,74 @@ async function syncAll() {
     showToast('Syncing all data...', 'success');
 
     try {
-        await Promise.allSettled([
-            v2Fetch(`${API_BASE}/portfolio/summary?refresh=true`),
-            v2Fetch(`${API_BASE}/exchanges/all?refresh=true`),
+        // 1. Single consolidated refresh call — clears caches, fetches fresh
+        //    chain + exchange data, writes positions, returns instant totals.
+        //    This replaces the old pattern of 3 separate refresh GETs.
+        let instantData = null;
+        try {
+            const refreshResp = await v2Fetch(`${API_BASE}/portfolio/refresh`, { method: 'POST' });
+            if (refreshResp.ok) {
+                instantData = await refreshResp.json();
+                // Update hero immediately with fresh data
+                if (instantData.has_positions) {
+                    renderPortfolioHero(instantData);
+                }
+            }
+        } catch (e) {
+            console.warn('[Sync] POST /portfolio/refresh failed:', e);
+        }
+
+        // 2. Refresh DeFi + NFTs in parallel (not covered by /portfolio/refresh)
+        const [pricesRes, defiRes, nftRes, historyRes, txStatsRes] = await Promise.allSettled([
+            v2Fetch(`${API_BASE}/prices/all`),
             v2Fetch(`${API_BASE}/defi/summary?refresh=true`),
+            v2Fetch(`${API_BASE}/nfts/all/summary`),
+            v2Fetch(`${API_BASE}/balance-history/data?range=${v2State.currentChartRange || '1w'}`),
+            v2Fetch(`${API_BASE}/transactions/stats?days=7`),
         ]);
 
-        // Reload dashboard
-        await loadDashboard();
+        // Process prices
+        if (pricesRes.status === 'fulfilled' && pricesRes.value.ok) {
+            const data = await pricesRes.value.json();
+            v2State.prices = data.prices || data;
+        }
+
+        // Process exchange total from instantData breakdown (already fetched)
+        if (instantData && instantData.breakdown) {
+            setText('statExchanges', formatCurrency(instantData.breakdown.exchange || 0));
+        }
+
+        // Process NFTs
+        let nftTotal = 0;
+        if (nftRes.status === 'fulfilled' && nftRes.value.ok) {
+            const data = await nftRes.value.json();
+            if (data.total_value_usd !== undefined) {
+                nftTotal = data.total_value_usd;
+            } else if (data.chains) {
+                Object.values(data.chains).forEach(c => { nftTotal += (c.total_value_usd || 0); });
+            }
+        }
+        setText('statNfts', formatCurrency(nftTotal));
+
+        // Process chart
+        if (historyRes.status === 'fulfilled' && historyRes.value.ok) {
+            const data = await historyRes.value.json();
+            v2State.chartData = data;
+            renderChart(data);
+        }
+
+        // Process tx stats
+        if (txStatsRes.status === 'fulfilled' && txStatsRes.value.ok) {
+            const data = await txStatsRes.value.json();
+            renderTxStats(data);
+        }
+
+        // 3. Refresh full holdings (uses fresh caches from step 1)
+        await loadHoldings(true);
+
         showToast('Sync complete', 'success');
     } catch (err) {
+        console.error('Sync error:', err);
         showToast('Sync failed', 'error');
     } finally {
         btn.classList.remove('syncing');

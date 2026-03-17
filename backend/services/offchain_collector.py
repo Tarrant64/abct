@@ -424,6 +424,68 @@ class OffchainCollector:
             except Exception as e:
                 logger.debug(f"Offchain collector: defi portfolio positions failed: {e}")
 
+            # Tracked native tokens
+            try:
+                from database import get_tracked_tokens, get_wallet_assets, get_all_wallets as _gaw2
+                from services.defi import DEFI_PROTOCOLS
+                tracked_tokens = await get_tracked_tokens()
+                tracked_ids = {t['asset_id'] for t in tracked_tokens}
+                if tracked_ids:
+                    wallets_all = await _gaw2(user_id=user_id)
+                    for w in wallets_all:
+                        if w['blockchain'] != 'cardano':
+                            continue
+                        assets = await get_wallet_assets(w['id'])
+                        for asset in assets:
+                            aid = asset.get('asset_id', '')
+                            if aid not in tracked_ids:
+                                continue
+                            ticker = (asset.get('ticker') or '').upper()
+                            if not ticker:
+                                continue
+                            policy_id = asset.get('policy_id', '')
+                            if policy_id in DEFI_PROTOCOLS:
+                                continue
+                            raw_qty = float(asset.get('quantity') or 0)
+                            decimals = int(asset.get('decimals') or 0)
+                            human_qty = raw_qty / (10 ** decimals) if decimals > 0 else raw_qty
+                            if human_qty <= 0:
+                                continue
+                            price_data = prices.get(ticker, {})
+                            price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
+                            if price > 0:
+                                pp_rows.append({
+                                    'user_id': user_id, 'symbol': ticker, 'quantity': human_qty,
+                                    'source_type': 'tracked_token', 'source_detail': aid,
+                                    'chain': 'cardano', 'last_price_usd': price,
+                                })
+            except Exception as e:
+                logger.debug(f"Offchain collector: tracked tokens portfolio positions failed: {e}")
+
+            # Custom tokens
+            try:
+                from database import get_all_custom_tokens
+                custom_tokens = await get_all_custom_tokens(user_id=user_id)
+                for token in custom_tokens:
+                    if token.get('include_in_total', 1) != 1:
+                        continue
+                    ticker = (token.get('ticker') or '').upper()
+                    quantity = float(token.get('quantity', 0))
+                    if not ticker or quantity <= 0:
+                        continue
+                    price_data = prices.get(ticker, {})
+                    price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
+                    if price <= 0 and token.get('price_usd'):
+                        price = float(token['price_usd'])
+                    if price > 0:
+                        pp_rows.append({
+                            'user_id': user_id, 'symbol': ticker, 'quantity': quantity,
+                            'source_type': 'custom_token', 'source_detail': str(token.get('id', '')),
+                            'chain': '', 'last_price_usd': price,
+                        })
+            except Exception as e:
+                logger.debug(f"Offchain collector: custom tokens portfolio positions failed: {e}")
+
             if pp_rows:
                 await upsert_portfolio_positions_batch(pp_rows)
                 logger.debug(f"Offchain collector: wrote {len(pp_rows)} portfolio positions for user {user_id}")

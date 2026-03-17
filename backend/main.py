@@ -692,6 +692,62 @@ async def lifespan(app: FastAPI):
                                 'chain': 'cardano', 'last_price_usd': _price_for(token),
                             })
 
+                # --- Tracked native tokens ---
+                try:
+                    from database import get_tracked_tokens, get_wallet_assets
+                    from services.defi import DEFI_PROTOCOLS
+                    tracked_tokens = await get_tracked_tokens()
+                    tracked_ids = {t['asset_id'] for t in tracked_tokens}
+                    if tracked_ids:
+                        for w in wallets:
+                            if w['blockchain'] != 'cardano':
+                                continue
+                            assets = await get_wallet_assets(w['id'])
+                            for asset in assets:
+                                aid = asset.get('asset_id', '')
+                                if aid not in tracked_ids:
+                                    continue
+                                ticker = (asset.get('ticker') or '').upper()
+                                if not ticker:
+                                    continue
+                                policy_id = asset.get('policy_id', '')
+                                if policy_id in DEFI_PROTOCOLS:
+                                    continue
+                                raw_qty = float(asset.get('quantity') or 0)
+                                decimals = int(asset.get('decimals') or 0)
+                                human_qty = raw_qty / (10 ** decimals) if decimals > 0 else raw_qty
+                                if human_qty > 0 and _price_for(ticker) > 0:
+                                    positions.append({
+                                        'user_id': uid, 'symbol': ticker, 'quantity': human_qty,
+                                        'source_type': 'tracked_token', 'source_detail': aid,
+                                        'chain': 'cardano', 'last_price_usd': _price_for(ticker),
+                                    })
+                except Exception as e:
+                    logger.debug(f"Portfolio positions seed: tracked tokens failed: {e}")
+
+                # --- Custom tokens ---
+                try:
+                    from database import get_all_custom_tokens
+                    custom_tokens = await get_all_custom_tokens(user_id=uid)
+                    for token in custom_tokens:
+                        if token.get('include_in_total', 1) != 1:
+                            continue
+                        ticker = (token.get('ticker') or '').upper()
+                        quantity = float(token.get('quantity', 0))
+                        if not ticker or quantity <= 0:
+                            continue
+                        price = _price_for(ticker)
+                        if price <= 0 and token.get('price_usd'):
+                            price = float(token['price_usd'])
+                        if price > 0:
+                            positions.append({
+                                'user_id': uid, 'symbol': ticker, 'quantity': quantity,
+                                'source_type': 'custom_token', 'source_detail': str(token.get('id', '')),
+                                'chain': '', 'last_price_usd': price,
+                            })
+                except Exception as e:
+                    logger.debug(f"Portfolio positions seed: custom tokens failed: {e}")
+
                 if positions:
                     await upsert_portfolio_positions_batch(positions)
                     logger.info(f"Portfolio positions: seeded {len(positions)} positions for user {uid}")

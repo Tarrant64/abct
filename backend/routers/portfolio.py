@@ -1113,6 +1113,67 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
         except Exception as e:
             logger.debug(f"Portfolio positions defi write failed: {e}")
 
+        # Tracked native tokens (Cardano tokens the user toggled for tracking)
+        try:
+            tracked_tokens = await get_tracked_tokens()
+            tracked_ids = {t['asset_id'] for t in tracked_tokens}
+            if tracked_ids:
+                _pp_wallets_all = await _pp_get_wallets(user_id=user_id)
+                for w in _pp_wallets_all:
+                    if w['blockchain'] != 'cardano':
+                        continue
+                    assets = await get_wallet_assets(w['id'])
+                    for asset in assets:
+                        aid = asset.get('asset_id', '')
+                        if aid not in tracked_ids:
+                            continue
+                        ticker = (asset.get('ticker') or '').upper()
+                        if not ticker:
+                            continue
+                        # Skip DeFi protocol tokens (already counted above)
+                        policy_id = asset.get('policy_id', '')
+                        if policy_id in DEFI_PROTOCOLS:
+                            continue
+                        raw_qty = float(asset.get('quantity') or 0)
+                        decimals = int(asset.get('decimals') or 0)
+                        human_qty = raw_qty / (10 ** decimals) if decimals > 0 else raw_qty
+                        if human_qty <= 0:
+                            continue
+                        price_data = all_prices.get(ticker, {})
+                        price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
+                        if price > 0:
+                            pp_rows.append({
+                                'user_id': user_id, 'symbol': ticker, 'quantity': human_qty,
+                                'source_type': 'tracked_token', 'source_detail': aid,
+                                'chain': 'cardano', 'last_price_usd': price,
+                            })
+        except Exception as e:
+            logger.debug(f"Portfolio positions tracked tokens write failed: {e}")
+
+        # Custom tokens (manually added tokens with user-specified quantities)
+        try:
+            from database import get_all_custom_tokens
+            custom_tokens = await get_all_custom_tokens(user_id=user_id)
+            for token in custom_tokens:
+                if token.get('include_in_total', 1) != 1:
+                    continue
+                ticker = (token.get('ticker') or '').upper()
+                quantity = float(token.get('quantity', 0))
+                if not ticker or quantity <= 0:
+                    continue
+                price_data = all_prices.get(ticker, {})
+                price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
+                if price <= 0 and token.get('price_usd'):
+                    price = float(token['price_usd'])
+                if price > 0:
+                    pp_rows.append({
+                        'user_id': user_id, 'symbol': ticker, 'quantity': quantity,
+                        'source_type': 'custom_token', 'source_detail': str(token.get('id', '')),
+                        'chain': '', 'last_price_usd': price,
+                    })
+        except Exception as e:
+            logger.debug(f"Portfolio positions custom tokens write failed: {e}")
+
         if pp_rows:
             await upsert_portfolio_positions_batch(pp_rows)
     except Exception as e:
