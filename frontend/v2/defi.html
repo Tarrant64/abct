@@ -18,6 +18,16 @@
         .position-row { display: flex; justify-content: space-between; padding: 6px 0; border-top: 1px solid var(--v2-border); font-size: 13px; }
         .position-row:first-child { border-top: none; }
         .protocol-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+        /* Sortable table headers */
+        .sortable-header { cursor: pointer; user-select: none; white-space: nowrap; }
+        .sortable-header:hover { color: var(--v2-accent-text); }
+        .sortable-header.sorted { color: var(--v2-accent-text); }
+        .sort-icon { font-size: 10px; margin-left: 2px; opacity: 0.5; }
+        .sortable-header.sorted .sort-icon { opacity: 1; }
+        /* View toggle */
+        .view-toggle { display: flex; gap: 4px; background: var(--v2-bg-input); border-radius: var(--v2-radius-sm); padding: 2px; }
+        .view-toggle-btn { padding: 4px 12px; border: none; background: transparent; color: var(--v2-text-muted); font-size: 12px; cursor: pointer; border-radius: var(--v2-radius-sm); transition: all 0.2s; }
+        .view-toggle-btn.active { background: var(--v2-bg-card); color: var(--v2-text-primary); box-shadow: var(--v2-shadow-sm); }
     </style>
 </head>
 <body>
@@ -40,11 +50,23 @@
                     <div class="v2-stat-card"><div class="v2-stat-label">Protocols</div><div class="v2-stat-value" id="protocolCount"><span class="v2-skeleton v2-skeleton-value"></span></div></div>
                 </div>
 
-                <!-- Protocol Cards -->
+                <!-- View toggle -->
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                    <span style="font-size:14px;font-weight:600;color:var(--v2-text-heading);">Positions</span>
+                    <div class="view-toggle">
+                        <button class="view-toggle-btn active" id="viewCards">Cards</button>
+                        <button class="view-toggle-btn" id="viewTable">Table</button>
+                    </div>
+                </div>
+
+                <!-- Protocol Cards View -->
                 <div class="protocol-grid v2-fade-in" id="protocolGrid">
                     <div class="v2-skeleton" style="height:200px;border-radius:var(--v2-radius-lg)"></div>
                     <div class="v2-skeleton" style="height:200px;border-radius:var(--v2-radius-lg)"></div>
                 </div>
+
+                <!-- Table View (hidden by default) -->
+                <div class="v2-table-wrapper v2-fade-in" id="defiTableView" style="display:none;"></div>
             </div>
 
             <footer class="v2-footer">ABCT V2 | DeFi & Staking</footer>
@@ -54,21 +76,36 @@
     <script src="/next/static/js/v2-app.js"></script>
     <script src="/next/static/js/v2-shell.js"></script>
     <script>
+        let defiPrices = {};
+        let allDefiRows = [];
+        let defiSortCol = 'value';
+        let defiSortDir = 'desc';
+        let defiView = 'cards';
+
         document.addEventListener('DOMContentLoaded', () => {
             v2InitShell('defi');
             loadDefi();
             document.getElementById('refreshDefiBtn').addEventListener('click', refreshDefi);
+            document.getElementById('viewCards').addEventListener('click', () => setDefiView('cards'));
+            document.getElementById('viewTable').addEventListener('click', () => setDefiView('table'));
         });
+
+        function setDefiView(view) {
+            defiView = view;
+            document.getElementById('viewCards').classList.toggle('active', view === 'cards');
+            document.getElementById('viewTable').classList.toggle('active', view === 'table');
+            document.getElementById('protocolGrid').style.display = view === 'cards' ? '' : 'none';
+            document.getElementById('defiTableView').style.display = view === 'table' ? '' : 'none';
+            if (view === 'table') renderDefiTable();
+        }
 
         async function loadDefi() {
             try {
-                // Load DeFi summary and all-holdings in parallel
-                // DeFi summary has governance token positions
-                // All-holdings has staking positions with values
-                const [defiResp, holdingsResp, instantResp] = await Promise.allSettled([
+                const [defiResp, holdingsResp, instantResp, pricesResp] = await Promise.allSettled([
                     v2Fetch('/defi/summary'),
                     v2Fetch('/portfolio/all-holdings'),
                     v2Fetch('/portfolio/instant'),
+                    v2Fetch('/prices/all'),
                 ]);
 
                 let defiData = null;
@@ -84,6 +121,10 @@
                 if (instantResp.status === 'fulfilled' && instantResp.value.ok) {
                     instantData = await instantResp.value.json();
                 }
+                if (pricesResp.status === 'fulfilled' && pricesResp.value.ok) {
+                    const priceData = await pricesResp.value.json();
+                    defiPrices = priceData.prices || priceData || {};
+                }
 
                 renderDefi(defiData, holdingsData, instantData);
             } catch(e) {
@@ -92,19 +133,20 @@
             }
         }
 
+        function getTokenPrice(symbol) {
+            const priceInfo = defiPrices[symbol] || defiPrices[(symbol || '').toUpperCase()] || {};
+            return typeof priceInfo === 'object' ? (parseFloat(priceInfo.usd) || 0) : (parseFloat(priceInfo) || 0);
+        }
+
         function renderDefi(defiData, holdingsData, instantData) {
-            // Extract staking and DeFi holdings from all-holdings
-            // Backend source field uses: 'staking', 'defi_summary', 'defi' (varies by path)
             const allHoldings = holdingsData ? (holdingsData.holdings || []) : [];
             const stakingHoldings = allHoldings.filter(h => h.source === 'staking');
             const defiHoldings = allHoldings.filter(h => h.source === 'defi' || h.source === 'defi_summary');
 
-            // Get totals from instant breakdown
             const bd = instantData ? (instantData.breakdown || {}) : {};
             const totalStaked = parseFloat(bd.staking) || 0;
             const totalDefi = parseFloat(bd.defi) || 0;
 
-            // Count protocols from defi summary
             const defiPositions = defiData ? (defiData.all_positions || []) : [];
             const protocolNames = new Set();
             defiPositions.forEach(p => protocolNames.add(p.protocol || 'Unknown'));
@@ -121,34 +163,32 @@
                 return;
             }
 
+            // Build unified row list for table view
+            allDefiRows = [];
+
             let html = '';
 
             // Staking positions from all-holdings
             if (stakingHoldings.length > 0) {
                 const stakingTotal = stakingHoldings.reduce((sum, h) => sum + (parseFloat(h.value_usd) || 0), 0);
-                // Determine chain from staking holdings
                 const stakingChain = (stakingHoldings[0].blockchain || 'cardano').toLowerCase();
-                html += `<div class="protocol-card">
-                    <div class="protocol-header">
-                        <div>
-                            <div class="protocol-name">Staked Assets</div>
-                            <span class="v2-chain-badge chain-${escapeAttr(stakingChain)} protocol-chain">${escapeHtml(stakingChain)}</span>
-                        </div>
-                        <div class="v2-stat-value v2-blur" style="font-size:16px">${formatCurrency(stakingTotal)}</div>
-                    </div>
-                    <div class="protocol-positions">`;
+                html += '<div class="protocol-card"><div class="protocol-header"><div>' +
+                    '<div class="protocol-name">Staked Assets</div>' +
+                    '<span class="v2-chain-badge chain-' + escapeAttr(stakingChain) + ' protocol-chain">' + escapeHtml(stakingChain) + '</span>' +
+                    '</div><div class="v2-stat-value v2-blur" style="font-size:16px">' + formatCurrency(stakingTotal) + '</div></div>' +
+                    '<div class="protocol-positions">';
                 stakingHoldings.forEach(h => {
-                    html += `<div class="position-row">
-                        <span>${escapeHtml(h.symbol || h.name || 'Token')}: <span class="v2-blur">${formatAmount(parseFloat(h.amount) || 0)}</span></span>
-                        <span class="v2-blur">${formatCurrency(parseFloat(h.value_usd) || 0)}</span>
-                    </div>`;
+                    const amount = parseFloat(h.amount) || 0;
+                    const valueUsd = parseFloat(h.value_usd) || 0;
+                    html += '<div class="position-row"><span>' + escapeHtml(h.symbol || h.name || 'Token') + ': <span class="v2-blur">' + formatAmount(amount) + '</span></span>' +
+                        '<span class="v2-blur">' + formatCurrency(valueUsd) + '</span></div>';
+                    allDefiRows.push({ protocol: 'Staking', token: h.symbol || h.name || 'Token', type: 'Staked', amount: amount, value: valueUsd });
                 });
                 html += '</div></div>';
             }
 
             // DeFi governance positions from defi summary
             if (defiPositions.length > 0) {
-                // Group by protocol
                 const byProtocol = {};
                 defiPositions.forEach(p => {
                     const key = p.protocol || 'Unknown';
@@ -158,46 +198,119 @@
 
                 Object.entries(byProtocol).forEach(([name, items]) => {
                     const protoChain = (items[0].blockchain || items[0].chain || 'cardano').toLowerCase();
-                    html += `<div class="protocol-card">
-                        <div class="protocol-header">
-                            <div>
-                                <div class="protocol-name">${escapeHtml(name)}</div>
-                                <span class="v2-chain-badge chain-${escapeAttr(protoChain)} protocol-chain">${escapeHtml(protoChain)}</span>
-                                <span class="v2-badge v2-badge-neutral" style="margin-left:4px">Governance</span>
-                            </div>
-                        </div>
-                        <div class="protocol-positions">`;
+                    // Calculate protocol total USD
+                    let protoTotal = 0;
                     items.forEach(p => {
-                        html += `<div class="position-row">
-                            <span>${escapeHtml(p.token || p.asset_name || 'Token')}: <span class="v2-blur">${formatAmount(parseFloat(p.quantity) || 0)}</span></span>
-                            <span style="font-size:12px;color:var(--v2-text-muted)">${escapeHtml(p.type_label || p.type || '')}</span>
-                        </div>`;
+                        const qty = parseFloat(p.quantity) || 0;
+                        const token = (p.token || '').toUpperCase();
+                        const price = getTokenPrice(token);
+                        protoTotal += qty * price;
+                    });
+
+                    html += '<div class="protocol-card"><div class="protocol-header"><div>' +
+                        '<div class="protocol-name">' + escapeHtml(name) + '</div>' +
+                        '<span class="v2-chain-badge chain-' + escapeAttr(protoChain) + ' protocol-chain">' + escapeHtml(protoChain) + '</span>' +
+                        ' <span class="v2-badge v2-badge-neutral" style="margin-left:4px">Governance</span>' +
+                        '</div>' +
+                        (protoTotal > 0 ? '<div class="v2-stat-value v2-blur" style="font-size:16px">' + formatCurrency(protoTotal) + '</div>' : '') +
+                        '</div><div class="protocol-positions">';
+                    items.forEach(p => {
+                        const qty = parseFloat(p.quantity) || 0;
+                        const token = (p.token || '').toUpperCase();
+                        const price = getTokenPrice(token);
+                        const usdVal = qty * price;
+                        html += '<div class="position-row"><span>' + escapeHtml(p.token || p.asset_name || 'Token') + ': <span class="v2-blur">' + formatAmount(qty) + '</span></span>' +
+                            '<span class="v2-blur">' + (usdVal > 0 ? formatCurrency(usdVal) : '<span style="color:var(--v2-text-muted)">' + escapeHtml(p.type_label || p.type || '') + '</span>') + '</span></div>';
+                        allDefiRows.push({ protocol: name, token: p.token || p.asset_name || 'Token', type: p.type_label || p.type || 'Governance', amount: qty, value: usdVal });
                     });
                     html += '</div></div>';
                 });
             }
 
-            // DeFi holdings from all-holdings (tokens sourced from DeFi protocols)
+            // DeFi holdings from all-holdings
             if (defiHoldings.length > 0) {
                 const defiTotal = defiHoldings.reduce((sum, h) => sum + (parseFloat(h.value_usd) || 0), 0);
-                html += `<div class="protocol-card">
-                    <div class="protocol-header">
-                        <div>
-                            <div class="protocol-name">DeFi Token Holdings</div>
-                        </div>
-                        <div class="v2-stat-value v2-blur" style="font-size:16px">${formatCurrency(defiTotal)}</div>
-                    </div>
-                    <div class="protocol-positions">`;
+                html += '<div class="protocol-card"><div class="protocol-header"><div>' +
+                    '<div class="protocol-name">DeFi Token Holdings</div></div>' +
+                    '<div class="v2-stat-value v2-blur" style="font-size:16px">' + formatCurrency(defiTotal) + '</div>' +
+                    '</div><div class="protocol-positions">';
                 defiHoldings.forEach(h => {
-                    html += `<div class="position-row">
-                        <span>${escapeHtml(h.symbol || h.name || 'Token')}: <span class="v2-blur">${formatAmount(parseFloat(h.amount) || 0)}</span></span>
-                        <span class="v2-blur">${formatCurrency(parseFloat(h.value_usd) || 0)}</span>
-                    </div>`;
+                    const amount = parseFloat(h.amount) || 0;
+                    const valueUsd = parseFloat(h.value_usd) || 0;
+                    html += '<div class="position-row"><span>' + escapeHtml(h.symbol || h.name || 'Token') + ': <span class="v2-blur">' + formatAmount(amount) + '</span></span>' +
+                        '<span class="v2-blur">' + formatCurrency(valueUsd) + '</span></div>';
+                    allDefiRows.push({ protocol: 'DeFi Holdings', token: h.symbol || h.name || 'Token', type: 'Holding', amount: amount, value: valueUsd });
                 });
                 html += '</div></div>';
             }
 
             setSafeHTML(grid, html);
+
+            // If table view is active, render it
+            if (defiView === 'table') renderDefiTable();
+        }
+
+        function renderDefiTable() {
+            const container = document.getElementById('defiTableView');
+            if (!allDefiRows.length) {
+                setSafeHTML(container, '<div class="v2-empty" style="padding:48px"><div class="v2-empty-title">No positions</div></div>');
+                return;
+            }
+
+            // Sort
+            const rows = allDefiRows.slice().sort((a, b) => {
+                let aVal, bVal;
+                switch(defiSortCol) {
+                    case 'protocol': aVal = a.protocol.toLowerCase(); bVal = b.protocol.toLowerCase(); break;
+                    case 'token': aVal = a.token.toLowerCase(); bVal = b.token.toLowerCase(); break;
+                    case 'type': aVal = a.type.toLowerCase(); bVal = b.type.toLowerCase(); break;
+                    case 'amount': aVal = a.amount; bVal = b.amount; break;
+                    case 'value': aVal = a.value; bVal = b.value; break;
+                    default: aVal = 0; bVal = 0;
+                }
+                const cmp = typeof aVal === 'string' ? aVal.localeCompare(bVal) : aVal - bVal;
+                return defiSortDir === 'asc' ? cmp : -cmp;
+            });
+
+            function sortTh(col, label, isRight) {
+                const active = defiSortCol === col;
+                const arrow = active ? (defiSortDir === 'asc' ? '&#9650;' : '&#9660;') : '';
+                return '<th class="' + (isRight ? 'right ' : '') + 'sortable-header' + (active ? ' sorted' : '') + '" data-sort="' + col + '">' + label + ' <span class="sort-icon">' + arrow + '</span></th>';
+            }
+
+            let html = '<table class="v2-table"><thead><tr>' +
+                sortTh('protocol', 'Protocol', false) +
+                sortTh('token', 'Token', false) +
+                sortTh('type', 'Type', false) +
+                sortTh('amount', 'Quantity', true) +
+                sortTh('value', 'Value (USD)', true) +
+                '</tr></thead><tbody>';
+
+            rows.forEach(r => {
+                html += '<tr>' +
+                    '<td><strong>' + escapeHtml(r.protocol) + '</strong></td>' +
+                    '<td>' + escapeHtml(r.token) + '</td>' +
+                    '<td>' + escapeHtml(r.type) + '</td>' +
+                    '<td class="right v2-blur">' + formatAmount(r.amount) + '</td>' +
+                    '<td class="right v2-blur">' + (r.value > 0 ? formatCurrency(r.value) : '<span style="color:var(--v2-text-muted);">--</span>') + '</td>' +
+                    '</tr>';
+            });
+            html += '</tbody></table>';
+            setSafeHTML(container, html);
+
+            // Attach sort handlers
+            container.querySelectorAll('.sortable-header').forEach(th => {
+                th.addEventListener('click', () => {
+                    const col = th.dataset.sort;
+                    if (defiSortCol === col) {
+                        defiSortDir = defiSortDir === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        defiSortCol = col;
+                        defiSortDir = (col === 'protocol' || col === 'token' || col === 'type') ? 'asc' : 'desc';
+                    }
+                    renderDefiTable();
+                });
+            });
         }
 
         async function refreshDefi() {

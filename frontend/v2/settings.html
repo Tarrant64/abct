@@ -7,6 +7,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="stylesheet" href="/next/static/css/v2.css">
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+    <script defer src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
     <script src="/static/js/session-auth.js?v=1772669294"></script>
 </head>
 <body>
@@ -169,10 +170,191 @@
 
                 <!-- Chart Designer Tab -->
                 <div id="tabChart" class="settings-tab-content" style="display:none">
+                    <style>
+                        .cd-layout { display: flex; flex-direction: column; gap: 20px; }
+                        .cd-controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+                        @media (max-width: 900px) { .cd-controls { grid-template-columns: repeat(2, 1fr); } }
+                        @media (max-width: 600px) { .cd-controls { grid-template-columns: 1fr; } }
+                        .cd-section { background: var(--v2-bg-input); border: 1px solid var(--v2-border); border-radius: var(--v2-radius-md); padding: 14px 16px; }
+                        .cd-section-title { margin: 0 0 10px; font-size: 13px; color: var(--v2-text-heading); font-weight: 600; }
+                        .cd-field { margin-bottom: 10px; }
+                        .cd-field:last-child { margin-bottom: 0; }
+                        .cd-field > label { display: block; font-size: 12px; color: var(--v2-text-secondary); margin-bottom: 4px; }
+                        .cd-field-row { display: flex; align-items: center; justify-content: space-between; }
+                        .cd-field-row > label { margin-bottom: 0; }
+                        .cd-color-input { display: flex; gap: 8px; align-items: center; }
+                        .cd-color-input input[type="color"] { width: 36px; height: 30px; border: 1px solid var(--v2-border); border-radius: 6px; padding: 2px; cursor: pointer; background: transparent; }
+                        .cd-hex-input { width: 80px; background: var(--v2-bg-card); border: 1px solid var(--v2-border); border-radius: 6px; padding: 5px 8px; color: var(--v2-text-primary); font-size: 12px; font-family: monospace; }
+                        .cd-select { width: 100%; background: var(--v2-bg-card); border: 1px solid var(--v2-border); border-radius: 6px; padding: 6px 10px; color: var(--v2-text-primary); font-size: 13px; }
+                        .cd-slider { width: 100%; accent-color: var(--v2-accent); }
+                        .cd-radio-group { display: flex; gap: 16px; }
+                        .cd-radio { display: flex; align-items: center; gap: 6px; color: var(--v2-text-primary); font-size: 13px; cursor: pointer; }
+                        .cd-radio input { accent-color: var(--v2-accent); }
+                        .cd-toggle { position: relative; display: inline-block; width: 40px; height: 22px; }
+                        .cd-toggle input { opacity: 0; width: 0; height: 0; }
+                        .cd-toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: var(--v2-border-input); border-radius: 22px; transition: 0.2s; }
+                        .cd-toggle-slider::before { content: ""; position: absolute; height: 16px; width: 16px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: 0.2s; }
+                        .cd-toggle input:checked + .cd-toggle-slider { background: var(--v2-accent); }
+                        .cd-toggle input:checked + .cd-toggle-slider::before { transform: translateX(18px); }
+                        .cd-actions { display: flex; gap: 10px; padding-top: 8px; grid-column: 1 / -1; }
+                        .cd-actions .v2-btn { flex: 1; justify-content: center; }
+                        .cd-preview-hint { text-align: center; color: var(--v2-text-muted); font-size: 12px; margin-top: 8px; }
+                    </style>
                     <div class="v2-card">
                         <div class="v2-card-header"><span class="v2-card-title">Chart Designer</span></div>
-                        <p style="color:var(--v2-text-secondary);padding:20px;">Customize your portfolio chart appearance. Available in the full settings view.</p>
-                        <a href="/settings.html#chart-designer" class="v2-btn v2-btn-secondary" style="display:inline-flex;margin:0 20px 20px;">Open Chart Designer (V1)</a>
+                        <div class="cd-layout" style="padding:16px;">
+                            <!-- Live Preview -->
+                            <div class="cd-preview">
+                                <h3 class="cd-section-title">Live Preview</h3>
+                                <div id="cdPreviewChart" style="width:100%;height:250px;border-radius:8px;overflow:hidden;"></div>
+                                <p class="cd-preview-hint">Preview updates as you adjust settings</p>
+                            </div>
+
+                            <!-- Controls Grid -->
+                            <div class="cd-controls">
+                                <!-- Series Type -->
+                                <div class="cd-section">
+                                    <h3 class="cd-section-title">Series Type</h3>
+                                    <div class="cd-radio-group">
+                                        <label class="cd-radio"><input type="radio" name="cdSeriesType" value="area" checked> Area</label>
+                                        <label class="cd-radio"><input type="radio" name="cdSeriesType" value="line"> Line</label>
+                                    </div>
+                                </div>
+
+                                <!-- Line Settings -->
+                                <div class="cd-section">
+                                    <h3 class="cd-section-title">Line Settings</h3>
+                                    <div class="cd-field">
+                                        <label>Color</label>
+                                        <div class="cd-color-input">
+                                            <input type="color" id="cdLineColor" value="#00d26a">
+                                            <input type="text" id="cdLineColorHex" value="#00d26a" maxlength="7" class="cd-hex-input">
+                                        </div>
+                                    </div>
+                                    <div class="cd-field">
+                                        <label>Width <span id="cdLineWidthVal">2</span>px</label>
+                                        <input type="range" id="cdLineWidth" min="1" max="4" value="2" class="cd-slider">
+                                    </div>
+                                    <div class="cd-field">
+                                        <label>Style</label>
+                                        <select id="cdLineStyle" class="cd-select">
+                                            <option value="0">Solid</option>
+                                            <option value="1">Dashed</option>
+                                            <option value="2">Dotted</option>
+                                            <option value="3">Large Dashed</option>
+                                        </select>
+                                    </div>
+                                    <div class="cd-field">
+                                        <label>Line Type</label>
+                                        <select id="cdLineType" class="cd-select">
+                                            <option value="0">Simple</option>
+                                            <option value="1">With Steps</option>
+                                            <option value="2">Curved</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- Area Fill -->
+                                <div class="cd-section" id="cdAreaSection">
+                                    <h3 class="cd-section-title">Area Fill</h3>
+                                    <div class="cd-field">
+                                        <label>Top Color</label>
+                                        <div class="cd-color-input">
+                                            <input type="color" id="cdAreaTopColor" value="#00d26a">
+                                            <input type="text" id="cdAreaTopColorHex" value="#00d26a" maxlength="7" class="cd-hex-input">
+                                        </div>
+                                    </div>
+                                    <div class="cd-field">
+                                        <label>Top Opacity <span id="cdAreaTopOpacityVal">56</span>%</label>
+                                        <input type="range" id="cdAreaTopOpacity" min="0" max="100" value="56" class="cd-slider">
+                                    </div>
+                                    <div class="cd-field">
+                                        <label>Bottom Color</label>
+                                        <div class="cd-color-input">
+                                            <input type="color" id="cdAreaBottomColor" value="#00d26a">
+                                            <input type="text" id="cdAreaBottomColorHex" value="#00d26a" maxlength="7" class="cd-hex-input">
+                                        </div>
+                                    </div>
+                                    <div class="cd-field">
+                                        <label>Bottom Opacity <span id="cdAreaBottomOpacityVal">4</span>%</label>
+                                        <input type="range" id="cdAreaBottomOpacity" min="0" max="100" value="4" class="cd-slider">
+                                    </div>
+                                </div>
+
+                                <!-- Grid -->
+                                <div class="cd-section">
+                                    <h3 class="cd-section-title">Grid</h3>
+                                    <div class="cd-field cd-field-row">
+                                        <label>Show Grid</label>
+                                        <label class="cd-toggle"><input type="checkbox" id="cdGridVisible" checked><span class="cd-toggle-slider"></span></label>
+                                    </div>
+                                    <div class="cd-field">
+                                        <label>Grid Color</label>
+                                        <div class="cd-color-input">
+                                            <input type="color" id="cdGridColor" value="#2a2a4a">
+                                            <input type="text" id="cdGridColorHex" value="#2a2a4a" maxlength="7" class="cd-hex-input">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Crosshair -->
+                                <div class="cd-section">
+                                    <h3 class="cd-section-title">Crosshair</h3>
+                                    <div class="cd-field">
+                                        <label>Mode</label>
+                                        <select id="cdCrosshairMode" class="cd-select">
+                                            <option value="0">Normal</option>
+                                            <option value="1">Magnet</option>
+                                            <option value="2">Hidden</option>
+                                        </select>
+                                    </div>
+                                    <div class="cd-field">
+                                        <label>Crosshair Color</label>
+                                        <div class="cd-color-input">
+                                            <input type="color" id="cdCrosshairColor" value="#758696">
+                                            <input type="text" id="cdCrosshairColorHex" value="#758696" maxlength="7" class="cd-hex-input">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Background -->
+                                <div class="cd-section">
+                                    <h3 class="cd-section-title">Background</h3>
+                                    <div class="cd-field">
+                                        <label>Background Color</label>
+                                        <div class="cd-color-input">
+                                            <input type="color" id="cdBackground" value="#151921">
+                                            <input type="text" id="cdBackgroundHex" value="#151921" maxlength="7" class="cd-hex-input">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Text & Borders -->
+                                <div class="cd-section">
+                                    <h3 class="cd-section-title">Text &amp; Borders</h3>
+                                    <div class="cd-field">
+                                        <label>Text Color</label>
+                                        <div class="cd-color-input">
+                                            <input type="color" id="cdTextColor" value="#e8ecf1">
+                                            <input type="text" id="cdTextColorHex" value="#e8ecf1" maxlength="7" class="cd-hex-input">
+                                        </div>
+                                    </div>
+                                    <div class="cd-field">
+                                        <label>Border Color</label>
+                                        <div class="cd-color-input">
+                                            <input type="color" id="cdBorderColor" value="#1e2433">
+                                            <input type="text" id="cdBorderColorHex" value="#1e2433" maxlength="7" class="cd-hex-input">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Action Buttons -->
+                                <div class="cd-actions">
+                                    <button class="v2-btn v2-btn-secondary" id="cdResetBtn">Reset to Theme Defaults</button>
+                                    <button class="v2-btn v2-btn-primary" id="cdSaveBtn">Save</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -319,6 +501,7 @@
             // Load tab-specific data on first visit
             if (tab === 'security') loadSecurityData();
             if (tab === 'system') loadSystemData();
+            if (tab === 'chart') initChartDesigner();
         }
 
         // ====================================================================
@@ -1409,6 +1592,231 @@
                 document.getElementById('optimizeDbBtn').disabled = false;
                 document.getElementById('optimizeDbBtn').textContent = 'Optimize Databases';
             }
+        }
+
+        // ====================================================================
+        // CHART DESIGNER
+        // ====================================================================
+        let cdPreviewChart = null;
+        let cdPreviewSeries = null;
+        let cdDebounceTimer = null;
+        let cdInitialized = false;
+
+        function cdGenerateSampleData() {
+            const data = [];
+            const now = Math.floor(Date.now() / 1000);
+            const daySeconds = 86400;
+            for (let i = 0; i < 30; i++) {
+                const time = now - (30 - i) * daySeconds;
+                const base = 1.0;
+                const value = base + 0.3 * Math.sin(i * 0.4) + 0.15 * Math.sin(i * 0.9) + 0.05 * Math.cos(i * 0.2);
+                data.push({ time: time, value: parseFloat(value.toFixed(4)) });
+            }
+            return data;
+        }
+
+        function cdGetThemeDefaults() {
+            const theme = document.documentElement.getAttribute('data-theme') || 'dark-mode';
+            if (theme === 'light') {
+                return {
+                    seriesType: 'area', lineColor: '#00b894', lineWidth: 2, lineStyle: 0, lineType: 0,
+                    areaTopColor: '#00b894', areaTopOpacity: 0.3, areaBottomColor: '#00b894', areaBottomOpacity: 0.02,
+                    gridVisible: true, gridColor: '#e5e7eb', crosshairMode: 0, crosshairColor: '#9ca3af',
+                    background: '#ffffff', textColor: '#374151', borderColor: '#e5e7eb'
+                };
+            }
+            return {
+                seriesType: 'area', lineColor: '#00d26a', lineWidth: 2, lineStyle: 0, lineType: 0,
+                areaTopColor: '#00d26a', areaTopOpacity: 0.56, areaBottomColor: '#00d26a', areaBottomOpacity: 0.04,
+                gridVisible: true, gridColor: '#1e2433', crosshairMode: 0, crosshairColor: '#758696',
+                background: '#151921', textColor: '#e8ecf1', borderColor: '#1e2433'
+            };
+        }
+
+        function cdReadForm() {
+            return {
+                enabled: true,
+                seriesType: document.querySelector('input[name="cdSeriesType"]:checked').value,
+                lineColor: document.getElementById('cdLineColor').value,
+                lineWidth: parseInt(document.getElementById('cdLineWidth').value),
+                lineStyle: parseInt(document.getElementById('cdLineStyle').value),
+                lineType: parseInt(document.getElementById('cdLineType').value),
+                areaTopColor: document.getElementById('cdAreaTopColor').value,
+                areaTopOpacity: parseInt(document.getElementById('cdAreaTopOpacity').value) / 100,
+                areaBottomColor: document.getElementById('cdAreaBottomColor').value,
+                areaBottomOpacity: parseInt(document.getElementById('cdAreaBottomOpacity').value) / 100,
+                gridVisible: document.getElementById('cdGridVisible').checked,
+                gridColor: document.getElementById('cdGridColor').value,
+                crosshairMode: parseInt(document.getElementById('cdCrosshairMode').value),
+                crosshairColor: document.getElementById('cdCrosshairColor').value,
+                background: document.getElementById('cdBackground').value,
+                textColor: document.getElementById('cdTextColor').value,
+                borderColor: document.getElementById('cdBorderColor').value
+            };
+        }
+
+        function cdPopulateForm(s) {
+            const radio = document.querySelector('input[name="cdSeriesType"][value="' + s.seriesType + '"]');
+            if (radio) radio.checked = true;
+            document.getElementById('cdLineColor').value = s.lineColor;
+            document.getElementById('cdLineColorHex').value = s.lineColor;
+            document.getElementById('cdLineWidth').value = s.lineWidth;
+            document.getElementById('cdLineWidthVal').textContent = s.lineWidth;
+            document.getElementById('cdLineStyle').value = s.lineStyle;
+            document.getElementById('cdLineType').value = s.lineType;
+            document.getElementById('cdAreaTopColor').value = s.areaTopColor;
+            document.getElementById('cdAreaTopColorHex').value = s.areaTopColor;
+            document.getElementById('cdAreaTopOpacity').value = Math.round(s.areaTopOpacity * 100);
+            document.getElementById('cdAreaTopOpacityVal').textContent = Math.round(s.areaTopOpacity * 100);
+            document.getElementById('cdAreaBottomColor').value = s.areaBottomColor;
+            document.getElementById('cdAreaBottomColorHex').value = s.areaBottomColor;
+            document.getElementById('cdAreaBottomOpacity').value = Math.round(s.areaBottomOpacity * 100);
+            document.getElementById('cdAreaBottomOpacityVal').textContent = Math.round(s.areaBottomOpacity * 100);
+            document.getElementById('cdGridVisible').checked = s.gridVisible;
+            document.getElementById('cdGridColor').value = s.gridColor;
+            document.getElementById('cdGridColorHex').value = s.gridColor;
+            document.getElementById('cdCrosshairMode').value = s.crosshairMode;
+            document.getElementById('cdCrosshairColor').value = s.crosshairColor;
+            document.getElementById('cdCrosshairColorHex').value = s.crosshairColor;
+            document.getElementById('cdBackground').value = s.background;
+            document.getElementById('cdBackgroundHex').value = s.background;
+            document.getElementById('cdTextColor').value = s.textColor;
+            document.getElementById('cdTextColorHex').value = s.textColor;
+            document.getElementById('cdBorderColor').value = s.borderColor;
+            document.getElementById('cdBorderColorHex').value = s.borderColor;
+            document.getElementById('cdAreaSection').style.display = s.seriesType === 'area' ? '' : 'none';
+        }
+
+        function cdRenderPreview() {
+            const container = document.getElementById('cdPreviewChart');
+            if (!container || !window.LightweightCharts) return;
+
+            const s = cdReadForm();
+
+            if (cdPreviewChart) {
+                cdPreviewChart.remove();
+                cdPreviewChart = null;
+                cdPreviewSeries = null;
+            }
+
+            const gridColor = s.gridVisible ? s.gridColor : 'transparent';
+
+            cdPreviewChart = LightweightCharts.createChart(container, {
+                layout: { background: { color: s.background }, textColor: s.textColor },
+                grid: { vertLines: { color: gridColor }, horzLines: { color: gridColor } },
+                crosshair: {
+                    mode: s.crosshairMode,
+                    vertLine: { color: s.crosshairColor },
+                    horzLine: { color: s.crosshairColor }
+                },
+                rightPriceScale: { borderColor: s.borderColor },
+                timeScale: { borderColor: s.borderColor, timeVisible: false },
+                width: container.clientWidth,
+                height: 250
+            });
+
+            const hexToRgba = function(hex, opacity) {
+                const r = parseInt(hex.slice(1, 3), 16);
+                const g = parseInt(hex.slice(3, 5), 16);
+                const b = parseInt(hex.slice(5, 7), 16);
+                return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + opacity + ')';
+            };
+
+            if (s.seriesType === 'line') {
+                cdPreviewSeries = cdPreviewChart.addLineSeries({
+                    color: s.lineColor, lineWidth: s.lineWidth, lineStyle: s.lineStyle, lineType: s.lineType
+                });
+            } else {
+                cdPreviewSeries = cdPreviewChart.addAreaSeries({
+                    topColor: hexToRgba(s.areaTopColor, s.areaTopOpacity),
+                    bottomColor: hexToRgba(s.areaBottomColor, s.areaBottomOpacity),
+                    lineColor: s.lineColor, lineWidth: s.lineWidth, lineStyle: s.lineStyle, lineType: s.lineType
+                });
+            }
+
+            cdPreviewSeries.setData(cdGenerateSampleData());
+            cdPreviewChart.timeScale().fitContent();
+        }
+
+        function cdSchedulePreview() {
+            clearTimeout(cdDebounceTimer);
+            cdDebounceTimer = setTimeout(cdRenderPreview, 100);
+        }
+
+        function initChartDesigner() {
+            if (cdInitialized) {
+                cdRenderPreview();
+                return;
+            }
+            cdInitialized = true;
+
+            const saved = localStorage.getItem('abct_chart_designer');
+            const settings = saved ? JSON.parse(saved) : cdGetThemeDefaults();
+            cdPopulateForm(settings);
+
+            // Bind color picker <-> hex input syncing
+            var colorPairs = [
+                ['cdLineColor', 'cdLineColorHex'],
+                ['cdAreaTopColor', 'cdAreaTopColorHex'],
+                ['cdAreaBottomColor', 'cdAreaBottomColorHex'],
+                ['cdGridColor', 'cdGridColorHex'],
+                ['cdCrosshairColor', 'cdCrosshairColorHex'],
+                ['cdBackground', 'cdBackgroundHex'],
+                ['cdTextColor', 'cdTextColorHex'],
+                ['cdBorderColor', 'cdBorderColorHex']
+            ];
+            colorPairs.forEach(function(pair) {
+                var picker = document.getElementById(pair[0]);
+                var hex = document.getElementById(pair[1]);
+                picker.addEventListener('input', function() { hex.value = picker.value; cdSchedulePreview(); });
+                hex.addEventListener('input', function() {
+                    if (/^#[0-9a-fA-F]{6}$/.test(hex.value)) { picker.value = hex.value; cdSchedulePreview(); }
+                });
+                hex.addEventListener('change', function() {
+                    if (/^#[0-9a-fA-F]{6}$/.test(hex.value)) { picker.value = hex.value; cdSchedulePreview(); }
+                });
+            });
+
+            document.getElementById('cdLineWidth').addEventListener('input', function() {
+                document.getElementById('cdLineWidthVal').textContent = this.value;
+                cdSchedulePreview();
+            });
+            document.getElementById('cdAreaTopOpacity').addEventListener('input', function() {
+                document.getElementById('cdAreaTopOpacityVal').textContent = this.value;
+                cdSchedulePreview();
+            });
+            document.getElementById('cdAreaBottomOpacity').addEventListener('input', function() {
+                document.getElementById('cdAreaBottomOpacityVal').textContent = this.value;
+                cdSchedulePreview();
+            });
+
+            ['cdLineStyle', 'cdLineType', 'cdCrosshairMode'].forEach(function(id) {
+                document.getElementById(id).addEventListener('change', cdSchedulePreview);
+            });
+            document.getElementById('cdGridVisible').addEventListener('change', cdSchedulePreview);
+
+            document.querySelectorAll('input[name="cdSeriesType"]').forEach(function(r) {
+                r.addEventListener('change', function() {
+                    document.getElementById('cdAreaSection').style.display = this.value === 'area' ? '' : 'none';
+                    cdSchedulePreview();
+                });
+            });
+
+            document.getElementById('cdSaveBtn').addEventListener('click', function() {
+                var settings = cdReadForm();
+                localStorage.setItem('abct_chart_designer', JSON.stringify(settings));
+                showToast('Chart settings saved! Changes will apply on next chart load.', 'success');
+            });
+
+            document.getElementById('cdResetBtn').addEventListener('click', function() {
+                localStorage.removeItem('abct_chart_designer');
+                var defaults = cdGetThemeDefaults();
+                cdPopulateForm(defaults);
+                cdRenderPreview();
+                showToast('Chart settings reset to theme defaults.', 'success');
+            });
+
+            cdRenderPreview();
         }
     </script>
 </body>

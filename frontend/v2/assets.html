@@ -57,6 +57,27 @@
         .gov-card-actions a { font-size: 12px; color: var(--v2-accent-text); text-decoration: none; padding: 4px 10px; border: 1px solid var(--v2-accent); border-radius: var(--v2-radius-sm); transition: all 0.2s; }
         .gov-card-actions a:hover { background: var(--v2-accent-muted); }
 
+        /* Sortable headers */
+        .sortable-header { cursor: pointer; user-select: none; white-space: nowrap; }
+        .sortable-header:hover { color: var(--v2-accent-text); }
+        .sortable-header.sorted { color: var(--v2-accent-text); }
+        .sort-icon { font-size: 10px; margin-left: 2px; opacity: 0.5; }
+        .sortable-header.sorted .sort-icon { opacity: 1; }
+
+        /* Exchange expandable cards */
+        .exchange-row { cursor: pointer; }
+        .exchange-row:hover { background: var(--v2-bg-table-row-hover); }
+        .exchange-expand-icon { display: inline-block; width: 16px; margin-right: 4px; transition: transform 0.2s; color: var(--v2-text-muted); font-size: 10px; }
+        .exchange-expand-icon.expanded { transform: rotate(90deg); }
+        .exchange-assets-row { display: none; }
+        .exchange-assets-row.show { display: table-row; }
+        .exchange-assets-row td { padding: 0 !important; }
+        .exchange-assets-container { padding: 8px 16px 12px 40px; background: var(--v2-bg-card); border-bottom: 1px solid var(--v2-border); }
+        .exchange-asset-item { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 12px; }
+        .exchange-asset-name { color: var(--v2-text-secondary); font-weight: 500; }
+        .exchange-asset-amount { color: var(--v2-text-primary); font-family: monospace; }
+        .exchange-asset-value { color: var(--v2-text-secondary); min-width: 80px; text-align: right; }
+
         /* Governance delegation section */
         .gov-delegation-section { margin-bottom: 24px; }
         .gov-delegation-card { background: var(--v2-bg-card); border: 1px solid var(--v2-border); border-radius: var(--v2-radius-lg); padding: 16px; margin-bottom: 12px; }
@@ -179,6 +200,12 @@
         let defiSummaryData = null;
         let governanceLoaded = false;
         let stakingDataByWallet = {};
+        let walletSortCol = 'value';
+        let walletSortDir = 'desc';
+        let exchangeData = null;
+        let defiTabSortCol = 'value';
+        let defiTabSortDir = 'desc';
+        let defiTabPositions = [];
 
         // Governance links (mirrors V1 GOVERNANCE_LINKS)
         const GOVERNANCE_LINKS = {
@@ -317,10 +344,34 @@
         // ==========================================
         // Wallets Tab with Chain Filtering + Expandable Rows
         // ==========================================
+        const CHAIN_SYMBOLS = {
+            'cardano': 'ADA', 'bitcoin': 'BTC', 'ethereum': 'ETH', 'solana': 'SOL',
+            'polygon': 'MATIC', 'base': 'ETH', 'algorand': 'ALGO', 'bsc': 'BNB',
+            'arbitrum': 'ETH', 'avalanche': 'AVAX', 'tron': 'TRX', 'xrp': 'XRP',
+            'dogecoin': 'DOGE', 'litecoin': 'LTC',
+        };
+
+        function getWalletSortValue(w, col) {
+            const chain = (w.blockchain || 'unknown').toLowerCase();
+            const symbol = CHAIN_SYMBOLS[chain] || chain.toUpperCase();
+            const unit = w.balance_unit || symbol;
+            const priceInfo = assetPrices[symbol] || {};
+            const price = typeof priceInfo === 'object' ? (parseFloat(priceInfo.usd) || 0) : (parseFloat(priceInfo) || 0);
+            const balance = parseFloat(w.balance) || 0;
+            switch(col) {
+                case 'label': return (w.label || w.name || 'Wallet').toLowerCase();
+                case 'chain': return chain;
+                case 'balance': return balance;
+                case 'value': return balance * price;
+                case 'assets': return parseInt(w.native_assets_count) || 0;
+                default: return 0;
+            }
+        }
+
         function renderWalletsTab() {
             const container = document.getElementById('walletsTable');
             let wallets = currentWalletChainFilter === 'all'
-                ? allWallets
+                ? allWallets.slice()
                 : allWallets.filter(w => (w.blockchain || '').toLowerCase() === currentWalletChainFilter);
 
             if (!wallets.length) {
@@ -328,40 +379,60 @@
                 return;
             }
 
-            const chainSymbols = {
-                'cardano': 'ADA', 'bitcoin': 'BTC', 'ethereum': 'ETH', 'solana': 'SOL',
-                'polygon': 'MATIC', 'base': 'ETH', 'algorand': 'ALGO', 'bsc': 'BNB',
-                'arbitrum': 'ETH', 'avalanche': 'AVAX', 'tron': 'TRX', 'xrp': 'XRP',
-                'dogecoin': 'DOGE', 'litecoin': 'LTC',
-            };
+            // Sort wallets
+            wallets.sort((a, b) => {
+                const aVal = getWalletSortValue(a, walletSortCol);
+                const bVal = getWalletSortValue(b, walletSortCol);
+                const cmp = typeof aVal === 'string' ? aVal.localeCompare(bVal) : aVal - bVal;
+                return walletSortDir === 'asc' ? cmp : -cmp;
+            });
 
-            // Group Cardano wallets by stake address
+            // Group Cardano wallets by stake address (only when sorted by default/value)
+            const useGrouping = walletSortCol === 'value';
             const stakeGroups = {};
             const ungrouped = [];
 
-            wallets.forEach(w => {
-                const chain = (w.blockchain || 'unknown').toLowerCase();
-                if (chain === 'cardano' && w.stake_address) {
-                    if (!stakeGroups[w.stake_address]) {
-                        stakeGroups[w.stake_address] = [];
+            if (useGrouping) {
+                wallets.forEach(w => {
+                    const chain = (w.blockchain || 'unknown').toLowerCase();
+                    if (chain === 'cardano' && w.stake_address) {
+                        if (!stakeGroups[w.stake_address]) {
+                            stakeGroups[w.stake_address] = [];
+                        }
+                        stakeGroups[w.stake_address].push(w);
+                    } else {
+                        ungrouped.push(w);
                     }
-                    stakeGroups[w.stake_address].push(w);
-                } else {
-                    ungrouped.push(w);
-                }
-            });
+                });
+            }
 
-            let html = '<table class="v2-table"><thead><tr><th>Label</th><th>Address</th><th>Blockchain</th><th class="right">Balance</th><th class="right">Value</th><th class="right">Assets</th></tr></thead><tbody>';
+            // Build sort indicator
+            function sortTh(col, label, isRight) {
+                const active = walletSortCol === col;
+                const arrow = active ? (walletSortDir === 'asc' ? '&#9650;' : '&#9660;') : '';
+                return '<th class="' + (isRight ? 'right ' : '') + 'sortable-header' + (active ? ' sorted' : '') + '" data-sort="' + col + '">' + label + ' <span class="sort-icon">' + arrow + '</span></th>';
+            }
 
-            // Render stake-grouped Cardano wallets first
-            Object.entries(stakeGroups).forEach(([stakeAddr, groupWallets]) => {
-                const shortStake = stakeAddr.slice(0, 12) + '...' + stakeAddr.slice(-6);
-                html += `<tr class="stake-group-header-row"><td colspan="6">Stake Key: <span style="font-family:monospace;font-size:11px;">${escapeHtml(shortStake)}</span> (${groupWallets.length} wallet${groupWallets.length > 1 ? 's' : ''})</td></tr>`;
-                groupWallets.forEach(w => { html += renderWalletRow(w, chainSymbols); });
-            });
+            let html = '<table class="v2-table"><thead><tr>' +
+                sortTh('label', 'Label', false) +
+                '<th>Address</th>' +
+                sortTh('chain', 'Blockchain', false) +
+                sortTh('balance', 'Balance', true) +
+                sortTh('value', 'Value', true) +
+                sortTh('assets', 'Assets', true) +
+                '</tr></thead><tbody>';
 
-            // Render ungrouped wallets
-            ungrouped.forEach(w => { html += renderWalletRow(w, chainSymbols); });
+            if (useGrouping) {
+                // Render stake-grouped Cardano wallets first
+                Object.entries(stakeGroups).forEach(([stakeAddr, groupWallets]) => {
+                    const shortStake = stakeAddr.slice(0, 12) + '...' + stakeAddr.slice(-6);
+                    html += '<tr class="stake-group-header-row"><td colspan="6">Stake Key: <span style="font-family:monospace;font-size:11px;">' + escapeHtml(shortStake) + '</span> (' + groupWallets.length + ' wallet' + (groupWallets.length > 1 ? 's' : '') + ')</td></tr>';
+                    groupWallets.forEach(w => { html += renderWalletRow(w, CHAIN_SYMBOLS); });
+                });
+                ungrouped.forEach(w => { html += renderWalletRow(w, CHAIN_SYMBOLS); });
+            } else {
+                wallets.forEach(w => { html += renderWalletRow(w, CHAIN_SYMBOLS); });
+            }
 
             html += '</tbody></table>';
             setSafeHTML(container, html);
@@ -369,6 +440,20 @@
             // Attach expand handlers
             container.querySelectorAll('.wallet-row-expandable').forEach(row => {
                 row.addEventListener('click', () => toggleWalletExpand(row.dataset.address));
+            });
+
+            // Attach sort handlers
+            container.querySelectorAll('.sortable-header').forEach(th => {
+                th.addEventListener('click', () => {
+                    const col = th.dataset.sort;
+                    if (walletSortCol === col) {
+                        walletSortDir = walletSortDir === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        walletSortCol = col;
+                        walletSortDir = (col === 'label' || col === 'chain') ? 'asc' : 'desc';
+                    }
+                    renderWalletsTab();
+                });
             });
         }
 
@@ -454,6 +539,7 @@
         // Exchanges Tab
         // ==========================================
         function renderExchangesTab(data) {
+            exchangeData = data;
             const container = document.getElementById('exchangesContent');
             const exchanges = data.exchanges || [];
             if (!exchanges.length) {
@@ -461,16 +547,54 @@
                 return;
             }
             let html = '<table class="v2-table"><thead><tr><th>Exchange</th><th class="right">Assets</th><th class="right">Total Value</th><th>Status</th></tr></thead><tbody>';
-            exchanges.forEach(ex => {
-                html += `<tr>
-                    <td><strong>${escapeHtml(ex.name || ex.exchange || 'Exchange')}</strong></td>
-                    <td class="right">${parseInt(ex.asset_count) || (ex.assets ? ex.assets.length : 0)}</td>
-                    <td class="right v2-blur">${formatCurrency(parseFloat(ex.total_usd) || 0)}</td>
-                    <td><span class="v2-badge ${ex.error ? 'v2-badge-red' : 'v2-badge-green'}">${ex.error ? 'Error' : 'Connected'}</span></td>
-                </tr>`;
+            exchanges.forEach((ex, idx) => {
+                const assets = ex.assets || [];
+                const hasAssets = assets.length > 0;
+                const exName = ex.name || ex.display_name || ex.exchange || 'Exchange';
+                html += '<tr class="exchange-row" data-exchange-idx="' + idx + '">' +
+                    '<td>' + (hasAssets ? '<span class="exchange-expand-icon" data-ex-idx="' + idx + '">&#9654;</span>' : '<span style="display:inline-block;width:20px;"></span>') + '<strong>' + escapeHtml(exName) + '</strong></td>' +
+                    '<td class="right">' + (parseInt(ex.asset_count) || assets.length) + '</td>' +
+                    '<td class="right v2-blur">' + formatCurrency(parseFloat(ex.total_usd) || 0) + '</td>' +
+                    '<td><span class="v2-badge ' + (ex.error ? 'v2-badge-red' : 'v2-badge-green') + '">' + (ex.error ? 'Error' : 'Connected') + '</span></td>' +
+                    '</tr>';
+                // Hidden expandable row for exchange assets
+                if (hasAssets) {
+                    html += '<tr class="exchange-assets-row" id="exchange-assets-' + idx + '"><td colspan="4"><div class="exchange-assets-container">';
+                    // Sort assets by USD value descending
+                    const sorted = assets.slice().sort((a, b) => (parseFloat(b.usd_value) || 0) - (parseFloat(a.usd_value) || 0));
+                    sorted.forEach(a => {
+                        const currency = a.currency || a.symbol || a.name || 'Unknown';
+                        const amount = parseFloat(a.balance) || parseFloat(a.amount) || 0;
+                        const value = parseFloat(a.usd_value) || 0;
+                        html += '<div class="exchange-asset-item">' +
+                            '<span class="exchange-asset-name">' + escapeHtml(currency) + '</span>' +
+                            '<span class="exchange-asset-amount v2-blur">' + formatAmount(amount) + '</span>' +
+                            '<span class="exchange-asset-value v2-blur">' + formatCurrency(value) + '</span>' +
+                            '</div>';
+                    });
+                    html += '</div></td></tr>';
+                }
             });
             html += '</tbody></table>';
             setSafeHTML(container, html);
+
+            // Attach expand handlers
+            container.querySelectorAll('.exchange-row').forEach(row => {
+                row.addEventListener('click', () => {
+                    const idx = row.dataset.exchangeIdx;
+                    const assetsRow = document.getElementById('exchange-assets-' + idx);
+                    if (!assetsRow) return;
+                    const icon = container.querySelector('.exchange-expand-icon[data-ex-idx="' + idx + '"]');
+                    const isVisible = assetsRow.classList.contains('show');
+                    if (isVisible) {
+                        assetsRow.classList.remove('show');
+                        if (icon) icon.classList.remove('expanded');
+                    } else {
+                        assetsRow.classList.add('show');
+                        if (icon) icon.classList.add('expanded');
+                    }
+                });
+            });
         }
 
         // ==========================================
@@ -483,17 +607,80 @@
                 setSafeHTML(container, '<div class="v2-empty" style="padding:48px"><div class="v2-empty-title">No DeFi positions detected</div><div class="v2-empty-desc">DeFi positions are auto-detected from your wallet addresses.</div></div>');
                 return;
             }
-            let html = '<table class="v2-table"><thead><tr><th>Protocol</th><th>Token</th><th>Type</th><th class="right">Quantity</th></tr></thead><tbody>';
-            positions.forEach(p => {
-                html += `<tr>
-                    <td><strong>${escapeHtml(p.protocol || p.name || 'DeFi')}</strong></td>
-                    <td>${escapeHtml(p.token || p.asset_name || '')}</td>
-                    <td>${escapeHtml(p.type_label || p.type || 'Position')}</td>
-                    <td class="right v2-blur">${formatAmount(parseFloat(p.quantity) || 0)}</td>
-                </tr>`;
+
+            // Enrich positions with USD values
+            defiTabPositions = positions.map(p => {
+                const qty = parseFloat(p.quantity) || 0;
+                const token = (p.token || '').toUpperCase();
+                const priceInfo = assetPrices[token] || {};
+                const price = typeof priceInfo === 'object' ? (parseFloat(priceInfo.usd) || 0) : (parseFloat(priceInfo) || 0);
+                return {
+                    protocol: p.protocol || p.name || 'DeFi',
+                    token: p.token || p.asset_name || '',
+                    type: p.type_label || p.type || 'Position',
+                    quantity: qty,
+                    value: qty * price
+                };
+            });
+            renderDefiTabTable();
+        }
+
+        function renderDefiTabTable() {
+            const container = document.getElementById('defiContent');
+
+            // Sort
+            const sorted = defiTabPositions.slice().sort((a, b) => {
+                let aVal, bVal;
+                switch(defiTabSortCol) {
+                    case 'protocol': aVal = a.protocol.toLowerCase(); bVal = b.protocol.toLowerCase(); break;
+                    case 'token': aVal = a.token.toLowerCase(); bVal = b.token.toLowerCase(); break;
+                    case 'type': aVal = a.type.toLowerCase(); bVal = b.type.toLowerCase(); break;
+                    case 'quantity': aVal = a.quantity; bVal = b.quantity; break;
+                    case 'value': aVal = a.value; bVal = b.value; break;
+                    default: aVal = 0; bVal = 0;
+                }
+                const cmp = typeof aVal === 'string' ? aVal.localeCompare(bVal) : aVal - bVal;
+                return defiTabSortDir === 'asc' ? cmp : -cmp;
+            });
+
+            function sortTh(col, label, isRight) {
+                const active = defiTabSortCol === col;
+                const arrow = active ? (defiTabSortDir === 'asc' ? '&#9650;' : '&#9660;') : '';
+                return '<th class="' + (isRight ? 'right ' : '') + 'sortable-header' + (active ? ' sorted' : '') + '" data-sort="' + col + '">' + label + ' <span class="sort-icon">' + arrow + '</span></th>';
+            }
+
+            let html = '<table class="v2-table"><thead><tr>' +
+                sortTh('protocol', 'Protocol', false) +
+                sortTh('token', 'Token', false) +
+                sortTh('type', 'Type', false) +
+                sortTh('quantity', 'Quantity', true) +
+                sortTh('value', 'Value (USD)', true) +
+                '</tr></thead><tbody>';
+            sorted.forEach(p => {
+                html += '<tr>' +
+                    '<td><strong>' + escapeHtml(p.protocol) + '</strong></td>' +
+                    '<td>' + escapeHtml(p.token) + '</td>' +
+                    '<td>' + escapeHtml(p.type) + '</td>' +
+                    '<td class="right v2-blur">' + formatAmount(p.quantity) + '</td>' +
+                    '<td class="right v2-blur">' + (p.value > 0 ? formatCurrency(p.value) : '<span style="color:var(--v2-text-muted);">--</span>') + '</td>' +
+                    '</tr>';
             });
             html += '</tbody></table>';
             setSafeHTML(container, html);
+
+            // Attach sort handlers
+            container.querySelectorAll('.sortable-header').forEach(th => {
+                th.addEventListener('click', () => {
+                    const col = th.dataset.sort;
+                    if (defiTabSortCol === col) {
+                        defiTabSortDir = defiTabSortDir === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        defiTabSortCol = col;
+                        defiTabSortDir = (col === 'protocol' || col === 'token' || col === 'type') ? 'asc' : 'desc';
+                    }
+                    renderDefiTabTable();
+                });
+            });
         }
 
         // ==========================================
@@ -578,7 +765,7 @@
                     const shortStake = stakeKey.length > 20 ? stakeKey.slice(0, 12) + '...' + stakeKey.slice(-6) : stakeKey;
 
                     html += '<div class="gov-delegation-card">';
-                    html += '<div class="gov-delegation-title"><span style="font-size:16px;">&#127944;</span> ' + escapeHtml(wallet.label || 'Cardano Wallet') + ' <span style="font-size:11px;color:var(--v2-text-muted);font-weight:400;">' + escapeHtml(shortStake) + '</span></div>';
+                    html += '<div class="gov-delegation-title"><span style="font-size:14px;">&#9733;</span> ' + escapeHtml(wallet.label || 'Cardano Wallet') + ' <span style="font-size:11px;color:var(--v2-text-muted);font-weight:400;">' + escapeHtml(shortStake) + '</span></div>';
 
                     // Pool delegation
                     if (gov.pool && gov.pool.pool_id) {
@@ -672,7 +859,7 @@
                     govTokenCount++;
 
                     const govInfo = GOVERNANCE_LINKS[t.token];
-                    const logoUrl = t.logo_url || ('https://img.logokit.com/crypto/' + encodeURIComponent(t.token) + '?size=32');
+                    const logoUrl = t.logo_url || null;
                     const totalFmt = t.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
                     let breakdownText = '';
@@ -686,7 +873,11 @@
 
                     html += `<div class="gov-card">
                         <div class="gov-card-header">
-                            <img class="gov-card-logo" src="${escapeAttr(logoUrl)}" alt="" onerror="this.style.display='none'">
+                            ${logoUrl
+                                ? '<img class="gov-card-logo" src="' + escapeAttr(logoUrl) + '" alt="" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
+                                  '<div class="gov-card-logo" style="display:none;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--v2-text-muted);background:var(--v2-bg-input);">' + escapeHtml(t.token.substring(0, 3)) + '</div>'
+                                : '<div class="gov-card-logo" style="display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--v2-text-muted);background:var(--v2-bg-input);">' + escapeHtml(t.token.substring(0, 3)) + '</div>'
+                            }
                             <div>
                                 <div class="gov-card-name">${escapeHtml(t.token)}</div>
                                 <div class="gov-card-chain"><span class="v2-chain-badge chain-${escapeAttr(t.blockchain)}">${escapeHtml(t.blockchain)}</span></div>

@@ -15,6 +15,7 @@
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
     <script src="/static/js/session-auth.js?v=1772669294"></script>
+    <style>.beta-ui-link:hover{background:rgba(0,210,106,0.2)!important;border-color:rgba(0,210,106,0.5)!important;}</style>
 </head>
 <body>
     <div class="container">
@@ -26,6 +27,7 @@
                 <a href="/data.html" class="nav-item">Data & Analytics</a>
             </nav>
             <div class="header-right-controls">
+                <a href="/next/" class="beta-ui-link" style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:16px;font-size:12px;font-weight:600;color:#00d26a;background:rgba(0,210,106,0.1);border:1px solid rgba(0,210,106,0.3);text-decoration:none;margin-right:8px;transition:all 0.2s;white-space:nowrap;"><span style="font-size:14px;">&#10024;</span> Try New UI</a>
                 <div class="user-avatar-container">
                     <button class="user-avatar-btn" onclick="toggleUserMenu()">
                         <div class="avatar-circle" id="userAvatar">?</div>
