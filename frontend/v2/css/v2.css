@@ -1846,6 +1846,33 @@ body.privacy-mode .v2-blur {
    RESPONSIVE
    ============================================================================ */
 
+/* Wide screens: expand content and use side-by-side layout */
+@media (min-width: 1600px) {
+    .v2-content {
+        max-width: 1800px;
+    }
+
+    /* Dashboard-specific wide layout: summary left, assets right */
+    .v2-dashboard-wide {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto;
+        gap: 20px;
+    }
+
+    .v2-dashboard-wide .v2-hero { grid-column: 1 / -1; }
+    .v2-dashboard-wide .v2-stats-grid { grid-column: 1 / -1; }
+    .v2-dashboard-wide .v2-wide-left { grid-column: 1; }
+    .v2-dashboard-wide .v2-wide-right { grid-column: 2; }
+    .v2-dashboard-wide .v2-wide-full { grid-column: 1 / -1; }
+}
+
+@media (min-width: 1900px) {
+    .v2-content {
+        max-width: 2200px;
+    }
+}
+
 @media (max-width: 1200px) {
     .v2-content { padding: 20px; }
     .v2-stats-grid { grid-template-columns: repeat(2, 1fr); }

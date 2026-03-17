@@ -218,9 +218,11 @@
         async function loadNfts() {
             try {
                 const chains = ['cardano', 'ethereum', 'solana', 'polygon', 'base'];
-                const promises = chains.map(chain =>
-                    v2Fetch('/nfts/' + (chain === 'cardano' ? '' : chain)).then(r => r.ok ? r.json() : { nfts: [] }).catch(() => ({ nfts: [] }))
-                );
+                const promises = chains.map(chain => {
+                    // Cardano NFTs use the root endpoint /nfts, others use /nfts/{chain}
+                    const url = chain === 'cardano' ? '/nfts' : '/nfts/' + chain;
+                    return v2Fetch(url).then(r => r.ok ? r.json() : { nfts: [] }).catch(() => ({ nfts: [] }));
+                });
 
                 // Also load summary
                 const summaryResp = await v2Fetch('/nfts/all/summary');
@@ -290,7 +292,7 @@
 
             // Sort
             if (currentSort === 'value') {
-                items.sort((a, b) => (parseFloat(b.floor_price_usd || b.value_usd) || 0) - (parseFloat(a.floor_price_usd || a.value_usd) || 0));
+                items.sort((a, b) => (parseFloat(b.floor_price_usd || b.value_usd || b.price_usd) || 0) - (parseFloat(a.floor_price_usd || a.value_usd || a.price_usd) || 0));
             } else if (currentSort === 'name') {
                 items.sort((a, b) => (a.name || a.asset_name || '').localeCompare(b.name || b.asset_name || ''));
             }
@@ -308,8 +310,8 @@
 
                 // Sort groups by total value
                 const sortedGroups = Object.entries(groups).sort((a, b) => {
-                    const valA = a[1].reduce((s, n) => s + (parseFloat(n.floor_price_usd || n.value_usd) || 0), 0);
-                    const valB = b[1].reduce((s, n) => s + (parseFloat(n.floor_price_usd || n.value_usd) || 0), 0);
+                    const valA = a[1].reduce((s, n) => s + (parseFloat(n.floor_price_usd || n.value_usd || n.price_usd) || 0), 0);
+                    const valB = b[1].reduce((s, n) => s + (parseFloat(n.floor_price_usd || n.value_usd || n.price_usd) || 0), 0);
                     return valB - valA;
                 });
 
@@ -333,7 +335,7 @@
             const name = nft.name || nft.asset_name || nft.token_name || 'Unnamed';
             const collection = nft._collection || nft.collection || nft.policy_id || '';
             const imgUrl = nft.image_url || nft.image || nft.thumbnail || '';
-            const value = parseFloat(nft.floor_price_usd || nft.value_usd) || 0;
+            const value = parseFloat(nft.floor_price_usd || nft.value_usd || nft.price_usd) || 0;
 
             // Store nft data on a global indexed array for modal retrieval
             const idx = _nftDetailStore.length;
@@ -370,7 +372,7 @@
             const name = nft.name || nft.asset_name || nft.token_name || 'Unnamed';
             const collection = nft._collection || nft.collection || nft.policy_id || '';
             const imgUrl = nft.image_url || nft.image || nft.thumbnail || '';
-            const value = parseFloat(nft.floor_price_usd || nft.value_usd) || 0;
+            const value = parseFloat(nft.floor_price_usd || nft.value_usd || nft.price_usd) || 0;
             const chain = nft._chain || '';
 
             // Image

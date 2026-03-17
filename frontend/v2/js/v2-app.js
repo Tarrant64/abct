@@ -53,7 +53,47 @@ let v2State = {
     chartInstance: null,
     sparklines: {},
     totalPortfolioValue: 0,
+    instantBreakdown: null,  // Cache /portfolio/instant breakdown for reconciliation
 };
+
+// Symbol-to-chain mapping for donut chart (all-holdings lacks blockchain field)
+const SYMBOL_TO_CHAIN = {
+    'ADA': 'cardano', 'BTC': 'bitcoin', 'ETH': 'ethereum', 'SOL': 'solana',
+    'POL': 'polygon', 'MATIC': 'polygon', 'ALGO': 'algorand', 'BNB': 'bsc',
+    'AVAX': 'avalanche', 'TRX': 'tron', 'XRP': 'xrp', 'HBAR': 'hedera',
+    'EGLD': 'multiversx', 'SUI': 'sui', 'APT': 'aptos', 'FIL': 'filecoin',
+    'LTC': 'litecoin', 'DOGE': 'dogecoin', 'ZEC': 'zcash', 'XTZ': 'tezos',
+    'STX': 'stacks', 'VET': 'vechain', 'ATOM': 'cosmos', 'NEAR': 'near',
+    'ICP': 'icp', 'DOT': 'polkadot', 'XLM': 'stellar', 'FTM': 'fantom',
+    'TON': 'ton',
+    // Cardano native tokens
+    'INDY': 'cardano', 'MIN': 'cardano', 'SNEK': 'cardano', 'SUNDAE': 'cardano',
+    'WMT': 'cardano', 'AGIX': 'cardano', 'DJED': 'cardano', 'SHEN': 'cardano',
+    'NMKR': 'cardano', 'LQ': 'cardano', 'IAG': 'cardano', 'STRIKE': 'cardano',
+    'LENFI': 'cardano', 'OPTIM': 'cardano', 'ENCS': 'cardano', 'BOOK': 'cardano',
+    'NEWM': 'cardano', 'COPI': 'cardano', 'GENS': 'cardano', 'HUNT': 'cardano',
+    'JPG': 'cardano', 'HOSKY': 'cardano', 'MILK': 'cardano', 'NTX': 'cardano',
+    'CLAY': 'cardano', 'FLDT': 'cardano', 'CSWAP': 'cardano', 'GERO': 'cardano',
+    'MELD': 'cardano', 'PAVIA': 'cardano', 'CNETA': 'cardano', 'CLAP': 'cardano',
+    'VYFI': 'cardano', 'IUSD': 'cardano', 'WINGRIDERS': 'cardano',
+};
+
+// Determine blockchain for a holding (frontend inference since all-holdings lacks blockchain)
+function inferBlockchain(holding) {
+    // If the backend provided a blockchain, use it
+    if (holding.blockchain) return holding.blockchain.toLowerCase();
+    if (holding.chain) return holding.chain.toLowerCase();
+    // Infer from source field — tokens/staking/defi without blockchain are Cardano native
+    const symbol = (holding.symbol || '').toUpperCase();
+    if (SYMBOL_TO_CHAIN[symbol]) return SYMBOL_TO_CHAIN[symbol];
+    // Source-based inference
+    const source = (holding.source || '').toLowerCase();
+    if (source === 'token' || source === 'staking' || source === 'defi' || source === 'defi_summary') {
+        return 'cardano';  // Native tokens in this tracker are Cardano-first
+    }
+    if (source === 'exchange') return 'exchange';
+    return 'other';
+}
 
 // ============================================================================
 // INITIALIZATION
@@ -174,19 +214,38 @@ async function loadHoldings(refresh = false) {
 
         const data = await response.json();
         v2State.holdings = data.holdings || [];
+
+        // Enrich holdings with inferred blockchain and price data
+        v2State.holdings.forEach(h => {
+            if (!h.blockchain) {
+                h.blockchain = inferBlockchain(h);
+            }
+            // Enrich 24h price change from /prices/all if not already present
+            if (!h.price_change_24h && h.symbol) {
+                const sym = h.symbol.toUpperCase();
+                const priceInfo = v2State.prices[sym] || {};
+                if (typeof priceInfo === 'object') {
+                    h.price_change_24h = parseFloat(priceInfo.usd_24h_change) || 0;
+                }
+            }
+        });
+
         v2State.totalPortfolioValue = parseFloat(data.total_value_usd) || 0;
 
-        // Update the hero value with the comprehensive all-holdings total.
-        // The /portfolio/instant total may miss tracked/custom tokens that
-        // all-holdings includes, so reconcile the hero if it's lower.
+        // Reconcile hero value: all-holdings is the authoritative total.
+        // Also update the breakdown stat cards proportionally if the total changed.
         const heroEl = document.getElementById('heroValue');
         if (heroEl && v2State.totalPortfolioValue > 0) {
             heroEl.textContent = formatCurrency(v2State.totalPortfolioValue);
         }
 
+        // Recompute stat cards from actual holdings data
+        reconcileStatCards();
+
         renderAssetsTable();
         renderPortfolioDonut();
         renderTopHoldings();
+        renderPortfolioHeatmap();
     } catch (err) {
         console.error('Holdings load error:', err);
         // Fallback: try /portfolio/summary
@@ -262,6 +321,9 @@ function renderPortfolioHero(data) {
     const liquid = (parseFloat(bd.chain) || 0) + (parseFloat(bd.exchange) || 0) + (parseFloat(bd.tracked_token) || 0) + (parseFloat(bd.custom_token) || 0);
     const staked = (parseFloat(bd.staking) || 0) + (parseFloat(bd.defi) || 0);
 
+    // Save breakdown for later reconciliation with all-holdings total
+    v2State.instantBreakdown = bd;
+
     // Remove skeleton, show value
     const heroEl = document.getElementById('heroValue');
     setSafeHTML(heroEl, '');
@@ -293,6 +355,42 @@ function renderPortfolioHero(data) {
         const pct = data.change_7d_pct || 0;
         pctEl.textContent = `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
         pctEl.className = `v2-stat-sub ${pct >= 0 ? 'positive' : 'negative'}`;
+    }
+}
+
+
+// ============================================================================
+// RECONCILE STAT CARDS (Fix #1 — match breakdown to total)
+// ============================================================================
+
+function reconcileStatCards() {
+    // Recompute liquid/staked/exchange/NFT from actual holdings data
+    // instead of relying on /portfolio/instant which may lag behind all-holdings.
+    const holdings = v2State.holdings;
+    if (!holdings || holdings.length === 0) return;
+
+    let liquid = 0;
+    let staked = 0;
+
+    holdings.forEach(h => {
+        const value = parseFloat(h.value_usd) || 0;
+        const source = (h.source || '').toLowerCase();
+        if (source === 'staking' || source === 'defi' || source === 'defi_summary') {
+            staked += value;
+        } else {
+            // chain, token, tracked_token, custom_token, exchange all count as liquid
+            liquid += value;
+        }
+    });
+
+    // Get exchange total from instant breakdown if available (more accurate)
+    const bd = v2State.instantBreakdown;
+    const exchangeTotal = bd ? (parseFloat(bd.exchange) || 0) : 0;
+
+    // Only update if we have meaningful data
+    if (liquid > 0 || staked > 0) {
+        setText('statLiquid', formatCurrency(liquid));
+        setText('statStaked', formatCurrency(staked));
     }
 }
 
@@ -1415,13 +1513,21 @@ function renderPortfolioDonut() {
     const canvas = document.getElementById('portfolioDonut');
     if (!canvas || typeof Chart === 'undefined' || !v2State.holdings.length) return;
 
-    // Aggregate by blockchain
+    // Aggregate by blockchain (using inferBlockchain for holdings without blockchain field)
     const chainTotals = {};
     v2State.holdings.forEach(h => {
-        const chain = (h.blockchain || 'other').toLowerCase();
+        const chain = inferBlockchain(h);
         const value = parseFloat(h.value_usd) || 0;
         if (value > 0) {
-            chainTotals[chain] = (chainTotals[chain] || 0) + value;
+            // Merge exchange holdings into their chain if possible
+            if (chain === 'exchange') {
+                // Exchange assets: try to map by symbol to a chain
+                const sym = (h.symbol || '').toUpperCase();
+                const mappedChain = SYMBOL_TO_CHAIN[sym] || 'exchange';
+                chainTotals[mappedChain] = (chainTotals[mappedChain] || 0) + value;
+            } else {
+                chainTotals[chain] = (chainTotals[chain] || 0) + value;
+            }
         }
     });
 
@@ -1602,6 +1708,177 @@ function renderTopHoldings() {
             openAssetDetail(row.dataset.symbol, row.dataset.chain || '');
         });
     });
+}
+
+
+// ============================================================================
+// PORTFOLIO HEATMAP (TREEMAP) — Fix #7
+// ============================================================================
+
+function renderPortfolioHeatmap() {
+    const container = document.getElementById('v2HeatmapContainer');
+    const section = document.getElementById('heatmapSection');
+    if (!container || !section) return;
+
+    const holdings = v2State.holdings || [];
+    // Only tokens with >$10 value
+    const filtered = holdings.filter(h => (parseFloat(h.value_usd) || 0) >= 10);
+
+    if (filtered.length < 2) {
+        section.style.display = 'none';
+        return;
+    }
+
+    section.style.display = '';
+
+    // Build token list with 24h change
+    const allTokens = [];
+    for (const h of filtered) {
+        const change24h = parseFloat(h.price_change_24h) || parseFloat(h.change_24h) || 0;
+        allTokens.push({
+            symbol: h.symbol || '???',
+            value_usd: parseFloat(h.value_usd) || 0,
+            change24h: change24h,
+        });
+    }
+    allTokens.sort((a, b) => b.value_usd - a.value_usd);
+
+    const containerWidth = container.clientWidth || 800;
+    const totalHeight = Math.min(480, Math.max(280, allTokens.length * 20));
+
+    // Layout as flat treemap
+    const tiles = _layoutTreemapTiles(allTokens, containerWidth, totalHeight);
+
+    let tilesHtml = '';
+    for (const tile of tiles) {
+        const bgColor = _getHeatmapColor(tile.token.change24h);
+        const changeStr = (tile.token.change24h >= 0 ? '+' : '') + tile.token.change24h.toFixed(2) + '%';
+        const valueStr = formatCurrency(tile.token.value_usd);
+
+        // Size text based on tile area
+        const area = tile.w * tile.h;
+        let symbolSize, changeSize, valueSize;
+        if (area > 40000) {
+            symbolSize = '1.6rem'; changeSize = '1.1rem'; valueSize = '0.9rem';
+        } else if (area > 20000) {
+            symbolSize = '1.3rem'; changeSize = '0.95rem'; valueSize = '0.8rem';
+        } else if (area > 8000) {
+            symbolSize = '1rem'; changeSize = '0.8rem'; valueSize = '0.7rem';
+        } else if (area > 3000) {
+            symbolSize = '0.85rem'; changeSize = '0.7rem'; valueSize = '0.6rem';
+        } else if (area > 1000) {
+            symbolSize = '0.7rem'; changeSize = '0.55rem'; valueSize = '0';
+        } else {
+            symbolSize = '0.6rem'; changeSize = '0'; valueSize = '0';
+        }
+
+        tilesHtml += '<div style="' +
+            'position:absolute;left:' + tile.x + 'px;top:' + tile.y + 'px;' +
+            'width:' + tile.w + 'px;height:' + tile.h + 'px;' +
+            'background:' + bgColor + ';border-radius:3px;' +
+            'display:flex;flex-direction:column;align-items:center;justify-content:center;' +
+            'overflow:hidden;cursor:default;transition:filter 0.15s;' +
+            'border:1px solid rgba(0,0,0,0.15);" ' +
+            'title="' + escapeAttr(tile.token.symbol + ': ' + valueStr + ' (' + changeStr + ')') + '">' +
+            '<span style="font-size:' + symbolSize + ';font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.5);">' + escapeHtml(tile.token.symbol) + '</span>' +
+            (changeSize !== '0' ? '<span style="font-size:' + changeSize + ';font-weight:600;color:rgba(255,255,255,0.9);">' + changeStr + '</span>' : '') +
+            (valueSize !== '0' ? '<span style="font-size:' + valueSize + ';color:rgba(255,255,255,0.7);" class="v2-blur">' + valueStr + '</span>' : '') +
+            '</div>';
+    }
+
+    setSafeHTML(container, '<div style="position:relative;width:' + containerWidth + 'px;height:' + totalHeight + 'px;">' + tilesHtml + '</div>');
+}
+
+function _getHeatmapColor(change) {
+    // Theme-aware gradient
+    const style = getComputedStyle(document.documentElement);
+    const successHex = style.getPropertyValue('--v2-accent').trim() || '#00d26a';
+    const errorHex = style.getPropertyValue('--v2-red').trim() || '#ff5252';
+    const bgHex = '#1a1f2b';
+
+    function hexToRgb(hex) {
+        hex = hex.replace('#', '');
+        if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+        return [parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16)];
+    }
+    function lerp(a, b, t) { return Math.round(a + (b - a) * t); }
+
+    const [sr, sg, sb] = hexToRgb(successHex);
+    const [er, eg, eb] = hexToRgb(errorHex);
+    const [nr, ng, nb] = hexToRgb(bgHex);
+
+    const clamped = Math.max(-15, Math.min(15, change));
+    const intensity = Math.abs(clamped) / 15;
+
+    if (clamped >= 0) {
+        return 'rgb(' + lerp(nr, sr, intensity) + ', ' + lerp(ng, sg, intensity) + ', ' + lerp(nb, sb, intensity) + ')';
+    } else {
+        return 'rgb(' + lerp(nr, er, intensity) + ', ' + lerp(ng, eg, intensity) + ', ' + lerp(nb, eb, intensity) + ')';
+    }
+}
+
+// Squarified treemap layout
+function _layoutTreemapTiles(tokens, width, height) {
+    if (tokens.length === 0) return [];
+    const totalValue = tokens.reduce((s, t) => s + t.value_usd, 0);
+    if (totalValue === 0) return [];
+
+    const results = [];
+    const remaining = tokens.map(t => ({ token: t, area: (t.value_usd / totalValue) * width * height }));
+    _squarify(remaining, [], { x: 0, y: 0, w: width, h: height }, results);
+    return results;
+}
+
+function _squarify(items, row, rect, results) {
+    if (items.length === 0) { _layoutRow(row, rect, results); return; }
+    if (row.length === 0) { row.push(items[0]); _squarify(items.slice(1), row, rect, results); return; }
+    const rowWithNext = [...row, items[0]];
+    if (_worstRatio(row, rect) >= _worstRatio(rowWithNext, rect)) {
+        _squarify(items.slice(1), rowWithNext, rect, results);
+    } else {
+        const newRect = _layoutRow(row, rect, results);
+        _squarify(items, [], newRect, results);
+    }
+}
+
+function _worstRatio(row, rect) {
+    const totalArea = row.reduce((s, r) => s + r.area, 0);
+    const shortSide = Math.min(rect.w, rect.h);
+    if (shortSide === 0 || totalArea === 0) return Infinity;
+    let worst = 0;
+    for (const item of row) {
+        const ratio = Math.max(
+            (shortSide * shortSide * item.area) / (totalArea * totalArea),
+            (totalArea * totalArea) / (shortSide * shortSide * item.area)
+        );
+        worst = Math.max(worst, ratio);
+    }
+    return worst;
+}
+
+function _layoutRow(row, rect, results) {
+    if (row.length === 0) return rect;
+    const totalArea = row.reduce((s, r) => s + r.area, 0);
+    const horizontal = rect.w >= rect.h;
+    if (horizontal) {
+        const rowWidth = totalArea / rect.h;
+        let y = rect.y;
+        for (const item of row) {
+            const h = item.area / rowWidth;
+            results.push({ token: item.token, x: Math.round(rect.x), y: Math.round(y), w: Math.max(1, Math.round(rowWidth) - 1), h: Math.max(1, Math.round(h) - 1) });
+            y += h;
+        }
+        return { x: rect.x + rowWidth, y: rect.y, w: rect.w - rowWidth, h: rect.h };
+    } else {
+        const rowHeight = totalArea / rect.w;
+        let x = rect.x;
+        for (const item of row) {
+            const w = item.area / rowHeight;
+            results.push({ token: item.token, x: Math.round(x), y: Math.round(rect.y), w: Math.max(1, Math.round(w) - 1), h: Math.max(1, Math.round(rowHeight) - 1) });
+            x += w;
+        }
+        return { x: rect.x, y: rect.y + rowHeight, w: rect.w, h: rect.h - rowHeight };
+    }
 }
 
 

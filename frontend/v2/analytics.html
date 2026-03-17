@@ -14,6 +14,13 @@
         .stream-range-btn { padding: 4px 14px; border-radius: var(--v2-radius-sm); font-size: 12px; font-weight: 500; border: 1px solid var(--v2-border-input); background: transparent; color: var(--v2-text-secondary); cursor: pointer; transition: all 0.2s; }
         .stream-range-btn:hover { border-color: var(--v2-text-muted); }
         .stream-range-btn.active { background: var(--v2-accent-muted); border-color: var(--v2-accent); color: var(--v2-accent-text); }
+        /* Sankey Diagram */
+        .sankey-svg { display: block; }
+        .sankey-node { transition: opacity 0.2s; }
+        .sankey-link { transition: fill-opacity 0.2s; }
+        .sankey-label-name { font-weight: 600; }
+        .sankey-label-value { font-weight: 400; }
+        .sankey-tooltip { position: absolute; background: var(--v2-bg-dropdown); border: 1px solid var(--v2-border); border-radius: 6px; padding: 8px 12px; font-size: 12px; color: var(--v2-text-primary); pointer-events: none; white-space: nowrap; z-index: 10; box-shadow: var(--v2-shadow-md); }
     </style>
 </head>
 <body>
@@ -158,6 +165,12 @@
                         <div style="font-size:12px;margin-top:4px;">Transaction data is needed for flow analysis.</div>
                     </div>
                 </div>
+
+                <!-- Portfolio Flow (Sankey Diagram) -->
+                <div class="v2-card v2-fade-in" id="portfolioFlowSection" style="margin-bottom:24px">
+                    <div class="v2-card-header"><span class="v2-card-title">Portfolio Flow</span></div>
+                    <div id="sankeyContainer" style="position:relative;min-height:400px;overflow:hidden;"></div>
+                </div>
             </div>
 
             <footer class="v2-footer">ABCT V2 | Analytics</footer>
@@ -165,14 +178,17 @@
     </div>
 
     <script src="/next/static/js/v2-app.js"></script>
+    <script src="/static/js/sankey-chart.js"></script>
     <script src="/next/static/js/v2-shell.js"></script>
     <script>
         let _streamChart = null;
+        let _portfolioSankey = null;
 
         document.addEventListener('DOMContentLoaded', () => {
             v2InitShell('analytics');
             loadAnalytics();
             initIntelligence();
+            loadSankey();
 
             // Stream chart range buttons
             document.querySelectorAll('#streamRangeBar .stream-range-btn').forEach(btn => {
@@ -820,6 +836,91 @@
                     }
                 }
             });
+        }
+        // ==========================================
+        // Sankey Diagram (Portfolio Flow)
+        // ==========================================
+        async function loadSankey() {
+            if (typeof PortfolioSankey === 'undefined') {
+                console.warn('[Sankey] sankey-chart.js not loaded');
+                return;
+            }
+
+            try {
+                const [summaryResp, pricesResp, holdingsResp] = await Promise.allSettled([
+                    v2Fetch('/portfolio/summary'),
+                    v2Fetch('/prices/all'),
+                    v2Fetch('/portfolio/all-holdings'),
+                ]);
+
+                let summaryData = null;
+                let priceData = {};
+                let holdingsData = null;
+
+                if (summaryResp.status === 'fulfilled' && summaryResp.value.ok) {
+                    summaryData = await summaryResp.value.json();
+                }
+                if (pricesResp.status === 'fulfilled' && pricesResp.value.ok) {
+                    const pd = await pricesResp.value.json();
+                    const rawPrices = pd.prices || pd || {};
+                    // Normalize prices to numeric values
+                    for (const [k, v] of Object.entries(rawPrices)) {
+                        priceData[k] = typeof v === 'object' ? (parseFloat(v.usd) || 0) : (parseFloat(v) || 0);
+                    }
+                }
+                if (holdingsResp.status === 'fulfilled' && holdingsResp.value.ok) {
+                    holdingsData = await holdingsResp.value.json();
+                }
+
+                if (!summaryData || !holdingsData) {
+                    document.getElementById('portfolioFlowSection').style.display = 'none';
+                    return;
+                }
+
+                // Build chain allocations from holdings data
+                const chainTotals = {};
+                const holdings = holdingsData.holdings || [];
+                holdings.forEach(function(h) {
+                    var chain = inferBlockchain(h);
+                    var value = parseFloat(h.value_usd) || 0;
+                    if (value > 0 && chain !== 'exchange') {
+                        if (!chainTotals[chain]) chainTotals[chain] = 0;
+                        chainTotals[chain] += value;
+                    } else if (value > 0 && chain === 'exchange') {
+                        var sym = (h.symbol || '').toUpperCase();
+                        var mapped = SYMBOL_TO_CHAIN[sym] || 'other';
+                        if (!chainTotals[mapped]) chainTotals[mapped] = 0;
+                        chainTotals[mapped] += value;
+                    }
+                });
+
+                var allocations = [];
+                for (var cfg of SANKEY_CHAIN_CONFIGS) {
+                    var usd = chainTotals[cfg.key] || 0;
+                    if (usd > 0) {
+                        allocations.push({ chain: cfg.key, label: cfg.label, color: cfg.color, usd: usd });
+                    }
+                }
+                allocations.sort(function(a, b) { return b.usd - a.usd; });
+
+                var totalValue = allocations.reduce(function(s, a) { return s + a.usd; }, 0);
+
+                if (totalValue <= 0 || allocations.length === 0) {
+                    document.getElementById('portfolioFlowSection').style.display = 'none';
+                    return;
+                }
+
+                // Initialize Sankey
+                if (!_portfolioSankey) {
+                    _portfolioSankey = new PortfolioSankey('sankeyContainer');
+                }
+                _portfolioSankey.setData(totalValue, allocations, summaryData, priceData);
+                _portfolioSankey.render();
+
+            } catch(e) {
+                console.error('[Sankey] Load error:', e);
+                document.getElementById('portfolioFlowSection').style.display = 'none';
+            }
         }
     </script>
 </body>

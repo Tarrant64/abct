@@ -41,7 +41,7 @@
             </header>
 
             <!-- Page Content -->
-            <div class="v2-content" id="pageContent">
+            <div class="v2-content v2-dashboard-wide" id="pageContent">
                 <!-- Hero: Portfolio Value -->
                 <div class="v2-hero v2-fade-in">
                     <div class="v2-card-header" style="margin-bottom: 4px;">
@@ -102,7 +102,7 @@
                 </div>
 
                 <!-- Portfolio Donut + Top Holdings -->
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:0;" class="v2-fade-in">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:0;" class="v2-fade-in v2-wide-left">
                     <!-- Donut Chart -->
                     <div class="v2-card" style="padding:20px;">
                         <div class="v2-card-header"><span class="v2-card-title">Chain Allocation</span></div>
@@ -127,7 +127,7 @@
                 </div>
 
                 <!-- Portfolio Chart -->
-                <div class="v2-chart-section v2-fade-in">
+                <div class="v2-chart-section v2-fade-in v2-wide-right">
                     <div class="v2-chart-header">
                         <div style="display:flex;align-items:center;gap:12px;">
                             <span class="v2-table-title">Portfolio History</span>
@@ -153,8 +153,14 @@
                     </div>
                 </div>
 
+                <!-- Portfolio Heatmap (Treemap) -->
+                <div class="v2-card v2-fade-in v2-wide-full" id="heatmapSection" style="margin-bottom:20px;padding:20px;display:none;">
+                    <div class="v2-card-header"><span class="v2-card-title">Portfolio Heatmap</span></div>
+                    <div id="v2HeatmapContainer" style="position:relative;width:100%;min-height:360px;border-radius:var(--v2-radius-md);overflow:hidden;"></div>
+                </div>
+
                 <!-- Assets Table -->
-                <div class="v2-table-section v2-fade-in">
+                <div class="v2-table-section v2-fade-in v2-wide-full">
                     <div class="v2-table-header">
                         <span class="v2-table-title">Your Assets</span>
                         <div class="v2-table-controls">
