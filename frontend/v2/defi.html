@@ -191,7 +191,7 @@
 
                 <!-- View toggle -->
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-                    <span style="font-size:14px;font-weight:600;color:var(--v2-text-heading);">Positions</span>
+                    <span style="font-size:14px;font-weight:600;color:var(--v2-text-heading);">Positions <span id="defiLastUpdated" style="font-size:11px;font-weight:400;color:var(--v2-text-muted);margin-left:8px;"></span></span>
                     <div class="view-toggle">
                         <button class="view-toggle-btn active" id="viewCards">Cards</button>
                         <button class="view-toggle-btn" id="viewTable">Table</button>
@@ -228,6 +228,49 @@
         let defiView = 'cards';
         let _walletAddresses = { cardano: [], solana: [], ethereum: [] };
 
+        /* ============================================================
+           LOCALSTORAGE CACHE — instant display on page load (matches V1)
+           ============================================================ */
+        var DEFI_CACHE_KEY = 'abct_v2_defi_cache';
+        var DEFI_CACHE_MAX_AGE = 2 * 60 * 1000; // 2 minutes — skip background refresh if fresh
+
+        function getCachedDefi() {
+            try {
+                var raw = localStorage.getItem(DEFI_CACHE_KEY);
+                if (!raw) return null;
+                var cached = JSON.parse(raw);
+                return cached.data || null;
+            } catch(e) { return null; }
+        }
+
+        function getCachedDefiAge() {
+            try {
+                var raw = localStorage.getItem(DEFI_CACHE_KEY);
+                if (!raw) return Infinity;
+                var cached = JSON.parse(raw);
+                return Date.now() - (cached.timestamp || 0);
+            } catch(e) { return Infinity; }
+        }
+
+        function setCachedDefi(data) {
+            try {
+                localStorage.setItem(DEFI_CACHE_KEY, JSON.stringify({ data: data, timestamp: Date.now() }));
+            } catch(e) { /* localStorage full or unavailable */ }
+        }
+
+        function updateDefiTimestamp() {
+            var el = document.getElementById('defiLastUpdated');
+            if (!el) return;
+            var age = getCachedDefiAge();
+            if (age === Infinity) { el.textContent = ''; return; }
+            var mins = Math.floor(age / 60000);
+            var hours = Math.floor(age / 3600000);
+            if (mins < 1) el.textContent = 'Updated just now';
+            else if (mins < 60) el.textContent = 'Updated ' + mins + ' min ago';
+            else if (hours < 24) el.textContent = 'Updated ' + hours + 'h ago';
+            else el.textContent = 'Updated ' + Math.floor(hours / 24) + 'd ago';
+        }
+
         // Governance links for DeFi protocols
         const GOVERNANCE_LINKS = {
             'INDY': { url: 'https://app.indigoprotocol.io/governance', name: 'Indigo' },
@@ -248,12 +291,37 @@
         /* ============================================================
            INIT
            ============================================================ */
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', function() {
             v2InitShell('defi');
-            loadDefi();
-            document.getElementById('refreshDefiBtn').addEventListener('click', () => refreshDefi());
-            document.getElementById('viewCards').addEventListener('click', () => setDefiView('cards'));
-            document.getElementById('viewTable').addEventListener('click', () => setDefiView('table'));
+
+            // Phase A: Render from localStorage cache instantly (no spinners, no waiting)
+            var cached = getCachedDefi();
+            var cacheAge = getCachedDefiAge();
+            if (cached) {
+                // Restore prices first so USD values render correctly
+                if (cached.prices) defiPrices = cached.prices;
+                if (cached.walletAddresses) _walletAddresses = cached.walletAddresses;
+                renderFullDefi(
+                    cached.allStaking || {},
+                    cached.defiData,
+                    cached.holdingsData,
+                    cached.instantData,
+                    cached.adaDelegation,
+                    cached.exchangeStablecoins || [],
+                    cached.nativeStablecoins || [],
+                    cached.exchangeStakedAssets || []
+                );
+                updateDefiTimestamp();
+            }
+
+            // Phase B: Background-refresh (or full load if no cache)
+            if (!cached || cacheAge >= DEFI_CACHE_MAX_AGE) {
+                loadDefi(!cached);
+            }
+
+            document.getElementById('refreshDefiBtn').addEventListener('click', function() { refreshDefi(); });
+            document.getElementById('viewCards').addEventListener('click', function() { setDefiView('cards'); });
+            document.getElementById('viewTable').addEventListener('click', function() { setDefiView('table'); });
         });
 
         function setDefiView(view) {
@@ -303,9 +371,9 @@
         }
 
         /* ============================================================
-           DATA LOADING — Multi-phase like V1
+           DATA LOADING — Multi-phase like V1 with localStorage cache
            ============================================================ */
-        async function loadDefi() {
+        async function loadDefi(showLoading) {
             setRefreshBar(true);
             try {
                 // Phase 1: Base data in parallel
@@ -497,9 +565,37 @@
                 // Render everything
                 renderFullDefi(allStaking, defiData, holdingsData, instantData, adaDelegation, exchangeStablecoins, nativeStablecoins, exchangeStakedAssets);
 
+                // Save to localStorage cache for instant display on next visit
+                setCachedDefi({
+                    allStaking: allStaking,
+                    defiData: defiData,
+                    holdingsData: holdingsData,
+                    instantData: instantData,
+                    adaDelegation: adaDelegation,
+                    exchangeStablecoins: exchangeStablecoins,
+                    nativeStablecoins: nativeStablecoins,
+                    exchangeStakedAssets: exchangeStakedAssets,
+                    prices: defiPrices,
+                    walletAddresses: _walletAddresses
+                });
+                updateDefiTimestamp();
+
+                // Auto-retry timed-out DePIN cards via dedicated endpoints (like V1)
+                Object.keys(allStaking).forEach(function(protocol) {
+                    var pData = allStaking[protocol];
+                    if (pData.category === 'depin' && pData.status === 'timeout') {
+                        console.log('[DePIN] ' + protocol + ' timed out in batch - auto-refreshing via dedicated endpoint');
+                        var btn = document.querySelector('#depin-card-' + protocol + ' .defi-card-refresh');
+                        refreshDepinCard(protocol, btn);
+                    }
+                });
+
             } catch(e) {
                 console.error('DeFi load error:', e);
-                setSafeHTML(document.getElementById('defiSections'), '<div class="v2-empty" style="padding:64px;text-align:center"><div class="v2-empty-title">Could not load DeFi data</div><div class="v2-empty-desc">' + escapeHtml(e.message || '') + '</div></div>');
+                // Only show error if we have no cached data already displayed
+                if (!getCachedDefi()) {
+                    setSafeHTML(document.getElementById('defiSections'), '<div class="v2-empty" style="padding:64px;text-align:center"><div class="v2-empty-title">Could not load DeFi data</div><div class="v2-empty-desc">' + escapeHtml(e.message || '') + '</div></div>');
+                }
             } finally {
                 setRefreshBar(false);
             }
@@ -1112,18 +1208,110 @@
                 btn.disabled = true;
             }
             try {
-                var addresses = _walletAddresses.cardano;
-                if (protocol === 'Helium') addresses = _walletAddresses.solana;
-
-                for (var i = 0; i < addresses.length; i++) {
-                    var endpoint = protocol === 'Helium'
-                        ? '/defi/helium/' + addresses[i] + '?refresh=true'
-                        : '/defi/staking/' + addresses[i] + '?refresh=true';
-                    await v2Fetch(endpoint);
+                // Use dedicated protocol endpoints (like V1) for more reliable data
+                var addresses = [];
+                var endpointTemplate = '';
+                if (protocol === 'Iagon') {
+                    addresses = _walletAddresses.cardano || [];
+                    endpointTemplate = '/defi/iagon/';
+                } else if (protocol === 'Helium') {
+                    addresses = _walletAddresses.solana || [];
+                    endpointTemplate = '/defi/helium/';
+                } else {
+                    addresses = _walletAddresses.cardano || [];
+                    endpointTemplate = '/defi/staking/';
                 }
-                await loadDefi();
-                showToast(protocol + ' data refreshed', 'success');
+
+                // Fetch all wallets in parallel for this protocol
+                var fetches = addresses.map(function(addr) {
+                    return v2Fetch(endpointTemplate + addr + '?refresh=true')
+                        .then(function(r) { return r.ok ? r.json() : null; })
+                        .catch(function() { return null; });
+                });
+                var results = await Promise.all(fetches);
+
+                // Aggregate results across wallets
+                var totalAmount = 0, pendingRewards = 0;
+                var rewardToken = '', rewardsUrl = '', token = '', logoUrl = '', blockchain = '';
+                var hasData = false;
+                var totalPositions = 0;
+
+                results.forEach(function(data) {
+                    if (!data || !data.protocols || !data.protocols[protocol]) return;
+                    hasData = true;
+                    var pData = data.protocols[protocol];
+                    rewardToken = pData.reward_token || rewardToken;
+                    rewardsUrl = pData.rewards_url || rewardsUrl;
+                    blockchain = pData.blockchain || blockchain;
+                    pendingRewards += parseFloat(pData.pending_rewards) || 0;
+
+                    (pData.staked || []).forEach(function(stake) {
+                        token = stake.token || token;
+                        totalAmount += parseFloat(stake.amount) || 0;
+                        totalPositions += (stake.positions || 0);
+                        logoUrl = stake.logo_url || logoUrl;
+                    });
+                });
+
+                // Update the card in-place without full page re-render
+                var cardEl = document.getElementById('depin-card-' + protocol);
+                if (hasData && cardEl) {
+                    var tokenPrice = getTokenPrice(token);
+                    var usdValue = totalAmount * tokenPrice;
+                    var pendingHtml = '';
+                    if (pendingRewards > 0 && rewardToken) {
+                        var rewPrice = getTokenPrice(rewardToken);
+                        var pendUsd = pendingRewards * rewPrice;
+                        pendingHtml = '<div class="defi-card-pending"><div class="defi-pending-label">Pending</div>' +
+                            '<div class="defi-pending-row"><span class="defi-pending-amount v2-blur">' + pendingRewards.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4}) + ' ' + escapeHtml(rewardToken) + '</span>' +
+                            (pendUsd > 0 ? '<span class="defi-pending-usd v2-blur">' + formatCurrency(pendUsd) + '</span>' : '') + '</div></div>';
+                    }
+
+                    var refreshBtnHtml = '<button class="defi-card-refresh" data-protocol="' + escapeAttr(protocol) + '" title="Refresh ' + escapeAttr(protocol) + '">' + refreshSvg(12) + '</button>';
+                    setSafeHTML(cardEl,
+                        '<div class="defi-card-header">' + logoImgHtml(token, logoUrl, 32) +
+                        '<span class="defi-card-protocol">' + getChainBadge(blockchain || 'cardano') + ' ' + escapeHtml(protocol) + '</span>' +
+                        '<div class="defi-card-badges"><span class="defi-badge defi-badge-depin">DePIN</span></div>' +
+                        refreshBtnHtml + '</div>' +
+                        '<div class="defi-card-amount v2-blur">' + totalAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4}) + ' <span style="font-size:14px;font-weight:400">' + escapeHtml(token) + '</span></div>' +
+                        '<div class="defi-card-value v2-blur">' + formatCurrency(usdValue) + '</div>' +
+                        pendingHtml +
+                        '<div class="defi-card-actions"><span class="defi-card-detail">' + totalPositions + ' position' + (totalPositions !== 1 ? 's' : '') + '</span>' +
+                        '<div class="defi-card-links">' + (rewardsUrl ? '<a href="' + escapeAttr(rewardsUrl) + '" target="_blank" rel="noopener" class="defi-action-link">Rewards</a>' : '') + '</div></div>'
+                    );
+                    cardEl.className = 'defi-card';
+                    cardEl.setAttribute('data-protocol', protocol);
+
+                    // Re-attach refresh button event listener
+                    var newBtn = cardEl.querySelector('.defi-card-refresh[data-protocol]');
+                    if (newBtn) {
+                        newBtn.addEventListener('click', function() { refreshDepinCard(protocol, newBtn); });
+                    }
+
+                    // Update localStorage cache with refreshed DePIN data
+                    var cached = getCachedDefi();
+                    if (cached && cached.allStaking) {
+                        cached.allStaking[protocol] = {
+                            staked: {},
+                            pending_rewards: pendingRewards,
+                            reward_token: rewardToken,
+                            rewards_url: rewardsUrl,
+                            blockchain: blockchain || 'cardano',
+                            category: 'depin',
+                            status: null,
+                        };
+                        if (token) {
+                            cached.allStaking[protocol].staked[token] = { amount: totalAmount, positions: totalPositions, logo_url: logoUrl };
+                        }
+                        setCachedDefi(cached);
+                    }
+
+                    showToast(protocol + ' data refreshed', 'success');
+                } else if (!hasData && cardEl) {
+                    showToast(protocol + ' - no data found', 'info');
+                }
             } catch (e) {
+                console.error('[DePIN] Refresh error for ' + protocol + ':', e);
                 showToast('Failed to refresh ' + protocol, 'error');
             } finally {
                 if (btn) {
@@ -1205,13 +1393,15 @@
             try {
                 if (forceStaking) {
                     // Refresh staking data for all wallets
-                    var addresses = _walletAddresses.cardano;
+                    var addresses = _walletAddresses.cardano || [];
                     for (var i = 0; i < addresses.length; i++) {
                         await v2Fetch('/defi/staking/' + addresses[i] + '?refresh=true');
                     }
                 }
                 await v2Fetch('/defi/summary?refresh=true');
-                await loadDefi();
+                // Clear cache so loadDefi does a full render
+                try { localStorage.removeItem(DEFI_CACHE_KEY); } catch(e) {}
+                await loadDefi(true);
                 showToast('DeFi data refreshed', 'success');
             } catch(e) { showToast('Refresh failed', 'error'); }
         }
