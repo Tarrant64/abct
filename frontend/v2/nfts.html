@@ -7,7 +7,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="stylesheet" href="/next/static/css/v2.css">
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
-    <script src="/static/js/session-auth.js?v=1772669294"></script>
+    <script src="/static/js/session-auth.js?v=1773833964"></script>
     <style>
         .nft-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
         .nft-card { background: var(--v2-bg-card); border: 1px solid var(--v2-border); border-radius: var(--v2-radius-lg); overflow: hidden; transition: all 0.2s; cursor: pointer; }
@@ -172,6 +172,7 @@
         </main>
     </div>
 
+    <script src="/next/static/js/v2-cache.js"></script>
     <script src="/next/static/js/v2-app.js"></script>
     <script src="/next/static/js/v2-shell.js"></script>
     <script>
@@ -217,6 +218,7 @@
 
         async function loadNfts() {
             try {
+                var useCached = typeof v2CachedFetch === 'function';
                 const chains = ['cardano', 'ethereum', 'solana', 'polygon', 'base'];
                 const promises = chains.map(chain => {
                     // Cardano NFTs use the root endpoint /nfts, others use /nfts/{chain}
@@ -224,15 +226,20 @@
                     return v2Fetch(url).then(r => r.ok ? r.json() : { nfts: [] }).catch(() => ({ nfts: [] }));
                 });
 
-                // Also load summary
-                const summaryResp = await v2Fetch('/nfts/all/summary');
-                if (summaryResp.ok) {
-                    const summary = await summaryResp.json();
+                // Load summary in parallel with chain data (was sequential before)
+                var summaryPromise = useCached
+                    ? v2CachedFetch('/nfts/all/summary').catch(function() { return { data: null }; })
+                    : v2Fetch('/nfts/all/summary').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }).catch(function() { return { data: null }; });
+
+                // Fire all in parallel
+                const [summaryResult, ...results] = await Promise.allSettled([summaryPromise, ...promises]);
+
+                // Process summary
+                if (summaryResult.status === 'fulfilled' && summaryResult.value && summaryResult.value.data) {
+                    var summary = summaryResult.value.data;
                     setText('nftTotalValue', formatCurrency(parseFloat(summary.total_value_usd) || 0));
                     setText('nftTotalCount', (parseInt(summary.total_count) || 0).toLocaleString());
                 }
-
-                const results = await Promise.allSettled(promises);
                 allNfts = [];
                 results.forEach((result, idx) => {
                     if (result.status === 'fulfilled') {

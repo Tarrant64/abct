@@ -7,7 +7,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="stylesheet" href="/next/static/css/v2.css">
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
-    <script src="/static/js/session-auth.js?v=1772669294"></script>
+    <script src="/static/js/session-auth.js?v=1773833964"></script>
 </head>
 <body>
     <div class="v2-layout" id="v2Layout">
@@ -51,6 +51,7 @@
         </main>
     </div>
 
+    <script src="/next/static/js/v2-cache.js"></script>
     <script src="/next/static/js/v2-app.js"></script>
     <script src="/next/static/js/v2-shell.js"></script>
     <script>
@@ -66,33 +67,26 @@
         });
 
         async function loadSecurity() {
-            // /privacy/stats returns: {zcash: {...}, monero: {...}, secret_network: {...}}
-            // It does NOT have average_score, total_approvals, or threat_count.
-            // Those stats come from other endpoints.
+            // Fire all security requests in parallel (was sequential)
+            var useCached = typeof v2CachedFetch === 'function';
 
-            // Privacy score — derive from wallet summary
-            // Approvals — from /privacy/approvals/wallets
-            // Threats — not directly available; show '--' until a scan is run
+            var results = await Promise.allSettled([
+                useCached ? v2CachedFetch('/spam/status') : v2Fetch('/spam/status').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }),
+                useCached ? v2CachedFetch('/privacy/approvals/wallets') : v2Fetch('/privacy/approvals/wallets').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }),
+                useCached ? v2CachedFetch('/privacy/wallets/summary') : v2Fetch('/privacy/wallets/summary').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }),
+            ]);
 
-            // Spam count from /spam/status
-            try {
-                const resp = await v2Fetch('/spam/status');
-                if (resp.ok) {
-                    const data = await resp.json();
-                    // Backend returns: {configured, hidden_tokens_count}
-                    setText('spamCount', (data.hidden_tokens_count || 0).toLocaleString());
-                }
-            } catch(e) {}
+            // Spam count
+            if (results[0].status === 'fulfilled' && results[0].value && results[0].value.data) {
+                var spamData = results[0].value.data;
+                setText('spamCount', (spamData.hidden_tokens_count || 0).toLocaleString());
+            }
 
-            // Approval count from /privacy/approvals/wallets
-            try {
-                const resp = await v2Fetch('/privacy/approvals/wallets');
-                if (resp.ok) {
-                    const data = await resp.json();
-                    // Backend returns: {wallets: [...], total: N}
-                    setText('approvalCount', (data.total || 0).toLocaleString());
-                }
-            } catch(e) {}
+            // Approval count
+            if (results[1].status === 'fulfilled' && results[1].value && results[1].value.data) {
+                var approvalData = results[1].value.data;
+                setText('approvalCount', (approvalData.total || 0).toLocaleString());
+            }
 
             // Threat count — no direct endpoint; default to '--'
             setText('threatCount', '--');
@@ -101,21 +95,18 @@
             setText('privacyScore', '--');
 
             // Wallet privacy summary
-            try {
-                const resp = await v2Fetch('/privacy/wallets/summary');
-                if (resp.ok) {
-                    const data = await resp.json();
-                    renderPrivacyWallets(data);
+            if (results[2].status === 'fulfilled' && results[2].value && results[2].value.data) {
+                var privacyData = results[2].value.data;
+                renderPrivacyWallets(privacyData);
 
-                    // Compute average privacy score from wallets that have one
-                    const wallets = data.wallets || [];
-                    const scored = wallets.filter(w => w.static_privacy_score !== null);
-                    if (scored.length > 0) {
-                        const avg = scored.reduce((s, w) => s + w.static_privacy_score, 0) / scored.length;
-                        setText('privacyScore', Math.round(avg) + '/100');
-                    }
+                // Compute average privacy score from wallets that have one
+                var walletsList = privacyData.wallets || [];
+                var scored = walletsList.filter(function(w) { return w.static_privacy_score !== null; });
+                if (scored.length > 0) {
+                    var avg = scored.reduce(function(s, w) { return s + w.static_privacy_score; }, 0) / scored.length;
+                    setText('privacyScore', Math.round(avg) + '/100');
                 }
-            } catch(e) {
+            } else {
                 setSafeHTML(document.getElementById('privacyWallets'), '<div style="padding:20px;color:var(--v2-text-muted);text-align:center">Privacy analysis available after scanning</div>');
             }
         }

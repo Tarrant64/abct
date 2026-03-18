@@ -138,61 +138,61 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function loadDashboard() {
     try {
-        // Fire all requests in parallel
-        const [pricesRes, instantRes, historyRes, txStatsRes, exchangeRes, nftRes] = await Promise.allSettled([
-            v2Fetch(`${API_BASE}/prices/all`),
-            v2Fetch(`${API_BASE}/portfolio/instant`),
-            v2Fetch(`${API_BASE}/balance-history/data?range=1w`),
-            v2Fetch(`${API_BASE}/transactions/stats?days=7`),
-            v2Fetch(`${API_BASE}/exchanges/all`),
-            v2Fetch(`${API_BASE}/nfts/all/summary`),
+        // Use cached fetch if available (v2-cache.js loaded), fall back to raw v2Fetch
+        var useCached = typeof v2CachedFetch === 'function';
+
+        // Fire all requests in parallel — with caching for instant page revisits
+        var results = await Promise.allSettled([
+            useCached ? v2CachedFetch('/prices/all') : v2Fetch('/prices/all').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }),
+            useCached ? v2CachedFetch('/portfolio/instant') : v2Fetch('/portfolio/instant').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }),
+            useCached ? v2CachedFetch('/balance-history/data?range=1w') : v2Fetch('/balance-history/data?range=1w').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }),
+            useCached ? v2CachedFetch('/transactions/stats?days=7') : v2Fetch('/transactions/stats?days=7').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }),
+            useCached ? v2CachedFetch('/exchanges/all') : v2Fetch('/exchanges/all').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }),
+            useCached ? v2CachedFetch('/nfts/all/summary') : v2Fetch('/nfts/all/summary').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }),
         ]);
 
         // Process prices
-        if (pricesRes.status === 'fulfilled' && pricesRes.value.ok) {
-            const data = await pricesRes.value.json();
-            v2State.prices = data.prices || data;
+        if (results[0].status === 'fulfilled' && results[0].value && results[0].value.data) {
+            var priceData = results[0].value.data;
+            v2State.prices = priceData.prices || priceData;
         }
 
         // Process portfolio instant
-        if (instantRes.status === 'fulfilled' && instantRes.value.ok) {
-            const data = await instantRes.value.json();
-            renderPortfolioHero(data);
+        if (results[1].status === 'fulfilled' && results[1].value && results[1].value.data) {
+            renderPortfolioHero(results[1].value.data);
         }
 
         // Process chart
-        if (historyRes.status === 'fulfilled' && historyRes.value.ok) {
-            const data = await historyRes.value.json();
-            v2State.chartData = data;
-            renderChart(data);
+        if (results[2].status === 'fulfilled' && results[2].value && results[2].value.data) {
+            v2State.chartData = results[2].value.data;
+            renderChart(results[2].value.data);
         }
 
         // Process tx stats
-        if (txStatsRes.status === 'fulfilled' && txStatsRes.value.ok) {
-            const data = await txStatsRes.value.json();
-            renderTxStats(data);
+        if (results[3].status === 'fulfilled' && results[3].value && results[3].value.data) {
+            renderTxStats(results[3].value.data);
         }
 
         // Process exchanges
-        let exchangeTotal = 0;
-        if (exchangeRes.status === 'fulfilled' && exchangeRes.value.ok) {
-            const data = await exchangeRes.value.json();
-            if (data.exchanges) {
-                data.exchanges.forEach(ex => {
-                    exchangeTotal += (ex.total_usd || 0);
+        var exchangeTotal = 0;
+        if (results[4].status === 'fulfilled' && results[4].value && results[4].value.data) {
+            var exData = results[4].value.data;
+            if (exData.exchanges) {
+                exData.exchanges.forEach(function(ex) {
+                    exchangeTotal += (parseFloat(ex.total_usd) || 0);
                 });
             }
         }
         setText('statExchanges', formatCurrency(exchangeTotal));
 
         // Process NFTs
-        let nftTotal = 0;
-        if (nftRes.status === 'fulfilled' && nftRes.value.ok) {
-            const data = await nftRes.value.json();
-            if (data.total_value_usd !== undefined) {
-                nftTotal = data.total_value_usd;
-            } else if (data.chains) {
-                Object.values(data.chains).forEach(c => { nftTotal += (c.total_value_usd || 0); });
+        var nftTotal = 0;
+        if (results[5].status === 'fulfilled' && results[5].value && results[5].value.data) {
+            var nftData = results[5].value.data;
+            if (nftData.total_value_usd !== undefined) {
+                nftTotal = parseFloat(nftData.total_value_usd) || 0;
+            } else if (nftData.chains) {
+                Object.values(nftData.chains).forEach(function(c) { nftTotal += (parseFloat(c.total_value_usd) || 0); });
             }
         }
         setText('statNfts', formatCurrency(nftTotal));
@@ -209,10 +209,15 @@ async function loadDashboard() {
 async function loadHoldings(refresh = false) {
     try {
         const url = refresh ? `${API_BASE}/portfolio/all-holdings?refresh=true` : `${API_BASE}/portfolio/all-holdings`;
-        const response = await v2Fetch(url);
-        if (!response.ok) throw new Error('Failed to load holdings');
-
-        const data = await response.json();
+        var data;
+        if (typeof v2CachedFetch === 'function' && !refresh) {
+            var result = await v2CachedFetch(url);
+            data = result.data;
+        } else {
+            var response = await v2Fetch(url);
+            if (!response.ok) throw new Error('Failed to load holdings');
+            data = await response.json();
+        }
         v2State.holdings = data.holdings || [];
 
         // Enrich holdings with inferred blockchain and price data
@@ -1248,6 +1253,11 @@ async function syncAll() {
     btn.classList.add('syncing');
     btn.disabled = true;
     showToast('Syncing all data...', 'success');
+
+    // Clear all cached data so we fetch fresh
+    if (typeof V2_CACHE !== 'undefined') {
+        V2_CACHE.clearAll();
+    }
 
     try {
         // 1. Single consolidated refresh call — clears caches, fetches fresh

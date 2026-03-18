@@ -126,6 +126,18 @@ function v2InitShell(activePage) {
             if (d) d.classList.remove('open');
         }
     });
+
+    // Prefetch on nav hover — preload data for the target page
+    if (typeof v2PrefetchForPage === 'function') {
+        document.querySelectorAll('.v2-nav-item').forEach(navItem => {
+            navItem.addEventListener('mouseenter', function() {
+                var pageId = this.getAttribute('data-page');
+                if (pageId) {
+                    v2PrefetchForPage(pageId);
+                }
+            });
+        });
+    }
 }
 
 // ============================================================================

@@ -7,7 +7,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="stylesheet" href="/next/static/css/v2.css">
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
-    <script src="/static/js/session-auth.js?v=1772669294"></script>
+    <script src="/static/js/session-auth.js?v=1773833964"></script>
     <style>
         /* ============================================================
            DEFI PAGE — RICH STAKING & PROTOCOL CARDS
@@ -215,6 +215,7 @@
         </main>
     </div>
 
+    <script src="/next/static/js/v2-cache.js"></script>
     <script src="/next/static/js/v2-app.js"></script>
     <script src="/next/static/js/v2-shell.js"></script>
     <script>
@@ -376,30 +377,32 @@
         async function loadDefi(showLoading) {
             setRefreshBar(true);
             try {
-                // Phase 1: Base data in parallel
+                // Phase 1: Base data in parallel — with caching for cross-page data reuse
+                var useCached = typeof v2CachedFetch === 'function';
+
                 var results = await Promise.allSettled([
-                    v2Fetch('/defi/summary'),
-                    v2Fetch('/portfolio/all-holdings'),
-                    v2Fetch('/portfolio/instant'),
-                    v2Fetch('/prices/all'),
-                    v2Fetch('/wallets'),
-                    v2Fetch('/exchanges/coinbase').catch(function() { return { ok: false }; }),
-                    v2Fetch('/portfolio/assets').catch(function() { return { ok: false }; }),
+                    useCached ? v2CachedFetch('/defi/summary') : v2Fetch('/defi/summary').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }),
+                    useCached ? v2CachedFetch('/portfolio/all-holdings') : v2Fetch('/portfolio/all-holdings').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }),
+                    useCached ? v2CachedFetch('/portfolio/instant') : v2Fetch('/portfolio/instant').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }),
+                    useCached ? v2CachedFetch('/prices/all') : v2Fetch('/prices/all').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }),
+                    useCached ? v2CachedFetch('/wallets') : v2Fetch('/wallets').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }),
+                    (useCached ? v2CachedFetch('/exchanges/coinbase').catch(function() { return { data: null }; }) : v2Fetch('/exchanges/coinbase').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }).catch(function() { return { data: null }; })),
+                    (useCached ? v2CachedFetch('/portfolio/assets').catch(function() { return { data: null }; }) : v2Fetch('/portfolio/assets').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }).catch(function() { return { data: null }; })),
                 ]);
 
                 var defiData = null, holdingsData = null, instantData = null, walletsData = null;
                 var exchangeData = null, nativeAssetsData = null;
 
-                if (results[0].status === 'fulfilled' && results[0].value.ok) defiData = await results[0].value.json();
-                if (results[1].status === 'fulfilled' && results[1].value.ok) holdingsData = await results[1].value.json();
-                if (results[2].status === 'fulfilled' && results[2].value.ok) instantData = await results[2].value.json();
-                if (results[3].status === 'fulfilled' && results[3].value.ok) {
-                    var priceData = await results[3].value.json();
+                if (results[0].status === 'fulfilled' && results[0].value && results[0].value.data) defiData = results[0].value.data;
+                if (results[1].status === 'fulfilled' && results[1].value && results[1].value.data) holdingsData = results[1].value.data;
+                if (results[2].status === 'fulfilled' && results[2].value && results[2].value.data) instantData = results[2].value.data;
+                if (results[3].status === 'fulfilled' && results[3].value && results[3].value.data) {
+                    var priceData = results[3].value.data;
                     defiPrices = priceData.prices || priceData || {};
                 }
-                if (results[4].status === 'fulfilled' && results[4].value.ok) walletsData = await results[4].value.json();
-                if (results[5].status === 'fulfilled' && results[5].value && results[5].value.ok) exchangeData = await results[5].value.json();
-                if (results[6].status === 'fulfilled' && results[6].value && results[6].value.ok) nativeAssetsData = await results[6].value.json();
+                if (results[4].status === 'fulfilled' && results[4].value && results[4].value.data) walletsData = results[4].value.data;
+                if (results[5].status === 'fulfilled' && results[5].value && results[5].value.data) exchangeData = results[5].value.data;
+                if (results[6].status === 'fulfilled' && results[6].value && results[6].value.data) nativeAssetsData = results[6].value.data;
 
                 var wallets = walletsData ? (walletsData.wallets || []) : [];
                 var cardanoWallets = wallets.filter(function(w) { return w.blockchain === 'cardano'; });
@@ -1389,6 +1392,8 @@
            REFRESH
            ============================================================ */
         async function refreshDefi(forceStaking) {
+            // Clear cache so we fetch fresh data
+            if (typeof V2_CACHE !== 'undefined') V2_CACHE.clearAll();
             showToast('Refreshing DeFi data...', 'success');
             try {
                 if (forceStaking) {

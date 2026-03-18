@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="/next/static/css/v2.css">
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
-    <script src="/static/js/session-auth.js?v=1772669294"></script>
+    <script src="/static/js/session-auth.js?v=1773833964"></script>
 </head>
 <body>
     <div class="v2-layout" id="v2Layout">
@@ -54,6 +54,7 @@
         </main>
     </div>
 
+    <script src="/next/static/js/v2-cache.js"></script>
     <script src="/next/static/js/v2-app.js"></script>
     <script src="/next/static/js/v2-shell.js"></script>
     <script>
@@ -67,13 +68,14 @@
             try {
                 // /pnl/summary returns: {total_invested, current_value, total_unrealized, total_realized, total_pnl, pnl_percent, ...}
                 // /pnl/unrealized returns: array of {token_symbol, total_invested, current_value, unrealized_gain, unrealized_pct, ...}
+                var useCachedPnl = typeof v2CachedFetch === 'function';
                 const [summaryResp, unrealizedResp] = await Promise.allSettled([
-                    v2Fetch('/pnl/summary'),
-                    v2Fetch('/pnl/unrealized'),
+                    useCachedPnl ? v2CachedFetch('/pnl/summary') : v2Fetch('/pnl/summary').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }),
+                    useCachedPnl ? v2CachedFetch('/pnl/unrealized') : v2Fetch('/pnl/unrealized').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }),
                 ]);
 
-                if (summaryResp.status === 'fulfilled' && summaryResp.value.ok) {
-                    const data = await summaryResp.value.json();
+                if (summaryResp.status === 'fulfilled' && summaryResp.value && summaryResp.value.data) {
+                    const data = summaryResp.value.data;
                     // Backend field: total_invested (not total_cost_basis)
                     setText('pnlCostBasis', formatCurrency(parseFloat(data.total_invested) || 0));
                     setText('pnlRealized', formatCurrency(parseFloat(data.total_realized) || 0));
@@ -84,8 +86,8 @@
                     retEl.style.color = returnPct >= 0 ? 'var(--v2-accent)' : 'var(--v2-red)';
                 }
 
-                if (unrealizedResp.status === 'fulfilled' && unrealizedResp.value.ok) {
-                    const data = await unrealizedResp.value.json();
+                if (unrealizedResp.status === 'fulfilled' && unrealizedResp.value && unrealizedResp.value.data) {
+                    const data = unrealizedResp.value.data;
                     // /pnl/unrealized returns a flat ARRAY of per-token items, not {total_unrealized, assets}
                     const items = Array.isArray(data) ? data : (data.assets || data.by_asset || []);
                     const totalUnrealized = items.reduce((sum, i) => sum + (parseFloat(i.unrealized_gain) || 0), 0);

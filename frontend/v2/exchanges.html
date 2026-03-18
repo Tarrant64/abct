@@ -7,7 +7,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="stylesheet" href="/next/static/css/v2.css">
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
-    <script src="/static/js/session-auth.js?v=1772669294"></script>
+    <script src="/static/js/session-auth.js?v=1773833964"></script>
     <style>
         .exchange-card { background: var(--v2-bg-card); border: 1px solid var(--v2-border); border-radius: var(--v2-radius-lg); overflow: hidden; transition: all 0.2s; margin-bottom: 16px; }
         .exchange-card:hover { border-color: var(--v2-border-light); }
@@ -46,6 +46,7 @@
         </main>
     </div>
 
+    <script src="/next/static/js/v2-cache.js"></script>
     <script src="/next/static/js/v2-app.js"></script>
     <script src="/next/static/js/v2-shell.js"></script>
     <script>
@@ -56,10 +57,15 @@
 
         async function loadExchanges() {
             try {
-                const resp = await v2Fetch('/exchanges/all');
-                if (!resp.ok) throw new Error('Failed');
-                const data = await resp.json();
-                renderExchanges(data);
+                var result;
+                if (typeof v2CachedFetch === 'function') {
+                    result = await v2CachedFetch('/exchanges/all');
+                } else {
+                    var resp = await v2Fetch('/exchanges/all');
+                    if (!resp.ok) throw new Error('Failed');
+                    result = { data: await resp.json() };
+                }
+                renderExchanges(result.data);
             } catch(e) {
                 setSafeHTML(document.getElementById('exchangeList'), '<div class="v2-empty"><div class="v2-empty-title">Could not load exchanges</div></div>');
             }
@@ -142,6 +148,7 @@
         }
 
         async function refreshExchanges() {
+            if (typeof V2_CACHE !== 'undefined') V2_CACHE.clearByPrefix('/exchanges');
             showToast('Refreshing exchanges...', 'success');
             try {
                 await v2Fetch('/exchanges/all?refresh=true');

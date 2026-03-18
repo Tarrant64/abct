@@ -7,7 +7,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="stylesheet" href="/next/static/css/v2.css">
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
-    <script src="/static/js/session-auth.js?v=1772669294"></script>
+    <script src="/static/js/session-auth.js?v=1773833964"></script>
     <style>
         .wallet-card { background: var(--v2-bg-card); border: 1px solid var(--v2-border); border-radius: var(--v2-radius-lg); padding: 16px; margin-bottom: 12px; transition: all 0.2s; }
         .wallet-card:hover { border-color: var(--v2-border-light); }
@@ -97,6 +97,7 @@
         </main>
     </div>
 
+    <script src="/next/static/js/v2-cache.js"></script>
     <script src="/next/static/js/v2-app.js"></script>
     <script src="/next/static/js/v2-shell.js"></script>
     <script>
@@ -115,12 +116,18 @@
 
         async function loadWallets() {
             try {
-                const resp = await v2Fetch('/wallets');
-                if (!resp.ok) {
-                    const errData = await resp.json().catch(() => ({}));
-                    throw new Error(errData.detail || 'HTTP ' + resp.status);
+                var data;
+                if (typeof v2CachedFetch === 'function') {
+                    var result = await v2CachedFetch('/wallets');
+                    data = result.data;
+                } else {
+                    var resp = await v2Fetch('/wallets');
+                    if (!resp.ok) {
+                        var errData = await resp.json().catch(function() { return {}; });
+                        throw new Error(errData.detail || 'HTTP ' + resp.status);
+                    }
+                    data = await resp.json();
                 }
-                const data = await resp.json();
                 wallets = data.wallets || data || [];
                 renderChainFilters();
                 renderWallets();
@@ -355,6 +362,7 @@
         }
 
         async function refreshAllWallets() {
+            if (typeof V2_CACHE !== 'undefined') V2_CACHE.clearByPrefix('/wallets');
             showToast('Refreshing all wallets...', 'success');
             try {
                 await v2Fetch('/wallets/refresh', { method: 'POST' });
