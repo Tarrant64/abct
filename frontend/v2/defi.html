@@ -9,28 +9,165 @@
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <script src="/static/js/session-auth.js?v=1772669294"></script>
     <style>
-        .protocol-card { background: var(--v2-bg-card); border: 1px solid var(--v2-border); border-radius: var(--v2-radius-lg); padding: 16px; transition: all 0.2s; }
-        .protocol-card:hover { border-color: var(--v2-border-light); }
-        .protocol-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-        .protocol-name { font-size: 15px; font-weight: 600; color: var(--v2-text-heading); }
-        .protocol-chain { font-size: 11px; }
-        .protocol-positions { margin-top: 8px; }
-        .position-row { display: flex; justify-content: space-between; padding: 6px 0; border-top: 1px solid var(--v2-border); font-size: 13px; }
-        .position-row:first-child { border-top: none; }
-        .protocol-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
-        /* Sortable table headers */
+        /* ============================================================
+           DEFI PAGE — RICH STAKING & PROTOCOL CARDS
+           ============================================================ */
+
+        /* Summary stat enhancements */
+        .defi-summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
+        .defi-stat-card { background: var(--v2-bg-card); border: 1px solid var(--v2-border); border-radius: var(--v2-radius-lg); padding: 16px; }
+        .defi-stat-label { font-size: 11px; color: var(--v2-text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .defi-stat-value { font-size: 20px; font-weight: 700; color: var(--v2-text-heading); font-family: var(--v2-font-mono, 'SF Mono', Monaco, monospace); }
+        .defi-stat-value.accent { color: var(--v2-accent, #00d26a); }
+        .defi-stat-value.amber { color: #f59e0b; }
+
+        /* Section headers */
+        .defi-section { margin-bottom: 28px; }
+        .defi-section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--v2-border); }
+        .defi-section-icon { font-size: 18px; }
+        .defi-section-title { font-size: 14px; font-weight: 600; color: var(--v2-text-heading); }
+        .defi-section-count { background: var(--v2-bg-input); color: var(--v2-text-muted); font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 500; }
+        .defi-section-refresh { margin-left: auto; background: none; border: 1px solid var(--v2-border); border-radius: 6px; padding: 4px 8px; cursor: pointer; color: var(--v2-text-muted); display: flex; align-items: center; gap: 4px; transition: all 0.2s; font-size: 11px; }
+        .defi-section-refresh:hover { color: var(--v2-accent, #00d26a); border-color: var(--v2-accent, #00d26a); }
+        .defi-section-refresh.refreshing svg { animation: defi-spin 1s linear infinite; }
+        @keyframes defi-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        /* Protocol card grid */
+        .defi-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+
+        /* Protocol staking card */
+        .defi-card { background: var(--v2-bg-card); border: 1px solid var(--v2-border); border-radius: var(--v2-radius-lg); padding: 16px; border-left: 4px solid var(--v2-accent, #00d26a); transition: all 0.2s; position: relative; overflow: hidden; }
+        .defi-card:hover { border-color: var(--v2-border-light); transform: translateY(-1px); box-shadow: var(--v2-shadow-md, 0 4px 12px rgba(0,0,0,0.2)); }
+
+        /* Protocol-specific border colors */
+        .defi-card[data-protocol="Indigo"] { border-left-color: #6366f1; }
+        .defi-card[data-protocol="Strike"] { border-left-color: #10b981; }
+        .defi-card[data-protocol="Liqwid"] { border-left-color: #06b6d4; }
+        .defi-card[data-protocol="Surf Lending"] { border-left-color: #3b82f6; }
+        .defi-card[data-protocol="Iagon"] { border-left-color: #f59e0b; }
+        .defi-card[data-protocol="Helium"] { border-left-color: #8b5cf6; }
+        .defi-card[data-protocol="Chainlink Staking"] { border-left-color: #375bd2; }
+        .defi-card.exchange-staked { border-left-color: #3b82f6; }
+        .defi-card.liquid-staking { border-left-color: #06b6d4; }
+        .defi-card.delegation { border-left-color: #0033AD; }
+
+        /* Card header */
+        .defi-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .defi-card-logo { width: 32px; height: 32px; border-radius: 50%; background: var(--v2-bg-input); display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; }
+        .defi-card-logo img { width: 100%; height: 100%; object-fit: cover; }
+        .defi-card-logo .logo-fallback { font-size: 11px; font-weight: 700; color: var(--v2-text-muted); text-transform: uppercase; }
+        .defi-card-protocol { font-size: 12px; color: var(--v2-text-muted); text-transform: uppercase; letter-spacing: 0.5px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .defi-card-badges { display: flex; gap: 5px; flex-shrink: 0; flex-wrap: wrap; }
+        .defi-card-refresh { background: none; border: none; color: var(--v2-text-muted); cursor: pointer; padding: 2px; opacity: 0.4; transition: opacity 0.2s; flex-shrink: 0; }
+        .defi-card-refresh:hover { opacity: 1; color: var(--v2-accent, #00d26a); }
+        .defi-card-refresh.refreshing svg { animation: defi-spin 1s linear infinite; }
+
+        /* Badges */
+        .defi-badge { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; white-space: nowrap; }
+        .defi-badge-staked { background: var(--v2-accent, #00d26a); color: #000; }
+        .defi-badge-rewards { background: #f59e0b; color: #000; }
+        .defi-badge-exchange { background: #3b82f6; color: #fff; }
+        .defi-badge-apy { background: #10b981; color: #000; }
+        .defi-badge-liquid { background: #06b6d4; color: #000; }
+        .defi-badge-depin { background: #f59e0b; color: #000; }
+        .defi-badge-governance { background: #8b5cf6; color: #fff; }
+        .defi-badge-chain { font-size: 10px; font-weight: 500; padding: 1px 6px; border-radius: 6px; background: var(--v2-bg-input); color: var(--v2-text-muted); }
+        .defi-badge-chain.cardano { background: rgba(0, 51, 173, 0.2); color: #4a8aff; }
+        .defi-badge-chain.ethereum { background: rgba(98, 126, 234, 0.2); color: #8da0f0; }
+        .defi-badge-chain.solana { background: rgba(20, 241, 149, 0.2); color: #14f195; }
+        .defi-badge-chain.exchange { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+
+        /* Card amount & value */
+        .defi-card-amount { font-size: 22px; font-weight: 700; color: var(--v2-text-heading); font-family: var(--v2-font-mono, 'SF Mono', Monaco, monospace); line-height: 1.2; }
+        .defi-card-token { font-size: 13px; color: var(--v2-text-secondary); margin-top: 2px; }
+        .defi-card-value { font-size: 14px; color: var(--v2-text-secondary); margin-top: 4px; font-family: var(--v2-font-mono, 'SF Mono', Monaco, monospace); }
+
+        /* Pending rewards box */
+        .defi-card-pending { margin-top: 10px; padding: 8px 10px; background: rgba(245, 158, 11, 0.08); border-radius: 8px; border-left: 3px solid #f59e0b; }
+        .defi-pending-label { font-size: 10px; color: #f59e0b; text-transform: uppercase; font-weight: 600; margin-bottom: 3px; }
+        .defi-pending-row { display: flex; align-items: center; gap: 8px; margin-top: 3px; font-size: 13px; }
+        .defi-pending-amount { font-weight: 600; color: var(--v2-text-primary); font-family: var(--v2-font-mono, 'SF Mono', Monaco, monospace); }
+        .defi-pending-usd { font-size: 12px; color: var(--v2-text-muted); }
+
+        /* Card footer actions */
+        .defi-card-actions { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--v2-border); display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--v2-text-muted); }
+        .defi-card-detail { font-size: 12px; color: var(--v2-text-muted); }
+        .defi-card-links { display: flex; gap: 8px; }
+        .defi-action-link { text-decoration: none; color: var(--v2-text-secondary); font-size: 12px; padding: 3px 10px; border: 1px solid var(--v2-border); border-radius: 12px; transition: all 0.2s; }
+        .defi-action-link:hover { background: var(--v2-accent, #00d26a); border-color: var(--v2-accent, #00d26a); color: #000; }
+        .defi-action-link.gov-link:hover { background: #8b5cf6; border-color: #8b5cf6; color: #fff; }
+
+        /* Delegation detail */
+        .defi-delegation-detail { font-size: 13px; color: var(--v2-text-secondary); margin-top: 6px; }
+        .defi-pool-info { font-size: 12px; color: var(--v2-text-muted); margin-top: 4px; }
+
+        /* Loading card state */
+        .defi-card-loading { opacity: 0.7; }
+        .defi-card-loading-msg { font-size: 13px; color: var(--v2-text-muted); padding: 8px 0; display: flex; align-items: center; gap: 8px; }
+        .defi-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--v2-text-muted); border-top-color: var(--v2-accent, #00d26a); border-radius: 50%; animation: defi-spin 1s linear infinite; }
+        .defi-card-timeout { font-size: 12px; color: var(--v2-text-muted); padding: 8px 0; }
+        .defi-card.depin-timeout { opacity: 0.7; border-left-style: dashed; }
+        .defi-card.depin-no-data { opacity: 0.7; border-left-style: dashed; }
+
+        /* Governance token lines */
+        .defi-gov-line { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--v2-border); font-size: 13px; }
+        .defi-gov-line:last-child { border-bottom: none; }
+        .defi-gov-line .line-logo { width: 28px; height: 28px; border-radius: 50%; background: var(--v2-bg-input); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
+        .defi-gov-line .line-logo img { width: 100%; height: 100%; object-fit: cover; }
+        .defi-gov-line .line-logo .logo-fallback { font-size: 10px; font-weight: 700; color: var(--v2-text-muted); }
+        .defi-gov-line .line-token { font-weight: 600; color: var(--v2-text-heading); min-width: 60px; }
+        .defi-gov-line .line-amount { font-family: var(--v2-font-mono, 'SF Mono', Monaco, monospace); color: var(--v2-text-primary); flex: 1; }
+        .defi-gov-line .line-value { font-family: var(--v2-font-mono, 'SF Mono', Monaco, monospace); color: var(--v2-text-secondary); min-width: 80px; text-align: right; }
+        .defi-gov-line .line-chains { display: flex; gap: 3px; }
+        .defi-gov-line .line-action { margin-left: 8px; }
+
+        /* Token chips for misc categories */
+        .defi-token-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+        .defi-token-chip { background: var(--v2-bg-card); border: 1px solid var(--v2-border); border-radius: 8px; padding: 8px 12px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+        .defi-token-chip .chip-name { font-weight: 600; color: var(--v2-text-heading); }
+        .defi-token-chip .chip-amount { font-family: var(--v2-font-mono, 'SF Mono', Monaco, monospace); color: var(--v2-text-secondary); }
+
+        /* Stablecoin lines */
+        .defi-stable-line { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--v2-border); font-size: 13px; }
+        .defi-stable-line:last-child { border-bottom: none; }
+
+        /* Hidden stables dropdown */
+        .hidden-stables-toggle { background: none; border: 1px solid var(--v2-border); border-radius: 8px; color: var(--v2-text-muted); font-size: 12px; padding: 6px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 8px; transition: all 0.2s; }
+        .hidden-stables-toggle:hover { border-color: var(--v2-border-light); color: var(--v2-text-secondary); }
+        .hidden-stables-toggle .toggle-icon { transition: transform 0.2s; font-size: 10px; }
+        .hidden-stables-toggle.open .toggle-icon { transform: rotate(90deg); }
+
+        /* Sortable table headers (preserved from original) */
         .sortable-header { cursor: pointer; user-select: none; white-space: nowrap; }
         .sortable-header:hover { color: var(--v2-accent-text); }
         .sortable-header.sorted { color: var(--v2-accent-text); }
         .sort-icon { font-size: 10px; margin-left: 2px; opacity: 0.5; }
         .sortable-header.sorted .sort-icon { opacity: 1; }
-        /* View toggle */
+
+        /* View toggle (preserved from original) */
         .view-toggle { display: flex; gap: 4px; background: var(--v2-bg-input); border-radius: var(--v2-radius-sm); padding: 2px; }
         .view-toggle-btn { padding: 4px 12px; border: none; background: transparent; color: var(--v2-text-muted); font-size: 12px; cursor: pointer; border-radius: var(--v2-radius-sm); transition: all 0.2s; }
         .view-toggle-btn.active { background: var(--v2-bg-card); color: var(--v2-text-primary); box-shadow: var(--v2-shadow-sm); }
+
+        /* Protocol-specific amount colors */
+        .defi-card[data-protocol="Indigo"] .defi-card-amount { color: #6366f1; }
+        .defi-card[data-protocol="Strike"] .defi-card-amount { color: #10b981; }
+        .defi-card[data-protocol="Liqwid"] .defi-card-amount { color: #06b6d4; }
+        .defi-card[data-protocol="Surf Lending"] .defi-card-amount { color: #3b82f6; }
+        .defi-card[data-protocol="Iagon"] .defi-card-amount { color: #f59e0b; }
+        .defi-card[data-protocol="Helium"] .defi-card-amount { color: #8b5cf6; }
+        .defi-card.delegation .defi-card-amount { color: #4a8aff; }
+        .defi-card.exchange-staked .defi-card-amount { color: #3b82f6; }
+
+        /* Refresh bar */
+        .defi-refresh-bar { position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 9999; opacity: 0; transition: opacity 0.3s; }
+        .defi-refresh-bar.active { opacity: 1; }
+        .defi-refresh-bar-fill { height: 100%; background: linear-gradient(90deg, var(--v2-accent, #00d26a), #06b6d4, var(--v2-accent, #00d26a)); background-size: 200% 100%; animation: defi-refresh-sweep 1.4s ease-in-out infinite; }
+        @keyframes defi-refresh-sweep { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     </style>
 </head>
 <body>
+    <div class="defi-refresh-bar" id="defiRefreshBar"><div class="defi-refresh-bar-fill"></div></div>
     <div class="v2-layout" id="v2Layout">
         <nav class="v2-sidebar" id="v2Sidebar"></nav>
         <main class="v2-main">
@@ -43,11 +180,13 @@
             </header>
 
             <div class="v2-content">
-                <!-- Summary -->
-                <div class="v2-stats-grid v2-fade-in" style="margin-bottom:24px">
-                    <div class="v2-stat-card"><div class="v2-stat-label">Total DeFi Value</div><div class="v2-stat-value v2-blur" id="defiTotal"><span class="v2-skeleton v2-skeleton-value"></span></div></div>
-                    <div class="v2-stat-card"><div class="v2-stat-label">Staked Value</div><div class="v2-stat-value v2-blur" id="stakedTotal"><span class="v2-skeleton v2-skeleton-value"></span></div></div>
-                    <div class="v2-stat-card"><div class="v2-stat-label">Protocols</div><div class="v2-stat-value" id="protocolCount"><span class="v2-skeleton v2-skeleton-value"></span></div></div>
+                <!-- Summary Stats -->
+                <div class="defi-summary-grid v2-fade-in">
+                    <div class="defi-stat-card"><div class="defi-stat-label">Total DeFi Value</div><div class="defi-stat-value accent v2-blur" id="defiTotal"><span class="v2-skeleton v2-skeleton-value"></span></div></div>
+                    <div class="defi-stat-card"><div class="defi-stat-label">Staked Value</div><div class="defi-stat-value v2-blur" id="stakedTotal"><span class="v2-skeleton v2-skeleton-value"></span></div></div>
+                    <div class="defi-stat-card"><div class="defi-stat-label">Pending Rewards</div><div class="defi-stat-value amber v2-blur" id="pendingTotal"><span class="v2-skeleton v2-skeleton-value"></span></div></div>
+                    <div class="defi-stat-card"><div class="defi-stat-label">Protocols</div><div class="defi-stat-value" id="protocolCount"><span class="v2-skeleton v2-skeleton-value"></span></div></div>
+                    <div class="defi-stat-card"><div class="defi-stat-label">Positions</div><div class="defi-stat-value" id="positionCount"><span class="v2-skeleton v2-skeleton-value"></span></div></div>
                 </div>
 
                 <!-- View toggle -->
@@ -59,10 +198,13 @@
                     </div>
                 </div>
 
-                <!-- Protocol Cards View -->
-                <div class="protocol-grid v2-fade-in" id="protocolGrid">
-                    <div class="v2-skeleton" style="height:200px;border-radius:var(--v2-radius-lg)"></div>
-                    <div class="v2-skeleton" style="height:200px;border-radius:var(--v2-radius-lg)"></div>
+                <!-- Card-based sections -->
+                <div id="defiSections" class="v2-fade-in">
+                    <div class="defi-card-grid">
+                        <div class="v2-skeleton" style="height:200px;border-radius:var(--v2-radius-lg)"></div>
+                        <div class="v2-skeleton" style="height:200px;border-radius:var(--v2-radius-lg)"></div>
+                        <div class="v2-skeleton" style="height:200px;border-radius:var(--v2-radius-lg)"></div>
+                    </div>
                 </div>
 
                 <!-- Table View (hidden by default) -->
@@ -76,16 +218,40 @@
     <script src="/next/static/js/v2-app.js"></script>
     <script src="/next/static/js/v2-shell.js"></script>
     <script>
+        /* ============================================================
+           STATE
+           ============================================================ */
         let defiPrices = {};
         let allDefiRows = [];
         let defiSortCol = 'value';
         let defiSortDir = 'desc';
         let defiView = 'cards';
+        let _walletAddresses = { cardano: [], solana: [], ethereum: [] };
 
+        // Governance links for DeFi protocols
+        const GOVERNANCE_LINKS = {
+            'INDY': { url: 'https://app.indigoprotocol.io/governance', name: 'Indigo' },
+            'LQ': { url: 'https://app.liqwid.finance/agora', name: 'Liqwid' },
+            'MIN': { url: 'https://app.minswap.org/governance', name: 'Minswap' },
+            'SUNDAE': { url: 'https://governance.sundaeswap.finance/', name: 'SundaeSwap' },
+            'STRIKE': { url: 'https://app.strikefinance.org/', name: 'Strike' },
+            'WRT': { url: 'https://app.wingriders.com/voting', name: 'WingRiders' },
+            'LENFI': { url: 'https://app.lenfi.io/governance', name: 'Lenfi' },
+            'OPTIM': { url: 'https://dao.optim.finance/', name: 'Optim' },
+            'VYFI': { url: 'https://app.vyfi.io/governance', name: 'VyFi' },
+            'FLDT': { url: 'https://app.fluidtokens.com', name: 'FluidTokens' },
+            'AGIX': { url: 'https://voting.singularitynet.io', name: 'SingularityNET' }
+        };
+
+        const KNOWN_STABLECOINS = ['USDC', 'USDT', 'DAI', 'USDM', 'iUSD', 'DJED', 'BUSD', 'TUSD'];
+
+        /* ============================================================
+           INIT
+           ============================================================ */
         document.addEventListener('DOMContentLoaded', () => {
             v2InitShell('defi');
             loadDefi();
-            document.getElementById('refreshDefiBtn').addEventListener('click', refreshDefi);
+            document.getElementById('refreshDefiBtn').addEventListener('click', () => refreshDefi());
             document.getElementById('viewCards').addEventListener('click', () => setDefiView('cards'));
             document.getElementById('viewTable').addEventListener('click', () => setDefiView('table'));
         });
@@ -94,172 +260,891 @@
             defiView = view;
             document.getElementById('viewCards').classList.toggle('active', view === 'cards');
             document.getElementById('viewTable').classList.toggle('active', view === 'table');
-            document.getElementById('protocolGrid').style.display = view === 'cards' ? '' : 'none';
+            document.getElementById('defiSections').style.display = view === 'cards' ? '' : 'none';
             document.getElementById('defiTableView').style.display = view === 'table' ? '' : 'none';
             if (view === 'table') renderDefiTable();
         }
 
+        /* ============================================================
+           HELPERS
+           ============================================================ */
+        function getLogoKitUrl(symbol, size) {
+            return 'https://img.logokit.com/crypto/' + encodeURIComponent((symbol || '').toUpperCase()) + '?size=' + (size || 32);
+        }
+
+        function getChainBadge(chain) {
+            var c = (chain || 'cardano').toLowerCase();
+            return '<span class="defi-badge-chain ' + escapeAttr(c) + '">' + escapeHtml(c.charAt(0).toUpperCase() + c.slice(1)) + '</span>';
+        }
+
+        function getTokenPrice(symbol) {
+            var key = (symbol || '').toUpperCase();
+            var priceInfo = defiPrices[symbol] || defiPrices[key] || {};
+            return typeof priceInfo === 'object' ? (parseFloat(priceInfo.usd) || 0) : (parseFloat(priceInfo) || 0);
+        }
+
+        function logoImgHtml(symbol, logoUrl, size) {
+            var sz = size || 32;
+            var src = logoUrl || getLogoKitUrl(symbol, sz);
+            var fb = escapeHtml((symbol || '???').substring(0, 3));
+            return '<div class="defi-card-logo" style="width:' + sz + 'px;height:' + sz + 'px;">' +
+                '<img src="' + escapeAttr(src) + '" alt="' + escapeAttr(symbol) + '" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">' +
+                '<span class="logo-fallback" style="display:none">' + fb + '</span></div>';
+        }
+
+        function setRefreshBar(active) {
+            var bar = document.getElementById('defiRefreshBar');
+            if (bar) bar.classList.toggle('active', active);
+        }
+
+        function refreshSvg(size) {
+            var s = size || 14;
+            return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>';
+        }
+
+        /* ============================================================
+           DATA LOADING — Multi-phase like V1
+           ============================================================ */
         async function loadDefi() {
+            setRefreshBar(true);
             try {
-                const [defiResp, holdingsResp, instantResp, pricesResp] = await Promise.allSettled([
+                // Phase 1: Base data in parallel
+                var results = await Promise.allSettled([
                     v2Fetch('/defi/summary'),
                     v2Fetch('/portfolio/all-holdings'),
                     v2Fetch('/portfolio/instant'),
                     v2Fetch('/prices/all'),
+                    v2Fetch('/wallets'),
+                    v2Fetch('/exchanges/coinbase').catch(function() { return { ok: false }; }),
+                    v2Fetch('/portfolio/assets').catch(function() { return { ok: false }; }),
                 ]);
 
-                let defiData = null;
-                let holdingsData = null;
-                let instantData = null;
+                var defiData = null, holdingsData = null, instantData = null, walletsData = null;
+                var exchangeData = null, nativeAssetsData = null;
 
-                if (defiResp.status === 'fulfilled' && defiResp.value.ok) {
-                    defiData = await defiResp.value.json();
-                }
-                if (holdingsResp.status === 'fulfilled' && holdingsResp.value.ok) {
-                    holdingsData = await holdingsResp.value.json();
-                }
-                if (instantResp.status === 'fulfilled' && instantResp.value.ok) {
-                    instantData = await instantResp.value.json();
-                }
-                if (pricesResp.status === 'fulfilled' && pricesResp.value.ok) {
-                    const priceData = await pricesResp.value.json();
+                if (results[0].status === 'fulfilled' && results[0].value.ok) defiData = await results[0].value.json();
+                if (results[1].status === 'fulfilled' && results[1].value.ok) holdingsData = await results[1].value.json();
+                if (results[2].status === 'fulfilled' && results[2].value.ok) instantData = await results[2].value.json();
+                if (results[3].status === 'fulfilled' && results[3].value.ok) {
+                    var priceData = await results[3].value.json();
                     defiPrices = priceData.prices || priceData || {};
                 }
+                if (results[4].status === 'fulfilled' && results[4].value.ok) walletsData = await results[4].value.json();
+                if (results[5].status === 'fulfilled' && results[5].value && results[5].value.ok) exchangeData = await results[5].value.json();
+                if (results[6].status === 'fulfilled' && results[6].value && results[6].value.ok) nativeAssetsData = await results[6].value.json();
 
-                renderDefi(defiData, holdingsData, instantData);
+                var wallets = walletsData ? (walletsData.wallets || []) : [];
+                var cardanoWallets = wallets.filter(function(w) { return w.blockchain === 'cardano'; });
+                var solanaWallets = wallets.filter(function(w) { return w.blockchain === 'solana'; });
+                var ethereumWallets = wallets.filter(function(w) { return w.blockchain === 'ethereum'; });
+
+                _walletAddresses = {
+                    cardano: cardanoWallets.map(function(w) { return w.address; }),
+                    solana: solanaWallets.map(function(w) { return w.address; }),
+                    ethereum: ethereumWallets.map(function(w) { return w.address; }),
+                };
+
+                // Extract exchange stablecoins
+                var exchangeStablecoins = [];
+                if (exchangeData && exchangeData.assets) {
+                    exchangeStablecoins = exchangeData.assets.filter(function(a) { return KNOWN_STABLECOINS.indexOf(a.currency) !== -1; }).map(function(a) { return { symbol: a.currency, balance: parseFloat(a.balance) || 0, chain: 'exchange' }; });
+                }
+
+                // Extract exchange staked assets
+                var exchangeStakedAssets = [];
+                if (exchangeData && exchangeData.assets) {
+                    exchangeData.assets.forEach(function(a) {
+                        if (parseFloat(a.staked_balance) > 0) {
+                            exchangeStakedAssets.push({
+                                currency: a.currency,
+                                staked_balance: parseFloat(a.staked_balance),
+                                usd_value: (parseFloat(a.staked_balance) || 0) * getTokenPrice(a.currency),
+                                apy: parseFloat(a.apy) || 0,
+                                exchangeName: 'Coinbase',
+                            });
+                        }
+                    });
+                }
+
+                // Extract native stablecoins from other chains
+                var nativeStablecoins = [];
+                if (nativeAssetsData && nativeAssetsData.assets) {
+                    nativeStablecoins = nativeAssetsData.assets.filter(function(a) {
+                        return KNOWN_STABLECOINS.indexOf(a.ticker || a.asset_name || '') !== -1;
+                    }).map(function(a) { return { symbol: a.ticker || a.asset_name, balance: parseFloat(a.total_quantity) || 0, chain: a.blockchain || 'cardano' }; });
+                }
+
+                // Phase 2: Fetch per-wallet staking + governance in parallel
+                var allStaking = {};
+                var adaDelegation = { totalAda: 0, stakedAda: 0, pools: [], undelegatedWallets: [] };
+
+                cardanoWallets.forEach(function(w) { adaDelegation.totalAda += parseFloat(w.balance) || 0; });
+
+                var walletPromises = cardanoWallets.map(function(wallet) {
+                    return Promise.allSettled([
+                        v2Fetch('/wallets/' + wallet.address + '/governance'),
+                        v2Fetch('/defi/staking/' + wallet.address),
+                    ]).then(function(r) { return { wallet: wallet, results: r }; });
+                });
+
+                var walletResults = await Promise.allSettled(walletPromises);
+
+                for (var i = 0; i < walletResults.length; i++) {
+                    if (walletResults[i].status !== 'fulfilled') continue;
+                    var wr = walletResults[i].value;
+                    var wallet = wr.wallet;
+                    var govResult = wr.results[0];
+                    var stakingResult = wr.results[1];
+                    var walletBalance = parseFloat(wallet.balance) || 0;
+
+                    // Process governance
+                    var walletDelegated = false;
+                    if (govResult.status === 'fulfilled' && govResult.value.ok) {
+                        try {
+                            var govData = await govResult.value.json();
+                            if (govData.pool && govData.pool.pool_id) {
+                                walletDelegated = true;
+                                adaDelegation.stakedAda += walletBalance;
+                                var existingPool = adaDelegation.pools.find(function(p) { return p.pool_id === govData.pool.pool_id; });
+                                if (!existingPool) {
+                                    adaDelegation.pools.push({
+                                        pool_id: govData.pool.pool_id,
+                                        name: govData.pool.name || 'Unknown Pool',
+                                        ticker: govData.pool.ticker || '',
+                                    });
+                                }
+                            }
+                        } catch (e) { console.error('Gov parse error:', e); }
+                    }
+                    if (!walletDelegated && walletBalance > 1) {
+                        adaDelegation.undelegatedWallets.push({ address: wallet.address, label: wallet.label || null, balance: walletBalance });
+                    }
+
+                    // Process staking
+                    try {
+                        if (stakingResult.status !== 'fulfilled' || !stakingResult.value.ok) continue;
+                        var stakingData = await stakingResult.value.json();
+                        var protocols = stakingData.protocols || {};
+
+                        Object.keys(protocols).forEach(function(protocol) {
+                            var data = protocols[protocol];
+                            if (!allStaking[protocol]) {
+                                allStaking[protocol] = {
+                                    staked: {},
+                                    pending_rewards: 0, pending_indy: 0, pending_ada: 0,
+                                    accumulated_rewards: 0, reward_token: data.reward_token || '',
+                                    apy: data.apy || null, claimed_rewards: 0, total_earned: 0,
+                                    rewards_url: data.rewards_url || null,
+                                    blockchain: data.blockchain || 'cardano',
+                                    category: data.category || null,
+                                    status: data.status || null,
+                                };
+                            }
+                            (data.staked || []).forEach(function(stake) {
+                                if (!allStaking[protocol].staked[stake.token]) {
+                                    allStaking[protocol].staked[stake.token] = { amount: 0, positions: 0, logo_url: stake.logo_url };
+                                }
+                                allStaking[protocol].staked[stake.token].amount += parseFloat(stake.amount) || 0;
+                                allStaking[protocol].staked[stake.token].positions += (stake.positions || 0);
+                                if (stake.logo_url && !allStaking[protocol].staked[stake.token].logo_url) {
+                                    allStaking[protocol].staked[stake.token].logo_url = stake.logo_url;
+                                }
+                                if ((parseFloat(stake.amount) || 0) > 0 && allStaking[protocol].status) {
+                                    allStaking[protocol].status = null;
+                                }
+                            });
+
+                            if (protocol === 'Indigo') {
+                                allStaking[protocol].pending_indy += parseFloat(data.pending_indy) || 0;
+                                allStaking[protocol].pending_ada += parseFloat(data.pending_ada) || 0;
+                            } else {
+                                allStaking[protocol].pending_rewards += parseFloat(data.pending_rewards) || 0;
+                                allStaking[protocol].accumulated_rewards += parseFloat(data.accumulated_rewards) || 0;
+                            }
+                            allStaking[protocol].claimed_rewards += parseFloat(data.claimed_rewards) || 0;
+                            allStaking[protocol].total_earned += parseFloat(data.total_earned) || 0;
+                            if (data.apy && !allStaking[protocol].apy) allStaking[protocol].apy = data.apy;
+                            if (data.rewards_url && !allStaking[protocol].rewards_url) allStaking[protocol].rewards_url = data.rewards_url;
+                        });
+                    } catch (e) { console.error('Staking parse error:', e); }
+                }
+
+                // Phase 2b: Helium rewards for Solana wallets
+                if (solanaWallets.length > 0) {
+                    var heliumPromises = solanaWallets.map(function(w) {
+                        return v2Fetch('/defi/helium/' + w.address).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; });
+                    });
+                    var heliumResults = await Promise.all(heliumPromises);
+                    heliumResults.forEach(function(hd) {
+                        if (!hd || !hd.protocols) return;
+                        Object.keys(hd.protocols).forEach(function(protocol) {
+                            var data = hd.protocols[protocol];
+                            if (!allStaking[protocol]) {
+                                allStaking[protocol] = { staked: {}, pending_rewards: 0, reward_token: data.reward_token || '', rewards_url: data.rewards_url || null, blockchain: data.blockchain || 'solana', category: data.category || null, status: data.status || null };
+                            }
+                            (data.staked || []).forEach(function(stake) {
+                                if (!allStaking[protocol].staked[stake.token]) {
+                                    allStaking[protocol].staked[stake.token] = { amount: 0, positions: 0, logo_url: stake.logo_url };
+                                }
+                                allStaking[protocol].staked[stake.token].amount += parseFloat(stake.amount) || 0;
+                                allStaking[protocol].staked[stake.token].positions += (stake.positions || 0);
+                            });
+                            allStaking[protocol].pending_rewards += parseFloat(data.pending_rewards) || 0;
+                        });
+                    });
+                }
+
+                // Render everything
+                renderFullDefi(allStaking, defiData, holdingsData, instantData, adaDelegation, exchangeStablecoins, nativeStablecoins, exchangeStakedAssets);
+
             } catch(e) {
                 console.error('DeFi load error:', e);
-                setSafeHTML(document.getElementById('protocolGrid'), '<div class="v2-empty" style="grid-column:1/-1"><div class="v2-empty-title">Could not load DeFi data</div></div>');
+                setSafeHTML(document.getElementById('defiSections'), '<div class="v2-empty" style="padding:64px;text-align:center"><div class="v2-empty-title">Could not load DeFi data</div><div class="v2-empty-desc">' + escapeHtml(e.message || '') + '</div></div>');
+            } finally {
+                setRefreshBar(false);
             }
         }
 
-        function getTokenPrice(symbol) {
-            const priceInfo = defiPrices[symbol] || defiPrices[(symbol || '').toUpperCase()] || {};
-            return typeof priceInfo === 'object' ? (parseFloat(priceInfo.usd) || 0) : (parseFloat(priceInfo) || 0);
-        }
-
-        function renderDefi(defiData, holdingsData, instantData) {
-            const allHoldings = holdingsData ? (holdingsData.holdings || []) : [];
-            const stakingHoldings = allHoldings.filter(h => h.source === 'staking');
-            const defiHoldings = allHoldings.filter(h => h.source === 'defi' || h.source === 'defi_summary');
-
-            const bd = instantData ? (instantData.breakdown || {}) : {};
-            const totalStaked = parseFloat(bd.staking) || 0;
-            const totalDefi = parseFloat(bd.defi) || 0;
-
-            const defiPositions = defiData ? (defiData.all_positions || []) : [];
-            const protocolNames = new Set();
-            defiPositions.forEach(p => protocolNames.add(p.protocol || 'Unknown'));
-            stakingHoldings.forEach(h => protocolNames.add('Staking'));
-
-            setText('defiTotal', formatCurrency(totalDefi + totalStaked));
-            setText('stakedTotal', formatCurrency(totalStaked));
-            setText('protocolCount', (protocolNames.size || (stakingHoldings.length > 0 ? 1 : 0) + (defiPositions.length > 0 ? defiPositions.length : 0)).toString());
-
-            const grid = document.getElementById('protocolGrid');
-
-            if (stakingHoldings.length === 0 && defiPositions.length === 0 && defiHoldings.length === 0) {
-                setSafeHTML(grid, '<div class="v2-empty" style="grid-column:1/-1;padding:64px"><div class="v2-empty-icon" style="font-size:48px;opacity:0.2">&#127981;</div><div class="v2-empty-title">No DeFi positions detected</div><div class="v2-empty-desc">DeFi positions and staking are auto-detected from your wallet addresses. Add wallets to see positions here.</div></div>');
-                return;
-            }
-
-            // Build unified row list for table view
+        /* ============================================================
+           RENDER — Full V1-level content
+           ============================================================ */
+        function renderFullDefi(allStaking, defiData, holdingsData, instantData, adaDelegation, exchangeStablecoins, nativeStablecoins, exchangeStakedAssets) {
             allDefiRows = [];
+            var html = '';
+            var totalStakedValue = 0;
+            var totalPendingValue = 0;
+            var totalStableValue = 0;
+            var stakedCount = 0;
+            var protocolSet = new Set();
 
-            let html = '';
+            // Separate protocols by category
+            var allProtocols = Object.keys(allStaking);
+            var depinProtocols = allProtocols.filter(function(p) { return allStaking[p].category === 'depin'; });
+            var stakingProtocols = allProtocols.filter(function(p) { return allStaking[p].category !== 'depin'; });
 
-            // Staking positions from all-holdings
-            if (stakingHoldings.length > 0) {
-                const stakingTotal = stakingHoldings.reduce((sum, h) => sum + (parseFloat(h.value_usd) || 0), 0);
-                const stakingChain = (stakingHoldings[0].blockchain || 'cardano').toLowerCase();
-                html += '<div class="protocol-card"><div class="protocol-header"><div>' +
-                    '<div class="protocol-name">Staked Assets</div>' +
-                    '<span class="v2-chain-badge chain-' + escapeAttr(stakingChain) + ' protocol-chain">' + escapeHtml(stakingChain) + '</span>' +
-                    '</div><div class="v2-stat-value v2-blur" style="font-size:16px">' + formatCurrency(stakingTotal) + '</div></div>' +
-                    '<div class="protocol-positions">';
-                stakingHoldings.forEach(h => {
-                    const amount = parseFloat(h.amount) || 0;
-                    const valueUsd = parseFloat(h.value_usd) || 0;
-                    html += '<div class="position-row"><span>' + escapeHtml(h.symbol || h.name || 'Token') + ': <span class="v2-blur">' + formatAmount(amount) + '</span></span>' +
-                        '<span class="v2-blur">' + formatCurrency(valueUsd) + '</span></div>';
-                    allDefiRows.push({ protocol: 'Staking', token: h.symbol || h.name || 'Token', type: 'Staked', amount: amount, value: valueUsd });
-                });
-                html += '</div></div>';
-            }
+            var positions = defiData ? (defiData.positions_by_category || {}) : {};
+            var liquidStakingPositions = positions['Liquid Staking'] || [];
+            var governancePositions = positions['Governance Tokens'] || [];
+            var hasAdaDelegation = adaDelegation && adaDelegation.totalAda > 0;
 
-            // DeFi governance positions from defi summary
-            if (defiPositions.length > 0) {
-                const byProtocol = {};
-                defiPositions.forEach(p => {
-                    const key = p.protocol || 'Unknown';
-                    if (!byProtocol[key]) byProtocol[key] = [];
-                    byProtocol[key].push(p);
-                });
+            // ========================================
+            // SECTION 1: STAKED POSITIONS
+            // ========================================
+            var hasStakedSection = stakingProtocols.length > 0 || hasAdaDelegation || liquidStakingPositions.length > 0 || (exchangeStakedAssets && exchangeStakedAssets.length > 0);
 
-                Object.entries(byProtocol).forEach(([name, items]) => {
-                    const protoChain = (items[0].blockchain || items[0].chain || 'cardano').toLowerCase();
-                    // Calculate protocol total USD
-                    let protoTotal = 0;
-                    items.forEach(p => {
-                        const qty = parseFloat(p.quantity) || 0;
-                        const token = (p.token || '').toUpperCase();
-                        const price = getTokenPrice(token);
-                        protoTotal += qty * price;
-                    });
+            if (hasStakedSection) {
+                html += '<div class="defi-section"><div class="defi-section-header">' +
+                    '<span class="defi-section-icon">&#128274;</span>' +
+                    '<span class="defi-section-title">Staked Positions</span>' +
+                    '<button class="defi-section-refresh" id="stakingRefreshBtn">' + refreshSvg(12) + ' Refresh</button>' +
+                    '</div><div class="defi-card-grid">';
 
-                    html += '<div class="protocol-card"><div class="protocol-header"><div>' +
-                        '<div class="protocol-name">' + escapeHtml(name) + '</div>' +
-                        '<span class="v2-chain-badge chain-' + escapeAttr(protoChain) + ' protocol-chain">' + escapeHtml(protoChain) + '</span>' +
-                        ' <span class="v2-badge v2-badge-neutral" style="margin-left:4px">Governance</span>' +
+                // --- ADA Delegation Card ---
+                if (hasAdaDelegation) {
+                    var adaPrice = getTokenPrice('ADA');
+                    var stakedUsd = adaDelegation.stakedAda * adaPrice;
+                    totalStakedValue += stakedUsd;
+                    if (adaDelegation.stakedAda > 0) stakedCount++;
+                    protocolSet.add('ADA Delegation');
+
+                    var pctDelegated = adaDelegation.totalAda > 0 ? Math.floor((adaDelegation.stakedAda / adaDelegation.totalAda) * 10000) / 100 : 0;
+                    var totalFormatted = adaDelegation.totalAda.toLocaleString(undefined, { maximumFractionDigits: 0 });
+
+                    var poolInfoHtml = '';
+                    if (adaDelegation.pools.length > 0) {
+                        var poolLabels = adaDelegation.pools.map(function(p) { return p.ticker ? '[' + escapeHtml(p.ticker) + '] ' + escapeHtml(p.name) : escapeHtml(p.name); });
+                        poolInfoHtml = '<div class="defi-pool-info">' + poolLabels.join(', ') + '</div>';
+                    }
+
+                    var undelegatedHtml = '';
+                    if (adaDelegation.undelegatedWallets.length > 0) {
+                        undelegatedHtml = ' (' + adaDelegation.undelegatedWallets.length + ' undelegated)';
+                    }
+
+                    html += '<div class="defi-card delegation" data-protocol="ADA Delegation">' +
+                        '<div class="defi-card-header">' +
+                        logoImgHtml('ADA', null, 32) +
+                        '<span class="defi-card-protocol">' + getChainBadge('cardano') + ' ADA Delegation</span>' +
+                        '<div class="defi-card-badges"><span class="defi-badge defi-badge-liquid">Liquid</span></div>' +
                         '</div>' +
-                        (protoTotal > 0 ? '<div class="v2-stat-value v2-blur" style="font-size:16px">' + formatCurrency(protoTotal) + '</div>' : '') +
-                        '</div><div class="protocol-positions">';
-                    items.forEach(p => {
-                        const qty = parseFloat(p.quantity) || 0;
-                        const token = (p.token || '').toUpperCase();
-                        const price = getTokenPrice(token);
-                        const usdVal = qty * price;
-                        html += '<div class="position-row"><span>' + escapeHtml(p.token || p.asset_name || 'Token') + ': <span class="v2-blur">' + formatAmount(qty) + '</span></span>' +
-                            '<span class="v2-blur">' + (usdVal > 0 ? formatCurrency(usdVal) : '<span style="color:var(--v2-text-muted)">' + escapeHtml(p.type_label || p.type || '') + '</span>') + '</span></div>';
-                        allDefiRows.push({ protocol: name, token: p.token || p.asset_name || 'Token', type: p.type_label || p.type || 'Governance', amount: qty, value: usdVal });
+                        '<div class="defi-card-amount v2-blur">' + escapeHtml(totalFormatted) + ' <span style="font-size:14px;font-weight:400">ADA</span></div>' +
+                        '<div class="defi-card-value v2-blur">' + formatCurrency(stakedUsd) + '</div>' +
+                        '<div class="defi-delegation-detail v2-blur">' + escapeHtml(pctDelegated.toString()) + '% delegated' + escapeHtml(undelegatedHtml) + '</div>' +
+                        poolInfoHtml +
+                        '</div>';
+
+                    allDefiRows.push({ protocol: 'ADA Delegation', token: 'ADA', type: 'Delegated', amount: adaDelegation.stakedAda, value: stakedUsd, chain: 'cardano' });
+                }
+
+                // --- Protocol Staking Cards ---
+                stakingProtocols.forEach(function(protocol) {
+                    var protocolData = allStaking[protocol];
+                    var stakes = protocolData.staked;
+                    var rewardsUrl = protocolData.rewards_url;
+                    var stakingChain = protocolData.blockchain || 'cardano';
+                    protocolSet.add(protocol);
+
+                    Object.keys(stakes).forEach(function(token) {
+                        var data = stakes[token];
+                        var tokenPrice = getTokenPrice(token);
+                        var usdValue = data.amount * tokenPrice;
+                        totalStakedValue += usdValue;
+                        stakedCount++;
+
+                        var govInfo = GOVERNANCE_LINKS[token];
+                        var tokenLogoUrl = data.logo_url || getLogoKitUrl(token, 32);
+
+                        // Pending rewards
+                        var pendingHtml = '';
+                        var totalPendingUsd = 0;
+
+                        if (protocol === 'Indigo') {
+                            var pendingIndy = protocolData.pending_indy || 0;
+                            var pendingAda = protocolData.pending_ada || 0;
+                            if (pendingIndy > 0 || pendingAda > 0) {
+                                var indyUsd = pendingIndy * getTokenPrice('INDY');
+                                var adaUsd = pendingAda * getTokenPrice('ADA');
+                                totalPendingUsd = indyUsd + adaUsd;
+                                totalPendingValue += totalPendingUsd;
+                                pendingHtml = '<div class="defi-card-pending"><div class="defi-pending-label">Pending Rewards</div>';
+                                if (pendingIndy > 0) {
+                                    pendingHtml += '<div class="defi-pending-row"><span class="defi-pending-amount v2-blur">' + pendingIndy.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4}) + ' INDY</span>' +
+                                        (indyUsd > 0 ? '<span class="defi-pending-usd v2-blur">' + formatCurrency(indyUsd) + '</span>' : '') + '</div>';
+                                }
+                                if (pendingAda > 0) {
+                                    pendingHtml += '<div class="defi-pending-row"><span class="defi-pending-amount v2-blur">' + pendingAda.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4}) + ' ADA</span>' +
+                                        (adaUsd > 0 ? '<span class="defi-pending-usd v2-blur">' + formatCurrency(adaUsd) + '</span>' : '') + '</div>';
+                                }
+                                pendingHtml += '</div>';
+                            }
+                        } else if (protocol === 'Liqwid') {
+                            var pendRew = protocolData.pending_rewards || 0;
+                            var claimedRew = protocolData.claimed_rewards || 0;
+                            var totalEarned = protocolData.total_earned || 0;
+                            var rewTk = protocolData.reward_token || 'LQ';
+                            var rewPrice = getTokenPrice(rewTk);
+                            if (pendRew > 0 || claimedRew > 0 || totalEarned > 0) {
+                                var pendUsd = pendRew * rewPrice;
+                                totalPendingUsd = pendUsd;
+                                totalPendingValue += pendUsd;
+                                pendingHtml = '<div class="defi-card-pending"><div class="defi-pending-label">Rewards</div>';
+                                if (pendRew > 0) {
+                                    pendingHtml += '<div class="defi-pending-row"><span class="defi-pending-amount v2-blur">' + pendRew.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4}) + ' ' + escapeHtml(rewTk) + '</span>' +
+                                        (pendUsd > 0 ? '<span class="defi-pending-usd v2-blur">' + formatCurrency(pendUsd) + '</span>' : '') + '</div>';
+                                }
+                                if (claimedRew > 0) {
+                                    pendingHtml += '<div class="defi-pending-row"><span style="font-size:11px;color:var(--v2-text-muted)">Claimed: ' + claimedRew.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4}) + ' ' + escapeHtml(rewTk) + '</span></div>';
+                                }
+                                if (totalEarned > 0) {
+                                    pendingHtml += '<div class="defi-pending-row"><span style="font-size:11px;color:var(--v2-text-muted)">Total Earned: ' + totalEarned.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4}) + ' ' + escapeHtml(rewTk) + '</span></div>';
+                                }
+                                pendingHtml += '</div>';
+                            }
+                        } else if (protocol === 'Strike') {
+                            var pendRew2 = protocolData.pending_rewards || 0;
+                            var accRew = protocolData.accumulated_rewards || 0;
+                            var rewTk2 = protocolData.reward_token || 'STRIKE';
+                            var rewPrice2 = getTokenPrice(rewTk2);
+                            if (pendRew2 > 0 || accRew > 0) {
+                                var pendUsd2 = pendRew2 * rewPrice2;
+                                totalPendingUsd = pendUsd2;
+                                totalPendingValue += pendUsd2;
+                                pendingHtml = '<div class="defi-card-pending"><div class="defi-pending-label">Rewards</div>';
+                                if (pendRew2 > 0) {
+                                    pendingHtml += '<div class="defi-pending-row"><span class="defi-pending-amount v2-blur">' + pendRew2.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4}) + ' ' + escapeHtml(rewTk2) + '</span>' +
+                                        (pendUsd2 > 0 ? '<span class="defi-pending-usd v2-blur">' + formatCurrency(pendUsd2) + '</span>' : '') + '</div>';
+                                }
+                                if (accRew > 0) {
+                                    pendingHtml += '<div class="defi-pending-row"><span style="font-size:11px;color:var(--v2-text-muted)">Accumulated: ' + accRew.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4}) + ' ' + escapeHtml(rewTk2) + '</span></div>';
+                                }
+                                pendingHtml += '</div>';
+                            }
+                        } else {
+                            var pendRew3 = protocolData.pending_rewards || 0;
+                            var rewTk3 = protocolData.reward_token || '';
+                            if (pendRew3 > 0 && rewTk3) {
+                                var rewPrice3 = getTokenPrice(rewTk3);
+                                var pendUsd3 = pendRew3 * rewPrice3;
+                                totalPendingUsd = pendUsd3;
+                                totalPendingValue += pendUsd3;
+                                pendingHtml = '<div class="defi-card-pending"><div class="defi-pending-label">Pending</div>' +
+                                    '<div class="defi-pending-row"><span class="defi-pending-amount v2-blur">' + pendRew3.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4}) + ' ' + escapeHtml(rewTk3) + '</span>' +
+                                    (pendUsd3 > 0 ? '<span class="defi-pending-usd v2-blur">' + formatCurrency(pendUsd3) + '</span>' : '') + '</div></div>';
+                            }
+                        }
+
+                        var hasPending = totalPendingUsd > 0;
+
+                        html += '<div class="defi-card" data-protocol="' + escapeAttr(protocol) + '">' +
+                            '<div class="defi-card-header">' +
+                            logoImgHtml(token, tokenLogoUrl, 32) +
+                            '<span class="defi-card-protocol">' + getChainBadge(stakingChain) + ' ' + escapeHtml(protocol) + '</span>' +
+                            '<div class="defi-card-badges">' +
+                            '<span class="defi-badge defi-badge-staked">Staked</span>' +
+                            (hasPending ? '<span class="defi-badge defi-badge-rewards">Rewards</span>' : '') +
+                            '</div></div>' +
+                            '<div class="defi-card-amount v2-blur">' + data.amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4}) + ' <span style="font-size:14px;font-weight:400">' + escapeHtml(token) + '</span></div>' +
+                            '<div class="defi-card-value v2-blur">' + formatCurrency(usdValue) + '</div>' +
+                            pendingHtml +
+                            '<div class="defi-card-actions">' +
+                            '<span class="defi-card-detail">' + data.positions + ' position' + (data.positions !== 1 ? 's' : '') + '</span>' +
+                            '<div class="defi-card-links">' +
+                            (rewardsUrl ? '<a href="' + escapeAttr(rewardsUrl) + '" target="_blank" rel="noopener" class="defi-action-link">Rewards</a>' : '') +
+                            (govInfo ? '<a href="' + escapeAttr(govInfo.url) + '" target="_blank" rel="noopener" class="defi-action-link gov-link">Vote</a>' : '') +
+                            '</div></div></div>';
+
+                        allDefiRows.push({ protocol: protocol, token: token, type: 'Staked', amount: data.amount, value: usdValue, chain: stakingChain });
                     });
-                    html += '</div></div>';
                 });
+
+                // --- Liquid Staking Cards ---
+                liquidStakingPositions.forEach(function(pos) {
+                    var displayName = pos.token || pos.asset_name;
+                    var tokenPrice = getTokenPrice(displayName);
+                    var usdValue = (parseFloat(pos.quantity) || 0) * tokenPrice;
+                    totalStakedValue += usdValue;
+                    stakedCount++;
+                    protocolSet.add(pos.protocol || 'Liquid Staking');
+
+                    html += '<div class="defi-card liquid-staking" data-protocol="' + escapeAttr(pos.protocol || '') + '">' +
+                        '<div class="defi-card-header">' +
+                        logoImgHtml(displayName, null, 32) +
+                        '<span class="defi-card-protocol">' + getChainBadge(pos.blockchain || 'cardano') + ' ' + escapeHtml(pos.protocol || 'Liquid Staking') + '</span>' +
+                        '<div class="defi-card-badges"><span class="defi-badge defi-badge-liquid">Liquid</span></div>' +
+                        '</div>' +
+                        '<div class="defi-card-amount v2-blur">' + (parseFloat(pos.quantity) || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4}) + ' <span style="font-size:14px;font-weight:400">' + escapeHtml(displayName) + '</span></div>' +
+                        '<div class="defi-card-value v2-blur">' + (usdValue > 0 ? formatCurrency(usdValue) : '--') + '</div>' +
+                        '</div>';
+
+                    allDefiRows.push({ protocol: pos.protocol || 'Liquid Staking', token: displayName, type: 'Liquid Staked', amount: parseFloat(pos.quantity) || 0, value: usdValue, chain: pos.blockchain || 'cardano' });
+                });
+
+                // --- Exchange Staked Cards ---
+                if (exchangeStakedAssets && exchangeStakedAssets.length > 0) {
+                    exchangeStakedAssets.forEach(function(staked) {
+                        var usdValue = staked.usd_value || 0;
+                        totalStakedValue += usdValue;
+                        stakedCount++;
+                        protocolSet.add(staked.exchangeName);
+
+                        var apyBadge = staked.apy > 0 ? '<span class="defi-badge defi-badge-apy">' + (staked.apy * 100).toFixed(2) + '% APY</span>' : '';
+
+                        html += '<div class="defi-card exchange-staked" data-protocol="' + escapeAttr(staked.exchangeName) + '">' +
+                            '<div class="defi-card-header">' +
+                            logoImgHtml(staked.currency, null, 32) +
+                            '<span class="defi-card-protocol">' + escapeHtml(staked.exchangeName) + '</span>' +
+                            '<div class="defi-card-badges"><span class="defi-badge defi-badge-exchange">Exchange</span>' + apyBadge + '</div>' +
+                            '</div>' +
+                            '<div class="defi-card-amount v2-blur">' + staked.staked_balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6}) + ' <span style="font-size:14px;font-weight:400">' + escapeHtml(staked.currency) + '</span></div>' +
+                            '<div class="defi-card-value v2-blur">' + formatCurrency(usdValue) + '</div>' +
+                            '<div class="defi-card-actions"><span class="defi-card-detail" style="font-style:italic">Included in exchange total</span></div>' +
+                            '</div>';
+
+                        allDefiRows.push({ protocol: staked.exchangeName, token: staked.currency, type: 'Exchange Staked', amount: staked.staked_balance, value: usdValue, chain: 'exchange' });
+                    });
+                }
+
+                html += '</div></div>'; // close grid + section
             }
 
-            // DeFi holdings from all-holdings
-            if (defiHoldings.length > 0) {
-                const defiTotal = defiHoldings.reduce((sum, h) => sum + (parseFloat(h.value_usd) || 0), 0);
-                html += '<div class="protocol-card"><div class="protocol-header"><div>' +
-                    '<div class="protocol-name">DeFi Token Holdings</div></div>' +
-                    '<div class="v2-stat-value v2-blur" style="font-size:16px">' + formatCurrency(defiTotal) + '</div>' +
-                    '</div><div class="protocol-positions">';
-                defiHoldings.forEach(h => {
-                    const amount = parseFloat(h.amount) || 0;
-                    const valueUsd = parseFloat(h.value_usd) || 0;
-                    html += '<div class="position-row"><span>' + escapeHtml(h.symbol || h.name || 'Token') + ': <span class="v2-blur">' + formatAmount(amount) + '</span></span>' +
-                        '<span class="v2-blur">' + formatCurrency(valueUsd) + '</span></div>';
-                    allDefiRows.push({ protocol: 'DeFi Holdings', token: h.symbol || h.name || 'Token', type: 'Holding', amount: amount, value: valueUsd });
+            // ========================================
+            // SECTION 2: DePIN
+            // ========================================
+            if (depinProtocols.length > 0) {
+                html += '<div class="defi-section"><div class="defi-section-header">' +
+                    '<span class="defi-section-icon">&#128225;</span>' +
+                    '<span class="defi-section-title">DePIN</span>' +
+                    '<span class="defi-section-count">' + depinProtocols.length + '</span>' +
+                    '</div><div class="defi-card-grid">';
+
+                depinProtocols.forEach(function(protocol) {
+                    var protocolData = allStaking[protocol];
+                    var rewardsUrl = protocolData.rewards_url;
+                    var stakingChain = protocolData.blockchain || 'cardano';
+                    var fallbackToken = protocolData.reward_token || protocol;
+                    protocolSet.add(protocol);
+
+                    var refreshBtnHtml = '<button class="defi-card-refresh" data-protocol="' + escapeAttr(protocol) + '" title="Refresh ' + escapeAttr(protocol) + '">' + refreshSvg(12) + '</button>';
+
+                    // Loading state
+                    if (protocolData.status === 'loading') {
+                        html += '<div class="defi-card defi-card-loading" data-protocol="' + escapeAttr(protocol) + '" id="depin-card-' + escapeAttr(protocol) + '">' +
+                            '<div class="defi-card-header">' + logoImgHtml(fallbackToken, null, 32) +
+                            '<span class="defi-card-protocol">' + getChainBadge(stakingChain) + ' ' + escapeHtml(protocol) + '</span>' +
+                            '<div class="defi-card-badges"><span class="defi-badge defi-badge-depin">DePIN</span></div></div>' +
+                            '<div class="defi-card-loading-msg"><span class="defi-spinner"></span> Scanning staking data...</div></div>';
+                        return;
+                    }
+
+                    // Timeout state
+                    if (protocolData.status === 'timeout') {
+                        html += '<div class="defi-card depin-timeout" data-protocol="' + escapeAttr(protocol) + '" id="depin-card-' + escapeAttr(protocol) + '">' +
+                            '<div class="defi-card-header">' + logoImgHtml(fallbackToken, null, 32) +
+                            '<span class="defi-card-protocol">' + getChainBadge(stakingChain) + ' ' + escapeHtml(protocol) + '</span>' +
+                            '<div class="defi-card-badges"><span class="defi-badge defi-badge-depin">DePIN</span></div>' +
+                            refreshBtnHtml + '</div>' +
+                            '<div class="defi-card-timeout">Data unavailable &mdash; timed out</div></div>';
+                        return;
+                    }
+
+                    // No data state
+                    if (protocolData.status === 'no_staking') {
+                        html += '<div class="defi-card depin-no-data" data-protocol="' + escapeAttr(protocol) + '" id="depin-card-' + escapeAttr(protocol) + '">' +
+                            '<div class="defi-card-header">' + logoImgHtml(fallbackToken, null, 32) +
+                            '<span class="defi-card-protocol">' + getChainBadge(stakingChain) + ' ' + escapeHtml(protocol) + '</span>' +
+                            '<div class="defi-card-badges"><span class="defi-badge defi-badge-depin">DePIN</span></div>' +
+                            refreshBtnHtml + '</div>' +
+                            '<div class="defi-card-timeout">No staked ' + escapeHtml(fallbackToken) + ' found</div>' +
+                            (rewardsUrl ? '<div class="defi-card-actions"><div class="defi-card-links"><a href="' + escapeAttr(rewardsUrl) + '" target="_blank" rel="noopener" class="defi-action-link">Staking</a></div></div>' : '') +
+                            '</div>';
+                        return;
+                    }
+
+                    // Active DePIN data
+                    var stakes = protocolData.staked;
+                    Object.keys(stakes).forEach(function(token) {
+                        var data = stakes[token];
+                        var tokenPrice = getTokenPrice(token);
+                        var usdValue = data.amount * tokenPrice;
+                        totalStakedValue += usdValue;
+                        stakedCount++;
+
+                        var pendingHtml = '';
+                        var pendRew = protocolData.pending_rewards || 0;
+                        var rewTk = protocolData.reward_token || '';
+                        if (pendRew > 0 && rewTk) {
+                            var rewPrice = getTokenPrice(rewTk);
+                            var pendUsd = pendRew * rewPrice;
+                            totalPendingValue += pendUsd;
+                            pendingHtml = '<div class="defi-card-pending"><div class="defi-pending-label">Pending</div>' +
+                                '<div class="defi-pending-row"><span class="defi-pending-amount v2-blur">' + pendRew.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4}) + ' ' + escapeHtml(rewTk) + '</span>' +
+                                (pendUsd > 0 ? '<span class="defi-pending-usd v2-blur">' + formatCurrency(pendUsd) + '</span>' : '') + '</div></div>';
+                        }
+
+                        html += '<div class="defi-card" data-protocol="' + escapeAttr(protocol) + '" id="depin-card-' + escapeAttr(protocol) + '">' +
+                            '<div class="defi-card-header">' + logoImgHtml(token, data.logo_url, 32) +
+                            '<span class="defi-card-protocol">' + getChainBadge(stakingChain) + ' ' + escapeHtml(protocol) + '</span>' +
+                            '<div class="defi-card-badges"><span class="defi-badge defi-badge-depin">DePIN</span></div>' +
+                            refreshBtnHtml + '</div>' +
+                            '<div class="defi-card-amount v2-blur">' + data.amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4}) + ' <span style="font-size:14px;font-weight:400">' + escapeHtml(token) + '</span></div>' +
+                            '<div class="defi-card-value v2-blur">' + formatCurrency(usdValue) + '</div>' +
+                            pendingHtml +
+                            '<div class="defi-card-actions"><span class="defi-card-detail">' + data.positions + ' position' + (data.positions !== 1 ? 's' : '') + '</span>' +
+                            '<div class="defi-card-links">' + (rewardsUrl ? '<a href="' + escapeAttr(rewardsUrl) + '" target="_blank" rel="noopener" class="defi-action-link">Rewards</a>' : '') + '</div></div></div>';
+
+                        allDefiRows.push({ protocol: protocol, token: token, type: 'DePIN', amount: data.amount, value: usdValue, chain: stakingChain });
+                    });
                 });
+
+                html += '</div></div>'; // close grid + section
+            }
+
+            // ========================================
+            // SECTION 3: STABLECOINS
+            // ========================================
+            var walletStablecoins = positions['Stablecoins'] || [];
+            var MIN_STABLE_VALUE = 1.00;
+            var stableTotals = {};
+
+            // Cardano stablecoins
+            walletStablecoins.forEach(function(pos) {
+                if (!stableTotals[pos.asset_name]) stableTotals[pos.asset_name] = { chains: {} };
+                if (!stableTotals[pos.asset_name].chains.cardano) stableTotals[pos.asset_name].chains.cardano = 0;
+                stableTotals[pos.asset_name].chains.cardano += parseFloat(pos.quantity) || 0;
+            });
+
+            // Exchange stablecoins
+            exchangeStablecoins.forEach(function(a) {
+                if (!stableTotals[a.symbol]) stableTotals[a.symbol] = { chains: {} };
+                if (!stableTotals[a.symbol].chains.exchange) stableTotals[a.symbol].chains.exchange = 0;
+                stableTotals[a.symbol].chains.exchange += parseFloat(a.balance) || 0;
+            });
+
+            // Native stablecoins from other chains
+            nativeStablecoins.forEach(function(a) {
+                var chain = a.chain || 'cardano';
+                if (chain === 'cardano') return;
+                if (!stableTotals[a.symbol]) stableTotals[a.symbol] = { chains: {} };
+                if (!stableTotals[a.symbol].chains[chain]) stableTotals[a.symbol].chains[chain] = 0;
+                stableTotals[a.symbol].chains[chain] += parseFloat(a.balance) || 0;
+            });
+
+            var stableKeys = Object.keys(stableTotals);
+            if (stableKeys.length > 0) {
+                var stableEntries = stableKeys.map(function(symbol) {
+                    var chains = stableTotals[symbol].chains;
+                    var total = 0;
+                    Object.keys(chains).forEach(function(c) { total += chains[c]; });
+                    return { symbol: symbol, chains: chains, total: total };
+                }).filter(function(s) { return s.total >= 0.01; }).sort(function(a, b) { return b.total - a.total; });
+
+                var visibleStables = [];
+                var hiddenStables = [];
+                stableEntries.forEach(function(s) {
+                    if (s.total >= MIN_STABLE_VALUE) { visibleStables.push(s); totalStableValue += s.total; }
+                    else { hiddenStables.push(s); }
+                });
+
+                if (visibleStables.length > 0 || hiddenStables.length > 0) {
+                    html += '<div class="defi-section"><div class="defi-section-header">' +
+                        '<span class="defi-section-icon">&#128176;</span>' +
+                        '<span class="defi-section-title">Stablecoins</span>' +
+                        '<span class="defi-section-count">' + stableEntries.length + '</span>' +
+                        '</div><div>';
+
+                    visibleStables.forEach(function(s) {
+                        var chainBadges = Object.keys(s.chains).filter(function(c) { return s.chains[c] > 0; }).map(function(c) { return getChainBadge(c); }).join('');
+                        html += '<div class="defi-gov-line">' +
+                            '<div class="line-logo"><img src="' + escapeAttr(getLogoKitUrl(s.symbol, 28)) + '" alt="' + escapeAttr(s.symbol) + '" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'"><span class="logo-fallback" style="display:none">' + escapeHtml(s.symbol.substring(0, 3)) + '</span></div>' +
+                            '<span class="line-token">' + escapeHtml(s.symbol) + '</span>' +
+                            '<span class="line-chains">' + chainBadges + '</span>' +
+                            '<span class="line-amount v2-blur">' + s.total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '</span>' +
+                            '<span class="line-value v2-blur">~' + formatCurrency(s.total) + '</span></div>';
+                        allDefiRows.push({ protocol: 'Stablecoins', token: s.symbol, type: 'Stablecoin', amount: s.total, value: s.total, chain: 'multi' });
+                    });
+
+                    if (visibleStables.length === 0) {
+                        html += '<div style="padding:8px 0;font-size:13px;color:var(--v2-text-muted)">No stablecoins over $1.00</div>';
+                    }
+
+                    if (hiddenStables.length > 0) {
+                        var hiddenTotal = hiddenStables.reduce(function(sum, s) { return sum + s.total; }, 0);
+                        html += '<button class="hidden-stables-toggle" id="hiddenStablesBtn">' +
+                            '<span class="toggle-icon">&#9654;</span>' +
+                            '<span>Hidden (' + hiddenStables.length + ')</span>' +
+                            '<span style="margin-left:auto;font-family:var(--v2-font-mono)">~' + formatCurrency(hiddenTotal) + '</span></button>' +
+                            '<div id="hiddenStablesContent" style="display:none">';
+                        hiddenStables.forEach(function(s) {
+                            var chainBadges = Object.keys(s.chains).filter(function(c) { return s.chains[c] > 0; }).map(function(c) { return getChainBadge(c); }).join('');
+                            html += '<div class="defi-gov-line" style="opacity:0.7">' +
+                                '<div class="line-logo"><img src="' + escapeAttr(getLogoKitUrl(s.symbol, 28)) + '" alt="' + escapeAttr(s.symbol) + '" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'"><span class="logo-fallback" style="display:none">' + escapeHtml(s.symbol.substring(0, 3)) + '</span></div>' +
+                                '<span class="line-token">' + escapeHtml(s.symbol) + '</span>' +
+                                '<span class="line-chains">' + chainBadges + '</span>' +
+                                '<span class="line-amount v2-blur">' + s.total.toLocaleString(undefined, {minimumFractionDigits: 4, maximumFractionDigits: 6}) + '</span>' +
+                                '<span class="line-value v2-blur">~' + formatCurrency(s.total) + '</span></div>';
+                        });
+                        html += '</div>';
+                    }
+
+                    html += '</div></div>'; // close section
+                }
+            }
+
+            // ========================================
+            // SECTION 4: GOVERNANCE TOKENS
+            // ========================================
+            if (governancePositions.length > 0) {
+                // Sort by value descending
+                governancePositions.sort(function(a, b) { return (parseFloat(b.quantity) || 0) * getTokenPrice(b.asset_name) - (parseFloat(a.quantity) || 0) * getTokenPrice(a.asset_name); });
+
+                html += '<div class="defi-section"><div class="defi-section-header">' +
+                    '<span class="defi-section-icon">&#127963;</span>' +
+                    '<span class="defi-section-title">Governance Tokens</span>' +
+                    '<span class="defi-section-count">' + governancePositions.length + '</span>' +
+                    '</div><div>';
+
+                governancePositions.forEach(function(pos) {
+                    var token = pos.asset_name || pos.token;
+                    var qty = parseFloat(pos.quantity) || 0;
+                    var price = getTokenPrice(token);
+                    var usdVal = qty * price;
+                    var govLink = GOVERNANCE_LINKS[token];
+                    var logoUrl = pos.logo_url || getLogoKitUrl(token, 28);
+
+                    html += '<div class="defi-gov-line">' +
+                        '<div class="line-logo"><img src="' + escapeAttr(logoUrl) + '" alt="' + escapeAttr(token) + '" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'"><span class="logo-fallback" style="display:none">' + escapeHtml(token.substring(0, 3)) + '</span></div>' +
+                        '<span class="line-token">' + escapeHtml(token) + '</span>' +
+                        '<span class="line-amount v2-blur">' + (pos.quantity_formatted || formatAmount(qty)) + '</span>' +
+                        (usdVal > 0 ? '<span class="line-value v2-blur">' + formatCurrency(usdVal) + '</span>' : '<span class="line-value" style="color:var(--v2-text-muted)">--</span>') +
+                        (govLink ? '<span class="line-action"><a href="' + escapeAttr(govLink.url) + '" target="_blank" rel="noopener" class="defi-action-link gov-link" style="font-size:11px;padding:2px 8px">Vote</a></span>' : '') +
+                        '</div>';
+
+                    allDefiRows.push({ protocol: pos.protocol || 'Governance', token: token, type: 'Governance', amount: qty, value: usdVal, chain: 'cardano' });
+                });
+
+                html += '</div></div>'; // close section
+            }
+
+            // ========================================
+            // SECTION 5: OTHER DEFI TOKEN CATEGORIES
+            // ========================================
+            var otherCategories = ['Liquidity Pool Tokens', 'Staking Receipts', 'Protocol Receipts', 'Synthetic Assets', 'Reserve Tokens'];
+            var categoryIcons = {
+                'Liquidity Pool Tokens': '&#128177;',
+                'Staking Receipts': '&#128196;',
+                'Protocol Receipts': '&#128195;',
+                'Synthetic Assets': '&#128181;',
+                'Reserve Tokens': '&#127974;'
+            };
+
+            otherCategories.forEach(function(category) {
+                var catPositions = positions[category] || [];
+                if (catPositions.length === 0) return;
+
+                html += '<div class="defi-section"><div class="defi-section-header">' +
+                    '<span class="defi-section-icon">' + (categoryIcons[category] || '&#128202;') + '</span>' +
+                    '<span class="defi-section-title">' + escapeHtml(category) + '</span>' +
+                    '<span class="defi-section-count">' + catPositions.length + '</span>' +
+                    '</div><div class="defi-token-chips">';
+
+                catPositions.forEach(function(pos) {
+                    var qty = parseFloat(pos.quantity) || 0;
+                    var price = getTokenPrice(pos.asset_name || pos.token);
+                    var usdVal = qty * price;
+
+                    html += '<div class="defi-token-chip">' +
+                        '<span class="chip-name">' + escapeHtml(pos.asset_name || pos.token) + '</span>' +
+                        '<span class="chip-amount v2-blur">' + (pos.quantity_formatted || formatAmount(qty)) + '</span>' +
+                        (usdVal > 0 ? '<span style="color:var(--v2-text-muted);font-size:12px" class="v2-blur">' + formatCurrency(usdVal) + '</span>' : '') +
+                        '</div>';
+
+                    allDefiRows.push({ protocol: pos.protocol || category, token: pos.asset_name || pos.token, type: category, amount: qty, value: usdVal, chain: 'cardano' });
+                });
+
+                html += '</div></div>'; // close section
+            });
+
+            // ========================================
+            // SECTION 6: DEFI HOLDINGS FROM ALL-HOLDINGS
+            // ========================================
+            var allHoldings = holdingsData ? (holdingsData.holdings || []) : [];
+            var defiHoldings = allHoldings.filter(function(h) { return h.source === 'defi' || h.source === 'defi_summary'; });
+
+            // Filter out tokens already shown in governance or other sections
+            var shownTokens = new Set();
+            allDefiRows.forEach(function(r) { shownTokens.add(r.token.toUpperCase()); });
+
+            var uniqueDefiHoldings = defiHoldings.filter(function(h) {
+                return !shownTokens.has((h.symbol || h.name || '').toUpperCase());
+            });
+
+            if (uniqueDefiHoldings.length > 0) {
+                var defiHoldTotal = uniqueDefiHoldings.reduce(function(sum, h) { return sum + (parseFloat(h.value_usd) || 0); }, 0);
+                html += '<div class="defi-section"><div class="defi-section-header">' +
+                    '<span class="defi-section-icon">&#127981;</span>' +
+                    '<span class="defi-section-title">Other DeFi Holdings</span>' +
+                    '<span class="defi-section-count">' + uniqueDefiHoldings.length + '</span>' +
+                    '</div><div class="defi-token-chips">';
+
+                uniqueDefiHoldings.forEach(function(h) {
+                    var amount = parseFloat(h.amount) || 0;
+                    var valueUsd = parseFloat(h.value_usd) || 0;
+                    html += '<div class="defi-token-chip">' +
+                        '<span class="chip-name">' + escapeHtml(h.symbol || h.name || 'Token') + '</span>' +
+                        '<span class="chip-amount v2-blur">' + formatAmount(amount) + '</span>' +
+                        (valueUsd > 0 ? '<span style="color:var(--v2-text-muted);font-size:12px" class="v2-blur">' + formatCurrency(valueUsd) + '</span>' : '') +
+                        '</div>';
+                    allDefiRows.push({ protocol: 'DeFi Holdings', token: h.symbol || h.name || 'Token', type: 'Holding', amount: amount, value: valueUsd, chain: h.blockchain || 'cardano' });
+                });
+
                 html += '</div></div>';
             }
 
-            setSafeHTML(grid, html);
+            // ========================================
+            // EMPTY STATE
+            // ========================================
+            if (html === '') {
+                html = '<div class="v2-empty" style="padding:64px;text-align:center"><div class="v2-empty-icon" style="font-size:48px;opacity:0.2">&#127981;</div><div class="v2-empty-title">No DeFi positions detected</div><div class="v2-empty-desc">DeFi positions and staking are auto-detected from your wallet addresses. Add wallets to see positions here.</div></div>';
+            }
 
-            // If table view is active, render it
+            setSafeHTML(document.getElementById('defiSections'), html);
+
+            // ========================================
+            // UPDATE SUMMARY STATS
+            // ========================================
+            var bd = instantData ? (instantData.breakdown || {}) : {};
+            var instStaked = parseFloat(bd.staking) || 0;
+            var instDefi = parseFloat(bd.defi) || 0;
+            var totalValue = Math.max(totalStakedValue + totalStableValue, instStaked + instDefi);
+
+            setText('defiTotal', formatCurrency(totalValue + totalPendingValue));
+            setText('stakedTotal', formatCurrency(totalStakedValue > 0 ? totalStakedValue : instStaked));
+            setText('pendingTotal', totalPendingValue > 0 ? formatCurrency(totalPendingValue) : '$0.00');
+            setText('protocolCount', protocolSet.size.toString());
+            setText('positionCount', stakedCount.toString());
+
+            // ========================================
+            // ATTACH EVENT HANDLERS
+            // ========================================
+            // DePIN refresh buttons
+            document.querySelectorAll('.defi-card-refresh[data-protocol]').forEach(function(btn) {
+                btn.addEventListener('click', function() { refreshDepinCard(btn.dataset.protocol, btn); });
+            });
+
+            // Staking section refresh
+            var stakingRefreshBtn = document.getElementById('stakingRefreshBtn');
+            if (stakingRefreshBtn) {
+                stakingRefreshBtn.addEventListener('click', function() { refreshDefi(true); });
+            }
+
+            // Hidden stables toggle
+            var hiddenBtn = document.getElementById('hiddenStablesBtn');
+            if (hiddenBtn) {
+                hiddenBtn.addEventListener('click', function() {
+                    var content = document.getElementById('hiddenStablesContent');
+                    if (content) {
+                        var showing = content.style.display !== 'none';
+                        content.style.display = showing ? 'none' : '';
+                        hiddenBtn.classList.toggle('open', !showing);
+                    }
+                });
+            }
+
+            // Logo fallbacks
+            document.querySelectorAll('.defi-card-logo img').forEach(function(img) {
+                img.addEventListener('error', function() {
+                    this.style.display = 'none';
+                    var fb = this.nextElementSibling;
+                    if (fb) fb.style.display = 'flex';
+                });
+            });
+
+            // Table view
             if (defiView === 'table') renderDefiTable();
         }
 
+        /* ============================================================
+           DEPIN CARD REFRESH
+           ============================================================ */
+        async function refreshDepinCard(protocol, btn) {
+            if (btn) {
+                btn.classList.add('refreshing');
+                btn.disabled = true;
+            }
+            try {
+                var addresses = _walletAddresses.cardano;
+                if (protocol === 'Helium') addresses = _walletAddresses.solana;
+
+                for (var i = 0; i < addresses.length; i++) {
+                    var endpoint = protocol === 'Helium'
+                        ? '/defi/helium/' + addresses[i] + '?refresh=true'
+                        : '/defi/staking/' + addresses[i] + '?refresh=true';
+                    await v2Fetch(endpoint);
+                }
+                await loadDefi();
+                showToast(protocol + ' data refreshed', 'success');
+            } catch (e) {
+                showToast('Failed to refresh ' + protocol, 'error');
+            } finally {
+                if (btn) {
+                    btn.classList.remove('refreshing');
+                    btn.disabled = false;
+                }
+            }
+        }
+
+        /* ============================================================
+           TABLE VIEW (preserved + enhanced)
+           ============================================================ */
         function renderDefiTable() {
-            const container = document.getElementById('defiTableView');
+            var container = document.getElementById('defiTableView');
             if (!allDefiRows.length) {
                 setSafeHTML(container, '<div class="v2-empty" style="padding:48px"><div class="v2-empty-title">No positions</div></div>');
                 return;
             }
 
-            // Sort
-            const rows = allDefiRows.slice().sort((a, b) => {
-                let aVal, bVal;
+            var rows = allDefiRows.slice().sort(function(a, b) {
+                var aVal, bVal;
                 switch(defiSortCol) {
                     case 'protocol': aVal = a.protocol.toLowerCase(); bVal = b.protocol.toLowerCase(); break;
                     case 'token': aVal = a.token.toLowerCase(); bVal = b.token.toLowerCase(); break;
@@ -268,17 +1153,17 @@
                     case 'value': aVal = a.value; bVal = b.value; break;
                     default: aVal = 0; bVal = 0;
                 }
-                const cmp = typeof aVal === 'string' ? aVal.localeCompare(bVal) : aVal - bVal;
+                var cmp = typeof aVal === 'string' ? aVal.localeCompare(bVal) : aVal - bVal;
                 return defiSortDir === 'asc' ? cmp : -cmp;
             });
 
             function sortTh(col, label, isRight) {
-                const active = defiSortCol === col;
-                const arrow = active ? (defiSortDir === 'asc' ? '&#9650;' : '&#9660;') : '';
+                var active = defiSortCol === col;
+                var arrow = active ? (defiSortDir === 'asc' ? '&#9650;' : '&#9660;') : '';
                 return '<th class="' + (isRight ? 'right ' : '') + 'sortable-header' + (active ? ' sorted' : '') + '" data-sort="' + col + '">' + label + ' <span class="sort-icon">' + arrow + '</span></th>';
             }
 
-            let html = '<table class="v2-table"><thead><tr>' +
+            var thtml = '<table class="v2-table"><thead><tr>' +
                 sortTh('protocol', 'Protocol', false) +
                 sortTh('token', 'Token', false) +
                 sortTh('type', 'Type', false) +
@@ -286,8 +1171,8 @@
                 sortTh('value', 'Value (USD)', true) +
                 '</tr></thead><tbody>';
 
-            rows.forEach(r => {
-                html += '<tr>' +
+            rows.forEach(function(r) {
+                thtml += '<tr>' +
                     '<td><strong>' + escapeHtml(r.protocol) + '</strong></td>' +
                     '<td>' + escapeHtml(r.token) + '</td>' +
                     '<td>' + escapeHtml(r.type) + '</td>' +
@@ -295,13 +1180,12 @@
                     '<td class="right v2-blur">' + (r.value > 0 ? formatCurrency(r.value) : '<span style="color:var(--v2-text-muted);">--</span>') + '</td>' +
                     '</tr>';
             });
-            html += '</tbody></table>';
-            setSafeHTML(container, html);
+            thtml += '</tbody></table>';
+            setSafeHTML(container, thtml);
 
-            // Attach sort handlers
-            container.querySelectorAll('.sortable-header').forEach(th => {
-                th.addEventListener('click', () => {
-                    const col = th.dataset.sort;
+            container.querySelectorAll('.sortable-header').forEach(function(th) {
+                th.addEventListener('click', function() {
+                    var col = th.dataset.sort;
                     if (defiSortCol === col) {
                         defiSortDir = defiSortDir === 'asc' ? 'desc' : 'asc';
                     } else {
@@ -313,9 +1197,19 @@
             });
         }
 
-        async function refreshDefi() {
+        /* ============================================================
+           REFRESH
+           ============================================================ */
+        async function refreshDefi(forceStaking) {
             showToast('Refreshing DeFi data...', 'success');
             try {
+                if (forceStaking) {
+                    // Refresh staking data for all wallets
+                    var addresses = _walletAddresses.cardano;
+                    for (var i = 0; i < addresses.length; i++) {
+                        await v2Fetch('/defi/staking/' + addresses[i] + '?refresh=true');
+                    }
+                }
                 await v2Fetch('/defi/summary?refresh=true');
                 await loadDefi();
                 showToast('DeFi data refreshed', 'success');
