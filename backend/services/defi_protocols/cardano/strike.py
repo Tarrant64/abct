@@ -5,6 +5,11 @@ Strike Finance is a perpetual futures DEX on Cardano. Users stake STRIKE
 governance tokens in the staking contract, identified by a per-user NFT
 whose asset name matches the user's payment key hash.
 
+Strike is primarily a perpetuals DEX, not a lending protocol. It does not
+currently have separate lending/borrowing markets like Liqwid or Lenfi.
+Users provide margin for perpetual positions, but this is handled via the
+perps contract rather than a standalone lending market.
+
 Detection: UTXO_SCAN (scans staking contract for user's staking NFT + STRIKE tokens)
 """
 

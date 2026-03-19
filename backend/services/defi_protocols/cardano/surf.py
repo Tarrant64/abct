@@ -1,7 +1,9 @@
 """
 Surf Lending Adapter - Cardano lending/borrowing protocol (formerly Flow Lending).
 
-Surf Lending allows users to supply ADA and other assets to earn yield.
+Surf Lending allows users to supply ADA and other assets to earn yield,
+and borrow assets against their supplied collateral.
+
 Detection first tries the Surf Lending REST API, falling back to on-chain
 UTXO scanning of the staking contract.
 
@@ -42,7 +44,7 @@ class SurfAdapter(ProtocolAdapter):
     async def detect_positions(
         self, address: str, chain: str = None
     ) -> List[ProtocolPosition]:
-        """Detect Surf Lending positions.
+        """Detect Surf Lending supply and borrow positions.
 
         First tries the Surf Lending REST API for position data.
         Falls back to on-chain UTXO scanning of the staking contract
@@ -53,7 +55,7 @@ class SurfAdapter(ProtocolAdapter):
             chain: Ignored (always Cardano)
 
         Returns:
-            List of ProtocolPosition for supplied assets
+            List of ProtocolPosition for supplied and borrowed assets
         """
         try:
             payment_cred = get_payment_credential(address)
@@ -70,28 +72,96 @@ class SurfAdapter(ProtocolAdapter):
                 )
                 if response.status_code == 200:
                     data = response.json()
+                    positions = []
+
+                    # Supply positions
                     total_supplied = data.get('total_supplied', 0)
                     if total_supplied > 0:
-                        positions = [ProtocolPosition(
-                            protocol=self.PROTOCOL_NAME,
-                            chain="cardano",
-                            position_type=PositionType.LENDING_SUPPLY,
-                            token_symbol="ADA",
-                            token_name="Cardano",
-                            amount=total_supplied,
-                            apy=data.get('supply_apy'),
-                            pending_rewards=data.get('pending_rewards', 0),
-                            reward_token="SURF",
-                            extra={
-                                'total_borrowed': data.get('total_borrowed', 0),
-                                'api_positions': data.get('positions', [])
-                            }
-                        )]
+                        # Parse individual supply positions if available
+                        api_positions = data.get('positions', [])
+                        supply_positions = [p for p in api_positions if p.get('type') == 'supply']
+
+                        if supply_positions:
+                            for sp in supply_positions:
+                                token = sp.get('token', 'ADA')
+                                amount = float(sp.get('amount', 0))
+                                if amount > 0:
+                                    positions.append(ProtocolPosition(
+                                        protocol=self.PROTOCOL_NAME,
+                                        chain="cardano",
+                                        position_type=PositionType.LENDING_SUPPLY,
+                                        token_symbol=token,
+                                        token_name=f"Surf {token} Supply",
+                                        amount=amount,
+                                        apy=float(sp.get('apy', 0)) if sp.get('apy') else data.get('supply_apy'),
+                                        pending_rewards=float(sp.get('rewards', 0)) if sp.get('rewards') else None,
+                                        reward_token="SURF" if sp.get('rewards') else None,
+                                        extra={
+                                            'health_factor': data.get('health_factor'),
+                                        }
+                                    ))
+                        else:
+                            # Fallback: single aggregated supply position
+                            positions.append(ProtocolPosition(
+                                protocol=self.PROTOCOL_NAME,
+                                chain="cardano",
+                                position_type=PositionType.LENDING_SUPPLY,
+                                token_symbol="ADA",
+                                token_name="Cardano",
+                                amount=total_supplied,
+                                apy=data.get('supply_apy'),
+                                pending_rewards=data.get('pending_rewards', 0),
+                                reward_token="SURF",
+                                extra={
+                                    'health_factor': data.get('health_factor'),
+                                }
+                            ))
+
+                    # Borrow positions
+                    total_borrowed = data.get('total_borrowed', 0)
+                    if total_borrowed > 0:
+                        api_positions = data.get('positions', [])
+                        borrow_positions = [p for p in api_positions if p.get('type') == 'borrow']
+
+                        if borrow_positions:
+                            for bp in borrow_positions:
+                                token = bp.get('token', 'ADA')
+                                amount = float(bp.get('amount', 0))
+                                if amount > 0:
+                                    positions.append(ProtocolPosition(
+                                        protocol=self.PROTOCOL_NAME,
+                                        chain="cardano",
+                                        position_type=PositionType.LENDING_BORROW,
+                                        token_symbol=token,
+                                        token_name=f"Surf {token} Borrow",
+                                        amount=amount,
+                                        apy=float(bp.get('borrow_apy', 0)) if bp.get('borrow_apy') else data.get('borrow_apy'),
+                                        extra={
+                                            'health_factor': data.get('health_factor'),
+                                            'debt_value_usd': float(bp.get('debt_usd', 0)) if bp.get('debt_usd') else None,
+                                        }
+                                    ))
+                        else:
+                            # Fallback: single aggregated borrow position
+                            positions.append(ProtocolPosition(
+                                protocol=self.PROTOCOL_NAME,
+                                chain="cardano",
+                                position_type=PositionType.LENDING_BORROW,
+                                token_symbol="ADA",
+                                token_name="Surf ADA Borrow",
+                                amount=total_borrowed,
+                                apy=data.get('borrow_apy'),
+                                extra={
+                                    'health_factor': data.get('health_factor'),
+                                }
+                            ))
+
+                    if positions:
                         return positions
             except Exception as e:
                 logger.warning(f"Surf Lending API not available: {e}")
 
-            # Fallback: Query on-chain data
+            # Fallback: Query on-chain data (supply only)
             if not SURF_STAKING_ADDRESS:
                 logger.debug("[Surf] No staking address configured for on-chain fallback")
                 return []
