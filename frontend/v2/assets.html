@@ -467,8 +467,11 @@
             const tokenCount = parseInt(w.native_assets_count) || 0;
             const hasTokens = tokenCount > 0;
 
+            const displayLabel = w.label || w.ada_handle || w.name || 'Wallet';
+            const handleBadge = w.ada_handle ? ' <span class="v2-ada-handle-badge">' + escapeHtml(w.ada_handle) + '</span>' : '';
+
             let html = `<tr class="wallet-row-expandable" data-address="${escapeAttr(addr)}">
-                <td>${hasTokens ? '<span class="wallet-expand-icon" data-addr="' + escapeAttr(addr) + '">&#9654;</span>' : '<span style="display:inline-block;width:20px;"></span>'}<strong>${escapeHtml(w.label || w.name || 'Wallet')}</strong></td>
+                <td>${hasTokens ? '<span class="wallet-expand-icon" data-addr="' + escapeAttr(addr) + '">&#9654;</span>' : '<span style="display:inline-block;width:20px;"></span>'}<strong>${escapeHtml(displayLabel)}</strong>${handleBadge}</td>
                 <td style="font-family:monospace;font-size:12px;color:var(--v2-text-secondary)">${escapeHtml(short)}</td>
                 <td><span class="v2-chain-badge chain-${escapeAttr(chain)}">${escapeHtml(chain)}</span></td>
                 <td class="right v2-blur">${formatAmount(balance)} <span style="font-size:11px;color:var(--v2-text-muted)">${escapeHtml(unit)}</span></td>
@@ -761,8 +764,11 @@
 
                     const shortStake = stakeKey.length > 20 ? stakeKey.slice(0, 12) + '...' + stakeKey.slice(-6) : stakeKey;
 
+                    const govDisplayLabel = wallet.label || wallet.ada_handle || 'Cardano Wallet';
+                    const govHandleBadge = wallet.ada_handle ? ' <span class="v2-ada-handle-badge">' + escapeHtml(wallet.ada_handle) + '</span>' : '';
+
                     html += '<div class="gov-delegation-card">';
-                    html += '<div class="gov-delegation-title"><span style="font-size:14px;">&#9733;</span> ' + escapeHtml(wallet.label || 'Cardano Wallet') + ' <span style="font-size:11px;color:var(--v2-text-muted);font-weight:400;">' + escapeHtml(shortStake) + '</span></div>';
+                    html += '<div class="gov-delegation-title"><span style="font-size:14px;">&#9733;</span> ' + escapeHtml(govDisplayLabel) + govHandleBadge + ' <span style="font-size:11px;color:var(--v2-text-muted);font-weight:400;">' + escapeHtml(shortStake) + '</span></div>';
 
                     // Pool delegation
                     if (gov.pool && gov.pool.pool_id) {

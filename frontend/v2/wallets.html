@@ -73,7 +73,7 @@
                     <div class="add-wallet-form">
                         <div class="field">
                             <label>Wallet Address</label>
-                            <input type="text" id="newWalletAddr" placeholder="Enter wallet address...">
+                            <input type="text" id="newWalletAddr" placeholder="Enter wallet address or $handle...">
                         </div>
                         <div class="field">
                             <label>Label (optional)</label>
@@ -81,7 +81,7 @@
                         </div>
                         <button class="v2-btn v2-btn-primary" id="addWalletBtn">Add</button>
                     </div>
-                    <div style="margin-top:8px;font-size:12px;color:var(--v2-text-muted);">Blockchain will be auto-detected from the address format.</div>
+                    <div style="margin-top:8px;font-size:12px;color:var(--v2-text-muted);">Blockchain will be auto-detected from the address format. Cardano ADA Handles ($handle) are supported.</div>
                 </div>
 
                 <!-- Chain Filter Tabs -->
@@ -206,8 +206,10 @@
             // Render stake groups
             Object.entries(stakeGroups).forEach(([stakeAddr, groupWallets]) => {
                 const shortStake = stakeAddr.slice(0, 12) + '...' + stakeAddr.slice(-6);
+                const groupHandle = groupWallets.find(w => w.ada_handle);
+                const groupHandleBadge = groupHandle ? ' <span class="v2-ada-handle-badge">' + escapeHtml(groupHandle.ada_handle) + '</span>' : '';
                 html += '<div class="stake-group">';
-                html += '<div class="stake-group-title"><span>Cardano Stake Key:</span> <span class="stake-addr">' + escapeHtml(shortStake) + '</span> <span style="color:var(--v2-text-muted);">(' + groupWallets.length + ' wallet' + (groupWallets.length > 1 ? 's' : '') + ')</span></div>';
+                html += '<div class="stake-group-title"><span>Cardano Stake Key:</span> <span class="stake-addr">' + escapeHtml(shortStake) + '</span>' + groupHandleBadge + ' <span style="color:var(--v2-text-muted);">(' + groupWallets.length + ' wallet' + (groupWallets.length > 1 ? 's' : '') + ')</span></div>';
                 groupWallets.forEach(w => { html += renderWalletCard(w); });
                 html += '</div>';
             });
@@ -237,16 +239,18 @@
 
         function renderWalletCard(w) {
             const addr = w.address || '';
-            const label = w.label || w.name || 'Wallet';
+            // Display priority: custom label > ada_handle > default
+            const label = w.label || w.ada_handle || w.name || 'Wallet';
             const blockchain = (w.blockchain || 'unknown').toLowerCase();
             const balance = parseFloat(w.balance) || 0;
             const balanceUnit = w.balance_unit || w.symbol || blockchain.toUpperCase();
             const valueUsd = parseFloat(w.value_usd) || 0;
             const tokenCount = parseInt(w.native_assets_count) || 0;
+            const handleBadge = w.ada_handle ? ' <span class="v2-ada-handle-badge">' + escapeHtml(w.ada_handle) + '</span>' : '';
 
             let html = '<div class="wallet-card" data-address="' + escapeAttr(addr) + '">';
             html += '<div class="wallet-card-header"><div>';
-            html += '<div class="wallet-card-label">' + escapeHtml(label) + '</div>';
+            html += '<div class="wallet-card-label">' + escapeHtml(label) + handleBadge + '</div>';
             html += '<div style="margin-top:2px;"><span class="v2-chain-badge chain-' + escapeAttr(blockchain) + '">' + escapeHtml(blockchain) + '</span>';
             if (tokenCount > 0) {
                 html += ' <span style="font-size:11px;color:var(--v2-text-muted);margin-left:6px;">' + tokenCount + ' token' + (tokenCount !== 1 ? 's' : '') + '</span>';
@@ -331,7 +335,11 @@
                     body: JSON.stringify({ address: addr, label: label || undefined })
                 });
                 if (resp.ok) {
-                    showToast('Wallet added successfully', 'success');
+                    const data = await resp.json().catch(() => ({}));
+                    const msg = data.ada_handle
+                        ? 'Wallet added via ADA Handle ' + (data.ada_handle || '')
+                        : 'Wallet added successfully';
+                    showToast(msg, 'success');
                     document.getElementById('newWalletAddr').value = '';
                     document.getElementById('newWalletLabel').value = '';
                     loadWallets();

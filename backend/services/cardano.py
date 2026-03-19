@@ -160,6 +160,27 @@ def _derive_stake_key_local(address: str) -> Optional[str]:
     return _bech32_encode('stake', reward_data5)
 
 
+ADA_HANDLE_POLICY_ID = 'f0ff48bbb7bbe9d59a40f1ce90e9e9d0ff5002ec48f232b49ca0fb9a'
+
+
+def detect_ada_handle(native_assets: List[dict]) -> Optional[str]:
+    """Detect an ADA Handle from a list of native assets.
+
+    ADA Handles are NFTs under the well-known policy ID. The hex-decoded
+    asset_name is the handle text (without the '$' prefix).
+
+    Returns the handle as '$name' or None if no handle found.
+    """
+    for asset in native_assets:
+        policy_id = asset.get('policy_id', '')
+        if policy_id == ADA_HANDLE_POLICY_ID:
+            asset_name = asset.get('asset_name', '')
+            # asset_name is already decoded from hex in _get_address_blockfrost
+            if asset_name:
+                return f'${asset_name}'
+    return None
+
+
 class CardanoService:
     """Service for fetching Cardano wallet data with Blockfrost primary and cexplorer fallback."""
 
@@ -248,6 +269,47 @@ class CardanoService:
         # Fallback to cexplorer
         logger.info(f"Blockfrost failed for {address[:20]}..., trying cexplorer")
         return await self._get_address_cexplorer(address)
+
+    async def resolve_ada_handle(self, handle: str) -> Optional[str]:
+        """Resolve an ADA Handle (e.g., '$chriscata') to a Cardano address.
+
+        Uses the Blockfrost API to look up the handle NFT and find the
+        address that holds it.
+
+        Args:
+            handle: The handle with or without '$' prefix
+
+        Returns:
+            The Cardano address holding the handle, or None if not found.
+        """
+        # Strip '$' prefix if present
+        handle_name = handle.lstrip('$')
+        if not handle_name:
+            return None
+
+        # Encode handle name to hex for asset lookup
+        handle_hex = handle_name.encode('utf-8').hex()
+        asset_id = f"{ADA_HANDLE_POLICY_ID}{handle_hex}"
+
+        try:
+            response = await blockfrost_fetch(
+                f"/assets/{asset_id}/addresses",
+                headers=await self._get_blockfrost_headers(),
+                timeout=30.0
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                if data and len(data) > 0:
+                    # The first address holding the handle NFT is the owner
+                    return data[0].get('address')
+
+            logger.info(f"ADA Handle '{handle_name}' not found (status {response.status_code})")
+            return None
+
+        except Exception as e:
+            logger.error(f"Error resolving ADA Handle '{handle_name}': {e}")
+            return None
 
     async def _get_address_blockfrost(self, address: str) -> Optional[dict]:
         """Fetch address data from Blockfrost API."""

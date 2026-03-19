@@ -2129,11 +2129,16 @@ function renderWallets(wallets) {
             </div>
         ` : '';
 
+        // Display priority: custom label > ada_handle > default
+        const displayLabel = wallet.label || wallet.ada_handle || blockchain.charAt(0).toUpperCase() + blockchain.slice(1) + ' Wallet';
+        const handleBadge = wallet.ada_handle ? `<span class="ada-handle-badge">${wallet.ada_handle}</span>` : '';
+
         return `
             <div class="wallet-item ${blockchain}" data-address="${wallet.address}">
                 <div class="wallet-info">
                     <div class="wallet-label-container">
-                        <span class="wallet-label">${wallet.label || blockchain.charAt(0).toUpperCase() + blockchain.slice(1) + ' Wallet'}</span>
+                        <span class="wallet-label">${displayLabel}</span>
+                        ${handleBadge}
                         <button class="edit-label-btn" onclick="editWalletLabel('${wallet.address}', this)" title="Edit wallet name">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -2236,11 +2241,16 @@ function renderWalletsGrouped(cardanoStakeGroups, bitcoinWallets, ethereumWallet
             const groupNativeAssetsValue = group.native_assets_value_usd || 0;
             const stakeId = group.stake_address ? group.stake_address.slice(0, 20) : 'none';
 
+            // Check if any wallet in the group has an ADA handle
+            const groupHandle = group.wallets.find(w => w.ada_handle);
+            const groupHandleBadge = groupHandle ? `<span class="ada-handle-badge">${groupHandle.ada_handle}</span>` : '';
+
             html += `
                 <div class="wallet-group cardano collapsed ${walletCount === 1 ? 'single-wallet' : ''}" data-stake="${group.stake_address || 'none'}">
                     <div class="wallet-group-header">
                         <div class="group-info">
                             <span class="group-label">${group.label || 'Stake Key'}: <span class="blur-sensitive stake-key-short">${group.stake_address_short || 'No Stake Key'}</span></span>
+                            ${groupHandleBadge}
                             ${group.stake_address ? `<button class="copy-address-btn" data-address="${group.stake_address}" title="Copy stake key">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -2931,11 +2941,16 @@ function renderSingleWallet(wallet, blockchain, isGrouped) {
     const walletId = wallet.id || wallet.wallet_id;
     const hasAssets = wallet.native_assets_count > 0 || wallet.token_count > 0;
 
+    // Display priority: custom label > ada_handle > default
+    const walletDisplayLabel = wallet.label || wallet.ada_handle || blockchain.charAt(0).toUpperCase() + blockchain.slice(1) + ' Wallet';
+    const walletHandleBadge = wallet.ada_handle && wallet.label !== wallet.ada_handle ? `<span class="ada-handle-badge">${wallet.ada_handle}</span>` : '';
+
     return `
         <div class="wallet-item ${blockchain} ${groupedClass}" data-address="${wallet.address}" data-wallet-id="${walletId}">
             <div class="wallet-info">
                 ${!isGrouped ? `<div class="wallet-label-container">
-                    <span class="wallet-label">${wallet.label || blockchain.charAt(0).toUpperCase() + blockchain.slice(1) + ' Wallet'}</span>
+                    <span class="wallet-label">${walletDisplayLabel}</span>
+                    ${walletHandleBadge}
                     <button class="edit-label-btn" title="Edit wallet name">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -4437,7 +4452,7 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
                 const escHtml = (s) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
                 const undelegatedItems = adaDelegation.undelegatedWallets.map(w => {
                     const shortAddr = w.address.slice(0, 8) + '...' + w.address.slice(-4);
-                    const displayLabel = w.label ? escHtml(w.label) : shortAddr;
+                    const displayLabel = w.label ? escHtml(w.label) : (w.ada_handle ? escHtml(w.ada_handle) : shortAddr);
                     const balFormatted = w.balance.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0});
                     return `<div class="undelegated-wallet-item" onclick="event.stopPropagation(); navigator.clipboard.writeText('${w.address}').then(() => { const el = this.querySelector('.copy-feedback'); el.style.opacity='1'; setTimeout(() => el.style.opacity='0', 1200); })">
                         <div class="undelegated-wallet-row">
@@ -5974,7 +5989,10 @@ async function addWallet(event) {
         const data = await response.json();
 
         if (response.ok) {
-            showStatus(`Added ${data.blockchain} wallet`);
+            const statusMsg = data.ada_handle
+                ? `Added Cardano wallet via ADA Handle ${data.ada_handle}`
+                : `Added ${data.blockchain} wallet`;
+            showStatus(statusMsg);
             document.getElementById('walletAddress').value = '';
             document.getElementById('walletLabel').value = '';
             await loadPrices();
@@ -10347,7 +10365,7 @@ function initGlobalSearch() {
             for (const w of walletResults) {
                 const addr = w.address.length > 20 ? w.address.slice(0, 10) + '...' + w.address.slice(-8) : w.address;
                 const sub = w.blockchain + ' \u00b7 ' + addr;
-                html += searchResultItem('/data.html', ICON_WALLET, w.label || addr, sub);
+                html += searchResultItem('/data.html', ICON_WALLET, w.label || w.ada_handle || addr, sub);
             }
         }
 

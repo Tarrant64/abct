@@ -229,6 +229,8 @@
             const totalAda = groupWallets.reduce((sum, w) => sum + (parseFloat(w.balance) || 0), 0);
             const totalAssets = groupWallets.reduce((sum, w) => sum + (w.native_assets_count || 0), 0);
             const groupLabel = groupWallets[0].label || '';
+            const groupHandle = groupWallets.find(w => w.ada_handle);
+            const groupHandleBadge = groupHandle ? `<span class="ada-handle-badge">${groupHandle.ada_handle}</span>` : '';
 
             const stakeKeyDisplay = stakeKey.length > 14 ? `${stakeKey.slice(0, 8)}...${stakeKey.slice(-4)}` : stakeKey;
 
@@ -246,6 +248,7 @@
                                 </svg>
                             </button>
                             ${groupLabel ? `<span class="group-label">${groupLabel}</span>` : ''}
+                            ${groupHandleBadge}
                         </div>
                         <div class="stake-group-summary">
                             <span class="wallet-count">${groupWallets.length} wallet${groupWallets.length !== 1 ? 's' : ''}</span>
@@ -299,6 +302,7 @@
                     <div class="wallet-label">
                         ${!isGrouped ? `<span class="chain ${wallet.blockchain}">${wallet.blockchain}</span>` : ''}
                         ${wallet.label ? `<span class="label-text">${wallet.label}</span>` : ''}
+                        ${wallet.ada_handle ? `<span class="ada-handle-badge">${wallet.ada_handle}</span>` : ''}
                         ${hasAssets ? `<span class="token-count" data-wallet-id="${wallet.id}">${wallet.native_assets_count} token${wallet.native_assets_count !== 1 ? 's' : ''} ▼</span>` : ''}
                     </div>
                     <div class="wallet-assets-container" id="assets-${wallet.id}">

@@ -1472,7 +1472,8 @@ async function runGlobalSearch(query) {
         html += categoryLabel('Wallets');
         walletResults.forEach(w => {
             const addr = (w.address || '').length > 20 ? w.address.slice(0, 10) + '...' + w.address.slice(-8) : w.address;
-            html += resultItem('/next/wallets', w.label || addr, (w.blockchain || '') + ' \u00b7 ' + addr);
+            const displayLabel = w.label || w.ada_handle || addr;
+            html += resultItem('/next/wallets', displayLabel, (w.blockchain || '') + ' \u00b7 ' + addr);
         });
     }
 

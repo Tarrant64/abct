@@ -1492,6 +1492,29 @@ body.privacy-mode .v2-blur {
     border: 1px solid rgba(240, 185, 11, 0.25);
 }
 
+/* ADA Handle Badge */
+.v2-ada-handle-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    background: rgba(0, 210, 106, 0.15);
+    color: #00d26a;
+    border: 1px solid rgba(0, 210, 106, 0.3);
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+[data-theme="light"] .v2-ada-handle-badge {
+    background: rgba(0, 184, 148, 0.10);
+    color: #00926e;
+    border-color: rgba(0, 184, 148, 0.25);
+}
+
 /* Direction badges */
 .v2-direction-badge {
     display: inline-flex;

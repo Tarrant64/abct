@@ -11,10 +11,11 @@ from database import (
     get_all_wallets, get_wallet_by_address, save_wallet,
     save_balance, clear_wallet_balances, save_native_assets,
     get_wallet_assets, get_wallet_balance,
-    get_cache, set_cache
+    get_cache, set_cache,
+    update_wallet_ada_handle
 )
 from config import CACHE_TTL_COLD
-from services.cardano import cardano_service, is_stake_address
+from services.cardano import cardano_service, is_stake_address, detect_ada_handle
 from services.bitcoin import bitcoin_service
 from services.ethereum import ethereum_service
 from services.solana import solana_service
@@ -136,6 +137,7 @@ class WalletResponse(BaseModel):
     address: str
     blockchain: str
     label: Optional[str]
+    ada_handle: Optional[str] = None
     balance: Optional[str] = None
     balance_native: Optional[str] = None
     native_assets: Optional[list] = None
@@ -753,13 +755,20 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
                 await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, info['balance_ada'], 'ADA')
                 await save_native_assets(wallet_id, info['native_assets'])
+
+                # Detect ADA Handle from native assets
+                ada_handle = detect_ada_handle(info['native_assets'])
+                if ada_handle:
+                    await update_wallet_ada_handle(wallet_id, ada_handle)
+
                 return {
                     'address': address,
                     'success': True,
                     'balance': info['balance_ada'],
                     'unit': 'ADA',
                     'native_assets_count': len(info['native_assets']),
-                    'source': info['source']
+                    'source': info['source'],
+                    'ada_handle': ada_handle
                 }
 
         elif blockchain == 'bitcoin':
@@ -2211,12 +2220,25 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
 
     try:
         address = wallet.address.strip()
+
+        # ADA Handle resolution: if input starts with '$', resolve to Cardano address
+        resolved_ada_handle = None
+        if address.startswith('$'):
+            resolved_address = await cardano_service.resolve_ada_handle(address)
+            if not resolved_address:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"ADA Handle '{address}' not found. Make sure the handle exists and is currently held."
+                )
+            resolved_ada_handle = address  # Store the original handle (e.g., '$chriscata')
+            address = resolved_address  # Use the resolved Cardano address
+
         blockchain = detect_blockchain(address)
 
         if not blockchain:
             raise HTTPException(
                 status_code=400,
-                detail="Could not detect blockchain. Supported: Cardano (addr1, stake1), Bitcoin (1, 3, bc1, xpub/ypub/zpub), Ethereum (0x 42-char), Polygon (polygon:0x), Base (base:0x), Solana (base58), BNB Chain (bsc:0x), Arbitrum (arb:0x), Avalanche (avax:0x), Tron (T...), XRP (r...), Hedera (0.0.N), MultiversX (erd1...), Sui (0x 66-char), Aptos (aptos:0x), Filecoin (f1/f3...), Litecoin (L/M/ltc1), Dogecoin (D...), Zcash (t1/t3), Tezos (tz1/KT1), Stacks (SP...), VeChain (vet:0x), Cosmos (cosmos1...), NEAR (*.near), ICP (icp:...), TON (EQ/UQ...), Polkadot (polkadot:...), Kusama (kusama:...), Stellar (G...), Kaspa (kaspa:...), Osmosis (osmo1...), Celestia (celestia1...), Injective (inj1...), dYdX (dydx1...), Sei (sei1...), Akash (akash1...), Kaia (kaia:0x), Ergo (9...), IOTA (iota:0x), Waves (3P...), Mina (B62...), Zilliqa (zil1/0x), Monero (monero:4.../8...), Secret Network (secret1...)"
+                detail="Could not detect blockchain. Supported: Cardano (addr1, stake1, $handle), Bitcoin (1, 3, bc1, xpub/ypub/zpub), Ethereum (0x 42-char), Polygon (polygon:0x), Base (base:0x), Solana (base58), BNB Chain (bsc:0x), Arbitrum (arb:0x), Avalanche (avax:0x), Tron (T...), XRP (r...), Hedera (0.0.N), MultiversX (erd1...), Sui (0x 66-char), Aptos (aptos:0x), Filecoin (f1/f3...), Litecoin (L/M/ltc1), Dogecoin (D...), Zcash (t1/t3), Tezos (tz1/KT1), Stacks (SP...), VeChain (vet:0x), Cosmos (cosmos1...), NEAR (*.near), ICP (icp:...), TON (EQ/UQ...), Polkadot (polkadot:...), Kusama (kusama:...), Stellar (G...), Kaspa (kaspa:...), Osmosis (osmo1...), Celestia (celestia1...), Injective (inj1...), dYdX (dydx1...), Sei (sei1...), Akash (akash1...), Kaia (kaia:0x), Ergo (9...), IOTA (iota:0x), Waves (3P...), Mina (B62...), Zilliqa (zil1/0x), Monero (monero:4.../8...), Secret Network (secret1...)"
             )
 
         # Extract raw address if chain prefix was provided
@@ -2328,6 +2350,12 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
         # Regular address handling
         await save_wallet(address, blockchain, wallet.label, user_id)
 
+        # If this was an ADA Handle resolution, store the handle on the wallet
+        if resolved_ada_handle:
+            saved_for_handle = await get_wallet_by_address(address, blockchain)
+            if saved_for_handle:
+                await update_wallet_ada_handle(saved_for_handle['id'], resolved_ada_handle)
+
         # Append to wallets.txt
         file_saved = append_to_wallets_file(address, wallet.label)
 
@@ -2342,12 +2370,16 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
             asyncio.create_task(_trigger_tx_history(user_id, saved_wallet['id'], blockchain))
             asyncio.create_task(_trigger_balance_history(user_id, saved_wallet['id'], blockchain))
 
-        return {
+        response_data = {
             "message": "Wallet added",
             "address": address,
             "blockchain": blockchain,
             "saved_to_file": file_saved
         }
+        if resolved_ada_handle:
+            response_data["ada_handle"] = resolved_ada_handle
+            response_data["message"] = f"Wallet added via ADA Handle {resolved_ada_handle}"
+        return response_data
 
     except HTTPException:
         raise

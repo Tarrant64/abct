@@ -656,6 +656,12 @@ async def init_db():
             except Exception:
                 pass  # Column already exists
 
+        # Add ada_handle column to wallets (migration for ADA Handle support)
+        try:
+            await db.execute("ALTER TABLE wallets ADD COLUMN ada_handle TEXT")
+        except Exception:
+            pass  # Column already exists
+
         # API usage tracking table - stores API call counts per period (legacy aggregated view)
         await db.execute("""
             CREATE TABLE IF NOT EXISTS api_usage (
@@ -1355,6 +1361,22 @@ async def get_wallets_by_address(address: str):
         cursor = await db.execute("SELECT * FROM wallets WHERE address = ?", (address,))
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
+
+
+async def update_wallet_ada_handle(wallet_id: int, ada_handle: Optional[str]):
+    """Update the ADA Handle for a wallet.
+
+    Args:
+        wallet_id: Wallet ID
+        ada_handle: The handle text (e.g., '$chriscata') or None to clear
+    """
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute(
+            "UPDATE wallets SET ada_handle = ?, updated_at = ? WHERE id = ?",
+            (ada_handle, datetime.now(), wallet_id)
+        )
+        await db.commit()
+
 
 async def save_balance(wallet_id: int, amount: str, unit: str, user_id: int = None):
     """Save or update the balance for a wallet."""
