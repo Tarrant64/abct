@@ -4882,88 +4882,236 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
     }
 
     // ========================================
-    // SECTION 2B: LENDING & BORROWING
+    // SECTION 2B: LENDING & BORROWING (All Chains)
     // ========================================
     if (typeof _lendingData !== 'undefined' && _lendingData && _lendingData.lending_positions && _lendingData.lending_positions.length > 0) {
         const lendingPositions = _lendingData.lending_positions;
         const supplyPos = lendingPositions.filter(p => p.position_type === 'lending_supply');
         const borrowPos = lendingPositions.filter(p => p.position_type === 'lending_borrow');
+        const lendingCount = supplyPos.length + borrowPos.length;
 
-        html += `<div class="defi-gov-subsection">
-            <div class="defi-gov-subsection-header">
-                <span class="subsection-icon">\uD83C\uDFE6</span>
-                <span class="subsection-title">Lending & Borrowing</span>
-                <span class="subsection-count">${lendingPositions.length}</span>
-            </div>
-            <div class="defi-gov-cards">`;
+        if (lendingCount > 0) {
+            html += `<div class="defi-gov-subsection">
+                <div class="defi-gov-subsection-header">
+                    <span class="subsection-icon">\uD83C\uDFE6</span>
+                    <span class="subsection-title">Lending & Borrowing</span>
+                    <span class="subsection-count">${lendingCount}</span>
+                </div>
+                <div class="defi-gov-cards">`;
 
-        // Supply positions
-        for (const pos of supplyPos) {
-            const underlying = (pos.extra && pos.extra.underlying_token) ? pos.extra.underlying_token : pos.token_symbol;
-            const tokenPrice = prices[underlying] || 0;
-            const amount = parseFloat(pos.amount) || 0;
-            const usdValue = parseFloat(pos.value_usd) || (amount * tokenPrice);
-            totalStakedValue += usdValue;
-            stakedCount++;
+            // Supply positions
+            for (const pos of supplyPos) {
+                const underlying = (pos.extra && pos.extra.underlying_token) ? pos.extra.underlying_token : pos.token_symbol;
+                const tokenPrice = prices[underlying] || 0;
+                const amount = parseFloat(pos.amount) || 0;
+                const usdValue = parseFloat(pos.value_usd) || (amount * tokenPrice);
+                totalStakedValue += usdValue;
+                stakedCount++;
 
-            const apyText = (pos.apy && parseFloat(pos.apy) > 0) ? `<span class="apy-badge">${parseFloat(pos.apy).toFixed(2)}% APY</span>` : '';
-            const logoUrl = getLogoKitUrl(underlying, 32);
-            const chainBadge = getGovChainBadge('cardano');
+                const apyText = (pos.apy && parseFloat(pos.apy) > 0) ? `<span class="apy-badge">${parseFloat(pos.apy).toFixed(2)}% APY</span>` : '';
+                const logoUrl = getLogoKitUrl(underlying, 32);
+                const posChain = pos.chain || 'cardano';
+                const chainBadge = getGovChainBadge(posChain);
+                const sourceNote = (pos.extra && pos.extra.source === 'api') ? '' : (pos.extra && pos.extra.note ? ` <span style="font-size:10px;color:var(--text-muted)">(est.)</span>` : '');
 
-            html += `
-                <div class="defi-gov-card staked" style="border-left-color: #3b82f6">
-                    <div class="card-header">
-                        <span class="token-logo-wrap"><img src="${DOMPurify.sanitize(logoUrl)}" alt="${DOMPurify.sanitize(underlying)}" class="token-logo-staking"></span>
-                        <span class="protocol-name">${chainBadge} ${DOMPurify.sanitize(pos.protocol)}</span>
-                        <span class="staked-badge" style="background:#3b82f6">Supply</span>
-                        ${apyText}
-                    </div>
-                    <div class="card-amount">${formatCryptoBlur(amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6}), pos.token_symbol)}</div>
-                    <div class="card-value">${formatUSDBlur(usdValue)}</div>
-                    <div class="card-actions">
-                        <span style="font-size:12px;color:var(--text-secondary)">Underlying: ${DOMPurify.sanitize(underlying)}</span>
-                    </div>
-                </div>`;
-        }
+                // Pending rewards
+                let rewardHtml = '';
+                const pendingRewards = parseFloat(pos.pending_rewards) || 0;
+                const rewardToken = pos.reward_token || '';
+                if (pendingRewards > 0 && rewardToken) {
+                    rewardHtml = `<div style="font-size:11px;color:#f59e0b;margin-top:4px">Pending: ${pendingRewards.toFixed(4)} ${DOMPurify.sanitize(rewardToken)}</div>`;
+                }
 
-        // Borrow positions
-        for (const pos of borrowPos) {
-            const underlying = (pos.extra && pos.extra.underlying_token) ? pos.extra.underlying_token : pos.token_symbol;
-            const tokenPrice = prices[underlying] || 0;
-            const amount = parseFloat(pos.amount) || 0;
-            const usdValue = parseFloat(pos.value_usd) || (amount * tokenPrice);
-            stakedCount++;
-
-            const healthFactor = pos.extra ? pos.extra.health_factor : null;
-            let healthHtml = '';
-            if (healthFactor !== null && healthFactor !== undefined) {
-                const hf = parseFloat(healthFactor);
-                const hfClass = hf >= 2 ? 'ratio-healthy' : (hf >= 1.2 ? 'ratio-caution' : 'ratio-danger');
-                healthHtml = `<div class="cdp-ratio ${hfClass}">Health Factor: ${hf.toFixed(2)}</div>`;
+                html += `
+                    <div class="defi-gov-card staked" style="border-left-color: #3b82f6">
+                        <div class="card-header">
+                            <span class="token-logo-wrap"><img src="${DOMPurify.sanitize(logoUrl)}" alt="${DOMPurify.sanitize(underlying)}" class="token-logo-staking"></span>
+                            <span class="protocol-name">${chainBadge} ${DOMPurify.sanitize(pos.protocol)}</span>
+                            <span class="staked-badge" style="background:#3b82f6">Supply</span>
+                            ${apyText}
+                        </div>
+                        <div class="card-amount">${formatCryptoBlur(amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6}), pos.token_symbol)}${sourceNote}</div>
+                        <div class="card-value">${formatUSDBlur(usdValue)}</div>
+                        ${rewardHtml}
+                        <div class="card-actions">
+                            <span style="font-size:12px;color:var(--text-secondary)">Underlying: ${DOMPurify.sanitize(underlying)}</span>
+                        </div>
+                    </div>`;
             }
 
-            const apyText = (pos.apy && parseFloat(pos.apy) > 0) ? `<span class="apy-badge" style="background:#ef4444;color:#fff">${parseFloat(pos.apy).toFixed(2)}% APR</span>` : '';
-            const logoUrl = getLogoKitUrl(underlying, 32);
-            const chainBadge = getGovChainBadge('cardano');
+            // Borrow positions
+            for (const pos of borrowPos) {
+                const underlying = (pos.extra && pos.extra.underlying_token) ? pos.extra.underlying_token : pos.token_symbol;
+                const tokenPrice = prices[underlying] || 0;
+                const amount = parseFloat(pos.amount) || 0;
+                const usdValue = parseFloat(pos.value_usd) || (amount * tokenPrice);
+                stakedCount++;
 
-            html += `
-                <div class="defi-gov-card staked" style="border-left-color: #ef4444">
-                    <div class="card-header">
-                        <span class="token-logo-wrap"><img src="${DOMPurify.sanitize(logoUrl)}" alt="${DOMPurify.sanitize(underlying)}" class="token-logo-staking"></span>
-                        <span class="protocol-name">${chainBadge} ${DOMPurify.sanitize(pos.protocol)}</span>
-                        <span class="staked-badge" style="background:#ef4444">Borrow</span>
-                        ${apyText}
-                    </div>
-                    <div class="card-amount">${formatCryptoBlur(amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6}), pos.token_symbol)}</div>
-                    <div class="card-value" style="color:#ef4444">${usdValue > 0 ? '-' + formatUSD(usdValue) + ' (debt)' : ''}</div>
-                    ${healthHtml}
-                    <div class="card-actions">
-                        <span style="font-size:12px;color:var(--text-secondary)">${DOMPurify.sanitize(pos.token_name || 'Active Loan')}</span>
-                    </div>
-                </div>`;
+                const healthFactor = pos.extra ? pos.extra.health_factor : null;
+                let healthHtml = '';
+                if (healthFactor !== null && healthFactor !== undefined) {
+                    const hf = parseFloat(healthFactor);
+                    const hfClass = hf >= 2 ? 'ratio-healthy' : (hf >= 1.2 ? 'ratio-caution' : 'ratio-danger');
+                    healthHtml = `<div class="cdp-ratio ${hfClass}">Health Factor: ${hf.toFixed(2)}</div>`;
+                }
+
+                const apyText = (pos.apy && parseFloat(pos.apy) > 0) ? `<span class="apy-badge" style="background:#ef4444;color:#fff">${parseFloat(pos.apy).toFixed(2)}% APR</span>` : '';
+                const logoUrl = getLogoKitUrl(underlying, 32);
+                const posChain = pos.chain || 'cardano';
+                const chainBadge = getGovChainBadge(posChain);
+
+                html += `
+                    <div class="defi-gov-card staked" style="border-left-color: #ef4444">
+                        <div class="card-header">
+                            <span class="token-logo-wrap"><img src="${DOMPurify.sanitize(logoUrl)}" alt="${DOMPurify.sanitize(underlying)}" class="token-logo-staking"></span>
+                            <span class="protocol-name">${chainBadge} ${DOMPurify.sanitize(pos.protocol)}</span>
+                            <span class="staked-badge" style="background:#ef4444">Borrow</span>
+                            ${apyText}
+                        </div>
+                        <div class="card-amount">${formatCryptoBlur(amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6}), pos.token_symbol)}</div>
+                        <div class="card-value" style="color:#ef4444">${usdValue > 0 ? '-' + formatUSD(usdValue) + ' (debt)' : ''}</div>
+                        ${healthHtml}
+                        <div class="card-actions">
+                            <span style="font-size:12px;color:var(--text-secondary)">${DOMPurify.sanitize(pos.token_name || 'Active Loan')}</span>
+                        </div>
+                    </div>`;
+            }
+
+            html += `</div></div>`;
         }
 
-        html += `</div></div>`;
+        // ========================================
+        // SECTION 2C: PERPETUAL POSITIONS (Solana)
+        // ========================================
+        const perpPositions = (_lendingData.perp_positions || []).length > 0
+            ? _lendingData.perp_positions
+            : lendingPositions.filter(p => p.position_type === 'perpetuals');
+
+        if (perpPositions.length > 0) {
+            html += `<div class="defi-gov-subsection">
+                <div class="defi-gov-subsection-header">
+                    <span class="subsection-icon">\u{1F4C8}</span>
+                    <span class="subsection-title">Perpetual Positions</span>
+                    <span class="subsection-count">${perpPositions.length}</span>
+                </div>
+                <div class="defi-gov-cards">`;
+
+            for (const pos of perpPositions) {
+                const amount = parseFloat(pos.amount) || 0;
+                const sizeUsd = parseFloat(pos.extra && pos.extra.size_usd ? pos.extra.size_usd : pos.value_usd) || 0;
+                const pnl = parseFloat(pos.extra ? pos.extra.pnl : 0) || 0;
+                const side = pos.extra ? (pos.extra.side || '') : '';
+                const entryPrice = parseFloat(pos.extra ? pos.extra.entry_price : 0) || 0;
+                const leverage = parseFloat(pos.extra ? pos.extra.leverage : 0) || 0;
+                const collateral = parseFloat(pos.extra ? pos.extra.collateral_usd : 0) || 0;
+                const liqPrice = parseFloat(pos.extra ? pos.extra.liquidation_price : 0) || 0;
+                const posChain = pos.chain || 'solana';
+                const chainBadge = getGovChainBadge(posChain);
+
+                const sideColor = side === 'long' ? '#10b981' : '#ef4444';
+                const sideLabel = side ? side.charAt(0).toUpperCase() + side.slice(1) : 'Position';
+                const pnlColor = pnl >= 0 ? '#10b981' : '#ef4444';
+                const pnlSign = pnl >= 0 ? '+' : '';
+                const pnlHtml = pnl !== 0 ? `<div style="font-size:14px;font-weight:600;color:${pnlColor};margin-top:4px">PnL: ${pnlSign}${formatUSD(Math.abs(pnl))}</div>` : '';
+
+                const tokenBase = pos.token_symbol ? pos.token_symbol.replace('-PERP', '').replace('-perp', '') : 'UNKNOWN';
+                const logoUrl = getLogoKitUrl(tokenBase, 32);
+
+                let detailHtml = '';
+                if (entryPrice > 0) detailHtml += `<span style="font-size:11px;color:var(--text-muted)">Entry: $${parseFloat(entryPrice).toLocaleString(undefined, {maximumFractionDigits: 2})}</span> `;
+                if (leverage > 0) detailHtml += `<span style="font-size:11px;color:var(--text-muted)">${parseFloat(leverage).toFixed(1)}x</span> `;
+                if (collateral > 0) detailHtml += `<span style="font-size:11px;color:var(--text-muted)">Collateral: ${formatUSD(collateral)}</span> `;
+                if (liqPrice > 0) detailHtml += `<span style="font-size:11px;color:#ef4444">Liq: $${parseFloat(liqPrice).toLocaleString(undefined, {maximumFractionDigits: 2})}</span>`;
+
+                html += `
+                    <div class="defi-gov-card staked" style="border-left-color: ${sideColor}">
+                        <div class="card-header">
+                            <span class="token-logo-wrap"><img src="${DOMPurify.sanitize(logoUrl)}" alt="${DOMPurify.sanitize(tokenBase)}" class="token-logo-staking"></span>
+                            <span class="protocol-name">${chainBadge} ${DOMPurify.sanitize(pos.protocol)}</span>
+                            <span class="staked-badge" style="background:${sideColor}">${DOMPurify.sanitize(sideLabel)}</span>
+                        </div>
+                        <div class="card-amount">${DOMPurify.sanitize(pos.token_symbol || 'Position')}</div>
+                        <div class="card-value">${sizeUsd > 0 ? 'Size: ' + formatUSD(sizeUsd) : ''}</div>
+                        ${pnlHtml}
+                        ${detailHtml ? `<div class="card-actions" style="flex-wrap:wrap;gap:6px">${detailHtml}</div>` : ''}
+                    </div>`;
+                stakedCount++;
+            }
+
+            html += `</div></div>`;
+        }
+
+        // ========================================
+        // SECTION 2D: LP POSITIONS (All Chains)
+        // ========================================
+        const solanaLpPositions = (_lendingData.lp_positions || []).length > 0
+            ? _lendingData.lp_positions
+            : lendingPositions.filter(p => p.position_type === 'lp_position' || p.position_type === 'concentrated_lp');
+
+        if (solanaLpPositions.length > 0) {
+            const totalSolanaLpValue = solanaLpPositions.reduce((sum, p) => sum + (parseFloat(p.value_usd) || 0), 0);
+
+            html += `<div class="defi-gov-subsection">
+                <div class="defi-gov-subsection-header">
+                    <span class="subsection-icon">\u{1F4B1}</span>
+                    <span class="subsection-title">LP Positions</span>
+                    <span class="subsection-count">${solanaLpPositions.length} pool${solanaLpPositions.length !== 1 ? 's' : ''}</span>
+                    ${totalSolanaLpValue > 0 ? `<span style="margin-left:auto;font-weight:700;color:var(--accent-green)">${formatUSDBlur(totalSolanaLpValue)}</span>` : ''}
+                </div>
+                <div class="defi-gov-cards">`;
+
+            for (const pos of solanaLpPositions) {
+                const pairName = (pos.extra && pos.extra.pair) ? pos.extra.pair : (pos.token_name || pos.token_symbol || 'LP');
+                const valueUsd = parseFloat(pos.value_usd) || 0;
+                const underlying = pos.underlying_tokens || [];
+                const tokenA = underlying[0] || null;
+                const tokenB = underlying[1] || null;
+                const inRange = pos.extra ? pos.extra.in_range : null;
+                const fees = pos.extra ? parseFloat(pos.extra.unclaimed_fees_usd || 0) : 0;
+                const posChain = pos.chain || 'solana';
+                const chainBadge = getGovChainBadge(posChain);
+                const isConcentrated = pos.position_type === 'concentrated_lp';
+
+                let rangeHtml = '';
+                if (inRange !== null && inRange !== undefined) {
+                    rangeHtml = inRange
+                        ? '<span style="font-size:10px;padding:2px 6px;border-radius:8px;background:rgba(16,185,129,0.15);color:#10b981">In Range</span>'
+                        : '<span style="font-size:10px;padding:2px 6px;border-radius:8px;background:rgba(239,68,68,0.15);color:#ef4444">Out of Range</span>';
+                }
+
+                html += `
+                    <div class="defi-gov-card staked" style="border-left-color: #06b6d4">
+                        <div class="card-header">
+                            <span class="protocol-name">${chainBadge} ${DOMPurify.sanitize(pos.protocol)}</span>
+                            <span class="staked-badge" style="background:#06b6d4">${isConcentrated ? 'CL' : 'LP'}</span>
+                            ${rangeHtml}
+                        </div>
+                        <div style="font-weight:700;font-size:14px;color:var(--text-primary)">${DOMPurify.sanitize(pairName)}</div>
+                        ${valueUsd > 0 ? `<div class="card-value">${formatUSDBlur(valueUsd)}</div>` : '<div style="font-size:12px;color:var(--text-muted);font-style:italic">Valuation pending...</div>'}`;
+
+                // Underlying token breakdown
+                if (tokenA || tokenB) {
+                    html += `<div style="margin-top:6px;padding:6px 8px;background:rgba(255,255,255,0.03);border-radius:6px;font-size:12px">`;
+                    if (tokenA) {
+                        html += `<div style="display:flex;gap:6px;margin-bottom:2px"><span style="font-weight:600;min-width:45px">${DOMPurify.sanitize(tokenA.symbol)}</span><span style="color:var(--text-secondary)">${parseFloat(tokenA.amount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6})}</span>${parseFloat(tokenA.value_usd) > 0 ? `<span style="color:var(--accent-green);margin-left:auto">${formatUSD(parseFloat(tokenA.value_usd))}</span>` : ''}</div>`;
+                    }
+                    if (tokenB) {
+                        html += `<div style="display:flex;gap:6px"><span style="font-weight:600;min-width:45px">${DOMPurify.sanitize(tokenB.symbol)}</span><span style="color:var(--text-secondary)">${parseFloat(tokenB.amount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6})}</span>${parseFloat(tokenB.value_usd) > 0 ? `<span style="color:var(--accent-green);margin-left:auto">${formatUSD(parseFloat(tokenB.value_usd))}</span>` : ''}</div>`;
+                    }
+                    html += `</div>`;
+                }
+
+                if (fees > 0) {
+                    html += `<div style="font-size:11px;color:#f59e0b;margin-top:4px">Unclaimed fees: ${formatUSD(fees)}</div>`;
+                }
+
+                html += `</div>`;
+                totalStakedValue += valueUsd;
+                stakedCount++;
+            }
+
+            html += `</div></div>`;
+        }
     }
 
     // ========================================

@@ -5,6 +5,7 @@ Detects lending/borrowing positions via:
 - balanceOf(address) for supply balance (selector: 0x70a08231)
 - borrowBalanceOf(address) for borrow balance (selector: 0x374c49b4)
 
+Enriched: Also fetches accrued COMP rewards via CometRewards.getRewardOwed().
 Each Comet market is a separate contract (e.g., cUSDCv3, cWETHv3).
 """
 
@@ -42,6 +43,14 @@ COMPOUND_V3_MARKETS = {
     },
 }
 
+# CometRewards contract addresses per chain
+COMET_REWARDS = {
+    "ethereum": "0x1B0e765F6224C21223AeA2af16c1C46E38885a40",
+    "polygon": "0x45939657d1CA34A8FA39A924B71D28Fe8431e581",
+    "arbitrum": "0x88730d254A2f7e6AC8388c3198aFd694bA9f7fae",
+    "base": "0x123964802e6ABabBE1Bc9547D72Ef1B69B00A6b1",
+}
+
 # Market base token decimals
 MARKET_DECIMALS = {
     "cUSDCv3": 6,
@@ -51,8 +60,21 @@ MARKET_DECIMALS = {
     "cWETHv3": 18,
 }
 
+# Market underlying symbol
+MARKET_SYMBOLS = {
+    "cUSDCv3": "USDC",
+    "cUSDC.ev3": "USDC",
+    "cUSDbCv3": "USDbC",
+    "cUSDTv3": "USDT",
+    "cWETHv3": "WETH",
+}
+
 # borrowBalanceOf(address) selector
 BORROW_BALANCE_OF = "0x374c49b4"
+# getRewardOwed(address comet, address account) selector
+GET_REWARD_OWED = "0x70ddd2c8"
+# COMP token decimals
+COMP_DECIMALS = 18
 
 
 class CompoundV3Adapter(BaseEVMAdapter):
@@ -74,11 +96,13 @@ class CompoundV3Adapter(BaseEVMAdapter):
 
             for market_name, contract in markets.items():
                 decimals = MARKET_DECIMALS.get(market_name, 6)
+                underlying = MARKET_SYMBOLS.get(market_name, market_name)
 
-                # Check supply and borrow in parallel
-                supply_balance, borrow_balance = await asyncio.gather(
+                # Check supply, borrow, and rewards in parallel
+                supply_balance, borrow_balance, comp_reward = await asyncio.gather(
                     self._get_erc20_balance(c, contract, address),
                     self._get_borrow_balance(c, contract, address),
+                    self._get_comp_rewards(c, contract, address),
                 )
 
                 if supply_balance and supply_balance > 0:
@@ -88,8 +112,14 @@ class CompoundV3Adapter(BaseEVMAdapter):
                         chain=c,
                         position_type=PositionType.LENDING_SUPPLY,
                         token_symbol=market_name,
+                        token_name=f"Compound {underlying} Supply",
                         amount=amount,
                         contract_address=contract,
+                        pending_rewards=comp_reward if comp_reward > 0 else None,
+                        reward_token="COMP" if comp_reward > 0 else None,
+                        extra={
+                            "underlying_token": underlying,
+                        },
                     ))
 
                 if borrow_balance and borrow_balance > 0:
@@ -99,8 +129,12 @@ class CompoundV3Adapter(BaseEVMAdapter):
                         chain=c,
                         position_type=PositionType.LENDING_BORROW,
                         token_symbol=f"{market_name}-DEBT",
+                        token_name=f"Compound {underlying} Borrow",
                         amount=amount,
                         contract_address=contract,
+                        extra={
+                            "underlying_token": underlying,
+                        },
                     ))
 
         return positions
@@ -117,6 +151,33 @@ class CompoundV3Adapter(BaseEVMAdapter):
             except ValueError:
                 pass
         return 0
+
+    async def _get_comp_rewards(
+        self, chain: str, comet: str, address: str
+    ) -> float:
+        """Fetch accrued COMP rewards from CometRewards.getRewardOwed(comet, account).
+
+        Returns rewards in COMP (human-readable), or 0 if unavailable.
+        """
+        rewards_contract = COMET_REWARDS.get(chain)
+        if not rewards_contract:
+            return 0.0
+
+        # getRewardOwed(address comet, address account)
+        data = GET_REWARD_OWED + self._encode_address(comet) + self._encode_address(address)
+        result = await self._eth_call(chain, rewards_contract, data)
+        if not result or result == "0x" or len(result) < 130:
+            return 0.0
+
+        try:
+            # Returns (address token, uint owed) — owed is at offset 1
+            owed_raw = self._decode_uint256(result, 1)
+            if owed_raw > 0:
+                return owed_raw / (10 ** COMP_DECIMALS)
+        except Exception as e:
+            logger.debug(f"Error decoding COMP rewards on {chain}: {e}")
+
+        return 0.0
 
 
 protocol_registry.register(CompoundV3Adapter())

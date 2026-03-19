@@ -47,6 +47,13 @@
         .defi-card[data-protocol="Iagon"] { border-left-color: #f59e0b; }
         .defi-card[data-protocol="Helium"] { border-left-color: #8b5cf6; }
         .defi-card[data-protocol="Chainlink Staking"] { border-left-color: #375bd2; }
+        .defi-card[data-protocol="Marginfi"] { border-left-color: #14f195; }
+        .defi-card[data-protocol="Kamino"] { border-left-color: #00d2ff; }
+        .defi-card[data-protocol="Drift"] { border-left-color: #e946ef; }
+        .defi-card[data-protocol="Jupiter Perps"] { border-left-color: #c7f284; }
+        .defi-card[data-protocol="Orca"] { border-left-color: #FFD700; }
+        .defi-card[data-protocol="Raydium"] { border-left-color: #6366f1; }
+        .defi-card[data-protocol="Solend"] { border-left-color: #e14fec; }
         .defi-card.exchange-staked { border-left-color: #3b82f6; }
         .defi-card.liquid-staking { border-left-color: #06b6d4; }
         .defi-card.delegation { border-left-color: #0033AD; }
@@ -180,6 +187,10 @@
         .defi-badge-supply { background: #3b82f6; color: #fff; }
         .defi-badge-borrow { background: #ef4444; color: #fff; }
         .defi-badge-lending { background: #8b5cf6; color: #fff; }
+        .defi-badge-long { background: #10b981; color: #fff; }
+        .defi-badge-short { background: #ef4444; color: #fff; }
+        .defi-badge-lp { background: #06b6d4; color: #000; }
+        .defi-badge-cl { background: #06b6d4; color: #000; }
 
         /* Lending-specific card colors */
         .defi-card.lending-supply { border-left-color: #3b82f6; }
@@ -327,6 +338,13 @@
             'Liqwid': 'https://app.liqwid.finance',
             'Lenfi': 'https://app.lenfi.io',
             'Surf Lending': 'https://surflending.org',
+            'Marginfi': 'https://app.marginfi.com',
+            'Kamino': 'https://app.kamino.finance',
+            'Solend': 'https://solend.fi',
+            'Drift': 'https://app.drift.trade',
+            'Jupiter Perps': 'https://jup.ag/perps',
+            'Orca': 'https://www.orca.so',
+            'Raydium': 'https://raydium.io',
         };
         function getLendingProtocolUrl(protocol) {
             return LENDING_PROTOCOL_URLS[protocol] || '#';
@@ -1083,17 +1101,18 @@
             }
 
             // ========================================
-            // SECTION 2B: LENDING POSITIONS
+            // SECTION 2B: LENDING POSITIONS (All Chains)
             // ========================================
             var lendingPositions = lendingData ? (lendingData.lending_positions || []) : [];
             var supplyPositions = lendingPositions.filter(function(p) { return p.position_type === 'lending_supply'; });
             var borrowPositions = lendingPositions.filter(function(p) { return p.position_type === 'lending_borrow'; });
+            var lendingOnlyCount = supplyPositions.length + borrowPositions.length;
 
-            if (lendingPositions.length > 0) {
+            if (lendingOnlyCount > 0) {
                 html += '<div class="defi-section"><div class="defi-section-header">' +
                     '<span class="defi-section-icon">&#127974;</span>' +
                     '<span class="defi-section-title">Lending & Borrowing</span>' +
-                    '<span class="defi-section-count">' + lendingPositions.length + '</span>' +
+                    '<span class="defi-section-count">' + lendingOnlyCount + '</span>' +
                     '</div><div class="defi-card-grid">';
 
                 // Supply positions
@@ -1106,18 +1125,20 @@
                     stakedCount++;
                     protocolSet.add(pos.protocol);
 
+                    var posChain = pos.chain || 'cardano';
                     var apyBadge = '';
                     if (pos.apy && parseFloat(pos.apy) > 0) {
                         apyBadge = '<span class="defi-badge defi-badge-apy">' + parseFloat(pos.apy).toFixed(2) + '% APY</span>';
                     }
+                    var sourceNote = (pos.extra && pos.extra.source === 'api') ? '' : (pos.extra && pos.extra.note ? ' <span style="font-size:10px;color:var(--v2-text-muted)">(est.)</span>' : '');
 
                     html += '<div class="defi-card lending-supply" data-protocol="' + escapeAttr(pos.protocol) + '">' +
                         '<div class="defi-card-header">' +
                         logoImgHtml(underlying, null, 32) +
-                        '<span class="defi-card-protocol">' + getChainBadge('cardano') + ' ' + escapeHtml(pos.protocol) + '</span>' +
+                        '<span class="defi-card-protocol">' + getChainBadge(posChain) + ' ' + escapeHtml(pos.protocol) + '</span>' +
                         '<div class="defi-card-badges"><span class="defi-badge defi-badge-supply">Supply</span>' + apyBadge + '</div>' +
                         '</div>' +
-                        '<div class="defi-card-amount v2-blur">' + amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6}) + ' <span style="font-size:14px;font-weight:400">' + escapeHtml(pos.token_symbol) + '</span></div>' +
+                        '<div class="defi-card-amount v2-blur">' + amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6}) + ' <span style="font-size:14px;font-weight:400">' + escapeHtml(pos.token_symbol) + '</span>' + sourceNote + '</div>' +
                         '<div class="defi-card-token">' + escapeHtml(pos.token_name || '') + '</div>' +
                         (usdValue > 0 ? '<div class="defi-card-value v2-blur">' + formatCurrency(usdValue) + '</div>' : '') +
                         '<div class="defi-card-actions">' +
@@ -1126,7 +1147,7 @@
                         '<a href="' + escapeAttr(getLendingProtocolUrl(pos.protocol)) + '" target="_blank" rel="noopener" class="defi-action-link">Manage</a>' +
                         '</div></div></div>';
 
-                    allDefiRows.push({ protocol: pos.protocol, token: pos.token_symbol, type: 'Supply', amount: amount, value: usdValue, chain: 'cardano' });
+                    allDefiRows.push({ protocol: pos.protocol, token: pos.token_symbol, type: 'Supply', amount: amount, value: usdValue, chain: posChain });
                 });
 
                 // Borrow positions
@@ -1138,6 +1159,7 @@
                     stakedCount++;
                     protocolSet.add(pos.protocol);
 
+                    var posChain = pos.chain || 'cardano';
                     var healthFactor = pos.extra ? pos.extra.health_factor : null;
                     var healthHtml = '';
                     if (healthFactor !== null && healthFactor !== undefined) {
@@ -1154,7 +1176,7 @@
                     html += '<div class="defi-card lending-borrow" data-protocol="' + escapeAttr(pos.protocol) + '">' +
                         '<div class="defi-card-header">' +
                         logoImgHtml(underlying, null, 32) +
-                        '<span class="defi-card-protocol">' + getChainBadge('cardano') + ' ' + escapeHtml(pos.protocol) + '</span>' +
+                        '<span class="defi-card-protocol">' + getChainBadge(posChain) + ' ' + escapeHtml(pos.protocol) + '</span>' +
                         '<div class="defi-card-badges"><span class="defi-badge defi-badge-borrow">Borrow</span>' + apyBadge + '</div>' +
                         '</div>' +
                         '<div class="defi-card-amount v2-blur">' + amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6}) + ' <span style="font-size:14px;font-weight:400">' + escapeHtml(pos.token_symbol) + '</span></div>' +
@@ -1167,7 +1189,155 @@
                         '<a href="' + escapeAttr(getLendingProtocolUrl(pos.protocol)) + '" target="_blank" rel="noopener" class="defi-action-link">Manage</a>' +
                         '</div></div></div>';
 
-                    allDefiRows.push({ protocol: pos.protocol, token: pos.token_symbol, type: 'Borrow', amount: amount, value: usdValue, chain: 'cardano' });
+                    allDefiRows.push({ protocol: pos.protocol, token: pos.token_symbol, type: 'Borrow', amount: amount, value: usdValue, chain: posChain });
+                });
+
+                html += '</div></div>'; // close grid + section
+            }
+
+            // ========================================
+            // SECTION 2C: PERPETUAL POSITIONS
+            // ========================================
+            var perpPositions = lendingData ? (lendingData.perp_positions || []) : [];
+            if (perpPositions.length === 0) {
+                perpPositions = lendingPositions.filter(function(p) { return p.position_type === 'perpetuals'; });
+            }
+
+            if (perpPositions.length > 0) {
+                html += '<div class="defi-section"><div class="defi-section-header">' +
+                    '<span class="defi-section-icon">&#128200;</span>' +
+                    '<span class="defi-section-title">Perpetual Positions</span>' +
+                    '<span class="defi-section-count">' + perpPositions.length + '</span>' +
+                    '</div><div class="defi-card-grid">';
+
+                perpPositions.forEach(function(pos) {
+                    var amount = parseFloat(pos.amount) || 0;
+                    var sizeUsd = parseFloat(pos.extra && pos.extra.size_usd ? pos.extra.size_usd : pos.value_usd) || 0;
+                    var pnl = parseFloat(pos.extra ? pos.extra.pnl : 0) || 0;
+                    var side = pos.extra ? (pos.extra.side || '') : '';
+                    var entryPrice = parseFloat(pos.extra ? pos.extra.entry_price : 0) || 0;
+                    var leverage = parseFloat(pos.extra ? pos.extra.leverage : 0) || 0;
+                    var collateral = parseFloat(pos.extra ? pos.extra.collateral_usd : 0) || 0;
+                    var liqPrice = parseFloat(pos.extra ? pos.extra.liquidation_price : 0) || 0;
+                    var posChain = pos.chain || 'solana';
+                    protocolSet.add(pos.protocol);
+                    stakedCount++;
+
+                    var sideColor = side === 'long' ? '#10b981' : (side === 'short' ? '#ef4444' : 'var(--v2-accent,#00d26a)');
+                    var sideLabel = side ? side.charAt(0).toUpperCase() + side.slice(1) : 'Position';
+                    var pnlColor = pnl >= 0 ? '#10b981' : '#ef4444';
+                    var pnlSign = pnl >= 0 ? '+' : '';
+                    var tokenBase = pos.token_symbol ? pos.token_symbol.replace('-PERP', '').replace('-perp', '') : 'UNKNOWN';
+
+                    var pnlHtml = pnl !== 0 ? '<div style="font-size:16px;font-weight:700;color:' + pnlColor + ';margin-top:4px;font-family:var(--v2-font-mono)">' + pnlSign + formatCurrency(Math.abs(pnl)) + '</div>' : '';
+
+                    var detailParts = [];
+                    if (entryPrice > 0) detailParts.push('Entry: $' + entryPrice.toLocaleString(undefined, {maximumFractionDigits: 2}));
+                    if (leverage > 0) detailParts.push(leverage.toFixed(1) + 'x');
+                    if (collateral > 0) detailParts.push('Collateral: ' + formatCurrency(collateral));
+
+                    html += '<div class="defi-card" style="border-left-color:' + sideColor + '" data-protocol="' + escapeAttr(pos.protocol) + '">' +
+                        '<div class="defi-card-header">' +
+                        logoImgHtml(tokenBase, null, 32) +
+                        '<span class="defi-card-protocol">' + getChainBadge(posChain) + ' ' + escapeHtml(pos.protocol) + '</span>' +
+                        '<div class="defi-card-badges"><span class="defi-badge" style="background:' + sideColor + ';color:#fff">' + escapeHtml(sideLabel) + '</span></div>' +
+                        '</div>' +
+                        '<div class="defi-card-amount">' + escapeHtml(pos.token_symbol || 'Position') + '</div>' +
+                        (sizeUsd > 0 ? '<div class="defi-card-value v2-blur">Size: ' + formatCurrency(sizeUsd) + '</div>' : '') +
+                        pnlHtml +
+                        (detailParts.length > 0 ? '<div class="defi-card-actions"><span class="defi-card-detail">' + escapeHtml(detailParts.join(' · ')) + '</span></div>' : '') +
+                        (liqPrice > 0 ? '<div style="font-size:11px;color:#ef4444;margin-top:4px">Liq: $' + liqPrice.toLocaleString(undefined, {maximumFractionDigits: 2}) + '</div>' : '') +
+                        '</div>';
+
+                    allDefiRows.push({ protocol: pos.protocol, token: pos.token_symbol, type: side ? side.charAt(0).toUpperCase() + side.slice(1) : 'Perp', amount: amount, value: sizeUsd, chain: posChain });
+                });
+
+                html += '</div></div>'; // close grid + section
+            }
+
+            // ========================================
+            // SECTION 2D: SOLANA LP POSITIONS
+            // ========================================
+            var solanaLpPositions = lendingData ? (lendingData.lp_positions || []) : [];
+            if (solanaLpPositions.length === 0) {
+                solanaLpPositions = lendingPositions.filter(function(p) { return p.position_type === 'lp_position' || p.position_type === 'concentrated_lp'; });
+            }
+
+            if (solanaLpPositions.length > 0) {
+                var totalSolLpVal = solanaLpPositions.reduce(function(sum, p) { return sum + (parseFloat(p.value_usd) || 0); }, 0);
+
+                html += '<div class="defi-section"><div class="defi-section-header">' +
+                    '<span class="defi-section-icon">&#128177;</span>' +
+                    '<span class="defi-section-title">Solana LP Positions</span>' +
+                    '<span class="defi-section-count">' + solanaLpPositions.length + ' pool' + (solanaLpPositions.length !== 1 ? 's' : '') + '</span>' +
+                    (totalSolLpVal > 0 ? '<span style="margin-left:auto;font-family:var(--v2-font-mono);font-weight:700;color:var(--v2-accent,#00d26a)" class="v2-blur">' + formatCurrency(totalSolLpVal) + '</span>' : '') +
+                    '</div><div class="defi-card-grid">';
+
+                solanaLpPositions.forEach(function(pos) {
+                    var pairName = (pos.extra && pos.extra.pair) ? pos.extra.pair : (pos.token_name || pos.token_symbol || 'LP');
+                    var valueUsd = parseFloat(pos.value_usd) || 0;
+                    var underlying = pos.underlying_tokens || [];
+                    var tokenA = underlying[0] || null;
+                    var tokenB = underlying[1] || null;
+                    var inRange = pos.extra ? pos.extra.in_range : null;
+                    var fees = pos.extra ? parseFloat(pos.extra.unclaimed_fees_usd || 0) : 0;
+                    var posChain = pos.chain || 'solana';
+                    var isConcentrated = pos.position_type === 'concentrated_lp';
+                    protocolSet.add(pos.protocol);
+                    stakedCount++;
+                    totalStakedValue += valueUsd;
+
+                    var protocolColors = { 'Orca': '#FFD700', 'Raydium': '#6366f1', 'Meteora': '#06b6d4' };
+                    var borderColor = protocolColors[pos.protocol] || '#06b6d4';
+
+                    var rangeHtml = '';
+                    if (inRange !== null && inRange !== undefined) {
+                        rangeHtml = inRange
+                            ? '<span class="defi-badge" style="background:rgba(16,185,129,0.15);color:#10b981">In Range</span>'
+                            : '<span class="defi-badge" style="background:rgba(239,68,68,0.15);color:#ef4444">Out of Range</span>';
+                    }
+
+                    html += '<div class="defi-card" style="border-left-color:' + borderColor + '" data-protocol="' + escapeAttr(pos.protocol) + '">' +
+                        '<div class="defi-card-header">' +
+                        '<span class="defi-card-protocol">' + getChainBadge(posChain) + ' ' + escapeHtml(pos.protocol) + '</span>' +
+                        '<div class="defi-card-badges"><span class="defi-badge defi-badge-staked">' + (isConcentrated ? 'CL' : 'LP') + '</span>' + rangeHtml + '</div>' +
+                        '</div>' +
+                        '<div style="font-weight:700;font-size:15px;color:var(--v2-text-heading)">' + escapeHtml(pairName) + '</div>';
+
+                    if (valueUsd > 0) {
+                        html += '<div class="defi-card-amount v2-blur">' + formatCurrency(valueUsd) + '</div>';
+                    } else {
+                        html += '<div style="font-size:13px;color:var(--v2-text-muted);font-style:italic">Valuation pending...</div>';
+                    }
+
+                    // Underlying tokens breakdown
+                    if (tokenA || tokenB) {
+                        html += '<div style="margin-top:8px;padding:8px 10px;background:rgba(255,255,255,0.03);border-radius:8px;font-size:13px">';
+                        if (tokenA) {
+                            html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">' +
+                                '<span style="font-weight:600;min-width:50px;color:var(--v2-text-primary)">' + escapeHtml(tokenA.symbol || '') + '</span>' +
+                                '<span style="font-family:var(--v2-font-mono);color:var(--v2-text-secondary);flex:1" class="v2-blur">' + parseFloat(tokenA.amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6}) + '</span>' +
+                                (parseFloat(tokenA.value_usd) > 0 ? '<span style="font-family:var(--v2-font-mono);color:var(--v2-accent,#00d26a);font-size:12px" class="v2-blur">' + formatCurrency(parseFloat(tokenA.value_usd)) + '</span>' : '') +
+                                '</div>';
+                        }
+                        if (tokenB) {
+                            html += '<div style="display:flex;align-items:center;gap:8px">' +
+                                '<span style="font-weight:600;min-width:50px;color:var(--v2-text-primary)">' + escapeHtml(tokenB.symbol || '') + '</span>' +
+                                '<span style="font-family:var(--v2-font-mono);color:var(--v2-text-secondary);flex:1" class="v2-blur">' + parseFloat(tokenB.amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6}) + '</span>' +
+                                (parseFloat(tokenB.value_usd) > 0 ? '<span style="font-family:var(--v2-font-mono);color:var(--v2-accent,#00d26a);font-size:12px" class="v2-blur">' + formatCurrency(parseFloat(tokenB.value_usd)) + '</span>' : '') +
+                                '</div>';
+                        }
+                        html += '</div>';
+                    }
+
+                    if (fees > 0) {
+                        html += '<div class="defi-card-pending"><div class="defi-pending-label">Unclaimed Fees</div>' +
+                            '<div class="defi-pending-row"><span class="defi-pending-amount v2-blur">' + formatCurrency(fees) + '</span></div></div>';
+                    }
+
+                    html += '<div class="defi-card-actions"><span class="defi-card-detail">' + escapeHtml(pos.protocol) + ' ' + (isConcentrated ? 'Concentrated' : 'Standard') + ' LP</span></div></div>';
+
+                    allDefiRows.push({ protocol: pos.protocol, token: pairName, type: isConcentrated ? 'Concentrated LP' : 'LP Position', amount: parseFloat(pos.amount) || 0, value: valueUsd, chain: posChain });
                 });
 
                 html += '</div></div>'; // close grid + section

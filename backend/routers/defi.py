@@ -21,6 +21,15 @@ from config import CACHE_TTL_COLD, CACHE_TTL_WARM
 
 logger = logging.getLogger(__name__)
 
+
+def parseFloat_safe(val) -> float:
+    """Safely convert a value to float, returning 0 on failure."""
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 router = APIRouter(prefix="/defi", tags=["defi"])
 
 # Cache TTL in seconds - refresh daily (DeFi positions don't change that frequently)
@@ -883,14 +892,15 @@ async def get_lending_positions(address: str, user_id: int = Depends(verify_sess
 
 @router.get("/lending-summary")
 async def get_lending_summary(user_id: int = Depends(verify_session), refresh: bool = False):
-    """Get aggregated lending summary across all tracked Cardano wallets.
+    """Get aggregated lending summary across all tracked wallets (Cardano + Solana).
 
-    Returns consolidated view of all lending supply and borrow positions.
+    Returns consolidated view of all lending supply, borrow, perpetual, and LP positions
+    from Cardano and Solana DeFi protocols.
     """
     # Check if demo user
     username = await get_username_by_user_id(user_id)
     if username and await is_demo_user(username):
-        return {"lending_positions": [], "supply_count": 0, "borrow_count": 0}
+        return {"lending_positions": [], "supply_count": 0, "borrow_count": 0, "perp_positions": [], "lp_positions": []}
 
     cache_key = f"lending_summary_{user_id}"
 
@@ -902,36 +912,61 @@ async def get_lending_summary(user_id: int = Depends(verify_session), refresh: b
 
     wallets = await get_all_wallets(user_id=user_id)
     cardano_wallets = [w for w in wallets if w['blockchain'] == 'cardano']
+    solana_wallets = [w for w in wallets if w['blockchain'] == 'solana']
 
-    if not cardano_wallets:
+    # EVM wallets: ethereum, polygon, arbitrum, base, avalanche, optimism
+    EVM_CHAINS = {'ethereum', 'polygon', 'arbitrum', 'base', 'avalanche', 'optimism'}
+    evm_wallets = [w for w in wallets if w['blockchain'] in EVM_CHAINS]
+
+    if not cardano_wallets and not solana_wallets and not evm_wallets:
         return {
             "lending_positions": [],
             "supply_count": 0,
             "borrow_count": 0,
+            "perp_positions": [],
+            "lp_positions": [],
             "total_wallets": 0,
         }
 
-    logger.info(f"[Lending] Scanning {len(cardano_wallets)} wallets for lending positions")
+    total_wallets = len(cardano_wallets) + len(solana_wallets) + len(evm_wallets)
+    logger.info(f"[Lending] Scanning {len(cardano_wallets)} Cardano + {len(solana_wallets)} Solana + {len(evm_wallets)} EVM wallets for DeFi positions")
+
+    # Position types we care about
+    DEFI_POSITION_TYPES = (
+        "lending_supply", "lending_borrow",
+        "perpetuals",
+        "lp_position", "concentrated_lp",
+        "cdp", "yield_vault",
+    )
 
     # Scan all wallets in parallel
-    async def scan_wallet(wallet):
+    async def scan_wallet(wallet, chain):
         try:
             positions = await asyncio.wait_for(
-                protocol_registry.detect_all_positions(wallet['address'], chain="cardano"),
+                protocol_registry.detect_all_positions(wallet['address'], chain=chain),
                 timeout=30.0
             )
             return [
                 p.to_dict() for p in positions
-                if p.position_type in ("lending_supply", "lending_borrow")
+                if p.position_type in DEFI_POSITION_TYPES
             ]
         except asyncio.TimeoutError:
-            logger.warning(f"[Lending] Timeout scanning {wallet['address'][:20]}...")
+            logger.warning(f"[Lending] Timeout scanning {chain}/{wallet['address'][:20]}...")
             return []
         except Exception as e:
-            logger.error(f"[Lending] Error scanning {wallet['address'][:20]}...: {e}")
+            logger.error(f"[Lending] Error scanning {chain}/{wallet['address'][:20]}...: {e}")
             return []
 
-    results = await asyncio.gather(*[scan_wallet(w) for w in cardano_wallets])
+    # Gather Cardano, Solana, and EVM results in parallel
+    scan_tasks = []
+    for w in cardano_wallets:
+        scan_tasks.append(scan_wallet(w, "cardano"))
+    for w in solana_wallets:
+        scan_tasks.append(scan_wallet(w, "solana"))
+    for w in evm_wallets:
+        scan_tasks.append(scan_wallet(w, w['blockchain']))
+
+    results = await asyncio.gather(*scan_tasks)
 
     # Aggregate positions by protocol + token + type
     aggregated = {}
@@ -944,33 +979,70 @@ async def get_lending_summary(user_id: int = Depends(verify_session), refresh: b
             if key not in aggregated:
                 aggregated[key] = {
                     'protocol': pos['protocol'],
+                    'chain': pos.get('chain', 'cardano'),
                     'token_symbol': pos['token_symbol'],
-                    'token_name': pos['token_name'],
+                    'token_name': pos.get('token_name', ''),
                     'position_type': pos['position_type'],
                     'amount': 0,
                     'value_usd': 0,
                     'apy': pos.get('apy'),
+                    'pending_rewards': 0,
+                    'reward_token': pos.get('reward_token'),
                     'wallet_count': 0,
                     'extra': pos.get('extra', {}),
+                    'underlying_tokens': pos.get('underlying_tokens', []),
                 }
             aggregated[key]['amount'] += pos.get('amount', 0)
             aggregated[key]['value_usd'] += pos.get('value_usd', 0)
             aggregated[key]['wallet_count'] += 1
+            # Accumulate rewards
+            if pos.get('pending_rewards'):
+                aggregated[key]['pending_rewards'] += parseFloat_safe(pos['pending_rewards'])
+            if pos.get('reward_token') and not aggregated[key].get('reward_token'):
+                aggregated[key]['reward_token'] = pos['reward_token']
             # Preserve APY if available
             if pos.get('apy') and not aggregated[key]['apy']:
                 aggregated[key]['apy'] = pos['apy']
+            # Preserve extra fields like health_factor, pnl, side, vault data
+            if pos.get('extra'):
+                for field in ('health_factor', 'pnl', 'side', 'leverage', 'entry_price',
+                              'collateral_usd', 'size_usd', 'in_range', 'pair',
+                              'underlying_token', 'source', 'aggregate',
+                              'vault_type', 'collateral_token', 'collateral_amount',
+                              'debt_dai', 'collateral_ratio',
+                              'pool_name', 'gauge_address',
+                              'fee_tier', 'fee_tier_label', 'current_tick',
+                              'tick_lower', 'tick_upper', 'token0_symbol', 'token1_symbol',
+                              'token0_amount', 'token1_amount', 'uncollected_fees'):
+                    if field in pos['extra'] and field not in aggregated[key]['extra']:
+                        aggregated[key]['extra'][field] = pos['extra'][field]
+            # Preserve underlying tokens (use the first non-empty one)
+            if pos.get('underlying_tokens') and not aggregated[key]['underlying_tokens']:
+                aggregated[key]['underlying_tokens'] = pos['underlying_tokens']
 
     supply_list = [p for p in aggregated.values() if p['position_type'] == 'lending_supply']
     borrow_list = [p for p in aggregated.values() if p['position_type'] == 'lending_borrow']
+    perp_list = [p for p in aggregated.values() if p['position_type'] == 'perpetuals']
+    lp_list = [p for p in aggregated.values() if p['position_type'] in ('lp_position', 'concentrated_lp')]
+    cdp_list = [p for p in aggregated.values() if p['position_type'] == 'cdp']
+    vault_list = [p for p in aggregated.values() if p['position_type'] == 'yield_vault']
 
     result = {
         "lending_positions": list(aggregated.values()),
         "supply_positions": supply_list,
         "borrow_positions": borrow_list,
+        "perp_positions": perp_list,
+        "lp_positions": lp_list,
+        "cdp_positions": cdp_list,
+        "vault_positions": vault_list,
         "supply_count": len(supply_list),
         "borrow_count": len(borrow_list),
+        "perp_count": len(perp_list),
+        "lp_count": len(lp_list),
+        "cdp_count": len(cdp_list),
+        "vault_count": len(vault_list),
         "total_positions": len(aggregated),
-        "total_wallets_scanned": len(cardano_wallets),
+        "total_wallets_scanned": total_wallets,
         "from_cache": False,
     }
 
