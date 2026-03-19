@@ -16,12 +16,7 @@ Provides adapters for 13 Cardano DeFi protocols:
 - Lenfi (lending ex-Aada, receipt token detection)
 - MuesliSwap (DEX, LP positions)
 
-Usage:
-    from services.defi_protocols.cardano import CARDANO_ADAPTERS
-
-    for adapter_cls in CARDANO_ADAPTERS:
-        adapter = adapter_cls()
-        registry.register(adapter)
+Importing this package auto-registers all Cardano adapters with the protocol_registry.
 """
 
 from services.defi_protocols.cardano.indigo import IndigoAdapter
@@ -37,6 +32,7 @@ from services.defi_protocols.cardano.djed import DjedAdapter
 from services.defi_protocols.cardano.fluidtokens import FluidTokensAdapter
 from services.defi_protocols.cardano.lenfi import LenfiAdapter
 from services.defi_protocols.cardano.muesliswap import MuesliSwapAdapter
+from services.defi_protocols.registry import protocol_registry
 
 # All Cardano adapter classes for bulk registration
 CARDANO_ADAPTERS = [
@@ -54,6 +50,10 @@ CARDANO_ADAPTERS = [
     LenfiAdapter,
     MuesliSwapAdapter,
 ]
+
+# Auto-register all Cardano adapters with the global protocol registry
+for _adapter_cls in CARDANO_ADAPTERS:
+    protocol_registry.register(_adapter_cls())
 
 __all__ = [
     'IndigoAdapter',

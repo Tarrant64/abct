@@ -59,6 +59,11 @@ from middleware import RequestSizeLimitMiddleware, RATE_LIMITING_AVAILABLE
 from services.logging_service import get_logging_service
 from services.nft_scheduler import nft_scheduler
 
+# Import DeFi adapter packages to trigger self-registration with protocol_registry
+import services.defi_protocols.cardano  # noqa: F401
+import services.defi_protocols.solana   # noqa: F401
+import services.defi_protocols.evm      # noqa: F401
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
