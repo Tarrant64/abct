@@ -2,17 +2,21 @@
 Shared utilities for Cardano DeFi protocol adapters.
 
 Contains common helpers used across multiple Cardano adapters,
-like address decoding and stake address lookup.
+like address decoding, stake address lookup, and LP position valuation.
 """
 
 import bech32
 import logging
-from typing import Optional
+from typing import Optional, Dict, List, Tuple
 
-from config import BLOCKFROST_API_KEY, BLOCKFROST_BASE_URL
+from config import BLOCKFROST_API_KEY, BLOCKFROST_BASE_URL, TAPTOOLS_BASE_URL
 from services.http_client import get_client, blockfrost_fetch
+from services.api_key_manager import APIKeyManager
 
 logger = logging.getLogger(__name__)
+
+# Singleton API key manager for TapTools within LP valuation
+_taptools_key_mgr = APIKeyManager(api_name='taptools', env_var='TAPTOOLS_API_KEY')
 
 
 def get_payment_credential(address: str) -> Optional[str]:
@@ -194,3 +198,361 @@ def calculate_lp_share(
         "amount_a": pool_reserve_a * share,
         "amount_b": pool_reserve_b * share,
     }
+
+
+# ─── LP Valuation via TapTools ───────────────────────────────────────────────
+# TapTools provides a unified /token/ohlcv and /wallet/portfolio endpoint that
+# works across all Cardano DEXes. For LP valuation we use Blockfrost to get the
+# LP token's on-chain metadata (total supply) and the pool's reserve data, then
+# fall back to TapTools for token pricing.
+
+# Map of DEX LP policy IDs for quick lookup
+DEX_LP_POLICIES: Dict[str, str] = {
+    "0be55d262b29f564998ff81efe21bdc0022621c12f15af08d0f2ddb1": "Minswap",
+    "f5808c2c990d86da54bfc97d89cee6efa20cd8461616359478d96b4c": "Minswap V2",
+    "e4214b7cce62ac6fbba385d164df48e157eae5863521b4b67ca71d86": "Minswap Farm",
+    "0029cb7c88c7567b63d1a512c0ed626aa169688ec980730c0473b913": "SundaeSwap",
+    "026a18d04a0c642759bb3d83b12e3344894e5c1c7b2aeb1a2113a570": "WingRiders",
+    "7aca4c98b65906a5d8e3dfa174dcaa72d190e0eae5ee279df6b87c5a": "Splash",
+    "af3d70acf4bd5b3abb319a7d75c89fb3e56eafcdd46b2e9b57a2999f": "MuesliSwap",
+}
+
+
+async def _get_taptools_headers() -> dict:
+    """Get TapTools API headers using the shared key manager."""
+    api_key = await _taptools_key_mgr.get_api_key()
+    return {"x-api-key": api_key} if api_key else {}
+
+
+async def get_lp_token_info(unit: str) -> Optional[Dict]:
+    """Fetch on-chain asset info for an LP token from Blockfrost.
+
+    Returns total supply, policy ID, asset name, and on-chain metadata.
+
+    Args:
+        unit: Full Cardano asset unit (policy_id + hex asset name)
+
+    Returns:
+        Dict with total_supply, policy_id, asset_name_hex, metadata, or None
+    """
+    try:
+        headers = {"project_id": BLOCKFROST_API_KEY}
+        response = await blockfrost_fetch(
+            f"/assets/{unit}",
+            headers=headers,
+            timeout=30.0,
+        )
+        if response.status_code != 200:
+            logger.warning(f"Blockfrost asset info error for {unit[:30]}...: {response.status_code}")
+            return None
+
+        data = response.json()
+        return {
+            "unit": unit,
+            "policy_id": data.get("policy_id", ""),
+            "asset_name_hex": data.get("asset_name", ""),
+            "total_supply": int(data.get("quantity", "0")),
+            "metadata": data.get("onchain_metadata"),
+            "fingerprint": data.get("fingerprint", ""),
+        }
+    except Exception as e:
+        logger.error(f"get_lp_token_info error for {unit[:30]}...: {e}")
+        return None
+
+
+async def get_token_price_ada(unit: str) -> float:
+    """Get token price in ADA from TapTools.
+
+    Args:
+        unit: Cardano asset unit (policy_id + hex asset name), or 'lovelace' for ADA
+
+    Returns:
+        Price in ADA (float), or 0.0 on failure
+    """
+    if unit == "lovelace":
+        return 1.0  # 1 ADA = 1 ADA
+
+    try:
+        headers = await _get_taptools_headers()
+        if not headers:
+            return 0.0
+
+        client = get_client("taptools_lp", timeout=15.0)
+        response = await client.get(
+            f"{TAPTOOLS_BASE_URL}/token/prices",
+            headers=headers,
+            params={"unit": unit},
+        )
+        if response.status_code == 200:
+            data = response.json()
+            # TapTools returns {unit: price_in_ada}
+            if isinstance(data, dict):
+                return float(data.get(unit, 0.0))
+        return 0.0
+    except Exception as e:
+        logger.debug(f"get_token_price_ada error for {unit[:30]}...: {e}")
+        return 0.0
+
+
+async def get_ada_usd_price() -> float:
+    """Get current ADA/USD price from TapTools.
+
+    Returns:
+        ADA price in USD, or 0.0 on failure
+    """
+    try:
+        headers = await _get_taptools_headers()
+        if not headers:
+            return 0.0
+
+        client = get_client("taptools_lp", timeout=15.0)
+        response = await client.get(
+            f"{TAPTOOLS_BASE_URL}/token/prices",
+            headers=headers,
+            params={"unit": "lovelace"},
+        )
+        if response.status_code == 200:
+            data = response.json()
+            if isinstance(data, dict):
+                return float(data.get("lovelace", 0.0))
+        return 0.0
+    except Exception as e:
+        logger.debug(f"get_ada_usd_price error: {e}")
+        return 0.0
+
+
+def _parse_pool_pair_from_hex(asset_name_hex: str) -> Tuple[str, str]:
+    """Parse pool pair tokens from LP token asset name hex.
+
+    Many Cardano DEXes encode pool information in the LP token name.
+    This is a best-effort parser that returns readable pair names.
+
+    Args:
+        asset_name_hex: Hex-encoded asset name of the LP token
+
+    Returns:
+        Tuple of (token_a_label, token_b_label)
+    """
+    try:
+        decoded = bytes.fromhex(asset_name_hex).decode("utf-8", errors="replace")
+        # Common patterns: "ADA-MIN", "ADA/MIN", etc.
+        for sep in ["-", "/", "_"]:
+            if sep in decoded:
+                parts = decoded.split(sep, 1)
+                return (parts[0].strip(), parts[1].strip())
+        return (decoded, "")
+    except Exception:
+        return ("Unknown", "Unknown")
+
+
+async def resolve_lp_value(
+    lp_unit: str,
+    lp_quantity: int,
+    dex_name: str,
+) -> Optional[Dict]:
+    """Resolve the USD value of LP tokens using Blockfrost pool data + TapTools pricing.
+
+    Strategy:
+    1. Get LP token total supply from Blockfrost
+    2. Find the pool UTXOs that hold the reserves for this LP token
+    3. Calculate user's share of the pool reserves
+    4. Price each reserve token via TapTools
+    5. Sum to get total USD value
+
+    This is the primary valuation method used by all 5 DEX adapters.
+
+    Args:
+        lp_unit: Full asset unit of the LP token (policy_id + hex_name)
+        lp_quantity: Raw quantity of LP tokens held by user
+        dex_name: Name of the DEX (for logging)
+
+    Returns:
+        Dict with valuation details, or None if valuation fails:
+        {
+            "value_usd": float,
+            "value_ada": float,
+            "pair_name": str,         # e.g. "ADA/MIN"
+            "token_a": {"symbol": str, "amount": float, "value_usd": float},
+            "token_b": {"symbol": str, "amount": float, "value_usd": float},
+            "pool_share_pct": float,
+            "total_lp_supply": int,
+        }
+    """
+    try:
+        # Step 1: Get LP token info (total supply)
+        lp_info = await get_lp_token_info(lp_unit)
+        if not lp_info or lp_info["total_supply"] <= 0:
+            logger.debug(f"[{dex_name}] Could not get LP token supply for {lp_unit[:30]}...")
+            return None
+
+        total_supply = lp_info["total_supply"]
+        policy_id = lp_unit[:56]
+        asset_name_hex = lp_unit[56:]
+
+        # Step 2: Find pool address holding this LP token's reserves
+        # The pool address is typically a script address that holds the pool NFT
+        # with the same policy as the LP token. Query Blockfrost for addresses
+        # holding this specific asset.
+        headers = {"project_id": BLOCKFROST_API_KEY}
+        response = await blockfrost_fetch(
+            f"/assets/{lp_unit}/addresses",
+            headers=headers,
+            params={"count": 5, "order": "desc"},
+            timeout=30.0,
+        )
+
+        if response.status_code != 200:
+            logger.debug(f"[{dex_name}] Could not find pool addresses for LP {lp_unit[:30]}...")
+            return None
+
+        asset_addresses = response.json()
+        if not asset_addresses:
+            return None
+
+        # The pool address is the one with the largest quantity of LP tokens
+        # (the pool itself holds the "locked" LP tokens as pool liquidity marker)
+        pool_address = None
+        max_qty = 0
+        for addr_info in asset_addresses:
+            qty = int(addr_info.get("quantity", "0"))
+            if qty > max_qty:
+                max_qty = qty
+                pool_address = addr_info.get("address")
+
+        if not pool_address:
+            logger.debug(f"[{dex_name}] No pool address found for LP {lp_unit[:30]}...")
+            return None
+
+        # Step 3: Get pool UTXOs to find reserve amounts
+        response = await blockfrost_fetch(
+            f"/addresses/{pool_address}/utxos",
+            headers=headers,
+            params={"count": 100},
+            timeout=30.0,
+        )
+
+        if response.status_code != 200:
+            logger.debug(f"[{dex_name}] Could not get pool UTXOs for {pool_address[:30]}...")
+            return None
+
+        utxos = response.json()
+
+        # Aggregate all assets at the pool address
+        pool_lovelace = 0
+        pool_assets: Dict[str, int] = {}  # unit -> quantity
+        for utxo in utxos:
+            for amount_entry in utxo.get("amount", []):
+                u = amount_entry["unit"]
+                q = int(amount_entry["quantity"])
+                if u == "lovelace":
+                    pool_lovelace += q
+                else:
+                    pool_assets[u] = pool_assets.get(u, 0) + q
+
+        # Remove the LP token itself and any NFT identifiers from reserves
+        pool_assets.pop(lp_unit, None)
+        # Remove assets with quantity 1 (likely NFT pool identifiers)
+        pool_assets = {u: q for u, q in pool_assets.items() if q > 1}
+
+        # Step 4: Identify the two reserve tokens
+        # For ADA-paired pools: one side is lovelace
+        # For token-token pools: two non-ADA tokens
+        reserve_a_unit = "lovelace"
+        reserve_a_qty = pool_lovelace
+        reserve_a_decimals = 6  # ADA has 6 decimals
+
+        reserve_b_unit = None
+        reserve_b_qty = 0
+        reserve_b_decimals = 0
+
+        if pool_assets:
+            # Find the primary non-ADA token (highest quantity likely the reserve)
+            # Sort by quantity descending
+            sorted_assets = sorted(pool_assets.items(), key=lambda x: x[1], reverse=True)
+            reserve_b_unit = sorted_assets[0][0]
+            reserve_b_qty = sorted_assets[0][1]
+
+            # Try to get decimals from Blockfrost
+            b_info = await get_lp_token_info(reserve_b_unit)
+            if b_info and b_info.get("metadata"):
+                meta = b_info["metadata"]
+                reserve_b_decimals = int(meta.get("decimals", 0))
+            else:
+                # Common default: 6 decimals for most Cardano tokens
+                reserve_b_decimals = 6
+
+        if not reserve_b_unit:
+            logger.debug(f"[{dex_name}] Could not identify pool reserves for {lp_unit[:30]}...")
+            return None
+
+        # Step 5: Calculate user's share
+        share_data = calculate_lp_share(
+            lp_tokens_held=lp_quantity,
+            total_lp_supply=total_supply,
+            pool_reserve_a=reserve_a_qty / (10 ** reserve_a_decimals),
+            pool_reserve_b=reserve_b_qty / (10 ** reserve_b_decimals),
+        )
+
+        # Step 6: Get token prices (ADA price + token B price in ADA)
+        ada_usd = await get_ada_usd_price()
+
+        # Token A is ADA
+        token_a_price_usd = ada_usd
+
+        # Token B: get price in ADA then convert to USD
+        token_b_price_ada = await get_token_price_ada(reserve_b_unit)
+        token_b_price_usd = token_b_price_ada * ada_usd
+
+        # Step 7: Calculate USD values
+        amount_a = share_data["amount_a"]
+        amount_b = share_data["amount_b"]
+        value_a_usd = amount_a * token_a_price_usd
+        value_b_usd = amount_b * token_b_price_usd
+        total_value_usd = value_a_usd + value_b_usd
+        total_value_ada = amount_a + (amount_b * token_b_price_ada)
+
+        # Parse pair name
+        token_a_label, token_b_label = _parse_pool_pair_from_hex(asset_name_hex)
+        if token_a_label in ("Unknown", "") and reserve_a_unit == "lovelace":
+            token_a_label = "ADA"
+        if token_b_label in ("Unknown", ""):
+            # Try to get ticker from metadata
+            if b_info and b_info.get("metadata"):
+                token_b_label = b_info["metadata"].get("ticker", b_info["metadata"].get("name", "Token"))
+            else:
+                token_b_label = reserve_b_unit[56:70] if len(reserve_b_unit) > 56 else "Token"
+                try:
+                    token_b_label = bytes.fromhex(token_b_label).decode("utf-8", errors="replace")
+                except Exception:
+                    pass
+
+        pair_name = f"{token_a_label}/{token_b_label}"
+
+        logger.info(
+            f"[{dex_name}] LP valued: {pair_name} = ${total_value_usd:.2f} "
+            f"(share={share_data['share_pct']:.4f}%, {amount_a:.2f} {token_a_label} + {amount_b:.4f} {token_b_label})"
+        )
+
+        return {
+            "value_usd": round(total_value_usd, 2),
+            "value_ada": round(total_value_ada, 4),
+            "pair_name": pair_name,
+            "token_a": {
+                "symbol": token_a_label,
+                "amount": round(amount_a, 6),
+                "value_usd": round(value_a_usd, 2),
+                "unit": reserve_a_unit,
+            },
+            "token_b": {
+                "symbol": token_b_label,
+                "amount": round(amount_b, 6),
+                "value_usd": round(value_b_usd, 2),
+                "unit": reserve_b_unit,
+            },
+            "pool_share_pct": round(share_data["share_pct"], 6),
+            "total_lp_supply": total_supply,
+        }
+
+    except Exception as e:
+        logger.error(f"[{dex_name}] LP valuation error for {lp_unit[:30]}...: {e}")
+        return None

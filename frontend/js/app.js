@@ -41,6 +41,7 @@ let stakingTotals = {}; // { 'INDY': 1234.56, 'STRIKE': 789.01, etc. }
 let defiTotals = {}; // DeFi tokens held in wallets (governance tokens, stablecoins, etc.)
 let exchangeTotals = { usd: 0 }; // Total USD value from exchanges
 let exchangeStakedAssets = []; // Staked assets from exchanges (display-only, not added to staking totals)
+let _lendingData = null; // Lending/borrowing positions from protocol adapters
 let snapshotTotals = { staking: 0, defi: 0, trackedTokens: 0 }; // From latest snapshot (dashboard only)
 let nftTotals = { cardano: 0, ethereum: 0, solana: 0, polygon: 0, base: 0, algorand: 0, bsc: 0, arbitrum: 0, avalanche: 0 }; // NFT values by chain
 let nftCounts = { cardano: 0, ethereum: 0, solana: 0, polygon: 0, base: 0, algorand: 0, bsc: 0, arbitrum: 0, avalanche: 0 }; // NFT counts by chain
@@ -4090,6 +4091,7 @@ async function loadDefiGovernance(forceRefresh = false) {
     if (cached) {
         // Render immediately from cache - no spinners
         restoreDefiTotalsFromCache(cached);
+        if (cached.lendingData) _lendingData = cached.lendingData;
         document.body.classList.remove('defi-loading');
         document.body.classList.remove('staking-loading');
         renderDefiGovernance(
@@ -4401,6 +4403,16 @@ async function loadDefiGovernance(forceRefresh = false) {
             }
         }
 
+        // Phase 3b: Fetch lending summary (parallel, non-blocking)
+        try {
+            const lendingResp = await fetch('/defi/lending-summary', { credentials: 'include' });
+            if (lendingResp.ok) {
+                _lendingData = await lendingResp.json();
+            }
+        } catch (e) {
+            console.warn('[DeFi] Lending summary fetch failed:', e);
+        }
+
         // Phase 4: Re-render with full fresh data
         renderDefiGovernance(allStaking, defiData, exchangeStablecoins, nativeStablecoins, adaDelegation);
 
@@ -4408,7 +4420,7 @@ async function loadDefiGovernance(forceRefresh = false) {
         scheduleUpdateTotalPortfolioValue();
 
         // Cache the complete result
-        setCachedDefi({ defiData, allStaking, exchangeStablecoins, nativeStablecoins, adaDelegation });
+        setCachedDefi({ defiData, allStaking, exchangeStablecoins, nativeStablecoins, adaDelegation, lendingData: _lendingData });
         updateDefiTimestamp();
 
         // Auto-refresh DePIN cards that timed out (fetch via dedicated endpoint in background)
@@ -4864,6 +4876,91 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
                     </div>
                 `;
             }
+        }
+
+        html += `</div></div>`;
+    }
+
+    // ========================================
+    // SECTION 2B: LENDING & BORROWING
+    // ========================================
+    if (typeof _lendingData !== 'undefined' && _lendingData && _lendingData.lending_positions && _lendingData.lending_positions.length > 0) {
+        const lendingPositions = _lendingData.lending_positions;
+        const supplyPos = lendingPositions.filter(p => p.position_type === 'lending_supply');
+        const borrowPos = lendingPositions.filter(p => p.position_type === 'lending_borrow');
+
+        html += `<div class="defi-gov-subsection">
+            <div class="defi-gov-subsection-header">
+                <span class="subsection-icon">\uD83C\uDFE6</span>
+                <span class="subsection-title">Lending & Borrowing</span>
+                <span class="subsection-count">${lendingPositions.length}</span>
+            </div>
+            <div class="defi-gov-cards">`;
+
+        // Supply positions
+        for (const pos of supplyPos) {
+            const underlying = (pos.extra && pos.extra.underlying_token) ? pos.extra.underlying_token : pos.token_symbol;
+            const tokenPrice = prices[underlying] || 0;
+            const amount = parseFloat(pos.amount) || 0;
+            const usdValue = parseFloat(pos.value_usd) || (amount * tokenPrice);
+            totalStakedValue += usdValue;
+            stakedCount++;
+
+            const apyText = (pos.apy && parseFloat(pos.apy) > 0) ? `<span class="apy-badge">${parseFloat(pos.apy).toFixed(2)}% APY</span>` : '';
+            const logoUrl = getLogoKitUrl(underlying, 32);
+            const chainBadge = getGovChainBadge('cardano');
+
+            html += `
+                <div class="defi-gov-card staked" style="border-left-color: #3b82f6">
+                    <div class="card-header">
+                        <span class="token-logo-wrap"><img src="${DOMPurify.sanitize(logoUrl)}" alt="${DOMPurify.sanitize(underlying)}" class="token-logo-staking"></span>
+                        <span class="protocol-name">${chainBadge} ${DOMPurify.sanitize(pos.protocol)}</span>
+                        <span class="staked-badge" style="background:#3b82f6">Supply</span>
+                        ${apyText}
+                    </div>
+                    <div class="card-amount">${formatCryptoBlur(amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6}), pos.token_symbol)}</div>
+                    <div class="card-value">${formatUSDBlur(usdValue)}</div>
+                    <div class="card-actions">
+                        <span style="font-size:12px;color:var(--text-secondary)">Underlying: ${DOMPurify.sanitize(underlying)}</span>
+                    </div>
+                </div>`;
+        }
+
+        // Borrow positions
+        for (const pos of borrowPos) {
+            const underlying = (pos.extra && pos.extra.underlying_token) ? pos.extra.underlying_token : pos.token_symbol;
+            const tokenPrice = prices[underlying] || 0;
+            const amount = parseFloat(pos.amount) || 0;
+            const usdValue = parseFloat(pos.value_usd) || (amount * tokenPrice);
+            stakedCount++;
+
+            const healthFactor = pos.extra ? pos.extra.health_factor : null;
+            let healthHtml = '';
+            if (healthFactor !== null && healthFactor !== undefined) {
+                const hf = parseFloat(healthFactor);
+                const hfClass = hf >= 2 ? 'ratio-healthy' : (hf >= 1.2 ? 'ratio-caution' : 'ratio-danger');
+                healthHtml = `<div class="cdp-ratio ${hfClass}">Health Factor: ${hf.toFixed(2)}</div>`;
+            }
+
+            const apyText = (pos.apy && parseFloat(pos.apy) > 0) ? `<span class="apy-badge" style="background:#ef4444;color:#fff">${parseFloat(pos.apy).toFixed(2)}% APR</span>` : '';
+            const logoUrl = getLogoKitUrl(underlying, 32);
+            const chainBadge = getGovChainBadge('cardano');
+
+            html += `
+                <div class="defi-gov-card staked" style="border-left-color: #ef4444">
+                    <div class="card-header">
+                        <span class="token-logo-wrap"><img src="${DOMPurify.sanitize(logoUrl)}" alt="${DOMPurify.sanitize(underlying)}" class="token-logo-staking"></span>
+                        <span class="protocol-name">${chainBadge} ${DOMPurify.sanitize(pos.protocol)}</span>
+                        <span class="staked-badge" style="background:#ef4444">Borrow</span>
+                        ${apyText}
+                    </div>
+                    <div class="card-amount">${formatCryptoBlur(amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6}), pos.token_symbol)}</div>
+                    <div class="card-value" style="color:#ef4444">${usdValue > 0 ? '-' + formatUSD(usdValue) + ' (debt)' : ''}</div>
+                    ${healthHtml}
+                    <div class="card-actions">
+                        <span style="font-size:12px;color:var(--text-secondary)">${DOMPurify.sanitize(pos.token_name || 'Active Loan')}</span>
+                    </div>
+                </div>`;
         }
 
         html += `</div></div>`;
