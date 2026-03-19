@@ -4451,7 +4451,12 @@ function getGovChainBadge(chain) {
     const badges = {
         'cardano': '<span class="chain-badge cardano" title="Cardano">ADA</span>',
         'ethereum': '<span class="chain-badge ethereum" title="Ethereum">ETH</span>',
-        'solana': '<span class="chain-badge solana" title="Solana">SOL</span>'
+        'solana': '<span class="chain-badge solana" title="Solana">SOL</span>',
+        'polygon': '<span class="chain-badge polygon" title="Polygon">MATIC</span>',
+        'arbitrum': '<span class="chain-badge arbitrum" title="Arbitrum">ARB</span>',
+        'base': '<span class="chain-badge base" title="Base">BASE</span>',
+        'optimism': '<span class="chain-badge optimism" title="Optimism">OP</span>',
+        'avalanche': '<span class="chain-badge avalanche" title="Avalanche">AVAX</span>',
     };
     return badges[chain] || badges['cardano'];
 }
@@ -5071,6 +5076,11 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
                 const posChain = pos.chain || 'solana';
                 const chainBadge = getGovChainBadge(posChain);
                 const isConcentrated = pos.position_type === 'concentrated_lp';
+                const feeTierLabel = (pos.extra && pos.extra.fee_tier_label) ? pos.extra.fee_tier_label : '';
+
+                // Pending rewards (CRV, BAL, etc.)
+                const pendingRewards = parseFloat(pos.pending_rewards) || 0;
+                const rewardToken = pos.reward_token || '';
 
                 let rangeHtml = '';
                 if (inRange !== null && inRange !== undefined) {
@@ -5079,11 +5089,18 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
                         : '<span style="font-size:10px;padding:2px 6px;border-radius:8px;background:rgba(239,68,68,0.15);color:#ef4444">Out of Range</span>';
                 }
 
+                // Fee tier badge for Uniswap v3
+                let feeTierHtml = '';
+                if (feeTierLabel) {
+                    feeTierHtml = `<span style="font-size:10px;padding:2px 6px;border-radius:8px;background:rgba(6,182,212,0.15);color:#06b6d4">${DOMPurify.sanitize(feeTierLabel)}</span>`;
+                }
+
                 html += `
                     <div class="defi-gov-card staked" style="border-left-color: #06b6d4">
                         <div class="card-header">
                             <span class="protocol-name">${chainBadge} ${DOMPurify.sanitize(pos.protocol)}</span>
                             <span class="staked-badge" style="background:#06b6d4">${isConcentrated ? 'CL' : 'LP'}</span>
+                            ${feeTierHtml}
                             ${rangeHtml}
                         </div>
                         <div style="font-weight:700;font-size:14px;color:var(--text-primary)">${DOMPurify.sanitize(pairName)}</div>
@@ -5105,9 +5122,86 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
                     html += `<div style="font-size:11px;color:#f59e0b;margin-top:4px">Unclaimed fees: ${formatUSD(fees)}</div>`;
                 }
 
+                // Uncollected fees from Uniswap v3 enrichment (per-token)
+                if (pos.extra && pos.extra.uncollected_fees) {
+                    const uf = pos.extra.uncollected_fees;
+                    const feeEntries = Object.entries(uf).filter(function(e) { return parseFloat(e[1]) > 0; });
+                    if (feeEntries.length > 0) {
+                        html += `<div style="font-size:11px;color:#f59e0b;margin-top:4px">Uncollected: ${feeEntries.map(function(e) { return parseFloat(e[1]).toFixed(6) + ' ' + DOMPurify.sanitize(e[0]); }).join(', ')}</div>`;
+                    }
+                }
+
+                // Pending rewards (CRV, BAL, etc.)
+                if (pendingRewards > 0 && rewardToken) {
+                    html += `<div style="font-size:11px;color:#f59e0b;margin-top:4px">Pending: ${pendingRewards.toFixed(4)} ${DOMPurify.sanitize(rewardToken)}</div>`;
+                }
+
                 html += `</div>`;
                 totalStakedValue += valueUsd;
                 stakedCount++;
+            }
+
+            html += `</div></div>`;
+        }
+
+        // ========================================
+        // SECTION 2E: CDP / VAULT POSITIONS
+        // ========================================
+        const cdpPositions = (_lendingData.cdp_positions || []);
+        const vaultPositions = (_lendingData.vault_positions || []);
+        const cdpAndVault = [...cdpPositions, ...vaultPositions];
+
+        if (cdpAndVault.length > 0) {
+            html += `<div class="defi-gov-subsection">
+                <div class="defi-gov-subsection-header">
+                    <span class="subsection-icon">\u{1F3E6}</span>
+                    <span class="subsection-title">Vaults & CDPs</span>
+                    <span class="subsection-count">${cdpAndVault.length}</span>
+                </div>
+                <div class="defi-gov-cards">`;
+
+            for (const pos of cdpAndVault) {
+                const underlying = (pos.extra && pos.extra.collateral_token) ? pos.extra.collateral_token : ((pos.extra && pos.extra.underlying_token) ? pos.extra.underlying_token : pos.token_symbol);
+                const amount = parseFloat(pos.amount) || 0;
+                const usdValue = parseFloat(pos.value_usd) || 0;
+                const posChain = pos.chain || 'ethereum';
+                const chainBadge = getGovChainBadge(posChain);
+                const logoUrl = getLogoKitUrl(underlying, 32);
+
+                const isCDP = pos.position_type === 'cdp';
+                const badgeColor = isCDP ? '#8b5cf6' : '#10b981';
+                const badgeLabel = isCDP ? 'CDP' : 'Vault';
+
+                let detailHtml = '';
+                if (isCDP && pos.extra) {
+                    const cr = pos.extra.collateral_ratio;
+                    const debt = pos.extra.debt_dai;
+                    if (cr !== null && cr !== undefined) {
+                        const crClass = cr >= 200 ? 'ratio-healthy' : (cr >= 150 ? 'ratio-caution' : 'ratio-danger');
+                        detailHtml += `<div class="cdp-ratio ${crClass}">CR: ${parseFloat(cr).toFixed(1)}%</div>`;
+                    }
+                    if (debt > 0) {
+                        detailHtml += `<div style="font-size:12px;color:#ef4444;margin-top:2px">Debt: ${parseFloat(debt).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} DAI</div>`;
+                    }
+                }
+
+                totalStakedValue += usdValue;
+                stakedCount++;
+
+                html += `
+                    <div class="defi-gov-card staked" style="border-left-color: ${badgeColor}">
+                        <div class="card-header">
+                            <span class="token-logo-wrap"><img src="${DOMPurify.sanitize(logoUrl)}" alt="${DOMPurify.sanitize(underlying)}" class="token-logo-staking"></span>
+                            <span class="protocol-name">${chainBadge} ${DOMPurify.sanitize(pos.protocol)}</span>
+                            <span class="staked-badge" style="background:${badgeColor}">${badgeLabel}</span>
+                        </div>
+                        <div class="card-amount">${formatCryptoBlur(amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6}), pos.token_symbol)}</div>
+                        ${usdValue > 0 ? `<div class="card-value">${formatUSDBlur(usdValue)}</div>` : ''}
+                        ${detailHtml}
+                        <div class="card-actions">
+                            <span style="font-size:12px;color:var(--text-secondary)">${DOMPurify.sanitize(pos.token_name || pos.token_symbol)}</span>
+                        </div>
+                    </div>`;
             }
 
             html += `</div></div>`;
