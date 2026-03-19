@@ -188,6 +188,49 @@ async def get_indigo_staking(address: str, user_id: int = Depends(verify_session
     return result
 
 
+@router.get("/indigo/cdps/{address}")
+async def get_indigo_cdps(address: str, user_id: int = Depends(verify_session)):
+    """
+    Get Indigo Protocol CDP (loan) positions for a specific wallet.
+
+    Returns collateral (ADA), minted iAssets, and collateral ratios.
+    """
+    result = await defi_service.get_indigo_cdps(address)
+
+    if not result:
+        return {
+            "protocol": "Indigo",
+            "address": address,
+            "cdps": [],
+            "total_collateral_ada": 0,
+            "cdp_count": 0,
+            "message": "No Indigo CDP positions found"
+        }
+
+    return result
+
+
+@router.get("/indigo/stability-pool/{address}")
+async def get_indigo_stability_pool(address: str, user_id: int = Depends(verify_session)):
+    """
+    Get Indigo Protocol Stability Pool positions for a specific wallet.
+
+    Returns iAsset deposits in stability pools.
+    """
+    result = await defi_service.get_indigo_stability_pool(address)
+
+    if not result:
+        return {
+            "protocol": "Indigo",
+            "address": address,
+            "stability_pool": [],
+            "pool_count": 0,
+            "message": "No Indigo Stability Pool positions found"
+        }
+
+    return result
+
+
 @router.get("/staking/strike/{address}")
 async def get_strike_staking(address: str, user_id: int = Depends(verify_session)):
     """
@@ -646,7 +689,13 @@ async def get_defi_summary(user_id: int = Depends(verify_session), refresh: bool
                         'decimals': pos['decimals'],
                         'quantity_raw': 0,
                         'wallet_count': 0,
-                        'logo_url': pos.get('logo_url')
+                        'logo_url': pos.get('logo_url'),
+                        # LP valuation fields
+                        'value_usd': 0.0,
+                        'value_ada': 0.0,
+                        'pair_name': pos.get('pair_name', ''),
+                        'pool_share_pct': 0.0,
+                        'underlying_tokens': [],
                     }
 
                 all_positions[key]['quantity_raw'] += pos['quantity_raw']
@@ -654,6 +703,30 @@ async def get_defi_summary(user_id: int = Depends(verify_session), refresh: bool
                 # Preserve logo_url from any wallet that has it
                 if pos.get('logo_url') and not all_positions[key].get('logo_url'):
                     all_positions[key]['logo_url'] = pos['logo_url']
+
+                # Accumulate LP valuation data across wallets
+                if pos.get('value_usd'):
+                    all_positions[key]['value_usd'] += float(pos['value_usd'])
+                    all_positions[key]['value_ada'] += float(pos.get('value_ada', 0))
+                    all_positions[key]['pool_share_pct'] += float(pos.get('pool_share_pct', 0))
+                    if pos.get('pair_name'):
+                        all_positions[key]['pair_name'] = pos['pair_name']
+                    if pos.get('underlying_tokens'):
+                        existing = all_positions[key]['underlying_tokens']
+                        incoming = pos['underlying_tokens']
+                        if not existing:
+                            all_positions[key]['underlying_tokens'] = [
+                                dict(t) for t in incoming
+                            ]
+                        else:
+                            for i, tok in enumerate(incoming):
+                                if i < len(existing):
+                                    existing[i]['amount'] = round(
+                                        existing[i].get('amount', 0) + tok.get('amount', 0), 6
+                                    )
+                                    existing[i]['value_usd'] = round(
+                                        existing[i].get('value_usd', 0) + tok.get('value_usd', 0), 2
+                                    )
 
                 # Protocol totals
                 protocol = pos['protocol']
@@ -772,3 +845,136 @@ async def get_all_defi_positions(address: str, user_id: int = Depends(verify_ses
         "chains": chain_summary,
         "total_protocols": protocol_registry.protocol_count,
     }
+
+
+# ============================================================================
+# Lending Position Detection
+# ============================================================================
+
+@router.get("/lending/{address}")
+async def get_lending_positions(address: str, user_id: int = Depends(verify_session)):
+    """Get all lending/borrowing positions for a specific wallet address.
+
+    Returns supply and borrow positions from Cardano lending protocols:
+    - Liqwid Finance (qToken supply positions)
+    - Lenfi (receipt token supply + loan NFT borrows)
+    - Surf Lending (API-based supply + borrow)
+
+    Returns positions with type lending_supply or lending_borrow.
+    """
+    positions = await protocol_registry.detect_all_positions(address, chain="cardano")
+
+    lending_positions = [
+        p.to_dict() for p in positions
+        if p.position_type in ("lending_supply", "lending_borrow")
+    ]
+
+    supply_positions = [p for p in lending_positions if p['position_type'] == 'lending_supply']
+    borrow_positions = [p for p in lending_positions if p['position_type'] == 'lending_borrow']
+
+    return {
+        "address": address,
+        "lending_positions": lending_positions,
+        "supply_count": len(supply_positions),
+        "borrow_count": len(borrow_positions),
+        "total_positions": len(lending_positions),
+    }
+
+
+@router.get("/lending-summary")
+async def get_lending_summary(user_id: int = Depends(verify_session), refresh: bool = False):
+    """Get aggregated lending summary across all tracked Cardano wallets.
+
+    Returns consolidated view of all lending supply and borrow positions.
+    """
+    # Check if demo user
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        return {"lending_positions": [], "supply_count": 0, "borrow_count": 0}
+
+    cache_key = f"lending_summary_{user_id}"
+
+    if not refresh:
+        cached = await get_cache(cache_key, user_id=user_id)
+        if cached:
+            cached['from_cache'] = True
+            return cached
+
+    wallets = await get_all_wallets(user_id=user_id)
+    cardano_wallets = [w for w in wallets if w['blockchain'] == 'cardano']
+
+    if not cardano_wallets:
+        return {
+            "lending_positions": [],
+            "supply_count": 0,
+            "borrow_count": 0,
+            "total_wallets": 0,
+        }
+
+    logger.info(f"[Lending] Scanning {len(cardano_wallets)} wallets for lending positions")
+
+    # Scan all wallets in parallel
+    async def scan_wallet(wallet):
+        try:
+            positions = await asyncio.wait_for(
+                protocol_registry.detect_all_positions(wallet['address'], chain="cardano"),
+                timeout=30.0
+            )
+            return [
+                p.to_dict() for p in positions
+                if p.position_type in ("lending_supply", "lending_borrow")
+            ]
+        except asyncio.TimeoutError:
+            logger.warning(f"[Lending] Timeout scanning {wallet['address'][:20]}...")
+            return []
+        except Exception as e:
+            logger.error(f"[Lending] Error scanning {wallet['address'][:20]}...: {e}")
+            return []
+
+    results = await asyncio.gather(*[scan_wallet(w) for w in cardano_wallets])
+
+    # Aggregate positions by protocol + token + type
+    aggregated = {}
+    all_positions = []
+
+    for wallet_positions in results:
+        for pos in wallet_positions:
+            all_positions.append(pos)
+            key = f"{pos['protocol']}:{pos['token_symbol']}:{pos['position_type']}"
+            if key not in aggregated:
+                aggregated[key] = {
+                    'protocol': pos['protocol'],
+                    'token_symbol': pos['token_symbol'],
+                    'token_name': pos['token_name'],
+                    'position_type': pos['position_type'],
+                    'amount': 0,
+                    'value_usd': 0,
+                    'apy': pos.get('apy'),
+                    'wallet_count': 0,
+                    'extra': pos.get('extra', {}),
+                }
+            aggregated[key]['amount'] += pos.get('amount', 0)
+            aggregated[key]['value_usd'] += pos.get('value_usd', 0)
+            aggregated[key]['wallet_count'] += 1
+            # Preserve APY if available
+            if pos.get('apy') and not aggregated[key]['apy']:
+                aggregated[key]['apy'] = pos['apy']
+
+    supply_list = [p for p in aggregated.values() if p['position_type'] == 'lending_supply']
+    borrow_list = [p for p in aggregated.values() if p['position_type'] == 'lending_borrow']
+
+    result = {
+        "lending_positions": list(aggregated.values()),
+        "supply_positions": supply_list,
+        "borrow_positions": borrow_list,
+        "supply_count": len(supply_list),
+        "borrow_count": len(borrow_list),
+        "total_positions": len(aggregated),
+        "total_wallets_scanned": len(cardano_wallets),
+        "from_cache": False,
+    }
+
+    if aggregated:
+        await set_cache(cache_key, result, STAKING_CACHE_TTL, user_id=user_id)
+
+    return result

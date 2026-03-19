@@ -195,6 +195,24 @@ DEFI_PROTOCOLS = {
         "description": "Optim liquid staked ADA"
     },
 
+    # === Splash (ex-Spectrum DEX) ===
+    "7aca4c98b65906a5d8e3dfa174dcaa72d190e0eae5ee279df6b87c5a": {
+        "protocol": "Splash",
+        "token": "LP",
+        "type": "lp",
+        "decimals": 0,
+        "description": "Splash liquidity pool tokens"
+    },
+
+    # === MuesliSwap ===
+    "af3d70acf4bd5b3abb319a7d75c89fb3e56eafcdd46b2e9b57a2999f": {
+        "protocol": "MuesliSwap",
+        "token": "LP",
+        "type": "lp",
+        "decimals": 0,
+        "description": "MuesliSwap liquidity pool tokens"
+    },
+
     # === Spectrum Finance (DEFUNCT - protocol shut down Sept 2025, SPF airdrop refund completed) ===
     "6c8642400e8437f737eb86df0fc8a8437c760f48592b1ba8f5767e81": {
         "protocol": "Spectrum",
@@ -407,6 +425,49 @@ class DeFiService:
                         'quantity': pos['quantity_formatted']
                     })
 
+            # Resolve LP position values via pool reserves + TapTools pricing
+            lp_positions = {k: v for k, v in defi_positions.items() if v['type'] == 'lp'}
+            if lp_positions:
+                from services.defi_protocols.cardano.utils import resolve_lp_value
+                lp_tasks = {}
+                for key, pos in lp_positions.items():
+                    unit = pos['policy_id'] + (
+                        bytes(pos['asset_name'], 'utf-8').hex()
+                        if pos['asset_name'] != pos['token'] else ''
+                    )
+                    lp_tasks[key] = resolve_lp_value(
+                        unit, pos['quantity_raw'], pos['protocol']
+                    )
+
+                lp_results = await asyncio.gather(
+                    *lp_tasks.values(), return_exceptions=True
+                )
+                for lp_key, lp_val in zip(lp_tasks.keys(), lp_results):
+                    if isinstance(lp_val, dict) and lp_val:
+                        defi_positions[lp_key]['value_usd'] = lp_val['value_usd']
+                        defi_positions[lp_key]['value_ada'] = lp_val.get('value_ada', 0)
+                        defi_positions[lp_key]['pair_name'] = lp_val.get('pair_name', '')
+                        defi_positions[lp_key]['pool_share_pct'] = lp_val.get('pool_share_pct', 0)
+                        defi_positions[lp_key]['underlying_tokens'] = [
+                            {
+                                'symbol': lp_val['token_a']['symbol'],
+                                'amount': lp_val['token_a']['amount'],
+                                'value_usd': lp_val['token_a']['value_usd'],
+                            },
+                            {
+                                'symbol': lp_val['token_b']['symbol'],
+                                'amount': lp_val['token_b']['amount'],
+                                'value_usd': lp_val['token_b']['value_usd'],
+                            },
+                        ]
+                        # Update display name to pair
+                        if lp_val.get('pair_name'):
+                            defi_positions[lp_key]['asset_name'] = lp_val['pair_name']
+                        logger.info(
+                            f"[DeFi] LP valued: {lp_val.get('pair_name', lp_key)} = "
+                            f"${lp_val['value_usd']:.2f}"
+                        )
+
             # Fetch logo URLs for governance tokens
             gov_tokens = [pos['token'] for pos in defi_positions.values() if pos['type'] == 'governance']
             if gov_tokens:
@@ -522,6 +583,147 @@ class DeFiService:
 
         except Exception as e:
             logger.error(f"Error getting Indigo staking: {e}")
+            return None
+
+    async def get_indigo_cdps(self, address: str) -> Optional[Dict]:
+        """
+        Get Indigo Protocol CDP (loan) positions for an address.
+        Uses Indigo Analytics API /api/v1/loans endpoint.
+        Each CDP has collateral (ADA), minted iAsset amount, and iAsset type.
+        """
+        try:
+            payment_cred = self._get_payment_credential(address)
+            if not payment_cred:
+                return None
+
+            client = get_client("blockfrost", timeout=15.0)
+
+            response = await client.get(
+                f"{INDIGO_API_BASE}/api/v1/loans"
+            )
+
+            if response.status_code != 200:
+                logger.error(f"Indigo loans API error: {response.status_code}")
+                return None
+
+            loans = response.json()
+            user_cdps = []
+            total_collateral_ada = 0
+
+            for loan in loans:
+                if loan.get('owner') != payment_cred:
+                    continue
+
+                asset = loan.get('asset', 'iUSD')
+                collateral_lovelace = loan.get('collateral', 0)
+                minted_raw = loan.get('minted', 0)
+
+                collateral_ada = float(collateral_lovelace) / 1_000_000
+                minted_amount = float(minted_raw) / 1_000_000  # 6 decimals for all iAssets
+
+                if collateral_ada <= 0 and minted_amount <= 0:
+                    continue
+
+                total_collateral_ada += collateral_ada
+
+                user_cdps.append({
+                    'asset': asset,
+                    'collateral_ada': collateral_ada,
+                    'minted_amount': minted_amount,
+                    'min_collateral_ratio': 150,  # Indigo governance param
+                    'output_hash': loan.get('outputHash', ''),
+                })
+
+            if not user_cdps:
+                return None
+
+            return {
+                'protocol': 'Indigo',
+                'address': address,
+                'cdps': user_cdps,
+                'total_collateral_ada': total_collateral_ada,
+                'cdp_count': len(user_cdps),
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting Indigo CDPs: {e}")
+            return None
+
+    async def get_indigo_stability_pool(self, address: str) -> Optional[Dict]:
+        """
+        Get Indigo Protocol Stability Pool positions for an address.
+        Uses Indigo Analytics API /api/v1/stability-pools/accounts endpoint.
+        Users deposit iAssets into stability pools to earn liquidation premiums.
+        """
+        try:
+            payment_cred = self._get_payment_credential(address)
+            if not payment_cred:
+                return None
+
+            client = get_client("blockfrost", timeout=15.0)
+
+            response = await client.get(
+                f"{INDIGO_API_BASE}/api/v1/stability-pools/accounts"
+            )
+
+            if response.status_code != 200:
+                logger.error(f"Indigo stability pools API error: {response.status_code}")
+                return None
+
+            accounts = response.json()
+            deposits_by_asset = {}
+
+            for acct in accounts:
+                if acct.get('owner') != payment_cred:
+                    continue
+
+                asset = acct.get('asset', 'iUSD')
+                snapshot_d = acct.get('snapshotD', '0')
+
+                try:
+                    deposit_scaled = float(snapshot_d)
+                except (ValueError, TypeError):
+                    deposit_scaled = 0
+
+                if deposit_scaled <= 0:
+                    continue
+
+                # snapshotD is scaled by 1e18 (pool math precision),
+                # then the iAsset amount itself has 6 decimals
+                deposit_amount = deposit_scaled / (10 ** 18) / (10 ** 6)
+
+                if deposit_amount < 0.000001:
+                    continue
+
+                if asset not in deposits_by_asset:
+                    deposits_by_asset[asset] = {
+                        'deposited': 0.0,
+                        'position_count': 0,
+                    }
+
+                deposits_by_asset[asset]['deposited'] += deposit_amount
+                deposits_by_asset[asset]['position_count'] += 1
+
+            if not deposits_by_asset:
+                return None
+
+            sp_positions = []
+            for asset, data in deposits_by_asset.items():
+                sp_positions.append({
+                    'asset': asset,
+                    'deposited': data['deposited'],
+                    'position_count': data['position_count'],
+                })
+
+            return {
+                'protocol': 'Indigo',
+                'address': address,
+                'stability_pool': sp_positions,
+                'pool_count': len(sp_positions),
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting Indigo Stability Pool: {e}")
             return None
 
     def _get_payment_credential(self, address: str) -> Optional[str]:
@@ -1426,12 +1628,14 @@ class DeFiService:
                 return None
 
         # Phase 1: Fetch all protocol staking positions in parallel (15s each)
-        indigo, strike, liqwid, iagon, surf = await asyncio.gather(
+        indigo, strike, liqwid, iagon, surf, indigo_cdps, indigo_sp = await asyncio.gather(
             with_timeout(self.get_indigo_staking(address), "Indigo"),
             with_timeout(self.get_strike_staking(address), "Strike", timeout=20),
             with_timeout(self.get_liqwid_staking(address), "Liqwid", timeout=25),
             with_timeout(self.get_iagon_staking(address), "Iagon", timeout=60),
             with_timeout(self.get_surf_lending_positions(address), "Surf"),
+            with_timeout(self.get_indigo_cdps(address), "Indigo CDPs"),
+            with_timeout(self.get_indigo_stability_pool(address), "Indigo SP"),
             return_exceptions=True
         )
 
@@ -1452,6 +1656,12 @@ class DeFiService:
         if isinstance(surf, Exception):
             logger.error(f"Surf staking error for {address[:20]}: {surf}")
             surf = None
+        if isinstance(indigo_cdps, Exception):
+            logger.error(f"Indigo CDPs error for {address[:20]}: {indigo_cdps}")
+            indigo_cdps = None
+        if isinstance(indigo_sp, Exception):
+            logger.error(f"Indigo SP error for {address[:20]}: {indigo_sp}")
+            indigo_sp = None
 
         # Fill timed-out protocols from previous cache result
         if previous_result and previous_result.get('protocols'):
@@ -1499,29 +1709,59 @@ class DeFiService:
             else:
                 logos[key] = val
 
-        # Assemble Indigo
-        if indigo:
+        # Assemble Indigo (staking + CDPs + Stability Pool)
+        if indigo or indigo_cdps or indigo_sp:
             indigo_rewards = rewards.get('indigo')
-            staking['protocols']['Indigo'] = {
-                'staked': [{
+
+            # Initialize Indigo protocol entry
+            if 'Indigo' not in staking['protocols']:
+                staking['protocols']['Indigo'] = {
+                    'staked': [],
+                    'cdps': [],
+                    'stability_pool': [],
+                    'pending_indy': 0,
+                    'pending_ada': 0,
+                    'reward_tokens': ['INDY', 'ADA'],
+                    'rewards_url': 'https://app.indigoprotocol.io/earn',
+                    'total_positions': 0
+                }
+
+            indigo_proto = staking['protocols']['Indigo']
+
+            # Staking positions
+            if indigo:
+                indigo_proto['staked'] = [{
                     'token': 'INDY',
                     'amount': indigo['total_staked_indy'],
                     'amount_formatted': f"{indigo['total_staked_indy']:,.6f}",
                     'positions': indigo['position_count'],
                     'logo_url': logos.get('INDY')
-                }],
-                'pending_indy': indigo_rewards.get('pending_indy', 0) if indigo_rewards else 0,
-                'pending_ada': indigo_rewards.get('pending_ada', 0) if indigo_rewards else 0,
-                'reward_tokens': ['INDY', 'ADA'],
-                'rewards_url': 'https://app.indigoprotocol.io/earn',
-                'total_positions': indigo['position_count']
-            }
-            staking['total_positions'] += indigo['position_count']
-            if indigo_rewards:
-                if indigo_rewards.get('pending_indy', 0) > 0:
-                    staking['total_pending_rewards']['INDY'] = staking['total_pending_rewards'].get('INDY', 0) + indigo_rewards['pending_indy']
-                if indigo_rewards.get('pending_ada', 0) > 0:
-                    staking['total_pending_rewards']['ADA'] = staking['total_pending_rewards'].get('ADA', 0) + indigo_rewards['pending_ada']
+                }]
+                indigo_proto['total_positions'] += indigo['position_count']
+                staking['total_positions'] += indigo['position_count']
+
+                if indigo_rewards:
+                    indigo_proto['pending_indy'] = indigo_rewards.get('pending_indy', 0)
+                    indigo_proto['pending_ada'] = indigo_rewards.get('pending_ada', 0)
+                    if indigo_rewards.get('pending_indy', 0) > 0:
+                        staking['total_pending_rewards']['INDY'] = staking['total_pending_rewards'].get('INDY', 0) + indigo_rewards['pending_indy']
+                    if indigo_rewards.get('pending_ada', 0) > 0:
+                        staking['total_pending_rewards']['ADA'] = staking['total_pending_rewards'].get('ADA', 0) + indigo_rewards['pending_ada']
+
+            # CDP positions
+            if indigo_cdps:
+                indigo_proto['cdps'] = indigo_cdps.get('cdps', [])
+                indigo_proto['total_collateral_ada'] = indigo_cdps.get('total_collateral_ada', 0)
+                indigo_proto['cdp_count'] = indigo_cdps.get('cdp_count', 0)
+                indigo_proto['total_positions'] += indigo_cdps['cdp_count']
+                staking['total_positions'] += indigo_cdps['cdp_count']
+
+            # Stability Pool positions
+            if indigo_sp:
+                indigo_proto['stability_pool'] = indigo_sp.get('stability_pool', [])
+                indigo_proto['sp_count'] = indigo_sp.get('pool_count', 0)
+                indigo_proto['total_positions'] += indigo_sp['pool_count']
+                staking['total_positions'] += indigo_sp['pool_count']
 
         # Assemble Strike
         if strike:

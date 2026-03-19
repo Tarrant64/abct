@@ -3780,6 +3780,14 @@ async function loadDefiPositions() {
         if (data.positions_by_category) {
             for (const [category, positions] of Object.entries(data.positions_by_category)) {
                 for (const pos of positions) {
+                    // LP positions with resolved value_usd: use that directly
+                    if (parseFloat(pos.value_usd) > 0 && pos.type === 'lp') {
+                        const lpKey = pos.pair_name || pos.asset_name || pos.token || 'LP';
+                        defiTotals[lpKey] = (defiTotals[lpKey] || 0) + pos.quantity;
+                        totalDefiValue += parseFloat(pos.value_usd);
+                        continue;
+                    }
+
                     // Use token (standard symbol from DEFI_PROTOCOLS) for price lookup
                     const token = pos.token || pos.asset_name || pos.symbol;
                     if (token && pos.quantity) {
@@ -3930,6 +3938,56 @@ function renderDefiPositions(data) {
                             `;
                         }).join('')}
                         ${stablePositions.length === 0 ? '<div class="defi-empty-line">No stablecoins held</div>' : ''}
+                    </div>
+                </div>
+            `;
+        } else if (category === 'Liquidity Pool Tokens') {
+            // Rich LP position display with underlying tokens and USD value
+            const totalLpValue = positions.reduce((sum, pos) => sum + (parseFloat(pos.value_usd) || 0), 0);
+            html += `
+                <div class="defi-category defi-category-lp">
+                    <div class="defi-category-header">
+                        <span class="defi-category-icon">${icon}</span>
+                        <span class="defi-category-title">${category}</span>
+                        <span class="defi-category-count">${positions.length} pool${positions.length !== 1 ? 's' : ''}</span>
+                        ${totalLpValue > 0 ? `<span class="defi-category-value">${formatUSD(totalLpValue)}</span>` : ''}
+                    </div>
+                    <div class="defi-positions defi-lp-positions">
+                        ${positions.map(pos => {
+                            const pairName = pos.pair_name || pos.asset_name || 'LP';
+                            const valueUsd = parseFloat(pos.value_usd) || 0;
+                            const poolShare = parseFloat(pos.pool_share_pct) || 0;
+                            const underlying = pos.underlying_tokens || [];
+                            const tokenA = underlying[0] || null;
+                            const tokenB = underlying[1] || null;
+                            return `
+                                <div class="defi-position defi-lp-card" data-protocol="${DOMPurify.sanitize(pos.protocol)}">
+                                    <div class="defi-lp-header">
+                                        <span class="defi-lp-protocol">${DOMPurify.sanitize(pos.protocol)}</span>
+                                        <span class="defi-lp-pair">${DOMPurify.sanitize(pairName)}</span>
+                                    </div>
+                                    ${valueUsd > 0 ? `<div class="defi-lp-value">${formatUSD(valueUsd)}</div>` : '<div class="defi-lp-value defi-lp-pending">Valuation pending...</div>'}
+                                    ${tokenA || tokenB ? `
+                                        <div class="defi-lp-underlying">
+                                            ${tokenA ? `<div class="defi-lp-token-row">
+                                                <span class="defi-lp-token-symbol">${DOMPurify.sanitize(tokenA.symbol)}</span>
+                                                <span class="defi-lp-token-amount">${parseFloat(tokenA.amount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6})}</span>
+                                                ${parseFloat(tokenA.value_usd) > 0 ? `<span class="defi-lp-token-usd">${formatUSD(parseFloat(tokenA.value_usd))}</span>` : ''}
+                                            </div>` : ''}
+                                            ${tokenB ? `<div class="defi-lp-token-row">
+                                                <span class="defi-lp-token-symbol">${DOMPurify.sanitize(tokenB.symbol)}</span>
+                                                <span class="defi-lp-token-amount">${parseFloat(tokenB.amount).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6})}</span>
+                                                ${parseFloat(tokenB.value_usd) > 0 ? `<span class="defi-lp-token-usd">${formatUSD(parseFloat(tokenB.value_usd))}</span>` : ''}
+                                            </div>` : ''}
+                                        </div>
+                                    ` : ''}
+                                    <div class="defi-lp-footer">
+                                        ${poolShare > 0 ? `<span class="defi-lp-share">Pool share: ${poolShare < 0.0001 ? '<0.0001' : poolShare.toFixed(4)}%</span>` : ''}
+                                        ${pos.wallet_count > 1 ? `<span class="defi-lp-wallets">In ${pos.wallet_count} wallets</span>` : ''}
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
                     </div>
                 </div>
             `;
@@ -4556,6 +4614,89 @@ function renderDefiContent(allStaking, defiData, exchangeStablecoins, nativeStab
                         </div>
                     </div>
                 `;
+            }
+
+            // --- Indigo CDP Cards ---
+            const cdps = protocolData.cdps || [];
+            if (protocol === 'Indigo' && cdps.length > 0) {
+                for (const cdp of cdps) {
+                    const collateralAda = parseFloat(cdp.collateral_ada) || 0;
+                    const mintedAmount = parseFloat(cdp.minted_amount) || 0;
+                    const iAsset = cdp.asset || 'iUSD';
+                    const minRatio = parseFloat(cdp.min_collateral_ratio) || 150;
+                    const adaPrice = prices['ADA'] || 0;
+                    const iAssetPrice = prices[iAsset] || 0;
+                    const collateralUsd = collateralAda * adaPrice;
+                    const mintedUsd = mintedAmount * iAssetPrice;
+
+                    let collateralRatio = 0;
+                    let ratioClass = '';
+                    let ratioLabel = '--';
+                    if (mintedUsd > 0 && collateralUsd > 0) {
+                        collateralRatio = (collateralUsd / mintedUsd) * 100;
+                        ratioLabel = collateralRatio.toFixed(0) + '%';
+                        if (collateralRatio >= 200) ratioClass = 'ratio-healthy';
+                        else if (collateralRatio >= minRatio) ratioClass = 'ratio-caution';
+                        else ratioClass = 'ratio-danger';
+                    }
+
+                    totalStakedValue += collateralUsd;
+                    stakedCount++;
+
+                    const iAssetLogoUrl = getLogoKitUrl(iAsset, 32);
+
+                    html += `
+                        <div class="defi-gov-card staked cdp-card">
+                            <div class="card-header">
+                                <span class="token-logo-wrap"><img src="${iAssetLogoUrl}" alt="${iAsset}" class="token-logo-staking"></span>
+                                <span class="protocol-name"><span class="chain-badge cardano" title="Cardano">ADA</span> Indigo CDP</span>
+                                <span class="cdp-badge">CDP</span>
+                            </div>
+                            <div class="cdp-metrics">
+                                <div class="cdp-metric"><span class="cdp-label">Collateral</span> <span class="cdp-value">${blurValue(collateralAda.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2}))} ADA</span></div>
+                                <div class="cdp-metric"><span class="cdp-label">Minted</span> <span class="cdp-value">${blurValue(mintedAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6}))} ${DOMPurify.sanitize(iAsset)}</span></div>
+                            </div>
+                            <div class="cdp-ratio ${ratioClass}">Ratio: ${ratioLabel} (min ${minRatio}%)</div>
+                            <div class="card-value">${formatUSDBlur(collateralUsd)}</div>
+                            <div class="card-actions">
+                                <a href="https://app.indigoprotocol.io/positions" target="_blank" rel="noopener" class="action-link">Manage</a>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            // --- Indigo Stability Pool Cards ---
+            const spPositions = protocolData.stability_pool || [];
+            if (protocol === 'Indigo' && spPositions.length > 0) {
+                for (const sp of spPositions) {
+                    const deposited = parseFloat(sp.deposited) || 0;
+                    const spAsset = sp.asset || 'iUSD';
+                    const spPrice = prices[spAsset] || 0;
+                    const depositedUsd = deposited * spPrice;
+                    const posCount = sp.position_count || 1;
+
+                    totalStakedValue += depositedUsd;
+                    stakedCount++;
+
+                    const spLogoUrl = getLogoKitUrl(spAsset, 32);
+
+                    html += `
+                        <div class="defi-gov-card staked sp-card">
+                            <div class="card-header">
+                                <span class="token-logo-wrap"><img src="${spLogoUrl}" alt="${spAsset}" class="token-logo-staking"></span>
+                                <span class="protocol-name"><span class="chain-badge cardano" title="Cardano">ADA</span> Indigo Stability Pool</span>
+                                <span class="sp-badge">SP</span>
+                            </div>
+                            <div class="card-amount">${formatCryptoBlur(deposited.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6}), spAsset)}</div>
+                            <div class="card-value">${depositedUsd > 0 ? formatUSDBlur(depositedUsd) : '--'}</div>
+                            <div class="sp-detail">${posCount} deposit${posCount !== 1 ? 's' : ''} in ${DOMPurify.sanitize(spAsset)} pool</div>
+                            <div class="card-actions">
+                                <a href="https://app.indigoprotocol.io/stability-pools" target="_blank" rel="noopener" class="action-link">Manage</a>
+                            </div>
+                        </div>
+                    `;
+                }
             }
         }
 

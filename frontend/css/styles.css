@@ -8252,6 +8252,94 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     flex-shrink: 0;
 }
 
+.defi-gov-card .cdp-badge {
+    background-color: #6366f1;
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.defi-gov-card .sp-badge {
+    background-color: #8b5cf6;
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.defi-gov-card .cdp-metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.defi-gov-card .cdp-metric {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.defi-gov-card .cdp-label {
+    font-size: 0.65rem;
+    color: var(--text-muted, var(--text-secondary));
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.defi-gov-card .cdp-value {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.defi-gov-card .cdp-ratio {
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-top: 6px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    display: inline-block;
+}
+
+.defi-gov-card .cdp-ratio.ratio-healthy {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+}
+
+.defi-gov-card .cdp-ratio.ratio-caution {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+}
+
+.defi-gov-card .cdp-ratio.ratio-danger {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.defi-gov-card .sp-detail {
+    font-size: 0.7rem;
+    color: var(--text-muted, var(--text-secondary));
+    margin-top: 4px;
+}
+
+.defi-gov-card.cdp-card {
+    border-left: 3px solid #6366f1;
+}
+
+.defi-gov-card.sp-card {
+    border-left: 3px solid #8b5cf6;
+}
+
 .defi-gov-card .card-note {
     font-size: 0.7rem;
     color: var(--text-muted, var(--text-secondary));
@@ -9003,6 +9091,132 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     font-size: 0.85rem;
     padding: 8px 12px;
     font-style: italic;
+}
+
+/* LP Position Cards */
+.defi-category-lp .defi-category-value {
+    margin-left: auto;
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    font-weight: 700;
+    color: var(--accent-success);
+}
+
+.defi-lp-positions {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+}
+
+.defi-lp-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 14px;
+    border-left: 3px solid var(--accent-success);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.defi-lp-card:hover {
+    border-color: var(--accent-success);
+}
+
+.defi-lp-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.defi-lp-protocol {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    opacity: 0.7;
+}
+
+.defi-lp-pair {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+
+.defi-lp-value {
+    font-size: 1.3rem;
+    font-weight: 700;
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    color: var(--accent-success);
+}
+
+.defi-lp-value.defi-lp-pending {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+    font-style: italic;
+}
+
+.defi-lp-underlying {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px;
+    background-color: rgba(255, 255, 255, 0.03);
+    border-radius: 6px;
+}
+
+.defi-lp-token-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+}
+
+.defi-lp-token-symbol {
+    font-weight: 600;
+    min-width: 50px;
+    color: var(--text-primary);
+}
+
+.defi-lp-token-amount {
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    color: var(--text-secondary);
+    flex: 1;
+}
+
+.defi-lp-token-usd {
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    color: var(--accent-success);
+    font-size: 0.8rem;
+}
+
+.defi-lp-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    opacity: 0.7;
+}
+
+.defi-lp-share {
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+}
+
+.defi-lp-card[data-protocol="Minswap"] { border-left-color: #6366f1; }
+.defi-lp-card[data-protocol="SundaeSwap"] { border-left-color: #ec4899; }
+.defi-lp-card[data-protocol="WingRiders"] { border-left-color: #3b82f6; }
+.defi-lp-card[data-protocol="Splash"] { border-left-color: #06b6d4; }
+.defi-lp-card[data-protocol="MuesliSwap"] { border-left-color: #f59e0b; }
+
+/* Light theme overrides for LP cards */
+[data-theme="light"] .defi-lp-card {
+    background-color: #ffffff;
+    border-color: #e5e7eb;
+}
+
+[data-theme="light"] .defi-lp-underlying {
+    background-color: #f9fafb;
 }
 
 /* NFT Section */

@@ -159,6 +159,40 @@
         .defi-card.delegation .defi-card-amount { color: #4a8aff; }
         .defi-card.exchange-staked .defi-card-amount { color: #3b82f6; }
 
+        /* CDP card styles */
+        .defi-card.cdp-card { border-left-color: #6366f1; }
+        .defi-cdp-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+        .defi-cdp-metric { padding: 6px 8px; background: rgba(99, 102, 241, 0.06); border-radius: 6px; }
+        .defi-cdp-metric-label { font-size: 10px; color: var(--v2-text-muted); text-transform: uppercase; letter-spacing: 0.3px; }
+        .defi-cdp-metric-value { font-size: 14px; font-weight: 600; color: var(--v2-text-heading); font-family: var(--v2-font-mono, 'SF Mono', Monaco, monospace); }
+        .defi-cdp-ratio { font-size: 13px; font-weight: 600; margin-top: 8px; padding: 4px 8px; border-radius: 6px; display: inline-block; }
+        .defi-cdp-ratio.healthy { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+        .defi-cdp-ratio.caution { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+        .defi-cdp-ratio.danger { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+        .defi-badge-cdp { background: #6366f1; color: #fff; }
+        .defi-badge-sp { background: #8b5cf6; color: #fff; }
+
+        /* Stability Pool card styles */
+        .defi-card.sp-card { border-left-color: #8b5cf6; }
+        .defi-sp-detail { font-size: 12px; color: var(--v2-text-muted); margin-top: 4px; }
+
+        /* Lending badges */
+        .defi-badge-supply { background: #3b82f6; color: #fff; }
+        .defi-badge-borrow { background: #ef4444; color: #fff; }
+        .defi-badge-lending { background: #8b5cf6; color: #fff; }
+
+        /* Lending-specific card colors */
+        .defi-card.lending-supply { border-left-color: #3b82f6; }
+        .defi-card.lending-borrow { border-left-color: #ef4444; }
+        .defi-card.lending-supply .defi-card-amount { color: #3b82f6; }
+        .defi-card.lending-borrow .defi-card-amount { color: #ef4444; }
+
+        /* Health factor indicator */
+        .health-factor { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 8px; }
+        .health-factor.healthy { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+        .health-factor.warning { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+        .health-factor.danger { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+
         /* Refresh bar */
         .defi-refresh-bar { position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 9999; opacity: 0; transition: opacity 0.3s; }
         .defi-refresh-bar.active { opacity: 1; }
@@ -310,7 +344,8 @@
                     cached.adaDelegation,
                     cached.exchangeStablecoins || [],
                     cached.nativeStablecoins || [],
-                    cached.exchangeStakedAssets || []
+                    cached.exchangeStakedAssets || [],
+                    cached.lendingData || null
                 );
                 updateDefiTimestamp();
             }
@@ -565,8 +600,19 @@
                     });
                 }
 
+                // Phase 3: Fetch lending summary
+                var lendingData = null;
+                try {
+                    var lendingResp = await v2Fetch('/defi/lending-summary');
+                    if (lendingResp.ok) {
+                        lendingData = await lendingResp.json();
+                    }
+                } catch (e) {
+                    console.warn('[DeFi] Lending summary fetch failed:', e);
+                }
+
                 // Render everything
-                renderFullDefi(allStaking, defiData, holdingsData, instantData, adaDelegation, exchangeStablecoins, nativeStablecoins, exchangeStakedAssets);
+                renderFullDefi(allStaking, defiData, holdingsData, instantData, adaDelegation, exchangeStablecoins, nativeStablecoins, exchangeStakedAssets, lendingData);
 
                 // Save to localStorage cache for instant display on next visit
                 setCachedDefi({
@@ -578,6 +624,7 @@
                     exchangeStablecoins: exchangeStablecoins,
                     nativeStablecoins: nativeStablecoins,
                     exchangeStakedAssets: exchangeStakedAssets,
+                    lendingData: lendingData,
                     prices: defiPrices,
                     walletAddresses: _walletAddresses
                 });
@@ -607,7 +654,7 @@
         /* ============================================================
            RENDER — Full V1-level content
            ============================================================ */
-        function renderFullDefi(allStaking, defiData, holdingsData, instantData, adaDelegation, exchangeStablecoins, nativeStablecoins, exchangeStakedAssets) {
+        function renderFullDefi(allStaking, defiData, holdingsData, instantData, adaDelegation, exchangeStablecoins, nativeStablecoins, exchangeStakedAssets, lendingData) {
             allDefiRows = [];
             var html = '';
             var totalStakedValue = 0;
@@ -794,6 +841,94 @@
 
                         allDefiRows.push({ protocol: protocol, token: token, type: 'Staked', amount: data.amount, value: usdValue, chain: stakingChain });
                     });
+
+                    // --- Indigo CDP Cards (within the protocol loop) ---
+                    var cdps = protocolData.cdps || [];
+                    if (protocol === 'Indigo' && cdps.length > 0) {
+                        cdps.forEach(function(cdp) {
+                            var collateralAda = parseFloat(cdp.collateral_ada) || 0;
+                            var mintedAmount = parseFloat(cdp.minted_amount) || 0;
+                            var iAsset = cdp.asset || 'iUSD';
+                            var minRatio = parseFloat(cdp.min_collateral_ratio) || 150;
+                            var adaPrice = getTokenPrice('ADA');
+                            var iAssetPrice = getTokenPrice(iAsset);
+                            var collateralUsd = collateralAda * adaPrice;
+                            var mintedUsd = mintedAmount * iAssetPrice;
+
+                            // Calculate collateral ratio
+                            var collateralRatio = 0;
+                            var ratioClass = 'healthy';
+                            var ratioLabel = '--';
+                            if (mintedUsd > 0 && collateralUsd > 0) {
+                                collateralRatio = (collateralUsd / mintedUsd) * 100;
+                                ratioLabel = collateralRatio.toFixed(0) + '%';
+                                if (collateralRatio < minRatio) {
+                                    ratioClass = 'danger';
+                                } else if (collateralRatio < 200) {
+                                    ratioClass = 'caution';
+                                }
+                            }
+
+                            totalStakedValue += collateralUsd;
+                            stakedCount++;
+                            protocolSet.add('Indigo');
+
+                            html += '<div class="defi-card cdp-card" data-protocol="Indigo">' +
+                                '<div class="defi-card-header">' +
+                                logoImgHtml(iAsset, null, 32) +
+                                '<span class="defi-card-protocol">' + getChainBadge('cardano') + ' Indigo CDP</span>' +
+                                '<div class="defi-card-badges"><span class="defi-badge defi-badge-cdp">CDP</span></div>' +
+                                '</div>' +
+                                '<div class="defi-cdp-metrics">' +
+                                '<div class="defi-cdp-metric"><div class="defi-cdp-metric-label">Collateral</div>' +
+                                '<div class="defi-cdp-metric-value v2-blur">' + collateralAda.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2}) + ' ADA</div></div>' +
+                                '<div class="defi-cdp-metric"><div class="defi-cdp-metric-label">Minted</div>' +
+                                '<div class="defi-cdp-metric-value v2-blur">' + mintedAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6}) + ' ' + escapeHtml(iAsset) + '</div></div>' +
+                                '</div>' +
+                                '<div class="defi-cdp-ratio ' + ratioClass + '">Ratio: ' + ratioLabel + ' (min ' + minRatio + '%)</div>' +
+                                '<div class="defi-card-value v2-blur" style="margin-top:6px">Collateral: ' + formatCurrency(collateralUsd) + '</div>' +
+                                '<div class="defi-card-actions">' +
+                                '<span class="defi-card-detail">' + escapeHtml(iAsset) + ' CDP</span>' +
+                                '<div class="defi-card-links">' +
+                                '<a href="https://app.indigoprotocol.io/positions" target="_blank" rel="noopener" class="defi-action-link">Manage</a>' +
+                                '</div></div></div>';
+
+                            allDefiRows.push({ protocol: 'Indigo', token: iAsset, type: 'CDP', amount: collateralAda, value: collateralUsd, chain: 'cardano' });
+                        });
+                    }
+
+                    // --- Indigo Stability Pool Cards (within the protocol loop) ---
+                    var spPositions = protocolData.stability_pool || [];
+                    if (protocol === 'Indigo' && spPositions.length > 0) {
+                        spPositions.forEach(function(sp) {
+                            var deposited = parseFloat(sp.deposited) || 0;
+                            var spAsset = sp.asset || 'iUSD';
+                            var spPrice = getTokenPrice(spAsset);
+                            var depositedUsd = deposited * spPrice;
+                            var posCount = sp.position_count || 1;
+
+                            totalStakedValue += depositedUsd;
+                            stakedCount++;
+                            protocolSet.add('Indigo');
+
+                            html += '<div class="defi-card sp-card" data-protocol="Indigo">' +
+                                '<div class="defi-card-header">' +
+                                logoImgHtml(spAsset, null, 32) +
+                                '<span class="defi-card-protocol">' + getChainBadge('cardano') + ' Indigo Stability Pool</span>' +
+                                '<div class="defi-card-badges"><span class="defi-badge defi-badge-sp">SP</span></div>' +
+                                '</div>' +
+                                '<div class="defi-card-amount v2-blur">' + deposited.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6}) + ' <span style="font-size:14px;font-weight:400">' + escapeHtml(spAsset) + '</span></div>' +
+                                '<div class="defi-card-value v2-blur">' + (depositedUsd > 0 ? formatCurrency(depositedUsd) : '--') + '</div>' +
+                                '<div class="defi-sp-detail">' + posCount + ' deposit' + (posCount !== 1 ? 's' : '') + ' in ' + escapeHtml(spAsset) + ' pool</div>' +
+                                '<div class="defi-card-actions">' +
+                                '<span class="defi-card-detail">Stability Pool</span>' +
+                                '<div class="defi-card-links">' +
+                                '<a href="https://app.indigoprotocol.io/stability-pools" target="_blank" rel="noopener" class="defi-action-link">Manage</a>' +
+                                '</div></div></div>';
+
+                            allDefiRows.push({ protocol: 'Indigo', token: spAsset, type: 'Stability Pool', amount: deposited, value: depositedUsd, chain: 'cardano' });
+                        });
+                    }
                 });
 
                 // --- Liquid Staking Cards ---
@@ -933,6 +1068,97 @@
 
                         allDefiRows.push({ protocol: protocol, token: token, type: 'DePIN', amount: data.amount, value: usdValue, chain: stakingChain });
                     });
+                });
+
+                html += '</div></div>'; // close grid + section
+            }
+
+            // ========================================
+            // SECTION 2B: LENDING POSITIONS
+            // ========================================
+            var lendingPositions = lendingData ? (lendingData.lending_positions || []) : [];
+            var supplyPositions = lendingPositions.filter(function(p) { return p.position_type === 'lending_supply'; });
+            var borrowPositions = lendingPositions.filter(function(p) { return p.position_type === 'lending_borrow'; });
+
+            if (lendingPositions.length > 0) {
+                html += '<div class="defi-section"><div class="defi-section-header">' +
+                    '<span class="defi-section-icon">&#127974;</span>' +
+                    '<span class="defi-section-title">Lending & Borrowing</span>' +
+                    '<span class="defi-section-count">' + lendingPositions.length + '</span>' +
+                    '</div><div class="defi-card-grid">';
+
+                // Supply positions
+                supplyPositions.forEach(function(pos) {
+                    var underlying = (pos.extra && pos.extra.underlying_token) ? pos.extra.underlying_token : pos.token_symbol;
+                    var tokenPrice = getTokenPrice(underlying);
+                    var amount = parseFloat(pos.amount) || 0;
+                    var usdValue = parseFloat(pos.value_usd) || (amount * tokenPrice);
+                    totalStakedValue += usdValue;
+                    stakedCount++;
+                    protocolSet.add(pos.protocol);
+
+                    var apyBadge = '';
+                    if (pos.apy && parseFloat(pos.apy) > 0) {
+                        apyBadge = '<span class="defi-badge defi-badge-apy">' + parseFloat(pos.apy).toFixed(2) + '% APY</span>';
+                    }
+
+                    html += '<div class="defi-card lending-supply" data-protocol="' + escapeAttr(pos.protocol) + '">' +
+                        '<div class="defi-card-header">' +
+                        logoImgHtml(underlying, null, 32) +
+                        '<span class="defi-card-protocol">' + getChainBadge('cardano') + ' ' + escapeHtml(pos.protocol) + '</span>' +
+                        '<div class="defi-card-badges"><span class="defi-badge defi-badge-supply">Supply</span>' + apyBadge + '</div>' +
+                        '</div>' +
+                        '<div class="defi-card-amount v2-blur">' + amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6}) + ' <span style="font-size:14px;font-weight:400">' + escapeHtml(pos.token_symbol) + '</span></div>' +
+                        '<div class="defi-card-token">' + escapeHtml(pos.token_name || '') + '</div>' +
+                        (usdValue > 0 ? '<div class="defi-card-value v2-blur">' + formatCurrency(usdValue) + '</div>' : '') +
+                        '<div class="defi-card-actions">' +
+                        '<span class="defi-card-detail">Underlying: ' + escapeHtml(underlying) + '</span>' +
+                        '<div class="defi-card-links">' +
+                        '<a href="https://app.liqwid.finance" target="_blank" rel="noopener" class="defi-action-link">Manage</a>' +
+                        '</div></div></div>';
+
+                    allDefiRows.push({ protocol: pos.protocol, token: pos.token_symbol, type: 'Supply', amount: amount, value: usdValue, chain: 'cardano' });
+                });
+
+                // Borrow positions
+                borrowPositions.forEach(function(pos) {
+                    var underlying = (pos.extra && pos.extra.underlying_token) ? pos.extra.underlying_token : pos.token_symbol;
+                    var tokenPrice = getTokenPrice(underlying);
+                    var amount = parseFloat(pos.amount) || 0;
+                    var usdValue = parseFloat(pos.value_usd) || (amount * tokenPrice);
+                    stakedCount++;
+                    protocolSet.add(pos.protocol);
+
+                    var healthFactor = pos.extra ? pos.extra.health_factor : null;
+                    var healthHtml = '';
+                    if (healthFactor !== null && healthFactor !== undefined) {
+                        var hf = parseFloat(healthFactor);
+                        var hfClass = hf >= 2 ? 'healthy' : (hf >= 1.2 ? 'warning' : 'danger');
+                        healthHtml = '<span class="health-factor ' + hfClass + '">HF ' + hf.toFixed(2) + '</span>';
+                    }
+
+                    var apyBadge = '';
+                    if (pos.apy && parseFloat(pos.apy) > 0) {
+                        apyBadge = '<span class="defi-badge defi-badge-apy" style="background:#ef4444;color:#fff">' + parseFloat(pos.apy).toFixed(2) + '% APR</span>';
+                    }
+
+                    html += '<div class="defi-card lending-borrow" data-protocol="' + escapeAttr(pos.protocol) + '">' +
+                        '<div class="defi-card-header">' +
+                        logoImgHtml(underlying, null, 32) +
+                        '<span class="defi-card-protocol">' + getChainBadge('cardano') + ' ' + escapeHtml(pos.protocol) + '</span>' +
+                        '<div class="defi-card-badges"><span class="defi-badge defi-badge-borrow">Borrow</span>' + apyBadge + '</div>' +
+                        '</div>' +
+                        '<div class="defi-card-amount v2-blur">' + amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6}) + ' <span style="font-size:14px;font-weight:400">' + escapeHtml(pos.token_symbol) + '</span></div>' +
+                        '<div class="defi-card-token">' + escapeHtml(pos.token_name || '') + '</div>' +
+                        (usdValue > 0 ? '<div class="defi-card-value v2-blur" style="color:#ef4444">-' + formatCurrency(usdValue) + ' (debt)</div>' : '') +
+                        (healthHtml ? '<div style="margin-top:6px">' + healthHtml + '</div>' : '') +
+                        '<div class="defi-card-actions">' +
+                        '<span class="defi-card-detail">' + escapeHtml(pos.token_name || 'Active Loan') + '</span>' +
+                        '<div class="defi-card-links">' +
+                        '<a href="https://app.liqwid.finance" target="_blank" rel="noopener" class="defi-action-link">Manage</a>' +
+                        '</div></div></div>';
+
+                    allDefiRows.push({ protocol: pos.protocol, token: pos.token_symbol, type: 'Borrow', amount: amount, value: usdValue, chain: 'cardano' });
                 });
 
                 html += '</div></div>'; // close grid + section

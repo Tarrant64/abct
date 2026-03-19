@@ -35,6 +35,8 @@ class PositionType(str, Enum):
     RESTAKING = "restaking"
     PERPETUALS = "perpetuals"
     DEPIN = "depin"
+    CDP = "cdp"
+    STABILITY_POOL = "stability_pool"
 
 
 @dataclass
