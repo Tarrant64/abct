@@ -144,20 +144,10 @@ EXCHANGE_INFO = {
     }
 }
 
-# CoinGecko ID mapping for OHLCV data
-SYMBOL_TO_COINGECKO = {
-    'BTC': 'bitcoin',
-    'ETH': 'ethereum',
-    'ADA': 'cardano',
-    'SOL': 'solana',
-    'MATIC': 'polygon-ecosystem-token',
-    'POL': 'polygon-ecosystem-token',
-    'DOGE': 'dogecoin',
-    'XRP': 'ripple',
-    'DOT': 'polkadot',
-    'USDC': 'usd-coin',
-    'USDT': 'tether',
-}
+# CoinGecko ID mapping for OHLCV data — use the comprehensive map from pricing.py
+# (the old SYMBOL_TO_COINGECKO only had 11 tokens, causing "chart unavailable" for
+# AVAX, HNT, NIGHT, MATIC, and all other non-top-10 tokens)
+from services.pricing import ASSET_TO_COINGECKO as SYMBOL_TO_COINGECKO
 
 SOURCE_TYPE_ORDER = ["on_chain", "exchange", "staking", "defi", "nft"]
 
@@ -1772,7 +1762,17 @@ async def fetch_ohlcv_coingecko(symbol: str, days: int) -> Optional[List[List]]:
         List of OHLCV data points or None if failed
     """
     coin_id = SYMBOL_TO_COINGECKO.get(symbol.upper())
+
+    # Fallback: resolve via CoinGecko search / engine DB / CoinPaprika
     if not coin_id:
+        try:
+            from services.pricing import resolve_coingecko_id
+            coin_id = await resolve_coingecko_id(symbol.upper())
+        except Exception as e:
+            logger.debug(f"resolve_coingecko_id failed for {symbol}: {e}")
+
+    if not coin_id:
+        logger.info(f"No CoinGecko ID found for {symbol}, skipping CoinGecko OHLCV")
         return None
 
     try:
@@ -1788,7 +1788,7 @@ async def fetch_ohlcv_coingecko(symbol: str, days: int) -> Optional[List[List]]:
         if response.status_code == 200:
             return response.json()
         else:
-            logger.warning(f"CoinGecko OHLCV error {response.status_code} for {symbol}")
+            logger.warning(f"CoinGecko OHLCV error {response.status_code} for {symbol} (id={coin_id})")
             return None
     except Exception as e:
         logger.error(f"CoinGecko OHLCV fetch error for {symbol}: {e}")
@@ -1929,12 +1929,15 @@ async def get_mobile_price_chart(
     }
     days = range_to_days.get(range, 7)
 
-    # Try CoinGecko first (has OHLC data)
+    # Source tracking for logging
+    chart_source = None
+    formatted_data = []
+
+    # 1. Try CoinGecko first (has OHLC data)
     ohlcv_data = await fetch_ohlcv_coingecko(symbol, days)
 
     if ohlcv_data:
         # CoinGecko format: [timestamp_ms, open, high, low, close]
-        formatted_data = []
         for candle in ohlcv_data:
             formatted_data.append({
                 "timestamp": int(candle[0]) // 1000,  # Convert ms to seconds
@@ -1944,14 +1947,80 @@ async def get_mobile_price_chart(
                 "close": round(candle[4], 6),
                 "volume": 0  # CoinGecko OHLC doesn't include volume
             })
-
+        chart_source = "CoinGecko"
         logger.info(f"Fetched {len(formatted_data)} OHLCV points from CoinGecko for {symbol}")
-    else:
-        # Fallback to Binance
-        logger.info(f"CoinGecko failed, trying Binance for {symbol}")
 
-        # Calculate limit and interval based on range
-        # For 90d+ use daily candles to stay within Binance's 1000-candle limit
+    # 2. Try Charli3/TapTools for Cardano native tokens
+    if not formatted_data:
+        from services.pricing import CARDANO_TOKEN_POLICIES
+        if symbol.upper() in CARDANO_TOKEN_POLICIES:
+            logger.info(f"CoinGecko failed, trying Charli3 for Cardano token {symbol}")
+            try:
+                from services.charli3 import charli3_service
+                if await charli3_service.is_configured():
+                    now_ts = int(datetime.utcnow().timestamp())
+                    from_ts = now_ts - (days * 86400)
+                    resolution = "1d" if days > 7 else "60min"
+                    candles = await charli3_service.get_ohlcv_history(
+                        symbol, resolution=resolution, from_ts=from_ts, to_ts=now_ts
+                    )
+                    if candles:
+                        for candle in candles:
+                            formatted_data.append({
+                                "timestamp": int(candle['time']),
+                                "open": round(float(candle.get('open', 0)), 6),
+                                "high": round(float(candle.get('high', 0)), 6),
+                                "low": round(float(candle.get('low', 0)), 6),
+                                "close": round(float(candle.get('close', 0)), 6),
+                                "volume": float(candle.get('volume', 0))
+                            })
+                        chart_source = "Charli3"
+                        logger.info(f"Fetched {len(formatted_data)} OHLCV points from Charli3 for {symbol}")
+            except Exception as e:
+                logger.warning(f"Charli3 OHLCV fetch failed for {symbol}: {e}")
+
+    # 3. Try DefiLlama (free, unlimited, no auth needed)
+    if not formatted_data:
+        logger.info(f"Trying DefiLlama for {symbol}")
+        try:
+            cg_id = SYMBOL_TO_COINGECKO.get(symbol.upper())
+            if not cg_id:
+                from services.pricing import resolve_coingecko_id
+                cg_id = await resolve_coingecko_id(symbol.upper())
+            if cg_id:
+                dl_client = get_client("defilama", timeout=15.0)
+                now_ts = int(datetime.utcnow().timestamp())
+                from_ts = now_ts - (days * 86400)
+                period = "1d" if days > 7 else "1h"
+                span = days if period == "1d" else days * 24
+                dl_resp = await dl_client.get(
+                    f"https://coins.llama.fi/chart/coingecko:{cg_id}",
+                    params={"start": from_ts, "span": span, "period": period}
+                )
+                if dl_resp.status_code == 200:
+                    dl_data = dl_resp.json()
+                    coin_key = f"coingecko:{cg_id}"
+                    prices = dl_data.get('coins', {}).get(coin_key, {}).get('prices', [])
+                    if prices:
+                        for entry in prices:
+                            ts = entry.get('timestamp', 0)
+                            price = float(entry.get('price', 0))
+                            formatted_data.append({
+                                "timestamp": ts,
+                                "open": round(price, 6),
+                                "high": round(price, 6),
+                                "low": round(price, 6),
+                                "close": round(price, 6),
+                                "volume": 0
+                            })
+                        chart_source = "DefiLlama"
+                        logger.info(f"Fetched {len(formatted_data)} points from DefiLlama for {symbol}")
+        except Exception as e:
+            logger.warning(f"DefiLlama chart fetch failed for {symbol}: {e}")
+
+    # 4. Fallback to Binance
+    if not formatted_data:
+        logger.info(f"Trying Binance for {symbol}")
         binance_interval = "1d" if days >= 90 else "1h"
         limit_map = {
             "1h": 12,
@@ -1964,29 +2033,33 @@ async def get_mobile_price_chart(
             "all": 365
         }
         limit = limit_map.get(range, 168)
-
         formatted_data = await fetch_ohlcv_binance(symbol, limit, interval=binance_interval)
-
         if formatted_data:
+            chart_source = "Binance"
             logger.info(f"Fetched {len(formatted_data)} OHLCV points from Binance for {symbol}")
-        else:
-            # Final fallback to Coinbase
-            logger.info(f"Binance failed, trying Coinbase for {symbol}")
-            coinbase_period_map = {
-                "1h": "day", "24h": "day", "1d": "day",
-                "7d": "week", "30d": "month",
-                "90d": "year", "1y": "year", "all": "year"
-            }
-            coinbase_period = coinbase_period_map.get(range, "week")
-            formatted_data = await fetch_ohlcv_coinbase(symbol, period=coinbase_period)
 
-            if formatted_data:
-                logger.info(f"Fetched {len(formatted_data)} points from Coinbase for {symbol}")
-            else:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"No OHLCV data available for {symbol}. Symbol may not be supported."
-                )
+    # 5. Final fallback to Coinbase
+    if not formatted_data:
+        logger.info(f"Trying Coinbase for {symbol}")
+        coinbase_period_map = {
+            "1h": "day", "24h": "day", "1d": "day",
+            "7d": "week", "30d": "month",
+            "90d": "year", "1y": "year", "all": "year"
+        }
+        coinbase_period = coinbase_period_map.get(range, "week")
+        formatted_data = await fetch_ohlcv_coinbase(symbol, period=coinbase_period)
+        if formatted_data:
+            chart_source = "Coinbase"
+            logger.info(f"Fetched {len(formatted_data)} points from Coinbase for {symbol}")
+
+    if not formatted_data:
+        logger.warning(f"All chart sources exhausted for {symbol} (CoinGecko, Charli3, DefiLlama, Binance, Coinbase)")
+        raise HTTPException(
+            status_code=404,
+            detail=f"No price chart data available for {symbol}. "
+                   f"Tried: CoinGecko, Charli3, DefiLlama, Binance, Coinbase. "
+                   f"Token may not have market data on any supported source."
+        )
 
     # Get current price and 24h change
     all_prices = await pricing_service.get_all_tracked_prices()

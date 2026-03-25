@@ -4208,12 +4208,13 @@ async def get_asset_chart(
     if not cg_id:
         cg_id = await resolve_coingecko_id(symbol, blockchain)
 
-    if not cg_id:
-        return {"data": [], "symbol": symbol, "error": "Could not resolve CoinGecko ID"}
-
-    # Use existing get_historical_prices (Charli3 → DefiLlama → CoinGecko fallback)
+    # Use get_historical_prices even without a CG ID — it has Charli3 for Cardano
+    # native tokens and other fallback sources that don't require a CoinGecko ID.
     historical = await pricing_service.get_historical_prices([symbol], days=days)
     points = historical.get(symbol, [])
+
+    if not points and not cg_id:
+        return {"data": [], "symbol": symbol, "error": f"No chart data for {symbol}: could not resolve price source"}
 
     # Format for TradingView lightweight-charts
     chart_data = []
