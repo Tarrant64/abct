@@ -22,6 +22,7 @@ from services.http_client import get_client, blockfrost_fetch
 INDIGO_API_BASE = "https://analytics.indigoprotocol.io"
 LIQWID_REWARDS_API = "https://api.sundae-rewards.sundaeswap.finance/api/v1/liqwid"
 SURF_LENDING_API = "https://api.surflending.org"
+STRIKE_V2_API_BASE = "https://api.strikefinance.org"
 
 # Strike Finance staking contract
 STRIKE_STAKING_ADDRESS = "addr1z9yh4zcqs4gh78ysvh8nqp40fsnxg49nn3h6x25az9k8tms6409492020k6xml8uvwn34wrexagjh5fsk5xk96jyxk2qf3a7kj"
@@ -970,6 +971,90 @@ class DeFiService:
             logger.error(f"Error getting Strike staking: {e}")
             return None
 
+    async def get_strike_v2_positions(self, address: str) -> Optional[Dict]:
+        """
+        Get Strike Finance V2 trading account balance and vault positions.
+        Uses the public Strike Finance API — no auth required for blockchain_address lookup.
+
+        Returns:
+            Dict with v2_balance (ADA in trading account), vault_positions (list),
+            total_vault_ada, or None if no V2 presence found.
+        """
+        try:
+            client = get_client("strike_v2", timeout=10.0)
+
+            # Step 1: Resolve blockchain address → account_id + wallet_balance
+            resp = await client.get(
+                f"{STRIKE_V2_API_BASE}/v2/account",
+                params={"blockchain_address": address}
+            )
+            if resp.status_code != 200:
+                return None
+
+            account = resp.json()
+            account_id = account.get("account_id")
+            wallet_balance = float(account.get("wallet_balance") or 0)
+
+            if not account_id or wallet_balance <= 0:
+                return None
+
+            # Step 2: Vault positions for this account
+            vault_positions = []
+            try:
+                vp_resp = await client.get(
+                    f"{STRIKE_V2_API_BASE}/v2/vault/positions",
+                    params={"account_id": account_id}
+                )
+                if vp_resp.status_code == 200:
+                    raw_positions = vp_resp.json().get("positions") or []
+
+                    if raw_positions:
+                        # Fetch vault details (names + share prices) for active vaults
+                        vault_map = {}
+                        try:
+                            vaults_resp = await client.get(
+                                f"{STRIKE_V2_API_BASE}/v2/vaults",
+                                params={"status": "active"}
+                            )
+                            if vaults_resp.status_code == 200:
+                                for v in vaults_resp.json().get("vaults", []):
+                                    vault_map[v["vault_id"]] = v
+                        except Exception:
+                            pass
+
+                        for pos in raw_positions:
+                            vault_id = pos.get("vault_id") or ""
+                            vault_info = vault_map.get(vault_id, {})
+                            shares = float(pos.get("shares", 0))
+                            share_price = float(vault_info.get("share_price") or 1)
+                            value_ada = shares * share_price
+                            vault_positions.append({
+                                "vault_id": vault_id,
+                                "vault_name": vault_info.get("name", f"Vault {vault_id[:8]}"),
+                                "shares": shares,
+                                "share_price": share_price,
+                                "value_ada": value_ada,
+                            })
+            except Exception as e:
+                logger.warning(f"[Strike V2] Vault positions fetch failed for {address[:20]}: {e}")
+
+            total_vault_ada = sum(p["value_ada"] for p in vault_positions)
+            logger.info(
+                f"[Strike V2] {address[:20]}... balance={wallet_balance:.2f} ADA, "
+                f"vaults={len(vault_positions)}, vault_total={total_vault_ada:.2f} ADA"
+            )
+
+            return {
+                "account_id": account_id,
+                "v2_balance": wallet_balance,
+                "vault_positions": vault_positions,
+                "total_vault_ada": total_vault_ada,
+            }
+
+        except Exception as e:
+            logger.error(f"[Strike V2] Error for {address[:20]}: {e}")
+            return None
+
     async def get_iagon_staking(self, address: str) -> Optional[Dict]:
         """
         Get Iagon staking position for an address.
@@ -1628,7 +1713,7 @@ class DeFiService:
                 return None
 
         # Phase 1: Fetch all protocol staking positions in parallel (15s each)
-        indigo, strike, liqwid, iagon, surf, indigo_cdps, indigo_sp = await asyncio.gather(
+        indigo, strike, liqwid, iagon, surf, indigo_cdps, indigo_sp, strike_v2 = await asyncio.gather(
             with_timeout(self.get_indigo_staking(address), "Indigo"),
             with_timeout(self.get_strike_staking(address), "Strike", timeout=20),
             with_timeout(self.get_liqwid_staking(address), "Liqwid", timeout=25),
@@ -1636,6 +1721,7 @@ class DeFiService:
             with_timeout(self.get_surf_lending_positions(address), "Surf"),
             with_timeout(self.get_indigo_cdps(address), "Indigo CDPs"),
             with_timeout(self.get_indigo_stability_pool(address), "Indigo SP"),
+            with_timeout(self.get_strike_v2_positions(address), "Strike V2", timeout=15),
             return_exceptions=True
         )
 
@@ -1662,6 +1748,9 @@ class DeFiService:
         if isinstance(indigo_sp, Exception):
             logger.error(f"Indigo SP error for {address[:20]}: {indigo_sp}")
             indigo_sp = None
+        if isinstance(strike_v2, Exception):
+            logger.error(f"Strike V2 error for {address[:20]}: {strike_v2}")
+            strike_v2 = None
 
         # Fill timed-out protocols from previous cache result
         if previous_result and previous_result.get('protocols'):
@@ -1763,26 +1852,49 @@ class DeFiService:
                 indigo_proto['total_positions'] += indigo_sp['pool_count']
                 staking['total_positions'] += indigo_sp['pool_count']
 
-        # Assemble Strike
-        if strike:
+        # Assemble Strike (staking + V2 account + vault deposits)
+        if strike or strike_v2:
             strike_rewards = rewards.get('strike')
-            staking['protocols']['Strike'] = {
-                'staked': [{
+
+            strike_entry = {
+                'staked': [],
+                'pending_rewards': 0,
+                'accumulated_rewards': 0,
+                'reward_token': 'STRIKE',
+                'rewards_url': 'https://app.strikefinance.org/perpetuals/ada',
+                'total_positions': 0,
+                'v2_balance': 0.0,
+                'v2_vault_positions': [],
+                'total_vault_ada': 0.0,
+            }
+
+            if strike:
+                strike_entry['staked'] = [{
                     'token': 'STRIKE',
                     'amount': strike['total_staked_strike'],
                     'amount_formatted': f"{strike['total_staked_strike']:,.6f}",
                     'positions': strike['position_count'],
                     'logo_url': logos.get('STRIKE')
-                }],
-                'pending_rewards': strike_rewards.get('pending_rewards', 0) if strike_rewards else 0,
-                'accumulated_rewards': strike_rewards.get('accumulated_rewards', 0) if strike_rewards else 0,
-                'reward_token': 'STRIKE',
-                'rewards_url': 'https://app.strikefinance.org/perpetuals/ada',
-                'total_positions': strike['position_count']
-            }
-            staking['total_positions'] += strike['position_count']
-            if strike_rewards and strike_rewards.get('pending_rewards', 0) > 0:
-                staking['total_pending_rewards']['STRIKE'] = staking['total_pending_rewards'].get('STRIKE', 0) + strike_rewards['pending_rewards']
+                }]
+                strike_entry['pending_rewards'] = strike_rewards.get('pending_rewards', 0) if strike_rewards else 0
+                strike_entry['accumulated_rewards'] = strike_rewards.get('accumulated_rewards', 0) if strike_rewards else 0
+                strike_entry['total_positions'] += strike['position_count']
+                staking['total_positions'] += strike['position_count']
+                if strike_rewards and strike_rewards.get('pending_rewards', 0) > 0:
+                    staking['total_pending_rewards']['STRIKE'] = (
+                        staking['total_pending_rewards'].get('STRIKE', 0) + strike_rewards['pending_rewards']
+                    )
+
+            if strike_v2:
+                strike_entry['v2_balance'] = strike_v2['v2_balance']
+                strike_entry['v2_vault_positions'] = strike_v2['vault_positions']
+                strike_entry['total_vault_ada'] = strike_v2['total_vault_ada']
+                # Count V2 as one position if there's a balance, plus each vault
+                v2_positions = 1 + len(strike_v2['vault_positions'])
+                strike_entry['total_positions'] += v2_positions
+                staking['total_positions'] += v2_positions
+
+            staking['protocols']['Strike'] = strike_entry
 
         # Assemble Liqwid
         if liqwid:

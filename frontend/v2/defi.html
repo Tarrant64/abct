@@ -156,6 +156,15 @@
         .view-toggle-btn { padding: 4px 12px; border: none; background: transparent; color: var(--v2-text-muted); font-size: 12px; cursor: pointer; border-radius: var(--v2-radius-sm); transition: all 0.2s; }
         .view-toggle-btn.active { background: var(--v2-bg-card); color: var(--v2-text-primary); box-shadow: var(--v2-shadow-sm); }
 
+        /* Strike V2 sub-section */
+        .strike-v2-section { margin-top: 10px; padding: 8px 10px; background: rgba(16, 185, 129, 0.06); border-radius: 8px; border-left: 3px solid rgba(16, 185, 129, 0.5); }
+        .strike-v2-label { font-size: 10px; color: #10b981; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; margin-bottom: 5px; }
+        .strike-v2-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 12px; }
+        .strike-v2-name { color: var(--v2-text-muted); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .strike-v2-amount { font-weight: 600; color: var(--v2-text-primary); font-family: var(--v2-font-mono, 'SF Mono', Monaco, monospace); white-space: nowrap; }
+        .strike-v2-usd { font-size: 11px; color: var(--v2-text-muted); white-space: nowrap; margin-left: auto; }
+        .defi-badge-v2 { background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
+
         /* Protocol-specific amount colors */
         .defi-card[data-protocol="Indigo"] .defi-card-amount { color: #6366f1; }
         .defi-card[data-protocol="Strike"] .defi-card-amount { color: #10b981; }
@@ -597,6 +606,16 @@
                             if (protocol === 'Indigo') {
                                 allStaking[protocol].pending_indy += parseFloat(data.pending_indy) || 0;
                                 allStaking[protocol].pending_ada += parseFloat(data.pending_ada) || 0;
+                            } else if (protocol === 'Strike') {
+                                allStaking[protocol].pending_rewards += parseFloat(data.pending_rewards) || 0;
+                                allStaking[protocol].accumulated_rewards += parseFloat(data.accumulated_rewards) || 0;
+                                // Merge Strike V2 fields across wallets
+                                allStaking[protocol].v2_balance = (allStaking[protocol].v2_balance || 0) + parseFloat(data.v2_balance || 0);
+                                allStaking[protocol].total_vault_ada = (allStaking[protocol].total_vault_ada || 0) + parseFloat(data.total_vault_ada || 0);
+                                var incomingVaults = data.v2_vault_positions || [];
+                                if (incomingVaults.length > 0) {
+                                    allStaking[protocol].v2_vault_positions = (allStaking[protocol].v2_vault_positions || []).concat(incomingVaults);
+                                }
                             } else {
                                 allStaking[protocol].pending_rewards += parseFloat(data.pending_rewards) || 0;
                                 allStaking[protocol].accumulated_rewards += parseFloat(data.accumulated_rewards) || 0;
@@ -855,17 +874,52 @@
 
                         var hasPending = totalPendingUsd > 0;
 
+                        // Strike V2: build breakdown section and add ADA value to total
+                        var v2Html = '';
+                        var hasV2 = false;
+                        if (protocol === 'Strike') {
+                            var v2Bal = protocolData.v2_balance || 0;
+                            var v2Vaults = protocolData.v2_vault_positions || [];
+                            var totalVaultAda = protocolData.total_vault_ada || 0;
+                            var adaPrice = getTokenPrice('ADA');
+                            hasV2 = v2Bal > 0 || v2Vaults.length > 0;
+                            if (hasV2) {
+                                var v2TotalAda = v2Bal + totalVaultAda;
+                                var v2TotalUsd = v2TotalAda * adaPrice;
+                                totalStakedValue += v2TotalUsd;
+                                v2Html = '<div class="strike-v2-section"><div class="strike-v2-label">V2 Deposits</div>';
+                                if (v2Bal > 0) {
+                                    v2Html += '<div class="strike-v2-row">' +
+                                        '<span class="strike-v2-name">Trading Account</span>' +
+                                        '<span class="strike-v2-amount v2-blur">' + v2Bal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ADA</span>' +
+                                        (adaPrice > 0 ? '<span class="strike-v2-usd v2-blur">' + formatCurrency(v2Bal * adaPrice) + '</span>' : '') +
+                                        '</div>';
+                                }
+                                v2Vaults.forEach(function(vp) {
+                                    v2Html += '<div class="strike-v2-row">' +
+                                        '<span class="strike-v2-name">' + escapeHtml(vp.vault_name) + '</span>' +
+                                        '<span class="strike-v2-amount v2-blur">' + vp.value_ada.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ADA</span>' +
+                                        (adaPrice > 0 ? '<span class="strike-v2-usd v2-blur">' + formatCurrency(vp.value_ada * adaPrice) + '</span>' : '') +
+                                        '</div>';
+                                });
+                                v2Html += '</div>';
+                                allDefiRows.push({ protocol: 'Strike', token: 'ADA', type: 'V2 Deposit', amount: v2TotalAda, value: v2TotalUsd, chain: 'cardano' });
+                            }
+                        }
+
                         html += '<div class="defi-card" data-protocol="' + escapeAttr(protocol) + '">' +
                             '<div class="defi-card-header">' +
                             logoImgHtml(token, tokenLogoUrl, 32) +
                             '<span class="defi-card-protocol">' + getChainBadge(stakingChain) + ' ' + escapeHtml(protocol) + '</span>' +
                             '<div class="defi-card-badges">' +
                             '<span class="defi-badge defi-badge-staked">Staked</span>' +
+                            (hasV2 ? '<span class="defi-badge defi-badge-v2">V2</span>' : '') +
                             (hasPending ? '<span class="defi-badge defi-badge-rewards">Rewards</span>' : '') +
                             '</div></div>' +
                             '<div class="defi-card-amount v2-blur">' + data.amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4}) + ' <span style="font-size:14px;font-weight:400">' + escapeHtml(token) + '</span></div>' +
                             '<div class="defi-card-value v2-blur">' + formatCurrency(usdValue) + '</div>' +
                             pendingHtml +
+                            v2Html +
                             '<div class="defi-card-actions">' +
                             '<span class="defi-card-detail">' + data.positions + ' position' + (data.positions !== 1 ? 's' : '') + '</span>' +
                             '<div class="defi-card-links">' +
@@ -962,6 +1016,54 @@
 
                             allDefiRows.push({ protocol: 'Indigo', token: spAsset, type: 'Stability Pool', amount: deposited, value: depositedUsd, chain: 'cardano' });
                         });
+                    }
+
+                    // --- Strike V2-only Card (no staked STRIKE, but V2 balance exists) ---
+                    if (protocol === 'Strike' && Object.keys(stakes).length === 0) {
+                        var sv2Bal = protocolData.v2_balance || 0;
+                        var sv2Vaults = protocolData.v2_vault_positions || [];
+                        var sv2TotalVaultAda = protocolData.total_vault_ada || 0;
+                        var sv2AdaPrice = getTokenPrice('ADA');
+                        if (sv2Bal > 0 || sv2Vaults.length > 0) {
+                            var sv2TotalAda = sv2Bal + sv2TotalVaultAda;
+                            var sv2TotalUsd = sv2TotalAda * sv2AdaPrice;
+                            totalStakedValue += sv2TotalUsd;
+                            stakedCount++;
+
+                            var sv2BreakdownHtml = '<div class="strike-v2-section"><div class="strike-v2-label">V2 Deposits</div>';
+                            if (sv2Bal > 0) {
+                                sv2BreakdownHtml += '<div class="strike-v2-row">' +
+                                    '<span class="strike-v2-name">Trading Account</span>' +
+                                    '<span class="strike-v2-amount v2-blur">' + sv2Bal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ADA</span>' +
+                                    (sv2AdaPrice > 0 ? '<span class="strike-v2-usd v2-blur">' + formatCurrency(sv2Bal * sv2AdaPrice) + '</span>' : '') +
+                                    '</div>';
+                            }
+                            sv2Vaults.forEach(function(vp) {
+                                sv2BreakdownHtml += '<div class="strike-v2-row">' +
+                                    '<span class="strike-v2-name">' + escapeHtml(vp.vault_name) + '</span>' +
+                                    '<span class="strike-v2-amount v2-blur">' + vp.value_ada.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ADA</span>' +
+                                    (sv2AdaPrice > 0 ? '<span class="strike-v2-usd v2-blur">' + formatCurrency(vp.value_ada * sv2AdaPrice) + '</span>' : '') +
+                                    '</div>';
+                            });
+                            sv2BreakdownHtml += '</div>';
+
+                            html += '<div class="defi-card" data-protocol="Strike">' +
+                                '<div class="defi-card-header">' +
+                                logoImgHtml('ADA', null, 32) +
+                                '<span class="defi-card-protocol">' + getChainBadge('cardano') + ' Strike Finance</span>' +
+                                '<div class="defi-card-badges"><span class="defi-badge defi-badge-v2">V2</span></div>' +
+                                '</div>' +
+                                '<div class="defi-card-amount v2-blur">' + sv2TotalAda.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' <span style="font-size:14px;font-weight:400">ADA</span></div>' +
+                                '<div class="defi-card-value v2-blur">' + (sv2TotalUsd > 0 ? formatCurrency(sv2TotalUsd) : '--') + '</div>' +
+                                sv2BreakdownHtml +
+                                '<div class="defi-card-actions">' +
+                                '<span class="defi-card-detail">V2 Deposits</span>' +
+                                '<div class="defi-card-links">' +
+                                '<a href="https://app.strikefinance.org/portfolio" target="_blank" rel="noopener" class="defi-action-link">Portfolio</a>' +
+                                '</div></div></div>';
+
+                            allDefiRows.push({ protocol: 'Strike', token: 'ADA', type: 'V2 Deposit', amount: sv2TotalAda, value: sv2TotalUsd, chain: 'cardano' });
+                        }
                     }
                 });
 

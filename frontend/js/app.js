@@ -345,6 +345,9 @@ async function checkCoinGeckoQuota() {
 }
 
 // Cardano SSE price stream (Charli3) - updates prices in real-time when available
+// Security note (Finding #5): Token is passed as ?token= query param because the
+// EventSource API does not support custom headers. This is acceptable for the
+// home-network threat model — HTTPS encrypts the URL in transit.
 let _cardanoPriceStream = null;
 function initCardanoPriceStream() {
     if (_cardanoPriceStream) return;
@@ -3450,6 +3453,19 @@ async function loadStakingPositions() {
                     allStaking[protocol].claimed_rewards += data.claimed_rewards || 0;
                     allStaking[protocol].total_earned += data.total_earned || 0;
 
+                    // Strike V2: aggregate across wallets
+                    if (protocol === 'Strike') {
+                        if (!allStaking[protocol].v2_balance) allStaking[protocol].v2_balance = 0;
+                        if (!allStaking[protocol].total_vault_ada) allStaking[protocol].total_vault_ada = 0;
+                        if (!allStaking[protocol].v2_vault_positions) allStaking[protocol].v2_vault_positions = [];
+                        allStaking[protocol].v2_balance += parseFloat(data.v2_balance || 0);
+                        allStaking[protocol].total_vault_ada += parseFloat(data.total_vault_ada || 0);
+                        const incomingVaults = data.v2_vault_positions || [];
+                        if (incomingVaults.length > 0) {
+                            allStaking[protocol].v2_vault_positions = allStaking[protocol].v2_vault_positions.concat(incomingVaults);
+                        }
+                    }
+
                     // Take APY and rewards_url from first wallet that has it
                     if (data.apy && !allStaking[protocol].apy) {
                         allStaking[protocol].apy = data.apy;
@@ -3540,6 +3556,8 @@ function renderStakingPositions(allStaking) {
             // Build pending rewards display based on protocol
             let pendingHtml = '';
             let hasPendingRewards = false;
+            let v2Html = '';
+            let hasV2 = false;
 
             if (protocol === 'Indigo') {
                 // Indigo has both INDY and ADA rewards
@@ -3603,6 +3621,26 @@ function renderStakingPositions(allStaking) {
                             </div>`;
                     }
                     pendingHtml += '</div>';
+                }
+
+                // Strike V2 deposits breakdown
+                const v2Bal = protocolData.v2_balance || 0;
+                const v2Vaults = protocolData.v2_vault_positions || [];
+                const v2VaultTotal = protocolData.total_vault_ada || 0;
+                const adaPriceV2 = prices['ADA'] || 0;
+                if (v2Bal > 0 || v2Vaults.length > 0) {
+                    hasV2 = true;
+                    const v2TotalAda = v2Bal + v2VaultTotal;
+                    const v2TotalUsd = v2TotalAda * adaPriceV2;
+                    totalStakingValue += v2TotalUsd;
+                    v2Html = '<div class="strike-v2-section"><div class="strike-v2-label">V2 Deposits</div>';
+                    if (v2Bal > 0) {
+                        v2Html += `<div class="strike-v2-row"><span class="strike-v2-name">Trading Account</span><span class="strike-v2-amount">${blurValue(v2Bal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ADA')}</span>${adaPriceV2 > 0 ? `<span class="strike-v2-usd">${formatUSDBlur(v2Bal * adaPriceV2)}</span>` : ''}</div>`;
+                    }
+                    v2Vaults.forEach(vp => {
+                        v2Html += `<div class="strike-v2-row"><span class="strike-v2-name">${vp.vault_name}</span><span class="strike-v2-amount">${blurValue(vp.value_ada.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ADA')}</span>${adaPriceV2 > 0 ? `<span class="strike-v2-usd">${formatUSDBlur(vp.value_ada * adaPriceV2)}</span>` : ''}</div>`;
+                    });
+                    v2Html += '</div>';
                 }
             } else if (protocol === 'Liqwid') {
                 // Liqwid has pending, claimed, and total earned
@@ -3675,18 +3713,62 @@ function renderStakingPositions(allStaking) {
                         <div class="staking-badges">
                             <span class="staking-badge">Staked</span>
                             ${hasPendingRewards ? '<span class="staking-badge rewards">Rewards</span>' : ''}
+                            ${hasV2 ? '<span class="staking-badge v2">V2</span>' : ''}
                         </div>
                     </div>
                     <div class="staking-amount">${blurValue(data.amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6}))}</div>
                     <div class="staking-token">${token}</div>
                     <div class="staking-usd">${formatUSDBlur(usdValue)}</div>
                     ${pendingHtml}
+                    ${v2Html}
                     <div class="staking-details">
                         ${data.positions} staking position${data.positions !== 1 ? 's' : ''}
                         ${rewardsLinkHtml}
                     </div>
                 </div>
             `;
+        }
+
+        // Strike V2-only card (no staked STRIKE tokens, but V2 balance exists)
+        if (protocol === 'Strike' && Object.keys(stakes).length === 0) {
+            const sv2Bal = protocolData.v2_balance || 0;
+            const sv2Vaults = protocolData.v2_vault_positions || [];
+            const sv2VaultTotal = protocolData.total_vault_ada || 0;
+            const sv2AdaPrice = prices['ADA'] || 0;
+            if (sv2Bal > 0 || sv2Vaults.length > 0) {
+                const sv2TotalAda = sv2Bal + sv2VaultTotal;
+                const sv2TotalUsd = sv2TotalAda * sv2AdaPrice;
+                totalStakingValue += sv2TotalUsd;
+
+                let sv2BreakdownHtml = '<div class="strike-v2-section"><div class="strike-v2-label">V2 Deposits</div>';
+                if (sv2Bal > 0) {
+                    sv2BreakdownHtml += `<div class="strike-v2-row"><span class="strike-v2-name">Trading Account</span><span class="strike-v2-amount">${blurValue(sv2Bal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ADA')}</span>${sv2AdaPrice > 0 ? `<span class="strike-v2-usd">${formatUSDBlur(sv2Bal * sv2AdaPrice)}</span>` : ''}</div>`;
+                }
+                sv2Vaults.forEach(vp => {
+                    sv2BreakdownHtml += `<div class="strike-v2-row"><span class="strike-v2-name">${vp.vault_name}</span><span class="strike-v2-amount">${blurValue(vp.value_ada.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ADA')}</span>${sv2AdaPrice > 0 ? `<span class="strike-v2-usd">${formatUSDBlur(vp.value_ada * sv2AdaPrice)}</span>` : ''}</div>`;
+                });
+                sv2BreakdownHtml += '</div>';
+
+                const sv2RewardsUrl = protocolData.rewards_url || '';
+                html += `
+                    <div class="staking-card" data-protocol="Strike">
+                        <div class="staking-card-header">
+                            <span class="staking-protocol">Strike Finance</span>
+                            <div class="staking-badges">
+                                <span class="staking-badge v2">V2</span>
+                            </div>
+                        </div>
+                        <div class="staking-amount">${blurValue(sv2TotalAda.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ADA')}</div>
+                        <div class="staking-token">ADA</div>
+                        <div class="staking-usd">${sv2TotalUsd > 0 ? formatUSDBlur(sv2TotalUsd) : '--'}</div>
+                        ${sv2BreakdownHtml}
+                        <div class="staking-details">
+                            V2 Deposits
+                            ${sv2RewardsUrl ? `<a href="${sv2RewardsUrl}" target="_blank" rel="noopener" class="rewards-page-link">Portfolio</a>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
         }
     }
 
