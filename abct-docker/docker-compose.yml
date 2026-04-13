@@ -5,8 +5,9 @@ services:
       dockerfile: abct-docker/Dockerfile
     container_name: abct-dashboard
     restart: unless-stopped
-    ports:
-      - "${ABCT_PORT:-8080}:80"
+    networks:
+      abct_net:
+        ipv4_address: ${ABCT_STATIC_IP:-}
     volumes:
       # Persist SQLite database
       - abct-data:/app/data
@@ -47,6 +48,11 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+networks:
+  abct_net:
+    external: true
+    name: ${ABCT_DOCKER_NETWORK:-br0}
 
 volumes:
   abct-data:
