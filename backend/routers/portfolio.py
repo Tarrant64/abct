@@ -1042,6 +1042,23 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
         }
         _pp_price_sym = {'ETH_BASE': 'ETH', 'ETH_ARB': 'ETH', 'POL': 'MATIC'}
         all_prices = await pricing_service.get_all_tracked_prices()
+
+        # Read existing chain rows so we can skip writes that look like fetch failures.
+        # Some upstream APIs (Blockfrost especially) intermittently return empty/partial
+        # data, which would otherwise overwrite correct multi-thousand-dollar balances
+        # with near-zero values. If a new amount is less than 10% of the existing
+        # quantity AND the existing position was worth >$50, skip the write — almost
+        # certainly an upstream failure rather than a real balance change.
+        from database import get_all_portfolio_positions
+        existing_positions = await get_all_portfolio_positions(user_id)
+        existing_chain = {
+            (p.get('symbol'), p.get('source_detail')): {
+                'quantity': float(p.get('quantity', 0)),
+                'value_usd': float(p.get('quantity', 0)) * float(p.get('last_price_usd', 0) or 0),
+            }
+            for p in existing_positions if p.get('source_type') == 'chain'
+        }
+
         pp_rows = []
         for chain, (sym, field) in _pp_chain_map.items():
             chain_data = summary.get(chain, {})
@@ -1050,6 +1067,19 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
                 ps = _pp_price_sym.get(sym, sym)
                 p = all_prices.get(ps, {})
                 price = p.get('usd', 0) if isinstance(p, dict) else 0
+
+                existing = existing_chain.get((sym, chain))
+                if existing and existing['value_usd'] > 50:
+                    drop_ratio = amount / existing['quantity'] if existing['quantity'] > 0 else 1
+                    if drop_ratio < 0.1:
+                        logger.warning(
+                            f"[Portfolio Positions] Skipping chain write for {sym}/{chain}: "
+                            f"new amount {amount} is {drop_ratio:.1%} of existing "
+                            f"{existing['quantity']} (worth ${existing['value_usd']:.2f}). "
+                            f"Likely upstream API failure — keeping existing data."
+                        )
+                        continue
+
                 pp_rows.append({
                     'user_id': user_id, 'symbol': sym, 'quantity': amount,
                     'source_type': 'chain', 'source_detail': chain,
