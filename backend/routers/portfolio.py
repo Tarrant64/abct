@@ -1075,7 +1075,7 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
                             price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
                             pp_rows.append({
                                 'user_id': user_id, 'symbol': token, 'quantity': amount,
-                                'source_type': 'staking', 'source_detail': protocol_name,
+                                'source_type': 'staking', 'source_detail': protocol_name.lower(),
                                 'chain': 'cardano', 'last_price_usd': price,
                             })
                     reward_token = protocol_data.get('reward_token')
@@ -1086,7 +1086,7 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
                         price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
                         pp_rows.append({
                             'user_id': user_id, 'symbol': reward_token_upper, 'quantity': pending_rewards,
-                            'source_type': 'staking', 'source_detail': f"{protocol_name}_rewards",
+                            'source_type': 'staking', 'source_detail': f"{protocol_name.lower()}_rewards",
                             'chain': 'cardano', 'last_price_usd': price,
                         })
         except Exception as e:
@@ -1105,7 +1105,7 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
                         continue
                     price_data = all_prices.get(token, {})
                     price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
-                    protocol = pos.get('protocol', 'defi')
+                    protocol = pos.get('protocol', 'defi').lower()
                     # LP/liquidity positions have no market price but a pre-computed value_usd.
                     # Store as quantity=value_usd, price=1.0 so /portfolio/instant values them correctly.
                     pre_valued_usd = float(pos.get('value_usd', 0))
@@ -1186,6 +1186,16 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
             logger.debug(f"Portfolio positions custom tokens write failed: {e}")
 
         if pp_rows:
+            # Clear stale staking/defi rows before re-inserting fresh data.
+            # Prevents accumulation of old protocol entries when current scans
+            # no longer detect them (e.g. user unstaked, protocol decommissioned).
+            from database import clear_portfolio_positions
+            has_fresh_staking = any(r.get('source_type') == 'staking' for r in pp_rows)
+            has_fresh_defi = any(r.get('source_type') == 'defi' for r in pp_rows)
+            if has_fresh_staking:
+                await clear_portfolio_positions(user_id, source_type='staking')
+            if has_fresh_defi:
+                await clear_portfolio_positions(user_id, source_type='defi')
             await upsert_portfolio_positions_batch(pp_rows)
     except Exception as e:
         logger.debug(f"Portfolio positions write failed: {e}")

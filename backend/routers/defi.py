@@ -812,6 +812,10 @@ async def get_defi_summary(user_id: int = Depends(verify_session), refresh: bool
                         'chain': 'cardano', 'last_price_usd': price,
                     })
             if pp_rows:
+                # Clear stale DeFi rows before re-inserting; prevents accumulation
+                # of positions from protocols no longer detected.
+                from database import clear_portfolio_positions
+                await clear_portfolio_positions(user_id, source_type='defi')
                 await upsert_portfolio_positions_batch(pp_rows)
         except Exception as e:
             logger.debug(f"Portfolio positions DeFi write failed: {e}")
