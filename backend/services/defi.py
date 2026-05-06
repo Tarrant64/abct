@@ -138,12 +138,15 @@ DEFI_PROTOCOLS = {
     },
 
     # === Strike Finance ===
+    # STRIKE in the wallet is auto-eligible for Strike's liquid revenue-share
+    # staking (no lockup, daily snapshots, 15-day distribution cycle), so
+    # we classify it as liquid_staking rather than passive governance.
     "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275": {
         "protocol": "Strike",
         "token": "STRIKE",
-        "type": "governance",
+        "type": "liquid_staking",
         "decimals": 6,
-        "description": "Strike Finance governance token"
+        "description": "Strike Finance — liquid staking (revenue share)"
     },
 
     # === WingRiders ===
