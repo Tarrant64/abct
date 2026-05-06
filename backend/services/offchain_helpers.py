@@ -68,19 +68,25 @@ async def get_defi_value(prices: dict, user_id: int = None) -> float:
     try:
         from database import get_cache
 
-        cached = await get_cache("defi_summary", user_id=user_id)
+        cache_key = f"defi_summary_{user_id}" if user_id is not None else "defi_summary"
+        cached = await get_cache(cache_key, user_id=user_id)
         if not cached:
-            cached = await _stale_fallback("defi_summary", user_id=user_id)
+            cached = await _stale_fallback(cache_key, user_id=user_id)
         if not cached:
             return 0.0
         # Use pre-calculated total if available
         if 'total_value_usd' in cached:
             return float(cached['total_value_usd'])
-        # Calculate from positions using prices
+        # Fall back: sum all positions, using pre-computed value_usd when available
+        # (covers LP/liquidity positions that have no standard market price)
         total = 0.0
         positions_by_category = cached.get('positions_by_category', {})
         for category, positions in positions_by_category.items():
             for pos in positions:
+                pre_valued = float(pos.get('value_usd', 0))
+                if pre_valued > 0:
+                    total += pre_valued
+                    continue
                 token = pos.get('token') or pos.get('asset_name', '')
                 quantity = float(pos.get('quantity', 0))
                 price_data = prices.get(token, {})

@@ -1101,10 +1101,21 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
                 for pos in defi_cache['all_positions']:
                     token = (pos.get('token') or '').upper()
                     quantity = float(pos.get('quantity', 0))
-                    if token and quantity > 0:
-                        price_data = all_prices.get(token, {})
-                        price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
-                        protocol = pos.get('protocol', 'defi')
+                    if not token or quantity <= 0:
+                        continue
+                    price_data = all_prices.get(token, {})
+                    price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
+                    protocol = pos.get('protocol', 'defi')
+                    # LP/liquidity positions have no market price but a pre-computed value_usd.
+                    # Store as quantity=value_usd, price=1.0 so /portfolio/instant values them correctly.
+                    pre_valued_usd = float(pos.get('value_usd', 0))
+                    if price <= 0 and pre_valued_usd > 0:
+                        pp_rows.append({
+                            'user_id': user_id, 'symbol': token, 'quantity': pre_valued_usd,
+                            'source_type': 'defi', 'source_detail': protocol,
+                            'chain': 'cardano', 'last_price_usd': 1.0,
+                        })
+                    else:
                         pp_rows.append({
                             'user_id': user_id, 'symbol': token, 'quantity': quantity,
                             'source_type': 'defi', 'source_detail': protocol,
@@ -1617,7 +1628,7 @@ async def get_all_holdings(
     )
 
     # Fetch DeFi summary (try cache first, then call endpoint directly)
-    defi_data = await get_cache(f"defi_summary_{user_id}")
+    defi_data = await get_cache(f"defi_summary_{user_id}", user_id=user_id)
     if not defi_data:
         try:
             from routers.defi import get_defi_summary
@@ -1720,14 +1731,39 @@ async def get_all_holdings(
                 'source': 'token',
             }
 
-    # --- 3. DeFi governance tokens (from wallet UTXOs) ---
+    # --- 3. DeFi positions (governance tokens + LP/liquidity positions) ---
     if defi_data and defi_data.get('all_positions'):
         for pos in defi_data['all_positions']:
             token = (pos.get('token') or '').upper()
             if not token or token in holdings:
-                continue  # Skip tokens already from native assets (step 2)
+                continue  # Skip tokens already counted from native assets (step 2)
+
+            pre_valued_usd = float(pos.get('value_usd', 0))
+            quantity = float(pos.get('quantity', 0))
+
+            # LP/liquidity positions have pre-computed value_usd but no market price.
+            # _merge_holding would drop them (price=0). Add them directly instead.
+            if pre_valued_usd > 0:
+                price_sym = _PRICE_SYMBOL.get(token, token)
+                price_info = all_prices.get(price_sym, {})
+                market_price = price_info.get('usd', 0) if isinstance(price_info, dict) else 0
+                if market_price <= 0:
+                    display_name = pos.get('pair_name') or pos.get('protocol', token)
+                    holdings[token] = {
+                        'symbol': token,
+                        'name': display_name,
+                        'amount': quantity,
+                        'price_usd': round(pre_valued_usd / quantity, 6) if quantity > 0 else 0,
+                        'value_usd': pre_valued_usd,
+                        'price_change_24h': 0,
+                        'wallet_count': 0,
+                        'logo_url': pos.get('logo_url', '') or logokit_service.get_crypto_logo_url(token, size=64),
+                        'source': 'defi',
+                    }
+                    continue
+
             _merge_holding(
-                holdings, token, pos.get('quantity', 0), 0,
+                holdings, token, quantity, 0,
                 all_prices, name=pos.get('protocol', token),
                 logo_url=pos.get('logo_url', ''), source='defi',
             )
@@ -1852,7 +1888,7 @@ async def debug_holding(
         })
 
     # 3. DeFi summary
-    defi_data = await get_cache(f"defi_summary_{user_id}")
+    defi_data = await get_cache(f"defi_summary_{user_id}", user_id=user_id)
     if defi_data and defi_data.get('all_positions'):
         for pos in defi_data['all_positions']:
             token = (pos.get('token') or '').upper()

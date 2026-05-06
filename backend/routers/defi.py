@@ -792,9 +792,20 @@ async def get_defi_summary(user_id: int = Depends(verify_session), refresh: bool
             for pos in result.get('all_positions', []):
                 token = (pos.get('token') or '').upper()
                 qty = float(pos.get('quantity', 0))
-                if token and qty > 0:
-                    p = _pp_prices.get(token, {})
-                    price = p.get('usd', 0) if isinstance(p, dict) else 0
+                if not token or qty <= 0:
+                    continue
+                p = _pp_prices.get(token, {})
+                price = p.get('usd', 0) if isinstance(p, dict) else 0
+                # LP/liquidity positions have no market price but a pre-computed value_usd.
+                # Store as quantity=value_usd, price=1.0 so /portfolio/instant values them correctly.
+                pre_valued_usd = float(pos.get('value_usd', 0))
+                if price <= 0 and pre_valued_usd > 0:
+                    pp_rows.append({
+                        'user_id': user_id, 'symbol': token, 'quantity': pre_valued_usd,
+                        'source_type': 'defi', 'source_detail': pos.get('protocol', '').lower(),
+                        'chain': 'cardano', 'last_price_usd': 1.0,
+                    })
+                else:
                     pp_rows.append({
                         'user_id': user_id, 'symbol': token, 'quantity': qty,
                         'source_type': 'defi', 'source_detail': pos.get('protocol', '').lower(),
