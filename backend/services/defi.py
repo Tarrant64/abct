@@ -319,7 +319,35 @@ class DeFiService:
     """Service for tracking Cardano DeFi positions."""
 
     def __init__(self):
+        # Default headers from env (used as fallback). The actual Blockfrost
+        # key is loaded from the DB at request time via _get_headers() —
+        # users typically save their key via the dashboard UI rather than
+        # in env vars, so a static env-only header would 403 immediately.
         self.headers = {"project_id": BLOCKFROST_API_KEY}
+        self._blockfrost_key_cache = None
+        self._blockfrost_cache_time = None
+        self._blockfrost_cache_ttl = 60  # seconds
+
+    async def _get_headers(self) -> dict:
+        """Get Blockfrost headers with key resolved from DB (cached) or env fallback."""
+        from datetime import datetime, timedelta
+        now = datetime.utcnow()
+        if self._blockfrost_key_cache is not None and self._blockfrost_cache_time:
+            if now - self._blockfrost_cache_time < timedelta(seconds=self._blockfrost_cache_ttl):
+                return {"project_id": self._blockfrost_key_cache} if self._blockfrost_key_cache else {}
+        try:
+            from database import get_api_key
+            db_key = await get_api_key('blockfrost', user_id=1)
+            if db_key:
+                self._blockfrost_key_cache = db_key
+                self._blockfrost_cache_time = now
+                return {"project_id": db_key}
+        except Exception:
+            pass
+        env_key = BLOCKFROST_API_KEY or ''
+        self._blockfrost_key_cache = env_key
+        self._blockfrost_cache_time = now
+        return {"project_id": env_key} if env_key else {}
 
     async def analyze_wallet_defi(self, address: str) -> Optional[Dict]:
         """
@@ -332,10 +360,11 @@ class DeFiService:
         """
         try:
             # Get all UTXOs
-            logger.info(f"[DeFi] Fetching UTXOs for {address[:20]}... API key present: {bool(self.headers.get('project_id'))}")
+            hdrs = await self._get_headers()
+            logger.info(f"[DeFi] Fetching UTXOs for {address[:20]}... API key present: {bool(hdrs.get('project_id'))}")
             response = await blockfrost_fetch(
                 f"/addresses/{address}/utxos",
-                headers=self.headers,
+                headers=hdrs,
                 timeout=30.0
             )
 
@@ -765,7 +794,7 @@ class DeFiService:
                     try:
                         resp = await blockfrost_fetch(
                             f"/addresses/{LIQWID_STAKING_ADDRESS}/utxos",
-                            headers=self.headers,
+                            headers=await self._get_headers(),
                             params={"count": 100, "page": pg},
                             timeout=30.0
                         )
@@ -876,7 +905,7 @@ class DeFiService:
                     try:
                         resp = await blockfrost_fetch(
                             f"/addresses/{STRIKE_STAKING_ADDRESS}/utxos",
-                            headers=self.headers,
+                            headers=await self._get_headers(),
                             params={"count": 100, "page": pg},
                             timeout=15.0
                         )
@@ -1118,7 +1147,7 @@ class DeFiService:
 
                 response = await blockfrost_fetch(
                     f"/addresses/{address}/transactions",
-                    headers=self.headers,
+                    headers=await self._get_headers(),
                     params=params,
                     timeout=30.0
                 )
@@ -1165,7 +1194,7 @@ class DeFiService:
                     try:
                         resp = await blockfrost_fetch(
                             f"/txs/{tx_hash}/utxos",
-                            headers=self.headers,
+                            headers=await self._get_headers(),
                             timeout=30.0
                         )
                         if resp.status_code == 200:
@@ -1377,7 +1406,7 @@ class DeFiService:
             # Check for pending rewards in the staking UTxOs datum
             response = await blockfrost_fetch(
                 f"/addresses/{STRIKE_STAKING_ADDRESS}/utxos",
-                headers=self.headers,
+                headers=await self._get_headers(),
                 params={"count": 100},
                 timeout=15.0
             )
@@ -1482,7 +1511,7 @@ class DeFiService:
         try:
             response = await blockfrost_fetch(
                 f"/addresses/{address}",
-                headers=self.headers,
+                headers=await self._get_headers(),
                 timeout=30.0
             )
             if response.status_code == 200:
@@ -1529,7 +1558,7 @@ class DeFiService:
 
             response = await blockfrost_fetch(
                 f"/addresses/{SURF_STAKING_ADDRESS}/utxos",
-                headers=self.headers,
+                headers=await self._get_headers(),
                 params={"count": 100},
                 timeout=30.0
             )
