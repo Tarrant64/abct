@@ -56,6 +56,10 @@ let v2State = {
     instantBreakdown: null,  // Cache /portfolio/instant breakdown for reconciliation
 };
 
+// Sequence counter — prevents a slow in-flight loadHoldings() from overwriting
+// results from a newer (refresh-triggered) call that already completed.
+let _holdingsLoadSeq = 0;
+
 // Symbol-to-chain mapping for donut chart (all-holdings lacks blockchain field)
 const SYMBOL_TO_CHAIN = {
     'ADA': 'cardano', 'BTC': 'bitcoin', 'ETH': 'ethereum', 'SOL': 'solana',
@@ -207,6 +211,7 @@ async function loadDashboard() {
 }
 
 async function loadHoldings(refresh = false) {
+    const mySeq = ++_holdingsLoadSeq;
     try {
         const url = refresh ? `${API_BASE}/portfolio/all-holdings?refresh=true` : `${API_BASE}/portfolio/all-holdings`;
         var data;
@@ -234,6 +239,9 @@ async function loadHoldings(refresh = false) {
                 }
             }
         });
+
+        // Bail if a newer loadHoldings() call has already completed.
+        if (mySeq !== _holdingsLoadSeq) return;
 
         v2State.totalPortfolioValue = parseFloat(data.total_value_usd) || 0;
 
