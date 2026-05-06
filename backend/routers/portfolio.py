@@ -1815,7 +1815,30 @@ async def get_all_holdings(
         reverse=True
     )
 
-    total_value = sum(h.get('value_usd', 0) for h in sorted_holdings)
+    # Canonical total comes from portfolio_positions (the source of truth).
+    # The holdings list above merges sources for display, but can miss value
+    # when a protocol scan returns partial data (e.g. only some staking
+    # protocols detected, LP positions without market prices).
+    holdings_sum = sum(h.get('value_usd', 0) for h in sorted_holdings)
+    try:
+        from database import get_all_portfolio_positions
+        positions = await get_all_portfolio_positions(user_id)
+        positions_total = 0.0
+        for pos in positions:
+            sym = pos.get('symbol', '')
+            qty = float(pos.get('quantity', 0))
+            price_sym = _PRICE_SYMBOL.get(sym, sym)
+            price_info = all_prices.get(price_sym, {})
+            price = price_info.get('usd', 0) if isinstance(price_info, dict) else 0
+            if price <= 0:
+                price = float(pos.get('last_price_usd', 0))
+            positions_total += qty * price
+        # Use whichever total is higher — protects against the edge case
+        # where get_all_native_assets surfaces tokens not yet in portfolio_positions.
+        total_value = max(holdings_sum, positions_total)
+    except Exception as e:
+        logger.debug(f"[All Holdings] portfolio_positions total fallback failed: {e}")
+        total_value = holdings_sum
 
     # Fetch sparklines + CoinGecko image URLs
     from services.pricing import ASSET_TO_COINGECKO
