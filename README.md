@@ -156,7 +156,8 @@ CEXPLORER_API_KEY=your_key_here      # Staking positions and rewards
 TAPTOOLS_API_KEY=your_key_here       # NFT floor prices
 
 # OPTIONAL: Additional blockchains
-ETHERSCAN_API_KEY=your_key_here      # Ethereum/Arbitrum/Avalanche/BNB/Base
+BLOCKSCOUT_API_KEY=proapi_your_key   # Free Etherscan-compatible EVM transaction API
+ETHERSCAN_API_KEY=your_key_here      # EVM transaction API fallback
 ALCHEMY_API_KEY=your_key_here        # Ethereum/Polygon/Base NFTs
 HELIUS_API_KEY=your_key_here         # Solana
 

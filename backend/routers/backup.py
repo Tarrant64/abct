@@ -778,6 +778,7 @@ async def import_env_file(env_content: str, user_id: int = Depends(verify_sessio
         'HELIUS_API_KEY': ('helius', 'key'),
         'MORALIS_API_KEY': ('moralis', 'key'),
         'ETHERSCAN_API_KEY': ('etherscan', 'key'),
+        'BLOCKSCOUT_API_KEY': ('blockscout', 'key'),
         'CMC_API_KEY': ('coinmarketcap', 'key'),
         'GRAPH_API_KEY': ('graph', 'key'),
         'BEACONCHAIN_API_KEY': ('beaconchain', 'key'),

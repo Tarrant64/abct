@@ -9,7 +9,8 @@ Environment Variables Required:
     - BLOCKFROST_API_KEY: Cardano blockchain API (required for Cardano wallets)
     - CEXPLORER_API_KEY: Cardano staking/DeFi data (optional)
     - TAPTOOLS_API_KEY: NFT floor prices (optional)
-    - ETHERSCAN_API_KEY: Ethereum blockchain data (optional)
+    - ETHERSCAN_API_KEY: Ethereum blockchain data fallback (optional)
+    - BLOCKSCOUT_API_KEY: Free Etherscan-compatible EVM transaction data (optional)
 
 Coinbase Integration:
     - Requires cdp_api_key.json file in project root with 'name' and 'privateKey'
@@ -37,6 +38,7 @@ ALCHEMY_API_KEY = os.getenv("ALCHEMY_API_KEY", "")
 HELIUS_API_KEY = os.getenv("HELIUS_API_KEY", "")
 MORALIS_API_KEY = os.getenv("MORALIS_API_KEY", "")
 ETHERSCAN_API_KEY = os.getenv("ETHERSCAN_API_KEY", "")
+BLOCKSCOUT_API_KEY = os.getenv("BLOCKSCOUT_API_KEY", "")
 CMC_API_KEY = os.getenv("CMC_API_KEY", "")
 GRAPH_API_KEY = os.getenv("GRAPH_API_KEY", "")
 ALPHAVANTAGE_API_KEY = os.getenv("ALPHAVANTAGE_API_KEY", "")

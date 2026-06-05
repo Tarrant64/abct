@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 # Etherscan V2 unified API — single endpoint with chainid parameter
 ETHERSCAN_V2_URL = "https://api.etherscan.io/v2/api"
+BLOCKSCOUT_PRO_URL = "https://api.blockscout.com/v2/api"
 
 # Cache settings
 ETHERSCAN_CACHE_TTL = 300  # 5 minutes for transaction data
@@ -82,18 +83,48 @@ class EtherscanService(APIKeyManager):
 
     def __init__(self):
         super().__init__(api_name='etherscan', env_var='ETHERSCAN_API_KEY')
+        self._blockscout_keys = APIKeyManager(api_name='blockscout', env_var='BLOCKSCOUT_API_KEY')
         self._cache: Dict[str, dict] = {}
         self._cache_ttl = timedelta(minutes=5)
-        self._has_api_key: Optional[bool] = None  # Cached key status
+        self._provider_logged = set()
 
     async def is_configured(self) -> bool:
         """Check if the API key is configured."""
-        key = await self.get_api_key()
+        key = await self._get_preferred_api_key()
         return bool(key)
 
     def _get_chain_config(self, chain: str) -> Optional[dict]:
         """Get configuration for a specific chain."""
         return self.CHAINS.get(chain.lower())
+
+    async def _get_preferred_api_key(self) -> Optional[str]:
+        """Prefer Blockscout PRO, then fall back to Etherscan."""
+        return await self._blockscout_keys.get_api_key() or await self.get_api_key()
+
+    async def _get_request_provider(self) -> dict:
+        """Return the active Etherscan-compatible provider configuration."""
+        blockscout_key = await self._blockscout_keys.get_api_key()
+        if blockscout_key:
+            return {
+                'name': 'Blockscout PRO',
+                'client_name': 'blockscout',
+                'base_url': BLOCKSCOUT_PRO_URL,
+                'chain_param': 'chain_id',
+                'api_key': blockscout_key,
+                'requires_key': True,
+                'min_delay': 0.25,
+            }
+
+        etherscan_key = await self.get_api_key()
+        return {
+            'name': 'Etherscan',
+            'client_name': 'etherscan',
+            'base_url': ETHERSCAN_V2_URL,
+            'chain_param': 'chainid',
+            'api_key': etherscan_key,
+            'requires_key': False,
+            'min_delay': 0.35,
+        }
 
     async def _make_request(self, chain: str, params: dict) -> Optional[dict]:
         """
@@ -114,33 +145,30 @@ class EtherscanService(APIKeyManager):
             logger.error(f"Unknown chain: {chain}")
             return None
 
-        # V2 API requires chainid parameter
-        params['chainid'] = chain_config['chain_id']
+        provider = await self._get_request_provider()
+        params[provider['chain_param']] = chain_config['chain_id']
 
-        # Add API key if available; works without one at reduced rate
-        api_key = await self.get_api_key()
-        if api_key:
-            params['apikey'] = api_key
-            if self._has_api_key is None:
-                self._has_api_key = True
+        if provider['api_key']:
+            params['apikey'] = provider['api_key']
+        elif provider['requires_key']:
+            logger.warning("Blockscout PRO API selected but no API key is configured")
+            return None
         else:
-            if self._has_api_key is None:
-                logger.info(f"No Etherscan API key configured — using keyless rate limit (slower)")
-                self._has_api_key = False
-            # Keyless rate limit: ~1 req per 5 seconds
+            if provider['name'] not in self._provider_logged:
+                logger.info("No Etherscan or Blockscout API key configured - using Etherscan keyless rate limit")
+                self._provider_logged.add(provider['name'])
             await asyncio.sleep(5)
 
         try:
-            # Rate limit: Etherscan free tier = 5 calls/sec with key
-            await asyncio.sleep(0.35)
-            client = get_client("etherscan", timeout=30.0)
+            await asyncio.sleep(provider['min_delay'])
+            client = get_client(provider['client_name'], timeout=30.0)
             response = await client.get(
-                chain_config['base_url'],
+                provider['base_url'],
                 params=params
             )
 
             if response.status_code != 200:
-                logger.error(f"{chain_config['explorer_name']} API error: {response.status_code}")
+                logger.error(f"{provider['name']} API error: {response.status_code}")
                 return None
 
             data = response.json()
@@ -153,20 +181,20 @@ class EtherscanService(APIKeyManager):
                     return {'result': []}
                 # Deprecation warnings - log but don't treat as error if data is empty
                 if message == 'NOTOK' and 'deprecated' in str(result).lower():
-                    logger.warning(f"{chain_config['explorer_name']} API: {message} - {result}")
+                    logger.warning(f"{provider['name']} API: {message} - {result}")
                     # If result is empty list, treat as "no data" not "error"
                     if isinstance(result, list) and len(result) == 0:
                         return {'result': []}
                     # Still return data if it exists
                     if isinstance(result, list):
                         return data
-                logger.warning(f"{chain_config['explorer_name']} API: {message} - {result}")
+                logger.warning(f"{provider['name']} API: {message} - {result}")
                 return None
 
             return data
 
         except Exception as e:
-            logger.error(f"Error making {chain_config['explorer_name']} request: {e}")
+            logger.error(f"Error making {provider['name']} request: {e}")
             return None
 
     async def get_eth_balance(self, chain: str, address: str) -> Optional[float]:
@@ -431,7 +459,8 @@ class EtherscanService(APIKeyManager):
         return {
             'configured': await self.is_configured(),
             'supported_chains': list(self.CHAINS.keys()),
-            'api_key_set': bool(await self.get_api_key())
+            'api_key_set': bool(await self._get_preferred_api_key()),
+            'active_provider': 'blockscout' if await self._blockscout_keys.get_api_key() else 'etherscan'
         }
 
 
