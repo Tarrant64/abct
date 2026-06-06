@@ -43,7 +43,7 @@
             <!-- Page Content -->
             <div class="v2-content v2-dashboard-wide" id="pageContent">
                 <!-- Hero: Portfolio Value -->
-                <div class="v2-hero v2-fade-in">
+                <div class="v2-hero v2-fade-in glass-card">
                     <div class="v2-card-header" style="margin-bottom: 4px;">
                         <span class="v2-card-title">Total Portfolio Value</span>
                         <button class="v2-sync-btn" id="syncAllBtn" onclick="syncAll()">
@@ -62,38 +62,38 @@
 
                 <!-- Stats Cards -->
                 <div class="v2-stats-grid v2-fade-in" id="statsGrid">
-                    <div class="v2-stat-card">
+                    <div class="v2-stat-card glass-card">
                         <div class="v2-stat-label">Liquid Assets</div>
                         <div class="v2-stat-value v2-blur" id="statLiquid">
                             <span class="v2-skeleton v2-skeleton-value"></span>
                         </div>
                     </div>
-                    <div class="v2-stat-card">
+                    <div class="v2-stat-card glass-card">
                         <div class="v2-stat-label">Staked + DeFi</div>
                         <div class="v2-stat-value v2-blur" id="statStaked">
                             <span class="v2-skeleton v2-skeleton-value"></span>
                         </div>
                     </div>
-                    <div class="v2-stat-card">
+                    <div class="v2-stat-card glass-card">
                         <div class="v2-stat-label">NFTs</div>
                         <div class="v2-stat-value v2-blur" id="statNfts">
                             <span class="v2-skeleton v2-skeleton-value"></span>
                         </div>
                     </div>
-                    <div class="v2-stat-card">
+                    <div class="v2-stat-card glass-card">
                         <div class="v2-stat-label">Exchanges</div>
                         <div class="v2-stat-value v2-blur" id="statExchanges">
                             <span class="v2-skeleton v2-skeleton-value"></span>
                         </div>
                     </div>
-                    <div class="v2-stat-card">
+                    <div class="v2-stat-card glass-card">
                         <div class="v2-stat-label">7-Day Change</div>
                         <div class="v2-stat-value" id="stat7dChange">
                             <span class="v2-skeleton v2-skeleton-value"></span>
                         </div>
                         <div class="v2-stat-sub" id="stat7dPct"></div>
                     </div>
-                    <div class="v2-stat-card">
+                    <div class="v2-stat-card glass-card">
                         <div class="v2-stat-label">Transactions (7d)</div>
                         <div class="v2-stat-value" id="statTx7d">
                             <span class="v2-skeleton v2-skeleton-value"></span>
@@ -104,7 +104,7 @@
                 <!-- Portfolio Donut + Top Holdings -->
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:0;" class="v2-fade-in v2-wide-left">
                     <!-- Donut Chart -->
-                    <div class="v2-card" style="padding:20px;">
+                    <div class="v2-card glass-card" style="padding:20px;">
                         <div class="v2-card-header"><span class="v2-card-title">Chain Allocation</span></div>
                         <div id="donutContainer" style="display:flex;align-items:center;justify-content:center;position:relative;height:240px;">
                             <canvas id="portfolioDonut" style="max-height:220px;"></canvas>
@@ -116,7 +116,7 @@
                         </div>
                     </div>
                     <!-- Top Holdings -->
-                    <div class="v2-card" style="padding:20px;">
+                    <div class="v2-card glass-card" style="padding:20px;">
                         <div class="v2-card-header"><span class="v2-card-title">Top Holdings</span></div>
                         <div id="topHoldingsContainer" style="display:flex;flex-direction:column;gap:12px;padding-top:8px;">
                             <div class="v2-skeleton v2-skeleton-text" style="height:40px"></div>
@@ -145,7 +145,7 @@
                             <button class="v2-range-btn" data-range="all" onclick="loadChart('all')">ALL</button>
                         </div>
                     </div>
-                    <div class="v2-chart-container" id="chartContainer">
+                    <div class="v2-chart-container glass-card" id="chartContainer">
                         <div class="v2-chart-canvas-wrapper">
                             <canvas id="portfolioChart"></canvas>
                         </div>
@@ -154,7 +154,7 @@
                 </div>
 
                 <!-- Portfolio Heatmap (Treemap) -->
-                <div class="v2-card v2-fade-in v2-wide-full" id="heatmapSection" style="margin-bottom:20px;padding:20px;display:none;">
+                <div class="v2-card glass-card v2-fade-in v2-wide-full" id="heatmapSection" style="margin-bottom:20px;padding:20px;display:none;">
                     <div class="v2-card-header"><span class="v2-card-title">Portfolio Heatmap</span></div>
                     <div id="v2HeatmapContainer" style="position:relative;width:100%;min-height:360px;border-radius:var(--v2-radius-md);overflow:hidden;"></div>
                 </div>

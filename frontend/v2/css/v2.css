@@ -145,6 +145,33 @@
     --v2-scrollbar-thumb-hover: #b0b8c4;
 }
 
+
+/* ============================================================================
+   GLASS DESIGN TOKENS — per-theme glass & polish system
+   Reusable: --glass-bg, --glass-blur, --glass-border, --glass-highlight,
+             --glass-shadow, --glass-radius, .glass-card utility
+   ============================================================================ */
+
+/* Dark Mode Glass Tokens */
+[data-theme="dark-mode"] {
+    --glass-bg: rgba(15, 52, 96, 0.45);
+    --glass-blur: blur(14px) saturate(140%);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-highlight: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 40%);
+    --glass-shadow: 0 8px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06);
+    --glass-radius: 14px;
+}
+
+/* Light Mode Glass Tokens */
+[data-theme="light"] {
+    --glass-bg: rgba(255, 255, 255, 0.72);
+    --glass-blur: blur(16px) saturate(130%);
+    --glass-border: rgba(255, 255, 255, 0.72);
+    --glass-highlight: linear-gradient(180deg, rgba(255,255,255,0.9) 0%, transparent 50%);
+    --glass-shadow: 0 8px 24px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.8);
+    --glass-radius: 14px;
+}
+
 /* Ocean Depths Theme */
 [data-theme="ocean-depths"] {
     --v2-bg-body: #060e1a;
@@ -836,6 +863,12 @@ a:hover { opacity: 0.85; }
     max-width: 100%;
 }
 
+.v2-wide-left,
+.v2-wide-right,
+.v2-wide-full {
+    background: transparent;
+}
+
 
 /* ============================================================================
    CARDS
@@ -851,6 +884,41 @@ a:hover { opacity: 0.85; }
 
 .v2-card:hover {
     border-color: var(--v2-border-light);
+}
+
+/* When .v2-card has .glass-card, use glass-bg instead of solid */
+.v2-card.glass-card {
+    background: var(--glass-bg);
+    border-color: var(--glass-border);
+    border-radius: var(--glass-radius);
+    box-shadow: var(--glass-shadow);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.v2-card.glass-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--glass-highlight);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.v2-card.glass-card > * {
+    position: relative;
+    z-index: 1;
+}
+
+.v2-card.glass-card:hover {
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08);
+    transform: translateY(-2px);
+}
+
+[data-theme="light"] .v2-card.glass-card:hover {
+    border-color: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.9);
 }
 
 .v2-card-header {
@@ -936,6 +1004,7 @@ a:hover { opacity: 0.85; }
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 16px;
     margin-bottom: 24px;
+    background: transparent;
 }
 
 .v2-stat-card {
@@ -949,6 +1018,43 @@ a:hover { opacity: 0.85; }
 .v2-stat-card:hover {
     border-color: var(--v2-border-light);
     background: var(--v2-bg-card-hover);
+}
+
+/* When .v2-stat-card has .glass-card, use glass-bg instead of solid */
+.v2-stat-card.glass-card {
+    background: var(--glass-bg);
+    border-color: var(--glass-border);
+    border-radius: var(--glass-radius);
+    box-shadow: var(--glass-shadow);
+    position: relative;
+    overflow: hidden;
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.v2-stat-card.glass-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--glass-highlight);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.v2-stat-card.glass-card > * {
+    position: relative;
+    z-index: 1;
+}
+
+.v2-stat-card.glass-card:hover {
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08);
+    transform: translateY(-2px);
+}
+
+[data-theme="light"] .v2-stat-card.glass-card:hover {
+    border-color: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.9);
 }
 
 .v2-stat-label {
@@ -981,6 +1087,94 @@ a:hover { opacity: 0.85; }
 .v2-stat-sub.negative { color: var(--v2-red); }
 
 
+
+
+/* ============================================================================
+   GLASS CARD UTILITY — reusable frosted-glass card style
+   Usage: add class="glass-card" to any card container
+   Applies: translucent fill, backdrop blur, hairline border, specular sheen,
+            layered shadow, hover lift. Falls back to solid card in unsupported envs.
+   ============================================================================ */
+
+.glass-card {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--glass-radius);
+    box-shadow: var(--glass-shadow);
+    position: relative;
+    overflow: hidden;
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    transition: transform var(--v2-transition), border-color var(--v2-transition), box-shadow var(--v2-transition);
+}
+
+/* Specular top-sheen via ::before */
+.glass-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--glass-highlight);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Ensure content sits above the sheen */
+.glass-card > * {
+    position: relative;
+    z-index: 1;
+}
+
+/* Hover lift */
+.glass-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
+[data-theme="light"] .glass-card:hover {
+    border-color: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.9);
+}
+
+/* Guardrail: @supports backdrop-filter fallback */
+@supports not (backdrop-filter: blur(1px)) {
+    .glass-card {
+        background: var(--v2-bg-card);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+    .glass-card:hover {
+        border-color: var(--v2-border-light);
+        box-shadow: var(--v2-shadow-card);
+    }
+}
+
+/* Guardrail: prefers-reduced-transparency -> solid panels */
+@media (prefers-reduced-transparency: reduce) {
+    .glass-card {
+        background: var(--v2-bg-card);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        box-shadow: var(--v2-shadow-card);
+    }
+    .glass-card::before { display: none; }
+    .glass-card:hover {
+        border-color: var(--v2-border-light);
+        box-shadow: var(--v2-shadow-card);
+    }
+}
+
+/* Guardrail: prefers-reduced-motion -> no transform/sheen anim */
+@media (prefers-reduced-motion: reduce) {
+    .glass-card,
+    .glass-card:hover {
+        transform: none;
+        transition: none;
+    }
+    .glass-card::before {
+        background: transparent;
+    }
+}
 /* ============================================================================
    CHART SECTION
    ============================================================================ */
@@ -1026,6 +1220,7 @@ a:hover { opacity: 0.85; }
     font-weight: 600;
 }
 
+/* Chart container base (non-glass) */
 .v2-chart-container {
     background: var(--v2-bg-card);
     border: 1px solid var(--v2-border);
@@ -1033,6 +1228,41 @@ a:hover { opacity: 0.85; }
     padding: 20px;
     position: relative;
     min-height: 300px;
+}
+
+/* Chart container with glass-card override */
+.v2-chart-container.glass-card {
+    background: var(--glass-bg);
+    border-color: var(--glass-border);
+    border-radius: var(--glass-radius);
+    box-shadow: var(--glass-shadow);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.v2-chart-container.glass-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--glass-highlight);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.v2-chart-container.glass-card > * {
+    position: relative;
+    z-index: 1;
+}
+
+.v2-chart-container.glass-card:hover {
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08);
+    transform: translateY(-2px);
+}
+
+[data-theme="light"] .v2-chart-container.glass-card:hover {
+    border-color: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.9);
 }
 
 .v2-chart-canvas-wrapper {
