@@ -10,10 +10,10 @@ Tokens are defined per-theme under `[data-theme="dark-mode"]` and `[data-theme="
 
 | Token | Dark Mode Value | Light Mode Value | Purpose |
 |-------|----------------|-----------------|---------|
-| `--glass-bg` | `rgba(15, 52, 96, 0.45)` | `rgba(255, 255, 255, 0.72)` | Translucent card fill |
+| `--glass-bg` | `rgba(10, 10, 12, 0.55)` | `rgba(255, 255, 255, 0.72)` | Translucent black card fill (revised 2026-06-07: removed blue tint) |
 | `--glass-blur` | `blur(14px) saturate(140%)` | `blur(16px) saturate(130%)` | Backdrop blur + saturation |
-| `--glass-border` | `rgba(255, 255, 255, 0.08)` | `rgba(255, 255, 255, 0.72)` | Hairline top-lit edge |
-| `--glass-highlight` | `linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 40%)` | `linear-gradient(180deg, rgba(255,255,255,0.9) 0%, transparent 50%)` | Specular top-sheen |
+| `--glass-border` | `rgba(255, 255, 255, 0.10)` | `rgba(255, 255, 255, 0.72)` | Hairline top-lit edge (lifted from 0.08) |
+| `--glass-highlight` | `linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.02) 30%, transparent 55%)` | `linear-gradient(180deg, rgba(255,255,255,0.9) 0%, transparent 50%)` | Specular top-sheen with mid-stop (revised 2026-06-07) |
 | `--glass-shadow` | `0 8px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)` | `0 8px 24px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.8)` | Layered shadow (ambient + inset) |
 | `--glass-radius` | `14px` | `14px` | Border radius |
 

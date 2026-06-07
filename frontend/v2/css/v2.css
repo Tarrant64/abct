@@ -168,12 +168,12 @@
              --glass-shadow, --glass-radius, .glass-card utility
    ============================================================================ */
 
-/* Dark Mode Glass Tokens */
+/* Dark Mode Glass Tokens — black-gloss revision */
 [data-theme="dark-mode"] {
-    --glass-bg: rgba(15, 52, 96, 0.45);
+    --glass-bg: rgba(10, 10, 12, 0.55);
     --glass-blur: blur(14px) saturate(140%);
-    --glass-border: rgba(255, 255, 255, 0.08);
-    --glass-highlight: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 40%);
+    --glass-border: rgba(255, 255, 255, 0.10);
+    --glass-highlight: linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.02) 30%, transparent 55%);
     --glass-shadow: 0 8px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06);
     --glass-radius: 14px;
 }
