@@ -174,6 +174,7 @@
     --glass-blur: blur(14px) saturate(140%);
     --glass-border: rgba(255, 255, 255, 0.10);
     --glass-highlight: linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.02) 30%, transparent 55%);
+    --glass-sheen: var(--glass-highlight);          /* default sheen = flat top-to-bottom */
     --glass-shadow: 0 8px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06);
     --glass-radius: 14px;
 }
@@ -184,6 +185,7 @@
     --glass-blur: blur(16px) saturate(130%);
     --glass-border: rgba(255, 255, 255, 0.72);
     --glass-highlight: linear-gradient(180deg, rgba(255,255,255,0.9) 0%, transparent 50%);
+    --glass-sheen: var(--glass-highlight);          /* default sheen = flat top-to-bottom */
     --glass-shadow: 0 8px 24px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.8);
     --glass-radius: 14px;
 }
@@ -917,7 +919,7 @@ a:hover { opacity: 0.85; }
     content: "";
     position: absolute;
     inset: 0;
-    background: var(--glass-highlight);
+    background: var(--glass-sheen);
     pointer-events: none;
     z-index: 0;
 }
@@ -1055,7 +1057,7 @@ a:hover { opacity: 0.85; }
     content: "";
     position: absolute;
     inset: 0;
-    background: var(--glass-highlight);
+    background: var(--glass-sheen);
     pointer-events: none;
     z-index: 0;
 }
@@ -1132,7 +1134,7 @@ a:hover { opacity: 0.85; }
     content: "";
     position: absolute;
     inset: 0;
-    background: var(--glass-highlight);
+    background: var(--glass-sheen);
     pointer-events: none;
     z-index: 0;
 }
@@ -1153,6 +1155,40 @@ a:hover { opacity: 0.85; }
 [data-theme="light"] .glass-card:hover {
     border-color: rgba(255, 255, 255, 0.95);
     box-shadow: 0 12px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.9);
+}
+
+/* ============================================================================
+   GLASS SHEEN VARIANTS — deliberate cascade across dashboard cards
+   Each variant overrides ::before { background: ... } only.
+   Usage: class="glass-card glass-sheen-1" etc.
+   ============================================================================ */
+
+/* Sheen 1 — Diagonal from top-left (~135deg), gentle corner catch */
+.glass-sheen-1::before {
+    --_glass-alpha: rgba(255,255,255,0.12);
+    background: linear-gradient(135deg, var(--_glass-alpha) 0%, transparent 45%, transparent 60%);
+}
+
+/* Sheen 2 — Diagonal from top-right (~45deg), asymmetric sweep */
+.glass-sheen-2::before {
+    --_glass-alpha: rgba(255,255,255,0.10);
+    background: linear-gradient(45deg, transparent 0%, var(--_glass-alpha) 55%, transparent 85%);
+}
+
+/* Sheen 3 — Soft radial corner gloss (bottom-left origin, wide falloff) */
+.glass-sheen-3::before {
+    background: radial-gradient(ellipse 60% 50% at 5% 95%, rgba(255,255,255,0.08) 0%, transparent 70%);
+}
+
+/* Sheen 4 — Steep low-angle sweep (~160deg), catches near bottom edge */
+.glass-sheen-4::before {
+    --_glass-alpha: rgba(255,255,255,0.09);
+    background: linear-gradient(160deg, transparent 0%, transparent 65%, var(--_glass-alpha) 88%, var(--_glass-alpha) 100%);
+}
+
+/* Sheen 5 — Split highlight (dual subtle bands, off-axis) */
+.glass-sheen-5::before {
+    background: linear-gradient(150deg, transparent 0%, transparent 38%, rgba(255,255,255,0.06) 42%, transparent 46%, transparent 54%, rgba(255,255,255,0.05) 58%, transparent 62%);
 }
 
 /* Guardrail: @supports backdrop-filter fallback */
@@ -1263,7 +1299,7 @@ a:hover { opacity: 0.85; }
     content: "";
     position: absolute;
     inset: 0;
-    background: var(--glass-highlight);
+    background: var(--glass-sheen);
     pointer-events: none;
     z-index: 0;
 }
