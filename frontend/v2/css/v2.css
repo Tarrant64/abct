@@ -1337,20 +1337,82 @@ a:hover { opacity: 0.85; }
     border-color: var(--v2-border-focus);
 }
 
-.v2-table-wrapper {
+/* Table wrapper: glass-card panel with container-level frosted glass + sheen.
+   Non-glass themes (ocean-depths, sunset-horizon, cypherpunk1, cypher) fall
+   through to the solid-card rules below because they have no --glass-* tokens.
+   overflow: hidden clips the ::before sheen to the border-radius; table body
+   overflows naturally within the dashboard layout (no per-row scroll needed). */
+.v2-table-wrapper.glass-card {
+    padding: 0;
+    background: var(--glass-bg);
+    border-color: var(--glass-border);
+    border-radius: var(--glass-radius);
+    box-shadow: var(--glass-shadow);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    position: relative;
+    overflow: hidden;
+    transition: transform var(--v2-transition), border-color var(--v2-transition), box-shadow var(--v2-transition);
+}
+
+/* Specular top-sheen via ::before (inherited from .glass-card) */
+
+/* Content sits above the sheen (inherited from .glass-card) */
+
+/* Hover lift on the wrapper only when the table is scrolled out of view */
+.v2-table-wrapper.glass-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
+[data-theme="light"] .v2-table-wrapper.glass-card:hover {
+    border-color: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.9);
+}
+
+/* Fallback for browsers / themes that don't support glass */
+@supports not (backdrop-filter: blur(1px)) {
+    .v2-table-wrapper.glass-card {
+        background: var(--v2-bg-card);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        box-shadow: var(--v2-shadow-card);
+    }
+    .v2-table-wrapper.glass-card:hover {
+        border-color: var(--v2-border-light);
+        box-shadow: var(--v2-shadow-card);
+        transform: none;
+    }
+}
+
+/* Non-glass themes: fall back to solid card style */
+[data-theme="ocean-depths"] .v2-table-wrapper.glass-card,
+[data-theme="sunset-horizon"] .v2-table-wrapper.glass-card,
+[data-theme="cypherpunk1"] .v2-table-wrapper.glass-card,
+[data-theme="cypher"] .v2-table-wrapper.glass-card {
     background: var(--v2-bg-card);
     border: 1px solid var(--v2-border);
     border-radius: var(--v2-radius-lg);
-    overflow: hidden;
+    box-shadow: var(--v2-shadow-card);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
 }
+
+/* ============================================================================
+   TABLE — no per-row backdrop-filter (perf on long lists)
+   ============================================================================ */
 
 .v2-table {
     width: 100%;
     border-collapse: collapse;
 }
 
+/* Sticky frosted header */
 .v2-table thead {
-    background: var(--v2-bg-table-header);
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
 .v2-table th {
@@ -1366,6 +1428,23 @@ a:hover { opacity: 0.85; }
     cursor: pointer;
     user-select: none;
     transition: color var(--v2-transition);
+}
+
+/* Frosted glass header background (dark + light) */
+.v2-table-wrapper.glass-card .v2-table thead {
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+}
+
+/* Non-glass themes: solid header */
+[data-theme="ocean-depths"] .v2-table-wrapper.glass-card .v2-table thead,
+[data-theme="sunset-horizon"] .v2-table-wrapper.glass-card .v2-table thead,
+[data-theme="cypherpunk1"] .v2-table-wrapper.glass-card .v2-table thead,
+[data-theme="cypher"] .v2-table-wrapper.glass-card .v2-table thead {
+    background: var(--v2-bg-table-header);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
 }
 
 .v2-table th:hover {
