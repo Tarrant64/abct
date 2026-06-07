@@ -22,7 +22,7 @@ Tokens are defined per-theme under `[data-theme="dark-mode"]` and `[data-theme="
 Add `class="glass-card"` to any card container to apply the glass treatment:
 
 ```html
-<div class="v2-card glass-card" style="padding:20px;">
+<div class="v2-card glass-card">
     <div class="v2-card-header">
         <span class="v2-card-title">Title</span>
     </div>
@@ -40,7 +40,44 @@ Add `class="glass-card"` to any card container to apply the glass treatment:
 
 ### Specialized Overrides
 
-For `.v2-stat-card.glass-card` and `.v2-card.glass-card`, the CSS file contains targeted overrides that ensure glass tokens take precedence over the base card/background values.
+For `.v2-stat-card.glass-card` and `.v2-card.glass-card`, the CSS file contains targeted overrides that ensure glass tokens take precedence over the base card/background values. Explicit `padding` is set on each specialized rule to prevent inheritance gaps from the base class.
+
+## Padding & Spacing Scale
+
+The dashboard uses a 6-step spacing scale (data-dense, professional):
+
+| Token | Value | Usage |
+|-------|-------|-------|
+| `--v2-space-xs` | `4px` | Micro margins (label-to-value) |
+| `--v2-space-sm` | `8px` | Tight gaps between small elements |
+| `--v2-space-md` | `12px` | Card padding, table cell padding, stat card padding, card header margins |
+| `--v2-space-lg` | `16px` | Standard card padding, chart container padding |
+| `--v2-space-xl` | `20px` | Hero padding, content padding, section top-level padding |
+| `--v2-space-2xl` | `24px` | Section-to-section margins |
+
+### Applied values (Phase 1 refine):
+
+| Element | Padding/Gap | Notes |
+|---------|------------|-------|
+| `.v2-content` | `20px` | Main content area |
+| `.v2-hero` | `20px` | Hero card internal padding (fixes overflow bug) |
+| `.v2-stat-card` | `12px` | Stat card internal padding |
+| `.v2-stat-card.glass-card` | `12px` | Explicit override to prevent inheritance gap |
+| `.v2-card` | `16px` | Standard card padding |
+| `.v2-card.glass-card` | `16px` | Explicit override to prevent inheritance gap |
+| `.v2-chart-container` | `16px` | Chart panel padding |
+| `.v2-chart-container.glass-card` | inherits from base | Already sets padding in base |
+| `.v2-table th/td` | `8px 12px` | Cell padding (reduced from 10/16) |
+| `.v2-footer` | `16px 20px` | Footer padding |
+| `.v2-stats-grid` | `gap: 12px` | Reduced from 16px |
+| `.v2-card-header` / `.v2-chart-header` / `.v2-table-header` | `margin-bottom: 12px` | Reduced from 16px |
+| `.v2-hero-change` | `margin-top: 4px` | Reduced from 6px |
+| `.v2-hero-sub` | `gap: 12px; margin-top: 6px` | Reduced from gap 16, margin 8 |
+| `.v2-stat-label` | `margin-bottom: 4px` | Reduced from 6px |
+
+### Inline-styled grid override
+
+The dashboard uses inline `style="grid-template-columns:1fr 1fr;gap:20px"` for the donut+holdings section. CSS attribute selector `[style*="grid-template-columns:1fr 1fr"]` overrides this to `gap: var(--v2-space-md)` (12px).
 
 ## Guardrails
 
@@ -62,5 +99,5 @@ For future phases (Assets, NFTs, DeFi pages), add `class="glass-card"` to card c
 
 ## Files
 
-- `v2.css` — All glass tokens and utility classes (Phase 1 additions start at line ~150).
+- `v2.css` — All glass tokens, spacing scale, and utility classes.
 - `index.html` — Dashboard HTML with glass-card class hooks on hero, stat cards, chart panel, and widget cards.
