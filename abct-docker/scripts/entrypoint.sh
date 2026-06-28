@@ -10,16 +10,11 @@ if [ -z "$BLOCKFROST_API_KEY" ]; then
     echo "WARNING: BLOCKFROST_API_KEY not set - Cardano features will not work"
 fi
 
-if [ -z "$TAPTOOLS_API_KEY" ]; then
-    echo "WARNING: TAPTOOLS_API_KEY not set - NFT and some token features will not work"
-fi
-
 # Show configuration
 echo ""
 echo "Configuration:"
 echo "  Database: ${DATABASE_PATH:-/app/data/portfolio.db}"
 echo "  Blockfrost: ${BLOCKFROST_API_KEY:+configured}${BLOCKFROST_API_KEY:-NOT SET}"
-echo "  TapTools: ${TAPTOOLS_API_KEY:+configured}${TAPTOOLS_API_KEY:-NOT SET}"
 echo "  CoinGecko: ${COINGECKO_API_KEY:+configured}${COINGECKO_API_KEY:-using free tier}"
 echo "  NFT Service: ${NFT_PRICE_SERVICE_URL:-not configured}"
 

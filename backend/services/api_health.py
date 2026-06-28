@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__)
 API_HEALTH_TESTS = {
     # Header-based: ("header", url, header_name)
     "blockfrost":    ("header", f"{BLOCKFROST_BASE_URL}/health", "project_id"),
-    "taptools":      ("header", "https://openapi.taptools.io/api/v1/token/mcap", "x-api-key"),
     "moralis":       ("header", "https://deep-index.moralis.io/api/v2.2/web3/version", "X-API-Key"),
     "coinmarketcap": ("header", "https://pro-api.coinmarketcap.com/v1/key/info", "X-CMC_PRO_API_KEY"),
     "nmkr":          ("header", "https://studio-api.nmkr.io/v2/GetCounts", "Authorization"),

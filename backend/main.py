@@ -294,27 +294,7 @@ async def lifespan(app: FastAPI):
 
             startup_status["nft_prices"] = "loading"
 
-            # CRITICAL: Taptools has very strict rate limits (100 requests/day on $9/mo plan)
-            # Use aggressive 4-hour cooldown to protect the API key
-            should_run, reason = await rate_limit_tracker.should_run_task(
-                task_name='nft_floor_prices',
-                service='taptools',
-                cooldown_minutes=240  # 4 HOURS for Taptools protection
-            )
-
-            if not should_run:
-                logger.info(f"Skipping Taptools NFT floor price collection: {reason}")
-                startup_status["nft_prices"] = "skipped"
-
-                # Still load cached prices from database even if we skip API calls
-                logger.info("Loading cached Cardano NFT floor prices from database...")
-                loaded = await nft_service.load_floor_prices_from_db()
-                logger.info(f"Loaded {loaded} cached Cardano floor prices from database")
-
-                startup_status["ready"] = True
-                return
-
-            # First, load any stored prices from the database
+            # Load any stored prices from the database
             logger.info("Loading Cardano NFT floor prices from database...")
             loaded = await nft_service.load_floor_prices_from_db()
             logger.info(f"Loaded {loaded} Cardano floor prices from database")
@@ -330,13 +310,9 @@ async def lifespan(app: FastAPI):
             startup_status["nft_prices"] = "ready"
 
             if result['status'] == 'rate_limited':
-                # Mark Taptools as rate limited in the tracker
-                await rate_limit_tracker.mark_rate_limited('taptools', recovery_minutes=1440)  # 24 hours
-                logger.warning(f"Cardano NFT price collection rate limited after updating {result['collections_updated']} collections. Taptools blocked for 24 hours.")
+                logger.warning(f"Cardano NFT price collection rate limited after updating {result['collections_updated']} collections.")
             else:
                 logger.info(f"Cardano NFT price collection: {result['status']}, updated {result['collections_updated']} collections")
-                # Mark task as successfully run
-                await rate_limit_tracker.mark_task_run('nft_floor_prices', 'taptools', 'auto')
 
         except Exception as e:
             startup_status["nft_prices"] = "error"

@@ -773,7 +773,6 @@ async def import_env_file(env_content: str, user_id: int = Depends(verify_sessio
     ENV_VAR_MAP = {
         'BLOCKFROST_API_KEY': ('blockfrost', 'key'),
         'CEXPLORER_API_KEY': ('cexplorer', 'key'),
-        'TAPTOOLS_API_KEY': ('taptools', 'key'),
         'ALCHEMY_API_KEY': ('alchemy', 'key'),
         'HELIUS_API_KEY': ('helius', 'key'),
         'MORALIS_API_KEY': ('moralis', 'key'),

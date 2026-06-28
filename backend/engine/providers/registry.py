@@ -146,15 +146,6 @@ def create_default_registry() -> ProviderRegistry:
         requests_per_second=2.0,
         burst_size=5,
     ))
-    registry.register(Provider(
-        name="taptools",
-        chains={ChainId.CARDANO},
-        domains={WorkDomain.ENRICH_METADATA},
-        priority=50,
-        max_concurrency=1,
-        requests_per_second=0.5,  # Very strict rate limit
-        burst_size=2,
-    ))
 
     # --- Bitcoin ---
     registry.register(Provider(

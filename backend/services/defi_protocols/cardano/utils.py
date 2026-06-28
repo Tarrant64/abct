@@ -9,14 +9,10 @@ import bech32
 import logging
 from typing import Optional, Dict, List, Tuple
 
-from config import BLOCKFROST_API_KEY, BLOCKFROST_BASE_URL, TAPTOOLS_BASE_URL
-from services.http_client import get_client, blockfrost_fetch
-from services.api_key_manager import APIKeyManager
+from config import BLOCKFROST_API_KEY, BLOCKFROST_BASE_URL
+from services.http_client import blockfrost_fetch
 
 logger = logging.getLogger(__name__)
-
-# Singleton API key manager for TapTools within LP valuation
-_taptools_key_mgr = APIKeyManager(api_name='taptools', env_var='TAPTOOLS_API_KEY')
 
 
 def get_payment_credential(address: str) -> Optional[str]:
@@ -200,11 +196,10 @@ def calculate_lp_share(
     }
 
 
-# ─── LP Valuation via TapTools ───────────────────────────────────────────────
-# TapTools provides a unified /token/ohlcv and /wallet/portfolio endpoint that
-# works across all Cardano DEXes. For LP valuation we use Blockfrost to get the
+# ─── LP Valuation ────────────────────────────────────────────────────────────
+# For LP valuation we use Blockfrost to get the
 # LP token's on-chain metadata (total supply) and the pool's reserve data, then
-# fall back to TapTools for token pricing.
+# fall back to pricing services for token pricing.
 
 # Map of DEX LP policy IDs for quick lookup
 DEX_LP_POLICIES: Dict[str, str] = {
@@ -216,12 +211,6 @@ DEX_LP_POLICIES: Dict[str, str] = {
     "7aca4c98b65906a5d8e3dfa174dcaa72d190e0eae5ee279df6b87c5a": "Splash",
     "af3d70acf4bd5b3abb319a7d75c89fb3e56eafcdd46b2e9b57a2999f": "MuesliSwap",
 }
-
-
-async def _get_taptools_headers() -> dict:
-    """Get TapTools API headers using the shared key manager."""
-    api_key = await _taptools_key_mgr.get_api_key()
-    return {"x-api-key": api_key} if api_key else {}
 
 
 async def get_lp_token_info(unit: str) -> Optional[Dict]:
@@ -261,7 +250,10 @@ async def get_lp_token_info(unit: str) -> Optional[Dict]:
 
 
 async def get_token_price_ada(unit: str) -> float:
-    """Get token price in ADA from TapTools.
+    """Get token price in ADA via USD pricing service.
+
+    Fetches token price in USD from the pricing service (Charli3 -> DefiLlama),
+    then divides by the current ADA/USD price to get the price in ADA.
 
     Args:
         unit: Cardano asset unit (policy_id + hex asset name), or 'lovelace' for ADA
@@ -273,49 +265,46 @@ async def get_token_price_ada(unit: str) -> float:
         return 1.0  # 1 ADA = 1 ADA
 
     try:
-        headers = await _get_taptools_headers()
-        if not headers:
+        # Build a reverse lookup: unit -> symbol from CARDANO_TOKEN_POLICIES
+        from services.pricing import CARDANO_TOKEN_POLICIES
+        symbol_map = {}
+        for sym, (policy_id, asset_name) in CARDANO_TOKEN_POLICIES.items():
+            symbol_map[f"{policy_id}{asset_name}"] = sym
+
+        symbol = symbol_map.get(unit)
+        if not symbol:
+            # Unit not in our known token policies; can't price it
             return 0.0
 
-        client = get_client("taptools_lp", timeout=15.0)
-        response = await client.get(
-            f"{TAPTOOLS_BASE_URL}/token/prices",
-            headers=headers,
-            params={"unit": unit},
-        )
-        if response.status_code == 200:
-            data = response.json()
-            # TapTools returns {unit: price_in_ada}
-            if isinstance(data, dict):
-                return float(data.get(unit, 0.0))
-        return 0.0
+        # Get USD price from pricing service
+        from services.pricing import pricing_service
+        token_usd = await pricing_service.get_price(symbol)
+        if token_usd <= 0:
+            return 0.0
+
+        # Get ADA/USD price
+        ada_usd = await get_ada_usd_price()
+        if ada_usd <= 0:
+            return 0.0
+
+        return token_usd / ada_usd
     except Exception as e:
         logger.debug(f"get_token_price_ada error for {unit[:30]}...: {e}")
         return 0.0
 
 
 async def get_ada_usd_price() -> float:
-    """Get current ADA/USD price from TapTools.
+    """Get current ADA/USD price from the pricing service.
+
+    Uses CoinGecko -> CMC -> Coinbase -> CoinPaprika -> DefiLlama chain
+    via the pricing service to fetch ADA/USD.
 
     Returns:
         ADA price in USD, or 0.0 on failure
     """
     try:
-        headers = await _get_taptools_headers()
-        if not headers:
-            return 0.0
-
-        client = get_client("taptools_lp", timeout=15.0)
-        response = await client.get(
-            f"{TAPTOOLS_BASE_URL}/token/prices",
-            headers=headers,
-            params={"unit": "lovelace"},
-        )
-        if response.status_code == 200:
-            data = response.json()
-            if isinstance(data, dict):
-                return float(data.get("lovelace", 0.0))
-        return 0.0
+        from services.pricing import pricing_service
+        return await pricing_service.get_price('ADA')
     except Exception as e:
         logger.debug(f"get_ada_usd_price error: {e}")
         return 0.0
@@ -350,13 +339,13 @@ async def resolve_lp_value(
     lp_quantity: int,
     dex_name: str,
 ) -> Optional[Dict]:
-    """Resolve the USD value of LP tokens using Blockfrost pool data + TapTools pricing.
+    """Resolve the USD value of LP tokens using Blockfrost pool data + pricing service.
 
     Strategy:
     1. Get LP token total supply from Blockfrost
     2. Find the pool UTXOs that hold the reserves for this LP token
     3. Calculate user's share of the pool reserves
-    4. Price each reserve token via TapTools
+    4. Price each reserve token via the pricing service (Charli3 -> DefiLlama for ADA-paired tokens)
     5. Sum to get total USD value
 
     This is the primary valuation method used by all 5 DEX adapters.

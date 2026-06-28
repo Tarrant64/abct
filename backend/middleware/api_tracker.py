@@ -123,11 +123,6 @@ def get_helius_client(timeout: float = 30.0, **kwargs) -> TrackedAsyncClient:
     return TrackedAsyncClient(api_name="helius", timeout=timeout, **kwargs)
 
 
-def get_taptools_client(headers: Dict[str, str], **kwargs) -> TrackedAsyncClient:
-    """Get tracked client for TapTools API."""
-    return TrackedAsyncClient(api_name="taptools", headers=headers, **kwargs)
-
-
 def get_etherscan_client(timeout: float = 30.0, **kwargs) -> TrackedAsyncClient:
     """Get tracked client for Etherscan API."""
     return TrackedAsyncClient(api_name="etherscan", timeout=timeout, **kwargs)

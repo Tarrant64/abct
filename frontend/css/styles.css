@@ -5644,11 +5644,6 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     color: white;
 }
 
-.explorer-icon.taptools {
-    background: linear-gradient(135deg, #10b981, #059669);
-    color: white;
-}
-
 .explorer-icon.mempool {
     background: linear-gradient(135deg, #f59e0b, #d97706);
     color: white;

@@ -284,7 +284,6 @@ chmod 644 certs/*.crt
 All external API calls use HTTPS:
 - Blockfrost: `https://cardano-mainnet.blockfrost.io`
 - CoinGecko: `https://api.coingecko.com`
-- TapTools: `https://openapi.taptools.io`
 
 Certificate validation enabled by default. Do not disable:
 ```python
@@ -580,7 +579,6 @@ BIND_HOST=10.8.0.1  # VPN interface only
 
 # Optional
 CEXPLORER_API_KEY=your_key
-TAPTOOLS_API_KEY=your_key
 ```
 
 **Security Notes:**

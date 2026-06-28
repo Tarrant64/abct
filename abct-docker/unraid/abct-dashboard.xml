@@ -69,17 +69,6 @@
     Required="true"
     Mask="true"/>
 
-  <Config
-    Name="TapTools API Key"
-    Target="TAPTOOLS_API_KEY"
-    Default=""
-    Mode=""
-    Description="TapTools API key for NFT and token data. Get one at https://taptools.io"
-    Type="Variable"
-    Display="always"
-    Required="false"
-    Mask="true"/>
-
   <!-- Optional Environment Variables -->
   <Config
     Name="CoinGecko API Key"

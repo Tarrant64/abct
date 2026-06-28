@@ -153,7 +153,6 @@ BLOCKFROST_API_KEY=mainnetXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 # RECOMMENDED: Enhanced Cardano features
 CEXPLORER_API_KEY=your_key_here      # Staking positions and rewards
-TAPTOOLS_API_KEY=your_key_here       # NFT floor prices
 
 # OPTIONAL: Additional blockchains
 ETHERSCAN_API_KEY=your_key_here      # Ethereum/Arbitrum/Avalanche/BNB/Base

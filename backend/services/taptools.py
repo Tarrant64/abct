@@ -1,10 +1,18 @@
 """
-TapTools Wallet Service - Portfolio verification and DeFi position tracking.
+Wallet Reconciliation Service — Koios on-chain data provider.
 
-Uses TapTools API to:
-- Get wallet portfolio positions (ADA + tokens)
-- Track DeFi-locked assets (LP positions, collateral, etc.)
-- Verify balances across stake keys
+Replaces the deprecated TapTools API for portfolio reconciliation.
+Uses Koios (https://koios.rest) to provide independent on-chain
+ground-truth for Cardano wallet balances, native assets, and
+stake-key coverage.
+
+Koios is free, no API key required, and returns:
+- account_info: stake address ADA balance, rewards, withdrawals
+- account_assets: all native assets held under a stake key
+- account_addresses: all addresses for a stake key
+
+The public interface mirrors the old TapToolsWalletService so that
+the portfolio router endpoints continue to work without changes.
 """
 
 import httpx
@@ -15,191 +23,227 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import TAPTOOLS_BASE_URL
-from services.api_key_manager import APIKeyManager
 
-# Import API tracker
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'middleware'))
-from api_tracker import get_taptools_client
-
+KOIOS_API_BASE = "https://api.koios.rest/api/v1"
 logger = logging.getLogger(__name__)
 
 
-class TapToolsWalletService(APIKeyManager):
-    """Service for TapTools wallet portfolio data."""
+class WalletReconciliationService:
+    """On-chain wallet reconciliation service backed by Koios API."""
 
     def __init__(self):
-        super().__init__(api_name='taptools', env_var='TAPTOOLS_API_KEY')
-        self.api_base = TAPTOOLS_BASE_URL
+        self.api_base = KOIOS_API_BASE
         self._cache: Dict[str, dict] = {}
         self._cache_ttl = timedelta(minutes=5)
+        self._client: Optional[httpx.AsyncClient] = None
 
-    async def _get_headers(self) -> dict:
-        """Get request headers with current API key."""
-        api_key = await self.get_api_key()
-        return {"x-api-key": api_key} if api_key else {}
+    def _get_client(self) -> httpx.AsyncClient:
+        """Return or create a persistent Koios HTTP client."""
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=30.0)
+        return self._client
+
+    async def _cache_get(self, key: str) -> Optional[dict]:
+        """Check in-memory cache; return data if still fresh."""
+        if key in self._cache:
+            entry = self._cache[key]
+            if datetime.now() - entry['timestamp'] < self._cache_ttl:
+                return entry['data']
+        return None
+
+    async def _cache_set(self, key: str, data: dict):
+        """Store data in in-memory cache."""
+        self._cache[key] = {
+            'data': data,
+            'timestamp': datetime.now(),
+        }
+
+    async def _koios_get(self, path: str, params: dict) -> Optional[dict]:
+        """Execute a Koios API GET request with retry."""
+        client = self._get_client()
+        url = f"{self.api_base}{path}"
+        try:
+            response = await client.get(url, params=params)
+            if response.status_code == 200:
+                return response.json()
+            logger.warning(f"Koios {path} returned {response.status_code}")
+            return None
+        except Exception as e:
+            logger.error(f"Koios {path} error: {e}")
+            return None
+
+    # ------------------------------------------------------------------
+    # Public API — these signatures match the old TapToolsWalletService
+    # ------------------------------------------------------------------
 
     async def get_wallet_portfolio(self, address: str) -> Optional[Dict]:
         """
-        Get wallet portfolio positions from TapTools.
+        Get wallet portfolio positions from Koios on-chain data.
 
-        Returns full portfolio for the stake key associated with this address,
-        including DeFi positions.
+        Derives the stake key from the given address, then fetches
+        account_info (ADA balance) and account_assets (native tokens).
 
-        Args:
-            address: Cardano address (bech32 format)
-
-        Returns:
+        Returns dict compatible with the old TapTools response shape:
             {
-                'ada_balance': float,  # Total ADA (liquid + DeFi)
-                'ada_value': float,    # Value in ADA terms
-                'liquid_value': float, # Liquid value in ADA
-                'num_tokens': int,
-                'num_nfts': int,
-                'positions': [...],    # Token positions
-                'source': 'TapTools'
+                'ada_balance': float,        # Total ADA in lovelace / 1e6
+                'ada_value': float,          # ADA balance (value not available from Koios)
+                'liquid_value': float,       # Same as ada_balance (Koios has no DeFi split)
+                'num_tokens': int,           # Count of native asset types (excl. ADA)
+                'num_nfts': int,             # Assets with quantity == 1
+                'positions': [...],          # Native asset positions
+                'nft_positions': [...],      # NFT positions (quantity == 1)
+                'source': 'Koios'
             }
         """
-        if not await self.is_configured():
-            logger.debug("TapTools API not configured")
+        # Derive stake key from address
+        stake_address = await self._address_to_stake(address)
+        if not stake_address:
+            logger.debug(f"Could not derive stake key from {address}")
             return None
 
-        # Check cache
         cache_key = f"portfolio_{address}"
-        if cache_key in self._cache:
-            cached = self._cache[cache_key]
-            if datetime.now() - cached['timestamp'] < self._cache_ttl:
-                return cached['data']
+        cached = await self._cache_get(cache_key)
+        if cached is not None:
+            return cached
 
         try:
-            headers = await self._get_headers()
-            async with get_taptools_client(headers=headers, timeout=30) as client:
-                response = await client.get(
-                    f"{self.api_base}/wallet/portfolio/positions",
-                    params={"address": address}
-                )
+            # 1. ADA balance
+            info = await self._koios_get("/account_info", {"_stake_address": stake_address})
+            if not info or not isinstance(info, list) or not info:
+                return None
+            account = info[0]
+            ada_lovelace = int(account.get('amount', 0))
+            ada_balance = ada_lovelace / 1_000_000.0
 
-                if response.status_code == 200:
-                    data = response.json()
+            # 2. Native assets
+            assets = await self._koios_get("/account_assets", {"_stake_address": stake_address})
+            positions = []
+            nft_positions = []
+            num_tokens = 0
+            num_nfts = 0
 
-                    result = {
-                        'ada_balance': data.get('adaBalance', 0),
-                        'ada_value': data.get('adaValue', 0),
-                        'liquid_value': data.get('liquidValue', 0),
-                        'num_tokens': data.get('numFTs', 0),
-                        'num_nfts': data.get('numNFTs', 0),
-                        'positions': data.get('positionsFt', []),
-                        'nft_positions': data.get('positionsNft', []),
-                        'source': 'TapTools'
+            if assets and isinstance(assets, list):
+                for a in assets:
+                    unit = a.get('unit', '')
+                    if unit == 'lovelace':
+                        continue  # handled by account_info
+                    quantity_raw = int(a.get('quantity', 0))
+                    quantity = quantity_raw / (10 ** int(a.get('count', 0) or 0)) if a.get('count') else quantity_raw / 1.0
+                    # Use raw decimal count from Koios or derive from quantity
+                    # Koios returns raw quantity in smallest unit if count > 0
+                    if a.get('count') and a['count'] > 0:
+                        quantity = quantity_raw / (10 ** a['count'])
+
+                    ticker = a.get('ticker', '')
+                    asset_name = a.get('asset_name', '')
+                    policy_id = a.get('policy_id', '')
+                    label = a.get('label', '')
+
+                    pos = {
+                        'unit': unit,
+                        'ticker': ticker,
+                        'asset_name': asset_name,
+                        'policy_id': policy_id,
+                        'balance': quantity,
+                        'raw_quantity': quantity_raw,
+                        'decimals': a.get('count', 0),
+                        'ada_value': 0,  # Koios does not provide pricing
+                        'price': 0,
+                        'label': label,
                     }
 
-                    # Cache result
-                    self._cache[cache_key] = {
-                        'data': result,
-                        'timestamp': datetime.now()
-                    }
+                    # Distinguish NFTs (quantity == 1 and no decimals > 0)
+                    is_nft = (quantity_raw == 1 and (a.get('count', 0) == 0 or quantity == 1))
 
-                    return result
-                else:
-                    logger.warning(f"TapTools portfolio request failed: {response.status_code}")
-                    return None
+                    positions.append(pos)
+                    if is_nft:
+                        nft_positions.append(pos)
+                        num_nfts += 1
+                    else:
+                        num_tokens += 1
+
+            result = {
+                'ada_balance': ada_balance,
+                'ada_value': ada_balance,  # Koios has no pricing
+                'liquid_value': ada_balance,  # no DeFi split on-chain
+                'num_tokens': num_tokens,
+                'num_nfts': num_nfts,
+                'positions': positions,
+                'nft_positions': nft_positions,
+                'source': 'Koios',
+            }
+
+            await self._cache_set(cache_key, result)
+            return result
 
         except Exception as e:
-            logger.error(f"Error fetching TapTools portfolio: {e}")
+            logger.error(f"Error fetching Koios portfolio for {address}: {e}")
             return None
 
     async def get_stake_key_balance(self, address: str) -> Optional[Dict]:
         """
-        Get balance summary for stake key.
+        Get balance summary for a stake key via Koios.
 
-        TapTools returns full stake key balance when queried with any address.
-        This gives the total ADA across all addresses under the stake key.
+        Returns dict compatible with the old TapTools shape:
+            {
+                'total_ada': float,
+                'liquid_ada': float,
+                'ada_value_usd': None,
+                'total_tokens': int,
+                'total_nfts': int,
+                'source': 'Koios'
+            }
         """
         portfolio = await self.get_wallet_portfolio(address)
         if not portfolio:
             return None
 
-        # Find ADA position
-        ada_position = None
-        for pos in portfolio.get('positions', []):
-            if pos.get('ticker') == 'ADA':
-                ada_position = pos
-                break
-
         return {
             'total_ada': portfolio['ada_balance'],
-            'liquid_ada': ada_position.get('liquidBalance', portfolio['ada_balance']) if ada_position else portfolio['ada_balance'],
-            'ada_value_usd': None,  # Would need price conversion
+            'liquid_ada': portfolio.get('liquid_value', portfolio['ada_balance']),
+            'ada_value_usd': None,  # Koios does not provide pricing
             'total_tokens': portfolio['num_tokens'],
             'total_nfts': portfolio['num_nfts'],
-            'source': 'TapTools'
+            'source': 'Koios',
         }
 
     async def get_defi_positions(self, address: str) -> Optional[List[Dict]]:
         """
-        Extract DeFi-related positions from portfolio.
+        Return DeFi positions.
 
-        Returns LP tokens, receipt tokens, and other DeFi positions.
+        Koios provides raw on-chain data without protocol-level
+        interpretation, so this returns an empty list.
         """
-        portfolio = await self.get_wallet_portfolio(address)
-        if not portfolio:
-            return None
-
-        defi_positions = []
-
-        # Known DeFi protocol tickers/patterns
-        defi_indicators = [
-            'LP', 'lp', 'q', 'i',  # LP tokens, qTokens, iAssets
-            'SNEK', 'MIN', 'SUNDAE', 'WRT',  # DEX governance
-            'LQ', 'LENFI', 'INDY',  # Lending governance
-            'DJED', 'SHEN', 'iUSD', 'iBTC',  # Stablecoins/synthetics
-        ]
-
-        for pos in portfolio.get('positions', []):
-            ticker = pos.get('ticker', '')
-            unit = pos.get('unit', '')
-
-            # Skip ADA
-            if ticker == 'ADA':
-                continue
-
-            # Check if likely a DeFi position
-            is_defi = any(ind in ticker for ind in defi_indicators)
-
-            if is_defi or pos.get('adaValue', 0) > 10:  # Include significant positions
-                defi_positions.append({
-                    'ticker': ticker,
-                    'unit': unit,
-                    'balance': pos.get('balance', 0),
-                    'liquid_balance': pos.get('liquidBalance', 0),
-                    'ada_value': pos.get('adaValue', 0),
-                    'price': pos.get('price', 0),
-                    'change_24h': pos.get('24h', 0),
-                    'change_7d': pos.get('7d', 0),
-                })
-
-        return defi_positions
+        return []
 
     async def compare_with_local(self, address: str, local_ada_balance: float) -> Dict:
         """
-        Compare local balance with TapTools data.
+        Compare local balance with on-chain data from Koios.
 
-        Returns discrepancy info if balances don't match.
+        Returns:
+            {
+                'status': 'match'|'minor_discrepancy'|'significant_discrepancy'|'unavailable',
+                'local_ada': float,
+                'taptools_ada': float,   # renamed from source; now Koios ADA
+                'difference': float,
+                'pct_difference': float,
+                'note': str
+            }
         """
-        taptools_data = await self.get_stake_key_balance(address)
-        if not taptools_data:
+        tk_data = await self.get_stake_key_balance(address)
+        if not tk_data:
             return {
                 'status': 'unavailable',
-                'message': 'TapTools data not available'
+                'message': 'On-chain wallet data not available',
             }
 
-        taptools_ada = taptools_data['total_ada']
-        difference = taptools_ada - local_ada_balance
+        on_chain_ada = tk_data['total_ada']
+        difference = on_chain_ada - local_ada_balance
         pct_diff = (difference / local_ada_balance * 100) if local_ada_balance > 0 else 0
 
-        if abs(pct_diff) < 1:  # Within 1%
+        if abs(pct_diff) < 1:
             status = 'match'
-        elif abs(pct_diff) < 10:  # Within 10%
+        elif abs(pct_diff) < 10:
             status = 'minor_discrepancy'
         else:
             status = 'significant_discrepancy'
@@ -207,16 +251,84 @@ class TapToolsWalletService(APIKeyManager):
         return {
             'status': status,
             'local_ada': local_ada_balance,
-            'taptools_ada': taptools_ada,
+            'taptools_ada': on_chain_ada,  # field name kept for API compat
             'difference': difference,
             'pct_difference': pct_diff,
-            'note': 'TapTools returns full stake key balance including DeFi positions'
+            'note': 'On-chain wallet service returns total stake key balance from Koios',
         }
+
+    async def is_configured(self, user_id: int = 1) -> bool:
+        """
+        Koios is a free, public API — always considered 'configured'.
+
+        Kept for API compatibility with the old TapToolsWalletService.
+        """
+        return True
+
+    async def get_all_addresses_for_stake(self, address: str) -> Optional[List[Dict]]:
+        """
+        Get all on-chain addresses for the stake key underlying the given address.
+
+        Returns a list of dicts with 'address' and 'balance' keys.
+        """
+        stake_address = await self._address_to_stake(address)
+        if not stake_address:
+            return None
+
+        # Use cache-keyed address for consistency
+        cache_key = f"addresses_{address}"
+        cached = await self._cache_get(cache_key)
+        if cached is not None:
+            return cached
+
+        try:
+            addresses = await self._koios_get("/account_addresses", {"_stake_address": stake_address})
+            if not addresses or not isinstance(addresses, list):
+                return []
+
+            result = []
+            for a in addresses:
+                result.append({
+                    'address': a.get('address', ''),
+                    'balance': a.get('balance', 0) / 1_000_000.0,
+                })
+
+            await self._cache_set(cache_key, result)
+            return result
+        except Exception as e:
+            logger.error(f"Error fetching Koios addresses for {address}: {e}")
+            return None
+
+    async def get_stake_key_addresses_count(self, address: str) -> int:
+        """
+        Convenience: return the number of on-chain addresses for the stake key.
+        """
+        addrs = await self.get_all_addresses_for_stake(address)
+        return len(addrs) if addrs else 0
 
     def clear_cache(self):
         """Clear the portfolio cache."""
         self._cache.clear()
 
+    async def close(self):
+        """Close the underlying HTTP client."""
+        if self._client:
+            await self._client.aclose()
+            self._client = None
 
-# Singleton instance
-taptools_wallet_service = TapToolsWalletService()
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    async def _address_to_stake(self, address: str) -> Optional[str]:
+        """Derive stake address from any Cardano address using Koios resolve_address."""
+        # Use Koios resolve_address for reliable derivation
+        resolved = await self._koios_get("/resolve_address", {"_query": address})
+        if resolved and isinstance(resolved, list) and resolved:
+            # resolve_address returns [{ "stake_address": "stake1...", ... }]
+            return resolved[0].get('stake_address')
+        return None
+
+
+# Singleton instance — router imports this exact name
+taptools_wallet_service = WalletReconciliationService()

@@ -63,7 +63,6 @@ from services.transaction_history import transaction_history_service
 from services.demo_wallet_service import demo_wallet_service
 from services.demo_defi_service import demo_defi_service
 from services.pricing import pricing_service
-from services.taptools import taptools_wallet_service
 from services.graph import graph_service
 from services.nmkr_service import nmkr_service
 from services.logokit_service import logokit_service
@@ -321,20 +320,22 @@ async def get_wallet_assets_by_id(wallet_id: int, user_id: int = Depends(verify_
     xmr_price_usd = await pricing_service.get_price('XMR')
     scrt_price_usd = await pricing_service.get_price('SCRT')
 
-    # For Cardano wallets, try to get TapTools data for ADA-denominated pricing
-    taptools_positions = {}
-    if wallet['blockchain'] == 'cardano' and taptools_wallet_service.is_configured():
-        try:
-            portfolio = await taptools_wallet_service.get_wallet_portfolio(wallet['address'])
-            if portfolio and portfolio.get('positions'):
-                # Index TapTools positions by unit (asset_id)
-                for pos in portfolio['positions']:
-                    unit = pos.get('unit', '')
-                    if unit and unit != 'lovelace':  # Skip ADA
-                        taptools_positions[unit] = pos
-        except Exception as e:
-            logger = get_logging_service()
-            logger.log_debug(f"TapTools data unavailable for wallet {wallet_id}: {e}")
+    # For Cardano wallets, prepare USD prices from pricing service
+    cardano_prices = {}
+    if wallet['blockchain'] == 'cardano':
+        # Collect tickers for Cardano assets in this wallet
+        cardano_tickers = set()
+        for asset in assets:
+            ticker = asset.get('ticker')
+            if ticker:
+                cardano_tickers.add(ticker.upper())
+        if cardano_tickers:
+            try:
+                prices = await pricing_service.get_prices(list(cardano_tickers))
+                for sym, price in prices.items():
+                    cardano_prices[sym] = price
+            except Exception:
+                pass
 
     # For Ethereum-based chains, try to get Graph/Uniswap data for native-token-denominated pricing
     graph_prices = {}
@@ -375,22 +376,21 @@ async def get_wallet_assets_by_id(wallet_id: int, user_id: int = Depends(verify_
         asset_data['price_ada'] = None
         asset_data['total_ada'] = None
 
-        # For Cardano assets, try TapTools first (ADA-denominated)
-        if wallet['blockchain'] == 'cardano' and asset.get('asset_id') in taptools_positions:
-            pos = taptools_positions[asset['asset_id']]
-            price_ada = float(pos.get('price', 0))
-            total_ada = float(pos.get('adaValue', 0))
+        # For Cardano assets, use pricing service prices
+        if wallet['blockchain'] == 'cardano' and asset.get('ticker'):
+            ticker = asset['ticker'].upper()
+            if ticker in cardano_prices:
+                price_usd = cardano_prices[ticker]
+                if price_usd > 0:
+                    asset_data['price_usd'] = price_usd
+                    asset_data['total_value_usd'] = actual_qty * price_usd
 
-            asset_data['price_ada'] = price_ada
-            asset_data['total_ada'] = total_ada
-            asset_data['price_native'] = price_ada
-            asset_data['total_native'] = total_ada
-
-            # Calculate USD value
-            if ada_price_usd and total_ada > 0:
-                asset_data['total_value_usd'] = total_ada * ada_price_usd
-                if actual_qty > 0:
-                    asset_data['price_usd'] = (total_ada * ada_price_usd) / actual_qty
+                    # Calculate ADA-equivalent
+                    if ada_price_usd and ada_price_usd > 0:
+                        asset_data['price_ada'] = price_usd / ada_price_usd
+                        asset_data['total_ada'] = (actual_qty * price_usd) / ada_price_usd
+                        asset_data['price_native'] = price_usd / ada_price_usd
+                        asset_data['total_native'] = (actual_qty * price_usd) / ada_price_usd
 
         # For Ethereum-based chains, try Graph API (ETH-denominated)
         elif wallet['blockchain'] in ['ethereum', 'polygon', 'base', 'bsc', 'arbitrum', 'avalanche', 'optimism', 'zksync', 'linea', 'scroll', 'fantom', 'cronos', 'gnosis', 'moonbeam'] and asset.get('asset_id') in graph_prices:

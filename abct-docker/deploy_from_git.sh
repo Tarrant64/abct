@@ -68,7 +68,6 @@ docker run -d \
     --ip "$ABCT_STATIC_IP" \
     -v "${ABCT_DATA_PATH}:/app/data" \
     -e "BLOCKFROST_API_KEY=${BLOCKFROST_API_KEY:-}" \
-    -e "TAPTOOLS_API_KEY=${TAPTOOLS_API_KEY:-}" \
     -e "COINGECKO_API_KEY=${COINGECKO_API_KEY:-}" \
     -e "NFT_PRICE_SERVICE_URL=${NFT_PRICE_SERVICE_URL:-}" \
     -e "DATABASE_PATH=/app/data/portfolio.db" \

@@ -14,7 +14,6 @@ cp .env.example .env
 Edit `.env` and add your API keys:
 ```
 BLOCKFROST_API_KEY=your_key_here
-TAPTOOLS_API_KEY=your_key_here
 ABCT_PORT=8080
 ```
 
@@ -72,7 +71,7 @@ bash unraid/install-unraid.sh
    - Repository: `abct-dashboard:latest`
    - Port: `8080` → `80`
    - Path: `/app/data` → `/mnt/user/appdata/abct-dashboard/data`
-   - Variables: `BLOCKFROST_API_KEY`, `TAPTOOLS_API_KEY`
+   - Variables: `BLOCKFROST_API_KEY`
 
 ### Remote Server (VPS)
 
@@ -101,7 +100,6 @@ docker-compose up -d --build
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `BLOCKFROST_API_KEY` | Yes | Cardano blockchain access |
-| `TAPTOOLS_API_KEY` | Yes | NFT and token data |
 | `ABCT_PORT` | No | Host port (default: 8080) |
 | `COINGECKO_API_KEY` | No | Better rate limits for prices |
 | `NFT_PRICE_SERVICE_URL` | No | External NFT price service |

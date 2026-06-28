@@ -99,7 +99,6 @@ ENV DATABASE_PATH=/app/data/portfolio.db
 ENV NFT_IMAGE_DB_PATH=/app/data/nft_images.db
 # Cardano APIs
 ENV BLOCKFROST_API_KEY=""
-ENV TAPTOOLS_API_KEY=""
 ENV CEXPLORER_API_KEY=""
 ENV MAESTRO_API_KEY=""
 # EVM APIs

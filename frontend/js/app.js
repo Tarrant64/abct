@@ -2091,9 +2091,6 @@ function renderWallets(wallets) {
                     <a href="https://beta.cexplorer.io/address/${wallet.address}" target="_blank" rel="noopener" class="explorer-link" title="Click here to view this wallet on cexplorer">
                         <span class="explorer-icon cexplorer">CX</span>
                     </a>
-                    <a href="https://www.taptools.io/portfolio?address=${wallet.address}" target="_blank" rel="noopener" class="explorer-link" title="Click here to view this wallet on TapTools">
-                        <span class="explorer-icon taptools">TT</span>
-                    </a>
                 </div>
             `;
         } else if (blockchain === 'bitcoin') {
@@ -2861,9 +2858,6 @@ function renderSingleWallet(wallet, blockchain, isGrouped) {
                 </a>
                 <a href="https://beta.cexplorer.io/address/${wallet.address}" target="_blank" rel="noopener" class="explorer-link" title="View on cexplorer">
                     <span class="explorer-icon cexplorer">CX</span>
-                </a>
-                <a href="https://www.taptools.io/portfolio?address=${wallet.address}" target="_blank" rel="noopener" class="explorer-link" title="View on TapTools">
-                    <span class="explorer-icon taptools">TT</span>
                 </a>
             </div>
         `;
@@ -7580,7 +7574,7 @@ async function syncNFTPrices() {
             }
             loadNFTPriceCoverage();
         } else if (!data.has_sources) {
-            showStatus('No pricing sources available \u2014 configure TapTools API key in Settings', true);
+            showStatus('No pricing sources available \\u2014 configure CoinGecko API key in Settings', true);
         } else {
             showStatus(data.message || 'Failed to sync prices', true);
         }

@@ -8,7 +8,7 @@ for API endpoints, file paths, and cache settings.
 Environment Variables Required:
     - BLOCKFROST_API_KEY: Cardano blockchain API (required for Cardano wallets)
     - CEXPLORER_API_KEY: Cardano staking/DeFi data (optional)
-    - TAPTOOLS_API_KEY: NFT floor prices (optional)
+
     - ETHERSCAN_API_KEY: Ethereum blockchain data (optional)
 
 Coinbase Integration:
@@ -30,7 +30,6 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 # API Keys
 BLOCKFROST_API_KEY = os.getenv("BLOCKFROST_API_KEY", "")
 CEXPLORER_API_KEY = os.getenv("CEXPLORER_API_KEY", "")
-TAPTOOLS_API_KEY = os.getenv("TAPTOOLS_API_KEY", "")
 BEACONCHAIN_API_KEY = os.getenv("BEACONCHAIN_API_KEY", "")
 MAESTRO_API_KEY = os.getenv("MAESTRO_API_KEY", "")
 ALCHEMY_API_KEY = os.getenv("ALCHEMY_API_KEY", "")
@@ -41,6 +40,8 @@ CMC_API_KEY = os.getenv("CMC_API_KEY", "")
 GRAPH_API_KEY = os.getenv("GRAPH_API_KEY", "")
 ALPHAVANTAGE_API_KEY = os.getenv("ALPHAVANTAGE_API_KEY", "")
 CHARLI3_API_KEY = os.getenv("CHARLI3_API_KEY", "")
+# Deprecated — TapTools sunset. Retained for NFT service compatibility until NFT pricing is migrated.
+TAPTOOLS_API_KEY = os.getenv("TAPTOOLS_API_KEY", "")
 ANKR_API_KEY = os.getenv("ANKR_API_KEY", "")
 
 # LogoKit API Configuration
@@ -155,7 +156,6 @@ BLOCKFROST_EXTERNAL_URL = os.getenv("BLOCKFROST_EXTERNAL_URL", "https://cardano-
 CEXPLORER_BASE_URL = "https://api.cexplorer.io/v1"
 BLOCKSTREAM_BASE_URL = "https://blockstream.info/api"
 MEMPOOL_BASE_URL = "https://mempool.space/api"  # Fallback for Bitcoin transactions
-TAPTOOLS_BASE_URL = "https://openapi.taptools.io/api/v1"
 BEACONCHAIN_BASE_URL = "https://beaconcha.in/api/v1"
 ALCHEMY_ETH_URL = "https://eth-mainnet.g.alchemy.com"
 ALCHEMY_BASE_URL = "https://eth-mainnet.g.alchemy.com/nft/v3"

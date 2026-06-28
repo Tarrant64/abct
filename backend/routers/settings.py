@@ -46,21 +46,6 @@ API_REGISTRY = {
         "rate_limit_note": "10 req/sec, 500 burst",
         "rate_limit_type": "quota"
     },
-    "taptools": {
-        "name": "TapTools",
-        "category": "cardano",
-        "description": "Cardano NFT floor prices only (use nftcdn/nmkr for metadata)",
-        "required": False,
-        "docs_url": "https://www.taptools.io/",
-        "env_var": "TAPTOOLS_API_KEY",
-        "pricing": "paid",
-        "pricing_note": "$9/mo plan: 100 requests/day",
-        "default_limit": 100,  # $9/mo plan limit
-        "default_period": 86400,
-        "period_label": "day",
-        "rate_limit_note": "~100 req/day on $9/mo plan",
-        "rate_limit_type": "quota"
-    },
     "nftcdn": {
         "name": "NFT CDN",
         "category": "cardano",
@@ -1636,7 +1621,6 @@ async def reload_all_api_keys(user_id: int = Depends(verify_session)):
 
     # List of service modules to reload
     service_modules = [
-        'services.taptools',
         'services.cardano',
         'services.polygon',
         'services.base',

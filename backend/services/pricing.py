@@ -2,7 +2,7 @@
 Pricing Service - Smart chain-aware routing with fallback sources.
 
 Routing strategy:
-- Cardano tokens: Charli3 -> TapTools -> DefiLlama
+- Cardano tokens: Charli3 -> DefiLlama
 - Major coins (BTC, ETH, ADA, SOL, etc.): CoinGecko -> CMC -> Coinbase -> CoinPaprika -> DefiLlama
 - Other tokens (DeFi mapped in CoinGecko): CoinGecko -> CoinPaprika -> DefiLlama
 
@@ -22,7 +22,7 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import TAPTOOLS_API_KEY, CEXPLORER_API_KEY, TAPTOOLS_BASE_URL, CEXPLORER_BASE_URL, CMC_API_KEY, CMC_BASE_URL
+from config import CEXPLORER_API_KEY, CEXPLORER_BASE_URL, CMC_API_KEY, CMC_BASE_URL
 from services.http_client import get_client, fetch_with_retry
 
 logger = logging.getLogger(__name__)
@@ -164,7 +164,7 @@ ASSET_TO_CMC = {
     'DYDX': 'DYDX',
 }
 
-# Map token symbols to their policy IDs and asset names for TapTools/CExplorer
+# Map token symbols to their policy IDs and asset names for pricing/Charli3
 # Format: {symbol: (policy_id, hex_asset_name)}
 CARDANO_TOKEN_POLICIES = {
     'INDY': ('533bb94a8850ee3ccbe483106489399112b74c905342cb1792a797a0', '494e4459'),
@@ -267,7 +267,7 @@ class PricingService:
         Get current USD prices for specified symbols.
 
         Smart routing: classifies symbols by chain and routes to best-fit API.
-        Cardano tokens -> Charli3/TapTools, Major coins -> CoinGecko/CMC, Others -> CoinGecko.
+        Cardano tokens -> Charli3, Major coins -> CoinGecko/CMC, Others -> CoinGecko.
         All three groups run in parallel.
         """
         if symbols is None:
@@ -342,7 +342,7 @@ class PricingService:
     # ============ Smart Routing Groups ============
 
     async def _fetch_cardano_prices(self, symbols: List[str]) -> None:
-        """Route: Charli3 -> TapTools -> DefiLlama for Cardano tokens."""
+        """Route: Charli3 -> DefiLlama for Cardano tokens."""
         if not symbols:
             return
 
@@ -365,15 +365,10 @@ class PricingService:
         except Exception as e:
             logger.warning(f"Charli3 pricing failed: {e}")
 
-        # TapTools fallback for missing Cardano tokens
-        missing = [s for s in symbols if self.cache.get(s.upper(), {}).get('usd', 0) == 0]
-        if missing and TAPTOOLS_API_KEY:
-            await self._fetch_from_taptools(missing)
-
         # DefiLlama final fallback
-        still_missing = [s for s in symbols if self.cache.get(s.upper(), {}).get('usd', 0) == 0]
-        if still_missing:
-            await self._fetch_from_defillama(still_missing)
+        missing = [s for s in symbols if self.cache.get(s.upper(), {}).get('usd', 0) == 0]
+        if missing:
+            await self._fetch_from_defillama(missing)
 
     async def _fetch_major_prices(self, symbols: List[str]) -> None:
         """Route: CoinGecko -> CMC -> Coinbase -> DefiLlama for major coins."""
@@ -623,45 +618,6 @@ class PricingService:
                 logger.info(f"CoinPaprika: fetched prices for {fetched_count} tokens")
         except Exception as e:
             logger.warning(f"CoinPaprika fetch error: {e}")
-
-    async def _fetch_from_taptools(self, symbols: List[str]) -> None:
-        """Fetch prices from TapTools API for Cardano tokens."""
-        try:
-            client = get_client("taptools", timeout=30.0)
-            for symbol in symbols:
-                policy_info = CARDANO_TOKEN_POLICIES.get(symbol.upper())
-                if not policy_info:
-                    continue
-
-                policy_id, asset_name = policy_info
-                unit = f"{policy_id}{asset_name}"
-
-                response = await client.get(
-                    f"{TAPTOOLS_BASE_URL}/token/prices",
-                    params={'unit': unit},
-                    headers={'x-api-key': TAPTOOLS_API_KEY}
-                )
-
-                if response.status_code == 200:
-                    data = response.json()
-                    if data and isinstance(data, list) and len(data) > 0:
-                        price = data[0].get('price', 0)
-                        if price > 0:
-                            self.cache[symbol.upper()] = {
-                                'usd': price,
-                                'usd_1h_change': data[0].get('priceChange1h', 0) or 0,
-                                'usd_24h_change': data[0].get('priceChange24h', 0) or 0,
-                                'market_cap': data[0].get('mcap', 0) or 0,
-                                'source': 'TapTools',
-                                'data_completeness': 'partial',
-                                'updated_at': datetime.now().isoformat()
-                            }
-                            logger.info(f"TapTools: got price for {symbol}: ${price}")
-                else:
-                    logger.warning(f"TapTools API error for {symbol}: {response.status_code}")
-
-        except Exception as e:
-            logger.error(f"TapTools fetch error: {e}")
 
     async def _fetch_from_defillama(self, symbols: List[str], include_major: bool = False) -> None:
         """Fetch prices from DefiLlama API (free, no key required)."""

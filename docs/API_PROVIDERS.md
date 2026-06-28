@@ -57,13 +57,6 @@ ABCT integrates with **16 different API providers** across 5 blockchain networks
 - Free tier: ~100 calls/day
 - ABCT includes automatic scheduler to respect limits
 
-**Pricing:** Subscription required (~$10/month)
-**Sign Up:** https://www.taptools.io/openapi/subscription
-**API Docs:** https://openapi.taptools.io/
-**Environment Variable:** `TAPTOOLS_API_KEY`
-
-**Note:** ABCT v0.9.0+ includes NFT Background Scheduler that automatically collects floor prices throughout the day while respecting rate limits.
-
 ---
 
 ### CExplorer
@@ -593,7 +586,6 @@ This document is maintained alongside ABCT releases. Check [CHANGELOG.md](CHANGE
 |----------|-----------|----------|-----------|--------------|
 | Blockfrost | Cardano | Yes | Yes (generous) | `BLOCKFROST_API_KEY` |
 | CExplorer | Cardano | No | Yes | `CEXPLORER_API_KEY` |
-| TapTools | Cardano | No | Paid (~$10/mo) | `TAPTOOLS_API_KEY` |
 | Koios | Cardano | No | Yes (no key) | None |
 | Alchemy | EVM | No | Yes (30M CU/mo) | `ALCHEMY_API_KEY` |
 | Etherscan | Ethereum | No | Yes (100k/day) | `ETHERSCAN_API_KEY` |

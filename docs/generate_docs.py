@@ -143,7 +143,6 @@ def create_documentation():
     config_vars = [
         ('BLOCKFROST_API_KEY', 'Cardano blockchain API access'),
         ('CEXPLORER_API_KEY', 'Cardano staking data'),
-        ('TAPTOOLS_API_KEY', 'NFT floor prices and metadata'),
         ('COINBASE_API_KEY_NAME', 'Coinbase exchange integration'),
         ('COINBASE_API_PRIVATE_KEY', 'Coinbase API authentication'),
         ('ETHERSCAN_API_KEY', 'Ethereum blockchain data')

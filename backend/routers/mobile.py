@@ -1950,7 +1950,7 @@ async def get_mobile_price_chart(
         chart_source = "CoinGecko"
         logger.info(f"Fetched {len(formatted_data)} OHLCV points from CoinGecko for {symbol}")
 
-    # 2. Try Charli3/TapTools for Cardano native tokens
+    # 2. Try Charli3 for Cardano native tokens
     if not formatted_data:
         from services.pricing import CARDANO_TOKEN_POLICIES
         if symbol.upper() in CARDANO_TOKEN_POLICIES:

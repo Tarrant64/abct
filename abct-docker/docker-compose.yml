@@ -20,7 +20,6 @@ services:
     environment:
       # Required API keys
       - BLOCKFROST_API_KEY=${BLOCKFROST_API_KEY:-}
-      - TAPTOOLS_API_KEY=${TAPTOOLS_API_KEY:-}
 
       # Optional API keys
       - COINGECKO_API_KEY=${COINGECKO_API_KEY:-}

@@ -72,7 +72,7 @@ async def calculate_wallet_native_assets_value(wallet_id: int, blockchain: str, 
     # Get ADA price for conversions
     ada_price_usd = await pricing_service.get_price('ADA')
 
-    # For Cardano, try to get TapTools data
+    # For Cardano, try to get on-chain wallet data for pricing
     taptools_positions = {}
     if blockchain == 'cardano' and await taptools_wallet_service.is_configured() and assets:
         try:
@@ -97,7 +97,7 @@ async def calculate_wallet_native_assets_value(wallet_id: int, blockchain: str, 
         if actual_qty == 0:
             continue
 
-        # Try TapTools first for Cardano
+        # Try on-chain wallet data first for Cardano
         if blockchain == 'cardano' and asset.get('asset_id') in taptools_positions:
             pos = taptools_positions[asset['asset_id']]
             total_ada = float(pos.get('adaValue', 0))
@@ -3089,9 +3089,9 @@ async def update_token_decimals(user_id: int = Depends(verify_session), asset_id
 @router.get("/verify/{address}")
 async def verify_wallet_balance(address: str, user_id: int = Depends(verify_session)):
     """
-    Verify wallet balance against TapTools data.
+    Verify wallet balance against on-chain data.
 
-    TapTools returns the full stake key balance including DeFi positions,
+    On-chain data (Koios) returns the full stake key balance,
     which may differ from our address-level tracking.
     """
     from database import get_wallet_by_address
@@ -3104,7 +3104,7 @@ async def verify_wallet_balance(address: str, user_id: int = Depends(verify_sess
     balance_info = await get_wallet_balance(wallet['id'])
     local_ada = float(balance_info['amount']) if balance_info else 0
 
-    # Get TapTools data
+    # Get on-chain data
     taptools_portfolio = await taptools_wallet_service.get_wallet_portfolio(address)
 
     if not taptools_portfolio:
@@ -3112,7 +3112,7 @@ async def verify_wallet_balance(address: str, user_id: int = Depends(verify_sess
             'address': address,
             'local_ada': local_ada,
             'taptools_available': False,
-            'message': 'TapTools API not configured or unavailable'
+            'message': 'On-chain wallet data not available'
         }
 
     taptools_ada = taptools_portfolio['ada_balance']
@@ -3131,7 +3131,7 @@ async def verify_wallet_balance(address: str, user_id: int = Depends(verify_sess
         'taptools_tokens': taptools_portfolio['num_tokens'],
         'taptools_nfts': taptools_portfolio['num_nfts'],
         'defi_positions': defi_positions[:10] if defi_positions else [],  # Top 10
-        'note': 'TapTools returns full stake key balance. Difference may be from DeFi or other addresses under same stake key.'
+        'note': 'On-chain data returns full stake key balance. Difference may be from DeFi or other addresses under same stake key.'
     }
 
 
@@ -3265,7 +3265,7 @@ async def analyze_defi_locked_ada(address: str, user_id: int = Depends(verify_se
     Deep analysis of DeFi-locked ADA for a given address.
 
     Checks all known DeFi protocols for positions that may explain
-    differences between local tracking and TapTools/on-chain totals.
+    differences between local tracking and on-chain totals.
     """
     from services.defi import defi_service
 
@@ -3276,7 +3276,7 @@ async def analyze_defi_locked_ada(address: str, user_id: int = Depends(verify_se
     addr_info = await cardano_service.get_address_info(address)
     local_ada = float(addr_info.get('balance_ada', 0)) if addr_info else 0
 
-    # Get TapTools data for comparison
+    # Get on-chain data for comparison
     taptools_data = await taptools_wallet_service.get_wallet_portfolio(address)
 
     # Get all DeFi positions
@@ -3344,7 +3344,7 @@ async def analyze_defi_locked_ada(address: str, user_id: int = Depends(verify_se
         'staking_protocols': list(staking_positions.get('protocols', {}).keys()),
         'taptools_positions': taptools_data.get('positions', [])[:20] if taptools_data else [],
         'analysis_notes': [
-            'TapTools returns full stake key balance including DeFi-locked assets',
+            'On-chain data returns full stake key balance including DeFi-locked assets',
             'LP tokens represent locked liquidity that may contain ADA',
             'Staked tokens are locked in protocol contracts',
             'Check individual protocol apps for exact ADA value in positions'
@@ -3355,10 +3355,10 @@ async def analyze_defi_locked_ada(address: str, user_id: int = Depends(verify_se
 @router.get("/taptools/summary")
 async def get_taptools_summary(user_id: int = Depends(verify_session)):
     """
-    Get TapTools portfolio summary for all Cardano wallets.
+    Get on-chain portfolio summary for all Cardano wallets.
 
-    Groups wallets by stake key and shows aggregate local vs TapTools balances.
-    TapTools returns stake key totals, so we aggregate our local balances similarly.
+    Groups wallets by stake key and shows aggregate local vs on-chain balances.
+    Koios returns stake key totals, so we aggregate our local balances similarly.
     """
     wallets = await get_all_wallets(user_id=user_id)
     cardano_wallets = [w for w in wallets if w['blockchain'] == 'cardano']
@@ -3366,7 +3366,7 @@ async def get_taptools_summary(user_id: int = Depends(verify_session)):
     if not await taptools_wallet_service.is_configured():
         return {
             'configured': False,
-            'message': 'TapTools API key not configured'
+            'message': 'On-chain wallet service not configured'
         }
 
     # Group wallets by stake key suffix (the staking credential portion)
@@ -3400,13 +3400,13 @@ async def get_taptools_summary(user_id: int = Depends(verify_session)):
         local_ada = float(balance_info['amount']) if balance_info else 0
         stake_key_groups[stake_suffix]['local_ada'] += local_ada
 
-    # Query TapTools once per stake key
+    # Query on-chain data once per stake key
     results = []
     total_local_ada = 0
     total_taptools_ada = 0
 
     for stake_suffix, group in stake_key_groups.items():
-        # Use first wallet address to query TapTools
+        # Use first wallet address to query on-chain data
         first_address = group['wallets'][0]['address']
 
         tt_data = await taptools_wallet_service.get_stake_key_balance(first_address)
@@ -3437,7 +3437,7 @@ async def get_taptools_summary(user_id: int = Depends(verify_session)):
             'nfts': group.get('nfts', 0)
         })
 
-    # Sort by TapTools balance descending
+    # Sort by on-chain balance descending
     results.sort(key=lambda x: x['taptools_ada'] or 0, reverse=True)
 
     return {
