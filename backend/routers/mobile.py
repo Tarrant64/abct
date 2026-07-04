@@ -33,6 +33,8 @@ from database import (
     get_all_wallets,
     get_wallet_balance,
     get_wallet_assets,
+    get_wallet_balances_bulk,
+    get_wallet_asset_counts_bulk,
     get_cache,
     set_cache,
     get_username_by_user_id,
@@ -50,6 +52,36 @@ logger = logging.getLogger(__name__)
 # Cache TTL
 MOBILE_CACHE_TTL = 120  # 2 minutes for mobile responses
 CHART_CACHE_TTL = 900  # 15 minutes for chart data
+
+# Native coin symbol/decimals per supported blockchain (used by /wallets)
+_WALLET_NATIVE_CONFIG = {
+    'cardano': {'symbol': 'ADA', 'decimals': 6},
+    'bitcoin': {'symbol': 'BTC', 'decimals': 8},
+    'ethereum': {'symbol': 'ETH', 'decimals': 18},
+    'solana': {'symbol': 'SOL', 'decimals': 9},
+    'polygon': {'symbol': 'POL', 'decimals': 18},
+    'base': {'symbol': 'ETH', 'decimals': 18},
+    'algorand': {'symbol': 'ALGO', 'decimals': 6},
+    'bsc': {'symbol': 'BNB', 'decimals': 18},
+    'arbitrum': {'symbol': 'ETH', 'decimals': 18},
+    'avalanche': {'symbol': 'AVAX', 'decimals': 18},
+    'tron': {'symbol': 'TRX', 'decimals': 6},
+    'xrp': {'symbol': 'XRP', 'decimals': 6},
+    'hedera': {'symbol': 'HBAR', 'decimals': 8},
+    'multiversx': {'symbol': 'EGLD', 'decimals': 18},
+    'sui': {'symbol': 'SUI', 'decimals': 9},
+    'aptos': {'symbol': 'APT', 'decimals': 8},
+    'filecoin': {'symbol': 'FIL', 'decimals': 18},
+    'litecoin': {'symbol': 'LTC', 'decimals': 8},
+    'dogecoin': {'symbol': 'DOGE', 'decimals': 8},
+    'zcash': {'symbol': 'ZEC', 'decimals': 8},
+    'tezos': {'symbol': 'XTZ', 'decimals': 6},
+    'stacks': {'symbol': 'STX', 'decimals': 6},
+    'vechain': {'symbol': 'VET', 'decimals': 18},
+    'cosmos': {'symbol': 'ATOM', 'decimals': 6},
+    'near': {'symbol': 'NEAR', 'decimals': 24},
+    'icp': {'symbol': 'ICP', 'decimals': 8},
+}
 
 
 # Display names for tokens not in metadata_cache (CoinGecko top 250)
@@ -904,6 +936,14 @@ async def get_mobile_wallets(
             "last_updated": datetime.utcnow().isoformat() + "Z",
         }
 
+    # Cache per user + query params; refresh=True bypasses the read but
+    # still repopulates the cache below so subsequent reads get fresh data
+    cache_key = f"mobile_wallets_{user_id}_{blockchain or 'all'}_{include_balances}"
+    if not refresh:
+        cached = await get_cache(cache_key, user_id=user_id)
+        if cached:
+            return cached
+
     all_wallets = await get_all_wallets(user_id=user_id)
 
     # When refresh=True, re-fetch balances from blockchain APIs before reading
@@ -926,14 +966,26 @@ async def get_mobile_wallets(
     # Get prices for value calculations
     all_prices = await pricing_service.get_all_tracked_prices()
 
+    filtered_wallets = [
+        w for w in all_wallets
+        if not blockchain or w['blockchain'] == blockchain
+    ]
+
+    # Batch the per-wallet DB lookups (was a sequential N+1: two awaited
+    # queries per wallet); two grouped queries run concurrently instead
+    balances_by_id = {}
+    asset_counts_by_id = {}
+    if include_balances and filtered_wallets:
+        wallet_ids = [w['id'] for w in filtered_wallets]
+        balances_by_id, asset_counts_by_id = await asyncio.gather(
+            get_wallet_balances_bulk(wallet_ids),
+            get_wallet_asset_counts_bulk(wallet_ids),
+        )
+
     mobile_wallets = []
     total_value_usd = 0.0
 
-    for wallet in all_wallets:
-        # Filter by blockchain if specified
-        if blockchain and wallet['blockchain'] != blockchain:
-            continue
-
+    for wallet in filtered_wallets:
         wallet_data = {
             "id": wallet['id'],
             "blockchain": wallet['blockchain'],
@@ -943,43 +995,12 @@ async def get_mobile_wallets(
         }
 
         if include_balances:
-            balance_info = await get_wallet_balance(wallet['id'])
-            assets = await get_wallet_assets(wallet['id'])
+            balance_info = balances_by_id.get(wallet['id'])
 
             # Get native balance
             native_balance = float(balance_info.get('amount', 0)) if balance_info else 0
 
-            # Map blockchain to symbol and decimals
-            blockchain_config = {
-                'cardano': {'symbol': 'ADA', 'decimals': 6},
-                'bitcoin': {'symbol': 'BTC', 'decimals': 8},
-                'ethereum': {'symbol': 'ETH', 'decimals': 18},
-                'solana': {'symbol': 'SOL', 'decimals': 9},
-                'polygon': {'symbol': 'POL', 'decimals': 18},
-                'base': {'symbol': 'ETH', 'decimals': 18},
-                'algorand': {'symbol': 'ALGO', 'decimals': 6},
-                'bsc': {'symbol': 'BNB', 'decimals': 18},
-                'arbitrum': {'symbol': 'ETH', 'decimals': 18},
-                'avalanche': {'symbol': 'AVAX', 'decimals': 18},
-                'tron': {'symbol': 'TRX', 'decimals': 6},
-                'xrp': {'symbol': 'XRP', 'decimals': 6},
-                'hedera': {'symbol': 'HBAR', 'decimals': 8},
-                'multiversx': {'symbol': 'EGLD', 'decimals': 18},
-                'sui': {'symbol': 'SUI', 'decimals': 9},
-                'aptos': {'symbol': 'APT', 'decimals': 8},
-                'filecoin': {'symbol': 'FIL', 'decimals': 18},
-                'litecoin': {'symbol': 'LTC', 'decimals': 8},
-                'dogecoin': {'symbol': 'DOGE', 'decimals': 8},
-                'zcash': {'symbol': 'ZEC', 'decimals': 8},
-                'tezos': {'symbol': 'XTZ', 'decimals': 6},
-                'stacks': {'symbol': 'STX', 'decimals': 6},
-                'vechain': {'symbol': 'VET', 'decimals': 18},
-                'cosmos': {'symbol': 'ATOM', 'decimals': 6},
-                'near': {'symbol': 'NEAR', 'decimals': 24},
-                'icp': {'symbol': 'ICP', 'decimals': 8},
-            }
-
-            config = blockchain_config.get(wallet['blockchain'], {'symbol': 'UNKNOWN', 'decimals': 0})
+            config = _WALLET_NATIVE_CONFIG.get(wallet['blockchain'], {'symbol': 'UNKNOWN', 'decimals': 0})
             symbol = config['symbol']
 
             # Get price
@@ -995,19 +1016,22 @@ async def get_mobile_wallets(
                 "usd_value": round(usd_value, 2),
                 "last_updated": datetime.utcnow().isoformat() + "Z"
             }
-            wallet_data['token_count'] = len(assets)
+            wallet_data['token_count'] = asset_counts_by_id.get(wallet['id'], 0)
             wallet_data['nft_count'] = 0  # TODO: Add NFT count when needed
 
             total_value_usd += usd_value
 
         mobile_wallets.append(wallet_data)
 
-    return {
+    result = {
         "total_wallets": len(mobile_wallets),
         "wallets": mobile_wallets,
         "total_value_usd": round(total_value_usd, 2),
         "last_updated": datetime.utcnow().isoformat() + "Z"
     }
+
+    await set_cache(cache_key, result, MOBILE_CACHE_TTL, user_id=user_id)
+    return result
 
 
 @router.get("/wallets/{wallet_id}")

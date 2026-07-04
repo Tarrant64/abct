@@ -1466,6 +1466,74 @@ async def get_wallet_balance(wallet_id: int):
         return dict(row) if row else None
 
 
+async def get_wallet_balances_bulk(wallet_ids: list):
+    """Get the latest balance row for each wallet in a single query.
+
+    Batched equivalent of calling get_wallet_balance() per wallet
+    (id DESC breaks updated_at ties, which the single-row query leaves
+    to SQLite's sort order).
+
+    Returns:
+        Dict mapping wallet_id -> balance row dict. Wallets with no
+        balance rows are absent from the dict.
+    """
+    if not wallet_ids:
+        return {}
+    placeholders = ",".join("?" * len(wallet_ids))
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(f"""
+            SELECT * FROM (
+                SELECT b.*, ROW_NUMBER() OVER (
+                    PARTITION BY b.wallet_id
+                    ORDER BY b.updated_at DESC, b.id DESC
+                ) AS rn
+                FROM balances b
+                WHERE b.wallet_id IN ({placeholders})
+            )
+            WHERE rn = 1
+        """, list(wallet_ids))
+        rows = await cursor.fetchall()
+        result = {}
+        for row in rows:
+            record = dict(row)
+            record.pop('rn', None)
+            result[record['wallet_id']] = record
+        return result
+
+
+async def get_wallet_asset_counts_bulk(wallet_ids: list):
+    """Count non-hidden native assets per wallet in a single query.
+
+    Batched equivalent of len(get_wallet_assets(wallet_id)) — same
+    hidden_tokens exclusion join.
+
+    Returns:
+        Dict mapping wallet_id -> asset count. Wallets with no assets
+        are absent from the dict (treat missing as 0).
+    """
+    if not wallet_ids:
+        return {}
+    placeholders = ",".join("?" * len(wallet_ids))
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(f"""
+            SELECT na.wallet_id, COUNT(*) AS asset_count
+            FROM native_assets na
+            JOIN wallets w ON na.wallet_id = w.id
+            LEFT JOIN hidden_tokens ht ON (
+                na.user_id = ht.user_id
+                AND w.blockchain = ht.blockchain
+                AND (na.policy_id = ht.token_address OR na.asset_id = ht.token_address)
+            )
+            WHERE na.wallet_id IN ({placeholders})
+            AND ht.id IS NULL
+            GROUP BY na.wallet_id
+        """, list(wallet_ids))
+        rows = await cursor.fetchall()
+        return {row['wallet_id']: row['asset_count'] for row in rows}
+
+
 async def update_wallet_label(address: str, label: str, blockchain: str = None):
     """Update the label for a wallet.
 
