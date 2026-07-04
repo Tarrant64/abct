@@ -6,6 +6,8 @@ This module provides mobile-friendly API endpoints with:
 - OHLCV chart data with multiple fallback sources
 - Simplified data formats
 - Proper caching and error handling
+- ETag/If-None-Match conditional GETs on every endpoint (304 on match)
+- Opt-in slim chart payloads (/chart/portfolio-history?slim=true)
 
 All endpoints require authentication via verify_session.
 """
@@ -1836,13 +1838,21 @@ async def get_mobile_portfolio_breakdown_history(
 async def get_mobile_portfolio_history(
     user_id: int = Depends(verify_session),
     range: str = Query("7d", description="Time range: 24h, 7d, 4w, 3m, 1y, all"),
-    interval: Optional[str] = Query(None, description="Data interval: hourly, daily (auto if not specified)")
+    interval: Optional[str] = Query(None, description="Data interval: hourly, daily (auto if not specified)"),
+    slim: bool = Query(False, description="Omit per-point breakdown/on-chain/off-chain fields (~4x smaller payload)")
 ):
     """
     Get historical portfolio value for charts.
 
     Mobile-optimized format compatible with chart libraries.
     Uses the unified chart endpoint for complete on-chain + off-chain data.
+
+    Slim contract (slim=true): every chart_data point is exactly
+    {"timestamp", "total_value_usd"}; the top-level "range", "interval",
+    "data_points", "summary" (all six fields), and "last_updated" keys are
+    unchanged and guaranteed. Default (slim=false) is byte-identical to the
+    pre-slim response, including per-point "on_chain_value_usd",
+    "off_chain_value_usd", and the six-component "breakdown".
     """
     try:
         # 24h range uses dedicated hourly endpoint
@@ -1881,22 +1891,31 @@ async def get_mobile_portfolio_history(
 
         # Format chart data for mobile chart libs
         chart_data = []
-        for point in data_points:
-            components = (point.get('breakdown') or {}).get('components', {})
-            chart_data.append({
-                "timestamp": point.get('date', ''),
-                "total_value_usd": round(point.get('total_value') or 0, 2),
-                "on_chain_value_usd": round(point.get('on_chain_value') or 0, 2),
-                "off_chain_value_usd": round(point.get('off_chain_value') or 0, 2),
-                "breakdown": {
-                    "wallets": round(components.get('wallets') or 0, 2),
-                    "staking": round(components.get('staking') or 0, 2),
-                    "defi": round(components.get('defi') or 0, 2),
-                    "exchanges": round(components.get('exchange') or 0, 2),
-                    "nfts": round(components.get('nfts') or 0, 2),
-                    "tracked_tokens": round(components.get('tracked_tokens') or 0, 2),
-                }
-            })
+        if slim:
+            # Mobile plots only the total line; skip the breakdown fields
+            # (~4x payload). See the slim contract in the docstring.
+            for point in data_points:
+                chart_data.append({
+                    "timestamp": point.get('date', ''),
+                    "total_value_usd": round(point.get('total_value') or 0, 2),
+                })
+        else:
+            for point in data_points:
+                components = (point.get('breakdown') or {}).get('components', {})
+                chart_data.append({
+                    "timestamp": point.get('date', ''),
+                    "total_value_usd": round(point.get('total_value') or 0, 2),
+                    "on_chain_value_usd": round(point.get('on_chain_value') or 0, 2),
+                    "off_chain_value_usd": round(point.get('off_chain_value') or 0, 2),
+                    "breakdown": {
+                        "wallets": round(components.get('wallets') or 0, 2),
+                        "staking": round(components.get('staking') or 0, 2),
+                        "defi": round(components.get('defi') or 0, 2),
+                        "exchanges": round(components.get('exchange') or 0, 2),
+                        "nfts": round(components.get('nfts') or 0, 2),
+                        "tracked_tokens": round(components.get('tracked_tokens') or 0, 2),
+                    }
+                })
 
         return {
             "range": range,
