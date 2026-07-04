@@ -214,6 +214,11 @@ async def export_backup(options: BackupOptions):
                 all_rows = [dict(zip(columns, row)) for row in rows]
 
                 # Decrypt api_settings values for export (stored encrypted at rest)
+                # Security note (Finding #7): API keys are exported in cleartext
+                # so backups can be restored to a fresh instance. This endpoint is
+                # authenticated and the backup file itself carries a warning banner.
+                # Acceptable for the home-network use case, but users should store
+                # backup files securely and never share them publicly.
                 if table_name == "api_settings":
                     for row in all_rows:
                         for field in ('api_key', 'api_secret', 'api_passphrase'):

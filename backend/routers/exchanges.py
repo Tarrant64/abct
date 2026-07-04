@@ -278,7 +278,7 @@ async def get_coinbase_portfolio(user_id: int = Depends(verify_session), refresh
     if not is_configured:
         raise HTTPException(
             status_code=503,
-            detail="Coinbase API not configured. Add cdp_api_key.json to project root."
+            detail="Coinbase API not configured. Add cdp_api_key.json to EXCLUDE/credentials/."
         )
 
     cache_key = f"coinbase_portfolio"

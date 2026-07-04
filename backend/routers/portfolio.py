@@ -480,10 +480,19 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
     stake_groups = {}  # stake_address -> list of wallets
 
     # Fetch all wallet data in parallel (balances, assets, native values, stake addresses)
+    WALLET_DATA_CACHE_TTL = 300  # 5 minutes
+
     async def fetch_wallet_data(wallet):
         """Fetch balance, assets, native value, and stake address for a single wallet."""
         blockchain = wallet['blockchain']
         wallet_id = wallet['id']
+
+        # Check per-wallet cache (skip if refresh=True)
+        wallet_cache_key = f"wallet_balance_{wallet_id}"
+        if not refresh:
+            cached = await get_cache(wallet_cache_key, user_id=user_id)
+            if cached:
+                return cached
 
         # Build parallel tasks for this wallet
         tasks = [
@@ -502,7 +511,7 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
         native_assets_value_usd = results[2] if not isinstance(results[2], Exception) else 0.0
         stake_address = results[3] if len(results) > 3 and not isinstance(results[3], Exception) else None
 
-        return {
+        result = {
             'wallet': wallet,
             'blockchain': blockchain,
             'balance_info': balance_info,
@@ -510,6 +519,11 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
             'native_assets_value_usd': native_assets_value_usd,
             'stake_address': stake_address,
         }
+
+        # Cache the per-wallet result
+        await set_cache(wallet_cache_key, result, WALLET_DATA_CACHE_TTL, user_id=user_id)
+
+        return result
 
     # Fetch all wallet data concurrently
     wallet_data_list = await asyncio.gather(

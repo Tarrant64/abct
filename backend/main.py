@@ -37,6 +37,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from datetime import datetime
 import logging
@@ -46,7 +47,7 @@ import os
 # Add backend directory to Python path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from config import PROJECT_ROOT, DATA_DIR, CERTS_DIR, DEFAULT_CERT_PATH, DEFAULT_KEY_PATH, NFT_SCHEDULER_ENABLED, DBSYNC_PG_ENABLED
+from config import PROJECT_ROOT, DATA_DIR, CERTS_DIR, DEFAULT_CERT_PATH, DEFAULT_KEY_PATH, NFT_SCHEDULER_ENABLED, DBSYNC_PG_ENABLED, ALLOWED_ORIGINS
 from database import init_db, init_encryption, migrate_encrypt_api_keys
 from nft_image_database import init_nft_image_db
 from routers import wallets, portfolio, defi, prices, exchanges, nfts, custom_tokens, settings, security, logs, nft_scheduler as nft_scheduler_router, backup, auth, dashboard, mobile, nmkr, cache, spam, transactions, demo, cloudflare, system, balance_history, analytics, intelligence, search, pnl
@@ -1031,6 +1032,18 @@ else:
 # 3. GZip compression for responses (reduces bandwidth for large JSON responses)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 logger.info("GZip compression enabled (minimum 1000 bytes)")
+
+# 4. CORS middleware — restrict cross-origin requests (Finding #6)
+# Origins configured via ALLOWED_ORIGINS env var (comma-separated).
+# Defaults to localhost only. Credentials allowed for session-based auth.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+    allow_headers=["Authorization", "Content-Type"],
+)
+logger.info(f"CORS enabled for origins: {ALLOWED_ORIGINS}")
 
 
 # Custom exception handlers for CRIT-003
