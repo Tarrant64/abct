@@ -36,6 +36,7 @@ from database import (
     get_wallet_balances_bulk,
     get_wallet_asset_counts_bulk,
     get_cache,
+    get_stale_cache,
     set_cache,
     get_username_by_user_id,
     get_wallet_sources,
@@ -479,6 +480,31 @@ async def get_mobile_portfolio_instant(user_id: int = Depends(verify_session)):
     return await get_portfolio_instant(user_id=user_id)
 
 
+# In-flight background summary recomputes, keyed by cache key (SWR stampede guard)
+_summary_refresh_tasks: Dict[str, asyncio.Task] = {}
+
+
+def _schedule_summary_refresh(cache_key: str, user_id: int, include_sparklines: bool):
+    """Kick off a background recompute of the portfolio summary (server-side SWR).
+
+    At most one recompute per cache key runs at a time; concurrent stale
+    hits piggyback on the in-flight task instead of stampeding upstream APIs.
+    """
+    if cache_key in _summary_refresh_tasks:
+        return
+
+    async def _refresh_job():
+        try:
+            await _compute_mobile_portfolio_summary(
+                user_id, refresh=False, include_sparklines=include_sparklines)
+        except Exception as e:
+            logger.warning(f"Background summary refresh failed for user {user_id}: {e}")
+        finally:
+            _summary_refresh_tasks.pop(cache_key, None)
+
+    _summary_refresh_tasks[cache_key] = asyncio.create_task(_refresh_job())
+
+
 @router.get("/portfolio/summary")
 async def get_mobile_portfolio_summary(
     user_id: int = Depends(verify_session),
@@ -502,6 +528,25 @@ async def get_mobile_portfolio_summary(
         cached = await get_cache(cache_key, user_id=user_id)
         if cached:
             return cached
+        # Stale-while-revalidate: on cache expiry serve the previous payload
+        # immediately and recompute in the background. refresh=true and
+        # first-ever requests (no cache row) still compute synchronously.
+        stale, _ = await get_stale_cache(cache_key, user_id=user_id)
+        if stale is not None:
+            _schedule_summary_refresh(cache_key, user_id, include_sparklines)
+            return stale
+
+    return await _compute_mobile_portfolio_summary(user_id, refresh, include_sparklines)
+
+
+async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include_sparklines: bool):
+    """Build the full summary payload and write it to the cache.
+
+    Internal lookups are batched for latency, but values, ordering, and key
+    order are unchanged — the payload must stay byte-identical for identical
+    data (response shape is frozen).
+    """
+    cache_key = f"mobile_portfolio_summary_{user_id}"
 
     # Fetch all data in parallel (including snapshot for staking/defi/tracked tokens)
     portfolio_data, exchange_summary, nft_summary, defi_summary, snapshot_totals = await asyncio.gather(
@@ -604,10 +649,14 @@ async def get_mobile_portfolio_summary(
                 "image_url": "",  # populated below from metadata_cache
             })
 
-    # Batch-populate image_url from metadata_cache (fast SQLite, no CoinGecko calls)
+    # Batch-populate image_url from metadata_cache (fast SQLite, no CoinGecko calls);
+    # one concurrent lookup per unique symbol instead of one await per chain
+    unique_chain_syms = list(dict.fromkeys(bs['symbol'] for bs in blockchain_summaries))
+    chain_metas = dict(zip(unique_chain_syms, await asyncio.gather(
+        *[metadata_cache.get_metadata(s) for s in unique_chain_syms])))
     for bs in blockchain_summaries:
         sym = bs['symbol']
-        meta = await metadata_cache.get_metadata(sym)
+        meta = chain_metas.get(sym)
         bs['image_url'] = (meta.get('image_url') if meta else None) or logokit_service.get_crypto_logo_url(sym, size=64)
 
     # Get component values
@@ -659,16 +708,26 @@ async def get_mobile_portfolio_summary(
     # Place BEFORE staking merge so staking amounts ADD to native amounts
     try:
         native_assets_data = await portfolio.get_all_native_assets(user_id=user_id)
+        # Two passes so the per-token name/image resolutions run concurrently:
+        # first apply the original skip rules (blank ticker, already counted,
+        # first-occurrence-wins, zero value) to pick the tokens to add, then
+        # resolve all of them in one gather and insert in the same order
+        native_pending = []
+        native_seen = set()
         for asset in native_assets_data.get('valuable_assets', []):
             ticker = (asset.get('ticker') or asset.get('asset_name', '')).upper()
-            if not ticker or ticker in symbol_agg:
+            if not ticker or ticker in symbol_agg or ticker in native_seen:
                 continue  # Already counted (L1 chain)
             price_data = all_prices.get(ticker, {})
             price_usd = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
             val = float(asset.get('value_usd', 0)) or (float(asset.get('total_quantity', 0)) * price_usd)
             if val <= 0:
                 continue
-            token_name, token_image = await _resolve_token_info(ticker)
+            native_seen.add(ticker)
+            native_pending.append((ticker, asset, price_data, price_usd, val))
+        native_infos = await asyncio.gather(
+            *[_resolve_token_info(t) for t, _, _, _, _ in native_pending])
+        for (ticker, asset, price_data, price_usd, val), (token_name, token_image) in zip(native_pending, native_infos):
             symbol_agg[ticker] = {
                 "name": token_name,
                 "symbol": ticker,
@@ -694,6 +753,25 @@ async def get_mobile_portfolio_summary(
                 defi.get_staking_positions(addr, refresh=False, user_id=user_id)
                 for addr in cardano_addrs
             ], return_exceptions=True)
+            # Pre-resolve name/image for every token this merge will introduce
+            # (i.e. not in symbol_agg at its first encounter), so the loop
+            # below never awaits per row; conditions mirror the loop exactly
+            staking_new_tokens = []
+            for cached in staking_caches:
+                if isinstance(cached, (Exception, BaseException)) or not cached or not isinstance(cached, dict) or not cached.get('protocols'):
+                    continue
+                for protocol_name, protocol_data in cached['protocols'].items():
+                    for stake in (protocol_data.get('staked') or []):
+                        token = (stake.get('token') or 'ADA').upper()
+                        if token not in symbol_agg and token not in staking_new_tokens:
+                            staking_new_tokens.append(token)
+                    reward_token = protocol_data.get('reward_token')
+                    if reward_token and float(protocol_data.get('pending_rewards', 0)) > 0:
+                        rt = reward_token.upper()
+                        if rt not in symbol_agg and rt not in staking_new_tokens:
+                            staking_new_tokens.append(rt)
+            staking_infos = dict(zip(staking_new_tokens, await asyncio.gather(
+                *[_resolve_token_info(t) for t in staking_new_tokens])))
             for cached in staking_caches:
                 if isinstance(cached, (Exception, BaseException)) or not cached or not isinstance(cached, dict) or not cached.get('protocols'):
                     continue
@@ -708,7 +786,7 @@ async def get_mobile_portfolio_summary(
                             symbol_agg[token]['value_usd'] += val
                             symbol_agg[token]['native_amount'] += amount
                         else:
-                            token_name, token_image = await _resolve_token_info(token)
+                            token_name, token_image = staking_infos[token]
                             symbol_agg[token] = {
                                 "name": token_name,
                                 "symbol": token,
@@ -732,7 +810,7 @@ async def get_mobile_portfolio_summary(
                             symbol_agg[rt]['value_usd'] += val
                             symbol_agg[rt]['native_amount'] += pending
                         else:
-                            rt_name, rt_image = await _resolve_token_info(rt)
+                            rt_name, rt_image = staking_infos[rt]
                             symbol_agg[rt] = {
                                 "name": rt_name,
                                 "symbol": rt,
@@ -753,6 +831,22 @@ async def get_mobile_portfolio_summary(
         exchange_caches = await asyncio.gather(*[
             get_cache(f"{name}_portfolio", user_id=user_id) for name in exchange_names
         ])
+        # Same two-pass pattern as the staking merge: pre-resolve currencies
+        # that will be newly added, then run the original loop without awaits
+        exchange_new_currencies = []
+        for exc_data in exchange_caches:
+            if not exc_data or not exc_data.get('assets'):
+                continue
+            for asset in exc_data['assets']:
+                currency = (asset.get('currency') or '').upper()
+                if not currency or currency == 'USD':
+                    continue
+                if float(asset.get('balance', 0)) <= 0:
+                    continue
+                if currency not in symbol_agg and currency not in exchange_new_currencies:
+                    exchange_new_currencies.append(currency)
+        exchange_infos = dict(zip(exchange_new_currencies, await asyncio.gather(
+            *[_resolve_token_info(c) for c in exchange_new_currencies])))
         for exc_data in exchange_caches:
             if not exc_data or not exc_data.get('assets'):
                 continue
@@ -769,7 +863,7 @@ async def get_mobile_portfolio_summary(
                     symbol_agg[currency]['value_usd'] += val
                     symbol_agg[currency]['native_amount'] += balance
                 else:
-                    exc_name, exc_image = await _resolve_token_info(currency)
+                    exc_name, exc_image = exchange_infos[currency]
                     symbol_agg[currency] = {
                         "name": exc_name,
                         "symbol": currency,
@@ -807,10 +901,16 @@ async def get_mobile_portfolio_summary(
         h['value_usd'] = round(h['value_usd'], 2)
         h['native_amount'] = round(h['native_amount'], 8)
         h['percentage'] = round((h['value_usd'] / total_value_usd * 100) if total_value_usd > 0 else 0, 1)
-        # Ensure every entry has an image_url via metadata_cache → logokit fallback
-        if not h.get('image_url'):
-            meta = await metadata_cache.get_metadata(h['symbol'])
-            h['image_url'] = (meta.get('image_url') if meta else None) or logokit_service.get_crypto_logo_url(h['symbol'], size=64)
+    # Ensure every entry has an image_url via metadata_cache → logokit fallback
+    # (one concurrent lookup per missing symbol; symbols are unique here)
+    missing_image_syms = [h['symbol'] for h in top_holdings if not h.get('image_url')]
+    if missing_image_syms:
+        fallback_metas = dict(zip(missing_image_syms, await asyncio.gather(
+            *[metadata_cache.get_metadata(s) for s in missing_image_syms])))
+        for h in top_holdings:
+            if not h.get('image_url'):
+                meta = fallback_metas.get(h['symbol'])
+                h['image_url'] = (meta.get('image_url') if meta else None) or logokit_service.get_crypto_logo_url(h['symbol'], size=64)
     top_holdings.sort(key=lambda x: x['value_usd'], reverse=True)
 
     # Fetch 7-day sparkline data + CoinGecko images for top holdings (for watchOS)
