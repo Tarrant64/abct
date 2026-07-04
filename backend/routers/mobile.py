@@ -10,9 +10,11 @@ This module provides mobile-friendly API endpoints with:
 All endpoints require authentication via verify_session.
 """
 
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends, Request, Response
+from fastapi.routing import APIRoute
 from typing import Optional, List, Dict
 from datetime import datetime, timedelta
+import hashlib
 import httpx
 import logging
 import sys
@@ -47,7 +49,55 @@ from middleware.demo_mode import is_demo_user
 from services.http_client import get_client
 from config import DATABASE_PATH
 
-router = APIRouter(prefix="/api/mobile", tags=["mobile"])
+def _etag_matches(if_none_match: str, etag: str) -> bool:
+    """RFC 7232 weak comparison for If-None-Match: ignore W/ prefixes,
+    handle comma-separated lists and the '*' wildcard."""
+    for candidate in if_none_match.split(','):
+        candidate = candidate.strip()
+        if candidate == '*':
+            return True
+        if candidate.startswith('W/') or candidate.startswith('w/'):
+            candidate = candidate[2:]
+        if candidate == etag:
+            return True
+    return False
+
+
+class _ConditionalGetRoute(APIRoute):
+    """Adds ETag / If-None-Match -> 304 support to every GET in this router.
+
+    The ETag is a hash of the response bytes FastAPI already serialized
+    (no re-serialization or payload recompute), so it is stable for
+    identical payloads and rotates when the payload changes. Purely
+    additive: requests without If-None-Match get the same body and
+    headers as before plus ETag; refresh=true always returns a full 200.
+    """
+
+    def get_route_handler(self):
+        original_handler = super().get_route_handler()
+
+        async def conditional_handler(request: Request) -> Response:
+            response = await original_handler(request)
+            if request.method != "GET" or response.status_code != 200:
+                return response
+            body = getattr(response, "body", b"")
+            if not body:
+                return response
+            etag = f'"{hashlib.sha256(body).hexdigest()[:32]}"'
+            response.headers["ETag"] = etag
+            # refresh=true means "give me fresh data no matter what" —
+            # never short-circuit it with a 304 (mirrors FastAPI bool parsing)
+            if request.query_params.get("refresh", "").lower() in ("1", "true", "yes", "on"):
+                return response
+            if_none_match = request.headers.get("if-none-match")
+            if if_none_match and _etag_matches(if_none_match, etag):
+                return Response(status_code=304, headers={"ETag": etag})
+            return response
+
+        return conditional_handler
+
+
+router = APIRouter(prefix="/api/mobile", tags=["mobile"], route_class=_ConditionalGetRoute)
 logger = logging.getLogger(__name__)
 
 # Cache TTL
