@@ -158,6 +158,25 @@ async def test_indigo_cdps_schema_drift_is_indeterminate(service, monkeypatch, c
     assert any("shape drift" in rec.message for rec in caplog.records)
 
 
+async def test_indigo_empty_list_is_indeterminate(service, monkeypatch, caplog):
+    """P3a-FIX2: the API demonstrably holds ~2,542 staking records — a sudden
+    empty-list 200 is drift-shaped, not a universal exit. Applies to both the
+    staking and CDP endpoints."""
+    class Client:
+        async def get(self, url, **kwargs):
+            return FakeResponse(json_data=[])
+
+    monkeypatch.setattr(defi_module, "get_client", lambda *a, **k: Client())
+
+    with caplog.at_level("WARNING"):
+        staking = await service.get_indigo_staking(ADDRESS)
+        cdps = await service.get_indigo_cdps(ADDRESS)
+
+    assert staking is None  # NOT confirmed_empty
+    assert cdps is None
+    assert sum("empty list" in rec.message for rec in caplog.records) == 2
+
+
 async def test_indigo_valid_shape_no_match_still_confirms(service, monkeypatch):
     class Client:
         async def get(self, url, **kwargs):

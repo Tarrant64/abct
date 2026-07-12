@@ -767,7 +767,16 @@ class DeFiService:
             # Shape validation: Indigo renamed every field once already. A
             # 200 whose entries carry no 'owner' key would make EVERY wallet
             # look confirmed-empty — treat schema drift as indeterminate.
-            if positions and not any(
+            # An EMPTY list is drift-shaped too: this API demonstrably holds
+            # thousands of staking records, so [] is never a universal exit.
+            if not positions:
+                logger.warning(
+                    "[Indigo] staking-positions returned an empty list — the "
+                    "API normally holds thousands of records; treating the "
+                    "scan as indeterminate, not a confirmed exit"
+                )
+                return None
+            if not any(
                 isinstance(p, dict) and 'owner' in p for p in positions
             ):
                 logger.warning(
@@ -846,8 +855,16 @@ class DeFiService:
             loans = response.json()
 
             # Same shape validation as staking: schema drift must be
-            # indeterminate, never a confirmed empty
-            if loans and not any(
+            # indeterminate, never a confirmed empty — and an empty list
+            # from an API that normally holds hundreds of CDPs is
+            # drift-shaped too
+            if not loans:
+                logger.warning(
+                    "[Indigo] cdps returned an empty list — treating the "
+                    "scan as indeterminate, not a confirmed exit"
+                )
+                return None
+            if not any(
                 isinstance(l, dict) and 'owner' in l for l in loans
             ):
                 logger.warning(
