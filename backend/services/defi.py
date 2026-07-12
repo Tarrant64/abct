@@ -31,8 +31,11 @@ STRIKE_TOKEN_POLICY = "f13ac4d66b3ee19a6aa0f2a22298737bd907cc95121662fc971b5275"
 STRIKE_REWARDS_ADDRESS = "addr1z9yh4zcqs4gh78ysvh8nqp40fsnxg49nn3h6x25az9k8tms6409492020k6xml8uvwn34wrexagjh5fsk5xk96jyxk2qf3a7kj"
 
 # Liqwid Finance staking contract
+# NOTE: the Blockfrost contract scan against LIQWID_STAKING_ADDRESS is retired —
+# Agora stakes are queried via the official GraphQL API by payment credential.
 LIQWID_STAKING_ADDRESS = "addr1w8arvq7j9qlrmt0wpdvpp7h4jr4fmfk8l653p9t907v2nsss7w7r4"
 LIQWID_LQ_TOKEN = "da8c30857834c6ae7203935b89278c532b3995245295456f993e1d244c51"
+LIQWID_GRAPHQL_API = "https://v2.api.liqwid.finance/graphql"
 
 # Flow Lending - liquid staking (tokens stay in wallet)
 FLOW_TOKEN_POLICY = "2d9db8a89f074aa045eab177f23a3395f62ced8b53499a9e4ad46c80"
@@ -796,11 +799,24 @@ class DeFiService:
             logger.error(f"Error decoding address: {e}")
             return None
 
+    # GraphQL query for Agora LQ stakes by payment credential.
+    # stakedAmount is already denominated in whole LQ (Float), not raw units.
+    LIQWID_STAKES_QUERY = (
+        "query($input: AgoraStakesInput!) {"
+        " agora { data { stakes(input: $input) {"
+        " page perPage pagesCount totalCount"
+        " results { txId owner stakedAmount delegatedTo }"
+        " } } } }"
+    )
+
     async def get_liqwid_staking(self, address: str) -> Optional[Dict]:
         """
-        Get Liqwid Finance staking positions for an address.
-        Queries the Liqwid staking contract for UTxOs with matching user PKH in datum.
-        Uses parallel page fetching to handle large contract state (2700+ UTxOs).
+        Get Liqwid Finance Agora staking positions for an address.
+
+        Queries the official Liqwid GraphQL API by payment credential.
+        Replaces the retired Blockfrost scan of the staking contract, which
+        paged through 3,000+ UTxOs and missed positions on the migrated
+        contract.
         """
         try:
             # Extract payment credential from address
@@ -808,98 +824,82 @@ class DeFiService:
             if not payment_cred:
                 return None
 
-            client = get_client("blockfrost", timeout=15.0)
-            sem = asyncio.Semaphore(5)  # Limit concurrent Blockfrost requests
+            client = get_client("liqwid_graphql", timeout=15.0)
 
-            async def fetch_page(pg):
-                async with sem:
-                    try:
-                        resp = await blockfrost_fetch(
-                            f"/addresses/{LIQWID_STAKING_ADDRESS}/utxos",
-                            headers=await self._get_headers(),
-                            params={"count": 100, "page": pg},
-                            timeout=30.0
-                        )
-                        if resp.status_code == 200:
-                            return resp.json()
-                        elif resp.status_code == 404:
-                            return []  # No more pages
-                        else:
-                            logger.warning(f"[Liqwid] Page {pg} returned HTTP {resp.status_code}")
-                            return None  # Error — eligible for retry
-                    except Exception as e:
-                        logger.warning(f"[Liqwid] Page {pg} fetch failed: {e}")
-                        return None
+            results = []
+            page = 0
+            while True:
+                resp = await client.post(
+                    LIQWID_GRAPHQL_API,
+                    json={
+                        "query": self.LIQWID_STAKES_QUERY,
+                        "variables": {"input": {
+                            "paymentKeys": [payment_cred],
+                            "page": page,
+                            "perPage": 100,
+                        }},
+                    },
+                )
 
-            # Phase 1: Fetch first page to confirm contract has UTxOs
-            first_page = await fetch_page(1)
-            if not first_page:
-                return None
+                if resp.status_code != 200:
+                    logger.warning(
+                        f"[Liqwid] GraphQL returned HTTP {resp.status_code} "
+                        f"— body: {resp.text[:200]!r}"
+                    )
+                    return None
 
-            # Phase 2: Fetch remaining pages in parallel (contract has ~2700+ UTxOs = ~28 pages)
-            remaining = await asyncio.gather(
-                *[fetch_page(pg) for pg in range(2, 31)],
-                return_exceptions=True
-            )
+                payload = resp.json()
+                if payload.get('errors'):
+                    logger.warning(f"[Liqwid] GraphQL errors: {payload['errors']}")
+                    return None
 
-            all_utxos = list(first_page)
-            failed_pages = []
-            for i, result in enumerate(remaining):
-                pg = i + 2
-                if isinstance(result, Exception):
-                    logger.warning(f"[Liqwid] Page {pg} raised exception: {result}")
-                    failed_pages.append(pg)
-                elif result is None:
-                    failed_pages.append(pg)
-                else:
-                    all_utxos.extend(result)
+                stakes = (
+                    payload.get('data', {})
+                    .get('agora', {})
+                    .get('data', {})
+                    .get('stakes', {})
+                ) or {}
+                results.extend(stakes.get('results') or [])
 
-            # Retry failed pages sequentially (rate-limit safe)
-            if failed_pages:
-                logger.info(f"[Liqwid] Retrying {len(failed_pages)} failed pages sequentially...")
-                for pg in failed_pages:
-                    try:
-                        result = await fetch_page(pg)
-                        if result:
-                            all_utxos.extend(result)
-                    except Exception as e:
-                        logger.warning(f"[Liqwid] Retry page {pg} failed: {e}")
+                pages_count = stakes.get('pagesCount', 0)
+                page += 1
+                if page >= pages_count:
+                    break
 
-            logger.info(f"[Liqwid] Scanned {len(all_utxos)} UTxOs for PKH {payment_cred[:16]}...")
-
-            # Search for UTxOs with user's PKH in the inline datum
             positions = []
-            total_staked = 0
+            total_staked_lq = 0.0
 
-            for utxo in all_utxos:
-                inline_datum = utxo.get('inline_datum') or ''
+            for stake in results:
+                staked_lq = float(stake.get('stakedAmount') or 0)
+                if staked_lq <= 0:
+                    continue
 
-                # Check if user's PKH is in the datum
-                if inline_datum and payment_cred in inline_datum:
-                    lq_amount = 0
-                    for asset in utxo.get('amount', []):
-                        if asset.get('unit') == LIQWID_LQ_TOKEN:
-                            lq_amount = int(asset.get('quantity', 0))
+                # txId is "<tx_hash>-<output_index>"
+                tx_id = stake.get('txId') or ''
+                tx_hash, _, output_index = tx_id.rpartition('-')
 
-                    if lq_amount > 0:
-                        total_staked += lq_amount
-                        positions.append({
-                            'tx_hash': utxo.get('tx_hash'),
-                            'output_index': utxo.get('output_index'),
-                            'staked_lq_raw': lq_amount,
-                            'staked_lq': lq_amount / 1_000_000
-                        })
+                total_staked_lq += staked_lq
+                positions.append({
+                    'tx_hash': tx_hash or tx_id,
+                    'output_index': int(output_index) if output_index.isdigit() else None,
+                    'staked_lq_raw': round(staked_lq * 1_000_000),
+                    'staked_lq': staked_lq,
+                    'delegated_to': stake.get('delegatedTo'),
+                })
 
             if not positions:
-                logger.info(f"[Liqwid] No positions found in {len(all_utxos)} UTxOs for {address[:20]}...")
+                logger.info(f"[Liqwid] No Agora stakes for {address[:20]}...")
                 return None
 
-            logger.info(f"[Liqwid] Found {len(positions)} positions, {total_staked/1_000_000:.2f} LQ for {address[:20]}...")
+            logger.info(
+                f"[Liqwid] Found {len(positions)} Agora stakes, "
+                f"{total_staked_lq:.2f} LQ for {address[:20]}..."
+            )
             return {
                 'protocol': 'Liqwid',
                 'address': address,
                 'positions': positions,
-                'total_staked_lq': total_staked / 1_000_000,
+                'total_staked_lq': total_staked_lq,
                 'position_count': len(positions)
             }
 
