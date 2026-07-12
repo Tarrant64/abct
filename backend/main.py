@@ -82,6 +82,28 @@ startup_status = {
     "ready": False
 }
 
+async def _purge_startup_response_caches() -> int:
+    """Clear response caches that are safe to rebuild from scratch on boot.
+
+    ONLY defi_summary_% — staking_positions_% rows must SURVIVE restarts:
+    they are the last-good data, the stale fallback that backfills timed-out
+    protocol scans, and the baseline for the degraded-result guard in
+    routers/defi.py. Purging them on boot let post-restart recompute bursts
+    cache degraded (Iagon-only) results for 24 h (2026-07-12 regression).
+    If a deploy truly breaks the cached staking schema, invalidate explicitly
+    via the cache admin endpoint (routers/cache.py) instead.
+    """
+    import aiosqlite
+    from config import DATABASE_PATH
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute(
+            "DELETE FROM cache WHERE key LIKE 'defi_summary_%'"
+        )
+        cleared = cursor.rowcount
+        await db.commit()
+        return cleared
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize database and check for snapshots on startup."""
@@ -153,19 +175,13 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Expired cache cleanup failed: {e}")
         await log_service.warning("main", f"Expired cache cleanup failed: {e}")
 
-    # Invalidate stale DeFi/staking response caches (ensures fresh logo data after code updates)
-    logger.info("Clearing stale DeFi/staking response caches...")
+    # Invalidate rebuildable response caches (staking rows deliberately
+    # survive restarts — see _purge_startup_response_caches)
+    logger.info("Clearing DeFi summary response caches...")
     try:
-        import aiosqlite
-        from config import DATABASE_PATH
-        async with aiosqlite.connect(DATABASE_PATH) as db:
-            cursor = await db.execute(
-                "DELETE FROM cache WHERE key LIKE 'defi_summary_%' OR key LIKE 'staking_positions_%'"
-            )
-            cleared = cursor.rowcount
-            await db.commit()
-            if cleared > 0:
-                logger.info(f"Cleared {cleared} stale DeFi/staking cache entries")
+        cleared = await _purge_startup_response_caches()
+        if cleared > 0:
+            logger.info(f"Cleared {cleared} DeFi summary cache entries")
     except Exception as e:
         logger.warning(f"DeFi cache cleanup failed: {e}")
 

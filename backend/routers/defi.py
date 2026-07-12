@@ -32,6 +32,27 @@ def parseFloat_safe(val) -> float:
 
 router = APIRouter(prefix="/defi", tags=["defi"])
 
+
+def _count_data_protocols(result: dict) -> int:
+    """Count protocols carrying ANY position data in a staking result.
+
+    Richness metric for the degraded-result guard. Counts every position
+    kind — token staking arrays, Strike V2 trading balance / vault deposits,
+    Indigo CDPs and stability-pool deposits — so a wallet whose only data is
+    e.g. Strike V2 still registers as having data.
+    """
+    count = 0
+    for p in (result.get('protocols') or {}).values():
+        if (
+            p.get('staked')
+            or p.get('v2_balance')
+            or p.get('v2_vault_positions')
+            or p.get('cdps')
+            or p.get('stability_pool')
+        ):
+            count += 1
+    return count
+
 # Cache TTL in seconds - refresh daily (DeFi positions don't change that frequently)
 STAKING_CACHE_TTL = CACHE_TTL_COLD  # 24 hours
 DEFI_SUMMARY_CACHE_TTL = CACHE_TTL_COLD  # 24 hours
@@ -129,24 +150,30 @@ async def get_staking_positions(address: str, refresh: bool = False, user_id: in
 
         # Don't overwrite cache with a degraded result (fewer protocols with data).
         # This prevents progressive data loss when Blockfrost is overloaded.
+        # Baseline falls back to the stale (expired) row when no fresh row
+        # exists, so staleness stays monotonic: a degraded recompute after a
+        # TTL expiry or cache purge can never displace better last-good data.
         existing = await get_cache(cache_key, user_id=user_id)
-        if existing:
-            existing_data_count = sum(
-                1 for p in existing.get('protocols', {}).values()
-                if p.get('staked') and len(p['staked']) > 0
-            )
-            new_data_count = sum(
-                1 for p in result.get('protocols', {}).values()
-                if p.get('staked') and len(p['staked']) > 0
-            )
+        baseline = existing
+        baseline_is_stale = False
+        if baseline is None and stale_data and stale_data.get('protocols'):
+            baseline = stale_data
+            baseline_is_stale = True
+        if baseline:
+            existing_data_count = _count_data_protocols(baseline)
+            new_data_count = _count_data_protocols(result)
             if new_data_count < existing_data_count:
                 logger.warning(
                     f"[Staking] Skipping cache update for {address[:20]}... — "
-                    f"new result has {new_data_count} active protocols vs {existing_data_count} cached"
+                    f"new result has {new_data_count} active protocols vs "
+                    f"{existing_data_count} cached"
+                    f"{' (stale baseline)' if baseline_is_stale else ''}"
                 )
                 # Return the existing better cache instead
-                existing['from_cache'] = True
-                return existing
+                baseline['from_cache'] = True
+                if baseline_is_stale:
+                    baseline['stale'] = True
+                return baseline
 
         await set_cache(cache_key, result, STAKING_CACHE_TTL, user_id=user_id)
 
