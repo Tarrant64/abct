@@ -20,6 +20,7 @@ from services.http_client import get_client, blockfrost_fetch
 
 # Protocol API endpoints
 INDIGO_API_BASE = "https://analytics.indigoprotocol.io"
+KOIOS_API_BASE = "https://api.koios.rest/api/v1"
 LIQWID_REWARDS_API = "https://api.sundae-rewards.sundaeswap.finance/api/v1/liqwid"
 SURF_LENDING_API = "https://api.surflending.org"
 STRIKE_V2_API_BASE = "https://api.strikefinance.org"
@@ -566,15 +567,17 @@ class DeFiService:
             protocols.add(info['protocol'])
         return sorted(list(protocols))
 
-    async def get_indigo_staking(self, address: str) -> Optional[Dict]:
+    async def get_indigo_staking(self, address: str, payment_creds: Optional[List[str]] = None) -> Optional[Dict]:
         """
         Get Indigo Protocol staking positions for an address.
         Uses Indigo Analytics API to find staked INDY.
+
+        payment_creds: optional stake-account-wide credential set to match
+        owners against (falls back to the address's own credential).
         """
         try:
-            # Extract payment credential from address
-            payment_cred = self._get_payment_credential(address)
-            if not payment_cred:
+            creds = self._resolve_cred_set(address, payment_creds)
+            if not creds:
                 return None
 
             client = get_client("blockfrost", timeout=15.0)
@@ -599,7 +602,7 @@ class DeFiService:
             total_staked = 0
 
             for pos in positions:
-                if pos.get('owner') == payment_cred:
+                if pos.get('owner') in creds:
                     staked = pos.get('staked_indy', 0)
                     total_staked += staked
                     user_positions.append({
@@ -607,7 +610,8 @@ class DeFiService:
                         'staked_indy': staked / 1_000_000,
                         'snapshot_ada': pos.get('snapshot_ada', 0) / 1_000_000,
                         'slot': pos.get('slot'),
-                        'output_hash': pos.get('output_hash')
+                        'output_hash': pos.get('output_hash'),
+                        'owner': pos.get('owner'),
                     })
 
             if not user_positions:
@@ -625,16 +629,18 @@ class DeFiService:
             logger.error(f"Error getting Indigo staking: {e}")
             return None
 
-    async def get_indigo_cdps(self, address: str) -> Optional[Dict]:
+    async def get_indigo_cdps(self, address: str, payment_creds: Optional[List[str]] = None) -> Optional[Dict]:
         """
         Get Indigo Protocol CDP (loan) positions for an address.
         Uses Indigo Analytics API /api/cdps endpoint (un-versioned; the old
         /api/v1/loans path is dead).
         Each CDP has collateral (ADA), minted iAsset amount, and iAsset type.
+
+        payment_creds: optional stake-account-wide credential set.
         """
         try:
-            payment_cred = self._get_payment_credential(address)
-            if not payment_cred:
+            creds = self._resolve_cred_set(address, payment_creds)
+            if not creds:
                 return None
 
             client = get_client("blockfrost", timeout=15.0)
@@ -654,7 +660,7 @@ class DeFiService:
             total_collateral_ada = 0
 
             for loan in loans:
-                if loan.get('owner') != payment_cred:
+                if loan.get('owner') not in creds:
                     continue
 
                 asset = loan.get('asset', 'iUSD')
@@ -799,6 +805,126 @@ class DeFiService:
             logger.error(f"Error decoding address: {e}")
             return None
 
+    # Wallet-context resolution cache TTL — a stake account's address set
+    # changes rarely; 24 h matches the staking cache, and the stale row is
+    # still served on Koios failure.
+    WALLET_CONTEXT_TTL = 24 * 3600
+
+    def _fallback_wallet_context(self, address: str) -> Dict:
+        """Single-address context — the pre-P2 behavior."""
+        own_cred = self._get_payment_credential(address)
+        return {
+            'address': address,
+            'stake_address': None,
+            'addresses': [address],
+            'payment_creds': [own_cred] if own_cred else [],
+            'resolved': False,
+        }
+
+    async def resolve_wallet_context(self, address: str) -> Dict:
+        """
+        Resolve the FULL identity of the wallet owning `address`:
+        every payment address (and payment credential) of its stake account.
+
+        A stake account commonly has many HD payment addresses — the user's
+        main wallet has six distinct payment credentials — and positions can
+        be opened from any of them. Owner-matching against only the stored
+        address's credential finds positions by luck (assessment bug #6).
+
+        Uses Koios account_addresses (one call per stake account, cached
+        24 h); payment credentials are derived locally from the addresses.
+        Falls back to a single-address context if the address has no stake
+        component or Koios is unavailable.
+        """
+        from database import get_cache, set_cache
+        from services.cardano import _derive_stake_key_local
+
+        try:
+            stake_address = _derive_stake_key_local(address)
+        except Exception:
+            stake_address = None
+        if not stake_address:
+            # Enterprise/script address without a stake component
+            return self._fallback_wallet_context(address)
+
+        cache_key = f"wallet_context_{stake_address}"
+        try:
+            cached = await get_cache(cache_key)
+            if cached and cached.get('payment_creds'):
+                if address not in cached.get('addresses', []):
+                    # Koios lag: always include the queried address itself
+                    cached = dict(cached)
+                    cached['addresses'] = cached['addresses'] + [address]
+                    own = self._get_payment_credential(address)
+                    if own and own not in cached['payment_creds']:
+                        cached['payment_creds'] = cached['payment_creds'] + [own]
+                return cached
+        except Exception as e:
+            logger.debug(f"[WalletContext] cache read failed: {e}")
+
+        try:
+            client = get_client("koios", timeout=15.0)
+            resp = await client.post(
+                f"{KOIOS_API_BASE}/account_addresses",
+                json={"_stake_addresses": [stake_address]},
+            )
+            if resp.status_code != 200:
+                logger.warning(
+                    f"[WalletContext] Koios account_addresses returned HTTP "
+                    f"{resp.status_code} for {stake_address[:20]}... — "
+                    f"falling back to single-address context"
+                )
+                return self._fallback_wallet_context(address)
+
+            rows = resp.json() or []
+            addresses = []
+            for row in rows:
+                addresses.extend(row.get('addresses') or [])
+            if address not in addresses:
+                addresses.append(address)
+
+            payment_creds = []
+            seen = set()
+            for a in addresses:
+                cred = self._get_payment_credential(a)
+                if cred and cred not in seen:
+                    seen.add(cred)
+                    payment_creds.append(cred)
+
+            context = {
+                'address': address,
+                'stake_address': stake_address,
+                'addresses': addresses,
+                'payment_creds': payment_creds,
+                'resolved': True,
+            }
+            try:
+                await set_cache(cache_key, context, self.WALLET_CONTEXT_TTL)
+            except Exception as e:
+                logger.debug(f"[WalletContext] cache write failed: {e}")
+
+            logger.info(
+                f"[WalletContext] {stake_address[:20]}... resolved to "
+                f"{len(addresses)} addresses / {len(payment_creds)} payment creds"
+            )
+            return context
+
+        except Exception as e:
+            logger.warning(
+                f"[WalletContext] Koios resolution failed for "
+                f"{stake_address[:20]}...: {e} — falling back to "
+                f"single-address context"
+            )
+            return self._fallback_wallet_context(address)
+
+    def _resolve_cred_set(self, address: str, payment_creds: Optional[List[str]]) -> Optional[set]:
+        """Credential set for owner-matching: the provided account-wide set,
+        or the address's own credential (pre-P2 behavior) when none given."""
+        if payment_creds:
+            return set(payment_creds)
+        own = self._get_payment_credential(address)
+        return {own} if own else None
+
     # GraphQL query for Agora LQ stakes by payment credential.
     # stakedAmount is already denominated in whole LQ (Float), not raw units.
     LIQWID_STAKES_QUERY = (
@@ -809,7 +935,7 @@ class DeFiService:
         " } } } }"
     )
 
-    async def get_liqwid_staking(self, address: str) -> Optional[Dict]:
+    async def get_liqwid_staking(self, address: str, payment_creds: Optional[List[str]] = None) -> Optional[Dict]:
         """
         Get Liqwid Finance Agora staking positions for an address.
 
@@ -817,11 +943,14 @@ class DeFiService:
         Replaces the retired Blockfrost scan of the staking contract, which
         paged through 3,000+ UTxOs and missed positions on the migrated
         contract.
+
+        payment_creds: optional stake-account-wide credential set — the
+        GraphQL paymentKeys argument accepts a list, so the whole account is
+        one query.
         """
         try:
-            # Extract payment credential from address
-            payment_cred = self._get_payment_credential(address)
-            if not payment_cred:
+            creds = self._resolve_cred_set(address, payment_creds)
+            if not creds:
                 return None
 
             client = get_client("liqwid_graphql", timeout=15.0)
@@ -834,7 +963,7 @@ class DeFiService:
                     json={
                         "query": self.LIQWID_STAKES_QUERY,
                         "variables": {"input": {
-                            "paymentKeys": [payment_cred],
+                            "paymentKeys": sorted(creds),
                             "page": page,
                             "perPage": 100,
                         }},
@@ -891,6 +1020,7 @@ class DeFiService:
                     'staked_lq_raw': round(staked_lq * 1_000_000),
                     'staked_lq': staked_lq,
                     'delegated_to': stake.get('delegatedTo'),
+                    'owner': stake.get('owner'),
                 })
 
             if not positions:
@@ -913,17 +1043,20 @@ class DeFiService:
             logger.error(f"Error getting Liqwid staking: {e}")
             return None
 
-    async def get_strike_staking(self, address: str) -> Optional[Dict]:
+    async def get_strike_staking(self, address: str, payment_creds: Optional[List[str]] = None) -> Optional[Dict]:
         """
         Get Strike Finance staking positions for an address.
         Queries the Strike staking contract for UTxOs with matching user NFT.
         Uses parallel page fetching to handle large contract state (1000+ UTxOs).
+
+        payment_creds: optional stake-account-wide credential set — staking
+        NFT asset names are payment credentials, matched locally.
         """
         try:
-            # Extract payment credential from address
-            payment_cred = self._get_payment_credential(address)
-            if not payment_cred:
+            creds = self._resolve_cred_set(address, payment_creds)
+            if not creds:
                 return None
+            payment_cred = next(iter(creds))  # for log lines only
 
             client = get_client("blockfrost", timeout=15.0)
             sem = asyncio.Semaphore(5)
@@ -994,10 +1127,10 @@ class DeFiService:
                     unit = asset.get('unit', '')
                     qty = int(asset.get('quantity', 0))
 
-                    # Check if this UTxO has an NFT with user's PKH
+                    # Check if this UTxO has an NFT with any of the user's PKHs
                     if unit.startswith(STRIKE_STAKING_NFT_POLICY):
                         asset_name = unit[len(STRIKE_STAKING_NFT_POLICY):]
-                        if asset_name == payment_cred:
+                        if asset_name in creds:
                             has_user_nft = True
 
                     # Check for STRIKE tokens
@@ -1028,102 +1161,139 @@ class DeFiService:
             logger.error(f"Error getting Strike staking: {e}")
             return None
 
-    async def get_strike_v2_positions(self, address: str) -> Optional[Dict]:
+    async def get_strike_v2_positions(self, address: str, account_addresses: Optional[List[str]] = None) -> Optional[Dict]:
         """
         Get Strike Finance V2 trading account balance and vault positions.
         Uses the public Strike Finance API — no auth required for blockchain_address lookup.
 
+        account_addresses: optional stake-account-wide address list. Strike V2
+        accounts are keyed by blockchain address, so each address is probed
+        (in parallel, capped at 12) and results deduplicate by account_id.
+
         Returns:
-            Dict with v2_balance (ADA in trading account), vault_positions (list),
-            total_vault_ada, or None if no V2 presence found.
+            Dict with v2_balance (ADA across trading accounts), vault_positions
+            (list), total_vault_ada, or None if no V2 presence found.
         """
         try:
             client = get_client("strike_v2", timeout=10.0)
 
-            # Step 1: Resolve blockchain address → account_id + wallet_balance
-            resp = await client.get(
-                f"{STRIKE_V2_API_BASE}/v2/account",
-                params={"blockchain_address": address}
-            )
-            if resp.status_code != 200:
-                return None
+            # Step 1: Resolve blockchain address(es) → account_id + wallet_balance.
+            # Own address first; dedupe while preserving order; cap the probe
+            # fan-out so a large HD wallet can't blow the timeout budget.
+            probe_addresses = list(dict.fromkeys(
+                [address] + (account_addresses or [])
+            ))[:12]
 
-            account = resp.json()
-            account_id = account.get("account_id")
-            wallet_balance = float(account.get("wallet_balance") or 0)
+            async def resolve_account(addr):
+                try:
+                    resp = await client.get(
+                        f"{STRIKE_V2_API_BASE}/v2/account",
+                        params={"blockchain_address": addr}
+                    )
+                    if resp.status_code != 200:
+                        return None
+                    return resp.json()
+                except Exception as e:
+                    logger.debug(f"[Strike V2] account probe failed for {addr[:20]}: {e}")
+                    return None
+
+            accounts_raw = await asyncio.gather(
+                *[resolve_account(a) for a in probe_addresses]
+            )
+
+            # account_id → wallet_balance (first occurrence wins)
+            accounts = {}
+            for acct in accounts_raw:
+                if not acct:
+                    continue
+                acct_id = acct.get("account_id")
+                if acct_id and acct_id not in accounts:
+                    accounts[acct_id] = float(acct.get("wallet_balance") or 0)
 
             # An empty trading account can still hold vault deposits —
             # only a missing account means no V2 presence at all.
-            if not account_id:
+            if not accounts:
                 return None
 
-            # Step 2: Vault positions for this account
-            vault_positions = []
-            try:
-                vp_resp = await client.get(
-                    f"{STRIKE_V2_API_BASE}/v2/vault/positions",
-                    params={"account_id": account_id}
-                )
-                if vp_resp.status_code == 200:
-                    raw_positions = vp_resp.json().get("positions") or []
+            account_id = next(iter(accounts))
+            wallet_balance = sum(accounts.values())
 
-                    if raw_positions:
-                        # Fetch vault details (names + share prices) for active vaults
-                        vault_map = {}
+            # Step 2: Vault positions per unique account
+            raw_by_account = []
+            for acct_id in accounts:
+                try:
+                    vp_resp = await client.get(
+                        f"{STRIKE_V2_API_BASE}/v2/vault/positions",
+                        params={"account_id": acct_id}
+                    )
+                    if vp_resp.status_code == 200:
+                        raw = vp_resp.json().get("positions") or []
+                        if raw:
+                            raw_by_account.append((acct_id, raw))
+                except Exception as e:
+                    logger.warning(f"[Strike V2] Vault positions fetch failed for {address[:20]}: {e}")
+
+            vault_positions = []
+            if raw_by_account:
+                # Fetch vault details (names + share prices) once for all accounts
+                vault_map = {}
+                try:
+                    vaults_resp = await client.get(
+                        f"{STRIKE_V2_API_BASE}/v2/vaults",
+                        params={"status": "active"}
+                    )
+                    if vaults_resp.status_code == 200:
+                        for v in vaults_resp.json().get("vaults", []):
+                            vault_map[v["vault_id"]] = v
+                    else:
+                        logger.warning(
+                            f"[Strike V2] vaults lookup returned HTTP "
+                            f"{vaults_resp.status_code} — vault positions "
+                            f"will be flagged unpriced"
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"[Strike V2] vaults lookup failed ({e}) — vault "
+                        f"positions will be flagged unpriced"
+                    )
+
+                seen_vault_keys = set()
+                for acct_id, raw_positions in raw_by_account:
+                    for pos in raw_positions:
+                        # One malformed vault must not abort the rest
                         try:
-                            vaults_resp = await client.get(
-                                f"{STRIKE_V2_API_BASE}/v2/vaults",
-                                params={"status": "active"}
-                            )
-                            if vaults_resp.status_code == 200:
-                                for v in vaults_resp.json().get("vaults", []):
-                                    vault_map[v["vault_id"]] = v
-                            else:
+                            vault_id = pos.get("vault_id") or ""
+                            if (acct_id, vault_id) in seen_vault_keys:
+                                continue
+                            vault_info = vault_map.get(vault_id, {})
+                            shares = float(pos.get("shares") or 0)
+                            raw_price = vault_info.get("share_price")
+                            priced = raw_price is not None
+                            share_price = float(raw_price) if priced else 1.0
+                            if not priced:
                                 logger.warning(
-                                    f"[Strike V2] vaults lookup returned HTTP "
-                                    f"{vaults_resp.status_code} — vault positions "
-                                    f"will be flagged unpriced"
+                                    f"[Strike V2] No active-vault share price "
+                                    f"for vault {vault_id[:8]} — valuing at "
+                                    f"share_price=1, flagged priced=false"
                                 )
+                            value_ada = shares * share_price
+                            vault_positions.append({
+                                "vault_id": vault_id,
+                                "vault_name": vault_info.get("name")
+                                or pos.get("name")
+                                or f"Vault {vault_id[:8]}",
+                                "shares": shares,
+                                "share_price": share_price,
+                                "value_ada": value_ada,
+                                "priced": priced,
+                                "share_price_source": "vaults_api" if priced else "fallback",
+                            })
+                            seen_vault_keys.add((acct_id, vault_id))
                         except Exception as e:
                             logger.warning(
-                                f"[Strike V2] vaults lookup failed ({e}) — vault "
-                                f"positions will be flagged unpriced"
+                                f"[Strike V2] Skipping malformed vault position "
+                                f"{str(pos)[:120]!r}: {e}"
                             )
-
-                        for pos in raw_positions:
-                            # One malformed vault must not abort the rest
-                            try:
-                                vault_id = pos.get("vault_id") or ""
-                                vault_info = vault_map.get(vault_id, {})
-                                shares = float(pos.get("shares") or 0)
-                                raw_price = vault_info.get("share_price")
-                                priced = raw_price is not None
-                                share_price = float(raw_price) if priced else 1.0
-                                if not priced:
-                                    logger.warning(
-                                        f"[Strike V2] No active-vault share price "
-                                        f"for vault {vault_id[:8]} — valuing at "
-                                        f"share_price=1, flagged priced=false"
-                                    )
-                                value_ada = shares * share_price
-                                vault_positions.append({
-                                    "vault_id": vault_id,
-                                    "vault_name": vault_info.get("name")
-                                    or pos.get("name")
-                                    or f"Vault {vault_id[:8]}",
-                                    "shares": shares,
-                                    "share_price": share_price,
-                                    "value_ada": value_ada,
-                                    "priced": priced,
-                                    "share_price_source": "vaults_api" if priced else "fallback",
-                                })
-                            except Exception as e:
-                                logger.warning(
-                                    f"[Strike V2] Skipping malformed vault position "
-                                    f"{str(pos)[:120]!r}: {e}"
-                                )
-            except Exception as e:
-                logger.warning(f"[Strike V2] Vault positions fetch failed for {address[:20]}: {e}")
 
             total_vault_ada = sum(p["value_ada"] for p in vault_positions)
 
@@ -1133,11 +1303,13 @@ class DeFiService:
 
             logger.info(
                 f"[Strike V2] {address[:20]}... balance={wallet_balance:.2f} ADA, "
-                f"vaults={len(vault_positions)}, vault_total={total_vault_ada:.2f} ADA"
+                f"accounts={len(accounts)}, vaults={len(vault_positions)}, "
+                f"vault_total={total_vault_ada:.2f} ADA"
             )
 
             return {
                 "account_id": account_id,
+                "account_ids": list(accounts),
                 "v2_balance": wallet_balance,
                 "vault_positions": vault_positions,
                 "total_vault_ada": total_vault_ada,
@@ -1359,7 +1531,7 @@ class DeFiService:
             logger.error(f"Error getting Iagon staking: {e}")
             return None
 
-    async def get_indigo_pending_rewards(self, address: str) -> Optional[Dict]:
+    async def get_indigo_pending_rewards(self, address: str, payment_creds: Optional[List[str]] = None) -> Optional[Dict]:
         """
         Get pending INDY and ADA rewards from Indigo Protocol.
         Uses Indigo Analytics API to fetch pending rewards.
@@ -1369,8 +1541,8 @@ class DeFiService:
         The lockedAmount represents locked INDY that may include accumulated rewards.
         """
         try:
-            payment_cred = self._get_payment_credential(address)
-            if not payment_cred:
+            creds = self._resolve_cred_set(address, payment_creds)
+            if not creds:
                 return None
 
             client = get_client("blockfrost", timeout=15.0)
@@ -1394,7 +1566,7 @@ class DeFiService:
             snapshot_ada = 0
 
             for pos in positions_data:
-                if pos.get('owner') == payment_cred:
+                if pos.get('owner') in creds:
                     staked = pos.get('staked_indy', 0) / 1_000_000
                     ada_snapshot = pos.get('snapshot_ada', 0) / 1_000_000
                     total_staked += staked
@@ -1436,21 +1608,22 @@ class DeFiService:
         )
         return None
 
-    async def get_strike_pending_rewards(self, address: str, staking_data=None) -> Optional[Dict]:
+    async def get_strike_pending_rewards(self, address: str, staking_data=None, payment_creds: Optional[List[str]] = None) -> Optional[Dict]:
         """
         Get pending STRIKE rewards.
         Calculated from staking duration and reward rate.
 
         Args:
             staking_data: Optional pre-fetched staking data to avoid re-scanning contracts.
+            payment_creds: optional stake-account-wide credential set.
         """
         try:
-            payment_cred = self._get_payment_credential(address)
-            if not payment_cred:
+            creds = self._resolve_cred_set(address, payment_creds)
+            if not creds:
                 return None
 
             # Reuse Phase 1 staking data if provided, otherwise fetch
-            staking = staking_data or await self.get_strike_staking(address)
+            staking = staking_data or await self.get_strike_staking(address, payment_creds=payment_creds)
             if not staking or staking['total_staked_strike'] == 0:
                 return None
 
@@ -1478,7 +1651,7 @@ class DeFiService:
                         unit = asset.get('unit', '')
                         if unit.startswith(STRIKE_STAKING_NFT_POLICY):
                             asset_name = unit[len(STRIKE_STAKING_NFT_POLICY):]
-                            if asset_name == payment_cred:
+                            if asset_name in creds:
                                 has_user_nft = True
                                 break
 
@@ -1771,12 +1944,25 @@ class DeFiService:
 
         return None
 
-    async def get_all_staking_positions(self, address: str, previous_result: Dict = None) -> Dict:
+    async def get_all_staking_positions(
+        self,
+        address: str,
+        previous_result: Dict = None,
+        payment_creds: Optional[List[str]] = None,
+        account_addresses: Optional[List[str]] = None,
+    ) -> Dict:
         """
         Get all protocol staking positions for an address.
         Aggregates data from supported protocol APIs including pending rewards.
         Uses parallel fetching with per-protocol timeouts to avoid 504s.
         If previous_result is provided, timed-out protocols are filled from it.
+
+        payment_creds / account_addresses: optional stake-account-wide
+        identity sets (see resolve_wallet_context). When omitted, matching
+        uses only the address's own credential — the pre-P2 behavior.
+        Iagon and Surf remain address-scoped: their detection scans the
+        queried address's own history/API and widening would multiply the
+        Blockfrost scan cost past the timeout budget (P3).
         """
         import asyncio
 
@@ -1784,7 +1970,11 @@ class DeFiService:
             'address': address,
             'protocols': {},
             'total_positions': 0,
-            'total_pending_rewards': {}
+            'total_pending_rewards': {},
+            'account_scan': {
+                'payment_creds': len(payment_creds) if payment_creds else 1,
+                'addresses': len(account_addresses) if account_addresses else 1,
+            },
         }
 
         # Track which protocols timed out vs returned no data
@@ -1801,14 +1991,14 @@ class DeFiService:
 
         # Phase 1: Fetch all protocol staking positions in parallel (15s each)
         indigo, strike, liqwid, iagon, surf, indigo_cdps, indigo_sp, strike_v2 = await asyncio.gather(
-            with_timeout(self.get_indigo_staking(address), "Indigo"),
-            with_timeout(self.get_strike_staking(address), "Strike", timeout=20),
-            with_timeout(self.get_liqwid_staking(address), "Liqwid", timeout=25),
+            with_timeout(self.get_indigo_staking(address, payment_creds=payment_creds), "Indigo"),
+            with_timeout(self.get_strike_staking(address, payment_creds=payment_creds), "Strike", timeout=20),
+            with_timeout(self.get_liqwid_staking(address, payment_creds=payment_creds), "Liqwid", timeout=25),
             with_timeout(self.get_iagon_staking(address), "Iagon", timeout=60),
             with_timeout(self.get_surf_lending_positions(address), "Surf"),
-            with_timeout(self.get_indigo_cdps(address), "Indigo CDPs"),
+            with_timeout(self.get_indigo_cdps(address, payment_creds=payment_creds), "Indigo CDPs"),
             with_timeout(self.get_indigo_stability_pool(address), "Indigo SP"),
-            with_timeout(self.get_strike_v2_positions(address), "Strike V2", timeout=15),
+            with_timeout(self.get_strike_v2_positions(address, account_addresses=account_addresses), "Strike V2", timeout=15),
             return_exceptions=True
         )
 
@@ -1854,10 +2044,10 @@ class DeFiService:
         reward_tasks = {}
         logo_tasks = {}
         if indigo:
-            reward_tasks['indigo'] = self.get_indigo_pending_rewards(address)
+            reward_tasks['indigo'] = self.get_indigo_pending_rewards(address, payment_creds=payment_creds)
             logo_tasks['INDY'] = self._get_token_logo_url('INDY')
         if strike:
-            reward_tasks['strike'] = self.get_strike_pending_rewards(address, staking_data=strike)
+            reward_tasks['strike'] = self.get_strike_pending_rewards(address, staking_data=strike, payment_creds=payment_creds)
             logo_tasks['STRIKE'] = self._get_token_logo_url('STRIKE')
         if liqwid:
             reward_tasks['liqwid'] = self.get_liqwid_pending_rewards(address, staking_data=liqwid)

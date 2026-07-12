@@ -33,6 +33,65 @@ def parseFloat_safe(val) -> float:
 router = APIRouter(prefix="/defi", tags=["defi"])
 
 
+async def _resolve_scan_identity(address: str, user_id: int):
+    """Stake-account-wide identity for a staking scan, partitioned so sibling
+    wallet rows can never double-report the same positions.
+
+    The stake account's payment credentials are split among its STORED wallet
+    rows: every stored row matches its own credential (unchanged behavior),
+    and exactly one deterministic representative row — the lowest stored
+    sibling address — additionally claims the "orphan" credentials belonging
+    to no stored row. The union across stored rows therefore covers the whole
+    stake account exactly once, and downstream consumers that sum per-address
+    caches (snapshot, summary, portfolio) stay correct.
+
+    Returns (payment_creds, account_addresses); (None, None) means
+    single-address scan — the pre-P2 behavior and the failure fallback.
+    """
+    try:
+        context = await defi_service.resolve_wallet_context(address)
+        if not context.get('resolved') or len(context.get('payment_creds') or []) <= 1:
+            return None, None
+
+        wallets = await get_all_wallets(user_id=user_id)
+        stored = {w['address'] for w in wallets if w.get('blockchain') == 'cardano'}
+        siblings_stored = sorted(a for a in context['addresses'] if a in stored)
+        representative = siblings_stored[0] if siblings_stored else address
+        if address != representative:
+            # A different stored sibling owns the account-wide sweep
+            return None, None
+
+        own_cred = defi_service._get_payment_credential(address)
+        other_creds = set()
+        for a in siblings_stored:
+            if a == address:
+                continue
+            cred = defi_service._get_payment_credential(a)
+            if cred and cred != own_cred:
+                other_creds.add(cred)
+
+        payment_creds = [
+            c for c in context['payment_creds'] if c not in other_creds
+        ]
+        account_addresses = [
+            a for a in context['addresses']
+            if a == address or a not in siblings_stored
+        ]
+        logger.info(
+            f"[Staking] {address[:20]}... is account representative: "
+            f"matching {len(payment_creds)}/{len(context['payment_creds'])} creds, "
+            f"{len(account_addresses)} addresses"
+        )
+        return payment_creds, account_addresses
+
+    except Exception as e:
+        logger.warning(
+            f"[Staking] identity resolution failed for {address[:20]}...: {e} "
+            f"— falling back to single-address scan"
+        )
+        return None, None
+
+
 def _count_data_protocols(result: dict) -> int:
     """Count protocols carrying ANY position data in a staking result.
 
@@ -140,9 +199,18 @@ async def get_staking_positions(address: str, refresh: bool = False, user_id: in
     if stale_data and stale_data.get('protocols'):
         previous_result = stale_data
 
+    # Stake-account-wide identity (multi-credential matching), partitioned
+    # across stored sibling rows to prevent double counting
+    payment_creds, account_addresses = await _resolve_scan_identity(address, user_id)
+
     # Limit concurrent staking scans to prevent Blockfrost overload
     async with _staking_scan_semaphore:
-        result = await defi_service.get_all_staking_positions(address, previous_result=previous_result)
+        result = await defi_service.get_all_staking_positions(
+            address,
+            previous_result=previous_result,
+            payment_creds=payment_creds,
+            account_addresses=account_addresses,
+        )
 
     if result:
         result['from_cache'] = False

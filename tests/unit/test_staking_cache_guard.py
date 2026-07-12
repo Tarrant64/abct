@@ -166,11 +166,23 @@ def wire(monkeypatch):
         monkeypatch.setattr(defi_router, "get_username_by_user_id", fake_username)
         monkeypatch.setattr(defi_router, "is_demo_user", fake_is_demo)
 
-        async def fake_compute(address, previous_result=None):
+        async def fake_compute(address, previous_result=None,
+                               payment_creds=None, account_addresses=None):
             return dict(compute_result)
 
         monkeypatch.setattr(
             defi_router.defi_service, "get_all_staking_positions", fake_compute
+        )
+
+        # Identity resolution (P2) is exercised in test_wallet_context.py —
+        # here it resolves to the single-address fallback without network.
+        async def fake_context(address):
+            return {"address": address, "stake_address": None,
+                    "addresses": [address], "payment_creds": ["cred0"],
+                    "resolved": False}
+
+        monkeypatch.setattr(
+            defi_router.defi_service, "resolve_wallet_context", fake_context
         )
 
         # Neutralize the fire-and-forget portfolio write's price fetch
