@@ -53,19 +53,32 @@ async def _resolve_scan_identity(address: str, user_id: int):
         if not context.get('resolved') or len(context.get('payment_creds') or []) <= 1:
             return None, None
 
+        # Representative eligibility requires membership in the CHAIN-OBSERVED
+        # (Koios) address set. A stored address Koios has never seen (manually
+        # added, never used on-chain) cannot hold positions — and because it
+        # is invisible to sibling rows' resolutions, electing it would let two
+        # rows claim the same orphan credentials (drift double-count).
+        koios_addresses = set(context.get('koios_addresses') or [])
+        if address not in koios_addresses:
+            return None, None
+
         wallets = await get_all_wallets(user_id=user_id)
         stored = {w['address'] for w in wallets if w.get('blockchain') == 'cardano'}
-        siblings_stored = sorted(a for a in context['addresses'] if a in stored)
-        representative = siblings_stored[0] if siblings_stored else address
+        rep_candidates = sorted(a for a in koios_addresses if a in stored)
+        representative = rep_candidates[0] if rep_candidates else address
         if address != representative:
             # A different stored sibling owns the account-wide sweep
             return None, None
 
+        # Exclude the credentials/addresses of EVERY other stored sibling in
+        # the full context (including drifted, Koios-unknown ones persisted by
+        # the self-append) — those rows scan their own credential themselves.
         own_cred = defi_service._get_payment_credential(address)
+        stored_siblings = [
+            a for a in context['addresses'] if a in stored and a != address
+        ]
         other_creds = set()
-        for a in siblings_stored:
-            if a == address:
-                continue
+        for a in stored_siblings:
             cred = defi_service._get_payment_credential(a)
             if cred and cred != own_cred:
                 other_creds.add(cred)
@@ -74,8 +87,7 @@ async def _resolve_scan_identity(address: str, user_id: int):
             c for c in context['payment_creds'] if c not in other_creds
         ]
         account_addresses = [
-            a for a in context['addresses']
-            if a == address or a not in siblings_stored
+            a for a in context['addresses'] if a not in stored_siblings
         ]
         logger.info(
             f"[Staking] {address[:20]}... is account representative: "
@@ -227,7 +239,24 @@ async def get_staking_positions(address: str, refresh: bool = False, user_id: in
         if baseline is None and stale_data and stale_data.get('protocols'):
             baseline = stale_data
             baseline_is_stale = True
-        if baseline:
+        # A scan-scope change (identity partition grew or shrank — e.g. the
+        # user stored a sibling address as its own wallet, moving a
+        # credential out of this row's claim) legitimately changes how much
+        # data this row reports. Comparing across scopes would wedge the old
+        # over-scoped row forever, double-counting against the new sibling
+        # row — so the guard re-baselines instead of refusing.
+        _default_scope = {'payment_creds': 1, 'addresses': 1}
+        scope_changed = bool(baseline) and (
+            (baseline.get('account_scan') or _default_scope)
+            != (result.get('account_scan') or _default_scope)
+        )
+        if scope_changed:
+            logger.info(
+                f"[Staking] scan scope changed for {address[:20]}... "
+                f"({baseline.get('account_scan')} -> {result.get('account_scan')}) "
+                f"— accepting result without downgrade guard"
+            )
+        if baseline and not scope_changed:
             existing_data_count = _count_data_protocols(baseline)
             new_data_count = _count_data_protocols(result)
             if new_data_count < existing_data_count:

@@ -806,8 +806,9 @@ class DeFiService:
             return None
 
     # Wallet-context resolution cache TTL — a stake account's address set
-    # changes rarely; 24 h matches the staking cache, and the stale row is
-    # still served on Koios failure.
+    # changes rarely; 24 h matches the staking cache. There is NO stale
+    # fallback here: on Koios failure the resolver returns the
+    # single-address context (resolved=False), i.e. pre-P2 behavior.
     WALLET_CONTEXT_TTL = 24 * 3600
 
     def _fallback_wallet_context(self, address: str) -> Dict:
@@ -817,6 +818,7 @@ class DeFiService:
             'address': address,
             'stake_address': None,
             'addresses': [address],
+            'koios_addresses': [],
             'payment_creds': [own_cred] if own_cred else [],
             'resolved': False,
         }
@@ -852,12 +854,21 @@ class DeFiService:
             cached = await get_cache(cache_key)
             if cached and cached.get('payment_creds'):
                 if address not in cached.get('addresses', []):
-                    # Koios lag: always include the queried address itself
+                    # Koios lag: include the queried address itself and
+                    # PERSIST the merge — a local-only copy would make
+                    # sibling rows resolve divergent contexts and break the
+                    # credential partition (drift double-count).
+                    # koios_addresses stays untouched: it records what the
+                    # chain has seen, which gates representative eligibility.
                     cached = dict(cached)
                     cached['addresses'] = cached['addresses'] + [address]
                     own = self._get_payment_credential(address)
                     if own and own not in cached['payment_creds']:
                         cached['payment_creds'] = cached['payment_creds'] + [own]
+                    try:
+                        await set_cache(cache_key, cached, self.WALLET_CONTEXT_TTL)
+                    except Exception as e:
+                        logger.debug(f"[WalletContext] cache update failed: {e}")
                 return cached
         except Exception as e:
             logger.debug(f"[WalletContext] cache read failed: {e}")
@@ -877,9 +888,10 @@ class DeFiService:
                 return self._fallback_wallet_context(address)
 
             rows = resp.json() or []
-            addresses = []
+            koios_addresses = []
             for row in rows:
-                addresses.extend(row.get('addresses') or [])
+                koios_addresses.extend(row.get('addresses') or [])
+            addresses = list(koios_addresses)
             if address not in addresses:
                 addresses.append(address)
 
@@ -895,6 +907,9 @@ class DeFiService:
                 'address': address,
                 'stake_address': stake_address,
                 'addresses': addresses,
+                # Chain-observed addresses only — gates representative
+                # eligibility in the scan-identity partition
+                'koios_addresses': koios_addresses,
                 'payment_creds': payment_creds,
                 'resolved': True,
             }
@@ -1005,6 +1020,14 @@ class DeFiService:
             total_staked_lq = 0.0
 
             for stake in results:
+                # Defense in depth: only count stakes owned by a requested
+                # credential, whatever the API chooses to return
+                if stake.get('owner') not in creds:
+                    logger.warning(
+                        f"[Liqwid] GraphQL returned stake owned by unrequested "
+                        f"cred {str(stake.get('owner'))[:16]}... — skipped"
+                    )
+                    continue
                 staked_lq = float(stake.get('stakedAmount') or 0)
                 if staked_lq <= 0:
                     continue
@@ -1184,18 +1207,29 @@ class DeFiService:
                 [address] + (account_addresses or [])
             ))[:12]
 
+            probe_sem = asyncio.Semaphore(4)
+
             async def resolve_account(addr):
-                try:
-                    resp = await client.get(
-                        f"{STRIKE_V2_API_BASE}/v2/account",
-                        params={"blockchain_address": addr}
-                    )
-                    if resp.status_code != 200:
+                async with probe_sem:
+                    try:
+                        resp = await client.get(
+                            f"{STRIKE_V2_API_BASE}/v2/account",
+                            params={"blockchain_address": addr}
+                        )
+                        if resp.status_code == 200:
+                            return resp.json()
+                        if resp.status_code != 404:
+                            # 404 = address has no Strike account (normal);
+                            # anything else (429/5xx) is silent under-detection
+                            logger.warning(
+                                f"[Strike V2] account probe for {addr[:20]}... "
+                                f"returned HTTP {resp.status_code} — positions on "
+                                f"this address may be missed this scan"
+                            )
                         return None
-                    return resp.json()
-                except Exception as e:
-                    logger.debug(f"[Strike V2] account probe failed for {addr[:20]}: {e}")
-                    return None
+                    except Exception as e:
+                        logger.debug(f"[Strike V2] account probe failed for {addr[:20]}: {e}")
+                        return None
 
             accounts_raw = await asyncio.gather(
                 *[resolve_account(a) for a in probe_addresses]

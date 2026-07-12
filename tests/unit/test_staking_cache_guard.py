@@ -242,6 +242,53 @@ async def test_no_baseline_at_all_caches_whatever_computed(wire):
     assert _count_data_protocols(out) == 1
 
 
+async def test_scope_change_bypasses_downgrade_guard(wire):
+    """H2 (P2-FIX): when the identity partition legitimately shrinks (the
+    user stored a sibling as its own wallet, moving a credential out of this
+    row's claim), the corrected smaller result must be ACCEPTED — refusing it
+    would wedge the over-scoped row and double-count against the new sibling
+    row until a manual cache clear."""
+    over_scoped = dict(FULL_RESULT)
+    over_scoped["account_scan"] = {"payment_creds": 6, "addresses": 6}
+    corrected = dict(IAGON_ONLY_RESULT)
+    corrected["account_scan"] = {"payment_creds": 5, "addresses": 5}
+
+    stub = wire(fresh=over_scoped, stale=None, compute_result=corrected)
+
+    out = await get_staking_positions(ADDRESS, refresh=True, user_id=1)
+
+    assert len(stub.set_calls) == 1  # accepted despite fewer protocols
+    assert out["from_cache"] is False
+    assert _count_data_protocols(out) == 1
+
+
+async def test_same_scope_degraded_still_refused(wire):
+    """Scope-change bypass must NOT weaken the guard when scope is equal."""
+    full = dict(FULL_RESULT)
+    full["account_scan"] = {"payment_creds": 6, "addresses": 6}
+    degraded = dict(IAGON_ONLY_RESULT)
+    degraded["account_scan"] = {"payment_creds": 6, "addresses": 6}
+
+    stub = wire(fresh=full, stale=None, compute_result=degraded)
+
+    out = await get_staking_positions(ADDRESS, refresh=True, user_id=1)
+
+    assert stub.set_calls == []
+    assert _count_data_protocols(out) == 4
+
+
+async def test_legacy_row_without_scope_guard_holds(wire):
+    """Pre-P2 cached rows carry no account_scan — treated as single-address
+    scope, so a single-address degraded recompute is still refused."""
+    stub = wire(fresh=dict(FULL_RESULT), stale=None,
+                compute_result=IAGON_ONLY_RESULT)  # neither has account_scan
+
+    out = await get_staking_positions(ADDRESS, refresh=True, user_id=1)
+
+    assert stub.set_calls == []
+    assert _count_data_protocols(out) == 4
+
+
 async def test_v2_only_wallet_protected_by_guard(wire):
     """F3 in action: a wallet whose only data is a Strike V2 vault used to
     count as zero protocols and went unprotected."""

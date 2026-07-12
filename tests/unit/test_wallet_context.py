@@ -136,6 +136,7 @@ async def test_context_resolves_all_creds(service, monkeypatch, mem_cache):
     assert ctx["resolved"] is True
     assert ctx["stake_address"] == STAKE_ADDRESS
     assert ctx["addresses"] == ADDRS
+    assert ctx["koios_addresses"] == ADDRS  # chain-observed set, verbatim
     assert ctx["payment_creds"] == CREDS  # all six, derived locally
     assert client.requests[0][0] == "POST"
     assert client.requests[0][1].endswith("/account_addresses")
@@ -293,12 +294,18 @@ async def test_strike_v2_probe_fanout_capped(service, monkeypatch):
 def identity_env(monkeypatch):
     """Wire _resolve_scan_identity to a canned context and stored-wallet set."""
 
-    def _wire(context_addresses, context_creds, stored_addresses, resolved=True):
+    def _wire(context_addresses, context_creds, stored_addresses, resolved=True,
+              koios_addresses=None):
         async def fake_context(address):
             return {
                 "address": address,
                 "stake_address": STAKE_ADDRESS,
                 "addresses": context_addresses,
+                # Default: everything chain-observed; drift tests narrow this
+                "koios_addresses": (
+                    context_addresses if koios_addresses is None
+                    else koios_addresses
+                ),
                 "payment_creds": context_creds,
                 "resolved": resolved,
             }
@@ -364,6 +371,28 @@ async def test_partition_covers_account_exactly_once(identity_env):
         union.extend(creds)
 
     assert sorted(union) == sorted(CREDS)  # complete AND disjoint
+
+
+async def test_drifted_stored_row_never_representative(identity_env):
+    """H1 (P2-FIX): a stored row absent from the Koios set (never used
+    on-chain) must not be electable, even when it sorts lowest — the
+    Koios-known sibling is the representative and excludes its cred."""
+    addr_to_cred = dict(zip(ADDRS, CREDS))
+    drifted = sorted(ADDRS)[0]
+    koios = [a for a in ADDRS if a != drifted]
+    known_stored = sorted(koios)[0]
+    identity_env(ADDRS, CREDS, stored_addresses=[drifted, known_stored],
+                 koios_addresses=koios)
+
+    # Drifted row: single-cred fallback, never the sweep
+    assert await _resolve_scan_identity(drifted, user_id=1) == (None, None)
+
+    # Koios-known stored sibling is the representative
+    creds, addresses = await _resolve_scan_identity(known_stored, user_id=1)
+    assert creds is not None
+    assert addr_to_cred[drifted] not in creds  # stored row keeps its own cred
+    assert set(creds) == set(CREDS) - {addr_to_cred[drifted]}
+    assert drifted not in addresses
 
 
 async def test_unresolved_context_falls_back(identity_env):

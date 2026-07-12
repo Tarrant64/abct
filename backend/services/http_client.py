@@ -25,6 +25,11 @@ from typing import Dict, Optional, Set
 
 logger = logging.getLogger(__name__)
 
+# httpx logs one INFO line per request including the full URL — which leaks
+# tokened image URLs and API-key query strings into the logs and drowns the
+# useful lines. Warnings and errors still come through.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 # Connection pool limits shared by all clients
 _default_limits = httpx.Limits(
     max_connections=20,
