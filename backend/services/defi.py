@@ -865,6 +865,12 @@ class DeFiService:
                 page += 1
                 if page >= pages_count:
                     break
+                if page >= 50:  # pagesCount is untrusted input — hard cap
+                    logger.warning(
+                        f"[Liqwid] pagination capped at 50 pages "
+                        f"(pagesCount={pages_count}) for {address[:20]}..."
+                    )
+                    break
 
             positions = []
             total_staked_lq = 0.0
@@ -1072,22 +1078,50 @@ class DeFiService:
                             if vaults_resp.status_code == 200:
                                 for v in vaults_resp.json().get("vaults", []):
                                     vault_map[v["vault_id"]] = v
-                        except Exception:
-                            pass
+                            else:
+                                logger.warning(
+                                    f"[Strike V2] vaults lookup returned HTTP "
+                                    f"{vaults_resp.status_code} — vault positions "
+                                    f"will be flagged unpriced"
+                                )
+                        except Exception as e:
+                            logger.warning(
+                                f"[Strike V2] vaults lookup failed ({e}) — vault "
+                                f"positions will be flagged unpriced"
+                            )
 
                         for pos in raw_positions:
-                            vault_id = pos.get("vault_id") or ""
-                            vault_info = vault_map.get(vault_id, {})
-                            shares = float(pos.get("shares", 0))
-                            share_price = float(vault_info.get("share_price") or 1)
-                            value_ada = shares * share_price
-                            vault_positions.append({
-                                "vault_id": vault_id,
-                                "vault_name": vault_info.get("name", f"Vault {vault_id[:8]}"),
-                                "shares": shares,
-                                "share_price": share_price,
-                                "value_ada": value_ada,
-                            })
+                            # One malformed vault must not abort the rest
+                            try:
+                                vault_id = pos.get("vault_id") or ""
+                                vault_info = vault_map.get(vault_id, {})
+                                shares = float(pos.get("shares") or 0)
+                                raw_price = vault_info.get("share_price")
+                                priced = raw_price is not None
+                                share_price = float(raw_price) if priced else 1.0
+                                if not priced:
+                                    logger.warning(
+                                        f"[Strike V2] No active-vault share price "
+                                        f"for vault {vault_id[:8]} — valuing at "
+                                        f"share_price=1, flagged priced=false"
+                                    )
+                                value_ada = shares * share_price
+                                vault_positions.append({
+                                    "vault_id": vault_id,
+                                    "vault_name": vault_info.get("name")
+                                    or pos.get("name")
+                                    or f"Vault {vault_id[:8]}",
+                                    "shares": shares,
+                                    "share_price": share_price,
+                                    "value_ada": value_ada,
+                                    "priced": priced,
+                                    "share_price_source": "vaults_api" if priced else "fallback",
+                                })
+                            except Exception as e:
+                                logger.warning(
+                                    f"[Strike V2] Skipping malformed vault position "
+                                    f"{str(pos)[:120]!r}: {e}"
+                                )
             except Exception as e:
                 logger.warning(f"[Strike V2] Vault positions fetch failed for {address[:20]}: {e}")
 
@@ -1341,50 +1375,42 @@ class DeFiService:
 
             client = get_client("blockfrost", timeout=15.0)
 
-            # Fetch staking positions which include rewards data
-            response = await client.get(
-                f"{INDIGO_API_BASE}/api/v1/staking/positions"
-            )
+            # Fetch staking positions from the current un-versioned endpoint
+            # (the old /api/v1/staking/positions path is dead)
+            url = f"{INDIGO_API_BASE}/api/staking-positions"
+            response = await client.get(url)
 
             if response.status_code != 200:
-                logger.warning(f"Indigo staking API returned {response.status_code}")
+                logger.warning(
+                    f"[Indigo] staking-positions returned HTTP {response.status_code} "
+                    f"for {url} — body: {response.text[:200]!r}"
+                )
                 return None
 
             positions_data = response.json()
 
-            # Find user's positions and rewards
+            # Find user's positions
             total_staked = 0
-            total_locked = 0
             snapshot_ada = 0
 
             for pos in positions_data:
                 if pos.get('owner') == payment_cred:
-                    staked = pos.get('stakedIndy', 0) / 1_000_000
-
-                    # lockedAmount can be a dict or int
-                    locked_raw = pos.get('lockedAmount', 0)
-                    if isinstance(locked_raw, dict):
-                        # Sum values if it's a dict of token amounts
-                        locked = sum(v for v in locked_raw.values() if isinstance(v, (int, float))) / 1_000_000
-                    else:
-                        locked = locked_raw / 1_000_000
-
-                    ada_snapshot = pos.get('snapshotAda', 0) / 1_000_000
-
+                    staked = pos.get('staked_indy', 0) / 1_000_000
+                    ada_snapshot = pos.get('snapshot_ada', 0) / 1_000_000
                     total_staked += staked
-                    total_locked += locked
                     snapshot_ada += ada_snapshot
+                    logger.info(
+                        f"Indigo position: staked={staked:.2f}, snapshotAda={ada_snapshot:.2f}"
+                    )
 
-                    logger.info(f"Indigo position: staked={staked:.2f}, locked={locked:.2f}, snapshotAda={ada_snapshot:.2f}")
-
-            # snapshotAda is the ADA backing/collateral value, not pending rewards
-            # Actual pending rewards require epoch-based calculation not available via this API
-            # For now, we show the staked amount and link to the app for actual rewards
-            pending_indy = max(0, total_locked - total_staked) if total_locked > 0 else 0
-
+            # The current API's locked_amount is a JSON string of per-epoch lock
+            # snapshots ({epoch: [amount, timestamp]}) — the same lock repeats
+            # across epochs, so the old locked-minus-staked pending heuristic
+            # would over-count. Actual pending rewards require an epoch-based
+            # calculation this API doesn't expose; report 0 and link to the app.
             return {
                 'protocol': 'Indigo',
-                'pending_indy': pending_indy,
+                'pending_indy': 0,
                 'pending_ada': 0,  # ADA rewards need to be checked in app
                 'total_staked': total_staked,
                 'ada_backing': snapshot_ada,  # ADA collateral backing the position
@@ -1397,14 +1423,17 @@ class DeFiService:
             return None
 
     async def _get_indigo_apy(self, client: httpx.AsyncClient) -> Optional[float]:
-        """Fetch current Indigo staking APY."""
-        try:
-            response = await client.get(f"{INDIGO_API_BASE}/api/v1/protocol/stats")
-            if response.status_code == 200:
-                stats = response.json()
-                return stats.get('stakingApy', stats.get('apy'))
-        except Exception as e:
-            logger.warning(f"Could not fetch Indigo APY: {e}")
+        """
+        Fetch current Indigo staking APY.
+
+        DISABLED: the old /api/v1/protocol/stats endpoint is dead and the
+        current analytics API exposes no stats equivalent (probed 2026-07-12).
+        No callers exist today; returns None until an endpoint is confirmed.
+        """
+        logger.debug(
+            "[Indigo] APY lookup disabled — no stats endpoint on the current "
+            "analytics API"
+        )
         return None
 
     async def get_strike_pending_rewards(self, address: str, staking_data=None) -> Optional[Dict]:
@@ -1948,7 +1977,7 @@ class DeFiService:
                 strike_entry['v2_vault_positions'] = strike_v2['vault_positions']
                 strike_entry['total_vault_ada'] = strike_v2['total_vault_ada']
                 # Count V2 as one position if there's a balance, plus each vault
-                v2_positions = 1 + len(strike_v2['vault_positions'])
+                v2_positions = (1 if strike_v2['v2_balance'] > 0 else 0) + len(strike_v2['vault_positions'])
                 strike_entry['total_positions'] += v2_positions
                 staking['total_positions'] += v2_positions
 

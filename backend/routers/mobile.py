@@ -159,6 +159,8 @@ def _as_float(value, default: float = 0.0) -> float:
     try:
         return float(value)
     except (TypeError, ValueError):
+        if value is not None:
+            logger.debug(f"_as_float: could not coerce {value!r}; using {default}")
         return default
 
 
@@ -1527,6 +1529,11 @@ async def _map_staking_protocol_positions(
             "vault_id": vault.get('vault_id', ''),
             "shares": _as_float(vault.get('shares', 0)),
             "share_price": _as_float(vault.get('share_price', 0)),
+            # False when the vaults lookup couldn't supply a real share price
+            # and value_ada fell back to share_price=1 — value is a floor,
+            # not a market valuation
+            "priced": bool(vault.get('priced', True)),
+            "share_price_source": vault.get('share_price_source', 'vaults_api'),
             "staked_amount": round(value_ada, 6),
             "staked_symbol": "ADA",
             "staked_usd": round(staked_usd, 2),
