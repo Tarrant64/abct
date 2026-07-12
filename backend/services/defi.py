@@ -430,7 +430,6 @@ def staking_portfolio_rows(
     prices: Dict,
     *,
     include_rewards: bool = True,
-    detail_lower: bool = True,
 ) -> List[Dict]:
     """
     portfolio_positions rows for a cached staking payload, derived from
@@ -443,13 +442,16 @@ def staking_portfolio_rows(
     source_detail is kind-suffixed for non-staked kinds so upsert keys
     (user_id, symbol, source_type, source_detail) never collide across kinds.
 
-    include_rewards / detail_lower preserve each caller's pre-existing
-    semantics (some writers historically included pending rewards and
-    lower-cased the protocol name; others did not).
+    source_detail is ALWAYS the lower-cased protocol id — one canonical
+    form, deliberately NOT configurable: writers emitting different casings
+    made the same position land under two upsert keys ('Indigo' vs
+    'indigo'), doubling /portfolio/instant (2026-07-12 rollback, D1).
+    include_rewards preserves each caller's pre-existing rewards-inclusion
+    semantics.
     """
     rows = []
     for protocol_name, protocol_data in (protocols or {}).items():
-        detail_base = protocol_name.lower() if detail_lower else protocol_name
+        detail_base = protocol_name.lower()
         for entry in iter_staking_token_values(protocol_data, prices):
             if entry['amount'] <= 0:
                 continue

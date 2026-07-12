@@ -668,7 +668,7 @@ async def lifespan(app: FastAPI):
                     if sk_cache and sk_cache.get('protocols'):
                         positions.extend(staking_portfolio_rows(
                             uid, sk_cache['protocols'], all_prices,
-                            include_rewards=False, detail_lower=True,
+                            include_rewards=False,
                         ))
 
                 # --- DeFi positions ---

@@ -367,8 +367,8 @@ class OffchainCollector:
 
             # Staking positions from cached staking data — shared valuation
             # over every position kind (this writer historically includes
-            # pending rewards and keeps the protocol name's original case in
-            # source_detail; both preserved)
+            # pending rewards — preserved; source_detail casing is the
+            # canonical lowercase like every other writer, see D1)
             try:
                 from database import get_all_wallets as _gaw
                 from services.defi import staking_portfolio_rows
@@ -382,7 +382,7 @@ class OffchainCollector:
                         continue
                     pp_rows.extend(staking_portfolio_rows(
                         user_id, stk_cache['protocols'], prices,
-                        include_rewards=True, detail_lower=False,
+                        include_rewards=True,
                     ))
             except Exception as e:
                 logger.debug(f"Offchain collector: staking portfolio positions failed: {e}")

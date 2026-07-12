@@ -137,14 +137,71 @@ async def fetch_with_retry(
 
 _FALLBACK_STATUSES = {500, 502, 503, 504}
 
-# Global Blockfrost pacing: full-refresh bursts (Strike/Iagon page scans for
-# 26+ wallets at once) produced 253 observed 429s. One semaphore across ALL
-# Blockfrost callers keeps concurrency bounded, and 429s get a short paced
-# retry. Counters feed per-scan summary log lines.
-_blockfrost_semaphore = asyncio.Semaphore(8)
-_blockfrost_stats = {"requests": 0, "throttled_429": 0}
+# Global Blockfrost pacing (reworked after the 2026-07-12 P3 rollback, D3).
+# The first design — semaphore(8) with 429-backoff sleeps held UNDER the
+# semaphore — caused head-of-line blocking: a full rescan queued hundreds of
+# requests behind sleeping slots, pushing refresh=true past the 60 s proxy
+# window while ACTUAL 429s rose to 522 (retries tripled request pressure).
+#
+# Current design: a token bucket sized under Blockfrost's advertised limits
+# (their burst ~500 with 10 req/s refill; we run 180 burst / 9 req/s: a full
+# rescan of ~520 requests completes in ~(520-180)/9 = 38 s worst case, under
+# the ~45 s refresh budget with near-zero 429s, and even against a DEGRADED
+# server with a 100-request burst the overshoot stays under ~100 429s). On any 429 the bucket is
+# PENALIZED to empty, dropping every caller to refill pace (slower than the
+# server refill, so pressure drains). Retry sleeps never hold the
+# concurrency semaphore. Clock and sleep are injectable (_bf_monotonic /
+# _bf_sleep) for deterministic latency-budget tests.
+import time as _time
+
+_bf_monotonic = _time.monotonic
+_bf_sleep = asyncio.sleep
+
+_BLOCKFROST_BUCKET_CAPACITY = 180.0
+_BLOCKFROST_BUCKET_REFILL = 9.0  # tokens/second
 _BLOCKFROST_429_RETRIES = 2
-_BLOCKFROST_429_BACKOFF = 0.6  # seconds, doubled per retry
+_BLOCKFROST_429_BACKOFF = 1.0  # seconds, doubled per retry
+
+# Concurrency cap protects local sockets only (httpx pool is 20); pacing is
+# the bucket's job
+_blockfrost_semaphore = asyncio.Semaphore(12)
+_blockfrost_stats = {"requests": 0, "throttled_429": 0}
+
+
+class _TokenBucket:
+    def __init__(self, capacity: float, refill_per_s: float):
+        self.capacity = capacity
+        self.refill = refill_per_s
+        self.tokens = capacity
+        self.ts = None  # lazily initialized so injected clocks work
+        self._lock = asyncio.Lock()
+
+    def _refill_now(self):
+        now = _bf_monotonic()
+        if self.ts is None:
+            self.ts = now
+        self.tokens = min(self.capacity, self.tokens + (now - self.ts) * self.refill)
+        self.ts = now
+
+    async def acquire(self):
+        # GCRA-style: the balance may go negative, forming a virtual queue —
+        # each caller claims a distinct future slot and sleeps exactly once
+        # (no retry loop, no thundering herd when hundreds of scans queue).
+        async with self._lock:
+            self._refill_now()
+            self.tokens -= 1
+            deficit = -self.tokens
+        if deficit > 0:
+            await _bf_sleep(deficit / self.refill)
+
+    def penalize(self):
+        """Empty the bucket: after a 429 every caller drops to refill pace."""
+        self.tokens = min(self.tokens, 0.0)
+
+
+_blockfrost_bucket = _TokenBucket(
+    _BLOCKFROST_BUCKET_CAPACITY, _BLOCKFROST_BUCKET_REFILL
+)
 
 
 def blockfrost_stats() -> Dict[str, int]:
@@ -163,27 +220,30 @@ async def blockfrost_fetch(
     Make a Blockfrost API request with automatic fallback from internal RYO
     to external Blockfrost.io.
 
-    Runs under the global Blockfrost semaphore; 429 responses are retried
-    with a short backoff (still under the semaphore) so refresh bursts pace
-    themselves instead of hammering the rate limit.
+    Every attempt takes a token from the global pacing bucket; the
+    concurrency semaphore is held only for the request itself (never across
+    retry sleeps), so a 429 storm slows everyone smoothly instead of
+    stalling the queue.
     """
-    async with _blockfrost_semaphore:
-        backoff = _BLOCKFROST_429_BACKOFF
-        for attempt in range(_BLOCKFROST_429_RETRIES + 1):
+    backoff = _BLOCKFROST_429_BACKOFF
+    for attempt in range(_BLOCKFROST_429_RETRIES + 1):
+        await _blockfrost_bucket.acquire()
+        async with _blockfrost_semaphore:
             _blockfrost_stats["requests"] += 1
             response = await _blockfrost_fetch_once(
                 path, method=method, timeout=timeout, **kwargs
             )
-            if response.status_code != 429:
-                return response
-            _blockfrost_stats["throttled_429"] += 1
-            if attempt < _BLOCKFROST_429_RETRIES:
-                logger.debug(
-                    f"Blockfrost 429 for {path} — retrying in {backoff:.1f}s"
-                )
-                await asyncio.sleep(backoff)
-                backoff *= 2
-        return response
+        if response.status_code != 429:
+            return response
+        _blockfrost_stats["throttled_429"] += 1
+        _blockfrost_bucket.penalize()
+        if attempt < _BLOCKFROST_429_RETRIES:
+            logger.debug(
+                f"Blockfrost 429 for {path} — retrying in {backoff:.1f}s"
+            )
+            await _bf_sleep(backoff)
+            backoff *= 2
+    return response
 
 
 async def _blockfrost_fetch_once(

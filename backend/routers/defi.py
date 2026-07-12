@@ -347,7 +347,7 @@ async def _compute_staking_positions(address: str, user_id: int):
             _pp_prices = await _pp_pricing.get_all_tracked_prices()
             pp_rows = staking_portfolio_rows(
                 user_id, result.get('protocols'), _pp_prices,
-                include_rewards=False, detail_lower=True,
+                include_rewards=False,
             )
             if pp_rows:
                 await upsert_portfolio_positions_batch(pp_rows)

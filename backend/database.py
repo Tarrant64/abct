@@ -3699,6 +3699,20 @@ async def upsert_portfolio_positions_batch(positions: list):
             qty = pos.get('quantity', 0)
             price = pos.get('last_price_usd', 0)
             value = qty * price if price else 0
+            detail = pos.get('source_detail', '')
+            if pos['source_type'] == 'staking':
+                # Belt+braces against the D1 double-count: the upsert key is
+                # case-sensitive, so a legacy row with a different
+                # source_detail casing ('Indigo' vs 'indigo') would survive
+                # this upsert and double the position. Remove case-variant
+                # duplicates in the same transaction.
+                await db.execute(
+                    """DELETE FROM portfolio_positions
+                       WHERE user_id = ? AND source_type = 'staking'
+                         AND symbol = ?
+                         AND lower(source_detail) = lower(?)
+                         AND source_detail <> ?""",
+                    (pos['user_id'], pos['symbol'].upper(), detail, detail))
             await db.execute("""
                 INSERT INTO portfolio_positions
                     (user_id, symbol, quantity, source_type, source_detail, chain,
@@ -3710,7 +3724,7 @@ async def upsert_portfolio_positions_batch(positions: list):
                     last_value_usd = excluded.last_value_usd,
                     updated_at = CURRENT_TIMESTAMP
             """, (pos['user_id'], pos['symbol'].upper(), qty,
-                  pos['source_type'], pos.get('source_detail', ''),
+                  pos['source_type'], detail,
                   pos.get('chain', ''), price, value))
         await db.commit()
 

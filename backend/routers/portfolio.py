@@ -1115,7 +1115,7 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
                     continue
                 pp_rows.extend(staking_portfolio_rows(
                     user_id, stk_cache['protocols'], all_prices,
-                    include_rewards=True, detail_lower=True,
+                    include_rewards=True,
                 ))
         except Exception as e:
             logger.debug(f"Portfolio positions staking write failed: {e}")
@@ -2089,8 +2089,14 @@ async def get_portfolio_history(
     }
 
 
+# Bump when the staking/DeFi valuation semantics change: cached totals rows
+# computed by an OLDER valuation are ignored, so a deploy never serves a
+# stale bucket for its TTL. v2 = P3a shared valuation (all position kinds).
+TOTALS_VALUATION_VERSION = 2
+
+
 @router.get("/totals")
-async def get_portfolio_totals(user_id: int = Depends(verify_session)):
+async def get_portfolio_totals(user_id: int = Depends(verify_session), refresh: bool = False):
     """
     Get portfolio value breakdown.
 
@@ -2103,9 +2109,15 @@ async def get_portfolio_totals(user_id: int = Depends(verify_session)):
     from services.offchain_helpers import get_staking_value, get_defi_value
 
     cache_key = f"portfolio_totals_{user_id}"
-    cached = await get_cache(cache_key, user_id=user_id)
-    if cached:
-        return cached
+    # A cached row computed by an OLDER valuation must be ignored: on the
+    # 2026-07-12 P3 deploy a pre-deploy row (staked-only staking bucket)
+    # served the mobile summary for its whole TTL — the staking figure came
+    # in short by exactly the Strike portion (rollback D2). refresh=true
+    # must also bypass this row: the phone's hard pull propagates it here.
+    if not refresh:
+        cached = await get_cache(cache_key, user_id=user_id)
+        if cached and cached.get('valuation_version') == TOTALS_VALUATION_VERSION:
+            return cached
 
     rows = await get_unified_daily_totals(user_id)
     latest = rows[-1] if rows else {}
@@ -2200,7 +2212,8 @@ async def get_portfolio_totals(user_id: int = Depends(verify_session)):
         "nft_usd": float(latest.get('nft_value', 0) or 0),
         "tracked_tokens_usd": tracked_tokens_usd,
         "custom_tokens_usd": custom_tokens_usd,
-        "snapshot_time": latest.get('date')
+        "snapshot_time": latest.get('date'),
+        "valuation_version": TOTALS_VALUATION_VERSION,
     }
     await set_cache(cache_key, result, ttl_seconds=CACHE_TTL_HOT, user_id=user_id)
     return result

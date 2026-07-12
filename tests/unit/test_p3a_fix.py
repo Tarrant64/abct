@@ -242,7 +242,7 @@ ROW_PRICES = {"ADA": {"usd": 0.60}, "INDY": {"usd": 1.10},
 
 def test_rows_value_equals_shared_valuation():
     rows = staking_portfolio_rows(1, FULL_PROTOCOLS, ROW_PRICES,
-                                  include_rewards=True, detail_lower=True)
+                                  include_rewards=True)
 
     rows_total = sum(r["quantity"] * r["last_price_usd"] for r in rows)
     entries_total = sum(
@@ -272,9 +272,12 @@ def test_rows_semantics_flags():
                                         include_rewards=False)
     assert all(not r["source_detail"].endswith("_rewards") for r in no_rewards)
 
-    original_case = staking_portfolio_rows(1, FULL_PROTOCOLS, ROW_PRICES,
-                                           detail_lower=False)
-    assert any(r["source_detail"] == "Indigo" for r in original_case)
+    # D1 (P3-FIX): source_detail casing is canonical lowercase, with NO
+    # override parameter — divergent casings doubled /portfolio/instant
+    rows = staking_portfolio_rows(1, FULL_PROTOCOLS, ROW_PRICES)
+    assert all(r["source_detail"] == r["source_detail"].lower() for r in rows)
+    import inspect
+    assert "detail_lower" not in inspect.signature(staking_portfolio_rows).parameters
 
 
 def test_rows_unpriced_entry_prices_at_zero():

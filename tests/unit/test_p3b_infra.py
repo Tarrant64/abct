@@ -164,20 +164,43 @@ class _Resp:
         self.status_code = status_code
 
 
-async def test_blockfrost_429_paced_retry(monkeypatch):
+class _FakeTime:
+    """Virtual clock: monkeypatched in as _bf_monotonic/_bf_sleep so pacing
+    math runs deterministically with no wall-clock waits."""
+
+    def __init__(self):
+        self.now = 0.0
+        self.sleeps = []
+
+    def monotonic(self):
+        return self.now
+
+    async def sleep(self, d):
+        self.sleeps.append(d)
+        self.now += max(d, 0)
+
+
+@pytest.fixture
+def bf_env(monkeypatch):
+    """Fresh bucket + virtual clock for pacing tests."""
+    ft = _FakeTime()
+    monkeypatch.setattr(http_client, "_bf_monotonic", ft.monotonic)
+    monkeypatch.setattr(http_client, "_bf_sleep", ft.sleep)
+    monkeypatch.setattr(http_client, "_blockfrost_bucket", http_client._TokenBucket(
+        http_client._BLOCKFROST_BUCKET_CAPACITY,
+        http_client._BLOCKFROST_BUCKET_REFILL,
+    ))
+    return ft
+
+
+async def test_blockfrost_429_paced_retry(monkeypatch, bf_env):
     attempts = []
 
     async def fake_once(path, **kwargs):
         attempts.append(path)
         return _Resp(429 if len(attempts) < 3 else 200)
 
-    sleeps = []
-
-    async def fake_sleep(s):
-        sleeps.append(s)
-
     monkeypatch.setattr(http_client, "_blockfrost_fetch_once", fake_once)
-    monkeypatch.setattr(http_client.asyncio, "sleep", fake_sleep)
 
     before = http_client.blockfrost_stats()
     resp = await http_client.blockfrost_fetch("/test/path")
@@ -185,26 +208,24 @@ async def test_blockfrost_429_paced_retry(monkeypatch):
 
     assert resp.status_code == 200
     assert len(attempts) == 3  # two 429s, then success
-    assert sleeps == [0.6, 1.2]  # backoff doubles
+    # Backoff sleeps happened (doubling), plus bucket refill waits after the
+    # 429 penalty emptied the bucket
+    assert 1.0 in bf_env.sleeps and 2.0 in bf_env.sleeps
     assert after["requests"] - before["requests"] == 3
     assert after["throttled_429"] - before["throttled_429"] == 2
 
 
-async def test_blockfrost_429_gives_up_after_retries(monkeypatch):
+async def test_blockfrost_429_gives_up_after_retries(monkeypatch, bf_env):
     async def always_429(path, **kwargs):
         return _Resp(429)
 
-    async def fake_sleep(s):
-        pass
-
     monkeypatch.setattr(http_client, "_blockfrost_fetch_once", always_429)
-    monkeypatch.setattr(http_client.asyncio, "sleep", fake_sleep)
 
     resp = await http_client.blockfrost_fetch("/test/path")
     assert resp.status_code == 429  # surfaced, caller's error handling applies
 
 
-async def test_blockfrost_success_costs_one_request(monkeypatch):
+async def test_blockfrost_success_costs_one_request(monkeypatch, bf_env):
     async def ok(path, **kwargs):
         return _Resp(200)
 
@@ -217,6 +238,7 @@ async def test_blockfrost_success_costs_one_request(monkeypatch):
     assert resp.status_code == 200
     assert after["requests"] - before["requests"] == 1
     assert after["throttled_429"] == before["throttled_429"]
+    assert bf_env.sleeps == []  # full bucket: no pacing delay
 
 
 # ---------------------------------------------------------------------------
@@ -328,26 +350,6 @@ async def test_indigo_adapter_confirmed_empty_maps_to_no_positions(monkeypatch):
     assert await adapter.get_cdp_positions(ADDRESS) is None
 
 
-def test_no_dead_indigo_api_v1_paths_remain():
-    """The dead /api/v1 Indigo endpoints must not be referenced by any
-    runtime code (the disabled legacy stability-pool parser in defi.py is
-    the sole documented exception)."""
-    import subprocess
-    out = subprocess.run(
-        ["grep", "-rn", "analytics.indigoprotocol.io/api/v1",
-         os.path.join(BACKEND_DIR, "services")],
-        capture_output=True, text=True,
-    ).stdout
-    assert out == ""
-
-    out = subprocess.run(
-        ["grep", "-rn", "INDIGO_API_BASE}/api/v1", "--include=*.py",
-         os.path.join(BACKEND_DIR, "services")],
-        capture_output=True, text=True,
-    ).stdout
-    offenders = [
-        line for line in out.splitlines()
-        if "_get_indigo_stability_pool_disabled" not in line
-        and "defi.py" not in line  # the disabled parser lives there
-    ]
-    assert offenders == []
+# The dead-Indigo-path grep test now lives in test_p3_fix.py
+# (test_no_dead_indigo_path_literals_in_runtime_code) — the original here
+# grepped a base-URL concatenation that could never match (vacuous).

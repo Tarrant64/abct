@@ -629,7 +629,9 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
         exchanges.get_all_exchanges_summary(user_id=user_id),
         nfts.get_all_chains_nft_summary(user_id=user_id),
         defi.get_defi_summary(user_id=user_id),
-        portfolio.get_portfolio_totals(user_id=user_id),
+        # refresh must propagate: the phone's hard pull has to recompute the
+        # staking/DeFi buckets too, not serve the 5-minute totals row (D2)
+        portfolio.get_portfolio_totals(user_id=user_id, refresh=refresh),
         return_exceptions=True
     )
 
