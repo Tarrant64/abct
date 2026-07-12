@@ -104,25 +104,30 @@ async def _resolve_scan_identity(address: str, user_id: int):
         return None, None
 
 
-def _data_protocol_names(result: dict) -> set:
-    """Names of protocols carrying ANY position data in a staking result.
+_GUARD_KINDS = (
+    'staked', 'v2_balance', 'v2_vault_positions', 'cdps', 'stability_pool'
+)
 
-    Basis of the degraded-result guard. Considers every position kind —
-    token staking arrays, Strike V2 trading balance / vault deposits, Indigo
-    CDPs and stability-pool deposits — so a wallet whose only data is e.g.
-    Strike V2 still registers as having data.
+
+def _data_protocol_kinds(result: dict) -> set:
+    """(protocol, kind) pairs carrying position data in a staking result.
+
+    Basis of the degraded-result guard, at PER-KIND granularity: a
+    sub-source loss inside a surviving protocol (e.g. Indigo CDPs failed
+    while Indigo staking succeeded) still registers as a loss instead of
+    silently dropping.
     """
-    names = set()
+    pairs = set()
     for name, p in (result.get('protocols') or {}).items():
-        if (
-            p.get('staked')
-            or p.get('v2_balance')
-            or p.get('v2_vault_positions')
-            or p.get('cdps')
-            or p.get('stability_pool')
-        ):
-            names.add(name)
-    return names
+        for kind in _GUARD_KINDS:
+            if p.get(kind):
+                pairs.add((name, kind))
+    return pairs
+
+
+def _data_protocol_names(result: dict) -> set:
+    """Names of protocols carrying ANY position data in a staking result."""
+    return {name for name, _ in _data_protocol_kinds(result)}
 
 
 def _count_data_protocols(result: dict) -> int:
@@ -303,22 +308,25 @@ async def _compute_staking_positions(address: str, user_id: int):
                 f"— accepting result without downgrade guard"
             )
         if baseline and not scope_changed:
-            # Per-protocol comparison: refuse only if a protocol that had
-            # data in the baseline is MISSING from the result WITHOUT the
-            # protocol having positively confirmed it is empty. A confirmed
-            # empty is a legitimate shrink (genuine protocol exit) and must
-            # display; a failed/timed-out fetch must not erase last-good data.
-            baseline_names = _data_protocol_names(baseline)
-            result_names = _data_protocol_names(result)
+            # Per-(protocol, kind) comparison: refuse if any position kind
+            # that had data in the baseline is MISSING from the result
+            # WITHOUT the protocol having positively confirmed it is empty.
+            # This catches sub-source losses inside surviving protocols
+            # (CDPs failed while staking succeeded). A confirmed empty is a
+            # legitimate shrink (genuine protocol exit) and must display; a
+            # failed/timed-out fetch must not erase last-good data.
+            baseline_pairs = _data_protocol_kinds(baseline)
+            result_pairs = _data_protocol_kinds(result)
             confirmed = set(result.get('confirmed_empty') or [])
-            lost = baseline_names - result_names - confirmed
+            lost = {
+                pair for pair in baseline_pairs - result_pairs
+                if pair[0] not in confirmed
+            }
             if lost:
                 logger.warning(
                     f"[Staking] Skipping cache update for {address[:20]}... — "
-                    f"result lost protocols {sorted(lost)} without confirmed "
-                    f"exit (had {sorted(baseline_names)}, got "
-                    f"{sorted(result_names)}, confirmed empty "
-                    f"{sorted(confirmed)})"
+                    f"result lost {sorted(lost)} without confirmed exit "
+                    f"(confirmed empty {sorted(confirmed)})"
                     f"{' (stale baseline)' if baseline_is_stale else ''}"
                 )
                 # Return the existing better cache instead
@@ -330,23 +338,17 @@ async def _compute_staking_positions(address: str, user_id: int):
         await set_cache(cache_key, result, STAKING_CACHE_TTL, user_id=user_id)
 
         # Fire-and-forget: write staking positions to portfolio_positions
+        # (shared valuation over every position kind; this writer never
+        # included pending rewards — preserved)
         try:
             from database import upsert_portfolio_positions_batch
+            from services.defi import staking_portfolio_rows
             from services.pricing import pricing_service as _pp_pricing
             _pp_prices = await _pp_pricing.get_all_tracked_prices()
-            pp_rows = []
-            for pname, pdata in (result.get('protocols') or {}).items():
-                for stake in (pdata.get('staked') or []):
-                    token = (stake.get('token') or 'ADA').upper()
-                    amount = float(stake.get('amount', 0))
-                    if amount > 0:
-                        p = _pp_prices.get(token, {})
-                        price = p.get('usd', 0) if isinstance(p, dict) else 0
-                        pp_rows.append({
-                            'user_id': user_id, 'symbol': token, 'quantity': amount,
-                            'source_type': 'staking', 'source_detail': pname.lower(),
-                            'chain': 'cardano', 'last_price_usd': price,
-                        })
+            pp_rows = staking_portfolio_rows(
+                user_id, result.get('protocols'), _pp_prices,
+                include_rewards=False, detail_lower=True,
+            )
             if pp_rows:
                 await upsert_portfolio_positions_batch(pp_rows)
         except Exception as e:

@@ -365,9 +365,13 @@ class OffchainCollector:
                         'chain': chain, 'last_price_usd': price,
                     })
 
-            # Staking positions from cached staking data
+            # Staking positions from cached staking data — shared valuation
+            # over every position kind (this writer historically includes
+            # pending rewards and keeps the protocol name's original case in
+            # source_detail; both preserved)
             try:
                 from database import get_all_wallets as _gaw
+                from services.defi import staking_portfolio_rows
                 wallets = await _gaw(user_id=user_id)
                 cardano_addrs = [w['address'] for w in wallets if w['blockchain'] == 'cardano']
                 for addr in cardano_addrs:
@@ -376,30 +380,10 @@ class OffchainCollector:
                         stk_cache = await _gc(f"staking_positions_{addr}")
                     if not stk_cache or not isinstance(stk_cache, dict) or not stk_cache.get('protocols'):
                         continue
-                    for protocol_name, protocol_data in stk_cache['protocols'].items():
-                        for stake in (protocol_data.get('staked') or []):
-                            token = (stake.get('token') or 'ADA').upper()
-                            amount = float(stake.get('amount', 0))
-                            if amount > 0:
-                                price_data = prices.get(token, {})
-                                price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
-                                pp_rows.append({
-                                    'user_id': user_id, 'symbol': token, 'quantity': amount,
-                                    'source_type': 'staking', 'source_detail': protocol_name,
-                                    'chain': 'cardano', 'last_price_usd': price,
-                                })
-                        # Include pending rewards as a separate position
-                        reward_token = protocol_data.get('reward_token')
-                        pending_rewards = float(protocol_data.get('pending_rewards', 0))
-                        if reward_token and pending_rewards > 0:
-                            reward_token_upper = reward_token.upper()
-                            price_data = prices.get(reward_token_upper, {})
-                            price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
-                            pp_rows.append({
-                                'user_id': user_id, 'symbol': reward_token_upper, 'quantity': pending_rewards,
-                                'source_type': 'staking', 'source_detail': f"{protocol_name}_rewards",
-                                'chain': 'cardano', 'last_price_usd': price,
-                            })
+                    pp_rows.extend(staking_portfolio_rows(
+                        user_id, stk_cache['protocols'], prices,
+                        include_rewards=True, detail_lower=False,
+                    ))
             except Exception as e:
                 logger.debug(f"Offchain collector: staking portfolio positions failed: {e}")
 

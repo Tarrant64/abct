@@ -289,6 +289,35 @@ async def test_legacy_row_without_scope_guard_holds(wire):
     assert _count_data_protocols(out) == 4
 
 
+async def test_sub_source_loss_within_surviving_protocol_refused(wire):
+    """A3 (P3a-FIX): Indigo CDPs failed while Indigo staking succeeded — the
+    protocol survives but a position KIND vanished without confirmation.
+    Per-kind granularity must refuse the write."""
+    baseline = {
+        "address": ADDRESS,
+        "protocols": {"Indigo": {
+            "staked": [{"token": "INDY", "amount": 8670.38}],
+            "cdps": [{"asset": "iUSD", "collateral_ada": 2500.0}],
+        }},
+        "total_positions": 2,
+    }
+    degraded = {
+        "address": ADDRESS,
+        "protocols": {"Indigo": {
+            "staked": [{"token": "INDY", "amount": 8670.38}],
+            "cdps": [],
+        }},
+        "total_positions": 1,
+    }
+
+    stub = wire(fresh=baseline, stale=None, compute_result=degraded)
+
+    out = await get_staking_positions(ADDRESS, refresh=True, user_id=1)
+
+    assert stub.set_calls == []
+    assert out["protocols"]["Indigo"]["cdps"]  # baseline preserved
+
+
 async def test_confirmed_exit_is_accepted(wire):
     """P3a: every lost protocol positively confirmed empty — a genuine exit
     must finally display instead of being pinned to stale data forever."""

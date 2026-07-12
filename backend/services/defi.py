@@ -424,6 +424,57 @@ def iter_staking_token_values(protocol_data: Dict, prices: Dict) -> List[Dict]:
     return entries
 
 
+def staking_portfolio_rows(
+    user_id: int,
+    protocols: Dict,
+    prices: Dict,
+    *,
+    include_rewards: bool = True,
+    detail_lower: bool = True,
+) -> List[Dict]:
+    """
+    portfolio_positions rows for a cached staking payload, derived from
+    iter_staking_token_values so /portfolio/instant agrees with every other
+    money surface.
+
+    quantity is the REAL position amount; last_price_usd is the effective
+    unit value (entry.usd / amount), so quantity x price == the shared
+    valuation exactly — CDPs land at NET equity, unpriced entries at 0.
+    source_detail is kind-suffixed for non-staked kinds so upsert keys
+    (user_id, symbol, source_type, source_detail) never collide across kinds.
+
+    include_rewards / detail_lower preserve each caller's pre-existing
+    semantics (some writers historically included pending rewards and
+    lower-cased the protocol name; others did not).
+    """
+    rows = []
+    for protocol_name, protocol_data in (protocols or {}).items():
+        detail_base = protocol_name.lower() if detail_lower else protocol_name
+        for entry in iter_staking_token_values(protocol_data, prices):
+            if entry['amount'] <= 0:
+                continue
+            if entry['kind'] == 'reward':
+                if not include_rewards:
+                    continue
+                detail = f"{detail_base}_rewards"
+            elif entry['kind'] == 'staked':
+                detail = detail_base
+            else:
+                detail = f"{detail_base}_{entry['kind']}"
+            rows.append({
+                'user_id': user_id,
+                'symbol': entry['token'],
+                'quantity': entry['amount'],
+                'source_type': 'staking',
+                'source_detail': detail,
+                'chain': 'cardano',
+                'last_price_usd': (
+                    entry['usd'] / entry['amount'] if entry['amount'] > 0 else 0
+                ),
+            })
+    return rows
+
+
 # Token type categories for display
 TOKEN_CATEGORIES = {
     "governance": "Governance Tokens",
@@ -713,6 +764,18 @@ class DeFiService:
 
             positions = response.json()
 
+            # Shape validation: Indigo renamed every field once already. A
+            # 200 whose entries carry no 'owner' key would make EVERY wallet
+            # look confirmed-empty — treat schema drift as indeterminate.
+            if positions and not any(
+                isinstance(p, dict) and 'owner' in p for p in positions
+            ):
+                logger.warning(
+                    "[Indigo] staking-positions response shape drift — no "
+                    "'owner' field in any entry; treating scan as indeterminate"
+                )
+                return None
+
             # Find positions matching this payment credential
             user_positions = []
             total_staked = 0
@@ -781,6 +844,18 @@ class DeFiService:
                 return None
 
             loans = response.json()
+
+            # Same shape validation as staking: schema drift must be
+            # indeterminate, never a confirmed empty
+            if loans and not any(
+                isinstance(l, dict) and 'owner' in l for l in loans
+            ):
+                logger.warning(
+                    "[Indigo] cdps response shape drift — no 'owner' field "
+                    "in any entry; treating scan as indeterminate"
+                )
+                return None
+
             user_cdps = []
             total_collateral_ada = 0
 
@@ -1269,6 +1344,12 @@ class DeFiService:
                 return_exceptions=True
             )
 
+            # A page terminator (empty page or short page, i.e. < 100 UTxOs)
+            # proves the scan reached the END of the contract inside the
+            # fixed 15-page window. Without one, the contract may extend
+            # past the window and an empty match can never be confirmed.
+            saw_terminator = len(first_page) < 100
+
             all_utxos = list(first_page)
             failed_pages = []
             for i, result in enumerate(remaining):
@@ -1279,6 +1360,8 @@ class DeFiService:
                 elif result is None:
                     failed_pages.append(pg)
                 else:
+                    if len(result) < 100:
+                        saw_terminator = True
                     all_utxos.extend(result)
 
             unrecovered_pages = []
@@ -1290,6 +1373,8 @@ class DeFiService:
                         if result is None:
                             unrecovered_pages.append(pg)
                         else:
+                            if len(result) < 100:
+                                saw_terminator = True
                             all_utxos.extend(result)
                     except Exception as e:
                         logger.warning(f"[Strike] Retry page {pg} failed: {e}")
@@ -1329,10 +1414,13 @@ class DeFiService:
                     })
 
             if not positions:
-                if unrecovered_pages:
-                    # Pages are missing — cannot rule out positions on them
+                if unrecovered_pages or not saw_terminator:
+                    # Pages missing, or the scan filled the whole window
+                    # without reaching the contract's end — positions could
+                    # exist beyond what was seen. Indeterminate, never a
+                    # confirmed empty.
                     return None
-                # Full scan, no user NFT anywhere — confirmed empty
+                # Complete scan to the contract's end, no user NFT anywhere
                 return {
                     'protocol': 'Strike',
                     'address': address,
@@ -1373,9 +1461,13 @@ class DeFiService:
             # Step 1: Resolve blockchain address(es) → account_id + wallet_balance.
             # Own address first; dedupe while preserving order; cap the probe
             # fan-out so a large HD wallet can't blow the timeout budget.
-            probe_addresses = list(dict.fromkeys(
+            unique_addresses = list(dict.fromkeys(
                 [address] + (account_addresses or [])
-            ))[:12]
+            ))
+            probe_addresses = unique_addresses[:12]
+            # A truncated probe list means unprobed addresses could hold
+            # accounts — findings still count, but "empty" can't be confirmed
+            probes_truncated = len(unique_addresses) > len(probe_addresses)
 
             probe_sem = asyncio.Semaphore(4)
 
@@ -1423,7 +1515,7 @@ class DeFiService:
             # An empty trading account can still hold vault deposits —
             # only a missing account means no V2 presence at all.
             if not accounts:
-                if probe_failures:
+                if probe_failures or probes_truncated:
                     return None
                 # Every address positively answered "no account"
                 return {
@@ -1522,10 +1614,11 @@ class DeFiService:
             total_vault_ada = sum(p["value_ada"] for p in vault_positions)
 
             # No balance and no vaults: nothing to report. If every lookup
-            # answered, the account is POSITIVELY empty; a failed vault fetch
-            # means positions may exist unseen, so stay indeterminate.
+            # answered, the account is POSITIVELY empty; a failed vault
+            # fetch or a truncated probe list means positions may exist
+            # unseen, so stay indeterminate.
             if wallet_balance <= 0 and not vault_positions:
-                if probe_failures or vault_fetch_failed:
+                if probe_failures or vault_fetch_failed or probes_truncated:
                     return None
                 return {
                     "account_id": account_id,

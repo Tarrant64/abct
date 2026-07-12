@@ -285,9 +285,10 @@ async def test_strike_v2_probe_fanout_capped(service, monkeypatch):
 
     result = await service.get_strike_v2_positions(many[0], account_addresses=many)
 
-    # All probes answered 404 → confirmed empty (not a failure)
-    assert result is not None
-    assert result["confirmed_empty"] is True
+    # H1(b) P3a-FIX: the address list exceeded the 12-probe cap — even though
+    # every probed address answered 404, unprobed addresses could hold
+    # accounts, so the result is indeterminate, never a confirmed empty
+    assert result is None
     assert len(client.requests) == 12  # capped fan-out
 
 

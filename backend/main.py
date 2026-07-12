@@ -650,8 +650,11 @@ async def lifespan(app: FastAPI):
                                     'chain': '', 'last_price_usd': float(asset.get('price', 0)),
                                 })
 
-                # --- Staking positions ---
+                # --- Staking positions --- (shared valuation over every
+                # position kind; this writer never included pending
+                # rewards — preserved)
                 from database import get_all_wallets
+                from services.defi import staking_portfolio_rows
                 wallets = await get_all_wallets(user_id=uid)
                 for w in wallets:
                     if w['blockchain'] != 'cardano':
@@ -663,16 +666,10 @@ async def lifespan(app: FastAPI):
                         stale, _ = await get_stale_cache(f"staking_positions_{w['address']}", user_id=uid)
                         sk_cache = stale
                     if sk_cache and sk_cache.get('protocols'):
-                        for pname, pdata in sk_cache['protocols'].items():
-                            for stake in (pdata.get('staked') or []):
-                                token = (stake.get('token') or 'ADA').upper()
-                                amount = float(stake.get('amount', 0))
-                                if amount > 0:
-                                    positions.append({
-                                        'user_id': uid, 'symbol': token, 'quantity': amount,
-                                        'source_type': 'staking', 'source_detail': pname.lower(),
-                                        'chain': 'cardano', 'last_price_usd': _price_for(token),
-                                    })
+                        positions.extend(staking_portfolio_rows(
+                            uid, sk_cache['protocols'], all_prices,
+                            include_rewards=False, detail_lower=True,
+                        ))
 
                 # --- DeFi positions ---
                 defi_cache = await get_cache(f"defi_summary_{uid}", user_id=uid)

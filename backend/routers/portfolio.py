@@ -1100,8 +1100,11 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
                     'chain': chain, 'last_price_usd': price,
                 })
 
-        # Staking positions from cached staking data
+        # Staking positions from cached staking data — shared valuation over
+        # every position kind (this writer historically includes pending
+        # rewards; preserved)
         try:
+            from services.defi import staking_portfolio_rows
             _pp_wallets = await _pp_get_wallets(user_id=user_id)
             _pp_cardano_addrs = [w['address'] for w in _pp_wallets if w['blockchain'] == 'cardano']
             for addr in _pp_cardano_addrs:
@@ -1110,29 +1113,10 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
                     stk_cache = await _pp_get_cache(f"staking_positions_{addr}")
                 if not stk_cache or not isinstance(stk_cache, dict) or not stk_cache.get('protocols'):
                     continue
-                for protocol_name, protocol_data in stk_cache['protocols'].items():
-                    for stake in (protocol_data.get('staked') or []):
-                        token = (stake.get('token') or 'ADA').upper()
-                        amount = float(stake.get('amount', 0))
-                        if amount > 0:
-                            price_data = all_prices.get(token, {})
-                            price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
-                            pp_rows.append({
-                                'user_id': user_id, 'symbol': token, 'quantity': amount,
-                                'source_type': 'staking', 'source_detail': protocol_name.lower(),
-                                'chain': 'cardano', 'last_price_usd': price,
-                            })
-                    reward_token = protocol_data.get('reward_token')
-                    pending_rewards = float(protocol_data.get('pending_rewards', 0))
-                    if reward_token and pending_rewards > 0:
-                        reward_token_upper = reward_token.upper()
-                        price_data = all_prices.get(reward_token_upper, {})
-                        price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
-                        pp_rows.append({
-                            'user_id': user_id, 'symbol': reward_token_upper, 'quantity': pending_rewards,
-                            'source_type': 'staking', 'source_detail': f"{protocol_name.lower()}_rewards",
-                            'chain': 'cardano', 'last_price_usd': price,
-                        })
+                pp_rows.extend(staking_portfolio_rows(
+                    user_id, stk_cache['protocols'], all_prices,
+                    include_rewards=True, detail_lower=True,
+                ))
         except Exception as e:
             logger.debug(f"Portfolio positions staking write failed: {e}")
 
@@ -1822,18 +1806,31 @@ async def get_all_holdings(
                 logo_url=pos.get('logo_url', ''), source='defi',
             )
 
-    # --- 4. Staking positions (INDY, STRIKE, LQ, IAG, ADA in Surf, etc.) ---
+    # --- 4. Staking positions (every kind, via the shared valuation) ---
+    # _merge_holding values everything at amount x market price, so entries
+    # whose USD is NOT market-consistent (CDP net equity) merge with their
+    # net-equivalent amount (usd / market) — the holdings total then equals
+    # the shared valuation exactly. Unpriced entries have no market price and
+    # are dropped here as before (they surface via has_unpriced elsewhere).
+    from services.defi import iter_staking_token_values as _stk_entries
     for cached in staking_caches:
         if isinstance(cached, (Exception, BaseException)) or not cached or not isinstance(cached, dict) or not cached.get('protocols'):
             continue
         for protocol_name, protocol_data in cached['protocols'].items():
-            for stake in (protocol_data.get('staked') or []):
-                token = (stake.get('token') or 'ADA').upper()
-                amount = float(stake.get('amount', 0))
+            for entry in _stk_entries(protocol_data, all_prices):
+                if entry['kind'] == 'reward' or not entry['priced']:
+                    continue  # rewards were never in holdings; unpriced has no market value
+                token = entry['token']
+                price_info = all_prices.get(_PRICE_SYMBOL.get(token, token), {})
+                market = price_info.get('usd', 0) if isinstance(price_info, dict) else 0
+                amount = entry['amount']
+                if market > 0 and abs(entry['usd'] - amount * market) > 1e-9:
+                    amount = entry['usd'] / market  # net-equivalent (CDPs)
+                raw = entry.get('raw') or {}
                 _merge_holding(
                     holdings, token, amount, 0,
                     all_prices, name=protocol_name,
-                    logo_url=stake.get('logo_url', ''), source='staking',
+                    logo_url=raw.get('logo_url', ''), source='staking',
                 )
 
     # --- 5. Exchange assets (Coinbase, Binance, OKX, etc.) ---
@@ -1978,7 +1975,8 @@ async def debug_holding(
                 'detail': f"From defi_summary_{user_id} cache",
             })
 
-    # 4. Staking positions per Cardano wallet
+    # 4. Staking positions per Cardano wallet (every kind, shared valuation)
+    from services.defi import iter_staking_token_values as _stk_entries
     cardano_wallets = [w for w in wallets if w['blockchain'] == 'cardano']
     for w in cardano_wallets:
         addr = w['address']
@@ -1986,16 +1984,18 @@ async def debug_holding(
         if not cached or not cached.get('protocols'):
             continue
         for protocol_name, protocol_data in cached['protocols'].items():
-            for stake in (protocol_data.get('staked') or []):
-                token = (stake.get('token') or 'ADA').upper()
-                if token != symbol:
+            for entry in _stk_entries(protocol_data, all_prices):
+                if entry['token'] != symbol:
                     continue
                 sources.append({
                     'source': 'staking',
                     'protocol': protocol_name,
+                    'kind': entry['kind'],
                     'wallet': addr[:20] + '...',
-                    'amount': float(stake.get('amount', 0)),
-                    'detail': f"Staked in {protocol_name}",
+                    'amount': entry['amount'],
+                    'value_usd': round(entry['usd'], 2),
+                    'priced': entry['priced'],
+                    'detail': f"{protocol_name} {entry['kind']}",
                 })
 
     # 5. Exchange assets

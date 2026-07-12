@@ -864,9 +864,18 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
                     has_unpriced_staking = True
                 price_data = all_prices.get(token, {})
                 price_usd = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
+                # Entries whose USD is not amount x market (CDP net equity,
+                # unpriced) would skew any implied per-token price derived
+                # from value/amount — tag the token's value basis as mixed so
+                # consumers keep using native_price_usd (market) instead
+                value_consistent = (
+                    price_usd > 0 and abs(val - amount * price_usd) < 1e-9
+                )
                 if token in symbol_agg:
                     symbol_agg[token]['value_usd'] += val
                     symbol_agg[token]['native_amount'] += amount
+                    if not value_consistent:
+                        symbol_agg[token]['value_basis'] = 'mixed'
                 else:
                     token_name, token_image = staking_infos[token]
                     symbol_agg[token] = {
@@ -880,6 +889,8 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
                         "percentage": 0,
                         "image_url": token_image,
                     }
+                    if not value_consistent:
+                        symbol_agg[token]['value_basis'] = 'mixed'
     except Exception as e:
         logger.debug(f"Could not aggregate staking for top holdings: {e}")
 

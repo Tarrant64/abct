@@ -298,7 +298,11 @@ class SnapshotService:
                     # Shared valuation over EVERY position kind (staked
                     # arrays, Strike V2 balance/vaults, Indigo CDPs at net
                     # equity, stability pools) so the net-worth staking
-                    # figure agrees with the Staking tab; unpriced adds 0
+                    # figure agrees with the Staking tab; unpriced adds 0.
+                    # Rewards are EXCLUDED here — snapshot's historical
+                    # semantics treat unclaimed rewards as not-yet-held
+                    # value — while offchain_helpers.get_staking_value
+                    # INCLUDES them to match the web dashboard staking card.
                     from services.defi import iter_staking_token_values
                     for protocol_name, protocol_data in (cached.get('protocols') or {}).items():
                         for entry in iter_staking_token_values(protocol_data, prices):
