@@ -289,6 +289,56 @@ async def test_legacy_row_without_scope_guard_holds(wire):
     assert _count_data_protocols(out) == 4
 
 
+async def test_confirmed_exit_is_accepted(wire):
+    """P3a: every lost protocol positively confirmed empty — a genuine exit
+    must finally display instead of being pinned to stale data forever."""
+    corrected = dict(IAGON_ONLY_RESULT)
+    corrected["confirmed_empty"] = ["Indigo", "Liqwid", "Strike"]
+
+    stub = wire(fresh=dict(FULL_RESULT), stale=None, compute_result=corrected)
+
+    out = await get_staking_positions(ADDRESS, refresh=True, user_id=1)
+
+    assert len(stub.set_calls) == 1  # accepted
+    assert _count_data_protocols(out) == 1
+
+
+async def test_partially_confirmed_loss_still_refused(wire):
+    """Only Liqwid confirmed its exit; Indigo/Strike losses are unconfirmed
+    fetch failures — the guard must refuse the whole downgrade."""
+    corrected = dict(IAGON_ONLY_RESULT)
+    corrected["confirmed_empty"] = ["Liqwid"]
+
+    stub = wire(fresh=dict(FULL_RESULT), stale=None, compute_result=corrected)
+
+    out = await get_staking_positions(ADDRESS, refresh=True, user_id=1)
+
+    assert stub.set_calls == []
+    assert _count_data_protocols(out) == 4
+
+
+async def test_equal_count_protocol_swap_refused(wire):
+    """Name-based guard: losing Indigo while gaining Liqwid keeps the count
+    equal but is still an unconfirmed loss — refused."""
+    indigo_only = {
+        "address": ADDRESS,
+        "protocols": {"Indigo": {"staked": [{"token": "INDY", "amount": 1.0}]}},
+        "total_positions": 1,
+    }
+    liqwid_only = {
+        "address": ADDRESS,
+        "protocols": {"Liqwid": {"staked": [{"token": "LQ", "amount": 1.0}]}},
+        "total_positions": 1,
+    }
+
+    stub = wire(fresh=indigo_only, stale=None, compute_result=liqwid_only)
+
+    out = await get_staking_positions(ADDRESS, refresh=True, user_id=1)
+
+    assert stub.set_calls == []
+    assert "Indigo" in out["protocols"]
+
+
 async def test_v2_only_wallet_protected_by_guard(wire):
     """F3 in action: a wallet whose only data is a Strike V2 vault used to
     count as zero protocols and went unprotected."""

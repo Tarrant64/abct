@@ -817,8 +817,14 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
     except Exception as e:
         logger.debug(f"Could not merge native tokens for top holdings: {e}")
 
-    # Merge staking positions into top_holdings (per-token breakdown)
+    # Merge staking positions into top_holdings (per-token breakdown).
+    # iter_staking_token_values is the shared valuation for EVERY position
+    # kind (staked arrays, Strike V2 balance/vaults, Indigo CDPs at NET
+    # equity, stability pools, pending rewards) so this figure agrees with
+    # the Staking tab. Unpriced entries add their amount but 0 USD.
+    has_unpriced_staking = False
     try:
+        from services.defi import iter_staking_token_values
         all_wallets = await get_all_wallets(user_id=user_id)
         cardano_addrs = [w['address'] for w in all_wallets if w['blockchain'] == 'cardano']
         if cardano_addrs:
@@ -828,75 +834,52 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
                 defi.get_staking_positions(addr, refresh=False, user_id=user_id)
                 for addr in cardano_addrs
             ], return_exceptions=True)
-            # Pre-resolve name/image for every token this merge will introduce
-            # (i.e. not in symbol_agg at its first encounter), so the loop
-            # below never awaits per row; conditions mirror the loop exactly
-            staking_new_tokens = []
+
+            # One valuation pass; entries carried so token-info pre-resolve
+            # and the aggregation loop below see the identical set
+            staking_entries = []
             for cached in staking_caches:
                 if isinstance(cached, (Exception, BaseException)) or not cached or not isinstance(cached, dict) or not cached.get('protocols'):
                     continue
                 for protocol_name, protocol_data in cached['protocols'].items():
-                    for stake in (protocol_data.get('staked') or []):
-                        token = (stake.get('token') or 'ADA').upper()
-                        if token not in symbol_agg and token not in staking_new_tokens:
-                            staking_new_tokens.append(token)
-                    reward_token = protocol_data.get('reward_token')
-                    if reward_token and float(protocol_data.get('pending_rewards', 0)) > 0:
-                        rt = reward_token.upper()
-                        if rt not in symbol_agg and rt not in staking_new_tokens:
-                            staking_new_tokens.append(rt)
+                    staking_entries.extend(
+                        iter_staking_token_values(protocol_data, all_prices)
+                    )
+
+            # Pre-resolve name/image for tokens this merge will introduce,
+            # so the aggregation loop never awaits per row
+            staking_new_tokens = []
+            for entry in staking_entries:
+                token = entry['token']
+                if token not in symbol_agg and token not in staking_new_tokens:
+                    staking_new_tokens.append(token)
             staking_infos = dict(zip(staking_new_tokens, await asyncio.gather(
                 *[_resolve_token_info(t) for t in staking_new_tokens])))
-            for cached in staking_caches:
-                if isinstance(cached, (Exception, BaseException)) or not cached or not isinstance(cached, dict) or not cached.get('protocols'):
-                    continue
-                for protocol_name, protocol_data in cached['protocols'].items():
-                    for stake in (protocol_data.get('staked') or []):
-                        token = (stake.get('token') or 'ADA').upper()
-                        amount = float(stake.get('amount', 0))
-                        price_data = all_prices.get(token, {})
-                        price_usd = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
-                        val = amount * price_usd
-                        if token in symbol_agg:
-                            symbol_agg[token]['value_usd'] += val
-                            symbol_agg[token]['native_amount'] += amount
-                        else:
-                            token_name, token_image = staking_infos[token]
-                            symbol_agg[token] = {
-                                "name": token_name,
-                                "symbol": token,
-                                "value_usd": val,
-                                "native_amount": amount,
-                                "native_price_usd": round(price_usd, 2),
-                                "price_change_24h": round((price_data.get('usd_24h_change', 0) or 0) if isinstance(price_data, dict) else 0, 2),
-                                "wallet_count": 0,
-                                "percentage": 0,
-                                "image_url": token_image,
-                            }
-                    # Add pending rewards
-                    reward_token = protocol_data.get('reward_token')
-                    pending = float(protocol_data.get('pending_rewards', 0))
-                    if reward_token and pending > 0:
-                        rt = reward_token.upper()
-                        price_data = all_prices.get(rt, {})
-                        price_usd = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
-                        val = pending * price_usd
-                        if rt in symbol_agg:
-                            symbol_agg[rt]['value_usd'] += val
-                            symbol_agg[rt]['native_amount'] += pending
-                        else:
-                            rt_name, rt_image = staking_infos[rt]
-                            symbol_agg[rt] = {
-                                "name": rt_name,
-                                "symbol": rt,
-                                "value_usd": val,
-                                "native_amount": pending,
-                                "native_price_usd": round(price_usd, 2),
-                                "price_change_24h": round((price_data.get('usd_24h_change', 0) or 0) if isinstance(price_data, dict) else 0, 2),
-                                "wallet_count": 0,
-                                "percentage": 0,
-                                "image_url": rt_image,
-                            }
+
+            for entry in staking_entries:
+                token = entry['token']
+                amount = entry['amount']
+                val = entry['usd']
+                if not entry['priced']:
+                    has_unpriced_staking = True
+                price_data = all_prices.get(token, {})
+                price_usd = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
+                if token in symbol_agg:
+                    symbol_agg[token]['value_usd'] += val
+                    symbol_agg[token]['native_amount'] += amount
+                else:
+                    token_name, token_image = staking_infos[token]
+                    symbol_agg[token] = {
+                        "name": token_name,
+                        "symbol": token,
+                        "value_usd": val,
+                        "native_amount": amount,
+                        "native_price_usd": round(price_usd, 2),
+                        "price_change_24h": round((price_data.get('usd_24h_change', 0) or 0) if isinstance(price_data, dict) else 0, 2),
+                        "wallet_count": 0,
+                        "percentage": 0,
+                        "image_url": token_image,
+                    }
     except Exception as e:
         logger.debug(f"Could not aggregate staking for top holdings: {e}")
 
@@ -1052,6 +1035,9 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
         },
         "blockchains": blockchain_summaries,
         "top_holdings": top_holdings[:8],
+        # True when some staking position's value could not be computed from
+        # a real price — its amount is counted, its USD contribution is 0
+        "has_unpriced": has_unpriced_staking,
         "last_updated": datetime.utcnow().isoformat() + "Z",
         "from_cache": False
     }
@@ -1445,161 +1431,99 @@ async def _map_staking_protocol_positions(
     protocol_data: dict,
     all_prices: dict,
     ada_price: float,
-) -> tuple[list, float, float]:
+) -> tuple[list, float, float, bool]:
     """Map one protocol's cached staking entry to mobile position dicts.
 
     Renders every position kind the aggregator produces — the `staked` token
     arrays plus Strike V2 trading balance / vault deposits and Indigo CDPs /
-    stability-pool deposits, which the old mapper silently dropped.
+    stability-pool deposits. All amount/USD/priced math comes from
+    services.defi.iter_staking_token_values, the single valuation used by
+    every screen, so totals agree by construction; this function only adds
+    display fields. Unpriced positions keep their amount visible but carry
+    priced=false and contribute 0 to USD totals; CDP USD is NET equity
+    (collateral minus minted debt), with the gross figures in the detail
+    fields.
 
-    Returns (positions, staked_usd_total, rewards_usd_total).
+    Returns (positions, staked_usd_total, rewards_usd_total, has_unpriced).
     """
+    from services.defi import iter_staking_token_values
+
     positions = []
     staked_usd_total = 0.0
     rewards_usd_total = 0.0
+    has_unpriced = False
 
-    def _price_usd(symbol: str) -> float:
-        price_data = all_prices.get(symbol, {})
-        return price_data.get('usd', 0) if isinstance(price_data, dict) else 0
+    logo_cache: dict = {}
 
-    # Token staking positions (Indigo INDY, Liqwid LQ, Iagon IAG, ...)
-    for stake in (protocol_data.get('staked') or []):
-        token = (stake.get('token') or 'ADA').upper()
-        amount = _as_float(stake.get('amount', 0))
-        if amount <= 0:
+    async def _logo(symbol: str) -> str:
+        if symbol not in logo_cache:
+            _, logo_cache[symbol] = await _resolve_token_info(symbol)
+        return logo_cache[symbol]
+
+    for entry in iter_staking_token_values(protocol_data, all_prices):
+        kind = entry['kind']
+        if kind == 'reward':
+            rewards_usd_total += entry['usd']
             continue
-        staked_usd = amount * _price_usd(token)
-        staked_usd_total += staked_usd
 
-        _, pos_image = await _resolve_token_info(token)
-        positions.append({
+        raw = entry.get('raw') or {}
+        if not entry['priced']:
+            has_unpriced = True
+        staked_usd_total += entry['usd']
+
+        position = {
             "blockchain": "cardano",
             "protocol": protocol_name,
-            "staked_amount": round(amount, 6),
-            "staked_symbol": token,
-            "staked_usd": round(staked_usd, 2),
+            "staked_amount": round(entry['amount'], 6),
+            "staked_symbol": entry['token'],
+            "staked_usd": round(entry['usd'], 2),
             "rewards_amount": 0,
             "rewards_usd": 0,
             "apy": 0,
             "active": True,
-            "logo_url": pos_image,
-        })
+            "logo_url": await _logo(entry['token']),
+        }
+        if not entry['priced']:
+            position["priced"] = False
 
-    # ADA-denominated position kinds share the ADA logo
-    ada_image = None
+        if kind == 'trading_balance':
+            position["position_kind"] = "trading_balance"
+            position["pool_name"] = f"{protocol_name} V2 Trading Account"
+        elif kind == 'vault':
+            position.update({
+                "position_kind": "vault",
+                "pool_name": raw.get('vault_name') or f"{protocol_name} Vault",
+                "vault_id": raw.get('vault_id', ''),
+                "shares": _as_float(raw.get('shares', 0)),
+                "share_price": _as_float(raw.get('share_price', 0)),
+                # False when the vaults lookup couldn't supply a real share
+                # price and value_ada fell back to share_price=1 — the value
+                # is a floor, not a market valuation
+                "priced": entry['priced'],
+                "share_price_source": raw.get('share_price_source', 'vaults_api'),
+            })
+        elif kind == 'cdp':
+            asset = raw.get('asset', 'iUSD')
+            position.update({
+                "position_kind": "cdp",
+                "pool_name": f"{protocol_name} CDP ({asset})",
+                # Gross breakdown; staked_usd above is NET equity
+                "minted_asset": asset,
+                "minted_amount": _as_float(raw.get('minted_amount', 0)),
+                "collateral_ada": _as_float(raw.get('collateral_ada', 0)),
+            })
+        elif kind == 'stability_pool':
+            asset = raw.get('asset', 'iUSD')
+            position.update({
+                "position_kind": "stability_pool",
+                "pool_name": f"{protocol_name} Stability Pool ({asset})",
+                "staked_symbol": asset,
+            })
+            position["logo_url"] = await _logo(asset)
 
-    async def _ada_logo():
-        nonlocal ada_image
-        if ada_image is None:
-            _, ada_image = await _resolve_token_info('ADA')
-        return ada_image
+        positions.append(position)
 
-    # Strike V2 trading-account balance
-    v2_balance = _as_float(protocol_data.get('v2_balance', 0))
-    if v2_balance > 0:
-        staked_usd = v2_balance * ada_price
-        staked_usd_total += staked_usd
-        positions.append({
-            "blockchain": "cardano",
-            "protocol": protocol_name,
-            "position_kind": "trading_balance",
-            "pool_name": f"{protocol_name} V2 Trading Account",
-            "staked_amount": round(v2_balance, 6),
-            "staked_symbol": "ADA",
-            "staked_usd": round(staked_usd, 2),
-            "rewards_amount": 0,
-            "rewards_usd": 0,
-            "apy": 0,
-            "active": True,
-            "logo_url": await _ada_logo(),
-        })
-
-    # Strike V2 vault deposits
-    for vault in (protocol_data.get('v2_vault_positions') or []):
-        value_ada = _as_float(vault.get('value_ada', 0))
-        if value_ada <= 0:
-            continue
-        staked_usd = value_ada * ada_price
-        staked_usd_total += staked_usd
-        positions.append({
-            "blockchain": "cardano",
-            "protocol": protocol_name,
-            "position_kind": "vault",
-            "pool_name": vault.get('vault_name') or f"{protocol_name} Vault",
-            "vault_id": vault.get('vault_id', ''),
-            "shares": _as_float(vault.get('shares', 0)),
-            "share_price": _as_float(vault.get('share_price', 0)),
-            # False when the vaults lookup couldn't supply a real share price
-            # and value_ada fell back to share_price=1 — value is a floor,
-            # not a market valuation
-            "priced": bool(vault.get('priced', True)),
-            "share_price_source": vault.get('share_price_source', 'vaults_api'),
-            "staked_amount": round(value_ada, 6),
-            "staked_symbol": "ADA",
-            "staked_usd": round(staked_usd, 2),
-            "rewards_amount": 0,
-            "rewards_usd": 0,
-            "apy": 0,
-            "active": True,
-            "logo_url": await _ada_logo(),
-        })
-
-    # Indigo CDPs — collateral is ADA, minted iAsset shown as metadata
-    for cdp in (protocol_data.get('cdps') or []):
-        collateral_ada = _as_float(cdp.get('collateral_ada', 0))
-        if collateral_ada <= 0:
-            continue
-        staked_usd = collateral_ada * ada_price
-        staked_usd_total += staked_usd
-        asset = cdp.get('asset', 'iUSD')
-        positions.append({
-            "blockchain": "cardano",
-            "protocol": protocol_name,
-            "position_kind": "cdp",
-            "pool_name": f"{protocol_name} CDP ({asset})",
-            "minted_asset": asset,
-            "minted_amount": _as_float(cdp.get('minted_amount', 0)),
-            "staked_amount": round(collateral_ada, 6),
-            "staked_symbol": "ADA",
-            "staked_usd": round(staked_usd, 2),
-            "rewards_amount": 0,
-            "rewards_usd": 0,
-            "apy": 0,
-            "active": True,
-            "logo_url": await _ada_logo(),
-        })
-
-    # Indigo stability-pool deposits — denominated in the deposited iAsset
-    for sp in (protocol_data.get('stability_pool') or []):
-        deposited = _as_float(sp.get('deposited', 0))
-        if deposited <= 0:
-            continue
-        asset = sp.get('asset', 'iUSD')
-        staked_usd = deposited * _price_usd(asset.upper())
-        staked_usd_total += staked_usd
-        _, sp_image = await _resolve_token_info(asset)
-        positions.append({
-            "blockchain": "cardano",
-            "protocol": protocol_name,
-            "position_kind": "stability_pool",
-            "pool_name": f"{protocol_name} Stability Pool ({asset})",
-            "staked_amount": round(deposited, 6),
-            "staked_symbol": asset,
-            "staked_usd": round(staked_usd, 2),
-            "rewards_amount": 0,
-            "rewards_usd": 0,
-            "apy": 0,
-            "active": True,
-            "logo_url": sp_image,
-        })
-
-    # Pending rewards
-    reward_token = protocol_data.get('reward_token')
-    pending = _as_float(protocol_data.get('pending_rewards', 0))
-    if reward_token and pending > 0:
-        rewards_usd_total += pending * _price_usd(reward_token)
-
-    return positions, staked_usd_total, rewards_usd_total
+    return positions, staked_usd_total, rewards_usd_total, has_unpriced
 
 
 @router.get("/defi/staking")
@@ -1616,6 +1540,7 @@ async def get_mobile_defi_staking(refresh: bool = Query(False), user_id: int = D
     positions = []
     total_staked_usd = 0.0
     total_rewards_usd = 0.0
+    has_unpriced = False
 
     # Get prices
     all_prices = await pricing_service.get_all_tracked_prices()
@@ -1674,7 +1599,7 @@ async def get_mobile_defi_staking(refresh: bool = Query(False), user_id: int = D
                 if isinstance(cached, (Exception, BaseException)) or not cached or not isinstance(cached, dict) or not cached.get('protocols'):
                     continue
                 for protocol_name, protocol_data in cached['protocols'].items():
-                    proto_positions, staked_usd, rewards_usd = (
+                    proto_positions, staked_usd, rewards_usd, proto_unpriced = (
                         await _map_staking_protocol_positions(
                             protocol_name, protocol_data, all_prices, ada_price
                         )
@@ -1682,6 +1607,7 @@ async def get_mobile_defi_staking(refresh: bool = Query(False), user_id: int = D
                     positions.extend(proto_positions)
                     total_staked_usd += staked_usd
                     total_rewards_usd += rewards_usd
+                    has_unpriced = has_unpriced or proto_unpriced
             except Exception as e:
                 logger.warning(f"Could not process staking positions: {e}")
 
@@ -1689,6 +1615,9 @@ async def get_mobile_defi_staking(refresh: bool = Query(False), user_id: int = D
         "total_staked_usd": round(total_staked_usd, 2),
         "total_rewards_usd": round(total_rewards_usd, 2),
         "positions": positions,
+        # True when some position's USD value could not be computed from a
+        # real price — its amount is shown but it contributes 0 to totals
+        "has_unpriced": has_unpriced,
         "last_updated": datetime.utcnow().isoformat() + "Z"
     }
 
@@ -2552,7 +2481,17 @@ async def get_asset_wallet_breakdown(
                 'last_synced': datetime.utcnow().isoformat() + 'Z',
             })
 
-    # 4. Staking positions
+    # 4. Staking positions — every kind, via the shared valuation so the
+    # drill-down matches the Staking tab and summary figures
+    from services.defi import iter_staking_token_values
+    _KIND_LABELS = {
+        'staked': 'Staked in {p}',
+        'trading_balance': '{p} V2 Trading Account',
+        'vault': '{p} Vault',
+        'cdp': '{p} CDP (net of debt)',
+        'stability_pool': '{p} Stability Pool',
+        'reward': '{p} pending rewards',
+    }
     cardano_wallet_entries = portfolio_summary.get('cardano', {}).get('wallets', [])
     staking_caches = await asyncio.gather(*[
         get_cache(f"staking_positions_{w['address']}", user_id=user_id) for w in cardano_wallet_entries
@@ -2561,21 +2500,20 @@ async def get_asset_wallet_breakdown(
         if isinstance(cached_staking, Exception) or not cached_staking or not isinstance(cached_staking, dict):
             continue
         for protocol_name, protocol_data in (cached_staking.get('protocols') or {}).items():
-            for stake in (protocol_data.get('staked') or []):
-                token = (stake.get('token') or 'ADA').upper()
-                if token != symbol:
+            for entry in iter_staking_token_values(protocol_data, all_prices):
+                if entry['token'] != symbol:
                     continue
-                amount = float(stake.get('amount', 0))
-                if amount <= 0:
-                    continue
-                sources.append({
+                source = {
                     'source_type': 'staking',
-                    'label': f"Staked in {protocol_name}",
+                    'label': _KIND_LABELS.get(entry['kind'], 'Staked in {p}').format(p=protocol_name),
                     'address': w['address'],
                     'blockchain': 'cardano',
-                    'amount': amount,
-                    'value_usd': round(amount * current_price, 2),
-                })
+                    'amount': entry['amount'],
+                    'value_usd': round(entry['usd'], 2),
+                }
+                if not entry['priced']:
+                    source['priced'] = False
+                sources.append(source)
 
     # 5. DeFi positions
     defi_data = await get_cache(f"defi_summary_{user_id}")

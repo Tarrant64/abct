@@ -28,6 +28,7 @@ ALL_PRICES = {
     "INDY": {"usd": 1.10},
     "LQ": {"usd": 2.50},
     "STRIKE": {"usd": 0.02},
+    "IUSD": {"usd": 1.0},
 }
 
 
@@ -53,8 +54,10 @@ async def test_staked_array_mapping_unchanged():
         "pending_ada": 0,
     }
 
-    positions, staked_usd, rewards_usd = await _map_staking_protocol_positions(
-        "Indigo", protocol_data, ALL_PRICES, ADA_PRICE
+    positions, staked_usd, rewards_usd, has_unpriced = (
+        await _map_staking_protocol_positions(
+            "Indigo", protocol_data, ALL_PRICES, ADA_PRICE
+        )
     )
 
     assert len(positions) == 1
@@ -73,6 +76,7 @@ async def test_staked_array_mapping_unchanged():
     }
     assert staked_usd == pytest.approx(8670.383309 * 1.10)
     assert rewards_usd == 0
+    assert has_unpriced is False
 
 
 async def test_strike_v2_balance_and_vaults_render():
@@ -92,8 +96,10 @@ async def test_strike_v2_balance_and_vaults_render():
         "total_vault_ada": 702.98,
     }
 
-    positions, staked_usd, rewards_usd = await _map_staking_protocol_positions(
-        "Strike", protocol_data, ALL_PRICES, ADA_PRICE
+    positions, staked_usd, rewards_usd, has_unpriced = (
+        await _map_staking_protocol_positions(
+            "Strike", protocol_data, ALL_PRICES, ADA_PRICE
+        )
     )
 
     assert len(positions) == 2
@@ -115,6 +121,7 @@ async def test_strike_v2_balance_and_vaults_render():
 
     assert staked_usd == pytest.approx((56.93 + 702.98) * ADA_PRICE)
     assert rewards_usd == 0
+    assert has_unpriced is False
 
 
 async def test_unpriced_vault_flag_passes_through():
@@ -133,7 +140,7 @@ async def test_unpriced_vault_flag_passes_through():
         }],
     }
 
-    positions, _, _ = await _map_staking_protocol_positions(
+    positions, staked_usd, _, has_unpriced = await _map_staking_protocol_positions(
         "Strike", protocol_data, ALL_PRICES, ADA_PRICE
     )
 
@@ -142,7 +149,10 @@ async def test_unpriced_vault_flag_passes_through():
     assert vault["priced"] is False
     assert vault["share_price_source"] == "fallback"
     assert vault["staked_amount"] == 599.68  # amount still visible
+    assert vault["staked_usd"] == 0  # flagged value contributes nothing
     assert vault["pool_name"] == "Retired Vault"
+    assert staked_usd == 0
+    assert has_unpriced is True
 
 
 async def test_indigo_cdps_and_stability_pool_render():
@@ -162,7 +172,7 @@ async def test_indigo_cdps_and_stability_pool_render():
         }],
     }
 
-    positions, staked_usd, _ = await _map_staking_protocol_positions(
+    positions, staked_usd, _, has_unpriced = await _map_staking_protocol_positions(
         "Indigo", protocol_data, ALL_PRICES, ADA_PRICE
     )
 
@@ -170,9 +180,12 @@ async def test_indigo_cdps_and_stability_pool_render():
 
     cdp = next(p for p in positions if p["position_kind"] == "cdp")
     assert cdp["pool_name"] == "Indigo CDP (iUSD)"
-    assert cdp["staked_amount"] == 2500.0
+    assert cdp["staked_amount"] == 2500.0  # gross collateral stays visible
+    assert cdp["collateral_ada"] == 2500.0
     assert cdp["staked_symbol"] == "ADA"
-    assert cdp["staked_usd"] == round(2500.0 * ADA_PRICE, 2)
+    # Director decision: CDP USD value = NET equity (collateral - debt)
+    cdp_net = 2500.0 * ADA_PRICE - 750.0 * 1.0
+    assert cdp["staked_usd"] == round(cdp_net, 2)
     assert cdp["minted_asset"] == "iUSD"
     assert cdp["minted_amount"] == 750.0
 
@@ -180,10 +193,35 @@ async def test_indigo_cdps_and_stability_pool_render():
     assert sp["pool_name"] == "Indigo Stability Pool (iUSD)"
     assert sp["staked_amount"] == 120.5
     assert sp["staked_symbol"] == "iUSD"
-    # iUSD is not in the price map — renders unpriced at 0, never dropped
-    assert sp["staked_usd"] == 0
+    assert sp["staked_usd"] == round(120.5 * 1.0, 2)  # iUSD priced at $1
 
-    assert staked_usd == pytest.approx(2500.0 * ADA_PRICE)
+    assert staked_usd == pytest.approx(cdp_net + 120.5)
+    assert has_unpriced is False
+
+
+async def test_cdp_with_unpriced_debt_flagged_not_overstated():
+    """Unknown minted-asset price would silently overstate equity — the CDP
+    must flag unpriced and contribute 0 instead."""
+    protocol_data = {
+        "staked": [],
+        "cdps": [{
+            "asset": "iBTC",  # not in the price map
+            "collateral_ada": 5000.0,
+            "minted_amount": 0.01,
+        }],
+    }
+
+    positions, staked_usd, _, has_unpriced = await _map_staking_protocol_positions(
+        "Indigo", protocol_data, ALL_PRICES, ADA_PRICE
+    )
+
+    assert len(positions) == 1
+    cdp = positions[0]
+    assert cdp["priced"] is False
+    assert cdp["staked_usd"] == 0
+    assert cdp["staked_amount"] == 5000.0  # amount still visible
+    assert staked_usd == 0
+    assert has_unpriced is True
 
 
 async def test_empty_status_entry_yields_no_positions():
@@ -196,13 +234,16 @@ async def test_empty_status_entry_yields_no_positions():
         "total_positions": 0,
     }
 
-    positions, staked_usd, rewards_usd = await _map_staking_protocol_positions(
-        "Iagon", protocol_data, ALL_PRICES, ADA_PRICE
+    positions, staked_usd, rewards_usd, has_unpriced = (
+        await _map_staking_protocol_positions(
+            "Iagon", protocol_data, ALL_PRICES, ADA_PRICE
+        )
     )
 
     assert positions == []
     assert staked_usd == 0
     assert rewards_usd == 0
+    assert has_unpriced is False
 
 
 async def test_pending_rewards_counted():
@@ -212,12 +253,55 @@ async def test_pending_rewards_counted():
         "reward_token": "LQ",
     }
 
-    _, staked_usd, rewards_usd = await _map_staking_protocol_positions(
+    _, staked_usd, rewards_usd, _ = await _map_staking_protocol_positions(
         "Liqwid", protocol_data, ALL_PRICES, ADA_PRICE
     )
 
     assert staked_usd == pytest.approx(2089.169352 * 2.50)
     assert rewards_usd == pytest.approx(10.0 * 2.50)
+
+
+async def test_cross_screen_totals_agree_by_construction():
+    """The mapper (Staking tab), the top-holdings/snapshot consumers, and the
+    token-detail drill-down all derive from iter_staking_token_values — the
+    same fixture must produce the identical USD figure everywhere."""
+    from services.defi import iter_staking_token_values
+
+    protocol_data = {
+        "staked": [{"token": "INDY", "amount": 8670.383309}],
+        "v2_balance": 56.93,
+        "v2_vault_positions": [{
+            "vault_id": "v", "vault_name": "V", "shares": 599.68,
+            "share_price": 1.172, "value_ada": 702.98,
+        }],
+        "cdps": [{"asset": "iUSD", "collateral_ada": 2500.0,
+                  "minted_amount": 750.0}],
+        "stability_pool": [{"asset": "iUSD", "deposited": 120.5}],
+        "reward_token": "LQ",
+        "pending_rewards": 10.0,
+    }
+
+    _, mapper_staked, mapper_rewards, _ = await _map_staking_protocol_positions(
+        "Indigo", protocol_data, ALL_PRICES, ADA_PRICE
+    )
+
+    entries = iter_staking_token_values(protocol_data, ALL_PRICES)
+    helper_staked = sum(e['usd'] for e in entries if e['kind'] != 'reward')
+    helper_rewards = sum(e['usd'] for e in entries if e['kind'] == 'reward')
+
+    assert mapper_staked == pytest.approx(helper_staked)
+    assert mapper_rewards == pytest.approx(helper_rewards)
+
+    # And the expected absolute value, spelled out once:
+    expected = (
+        8670.383309 * 1.10             # INDY staked
+        + 56.93 * ADA_PRICE            # Strike V2 trading balance
+        + 702.98 * ADA_PRICE           # vault
+        + (2500.0 * ADA_PRICE - 750.0) # CDP net equity (iUSD @ $1)
+        + 120.5 * 1.0                  # stability pool iUSD
+    )
+    assert helper_staked == pytest.approx(expected)
+    assert helper_rewards == pytest.approx(10.0 * 2.50)
 
 
 async def test_string_amounts_from_stale_cache_do_not_crash():
@@ -227,7 +311,7 @@ async def test_string_amounts_from_stale_cache_do_not_crash():
         "v2_balance": "56.93",
     }
 
-    positions, staked_usd, _ = await _map_staking_protocol_positions(
+    positions, staked_usd, _, _ = await _map_staking_protocol_positions(
         "Mixed", protocol_data, ALL_PRICES, ADA_PRICE
     )
 

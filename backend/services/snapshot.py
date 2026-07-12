@@ -295,14 +295,15 @@ class SnapshotService:
                         cached = await get_cache(cache_key)
                     if not cached:
                         continue
-                    # Cache structure: {protocols: {ProtocolName: {staked: [{token, amount}]}}}
+                    # Shared valuation over EVERY position kind (staked
+                    # arrays, Strike V2 balance/vaults, Indigo CDPs at net
+                    # equity, stability pools) so the net-worth staking
+                    # figure agrees with the Staking tab; unpriced adds 0
+                    from services.defi import iter_staking_token_values
                     for protocol_name, protocol_data in (cached.get('protocols') or {}).items():
-                        for stake in (protocol_data.get('staked') or []):
-                            amount = float(stake.get('amount', 0))
-                            token = stake.get('token', 'ADA')
-                            price_data = prices.get(token, {})
-                            price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
-                            total_usd += amount * price
+                        for entry in iter_staking_token_values(protocol_data, prices):
+                            if entry['kind'] != 'reward':
+                                total_usd += entry['usd']
 
             return total_usd
         except Exception as e:

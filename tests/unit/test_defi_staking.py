@@ -139,13 +139,19 @@ async def test_indigo_staking_non_200_logs_warning_and_returns_none(
     )
 
 
-async def test_indigo_staking_no_match_returns_none(service, monkeypatch):
+async def test_indigo_staking_no_match_is_confirmed_empty(service, monkeypatch):
+    """API answered, nothing owned: a CONFIRMED empty, not a failure (P3a)."""
     client = FakeClient([
         ("/api/staking-positions", FakeResponse(json_data=[INDIGO_STAKING_FIXTURE[0]])),
     ])
     use_client(monkeypatch, client)
 
-    assert await service.get_indigo_staking(ADDRESS) is None
+    result = await service.get_indigo_staking(ADDRESS)
+
+    assert result is not None
+    assert result["confirmed_empty"] is True
+    assert result["positions"] == []
+    assert result["total_staked_indy"] == 0
 
 
 # ---------------------------------------------------------------------------
@@ -256,8 +262,38 @@ async def test_strike_v2_vaults_found_with_zero_trading_balance(service, monkeyp
     assert result["total_vault_ada"] == pytest.approx(599.68 * 1.172265)
 
 
-async def test_strike_v2_no_balance_no_vaults_returns_none(service, monkeypatch):
+async def test_strike_v2_no_balance_no_vaults_is_confirmed_empty(service, monkeypatch):
+    """Account exists, zero balance, zero vaults, every lookup answered —
+    positively empty, not a failure (P3a)."""
     client = FakeClient(strike_routes(wallet_balance=0, vault_positions=[]))
+    use_client(monkeypatch, client)
+
+    result = await service.get_strike_v2_positions(ADDRESS)
+
+    assert result is not None
+    assert result["confirmed_empty"] is True
+    assert result["v2_balance"] == 0.0
+    assert result["vault_positions"] == []
+
+
+async def test_strike_v2_all_probes_404_is_confirmed_empty(service, monkeypatch):
+    client = FakeClient([
+        ("/v2/account", FakeResponse(status_code=404, text="no account")),
+    ])
+    use_client(monkeypatch, client)
+
+    result = await service.get_strike_v2_positions(ADDRESS)
+
+    assert result is not None
+    assert result["confirmed_empty"] is True
+
+
+async def test_strike_v2_probe_failure_stays_indeterminate(service, monkeypatch):
+    """A 429/5xx probe means positions may exist unseen — None, never a
+    confirmed empty."""
+    client = FakeClient([
+        ("/v2/account", FakeResponse(status_code=429, text="rate limited")),
+    ])
     use_client(monkeypatch, client)
 
     assert await service.get_strike_v2_positions(ADDRESS) is None
@@ -489,11 +525,15 @@ async def test_liqwid_graphql_page_cap(service, monkeypatch, caplog):
     assert any("capped at 50 pages" in rec.message for rec in caplog.records)
 
 
-async def test_liqwid_graphql_no_stakes_returns_none(service, monkeypatch):
+async def test_liqwid_graphql_no_stakes_is_confirmed_empty(service, monkeypatch):
     client = FakeClient([("/graphql", liqwid_graphql_response([]))])
     use_client(monkeypatch, client)
 
-    assert await service.get_liqwid_staking(ADDRESS) is None
+    result = await service.get_liqwid_staking(ADDRESS)
+
+    assert result is not None
+    assert result["confirmed_empty"] is True
+    assert result["total_staked_lq"] == 0
 
 
 async def test_liqwid_graphql_errors_logged_and_none(service, monkeypatch, caplog):

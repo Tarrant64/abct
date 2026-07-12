@@ -104,16 +104,16 @@ async def _resolve_scan_identity(address: str, user_id: int):
         return None, None
 
 
-def _count_data_protocols(result: dict) -> int:
-    """Count protocols carrying ANY position data in a staking result.
+def _data_protocol_names(result: dict) -> set:
+    """Names of protocols carrying ANY position data in a staking result.
 
-    Richness metric for the degraded-result guard. Counts every position
-    kind — token staking arrays, Strike V2 trading balance / vault deposits,
-    Indigo CDPs and stability-pool deposits — so a wallet whose only data is
-    e.g. Strike V2 still registers as having data.
+    Basis of the degraded-result guard. Considers every position kind —
+    token staking arrays, Strike V2 trading balance / vault deposits, Indigo
+    CDPs and stability-pool deposits — so a wallet whose only data is e.g.
+    Strike V2 still registers as having data.
     """
-    count = 0
-    for p in (result.get('protocols') or {}).values():
+    names = set()
+    for name, p in (result.get('protocols') or {}).items():
         if (
             p.get('staked')
             or p.get('v2_balance')
@@ -121,8 +121,13 @@ def _count_data_protocols(result: dict) -> int:
             or p.get('cdps')
             or p.get('stability_pool')
         ):
-            count += 1
-    return count
+            names.add(name)
+    return names
+
+
+def _count_data_protocols(result: dict) -> int:
+    """Count of protocols carrying any position data (see _data_protocol_names)."""
+    return len(_data_protocol_names(result))
 
 # Cache TTL in seconds - refresh daily (DeFi positions don't change that frequently)
 STAKING_CACHE_TTL = CACHE_TTL_COLD  # 24 hours
@@ -257,13 +262,22 @@ async def get_staking_positions(address: str, refresh: bool = False, user_id: in
                 f"— accepting result without downgrade guard"
             )
         if baseline and not scope_changed:
-            existing_data_count = _count_data_protocols(baseline)
-            new_data_count = _count_data_protocols(result)
-            if new_data_count < existing_data_count:
+            # Per-protocol comparison: refuse only if a protocol that had
+            # data in the baseline is MISSING from the result WITHOUT the
+            # protocol having positively confirmed it is empty. A confirmed
+            # empty is a legitimate shrink (genuine protocol exit) and must
+            # display; a failed/timed-out fetch must not erase last-good data.
+            baseline_names = _data_protocol_names(baseline)
+            result_names = _data_protocol_names(result)
+            confirmed = set(result.get('confirmed_empty') or [])
+            lost = baseline_names - result_names - confirmed
+            if lost:
                 logger.warning(
                     f"[Staking] Skipping cache update for {address[:20]}... — "
-                    f"new result has {new_data_count} active protocols vs "
-                    f"{existing_data_count} cached"
+                    f"result lost protocols {sorted(lost)} without confirmed "
+                    f"exit (had {sorted(baseline_names)}, got "
+                    f"{sorted(result_names)}, confirmed empty "
+                    f"{sorted(confirmed)})"
                     f"{' (stale baseline)' if baseline_is_stale else ''}"
                 )
                 # Return the existing better cache instead

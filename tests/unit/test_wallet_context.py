@@ -202,7 +202,10 @@ async def test_indigo_finds_position_owned_by_fourth_cred(service, monkeypatch):
     assert result["positions"][0]["owner"] == CREDS[3]
 
     # Single-cred call (pre-P2 behavior) must NOT see the sibling's position
-    assert await service.get_indigo_staking(ADDRS[0]) is None
+    # (it comes back as a confirmed empty, since the API answered)
+    single = await service.get_indigo_staking(ADDRS[0])
+    assert single["confirmed_empty"] is True
+    assert single["positions"] == []
     # Widening costs no extra API calls — one download per lookup
     assert len(client.requests) == 2
 
@@ -282,7 +285,9 @@ async def test_strike_v2_probe_fanout_capped(service, monkeypatch):
 
     result = await service.get_strike_v2_positions(many[0], account_addresses=many)
 
-    assert result is None
+    # All probes answered 404 → confirmed empty (not a failure)
+    assert result is not None
+    assert result["confirmed_empty"] is True
     assert len(client.requests) == 12  # capped fan-out
 
 

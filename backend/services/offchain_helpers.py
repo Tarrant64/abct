@@ -41,21 +41,14 @@ async def get_staking_value(prices: dict, user_id: int = None) -> float:
                         cached = await _stale_fallback(cache_key)
                 if not cached:
                     continue
-                # Cache structure: {protocols: {ProtocolName: {staked: [{token, amount}], reward_token, pending_rewards}}}
+                # Shared valuation over EVERY position kind (staked arrays,
+                # Strike V2 balance/vaults, Indigo CDPs at net equity,
+                # stability pools, pending rewards) so this figure agrees
+                # with the Staking tab; unpriced entries add 0 USD
+                from services.defi import iter_staking_token_values
                 for protocol_name, protocol_data in (cached.get('protocols') or {}).items():
-                    for stake in (protocol_data.get('staked') or []):
-                        amount = float(stake.get('amount', 0))
-                        token = stake.get('token', 'ADA')
-                        price_data = prices.get(token, {})
-                        price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
-                        total_usd += amount * price
-                    # Include pending rewards (matches web dashboard logic)
-                    reward_token = protocol_data.get('reward_token')
-                    pending_rewards = float(protocol_data.get('pending_rewards', 0))
-                    if reward_token and pending_rewards > 0:
-                        price_data = prices.get(reward_token, {})
-                        price = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
-                        total_usd += pending_rewards * price
+                    for entry in iter_staking_token_values(protocol_data, prices):
+                        total_usd += entry['usd']
 
         return total_usd
     except Exception as e:

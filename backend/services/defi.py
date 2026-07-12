@@ -308,6 +308,122 @@ DEFI_PROTOCOLS = {
     },
 }
 
+def _price_usd_of(prices: Dict, symbol: str) -> float:
+    """USD price for a token symbol from the tracked-prices map, else 0."""
+    data = prices.get((symbol or '').upper(), {})
+    return data.get('usd', 0) if isinstance(data, dict) else 0
+
+
+def iter_staking_token_values(protocol_data: Dict, prices: Dict) -> List[Dict]:
+    """
+    Canonical valuation of ONE protocol's cached staking entry.
+
+    Yields one entry per position across EVERY kind the aggregator produces —
+    staked token arrays, Strike V2 trading balance and vault deposits, Indigo
+    CDPs and stability-pool deposits, plus pending rewards. All USD totals
+    shown anywhere (staking tab, dashboard top holdings, token detail, net
+    worth snapshots) must be derived from these entries so the screens agree
+    by construction.
+
+    Entry: {kind, token, amount, usd, priced, raw}
+      - kind: staked|trading_balance|vault|cdp|stability_pool|reward
+      - priced=False means the USD value could not be computed from real
+        prices; usd is 0 then (the amount stays visible — flag, don't hide).
+      - CDP usd is NET equity: collateral valued in ADA minus minted iAsset
+        debt at current prices (gross figures remain on the raw position).
+    """
+    entries = []
+    ada_price = _price_usd_of(prices, 'ADA')
+
+    for stake in (protocol_data.get('staked') or []):
+        try:
+            token = (stake.get('token') or 'ADA').upper()
+            amount = float(stake.get('amount') or 0)
+        except (TypeError, ValueError):
+            continue
+        if amount <= 0:
+            continue
+        price = _price_usd_of(prices, token)
+        entries.append({
+            'kind': 'staked', 'token': token, 'amount': amount,
+            'usd': amount * price, 'priced': price > 0, 'raw': stake,
+        })
+
+    try:
+        v2_balance = float(protocol_data.get('v2_balance') or 0)
+    except (TypeError, ValueError):
+        v2_balance = 0.0
+    if v2_balance > 0:
+        entries.append({
+            'kind': 'trading_balance', 'token': 'ADA', 'amount': v2_balance,
+            'usd': v2_balance * ada_price, 'priced': ada_price > 0, 'raw': None,
+        })
+
+    for vault in (protocol_data.get('v2_vault_positions') or []):
+        try:
+            value_ada = float(vault.get('value_ada') or 0)
+        except (TypeError, ValueError):
+            continue
+        if value_ada <= 0:
+            continue
+        # A share_price fallback means value_ada is a floor, not a market
+        # valuation — flag it and keep it out of USD totals
+        priced = bool(vault.get('priced', True)) and ada_price > 0
+        entries.append({
+            'kind': 'vault', 'token': 'ADA', 'amount': value_ada,
+            'usd': value_ada * ada_price if priced else 0.0,
+            'priced': priced, 'raw': vault,
+        })
+
+    for cdp in (protocol_data.get('cdps') or []):
+        try:
+            collateral_ada = float(cdp.get('collateral_ada') or 0)
+            minted_amount = float(cdp.get('minted_amount') or 0)
+        except (TypeError, ValueError):
+            continue
+        if collateral_ada <= 0 and minted_amount <= 0:
+            continue
+        minted_asset = (cdp.get('asset') or 'iUSD')
+        minted_price = _price_usd_of(prices, minted_asset)
+        # Net equity requires BOTH sides priced (debt with an unknown price
+        # would silently overstate equity)
+        priced = ada_price > 0 and (minted_amount <= 0 or minted_price > 0)
+        net_usd = collateral_ada * ada_price - minted_amount * minted_price
+        entries.append({
+            'kind': 'cdp', 'token': 'ADA', 'amount': collateral_ada,
+            'usd': net_usd if priced else 0.0, 'priced': priced, 'raw': cdp,
+        })
+
+    for sp in (protocol_data.get('stability_pool') or []):
+        try:
+            deposited = float(sp.get('deposited') or 0)
+        except (TypeError, ValueError):
+            continue
+        if deposited <= 0:
+            continue
+        asset = (sp.get('asset') or 'iUSD')
+        price = _price_usd_of(prices, asset)
+        entries.append({
+            'kind': 'stability_pool', 'token': asset.upper(), 'amount': deposited,
+            'usd': deposited * price, 'priced': price > 0, 'raw': sp,
+        })
+
+    reward_token = protocol_data.get('reward_token')
+    try:
+        pending = float(protocol_data.get('pending_rewards') or 0)
+    except (TypeError, ValueError):
+        pending = 0.0
+    if reward_token and pending > 0:
+        rt = reward_token.upper()
+        price = _price_usd_of(prices, rt)
+        entries.append({
+            'kind': 'reward', 'token': rt, 'amount': pending,
+            'usd': pending * price, 'priced': price > 0, 'raw': None,
+        })
+
+    return entries
+
+
 # Token type categories for display
 TOKEN_CATEGORIES = {
     "governance": "Governance Tokens",
@@ -615,7 +731,16 @@ class DeFiService:
                     })
 
             if not user_positions:
-                return None
+                # The API answered and none of the creds own a position —
+                # a confirmed empty, distinct from fetch failure (None)
+                return {
+                    'protocol': 'Indigo',
+                    'address': address,
+                    'positions': [],
+                    'total_staked_indy': 0,
+                    'position_count': 0,
+                    'confirmed_empty': True,
+                }
 
             return {
                 'protocol': 'Indigo',
@@ -684,7 +809,15 @@ class DeFiService:
                 })
 
             if not user_cdps:
-                return None
+                # Confirmed empty — the API answered with no matching CDPs
+                return {
+                    'protocol': 'Indigo',
+                    'address': address,
+                    'cdps': [],
+                    'total_collateral_ada': 0,
+                    'cdp_count': 0,
+                    'confirmed_empty': True,
+                }
 
             return {
                 'protocol': 'Indigo',
@@ -1048,7 +1181,15 @@ class DeFiService:
 
             if not positions:
                 logger.info(f"[Liqwid] No Agora stakes for {address[:20]}...")
-                return None
+                # Every page answered 200 — confirmed empty
+                return {
+                    'protocol': 'Liqwid',
+                    'address': address,
+                    'positions': [],
+                    'total_staked_lq': 0,
+                    'position_count': 0,
+                    'confirmed_empty': True,
+                }
 
             logger.info(
                 f"[Liqwid] Found {len(positions)} Agora stakes, "
@@ -1104,9 +1245,10 @@ class DeFiService:
                         logger.warning(f"[Strike] Page {pg} fetch failed: {e}")
                         return None
 
-            # Fetch first page, then remaining in parallel
+            # Fetch first page, then remaining in parallel.
+            # None = fetch failure; [] = the contract simply has no more pages.
             first_page = await fetch_page(1)
-            if not first_page:
+            if first_page is None:
                 return None
 
             remaining = await asyncio.gather(
@@ -1126,15 +1268,19 @@ class DeFiService:
                 else:
                     all_utxos.extend(result)
 
+            unrecovered_pages = []
             if failed_pages:
                 logger.info(f"[Strike] Retrying {len(failed_pages)} failed pages sequentially...")
                 for pg in failed_pages:
                     try:
                         result = await fetch_page(pg)
-                        if result:
+                        if result is None:
+                            unrecovered_pages.append(pg)
+                        else:
                             all_utxos.extend(result)
                     except Exception as e:
                         logger.warning(f"[Strike] Retry page {pg} failed: {e}")
+                        unrecovered_pages.append(pg)
 
             logger.info(f"[Strike] Scanned {len(all_utxos)} UTxOs for PKH {payment_cred[:16]}...")
 
@@ -1170,7 +1316,18 @@ class DeFiService:
                     })
 
             if not positions:
-                return None
+                if unrecovered_pages:
+                    # Pages are missing — cannot rule out positions on them
+                    return None
+                # Full scan, no user NFT anywhere — confirmed empty
+                return {
+                    'protocol': 'Strike',
+                    'address': address,
+                    'positions': [],
+                    'total_staked_strike': 0,
+                    'position_count': 0,
+                    'confirmed_empty': True,
+                }
 
             return {
                 'protocol': 'Strike',
@@ -1210,6 +1367,8 @@ class DeFiService:
             probe_sem = asyncio.Semaphore(4)
 
             async def resolve_account(addr):
+                # Returns account dict, "notfound" (404 — a POSITIVE
+                # no-account answer), or None (fetch failure)
                 async with probe_sem:
                     try:
                         resp = await client.get(
@@ -1218,14 +1377,14 @@ class DeFiService:
                         )
                         if resp.status_code == 200:
                             return resp.json()
-                        if resp.status_code != 404:
-                            # 404 = address has no Strike account (normal);
-                            # anything else (429/5xx) is silent under-detection
-                            logger.warning(
-                                f"[Strike V2] account probe for {addr[:20]}... "
-                                f"returned HTTP {resp.status_code} — positions on "
-                                f"this address may be missed this scan"
-                            )
+                        if resp.status_code == 404:
+                            return "notfound"
+                        # 429/5xx etc. is silent under-detection
+                        logger.warning(
+                            f"[Strike V2] account probe for {addr[:20]}... "
+                            f"returned HTTP {resp.status_code} — positions on "
+                            f"this address may be missed this scan"
+                        )
                         return None
                     except Exception as e:
                         logger.debug(f"[Strike V2] account probe failed for {addr[:20]}: {e}")
@@ -1237,8 +1396,12 @@ class DeFiService:
 
             # account_id → wallet_balance (first occurrence wins)
             accounts = {}
+            probe_failures = 0
             for acct in accounts_raw:
-                if not acct:
+                if acct is None:
+                    probe_failures += 1
+                    continue
+                if acct == "notfound" or not isinstance(acct, dict):
                     continue
                 acct_id = acct.get("account_id")
                 if acct_id and acct_id not in accounts:
@@ -1247,13 +1410,24 @@ class DeFiService:
             # An empty trading account can still hold vault deposits —
             # only a missing account means no V2 presence at all.
             if not accounts:
-                return None
+                if probe_failures:
+                    return None
+                # Every address positively answered "no account"
+                return {
+                    "account_id": None,
+                    "account_ids": [],
+                    "v2_balance": 0.0,
+                    "vault_positions": [],
+                    "total_vault_ada": 0.0,
+                    "confirmed_empty": True,
+                }
 
             account_id = next(iter(accounts))
             wallet_balance = sum(accounts.values())
 
             # Step 2: Vault positions per unique account
             raw_by_account = []
+            vault_fetch_failed = False
             for acct_id in accounts:
                 try:
                     vp_resp = await client.get(
@@ -1264,7 +1438,10 @@ class DeFiService:
                         raw = vp_resp.json().get("positions") or []
                         if raw:
                             raw_by_account.append((acct_id, raw))
+                    else:
+                        vault_fetch_failed = True
                 except Exception as e:
+                    vault_fetch_failed = True
                     logger.warning(f"[Strike V2] Vault positions fetch failed for {address[:20]}: {e}")
 
             vault_positions = []
@@ -1331,9 +1508,20 @@ class DeFiService:
 
             total_vault_ada = sum(p["value_ada"] for p in vault_positions)
 
-            # No balance and no vaults: nothing to report
+            # No balance and no vaults: nothing to report. If every lookup
+            # answered, the account is POSITIVELY empty; a failed vault fetch
+            # means positions may exist unseen, so stay indeterminate.
             if wallet_balance <= 0 and not vault_positions:
-                return None
+                if probe_failures or vault_fetch_failed:
+                    return None
+                return {
+                    "account_id": account_id,
+                    "account_ids": list(accounts),
+                    "v2_balance": 0.0,
+                    "vault_positions": [],
+                    "total_vault_ada": 0.0,
+                    "confirmed_empty": True,
+                }
 
             logger.info(
                 f"[Strike V2] {address[:20]}... balance={wallet_balance:.2f} ADA, "
@@ -2036,6 +2224,33 @@ class DeFiService:
             return_exceptions=True
         )
 
+        # Confirmed-empty results (the protocol POSITIVELY answered "no
+        # positions", as opposed to a failed/timed-out fetch → None):
+        # normalize to None for assembly, but remember them — a confirmed
+        # empty must neither be backfilled from stale data nor refused by
+        # the downgrade guard, or a genuine protocol exit can never display.
+        def _split_confirmed(val):
+            if isinstance(val, dict) and val.get('confirmed_empty'):
+                return None, True
+            return val, False
+
+        indigo, ce_indigo = _split_confirmed(indigo)
+        indigo_cdps, ce_indigo_cdps = _split_confirmed(indigo_cdps)
+        liqwid, ce_liqwid = _split_confirmed(liqwid)
+        strike, ce_strike = _split_confirmed(strike)
+        strike_v2, ce_strike_v2 = _split_confirmed(strike_v2)
+
+        confirmed_empty = set()
+        # Indigo SP is disabled and can never contribute data, so staking +
+        # CDPs confirm the whole Indigo entry
+        if ce_indigo and ce_indigo_cdps:
+            confirmed_empty.add('Indigo')
+        if ce_liqwid:
+            confirmed_empty.add('Liqwid')
+        if ce_strike and ce_strike_v2:
+            confirmed_empty.add('Strike')
+        staking['confirmed_empty'] = sorted(confirmed_empty)
+
         # Treat exceptions as None
         if isinstance(indigo, Exception):
             logger.error(f"Indigo staking error for {address[:20]}: {indigo}")
@@ -2063,11 +2278,15 @@ class DeFiService:
             logger.error(f"Strike V2 error for {address[:20]}: {strike_v2}")
             strike_v2 = None
 
-        # Fill timed-out protocols from previous cache result
+        # Fill timed-out protocols from previous cache result — but never a
+        # confirmed-empty one: the protocol answered "no positions", so
+        # resurrecting stale data would mask a genuine exit
         if previous_result and previous_result.get('protocols'):
             prev = previous_result['protocols']
             protocol_map = {'Indigo': indigo, 'Strike': strike, 'Liqwid': liqwid, 'Iagon': iagon, 'Surf Lending': surf}
             for name, val in protocol_map.items():
+                if name in confirmed_empty:
+                    continue
                 if val is None and name in prev:
                     logger.info(f"[Staking] {name} timed out — using previous cached data (stale)")
                     prev[name]['stale'] = True
