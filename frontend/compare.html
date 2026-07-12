@@ -1,0 +1,1423 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark-mode">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compare Wallets - ABCT</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1776051739">
+    <!-- Chart.js for pie/bar charts -->
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+    <!-- DOMPurify for XSS protection -->
+    <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+    <!-- Session-based authentication -->
+    <script src="/static/js/session-auth.js?v=1776051739"></script>
+    <style>
+        /* Compare Page Layout */
+        .compare-page {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .page-header h1 {
+            margin: 0;
+            color: var(--text-primary, #e0e0e0);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 12px;
+        }
+
+        /* Waffle Menu Styles (consistent with other pages) */
+        .waffle-menu-container {
+            position: relative;
+        }
+
+        .waffle-menu-btn {
+            width: 40px;
+            height: 40px;
+            background: rgba(102, 126, 234, 0.1);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .waffle-menu-btn:hover {
+            background: rgba(102, 126, 234, 0.2);
+            border-color: rgba(102, 126, 234, 0.5);
+        }
+
+        .waffle-icon {
+            display: grid;
+            grid-template-columns: repeat(3, 6px);
+            gap: 3px;
+        }
+
+        .waffle-icon span {
+            width: 6px;
+            height: 6px;
+            background: #667eea;
+            border-radius: 1px;
+        }
+
+        .waffle-menu-dropdown {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            background: var(--bg-secondary, #16213e);
+            border: 1px solid var(--border-color, #2a2a4a);
+            border-radius: 12px;
+            min-width: 220px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: all 0.2s ease;
+            overflow: hidden;
+        }
+
+        .waffle-menu-dropdown.active {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .waffle-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            color: var(--text-primary, #e0e0e0);
+            text-decoration: none;
+            font-size: 14px;
+            transition: background 0.2s;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .waffle-menu-item:last-child {
+            border-bottom: none;
+        }
+
+        .waffle-menu-item:hover {
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .waffle-menu-item.active {
+            background: rgba(102, 126, 234, 0.15);
+            border-left: 3px solid #667eea;
+        }
+
+        .waffle-item-icon {
+            font-size: 18px;
+            width: 24px;
+            text-align: center;
+        }
+
+        .waffle-menu-divider {
+            height: 1px;
+            background: var(--border-color, #2a2a4a);
+            margin: 4px 0;
+        }
+
+        .waffle-menu-theme {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+        }
+
+        .waffle-menu-theme select {
+            background: var(--bg-primary, #1a1a2e);
+            color: var(--text-primary, #e0e0e0);
+            border: 1px solid var(--border-color, #2a2a4a);
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 13px;
+        }
+
+        /* Wallet Selectors */
+        .wallet-selectors {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .wallet-selector-card {
+            flex: 1;
+            min-width: 280px;
+            background: var(--bg-secondary, #16213e);
+            border: 1px solid var(--border-color, #2a2a4a);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .wallet-selector-card.wallet-a {
+            border-left: 4px solid #667eea;
+        }
+
+        .wallet-selector-card.wallet-b {
+            border-left: 4px solid #00d26a;
+        }
+
+        .wallet-selector-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-secondary, #a0a0a0);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+        }
+
+        .wallet-selector-card.wallet-a .wallet-selector-label {
+            color: #667eea;
+        }
+
+        .wallet-selector-card.wallet-b .wallet-selector-label {
+            color: #00d26a;
+        }
+
+        .wallet-select {
+            width: 100%;
+            padding: 10px 14px;
+            background: var(--bg-primary, #1a1a2e);
+            color: var(--text-primary, #e0e0e0);
+            border: 1px solid var(--border-color, #2a2a4a);
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .wallet-select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        /* Compare Button */
+        .compare-actions {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+
+        .btn-compare {
+            padding: 12px 32px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-compare:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-compare:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Comparison Grid */
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .wallet-panel {
+            background: var(--bg-secondary, #16213e);
+            border: 1px solid var(--border-color, #2a2a4a);
+            border-radius: 12px;
+            padding: 24px;
+        }
+
+        .wallet-panel.panel-a {
+            border-top: 3px solid #667eea;
+        }
+
+        .wallet-panel.panel-b {
+            border-top: 3px solid #00d26a;
+        }
+
+        .diff-panel {
+            background: var(--bg-secondary, #16213e);
+            border: 1px solid var(--border-color, #2a2a4a);
+            border-radius: 12px;
+            padding: 24px;
+            min-width: 280px;
+        }
+
+        .panel-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary, #e0e0e0);
+            margin: 0 0 20px 0;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color, #2a2a4a);
+        }
+
+        .panel-a .panel-title { color: #667eea; }
+        .panel-b .panel-title { color: #00d26a; }
+        .diff-panel .panel-title { color: var(--accent-success, #00d26a); }
+
+        /* Portfolio Value */
+        .portfolio-total {
+            margin-bottom: 24px;
+        }
+
+        .portfolio-total .value-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary, #a0a0a0);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+
+        .portfolio-total .value-amount {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--text-primary, #e0e0e0);
+        }
+
+        /* Asset List */
+        .section-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-secondary, #a0a0a0);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 20px 0 12px 0;
+        }
+
+        .asset-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .asset-list li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 0.9rem;
+        }
+
+        .asset-list li:last-child {
+            border-bottom: none;
+        }
+
+        .asset-name {
+            color: var(--text-primary, #e0e0e0);
+            font-weight: 500;
+        }
+
+        .asset-value {
+            color: var(--text-secondary, #a0a0a0);
+            text-align: right;
+        }
+
+        .asset-value .qty {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--text-secondary, #a0a0a0);
+            opacity: 0.7;
+        }
+
+        /* Chain Distribution Chart */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 280px;
+            margin: 10px auto;
+        }
+
+        /* DeFi Summary */
+        .defi-summary {
+            display: flex;
+            gap: 20px;
+            margin-top: 10px;
+        }
+
+        .defi-stat {
+            flex: 1;
+            background: rgba(102, 126, 234, 0.08);
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .defi-stat .defi-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary, #a0a0a0);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            margin-bottom: 4px;
+        }
+
+        .defi-stat .defi-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary, #e0e0e0);
+        }
+
+        /* Difference Column Styles */
+        .diff-section {
+            margin-bottom: 20px;
+        }
+
+        .diff-value {
+            font-size: 1.4rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .diff-value.positive { color: var(--accent-success, #00d26a); }
+        .diff-value.negative { color: var(--accent-error, #ff6b6b); }
+        .diff-value.neutral { color: var(--text-secondary, #a0a0a0); }
+
+        .diff-percent {
+            font-size: 0.85rem;
+            color: var(--text-secondary, #a0a0a0);
+        }
+
+        .diff-asset-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .diff-asset-list li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 0.85rem;
+        }
+
+        .diff-asset-list li:last-child {
+            border-bottom: none;
+        }
+
+        .unique-badge {
+            display: inline-block;
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .unique-badge.badge-a {
+            background: rgba(102, 126, 234, 0.2);
+            color: #667eea;
+            border: 1px solid rgba(102, 126, 234, 0.3);
+        }
+
+        .unique-badge.badge-b {
+            background: rgba(0, 210, 106, 0.2);
+            color: #00d26a;
+            border: 1px solid rgba(0, 210, 106, 0.3);
+        }
+
+        /* Loading Skeleton */
+        .skeleton {
+            background: linear-gradient(90deg,
+                var(--bg-secondary, #16213e) 25%,
+                rgba(255, 255, 255, 0.08) 50%,
+                var(--bg-secondary, #16213e) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: 6px;
+        }
+
+        .skeleton-text {
+            height: 16px;
+            margin-bottom: 8px;
+        }
+
+        .skeleton-value {
+            height: 32px;
+            width: 60%;
+            margin-bottom: 16px;
+        }
+
+        .skeleton-chart {
+            height: 200px;
+            border-radius: 12px;
+        }
+
+        .skeleton-row {
+            height: 14px;
+            margin-bottom: 10px;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        /* Loading Spinner */
+        .compare-loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: var(--text-secondary, #a0a0a0);
+        }
+
+        .compare-loading .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border-color, #2a2a4a);
+            border-top-color: var(--accent-success, #00d26a);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Error State */
+        .error-state {
+            text-align: center;
+            padding: 30px 20px;
+            color: var(--accent-error, #ff6b6b);
+        }
+
+        .error-state .error-icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .error-state .error-message {
+            font-size: 0.9rem;
+            color: var(--text-secondary, #a0a0a0);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-secondary, #a0a0a0);
+        }
+
+        .empty-state .empty-icon {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            opacity: 0.5;
+        }
+
+        .empty-state p {
+            margin: 0;
+            font-size: 0.95rem;
+        }
+
+        /* Responsive: Stack vertically below 768px */
+        @media (max-width: 768px) {
+            .comparison-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .diff-panel {
+                min-width: auto;
+                order: -1;
+            }
+
+            .wallet-selectors {
+                flex-direction: column;
+            }
+
+            .wallet-selector-card {
+                min-width: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="compare-page">
+        <header>
+            <h1><a href="/" style="color: inherit; text-decoration: none;">A Better Crypto Tracker</a></h1>
+            <div class="header-actions" style="display: flex; align-items: center; gap: 12px;">
+                <button id="privacyBtn" class="btn btn-privacy" onclick="togglePrivacyMode()" title="Toggle privacy mode">
+                    Privacy Mode
+                </button>
+                <div class="waffle-menu-container">
+                    <button class="waffle-menu-btn" onclick="toggleWaffleMenu()" title="Menu">
+                        <span class="waffle-icon">
+                            <span></span><span></span><span></span>
+                            <span></span><span></span><span></span>
+                            <span></span><span></span><span></span>
+                        </span>
+                    </button>
+                    <div class="waffle-menu-dropdown" id="waffleMenu">
+                        <a href="/" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128200;</span>
+                            <span class="waffle-item-label">Dashboard</span>
+                        </a>
+                        <a href="/wallets.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128176;</span>
+                            <span class="waffle-item-label">Manage Wallets</span>
+                        </a>
+                        <a href="/transactions.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128260;</span>
+                            <span class="waffle-item-label">Transactions</span>
+                        </a>
+                        <a href="/apis.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128273;</span>
+                            <span class="waffle-item-label">APIs</span>
+                        </a>
+                        <a href="/services.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#9881;</span>
+                            <span class="waffle-item-label">Services</span>
+                        </a>
+                        <a href="/system.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128295;</span>
+                            <span class="waffle-item-label">Settings</span>
+                        </a>
+                        <a href="/cache.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128452;</span>
+                            <span class="waffle-item-label">Cache Management</span>
+                        </a>
+                        <a href="/compare.html" class="waffle-menu-item active">
+                            <span class="waffle-item-icon">&#128203;</span>
+                            <span class="waffle-item-label">Compare Wallets</span>
+                        </a>
+                        <a href="/nft-wall.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128444;</span>
+                            <span class="waffle-item-label">NFT Wall</span>
+                        </a>
+                        <a href="/logs.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#128221;</span>
+                            <span class="waffle-item-label">System Logs</span>
+                        </a>
+                        <a href="/help.html" class="waffle-menu-item">
+                            <span class="waffle-item-icon">&#10067;</span>
+                            <span class="waffle-item-label">Help & Guide</span>
+                        </a>
+                        <div class="waffle-menu-divider"></div>
+                        <div class="waffle-menu-theme">
+                            <span class="waffle-item-icon">&#127912;</span>
+                            <select id="themeSelect" onchange="changeTheme(this.value)" title="Select theme">
+                                <option value="dark-mode">Dark Mode</option>
+                                <option value="light">Light</option>
+                                <option value="cypherpunk1">Cypherpunk 1</option>
+                                <option value="ocean-depths">Ocean Depths</option>
+                                <option value="sunset-horizon">Sunset Horizon</option>
+                                <option value="cypher">Cypher</option>
+                                <option value="cypher2">Cypher2</option>
+                                <option value="cypher3">Cypher3</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Wallet Selectors -->
+        <div class="wallet-selectors">
+            <div class="wallet-selector-card wallet-a">
+                <div class="wallet-selector-label">Wallet A</div>
+                <select id="walletSelectA" class="wallet-select" onchange="onWalletChanged()">
+                    <option value="">-- Select Wallet --</option>
+                </select>
+            </div>
+            <div class="wallet-selector-card wallet-b">
+                <div class="wallet-selector-label">Wallet B</div>
+                <select id="walletSelectB" class="wallet-select" onchange="onWalletChanged()">
+                    <option value="">-- Select Wallet --</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Compare Action -->
+        <div class="compare-actions">
+            <button id="compareBtn" class="btn-compare" onclick="runComparison()" disabled>
+                Compare Wallets
+            </button>
+        </div>
+
+        <!-- Empty State (shown initially) -->
+        <div id="emptyState" class="empty-state">
+            <div class="empty-icon">&#9878;</div>
+            <p>Select two wallets above to compare their portfolios side-by-side.</p>
+        </div>
+
+        <!-- Loading State (hidden by default) -->
+        <div id="loadingState" class="compare-loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Loading comparison data...</p>
+        </div>
+
+        <!-- Comparison Results (hidden by default) -->
+        <div id="comparisonResults" style="display: none;">
+            <div class="comparison-grid">
+                <!-- Wallet A Panel -->
+                <div class="wallet-panel panel-a">
+                    <h3 class="panel-title" id="panelTitleA">Wallet A</h3>
+
+                    <!-- Total Value -->
+                    <div class="portfolio-total">
+                        <div class="value-label">Total Portfolio Value</div>
+                        <div class="value-amount" id="totalValueA">$0.00</div>
+                    </div>
+
+                    <!-- Top Assets -->
+                    <div class="section-title">Top 10 Assets by Value</div>
+                    <ul class="asset-list" id="assetListA"></ul>
+
+                    <!-- Chain Distribution -->
+                    <div class="section-title">Chain Distribution</div>
+                    <div class="chart-container">
+                        <canvas id="chainChartA"></canvas>
+                    </div>
+
+                    <!-- DeFi Summary -->
+                    <div class="section-title">DeFi Positions</div>
+                    <div class="defi-summary" id="defiSummaryA">
+                        <div class="defi-stat">
+                            <div class="defi-label">Positions</div>
+                            <div class="defi-value" id="defiCountA">0</div>
+                        </div>
+                        <div class="defi-stat">
+                            <div class="defi-label">Total Value</div>
+                            <div class="defi-value" id="defiValueA">$0.00</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Difference Panel -->
+                <div class="diff-panel">
+                    <h3 class="panel-title">Differences</h3>
+
+                    <!-- Value Delta -->
+                    <div class="diff-section">
+                        <div class="section-title">Value Delta (A - B)</div>
+                        <div class="diff-value" id="valueDelta">$0.00</div>
+                        <div class="diff-percent" id="valueDeltaPct"></div>
+                    </div>
+
+                    <!-- Unique Assets -->
+                    <div class="diff-section">
+                        <div class="section-title">Unique to Wallet A</div>
+                        <ul class="diff-asset-list" id="uniqueAssetsA">
+                            <li><span style="color: var(--text-secondary);">None</span></li>
+                        </ul>
+                    </div>
+
+                    <div class="diff-section">
+                        <div class="section-title">Unique to Wallet B</div>
+                        <ul class="diff-asset-list" id="uniqueAssetsB">
+                            <li><span style="color: var(--text-secondary);">None</span></li>
+                        </ul>
+                    </div>
+
+                    <!-- Common Assets with Differences -->
+                    <div class="diff-section">
+                        <div class="section-title">Common Asset Differences</div>
+                        <ul class="diff-asset-list" id="commonAssetDiffs">
+                            <li><span style="color: var(--text-secondary);">None</span></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Wallet B Panel -->
+                <div class="wallet-panel panel-b">
+                    <h3 class="panel-title" id="panelTitleB">Wallet B</h3>
+
+                    <!-- Total Value -->
+                    <div class="portfolio-total">
+                        <div class="value-label">Total Portfolio Value</div>
+                        <div class="value-amount" id="totalValueB">$0.00</div>
+                    </div>
+
+                    <!-- Top Assets -->
+                    <div class="section-title">Top 10 Assets by Value</div>
+                    <ul class="asset-list" id="assetListB"></ul>
+
+                    <!-- Chain Distribution -->
+                    <div class="section-title">Chain Distribution</div>
+                    <div class="chart-container">
+                        <canvas id="chainChartB"></canvas>
+                    </div>
+
+                    <!-- DeFi Summary -->
+                    <div class="section-title">DeFi Positions</div>
+                    <div class="defi-summary" id="defiSummaryB">
+                        <div class="defi-stat">
+                            <div class="defi-label">Positions</div>
+                            <div class="defi-value" id="defiCountB">0</div>
+                        </div>
+                        <div class="defi-stat">
+                            <div class="defi-label">Total Value</div>
+                            <div class="defi-value" id="defiValueB">$0.00</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- App.js provides theme, privacy mode, waffle menu functions -->
+    <script src="/static/js/app.js?v=1776051739"></script>
+
+    <script>
+    /**
+     * ABCT Portfolio Comparison View
+     *
+     * Fetches portfolio and DeFi data for two selected wallets
+     * and renders a side-by-side comparison with difference analysis.
+     */
+
+    /* ------------------------------------------------------------------ */
+    /*  State                                                              */
+    /* ------------------------------------------------------------------ */
+    let wallets = [];
+    let chartA = null;
+    let chartB = null;
+
+    /* ------------------------------------------------------------------ */
+    /*  Initialization                                                     */
+    /* ------------------------------------------------------------------ */
+    document.addEventListener('DOMContentLoaded', async () => {
+        /* Apply saved theme and privacy mode */
+        if (typeof initializePrivacyMode === 'function') {
+            initializePrivacyMode();
+        }
+        if (typeof loadSavedTheme === 'function') {
+            loadSavedTheme();
+        }
+
+        /* Load wallet list for both selectors */
+        await loadWallets();
+    });
+
+    /* ------------------------------------------------------------------ */
+    /*  Wallet Loading                                                     */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Fetch configured wallets from the API and populate both selectors.
+     */
+    async function loadWallets() {
+        try {
+            const response = await authFetch('/api/wallets');
+            if (!response.ok) {
+                throw new Error('Failed to load wallets');
+            }
+            const data = await response.json();
+            wallets = Array.isArray(data) ? data : (data.wallets || []);
+            populateSelectors();
+        } catch (err) {
+            showError('Unable to load wallets. Please check your connection and try again.');
+        }
+    }
+
+    /**
+     * Populate both wallet selector dropdowns with wallet options.
+     * Uses DOMPurify to sanitize wallet names before rendering.
+     */
+    function populateSelectors() {
+        var selectA = document.getElementById('walletSelectA');
+        var selectB = document.getElementById('walletSelectB');
+
+        /* Clear existing options beyond the placeholder */
+        selectA.innerHTML = '<option value="">-- Select Wallet --</option>';
+        selectB.innerHTML = '<option value="">-- Select Wallet --</option>';
+
+        wallets.forEach(function(wallet) {
+            var safeName = typeof DOMPurify !== 'undefined'
+                ? DOMPurify.sanitize(wallet.name || wallet.address || 'Unknown')
+                : escapeText(wallet.name || wallet.address || 'Unknown');
+            var id = wallet.id || wallet.wallet_id || '';
+
+            var optA = document.createElement('option');
+            optA.value = id;
+            optA.textContent = safeName;
+            selectA.appendChild(optA);
+
+            var optB = document.createElement('option');
+            optB.value = id;
+            optB.textContent = safeName;
+            selectB.appendChild(optB);
+        });
+    }
+
+    /**
+     * Enable or disable the Compare button based on selection state.
+     */
+    function onWalletChanged() {
+        var a = document.getElementById('walletSelectA').value;
+        var b = document.getElementById('walletSelectB').value;
+        document.getElementById('compareBtn').disabled = !(a && b);
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  Comparison Logic                                                   */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Run the full comparison: fetch data for both wallets, render panels,
+     * and compute differences.
+     */
+    async function runComparison() {
+        var idA = document.getElementById('walletSelectA').value;
+        var idB = document.getElementById('walletSelectB').value;
+
+        if (!idA || !idB) return;
+
+        /* Show loading state */
+        document.getElementById('emptyState').style.display = 'none';
+        document.getElementById('comparisonResults').style.display = 'none';
+        document.getElementById('loadingState').style.display = 'flex';
+
+        try {
+            /* Fetch portfolio data for both wallets in parallel */
+            var results = await Promise.allSettled([
+                fetchPortfolio(idA),
+                fetchPortfolio(idB),
+                fetchDefiPositions(idA),
+                fetchDefiPositions(idB)
+            ]);
+
+            var portfolioA = results[0].status === 'fulfilled' ? results[0].value : null;
+            var portfolioB = results[1].status === 'fulfilled' ? results[1].value : null;
+            var defiA      = results[2].status === 'fulfilled' ? results[2].value : null;
+            var defiB      = results[3].status === 'fulfilled' ? results[3].value : null;
+
+            /* Hide loading, show results */
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('comparisonResults').style.display = 'block';
+
+            /* Render each panel */
+            renderWalletPanel('A', portfolioA, defiA, idA);
+            renderWalletPanel('B', portfolioB, defiB, idB);
+            renderDifferences(portfolioA, portfolioB);
+        } catch (err) {
+            document.getElementById('loadingState').style.display = 'none';
+            showError('An unexpected error occurred while comparing wallets.');
+        }
+    }
+
+    /**
+     * Fetch portfolio data for a given wallet ID.
+     * @param {string} walletId
+     * @returns {Promise<Object|null>}
+     */
+    async function fetchPortfolio(walletId) {
+        var wallet = wallets.find(function(w) {
+            return (w.id || w.wallet_id) === walletId;
+        });
+        if (!wallet) return null;
+
+        var response = await authFetch('/api/portfolio/' + encodeURIComponent(walletId));
+        if (!response.ok) return null;
+        return response.json();
+    }
+
+    /**
+     * Fetch DeFi positions for a given wallet.
+     * Looks up the wallet address from the wallets list.
+     * @param {string} walletId
+     * @returns {Promise<Object|null>}
+     */
+    async function fetchDefiPositions(walletId) {
+        var wallet = wallets.find(function(w) {
+            return (w.id || w.wallet_id) === walletId;
+        });
+        if (!wallet || !wallet.address) return null;
+
+        try {
+            var response = await authFetch('/api/defi/positions/' + encodeURIComponent(wallet.address));
+            if (!response.ok) return null;
+            return response.json();
+        } catch (e) {
+            /* DeFi endpoint may not exist for all wallets — graceful fallback */
+            return null;
+        }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  Rendering                                                          */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Render a single wallet panel (A or B).
+     * @param {'A'|'B'} side
+     * @param {Object|null} portfolio
+     * @param {Object|null} defi
+     * @param {string} walletId
+     */
+    function renderWalletPanel(side, portfolio, defi, walletId) {
+        var wallet = wallets.find(function(w) {
+            return (w.id || w.wallet_id) === walletId;
+        });
+        var walletName = wallet
+            ? (wallet.name || wallet.address || 'Unknown')
+            : 'Unknown';
+
+        /* Sanitize wallet name for DOM insertion */
+        var safeName = typeof DOMPurify !== 'undefined'
+            ? DOMPurify.sanitize(walletName)
+            : escapeText(walletName);
+
+        document.getElementById('panelTitle' + side).textContent = safeName;
+
+        /* Handle missing portfolio data */
+        if (!portfolio) {
+            document.getElementById('totalValue' + side).textContent = '--';
+            document.getElementById('assetList' + side).innerHTML =
+                '<li class="error-state"><span class="error-message">Failed to load portfolio data</span></li>';
+            document.getElementById('defiCount' + side).textContent = '--';
+            document.getElementById('defiValue' + side).textContent = '--';
+            return;
+        }
+
+        /* Extract assets from portfolio response */
+        var assets = extractAssets(portfolio);
+        var totalValue = computeTotalValue(assets);
+
+        /* Total Value */
+        document.getElementById('totalValue' + side).textContent = formatUSD(totalValue);
+
+        /* Top 10 Assets */
+        var sorted = assets.slice().sort(function(a, b) {
+            return (b.usd_value || 0) - (a.usd_value || 0);
+        });
+        var top10 = sorted.slice(0, 10);
+        renderAssetList('assetList' + side, top10);
+
+        /* Chain Distribution Chart */
+        var chainData = computeChainDistribution(assets);
+        renderChainChart(side, chainData);
+
+        /* DeFi Summary */
+        renderDefiSummary(side, defi);
+    }
+
+    /**
+     * Extract a normalized asset array from various portfolio response formats.
+     * @param {Object} portfolio
+     * @returns {Array}
+     */
+    function extractAssets(portfolio) {
+        if (Array.isArray(portfolio)) return portfolio;
+        if (portfolio.assets) return portfolio.assets;
+        if (portfolio.holdings) return portfolio.holdings;
+        if (portfolio.tokens) return portfolio.tokens;
+        /* Flatten chain-grouped data */
+        if (portfolio.chains || portfolio.blockchains) {
+            var chains = portfolio.chains || portfolio.blockchains;
+            var all = [];
+            Object.keys(chains).forEach(function(chain) {
+                var items = chains[chain];
+                if (Array.isArray(items)) {
+                    items.forEach(function(item) {
+                        item._chain = item.chain || item.blockchain || chain;
+                        all.push(item);
+                    });
+                }
+            });
+            return all;
+        }
+        return [];
+    }
+
+    /**
+     * Compute total USD value across all assets.
+     * @param {Array} assets
+     * @returns {number}
+     */
+    function computeTotalValue(assets) {
+        return assets.reduce(function(sum, a) {
+            return sum + (parseFloat(a.usd_value || a.value_usd || a.total_value || 0));
+        }, 0);
+    }
+
+    /**
+     * Render an asset list into a <ul> element.
+     * @param {string} elementId
+     * @param {Array} assets
+     */
+    function renderAssetList(elementId, assets) {
+        var ul = document.getElementById(elementId);
+        if (!assets || assets.length === 0) {
+            ul.innerHTML = '<li><span style="color: var(--text-secondary);">No assets found</span></li>';
+            return;
+        }
+
+        var html = '';
+        assets.forEach(function(asset) {
+            var name = typeof DOMPurify !== 'undefined'
+                ? DOMPurify.sanitize(asset.symbol || asset.name || 'Unknown')
+                : escapeText(asset.symbol || asset.name || 'Unknown');
+            var value = parseFloat(asset.usd_value || asset.value_usd || asset.total_value || 0);
+            var qty = parseFloat(asset.quantity || asset.balance || asset.amount || 0);
+            html += '<li>'
+                + '<span class="asset-name">' + name + '</span>'
+                + '<span class="asset-value">'
+                + formatUSD(value)
+                + '<span class="qty">' + formatNumber(qty) + '</span>'
+                + '</span>'
+                + '</li>';
+        });
+        ul.innerHTML = html;
+    }
+
+    /**
+     * Compute chain distribution from asset list.
+     * @param {Array} assets
+     * @returns {Object} { chainName: totalUsdValue }
+     */
+    function computeChainDistribution(assets) {
+        var dist = {};
+        assets.forEach(function(asset) {
+            var chain = asset._chain || asset.chain || asset.blockchain || asset.network || 'Other';
+            if (!dist[chain]) dist[chain] = 0;
+            dist[chain] += parseFloat(asset.usd_value || asset.value_usd || asset.total_value || 0);
+        });
+        return dist;
+    }
+
+    /**
+     * Render a pie chart for chain distribution.
+     * @param {'A'|'B'} side
+     * @param {Object} chainData
+     */
+    function renderChainChart(side, chainData) {
+        var canvasId = 'chainChart' + side;
+        var canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+
+        /* Destroy existing chart if present */
+        if (side === 'A' && chartA) { chartA.destroy(); chartA = null; }
+        if (side === 'B' && chartB) { chartB.destroy(); chartB = null; }
+
+        var labels = Object.keys(chainData);
+        var values = labels.map(function(l) { return chainData[l]; });
+
+        if (labels.length === 0) {
+            labels = ['No Data'];
+            values = [1];
+        }
+
+        /* Chain colors — reuse ABCT accent palette */
+        var colors = [
+            '#667eea', '#00d26a', '#f7931a', '#627eea', '#ff6b6b',
+            '#00b4d8', '#ffd166', '#d946ef', '#06d6a0', '#ef476f',
+            '#48cae4', '#ff8c42', '#00d4ff', '#ff3366', '#ffc145'
+        ];
+
+        var chart = new Chart(canvas, {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: colors.slice(0, labels.length),
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            color: getComputedStyle(document.documentElement)
+                                .getPropertyValue('--text-primary').trim() || '#e0e0e0',
+                            font: { size: 11 },
+                            padding: 8
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                var total = ctx.dataset.data.reduce(function(s, v) { return s + v; }, 0);
+                                var pct = total > 0 ? ((ctx.raw / total) * 100).toFixed(1) : 0;
+                                return ctx.label + ': ' + formatUSD(ctx.raw) + ' (' + pct + '%)';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        if (side === 'A') chartA = chart;
+        else chartB = chart;
+    }
+
+    /**
+     * Render DeFi summary for a wallet panel.
+     * @param {'A'|'B'} side
+     * @param {Object|null} defi
+     */
+    function renderDefiSummary(side, defi) {
+        if (!defi) {
+            document.getElementById('defiCount' + side).textContent = '0';
+            document.getElementById('defiValue' + side).textContent = '$0.00';
+            return;
+        }
+
+        var positions = Array.isArray(defi) ? defi : (defi.positions || defi.data || []);
+        var count = positions.length;
+        var totalValue = positions.reduce(function(sum, p) {
+            return sum + (parseFloat(p.value_usd || p.usd_value || p.total_value || 0));
+        }, 0);
+
+        document.getElementById('defiCount' + side).textContent = count.toString();
+        document.getElementById('defiValue' + side).textContent = formatUSD(totalValue);
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  Difference Computation                                             */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Compute and render the differences between two portfolios.
+     * @param {Object|null} portfolioA
+     * @param {Object|null} portfolioB
+     */
+    function renderDifferences(portfolioA, portfolioB) {
+        var assetsA = portfolioA ? extractAssets(portfolioA) : [];
+        var assetsB = portfolioB ? extractAssets(portfolioB) : [];
+
+        var totalA = computeTotalValue(assetsA);
+        var totalB = computeTotalValue(assetsB);
+
+        /* Value Delta */
+        var delta = totalA - totalB;
+        var pct = totalB > 0 ? ((delta / totalB) * 100).toFixed(1) : (totalA > 0 ? '100' : '0');
+
+        var deltaEl = document.getElementById('valueDelta');
+        deltaEl.textContent = (delta >= 0 ? '+' : '') + formatUSD(delta);
+        deltaEl.className = 'diff-value ' + (delta > 0 ? 'positive' : delta < 0 ? 'negative' : 'neutral');
+
+        document.getElementById('valueDeltaPct').textContent =
+            (delta >= 0 ? '+' : '') + pct + '% relative to Wallet B';
+
+        /* Build asset maps keyed by symbol */
+        var mapA = buildAssetMap(assetsA);
+        var mapB = buildAssetMap(assetsB);
+
+        /* Find unique to A */
+        var uniqueA = [];
+        Object.keys(mapA).forEach(function(sym) {
+            if (!mapB[sym]) {
+                uniqueA.push({ symbol: sym, value: mapA[sym].value, qty: mapA[sym].qty });
+            }
+        });
+
+        /* Find unique to B */
+        var uniqueB = [];
+        Object.keys(mapB).forEach(function(sym) {
+            if (!mapA[sym]) {
+                uniqueB.push({ symbol: sym, value: mapB[sym].value, qty: mapB[sym].qty });
+            }
+        });
+
+        /* Find common with differences */
+        var common = [];
+        Object.keys(mapA).forEach(function(sym) {
+            if (mapB[sym]) {
+                var diff = mapA[sym].value - mapB[sym].value;
+                if (Math.abs(diff) > 0.01) {
+                    common.push({
+                        symbol: sym,
+                        valueA: mapA[sym].value,
+                        valueB: mapB[sym].value,
+                        diff: diff
+                    });
+                }
+            }
+        });
+
+        /* Sort by absolute difference descending */
+        common.sort(function(a, b) { return Math.abs(b.diff) - Math.abs(a.diff); });
+
+        /* Render unique assets */
+        renderUniqueAssets('uniqueAssetsA', uniqueA, 'badge-a');
+        renderUniqueAssets('uniqueAssetsB', uniqueB, 'badge-b');
+
+        /* Render common asset differences */
+        renderCommonDiffs('commonAssetDiffs', common);
+    }
+
+    /**
+     * Build a map of { symbol: { value, qty } } from an asset array.
+     * @param {Array} assets
+     * @returns {Object}
+     */
+    function buildAssetMap(assets) {
+        var map = {};
+        assets.forEach(function(a) {
+            var sym = (a.symbol || a.name || 'UNKNOWN').toUpperCase();
+            var val = parseFloat(a.usd_value || a.value_usd || a.total_value || 0);
+            var qty = parseFloat(a.quantity || a.balance || a.amount || 0);
+            if (map[sym]) {
+                map[sym].value += val;
+                map[sym].qty += qty;
+            } else {
+                map[sym] = { value: val, qty: qty };
+            }
+        });
+        return map;
+    }
+
+    /**
+     * Render unique assets list.
+     * @param {string} elementId
+     * @param {Array} assets
+     * @param {string} badgeClass
+     */
+    function renderUniqueAssets(elementId, assets, badgeClass) {
+        var ul = document.getElementById(elementId);
+        if (!assets || assets.length === 0) {
+            ul.innerHTML = '<li><span style="color: var(--text-secondary);">None</span></li>';
+            return;
+        }
+
+        var html = '';
+        assets.sort(function(a, b) { return b.value - a.value; });
+        assets.forEach(function(asset) {
+            var safeSym = typeof DOMPurify !== 'undefined'
+                ? DOMPurify.sanitize(asset.symbol)
+                : escapeText(asset.symbol);
+            html += '<li>'
+                + '<span class="asset-name">' + safeSym + '</span>'
+                + '<span class="asset-value">' + formatUSD(asset.value) + '</span>'
+                + '</li>';
+        });
+        ul.innerHTML = html;
+    }
+
+    /**
+     * Render common asset differences.
+     * @param {string} elementId
+     * @param {Array} diffs
+     */
+    function renderCommonDiffs(elementId, diffs) {
+        var ul = document.getElementById(elementId);
+        if (!diffs || diffs.length === 0) {
+            ul.innerHTML = '<li><span style="color: var(--text-secondary);">None</span></li>';
+            return;
+        }
+
+        var html = '';
+        /* Show top 15 differences */
+        diffs.slice(0, 15).forEach(function(d) {
+            var safeSym = typeof DOMPurify !== 'undefined'
+                ? DOMPurify.sanitize(d.symbol)
+                : escapeText(d.symbol);
+            var diffClass = d.diff > 0 ? 'positive' : 'negative';
+            var sign = d.diff > 0 ? '+' : '';
+            html += '<li>'
+                + '<span class="asset-name">' + safeSym + '</span>'
+                + '<span class="diff-value ' + diffClass + '" style="font-size: 0.85rem;">'
+                + sign + formatUSD(d.diff)
+                + '</span>'
+                + '</li>';
+        });
+        ul.innerHTML = html;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  Utility Functions                                                  */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Format a number as USD currency string.
+     * @param {number} value
+     * @returns {string}
+     */
+    function formatUSD(value) {
+        var num = parseFloat(value) || 0;
+        if (Math.abs(num) >= 1) {
+            return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        /* Small values: show more decimals */
+        return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 });
+    }
+
+    /**
+     * Format a number with appropriate precision.
+     * @param {number} value
+     * @returns {string}
+     */
+    function formatNumber(value) {
+        var num = parseFloat(value) || 0;
+        if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
+        if (num >= 1000) return (num / 1000).toFixed(2) + 'K';
+        if (num >= 1) return num.toFixed(2);
+        return num.toFixed(6);
+    }
+
+    /**
+     * Escape text for safe HTML insertion (fallback if DOMPurify not loaded).
+     * @param {string} text
+     * @returns {string}
+     */
+    function escapeText(text) {
+        var div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    /**
+     * Show a global error message in the comparison area.
+     * @param {string} message
+     */
+    function showError(message) {
+        document.getElementById('emptyState').style.display = 'none';
+        document.getElementById('loadingState').style.display = 'none';
+        document.getElementById('comparisonResults').style.display = 'none';
+
+        var errorHtml = '<div class="error-state">'
+            + '<div class="error-icon">&#9888;</div>'
+            + '<p class="error-message">' + escapeText(message) + '</p>'
+            + '</div>';
+
+        /* Reuse the empty state container for errors */
+        var emptyEl = document.getElementById('emptyState');
+        emptyEl.innerHTML = errorHtml;
+        emptyEl.style.display = 'block';
+    }
+    </script>
+
+    <footer style="text-align: center; padding: 20px; margin-top: 40px; color: #888; font-size: 0.875rem;">
+        <p>ABCT - Compare Wallets | <span style="opacity: 0.6;">v1.15.3 (BUILD 1772669294)</span></p>
+    </footer>
+</body>
+</html>

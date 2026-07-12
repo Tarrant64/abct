@@ -7,9 +7,12 @@ Provides endpoints for:
 - Session logout
 - Password management
 
-Default credentials:
+Default credentials (Finding #9):
 - Username: admin
 - Password: satoshi (hashed in database)
+- These defaults are intentional for first-run setup on a home-network appliance.
+  The user should change the password after initial login via the Security page.
+  The defaults are NOT exposed via API (see Finding #3 removal in /auth/status).
 
 Build: v1769653325
 """
@@ -23,7 +26,15 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, Response, Header
 from pydantic import BaseModel
 import aiosqlite
+from starlette.requests import Request as StarletteRequest
 from config import DATABASE_PATH
+
+# Rate limiting for login endpoint (brute-force protection, Finding #4)
+try:
+    from middleware.rate_limit import limiter
+    _RATE_LIMITING_AVAILABLE = True
+except ImportError:
+    _RATE_LIMITING_AVAILABLE = False
 
 # Initialize auth_utils with session store
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -222,13 +233,25 @@ def create_session_token() -> str:
     return secrets.token_urlsafe(32)
 
 
+# Rate limit: 5 login attempts per minute per IP (brute-force protection, Finding #4)
+if _RATE_LIMITING_AVAILABLE:
+    _login_limit = limiter.limit("5/minute")
+else:
+    _login_limit = lambda f: f  # noqa: E731 — no-op if slowapi unavailable
+
+
 @router.post("/login", response_model=LoginResponse)
-async def login(request: LoginRequest):
+@_login_limit
+async def login(http_request: StarletteRequest, login_data: LoginRequest):
     """
     Login endpoint - authenticate user and create session.
 
+    Rate-limited to 5 attempts per minute per IP to prevent brute-force attacks
+    (Security audit Finding #4). Uses slowapi limiter when available.
+
     Args:
-        request: Login credentials (username, password)
+        http_request: Starlette request (used by slowapi for rate limiting)
+        login_data: Login credentials (username, password)
 
     Returns:
         LoginResponse with success status and session token
@@ -237,7 +260,7 @@ async def login(request: LoginRequest):
     await cleanup_expired_sessions()
 
     # Verify credentials
-    if not await verify_password(request.username, request.password):
+    if not await verify_password(login_data.username, login_data.password):
         return LoginResponse(
             success=False,
             message="Invalid username or password"
@@ -249,7 +272,7 @@ async def login(request: LoginRequest):
     async with aiosqlite.connect(DATABASE_PATH) as db:
         async with db.execute(
             "SELECT id, is_demo FROM users WHERE username = ?",
-            (request.username,)
+            (login_data.username,)
         ) as cursor:
             row = await cursor.fetchone()
             if row:
@@ -259,7 +282,7 @@ async def login(request: LoginRequest):
 
     # Create session token and store in database
     token = create_session_token()
-    await create_session(token, request.username, user_id, is_demo, SESSION_TIMEOUT_MINUTES)
+    await create_session(token, login_data.username, user_id, is_demo, SESSION_TIMEOUT_MINUTES)
 
     return LoginResponse(
         success=True,
@@ -410,20 +433,14 @@ async def auth_status():
     except Exception as e:
         user_count = f"Error: {e}"
 
+    # Security: Do not expose default credentials or demo account details via API.
+    # Previously returned default_credentials and demo_account fields here,
+    # which disclosed plaintext passwords. Removed per OWASP audit (Finding #3).
     return {
         "enabled": True,
         "active_sessions": session_count,
         "session_timeout_minutes": SESSION_TIMEOUT_MINUTES,
-        "users_in_database": user_count,
-        "default_credentials": {
-            "username": "admin",
-            "password": "satoshi (change on first login)"
-        },
-        "demo_account": {
-            "username": "demo",
-            "password": "demo",
-            "description": "Demo account with fake data (no real API calls)"
-        }
+        "users_in_database": user_count
     }
 
 

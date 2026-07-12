@@ -69,7 +69,16 @@ class CoinbaseService:
             logger.debug(f"Could not fetch CDP credentials from database: {e}")
 
         # Try loading from file (fallback for development)
-        cdp_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'cdp_api_key.json')
+        # Security (Finding #1): Primary location is EXCLUDE/credentials/ (gitignored).
+        # Legacy fallback checks project root for backwards compatibility.
+        cdp_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'EXCLUDE', 'credentials', 'cdp_api_key.json')
+        if not os.path.exists(cdp_file):
+            # Legacy fallback — warn if found in project root
+            cdp_file_legacy = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'cdp_api_key.json')
+            if os.path.exists(cdp_file_legacy):
+                logger.warning("CDP key found in project root (legacy location). "
+                               "Move to EXCLUDE/credentials/cdp_api_key.json for security.")
+                cdp_file = cdp_file_legacy
         if os.path.exists(cdp_file):
             try:
                 with open(cdp_file, 'r') as f:

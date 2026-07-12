@@ -6,13 +6,17 @@ This module provides mobile-friendly API endpoints with:
 - OHLCV chart data with multiple fallback sources
 - Simplified data formats
 - Proper caching and error handling
+- ETag/If-None-Match conditional GETs on every endpoint (304 on match)
+- Opt-in slim chart payloads (/chart/portfolio-history?slim=true)
 
 All endpoints require authentication via verify_session.
 """
 
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends, Request, Response
+from fastapi.routing import APIRoute
 from typing import Optional, List, Dict
 from datetime import datetime, timedelta
+import hashlib
 import httpx
 import logging
 import sys
@@ -33,7 +37,10 @@ from database import (
     get_all_wallets,
     get_wallet_balance,
     get_wallet_assets,
+    get_wallet_balances_bulk,
+    get_wallet_asset_counts_bulk,
     get_cache,
+    get_stale_cache,
     set_cache,
     get_username_by_user_id,
     get_wallet_sources,
@@ -44,12 +51,90 @@ from middleware.demo_mode import is_demo_user
 from services.http_client import get_client
 from config import DATABASE_PATH
 
-router = APIRouter(prefix="/api/mobile", tags=["mobile"])
+def _etag_matches(if_none_match: str, etag: str) -> bool:
+    """RFC 7232 weak comparison for If-None-Match: ignore W/ prefixes,
+    handle comma-separated lists and the '*' wildcard."""
+    for candidate in if_none_match.split(','):
+        candidate = candidate.strip()
+        if candidate == '*':
+            return True
+        if candidate.startswith('W/') or candidate.startswith('w/'):
+            candidate = candidate[2:]
+        if candidate == etag:
+            return True
+    return False
+
+
+class _ConditionalGetRoute(APIRoute):
+    """Adds ETag / If-None-Match -> 304 support to every GET in this router.
+
+    The ETag is a hash of the response bytes FastAPI already serialized
+    (no re-serialization or payload recompute), so it is stable for
+    identical payloads and rotates when the payload changes. Purely
+    additive: requests without If-None-Match get the same body and
+    headers as before plus ETag; refresh=true always returns a full 200.
+    """
+
+    def get_route_handler(self):
+        original_handler = super().get_route_handler()
+
+        async def conditional_handler(request: Request) -> Response:
+            response = await original_handler(request)
+            if request.method != "GET" or response.status_code != 200:
+                return response
+            body = getattr(response, "body", b"")
+            if not body:
+                return response
+            etag = f'"{hashlib.sha256(body).hexdigest()[:32]}"'
+            response.headers["ETag"] = etag
+            # refresh=true means "give me fresh data no matter what" —
+            # never short-circuit it with a 304 (mirrors FastAPI bool parsing)
+            if request.query_params.get("refresh", "").lower() in ("1", "true", "yes", "on"):
+                return response
+            if_none_match = request.headers.get("if-none-match")
+            if if_none_match and _etag_matches(if_none_match, etag):
+                return Response(status_code=304, headers={"ETag": etag})
+            return response
+
+        return conditional_handler
+
+
+router = APIRouter(prefix="/api/mobile", tags=["mobile"], route_class=_ConditionalGetRoute)
 logger = logging.getLogger(__name__)
 
 # Cache TTL
 MOBILE_CACHE_TTL = 120  # 2 minutes for mobile responses
 CHART_CACHE_TTL = 900  # 15 minutes for chart data
+
+# Native coin symbol/decimals per supported blockchain (used by /wallets)
+_WALLET_NATIVE_CONFIG = {
+    'cardano': {'symbol': 'ADA', 'decimals': 6},
+    'bitcoin': {'symbol': 'BTC', 'decimals': 8},
+    'ethereum': {'symbol': 'ETH', 'decimals': 18},
+    'solana': {'symbol': 'SOL', 'decimals': 9},
+    'polygon': {'symbol': 'POL', 'decimals': 18},
+    'base': {'symbol': 'ETH', 'decimals': 18},
+    'algorand': {'symbol': 'ALGO', 'decimals': 6},
+    'bsc': {'symbol': 'BNB', 'decimals': 18},
+    'arbitrum': {'symbol': 'ETH', 'decimals': 18},
+    'avalanche': {'symbol': 'AVAX', 'decimals': 18},
+    'tron': {'symbol': 'TRX', 'decimals': 6},
+    'xrp': {'symbol': 'XRP', 'decimals': 6},
+    'hedera': {'symbol': 'HBAR', 'decimals': 8},
+    'multiversx': {'symbol': 'EGLD', 'decimals': 18},
+    'sui': {'symbol': 'SUI', 'decimals': 9},
+    'aptos': {'symbol': 'APT', 'decimals': 8},
+    'filecoin': {'symbol': 'FIL', 'decimals': 18},
+    'litecoin': {'symbol': 'LTC', 'decimals': 8},
+    'dogecoin': {'symbol': 'DOGE', 'decimals': 8},
+    'zcash': {'symbol': 'ZEC', 'decimals': 8},
+    'tezos': {'symbol': 'XTZ', 'decimals': 6},
+    'stacks': {'symbol': 'STX', 'decimals': 6},
+    'vechain': {'symbol': 'VET', 'decimals': 18},
+    'cosmos': {'symbol': 'ATOM', 'decimals': 6},
+    'near': {'symbol': 'NEAR', 'decimals': 24},
+    'icp': {'symbol': 'ICP', 'decimals': 8},
+}
 
 
 # Display names for tokens not in metadata_cache (CoinGecko top 250)
@@ -447,6 +532,44 @@ async def get_mobile_portfolio_instant(user_id: int = Depends(verify_session)):
     return await get_portfolio_instant(user_id=user_id)
 
 
+def _summary_cache_key(user_id: int, include_sparklines: bool) -> str:
+    """Cache key for /portfolio/summary, partitioned by response variant (SEC-A1).
+
+    include_sparklines changes the payload shape, so each variant must get its
+    own cache row — otherwise a background SWR recompute triggered by one
+    variant would overwrite the other within the TTL. Every key construction
+    (fresh hit, stale/SWR lookup, refresh-task dedupe, cache write) must go
+    through this helper.
+    """
+    variant = "sparklines" if include_sparklines else "nosparklines"
+    return f"mobile_portfolio_summary_{user_id}_{variant}"
+
+
+# In-flight background summary recomputes, keyed by cache key (SWR stampede guard)
+_summary_refresh_tasks: Dict[str, asyncio.Task] = {}
+
+
+def _schedule_summary_refresh(cache_key: str, user_id: int, include_sparklines: bool):
+    """Kick off a background recompute of the portfolio summary (server-side SWR).
+
+    At most one recompute per cache key runs at a time; concurrent stale
+    hits piggyback on the in-flight task instead of stampeding upstream APIs.
+    """
+    if cache_key in _summary_refresh_tasks:
+        return
+
+    async def _refresh_job():
+        try:
+            await _compute_mobile_portfolio_summary(
+                user_id, refresh=False, include_sparklines=include_sparklines)
+        except Exception as e:
+            logger.warning(f"Background summary refresh failed for user {user_id}: {e}")
+        finally:
+            _summary_refresh_tasks.pop(cache_key, None)
+
+    _summary_refresh_tasks[cache_key] = asyncio.create_task(_refresh_job())
+
+
 @router.get("/portfolio/summary")
 async def get_mobile_portfolio_summary(
     user_id: int = Depends(verify_session),
@@ -464,12 +587,31 @@ async def get_mobile_portfolio_summary(
 
     Returns mobile-optimized format with percentages and totals.
     """
-    cache_key = f"mobile_portfolio_summary_{user_id}"
+    cache_key = _summary_cache_key(user_id, include_sparklines)
 
     if not refresh:
         cached = await get_cache(cache_key, user_id=user_id)
         if cached:
             return cached
+        # Stale-while-revalidate: on cache expiry serve the previous payload
+        # immediately and recompute in the background. refresh=true and
+        # first-ever requests (no cache row) still compute synchronously.
+        stale, _ = await get_stale_cache(cache_key, user_id=user_id)
+        if stale is not None:
+            _schedule_summary_refresh(cache_key, user_id, include_sparklines)
+            return stale
+
+    return await _compute_mobile_portfolio_summary(user_id, refresh, include_sparklines)
+
+
+async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include_sparklines: bool):
+    """Build the full summary payload and write it to the cache.
+
+    Internal lookups are batched for latency, but values, ordering, and key
+    order are unchanged — the payload must stay byte-identical for identical
+    data (response shape is frozen).
+    """
+    cache_key = _summary_cache_key(user_id, include_sparklines)
 
     # Fetch all data in parallel (including snapshot for staking/defi/tracked tokens)
     portfolio_data, exchange_summary, nft_summary, defi_summary, snapshot_totals = await asyncio.gather(
@@ -572,10 +714,14 @@ async def get_mobile_portfolio_summary(
                 "image_url": "",  # populated below from metadata_cache
             })
 
-    # Batch-populate image_url from metadata_cache (fast SQLite, no CoinGecko calls)
+    # Batch-populate image_url from metadata_cache (fast SQLite, no CoinGecko calls);
+    # one concurrent lookup per unique symbol instead of one await per chain
+    unique_chain_syms = list(dict.fromkeys(bs['symbol'] for bs in blockchain_summaries))
+    chain_metas = dict(zip(unique_chain_syms, await asyncio.gather(
+        *[metadata_cache.get_metadata(s) for s in unique_chain_syms])))
     for bs in blockchain_summaries:
         sym = bs['symbol']
-        meta = await metadata_cache.get_metadata(sym)
+        meta = chain_metas.get(sym)
         bs['image_url'] = (meta.get('image_url') if meta else None) or logokit_service.get_crypto_logo_url(sym, size=64)
 
     # Get component values
@@ -627,16 +773,26 @@ async def get_mobile_portfolio_summary(
     # Place BEFORE staking merge so staking amounts ADD to native amounts
     try:
         native_assets_data = await portfolio.get_all_native_assets(user_id=user_id)
+        # Two passes so the per-token name/image resolutions run concurrently:
+        # first apply the original skip rules (blank ticker, already counted,
+        # first-occurrence-wins, zero value) to pick the tokens to add, then
+        # resolve all of them in one gather and insert in the same order
+        native_pending = []
+        native_seen = set()
         for asset in native_assets_data.get('valuable_assets', []):
             ticker = (asset.get('ticker') or asset.get('asset_name', '')).upper()
-            if not ticker or ticker in symbol_agg:
+            if not ticker or ticker in symbol_agg or ticker in native_seen:
                 continue  # Already counted (L1 chain)
             price_data = all_prices.get(ticker, {})
             price_usd = price_data.get('usd', 0) if isinstance(price_data, dict) else 0
             val = float(asset.get('value_usd', 0)) or (float(asset.get('total_quantity', 0)) * price_usd)
             if val <= 0:
                 continue
-            token_name, token_image = await _resolve_token_info(ticker)
+            native_seen.add(ticker)
+            native_pending.append((ticker, asset, price_data, price_usd, val))
+        native_infos = await asyncio.gather(
+            *[_resolve_token_info(t) for t, _, _, _, _ in native_pending])
+        for (ticker, asset, price_data, price_usd, val), (token_name, token_image) in zip(native_pending, native_infos):
             symbol_agg[ticker] = {
                 "name": token_name,
                 "symbol": ticker,
@@ -662,6 +818,25 @@ async def get_mobile_portfolio_summary(
                 defi.get_staking_positions(addr, refresh=False, user_id=user_id)
                 for addr in cardano_addrs
             ], return_exceptions=True)
+            # Pre-resolve name/image for every token this merge will introduce
+            # (i.e. not in symbol_agg at its first encounter), so the loop
+            # below never awaits per row; conditions mirror the loop exactly
+            staking_new_tokens = []
+            for cached in staking_caches:
+                if isinstance(cached, (Exception, BaseException)) or not cached or not isinstance(cached, dict) or not cached.get('protocols'):
+                    continue
+                for protocol_name, protocol_data in cached['protocols'].items():
+                    for stake in (protocol_data.get('staked') or []):
+                        token = (stake.get('token') or 'ADA').upper()
+                        if token not in symbol_agg and token not in staking_new_tokens:
+                            staking_new_tokens.append(token)
+                    reward_token = protocol_data.get('reward_token')
+                    if reward_token and float(protocol_data.get('pending_rewards', 0)) > 0:
+                        rt = reward_token.upper()
+                        if rt not in symbol_agg and rt not in staking_new_tokens:
+                            staking_new_tokens.append(rt)
+            staking_infos = dict(zip(staking_new_tokens, await asyncio.gather(
+                *[_resolve_token_info(t) for t in staking_new_tokens])))
             for cached in staking_caches:
                 if isinstance(cached, (Exception, BaseException)) or not cached or not isinstance(cached, dict) or not cached.get('protocols'):
                     continue
@@ -676,7 +851,7 @@ async def get_mobile_portfolio_summary(
                             symbol_agg[token]['value_usd'] += val
                             symbol_agg[token]['native_amount'] += amount
                         else:
-                            token_name, token_image = await _resolve_token_info(token)
+                            token_name, token_image = staking_infos[token]
                             symbol_agg[token] = {
                                 "name": token_name,
                                 "symbol": token,
@@ -700,7 +875,7 @@ async def get_mobile_portfolio_summary(
                             symbol_agg[rt]['value_usd'] += val
                             symbol_agg[rt]['native_amount'] += pending
                         else:
-                            rt_name, rt_image = await _resolve_token_info(rt)
+                            rt_name, rt_image = staking_infos[rt]
                             symbol_agg[rt] = {
                                 "name": rt_name,
                                 "symbol": rt,
@@ -721,6 +896,22 @@ async def get_mobile_portfolio_summary(
         exchange_caches = await asyncio.gather(*[
             get_cache(f"{name}_portfolio", user_id=user_id) for name in exchange_names
         ])
+        # Same two-pass pattern as the staking merge: pre-resolve currencies
+        # that will be newly added, then run the original loop without awaits
+        exchange_new_currencies = []
+        for exc_data in exchange_caches:
+            if not exc_data or not exc_data.get('assets'):
+                continue
+            for asset in exc_data['assets']:
+                currency = (asset.get('currency') or '').upper()
+                if not currency or currency == 'USD':
+                    continue
+                if float(asset.get('balance', 0)) <= 0:
+                    continue
+                if currency not in symbol_agg and currency not in exchange_new_currencies:
+                    exchange_new_currencies.append(currency)
+        exchange_infos = dict(zip(exchange_new_currencies, await asyncio.gather(
+            *[_resolve_token_info(c) for c in exchange_new_currencies])))
         for exc_data in exchange_caches:
             if not exc_data or not exc_data.get('assets'):
                 continue
@@ -737,7 +928,7 @@ async def get_mobile_portfolio_summary(
                     symbol_agg[currency]['value_usd'] += val
                     symbol_agg[currency]['native_amount'] += balance
                 else:
-                    exc_name, exc_image = await _resolve_token_info(currency)
+                    exc_name, exc_image = exchange_infos[currency]
                     symbol_agg[currency] = {
                         "name": exc_name,
                         "symbol": currency,
@@ -775,10 +966,16 @@ async def get_mobile_portfolio_summary(
         h['value_usd'] = round(h['value_usd'], 2)
         h['native_amount'] = round(h['native_amount'], 8)
         h['percentage'] = round((h['value_usd'] / total_value_usd * 100) if total_value_usd > 0 else 0, 1)
-        # Ensure every entry has an image_url via metadata_cache → logokit fallback
-        if not h.get('image_url'):
-            meta = await metadata_cache.get_metadata(h['symbol'])
-            h['image_url'] = (meta.get('image_url') if meta else None) or logokit_service.get_crypto_logo_url(h['symbol'], size=64)
+    # Ensure every entry has an image_url via metadata_cache → logokit fallback
+    # (one concurrent lookup per missing symbol; symbols are unique here)
+    missing_image_syms = [h['symbol'] for h in top_holdings if not h.get('image_url')]
+    if missing_image_syms:
+        fallback_metas = dict(zip(missing_image_syms, await asyncio.gather(
+            *[metadata_cache.get_metadata(s) for s in missing_image_syms])))
+        for h in top_holdings:
+            if not h.get('image_url'):
+                meta = fallback_metas.get(h['symbol'])
+                h['image_url'] = (meta.get('image_url') if meta else None) or logokit_service.get_crypto_logo_url(h['symbol'], size=64)
     top_holdings.sort(key=lambda x: x['value_usd'], reverse=True)
 
     # Fetch 7-day sparkline data + CoinGecko images for top holdings (for watchOS)
@@ -904,6 +1101,14 @@ async def get_mobile_wallets(
             "last_updated": datetime.utcnow().isoformat() + "Z",
         }
 
+    # Cache per user + query params; refresh=True bypasses the read but
+    # still repopulates the cache below so subsequent reads get fresh data
+    cache_key = f"mobile_wallets_{user_id}_{blockchain or 'all'}_{include_balances}"
+    if not refresh:
+        cached = await get_cache(cache_key, user_id=user_id)
+        if cached:
+            return cached
+
     all_wallets = await get_all_wallets(user_id=user_id)
 
     # When refresh=True, re-fetch balances from blockchain APIs before reading
@@ -926,14 +1131,26 @@ async def get_mobile_wallets(
     # Get prices for value calculations
     all_prices = await pricing_service.get_all_tracked_prices()
 
+    filtered_wallets = [
+        w for w in all_wallets
+        if not blockchain or w['blockchain'] == blockchain
+    ]
+
+    # Batch the per-wallet DB lookups (was a sequential N+1: two awaited
+    # queries per wallet); two grouped queries run concurrently instead
+    balances_by_id = {}
+    asset_counts_by_id = {}
+    if include_balances and filtered_wallets:
+        wallet_ids = [w['id'] for w in filtered_wallets]
+        balances_by_id, asset_counts_by_id = await asyncio.gather(
+            get_wallet_balances_bulk(wallet_ids),
+            get_wallet_asset_counts_bulk(wallet_ids),
+        )
+
     mobile_wallets = []
     total_value_usd = 0.0
 
-    for wallet in all_wallets:
-        # Filter by blockchain if specified
-        if blockchain and wallet['blockchain'] != blockchain:
-            continue
-
+    for wallet in filtered_wallets:
         wallet_data = {
             "id": wallet['id'],
             "blockchain": wallet['blockchain'],
@@ -943,43 +1160,12 @@ async def get_mobile_wallets(
         }
 
         if include_balances:
-            balance_info = await get_wallet_balance(wallet['id'])
-            assets = await get_wallet_assets(wallet['id'])
+            balance_info = balances_by_id.get(wallet['id'])
 
             # Get native balance
             native_balance = float(balance_info.get('amount', 0)) if balance_info else 0
 
-            # Map blockchain to symbol and decimals
-            blockchain_config = {
-                'cardano': {'symbol': 'ADA', 'decimals': 6},
-                'bitcoin': {'symbol': 'BTC', 'decimals': 8},
-                'ethereum': {'symbol': 'ETH', 'decimals': 18},
-                'solana': {'symbol': 'SOL', 'decimals': 9},
-                'polygon': {'symbol': 'POL', 'decimals': 18},
-                'base': {'symbol': 'ETH', 'decimals': 18},
-                'algorand': {'symbol': 'ALGO', 'decimals': 6},
-                'bsc': {'symbol': 'BNB', 'decimals': 18},
-                'arbitrum': {'symbol': 'ETH', 'decimals': 18},
-                'avalanche': {'symbol': 'AVAX', 'decimals': 18},
-                'tron': {'symbol': 'TRX', 'decimals': 6},
-                'xrp': {'symbol': 'XRP', 'decimals': 6},
-                'hedera': {'symbol': 'HBAR', 'decimals': 8},
-                'multiversx': {'symbol': 'EGLD', 'decimals': 18},
-                'sui': {'symbol': 'SUI', 'decimals': 9},
-                'aptos': {'symbol': 'APT', 'decimals': 8},
-                'filecoin': {'symbol': 'FIL', 'decimals': 18},
-                'litecoin': {'symbol': 'LTC', 'decimals': 8},
-                'dogecoin': {'symbol': 'DOGE', 'decimals': 8},
-                'zcash': {'symbol': 'ZEC', 'decimals': 8},
-                'tezos': {'symbol': 'XTZ', 'decimals': 6},
-                'stacks': {'symbol': 'STX', 'decimals': 6},
-                'vechain': {'symbol': 'VET', 'decimals': 18},
-                'cosmos': {'symbol': 'ATOM', 'decimals': 6},
-                'near': {'symbol': 'NEAR', 'decimals': 24},
-                'icp': {'symbol': 'ICP', 'decimals': 8},
-            }
-
-            config = blockchain_config.get(wallet['blockchain'], {'symbol': 'UNKNOWN', 'decimals': 0})
+            config = _WALLET_NATIVE_CONFIG.get(wallet['blockchain'], {'symbol': 'UNKNOWN', 'decimals': 0})
             symbol = config['symbol']
 
             # Get price
@@ -995,19 +1181,22 @@ async def get_mobile_wallets(
                 "usd_value": round(usd_value, 2),
                 "last_updated": datetime.utcnow().isoformat() + "Z"
             }
-            wallet_data['token_count'] = len(assets)
+            wallet_data['token_count'] = asset_counts_by_id.get(wallet['id'], 0)
             wallet_data['nft_count'] = 0  # TODO: Add NFT count when needed
 
             total_value_usd += usd_value
 
         mobile_wallets.append(wallet_data)
 
-    return {
+    result = {
         "total_wallets": len(mobile_wallets),
         "wallets": mobile_wallets,
         "total_value_usd": round(total_value_usd, 2),
         "last_updated": datetime.utcnow().isoformat() + "Z"
     }
+
+    await set_cache(cache_key, result, MOBILE_CACHE_TTL, user_id=user_id)
+    return result
 
 
 @router.get("/wallets/{wallet_id}")
@@ -1662,13 +1851,21 @@ async def get_mobile_portfolio_breakdown_history(
 async def get_mobile_portfolio_history(
     user_id: int = Depends(verify_session),
     range: str = Query("7d", description="Time range: 24h, 7d, 4w, 3m, 1y, all"),
-    interval: Optional[str] = Query(None, description="Data interval: hourly, daily (auto if not specified)")
+    interval: Optional[str] = Query(None, description="Data interval: hourly, daily (auto if not specified)"),
+    slim: bool = Query(False, description="Omit per-point breakdown/on-chain/off-chain fields (~4x smaller payload)")
 ):
     """
     Get historical portfolio value for charts.
 
     Mobile-optimized format compatible with chart libraries.
     Uses the unified chart endpoint for complete on-chain + off-chain data.
+
+    Slim contract (slim=true): every chart_data point is exactly
+    {"timestamp", "total_value_usd"}; the top-level "range", "interval",
+    "data_points", "summary" (all six fields), and "last_updated" keys are
+    unchanged and guaranteed. Default (slim=false) is byte-identical to the
+    pre-slim response, including per-point "on_chain_value_usd",
+    "off_chain_value_usd", and the six-component "breakdown".
     """
     try:
         # 24h range uses dedicated hourly endpoint
@@ -1707,22 +1904,31 @@ async def get_mobile_portfolio_history(
 
         # Format chart data for mobile chart libs
         chart_data = []
-        for point in data_points:
-            components = (point.get('breakdown') or {}).get('components', {})
-            chart_data.append({
-                "timestamp": point.get('date', ''),
-                "total_value_usd": round(point.get('total_value') or 0, 2),
-                "on_chain_value_usd": round(point.get('on_chain_value') or 0, 2),
-                "off_chain_value_usd": round(point.get('off_chain_value') or 0, 2),
-                "breakdown": {
-                    "wallets": round(components.get('wallets') or 0, 2),
-                    "staking": round(components.get('staking') or 0, 2),
-                    "defi": round(components.get('defi') or 0, 2),
-                    "exchanges": round(components.get('exchange') or 0, 2),
-                    "nfts": round(components.get('nfts') or 0, 2),
-                    "tracked_tokens": round(components.get('tracked_tokens') or 0, 2),
-                }
-            })
+        if slim:
+            # Mobile plots only the total line; skip the breakdown fields
+            # (~4x payload). See the slim contract in the docstring.
+            for point in data_points:
+                chart_data.append({
+                    "timestamp": point.get('date', ''),
+                    "total_value_usd": round(point.get('total_value') or 0, 2),
+                })
+        else:
+            for point in data_points:
+                components = (point.get('breakdown') or {}).get('components', {})
+                chart_data.append({
+                    "timestamp": point.get('date', ''),
+                    "total_value_usd": round(point.get('total_value') or 0, 2),
+                    "on_chain_value_usd": round(point.get('on_chain_value') or 0, 2),
+                    "off_chain_value_usd": round(point.get('off_chain_value') or 0, 2),
+                    "breakdown": {
+                        "wallets": round(components.get('wallets') or 0, 2),
+                        "staking": round(components.get('staking') or 0, 2),
+                        "defi": round(components.get('defi') or 0, 2),
+                        "exchanges": round(components.get('exchange') or 0, 2),
+                        "nfts": round(components.get('nfts') or 0, 2),
+                        "tracked_tokens": round(components.get('tracked_tokens') or 0, 2),
+                    }
+                })
 
         return {
             "range": range,

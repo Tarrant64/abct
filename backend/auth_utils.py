@@ -152,7 +152,16 @@ async def verify_session_sse(
 ) -> int:
     """Verify session for SSE endpoints that use EventSource.
     EventSource can't send headers, so also accepts token as query param.
-    Also performs sliding window session renewal."""
+    Also performs sliding window session renewal.
+
+    Security note (Finding #5): Passing tokens as query params is a known
+    limitation of the EventSource/SSE API (no custom header support). This is
+    acceptable for the home-network threat model because:
+    - HTTPS encrypts the URL in transit (query params are not visible on the wire)
+    - Server access logs may capture the token, but logs are local-only
+    - The alternative (polling with fetch + Authorization header) would add
+      complexity and latency for minimal security gain on a LAN app
+    """
     from database import get_session, cleanup_expired_sessions, renew_session
 
     SESSION_LIFETIME_MINUTES = 43200  # 30 days

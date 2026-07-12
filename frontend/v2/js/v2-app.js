@@ -1262,9 +1262,11 @@ async function syncAll() {
     btn.disabled = true;
     showToast('Syncing all data...', 'success');
 
-    // Clear all cached data so we fetch fresh
+    // Clear portfolio/holdings caches only — preserve price/market caches
     if (typeof V2_CACHE !== 'undefined') {
-        V2_CACHE.clearAll();
+        ['/portfolio', '/holdings', '/balance-history', '/transactions', '/exchanges', '/nfts', '/defi', '/wallets', '/spam', '/search'].forEach(prefix => {
+            V2_CACHE.clearByPrefix(prefix);
+        });
     }
 
     try {
@@ -1349,6 +1351,7 @@ async function syncAll() {
 // ============================================================================
 
 let _searchDebounce = null;
+let _searchAbortController = null;
 
 function initGlobalSearch() {
     const input = document.getElementById('globalSearch');
@@ -1412,10 +1415,13 @@ async function runGlobalSearch(query) {
     const q = query.toLowerCase();
     const pageResults = pageIndex.filter(p => p.name.toLowerCase().includes(q) || p.keywords.some(k => k.includes(q))).slice(0, 3);
 
-    // Backend search
+    // Backend search — cancel any previous in-flight request
+    if (_searchAbortController) _searchAbortController.abort();
+    _searchAbortController = new AbortController();
+
     let tokens = [], walletResults = [], defiResults = [], stakingResults = [], exchangeResults = [];
     try {
-        const resp = await v2Fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}`);
+        const resp = await v2Fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}`, { signal: _searchAbortController.signal });
         if (resp.ok) {
             const data = await resp.json();
             tokens = data.tokens || [];
@@ -1425,6 +1431,7 @@ async function runGlobalSearch(query) {
             exchangeResults = data.exchanges || [];
         }
     } catch (e) {
+        if (e instanceof DOMException && e.name === 'AbortError') return; // silently ignore cancellations
         console.warn('[Search] Backend error:', e);
     }
 
@@ -1906,6 +1913,8 @@ function _layoutRow(row, rect, results) {
 // ============================================================================
 
 let _collectPolling = null;
+let _collectPollInterval = 3000;  // start at 3s, doubles with no progress, caps at 30s
+let _collectLastStatus = null;
 
 function initCollectHistory() {
     const btn = document.getElementById('collectHistoryBtn');
@@ -1935,8 +1944,10 @@ async function startCollectHistory() {
         if (resp.ok) {
             const data = await resp.json();
             if (data.status === 'started' || data.status === 'completed') {
-                // Start polling for progress
-                _collectPolling = setInterval(checkCollectStatus, 3000);
+                // Start polling for progress with exponential backoff
+                _collectPollInterval = 3000;
+                _collectLastStatus = null;
+                _collectPolling = setTimeout(checkCollectStatus, _collectPollInterval);
             }
         } else {
             showToast('Failed to start collection', 'error');
@@ -1968,14 +1979,18 @@ async function checkCollectStatus() {
                 const pct = parseFloat(data.progress) || 0;
                 statusEl.textContent = `${data.step || 'Processing...'} ${pct > 0 ? '(' + pct.toFixed(0) + '%)' : ''}`;
             }
-            // Keep polling
-            if (!_collectPolling) {
-                _collectPolling = setInterval(checkCollectStatus, 3000);
+            // Exponential backoff: double interval when status unchanged, reset when it changes, cap at 30s
+            if (data.status === _collectLastStatus) {
+                _collectPollInterval = Math.min(_collectPollInterval * 2, 30000);
+            } else {
+                _collectPollInterval = 3000;
             }
+            _collectLastStatus = data.status;
+            _collectPolling = setTimeout(checkCollectStatus, _collectPollInterval);
         } else {
             // Completed, failed, or idle
             if (_collectPolling) {
-                clearInterval(_collectPolling);
+                clearTimeout(_collectPolling);
                 _collectPolling = null;
             }
             if (btn) { btn.disabled = false; btn.classList.remove('syncing'); }

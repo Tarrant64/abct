@@ -49,16 +49,26 @@ LOGOKIT_API_KEY = os.getenv('LOGOKIT_API_KEY', '')
 LOGOKIT_BASE_URL = 'https://img.logokit.com'
 
 # Coinbase CDP API Key (loaded from JSON file)
-CDP_API_KEY_FILE = Path(__file__).parent.parent / "cdp_api_key.json"
+# Security (Finding #1): CDP key files moved to EXCLUDE/credentials/ to keep
+# private keys outside the project tree proper. EXCLUDE/ is gitignored.
+CDP_API_KEY_FILE = Path(__file__).parent.parent / "EXCLUDE" / "credentials" / "cdp_api_key.json"
+# Legacy fallback: check project root for backwards compatibility during migration
+_CDP_API_KEY_FILE_LEGACY = Path(__file__).parent.parent / "cdp_api_key.json"
 COINBASE_API_KEY_NAME = ""
 COINBASE_API_PRIVATE_KEY = ""
 
-if CDP_API_KEY_FILE.exists():
+_cdp_file_to_load = CDP_API_KEY_FILE if CDP_API_KEY_FILE.exists() else (
+    _CDP_API_KEY_FILE_LEGACY if _CDP_API_KEY_FILE_LEGACY.exists() else None
+)
+if _cdp_file_to_load:
     try:
-        with open(CDP_API_KEY_FILE) as f:
+        with open(_cdp_file_to_load) as f:
             cdp_key = json.load(f)
             COINBASE_API_KEY_NAME = cdp_key.get("name", "")
             COINBASE_API_PRIVATE_KEY = cdp_key.get("privateKey", "")
+        if _cdp_file_to_load == _CDP_API_KEY_FILE_LEGACY:
+            print("Warning: CDP key found in project root (legacy location). "
+                  "Move to EXCLUDE/credentials/cdp_api_key.json for security.")
     except Exception as e:
         print(f"Warning: Failed to load CDP API key: {e}")
 
@@ -249,6 +259,11 @@ NFT_IMAGE_DB_PATH = DATA_DIR / "nft_images.db"
 CERTS_DIR = DATA_DIR / "certs"
 DEFAULT_CERT_PATH = CERTS_DIR / "server.crt"
 DEFAULT_KEY_PATH = CERTS_DIR / "server.key"
+
+# CORS Configuration (Finding #6 — restrict cross-origin requests)
+# Comma-separated list of allowed origins from .env; defaults to localhost only.
+_allowed_origins_raw = os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000")
+ALLOWED_ORIGINS = [origin.strip() for origin in _allowed_origins_raw.split(",") if origin.strip()]
 
 # Cache TTL Tiers (in seconds)
 CACHE_TTL_HOT = 300         # 5 minutes - prices, exchange balances, wallet balances

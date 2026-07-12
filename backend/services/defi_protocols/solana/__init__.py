@@ -21,6 +21,7 @@ from services.defi_protocols.solana.drift import DriftAdapter
 from services.defi_protocols.solana.meteora import MeteoraAdapter
 from services.defi_protocols.solana.lifinity import LifinityAdapter
 from services.defi_protocols.solana.phoenix import PhoenixAdapter
+from services.defi_protocols.solana.tensor import TensorAdapter
 
 SOLANA_ADAPTERS = [
     MarinadeAdapter,
@@ -38,6 +39,7 @@ SOLANA_ADAPTERS = [
     MeteoraAdapter,
     LifinityAdapter,
     PhoenixAdapter,
+    TensorAdapter,
 ]
 
 __all__ = [
@@ -56,5 +58,6 @@ __all__ = [
     "MeteoraAdapter",
     "LifinityAdapter",
     "PhoenixAdapter",
+    "TensorAdapter",
     "SOLANA_ADAPTERS",
 ]
