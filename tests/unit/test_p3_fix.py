@@ -185,7 +185,10 @@ async def _run_route_writer(monkeypatch):
         defi_router.defi_service, "resolve_wallet_context", fake_context
     )
 
-    await defi_router.get_staking_positions(ADDRESS, refresh=True, user_id=1)
+    # The route now answers refresh promptly and runs the compute (and
+    # its fire-and-forget writer) in the background job — drive the
+    # compute path directly, which IS the production write path
+    await defi_router._compute_staking_positions(ADDRESS, 1)
 
 
 async def _run_offchain_collector():

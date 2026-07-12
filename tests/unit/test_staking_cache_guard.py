@@ -25,7 +25,10 @@ if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
 import routers.defi as defi_router  # noqa: E402
-from routers.defi import _count_data_protocols, get_staking_positions  # noqa: E402
+from routers.defi import (  # noqa: E402
+    _compute_staking_positions,
+    _count_data_protocols,
+)
 
 ADDRESS = "addr1q9phspv20nxtestonly"
 
@@ -201,7 +204,7 @@ async def test_degraded_fresh_result_cannot_overwrite_fresh_baseline(wire):
     stub = wire(fresh=dict(FULL_RESULT), stale=None,
                 compute_result=IAGON_ONLY_RESULT)
 
-    out = await get_staking_positions(ADDRESS, refresh=True, user_id=1)
+    out = await _compute_staking_positions(ADDRESS, 1)
 
     assert stub.set_calls == []  # degraded result never cached
     assert out["from_cache"] is True
@@ -214,7 +217,7 @@ async def test_degraded_fresh_result_cannot_overwrite_stale_baseline(wire):
     stub = wire(fresh=None, stale=dict(FULL_RESULT),
                 compute_result=IAGON_ONLY_RESULT)
 
-    out = await get_staking_positions(ADDRESS, refresh=True, user_id=1)
+    out = await _compute_staking_positions(ADDRESS, 1)
 
     assert stub.set_calls == []
     assert out["from_cache"] is True
@@ -226,7 +229,7 @@ async def test_equal_or_better_result_is_cached(wire):
     stub = wire(fresh=dict(IAGON_ONLY_RESULT), stale=None,
                 compute_result=FULL_RESULT)
 
-    out = await get_staking_positions(ADDRESS, refresh=True, user_id=1)
+    out = await _compute_staking_positions(ADDRESS, 1)
 
     assert len(stub.set_calls) == 1
     assert _count_data_protocols(stub.set_calls[0][1]) == 4
@@ -236,7 +239,7 @@ async def test_equal_or_better_result_is_cached(wire):
 async def test_no_baseline_at_all_caches_whatever_computed(wire):
     stub = wire(fresh=None, stale=None, compute_result=IAGON_ONLY_RESULT)
 
-    out = await get_staking_positions(ADDRESS, refresh=True, user_id=1)
+    out = await _compute_staking_positions(ADDRESS, 1)
 
     assert len(stub.set_calls) == 1  # nothing better exists — cache it
     assert _count_data_protocols(out) == 1
@@ -255,7 +258,7 @@ async def test_scope_change_bypasses_downgrade_guard(wire):
 
     stub = wire(fresh=over_scoped, stale=None, compute_result=corrected)
 
-    out = await get_staking_positions(ADDRESS, refresh=True, user_id=1)
+    out = await _compute_staking_positions(ADDRESS, 1)
 
     assert len(stub.set_calls) == 1  # accepted despite fewer protocols
     assert out["from_cache"] is False
@@ -271,7 +274,7 @@ async def test_same_scope_degraded_still_refused(wire):
 
     stub = wire(fresh=full, stale=None, compute_result=degraded)
 
-    out = await get_staking_positions(ADDRESS, refresh=True, user_id=1)
+    out = await _compute_staking_positions(ADDRESS, 1)
 
     assert stub.set_calls == []
     assert _count_data_protocols(out) == 4
@@ -283,7 +286,7 @@ async def test_legacy_row_without_scope_guard_holds(wire):
     stub = wire(fresh=dict(FULL_RESULT), stale=None,
                 compute_result=IAGON_ONLY_RESULT)  # neither has account_scan
 
-    out = await get_staking_positions(ADDRESS, refresh=True, user_id=1)
+    out = await _compute_staking_positions(ADDRESS, 1)
 
     assert stub.set_calls == []
     assert _count_data_protocols(out) == 4
@@ -312,7 +315,7 @@ async def test_sub_source_loss_within_surviving_protocol_refused(wire):
 
     stub = wire(fresh=baseline, stale=None, compute_result=degraded)
 
-    out = await get_staking_positions(ADDRESS, refresh=True, user_id=1)
+    out = await _compute_staking_positions(ADDRESS, 1)
 
     assert stub.set_calls == []
     assert out["protocols"]["Indigo"]["cdps"]  # baseline preserved
@@ -326,7 +329,7 @@ async def test_confirmed_exit_is_accepted(wire):
 
     stub = wire(fresh=dict(FULL_RESULT), stale=None, compute_result=corrected)
 
-    out = await get_staking_positions(ADDRESS, refresh=True, user_id=1)
+    out = await _compute_staking_positions(ADDRESS, 1)
 
     assert len(stub.set_calls) == 1  # accepted
     assert _count_data_protocols(out) == 1
@@ -340,7 +343,7 @@ async def test_partially_confirmed_loss_still_refused(wire):
 
     stub = wire(fresh=dict(FULL_RESULT), stale=None, compute_result=corrected)
 
-    out = await get_staking_positions(ADDRESS, refresh=True, user_id=1)
+    out = await _compute_staking_positions(ADDRESS, 1)
 
     assert stub.set_calls == []
     assert _count_data_protocols(out) == 4
@@ -362,7 +365,7 @@ async def test_equal_count_protocol_swap_refused(wire):
 
     stub = wire(fresh=indigo_only, stale=None, compute_result=liqwid_only)
 
-    out = await get_staking_positions(ADDRESS, refresh=True, user_id=1)
+    out = await _compute_staking_positions(ADDRESS, 1)
 
     assert stub.set_calls == []
     assert "Indigo" in out["protocols"]
@@ -387,7 +390,7 @@ async def test_v2_only_wallet_protected_by_guard(wire):
 
     stub = wire(fresh=dict(v2_only), stale=None, compute_result=empty)
 
-    out = await get_staking_positions(ADDRESS, refresh=True, user_id=1)
+    out = await _compute_staking_positions(ADDRESS, 1)
 
     assert stub.set_calls == []
     assert _count_data_protocols(out) == 1

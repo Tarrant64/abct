@@ -213,15 +213,44 @@ def _schedule_staking_refresh(address: str, user_id: int):
     _staking_refresh_tasks[task_key] = asyncio.create_task(_refresh_job())
 
 
+# A refresh request arriving within this window of a completed scan serves
+# the fresh result directly instead of scheduling another rescan
+REFRESH_FRESH_WINDOW_S = 60
+
+
+def _empty_staking_payload(address: str) -> dict:
+    """Schema-compatible payload for a wallet with no cached data yet."""
+    return {
+        'address': address,
+        'protocols': {},
+        'total_positions': 0,
+        'total_pending_rewards': {},
+        'confirmed_empty': [],
+        'from_cache': False,
+    }
+
+
+def _cached_age_seconds(payload: dict) -> float:
+    try:
+        cached_at = datetime.fromisoformat(payload.get('cached_at'))
+        return (datetime.now() - cached_at).total_seconds()
+    except (TypeError, ValueError):
+        return float('inf')
+
+
 @router.get("/staking/{address}")
 async def get_staking_positions(address: str, refresh: bool = False, user_id: int = Depends(verify_session)):
     """
     Get staked positions for a wallet across supported DeFi protocols.
 
-    Currently supported:
-    - Indigo Protocol (INDY staking)
-
-    Returns tokens that are actively staked in protocol smart contracts.
+    NEVER blocks on a rescan (2026-07-12 deploy-5: a paced full-account
+    rescan structurally cannot finish inside the proxy window, and reads
+    queueing behind in-flight scans 504'd). Reads serve whatever the cache
+    has immediately; refresh=true responds promptly with the best current
+    data plus refreshing=true/data_as_of while the full paced rescan runs
+    in the background (deduped via the SWR task dict; the downgrade guard
+    and portfolio writer run there as normal). The phone's revalidation
+    triggers pick up the completed data on their own.
     """
     # Demo user intercept
     username = await get_username_by_user_id(user_id)
@@ -229,9 +258,9 @@ async def get_staking_positions(address: str, refresh: bool = False, user_id: in
         return await demo_defi_service.get_staking_data(address)
 
     cache_key = f"staking_positions_{address}"
+    cached = await get_cache(cache_key, user_id=user_id)
 
     if not refresh:
-        cached = await get_cache(cache_key, user_id=user_id)
         if cached:
             cached['from_cache'] = True
             return cached
@@ -247,7 +276,39 @@ async def get_staking_positions(address: str, refresh: bool = False, user_id: in
             stale_data['cached_at'] = cached_at
             return stale_data
 
-    return await _compute_staking_positions(address, user_id)
+        # Cold (no row at all): a read must not queue behind in-flight
+        # scans — schedule the compute and answer with an empty payload
+        _schedule_staking_refresh(address, user_id)
+        payload = _empty_staking_payload(address)
+        payload['refreshing'] = True
+        payload['data_as_of'] = None
+        return payload
+
+    # refresh=true — the async refresh contract. A scan that completed
+    # moments ago is fresh enough to serve directly.
+    if cached and _cached_age_seconds(cached) < REFRESH_FRESH_WINDOW_S:
+        cached['from_cache'] = True
+        cached['refreshing'] = False
+        cached['data_as_of'] = cached.get('cached_at')
+        return cached
+
+    _schedule_staking_refresh(address, user_id)
+
+    best = cached
+    is_stale = False
+    if best is None:
+        best, _stale_expires = await get_stale_cache(cache_key, user_id=user_id)
+        is_stale = best is not None
+    if best is None:
+        best = _empty_staking_payload(address)
+    else:
+        best = dict(best)
+        best['from_cache'] = True
+        if is_stale:
+            best['stale'] = True
+    best['refreshing'] = True
+    best['data_as_of'] = best.get('cached_at')
+    return best
 
 
 async def _compute_staking_positions(address: str, user_id: int):

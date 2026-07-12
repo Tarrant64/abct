@@ -1554,6 +1554,8 @@ async def get_mobile_defi_staking(refresh: bool = Query(False), user_id: int = D
     total_staked_usd = 0.0
     total_rewards_usd = 0.0
     has_unpriced = False
+    refreshing = False
+    data_as_of = None
 
     # Get prices
     all_prices = await pricing_service.get_all_tracked_prices()
@@ -1609,7 +1611,14 @@ async def get_mobile_defi_staking(refresh: bool = Query(False), user_id: int = D
 
         for cached in staking_caches:
             try:
-                if isinstance(cached, (Exception, BaseException)) or not cached or not isinstance(cached, dict) or not cached.get('protocols'):
+                if isinstance(cached, (Exception, BaseException)) or not cached or not isinstance(cached, dict):
+                    continue
+                if cached.get('refreshing'):
+                    refreshing = True
+                wallet_as_of = cached.get('cached_at') or cached.get('data_as_of')
+                if wallet_as_of and (data_as_of is None or wallet_as_of < data_as_of):
+                    data_as_of = wallet_as_of  # oldest wallet's data age
+                if not cached.get('protocols'):
                     continue
                 for protocol_name, protocol_data in cached['protocols'].items():
                     proto_positions, staked_usd, rewards_usd, proto_unpriced = (
@@ -1631,6 +1640,11 @@ async def get_mobile_defi_staking(refresh: bool = Query(False), user_id: int = D
         # True when some position's USD value could not be computed from a
         # real price — its amount is shown but it contributes 0 to totals
         "has_unpriced": has_unpriced,
+        # Async refresh contract: hard pulls answer promptly with current
+        # best data; refreshing=true means a background rescan is running
+        # and the app's revalidation picks up the fresh result on its own
+        "refreshing": refreshing,
+        "data_as_of": data_as_of,
         "last_updated": datetime.utcnow().isoformat() + "Z"
     }
 
