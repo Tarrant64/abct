@@ -576,13 +576,17 @@ class DeFiService:
 
             client = get_client("blockfrost", timeout=15.0)
 
-            # Fetch all staking positions from Indigo
-            response = await client.get(
-                f"{INDIGO_API_BASE}/api/v1/staking/positions"
-            )
+            # Fetch all staking positions from Indigo.
+            # Indigo retired the /api/v1/* paths (they now return HTML 404);
+            # current endpoints are un-versioned with snake_case fields.
+            url = f"{INDIGO_API_BASE}/api/staking-positions"
+            response = await client.get(url)
 
             if response.status_code != 200:
-                logger.error(f"Indigo API error: {response.status_code}")
+                logger.warning(
+                    f"[Indigo] staking-positions returned HTTP {response.status_code} "
+                    f"for {url} — body: {response.text[:200]!r}"
+                )
                 return None
 
             positions = response.json()
@@ -593,14 +597,14 @@ class DeFiService:
 
             for pos in positions:
                 if pos.get('owner') == payment_cred:
-                    staked = pos.get('stakedIndy', 0)
+                    staked = pos.get('staked_indy', 0)
                     total_staked += staked
                     user_positions.append({
                         'staked_indy_raw': staked,
                         'staked_indy': staked / 1_000_000,
-                        'snapshot_ada': pos.get('snapshotAda', 0) / 1_000_000,
+                        'snapshot_ada': pos.get('snapshot_ada', 0) / 1_000_000,
                         'slot': pos.get('slot'),
-                        'output_hash': pos.get('outputHash')
+                        'output_hash': pos.get('output_hash')
                     })
 
             if not user_positions:
@@ -621,7 +625,8 @@ class DeFiService:
     async def get_indigo_cdps(self, address: str) -> Optional[Dict]:
         """
         Get Indigo Protocol CDP (loan) positions for an address.
-        Uses Indigo Analytics API /api/v1/loans endpoint.
+        Uses Indigo Analytics API /api/cdps endpoint (un-versioned; the old
+        /api/v1/loans path is dead).
         Each CDP has collateral (ADA), minted iAsset amount, and iAsset type.
         """
         try:
@@ -631,12 +636,14 @@ class DeFiService:
 
             client = get_client("blockfrost", timeout=15.0)
 
-            response = await client.get(
-                f"{INDIGO_API_BASE}/api/v1/loans"
-            )
+            url = f"{INDIGO_API_BASE}/api/cdps"
+            response = await client.get(url)
 
             if response.status_code != 200:
-                logger.error(f"Indigo loans API error: {response.status_code}")
+                logger.warning(
+                    f"[Indigo] cdps returned HTTP {response.status_code} "
+                    f"for {url} — body: {response.text[:200]!r}"
+                )
                 return None
 
             loans = response.json()
@@ -648,8 +655,8 @@ class DeFiService:
                     continue
 
                 asset = loan.get('asset', 'iUSD')
-                collateral_lovelace = loan.get('collateral', 0)
-                minted_raw = loan.get('minted', 0)
+                collateral_lovelace = loan.get('collateralAmount', 0)
+                minted_raw = loan.get('mintedAmount', 0)
 
                 collateral_ada = float(collateral_lovelace) / 1_000_000
                 minted_amount = float(minted_raw) / 1_000_000  # 6 decimals for all iAssets
@@ -685,9 +692,21 @@ class DeFiService:
     async def get_indigo_stability_pool(self, address: str) -> Optional[Dict]:
         """
         Get Indigo Protocol Stability Pool positions for an address.
-        Uses Indigo Analytics API /api/v1/stability-pools/accounts endpoint.
-        Users deposit iAssets into stability pools to earn liquidation premiums.
+
+        DISABLED: the old /api/v1/stability-pools/accounts endpoint is dead and
+        the un-versioned API only exposes pool-level data (/api/stability-pools),
+        not per-account deposits. Returns None until a per-account endpoint is
+        confirmed. Users deposit iAssets into stability pools to earn
+        liquidation premiums.
         """
+        logger.debug(
+            "[Indigo] stability-pool lookup disabled — no per-account endpoint "
+            "on the current analytics API"
+        )
+        return None
+
+    async def _get_indigo_stability_pool_disabled(self, address: str) -> Optional[Dict]:
+        """Legacy stability-pool parser, kept for when a per-account endpoint returns."""
         try:
             payment_cred = self._get_payment_credential(address)
             if not payment_cred:
