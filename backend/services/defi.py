@@ -1046,7 +1046,9 @@ class DeFiService:
             account_id = account.get("account_id")
             wallet_balance = float(account.get("wallet_balance") or 0)
 
-            if not account_id or wallet_balance <= 0:
+            # An empty trading account can still hold vault deposits —
+            # only a missing account means no V2 presence at all.
+            if not account_id:
                 return None
 
             # Step 2: Vault positions for this account
@@ -1090,6 +1092,11 @@ class DeFiService:
                 logger.warning(f"[Strike V2] Vault positions fetch failed for {address[:20]}: {e}")
 
             total_vault_ada = sum(p["value_ada"] for p in vault_positions)
+
+            # No balance and no vaults: nothing to report
+            if wallet_balance <= 0 and not vault_positions:
+                return None
+
             logger.info(
                 f"[Strike V2] {address[:20]}... balance={wallet_balance:.2f} ADA, "
                 f"vaults={len(vault_positions)}, vault_total={total_vault_ada:.2f} ADA"
