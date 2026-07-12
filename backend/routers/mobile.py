@@ -532,6 +532,19 @@ async def get_mobile_portfolio_instant(user_id: int = Depends(verify_session)):
     return await get_portfolio_instant(user_id=user_id)
 
 
+def _summary_cache_key(user_id: int, include_sparklines: bool) -> str:
+    """Cache key for /portfolio/summary, partitioned by response variant (SEC-A1).
+
+    include_sparklines changes the payload shape, so each variant must get its
+    own cache row — otherwise a background SWR recompute triggered by one
+    variant would overwrite the other within the TTL. Every key construction
+    (fresh hit, stale/SWR lookup, refresh-task dedupe, cache write) must go
+    through this helper.
+    """
+    variant = "sparklines" if include_sparklines else "nosparklines"
+    return f"mobile_portfolio_summary_{user_id}_{variant}"
+
+
 # In-flight background summary recomputes, keyed by cache key (SWR stampede guard)
 _summary_refresh_tasks: Dict[str, asyncio.Task] = {}
 
@@ -574,7 +587,7 @@ async def get_mobile_portfolio_summary(
 
     Returns mobile-optimized format with percentages and totals.
     """
-    cache_key = f"mobile_portfolio_summary_{user_id}"
+    cache_key = _summary_cache_key(user_id, include_sparklines)
 
     if not refresh:
         cached = await get_cache(cache_key, user_id=user_id)
@@ -598,7 +611,7 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
     order are unchanged — the payload must stay byte-identical for identical
     data (response shape is frozen).
     """
-    cache_key = f"mobile_portfolio_summary_{user_id}"
+    cache_key = _summary_cache_key(user_id, include_sparklines)
 
     # Fetch all data in parallel (including snapshot for staking/defi/tracked tokens)
     portfolio_data, exchange_summary, nft_summary, defi_summary, snapshot_totals = await asyncio.gather(
