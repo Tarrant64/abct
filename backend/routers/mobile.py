@@ -154,6 +154,14 @@ _TOKEN_NAMES = {
 }
 
 
+def _as_float(value, default: float = 0.0) -> float:
+    """Coerce API/cache values that may arrive as str, int, float or None."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 async def _resolve_token_info(symbol: str) -> tuple[str, str]:
     """Look up proper display name and image URL for a token symbol.
 
@@ -1462,10 +1470,10 @@ async def get_mobile_defi_staking(refresh: bool = Query(False), user_id: int = D
 
                 # Get account info
                 account_info = await cardano_service.get_stake_account_info(stake_address)
-                if account_info and account_info.get('controlled_ada', 0) > 0:
-                    delegated_ada = account_info.get('controlled_ada', 0)
+                delegated_ada = _as_float(account_info.get('controlled_ada', 0)) if account_info else 0.0
+                if account_info and delegated_ada > 0:
                     delegated_usd = delegated_ada * ada_price
-                    rewards_ada = account_info.get('withdrawable_ada', 0)
+                    rewards_ada = _as_float(account_info.get('withdrawable_ada', 0))
                     rewards_usd = rewards_ada * ada_price
 
                     total_staked_usd += delegated_usd

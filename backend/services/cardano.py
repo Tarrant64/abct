@@ -596,8 +596,11 @@ class CardanoService:
                     'stake_address': stake_address,
                     'active': False,
                     'controlled_amount': '0',
+                    'controlled_ada': 0.0,
                     'rewards_sum': '0',
+                    'rewards_ada': 0.0,
                     'withdrawable_amount': '0',
+                    'withdrawable_ada': 0.0,
                     'pool_id': None
                 }
 
@@ -606,15 +609,17 @@ class CardanoService:
                 return None
 
             data = response.json()
+            # Derived *_ada fields are numeric — consumers do arithmetic and
+            # comparisons on them. Raw lovelace fields stay Blockfrost strings.
             return {
                 'stake_address': stake_address,
                 'active': data.get('active', False),
                 'controlled_amount': data.get('controlled_amount', '0'),
-                'controlled_ada': str(int(data.get('controlled_amount', 0)) / 1_000_000),
+                'controlled_ada': int(data.get('controlled_amount', 0)) / 1_000_000,
                 'rewards_sum': data.get('rewards_sum', '0'),
-                'rewards_ada': str(int(data.get('rewards_sum', 0)) / 1_000_000),
+                'rewards_ada': int(data.get('rewards_sum', 0)) / 1_000_000,
                 'withdrawable_amount': data.get('withdrawable_amount', '0'),
-                'withdrawable_ada': str(int(data.get('withdrawable_amount', 0)) / 1_000_000),
+                'withdrawable_ada': int(data.get('withdrawable_amount', 0)) / 1_000_000,
                 'pool_id': data.get('pool_id'),
                 'drep_id': data.get('drep_id'),
                 '_raw': data
