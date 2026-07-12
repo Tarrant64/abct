@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 
 from auth_utils import verify_session
 from services.image_cache import image_cache_service
+from services.logokit_service import logokit_service
 
 router = APIRouter(prefix="/images", tags=["images"])
 logger = logging.getLogger(__name__)
@@ -44,8 +45,11 @@ async def get_token_image(symbol: str, _user_id: int = Depends(verify_session)):
             headers={"Cache-Control": "public, max-age=86400"},
         )
 
-    # All sources failed — redirect to LogoKit as last resort
-    logokit_url = f"https://img.logokit.com/crypto/{symbol}?size=128"
+    # All sources failed — redirect to LogoKit as last resort. Use the
+    # tokened service URL: the token-less form 401s ("Missing API token"),
+    # which native image loaders (mobile) surface as a broken logo while
+    # the web frontend masks it by building its own tokened URLs.
+    logokit_url = logokit_service.get_crypto_logo_url(symbol, size=128)
     return RedirectResponse(
         url=logokit_url,
         status_code=302,

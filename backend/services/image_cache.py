@@ -126,9 +126,15 @@ class ImageCacheService:
             logger.debug(f"CoinPaprika image lookup failed for {symbol}: {e}")
 
         # --- Source 4: LogoKit ---
-        logokit_url = f"https://img.logokit.com/crypto/{symbol.upper()}?size=128"
-        if await self.cache_image(symbol, logokit_url):
-            return await self.get_image_path(symbol)
+        # Must use the tokened service URL: token-less img.logokit.com
+        # requests answer 401 "Missing API token" for every client.
+        try:
+            from services.logokit_service import logokit_service
+            logokit_url = logokit_service.get_crypto_logo_url(symbol, size=128)
+            if await self.cache_image(symbol, logokit_url):
+                return await self.get_image_path(symbol)
+        except Exception as e:
+            logger.debug(f"LogoKit image fetch failed for {symbol}: {e}")
 
         return None
 
