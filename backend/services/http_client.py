@@ -137,6 +137,20 @@ async def fetch_with_retry(
 
 _FALLBACK_STATUSES = {500, 502, 503, 504}
 
+# Global Blockfrost pacing: full-refresh bursts (Strike/Iagon page scans for
+# 26+ wallets at once) produced 253 observed 429s. One semaphore across ALL
+# Blockfrost callers keeps concurrency bounded, and 429s get a short paced
+# retry. Counters feed per-scan summary log lines.
+_blockfrost_semaphore = asyncio.Semaphore(8)
+_blockfrost_stats = {"requests": 0, "throttled_429": 0}
+_BLOCKFROST_429_RETRIES = 2
+_BLOCKFROST_429_BACKOFF = 0.6  # seconds, doubled per retry
+
+
+def blockfrost_stats() -> Dict[str, int]:
+    """Snapshot of global Blockfrost request/429 counters (monotonic)."""
+    return dict(_blockfrost_stats)
+
 
 async def blockfrost_fetch(
     path: str,
@@ -148,6 +162,39 @@ async def blockfrost_fetch(
     """
     Make a Blockfrost API request with automatic fallback from internal RYO
     to external Blockfrost.io.
+
+    Runs under the global Blockfrost semaphore; 429 responses are retried
+    with a short backoff (still under the semaphore) so refresh bursts pace
+    themselves instead of hammering the rate limit.
+    """
+    async with _blockfrost_semaphore:
+        backoff = _BLOCKFROST_429_BACKOFF
+        for attempt in range(_BLOCKFROST_429_RETRIES + 1):
+            _blockfrost_stats["requests"] += 1
+            response = await _blockfrost_fetch_once(
+                path, method=method, timeout=timeout, **kwargs
+            )
+            if response.status_code != 429:
+                return response
+            _blockfrost_stats["throttled_429"] += 1
+            if attempt < _BLOCKFROST_429_RETRIES:
+                logger.debug(
+                    f"Blockfrost 429 for {path} — retrying in {backoff:.1f}s"
+                )
+                await asyncio.sleep(backoff)
+                backoff *= 2
+        return response
+
+
+async def _blockfrost_fetch_once(
+    path: str,
+    *,
+    method: str = "GET",
+    timeout: float = 30.0,
+    **kwargs,
+) -> httpx.Response:
+    """
+    Single Blockfrost request with RYO → external fallback.
 
     Tries BLOCKFROST_BASE_URL first. On connection error, timeout, or 5xx,
     retries the same request against BLOCKFROST_EXTERNAL_URL.

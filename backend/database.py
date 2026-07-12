@@ -3015,15 +3015,26 @@ async def cleanup_expired_sessions():
         logger.warning(f"Session cleanup failed: {e}")
 
 
-async def cleanup_expired_cache():
-    """Remove expired cache entries from the database.
+async def cleanup_expired_cache(grace_days: int = 7):
+    """Remove long-expired cache entries from the database.
+
+    Rows keep a grace window after expiry (default 7 days): expired rows are
+    exactly what get_stale_cache() serves as the stale fallback and what the
+    staking degraded-result guard uses as its baseline, so deleting them at
+    expiry would destroy last-good data across restarts and long outages.
+
+    expires_at is written with datetime.now().isoformat() (LOCAL time), so
+    the comparison uses sqlite's localtime — comparing against UTC
+    datetime('now') skewed the cutoff by the host's UTC offset.
 
     Returns:
         Number of rows deleted
     """
     async with aiosqlite.connect(DATABASE_PATH) as db:
         cursor = await db.execute(
-            "DELETE FROM cache WHERE expires_at < datetime('now')"
+            "DELETE FROM cache WHERE expires_at < "
+            "datetime('now', 'localtime', ?)",
+            (f"-{int(grace_days)} days",)
         )
         deleted = cursor.rowcount
         await db.commit()

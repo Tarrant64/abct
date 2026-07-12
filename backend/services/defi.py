@@ -993,6 +993,19 @@ class DeFiService:
                     # credential partition (drift double-count).
                     # koios_addresses stays untouched: it records what the
                     # chain has seen, which gates representative eligibility.
+                    # Appends are capped so a pathological caller cannot grow
+                    # the cached row without bound.
+                    appended = (
+                        len(cached.get('addresses', []))
+                        - len(cached.get('koios_addresses', []))
+                    )
+                    if appended >= 100:
+                        logger.warning(
+                            f"[WalletContext] append cap reached for "
+                            f"{stake_address[:20]}... ({appended} non-Koios "
+                            f"addresses) — serving unmerged context"
+                        )
+                        return cached
                     cached = dict(cached)
                     cached['addresses'] = cached['addresses'] + [address]
                     own = self._get_payment_credential(address)
@@ -2187,6 +2200,9 @@ class DeFiService:
         Blockfrost scan cost past the timeout budget (P3).
         """
         import asyncio
+        from services.http_client import blockfrost_stats
+
+        bf_before = blockfrost_stats()
 
         staking = {
             'address': address,
@@ -2508,6 +2524,17 @@ class DeFiService:
                 'total_positions': surf.get('position_count', 0)
             }
             staking['total_positions'] += surf.get('position_count', 0)
+
+        # Per-scan Blockfrost usage summary (global counters, so numbers are
+        # approximate when scans overlap — still enough to spot 429 pressure)
+        bf_after = blockfrost_stats()
+        logger.info(
+            f"[StakingScan {address[:20]}...] protocols="
+            f"{sorted(staking['protocols'].keys())} "
+            f"confirmed_empty={staking['confirmed_empty']} "
+            f"blockfrost_requests={bf_after['requests'] - bf_before['requests']} "
+            f"blockfrost_429s={bf_after['throttled_429'] - bf_before['throttled_429']}"
+        )
 
         return staking
 

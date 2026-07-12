@@ -177,6 +177,37 @@ async def analyze_wallet_defi(address: str, user_id: int = Depends(verify_sessio
     return result
 
 
+# In-flight background staking recomputes (server-side SWR, mirrors the
+# portfolio-summary scheduler): at most one per user+address at a time
+_staking_refresh_tasks: dict = {}
+
+
+def _schedule_staking_refresh(address: str, user_id: int):
+    """Kick off a background staking recompute after serving a stale row.
+
+    Freshness must not depend on the user hard-pulling: the stale hit
+    answers instantly and this job repopulates the cache behind it. Runs
+    the normal compute path (never refresh=True semantics); concurrent
+    stale hits piggyback on the in-flight task instead of stampeding.
+    """
+    task_key = f"{user_id}:staking_positions_{address}"
+    if task_key in _staking_refresh_tasks:
+        return
+
+    async def _refresh_job():
+        try:
+            await _compute_staking_positions(address, user_id)
+        except Exception as e:
+            logger.warning(
+                f"[Staking] background revalidation failed for "
+                f"{address[:20]}...: {e}"
+            )
+        finally:
+            _staking_refresh_tasks.pop(task_key, None)
+
+    _staking_refresh_tasks[task_key] = asyncio.create_task(_refresh_job())
+
+
 @router.get("/staking/{address}")
 async def get_staking_positions(address: str, refresh: bool = False, user_id: int = Depends(verify_session)):
     """
@@ -200,15 +231,25 @@ async def get_staking_positions(address: str, refresh: bool = False, user_id: in
             cached['from_cache'] = True
             return cached
 
-    if not refresh:
-        # Fresh cache miss — try stale fallback so frontend gets instant data
+        # Fresh cache miss — serve the stale row for instant data and
+        # revalidate in the background (server-side SWR)
         stale_data, stale_expires = await get_stale_cache(cache_key, user_id=user_id)
         if stale_data:
+            _schedule_staking_refresh(address, user_id)
             cached_at = (datetime.fromisoformat(stale_expires) - timedelta(seconds=STAKING_CACHE_TTL)).isoformat()
             stale_data['from_cache'] = True
             stale_data['stale'] = True
             stale_data['cached_at'] = cached_at
             return stale_data
+
+    return await _compute_staking_positions(address, user_id)
+
+
+async def _compute_staking_positions(address: str, user_id: int):
+    """Full staking recompute for one address: identity resolution, scan,
+    downgrade guard, cache write. Shared by the route (cold/refresh path)
+    and the background stale-hit revalidation."""
+    cache_key = f"staking_positions_{address}"
 
     # Fetch previous result for protocol-level merge on timeout
     previous_result = None

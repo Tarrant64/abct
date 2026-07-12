@@ -94,7 +94,7 @@ class StrikeAdapter(ProtocolAdapter):
                     for asset in utxo.get('amount', []):
                         unit = asset.get('unit', '')
                         if unit.startswith(STRIKE_STAKING_NFT_POLICY):
-                            asset_name = unit[len(STRIKE_STAKING_NFT_policy):]
+                            asset_name = unit[len(STRIKE_STAKING_NFT_POLICY):]
                             if asset_name == payment_cred:
                                 has_user_nft = True
                                 break
