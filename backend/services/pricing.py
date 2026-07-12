@@ -53,7 +53,7 @@ ASSET_TO_COINGECKO = {
     'LENFI': 'aada-finance',
     'AGIX': 'singularitynet',
     'SNEK': 'snek',
-    'STRIKE': 'strike-finance',
+    'STRIKE': 'strike-2',  # Cardano Strike Finance ('strike-finance' is a dead id)
     'IAG': 'iagon',
     'FLDT': 'fluidtokens',
     'XER': 'xerberus',

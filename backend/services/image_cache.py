@@ -69,8 +69,9 @@ class ImageCacheService:
 
         Fallback chain:
         1. CoinGecko image URL from pricing cache
-        2. CoinPaprika coin logo
-        3. LogoKit URL
+        2. CoinGecko /coins/{id} lookup (works before any pricing cycle)
+        3. CoinPaprika coin logo
+        4. LogoKit URL
         """
         # Already cached?
         path = await self.get_image_path(symbol)
@@ -88,14 +89,35 @@ class ImageCacheService:
         except Exception as e:
             logger.debug(f"Pricing cache image lookup failed for {symbol}: {e}")
 
-        # --- Source 2: CoinPaprika ---
+        # --- Source 2: CoinGecko coin lookup ---
+        # The pricing cache only carries an image after a markets fetch has
+        # included the symbol, so ask CoinGecko directly as well.
         try:
             from services.pricing import ASSET_TO_COINGECKO
-            # CoinPaprika uses its own IDs (often <symbol>-<name>)
             cg_id = ASSET_TO_COINGECKO.get(symbol.upper())
             if cg_id:
                 client = get_client("image_cache", timeout=15.0)
-                resp = await client.get(f"https://api.coinpaprika.com/v1/coins/{cg_id}")
+                resp = await client.get(
+                    f"https://api.coingecko.com/api/v3/coins/{cg_id}",
+                    params={"localization": "false", "tickers": "false",
+                            "market_data": "false", "community_data": "false",
+                            "developer_data": "false"},
+                )
+                if resp.status_code == 200:
+                    img = resp.json().get("image", {})
+                    cg_image = img.get("small") or img.get("large") or img.get("thumb")
+                    if cg_image and await self.cache_image(symbol, cg_image):
+                        return await self.get_image_path(symbol)
+        except Exception as e:
+            logger.debug(f"CoinGecko coin image lookup failed for {symbol}: {e}")
+
+        # --- Source 3: CoinPaprika ---
+        try:
+            from services.coinpaprika import SYMBOL_TO_COINPAPRIKA
+            pap_id = SYMBOL_TO_COINPAPRIKA.get(symbol.upper())
+            if pap_id:
+                client = get_client("image_cache", timeout=15.0)
+                resp = await client.get(f"https://api.coinpaprika.com/v1/coins/{pap_id}")
                 if resp.status_code == 200:
                     logo_url = resp.json().get("logo")
                     if logo_url and await self.cache_image(symbol, logo_url):
@@ -103,7 +125,7 @@ class ImageCacheService:
         except Exception as e:
             logger.debug(f"CoinPaprika image lookup failed for {symbol}: {e}")
 
-        # --- Source 3: LogoKit ---
+        # --- Source 4: LogoKit ---
         logokit_url = f"https://img.logokit.com/crypto/{symbol.upper()}?size=128"
         if await self.cache_image(symbol, logokit_url):
             return await self.get_image_path(symbol)
