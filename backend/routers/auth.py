@@ -242,7 +242,7 @@ else:
 
 @router.post("/login", response_model=LoginResponse)
 @_login_limit
-async def login(http_request: StarletteRequest, login_data: LoginRequest):
+async def login(request: StarletteRequest, login_data: LoginRequest):
     """
     Login endpoint - authenticate user and create session.
 
@@ -250,7 +250,7 @@ async def login(http_request: StarletteRequest, login_data: LoginRequest):
     (Security audit Finding #4). Uses slowapi limiter when available.
 
     Args:
-        http_request: Starlette request (used by slowapi for rate limiting)
+        request: Starlette request (used by slowapi for rate limiting; slowapi requires this exact parameter name)
         login_data: Login credentials (username, password)
 
     Returns:

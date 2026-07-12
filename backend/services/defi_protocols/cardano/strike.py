@@ -43,7 +43,6 @@ class StrikeAdapter(ProtocolAdapter):
     LOGO_URL = ""
 
     async def detect_positions(
-    async def detect_positions(
         self, address: str, chain: str = None
     ) -> List[ProtocolPosition]:
         """Detect Strike staking and yield_vault positions."""
