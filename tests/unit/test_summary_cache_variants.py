@@ -22,6 +22,7 @@ import asyncio
 import os
 import sys
 import types
+from datetime import datetime, timedelta
 
 # Add backend to sys.path so imports work
 BACKEND_DIR = os.path.abspath(
@@ -41,24 +42,31 @@ class FakeCacheStore:
     """In-memory stand-in for database get_cache/get_stale_cache/set_cache.
 
     Rows in `fresh` behave as unexpired; rows only in `store` behave as
-    expired-but-present (the stale/SWR case).
+    expired-but-present (the stale/SWR case). Stale rows report a just-expired
+    timestamp so they fall inside SUMMARY_STALE_MAX_AGE_S and stay on the SWR
+    path these tests exercise (the stale-age cap has its own tests in
+    test_summary_stale_cap.py).
     """
 
     def __init__(self):
         self.store = {}
         self.fresh = set()
+        self.expires_at = {}
 
-    def seed(self, key, value, fresh=True):
+    def seed(self, key, value, fresh=True, expires_at=None):
         self.store[key] = value
         if fresh:
             self.fresh.add(key)
+        if expires_at is not None:
+            self.expires_at[key] = expires_at
 
     async def get_cache(self, key, user_id=None):
         return self.store[key] if key in self.fresh else None
 
     async def get_stale_cache(self, key, user_id=None):
         if key in self.store:
-            return self.store[key], "2026-01-01T00:00:00"
+            default = (datetime.now() - timedelta(seconds=1)).isoformat()
+            return self.store[key], self.expires_at.get(key, default)
         return None, None
 
     async def set_cache(self, key, value, ttl_seconds=300, user_id=None):

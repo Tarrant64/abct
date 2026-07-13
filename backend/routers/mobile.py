@@ -105,6 +105,20 @@ logger = logging.getLogger(__name__)
 # Cache TTL
 MOBILE_CACHE_TTL = 120  # 2 minutes for mobile responses
 
+# Stale summaries are only servable via SWR for this long past their expiry.
+# Without a bound, a client whose visits are sparse (the phone is the only
+# consumer of its cache variant) is ALWAYS answered with the payload computed
+# during its previous visit — the background recompute lands after the
+# response and nothing ever fetches it, so the app displays one-visit-old
+# data forever (PRICE-1 echo loop). Past this bound the row is worthless as
+# a placeholder and the request computes synchronously instead.
+SUMMARY_STALE_MAX_AGE_S = 600
+
+# A background SWR recompute holding a variant's single-flight slot is
+# cancelled after this long; without it one hung upstream call blocks that
+# variant's refresh until the next container restart.
+SUMMARY_REFRESH_TIMEOUT_S = 120
+
 # Native stake-account info (delegation/rewards) cache: changes on-chain at
 # epoch cadence (days); 10 minutes keeps the mobile staking read DB-only in
 # steady state so it can never queue behind scan traffic (P3-FIX3)
@@ -564,6 +578,23 @@ def _summary_cache_key(user_id: int, include_sparklines: bool) -> str:
 _summary_refresh_tasks: Dict[str, asyncio.Task] = {}
 
 
+def _stale_summary_servable(expires_at_iso: Optional[str]) -> bool:
+    """Whether an expired summary row is still fresh enough to serve via SWR.
+
+    Measured from the row's expiry: within SUMMARY_STALE_MAX_AGE_S of expiring
+    it works as a placeholder while the recompute runs; older than that it is
+    the previous visit's data and serving it re-enters the echo loop. Missing
+    or malformed timestamps count as too old — compute synchronously.
+    """
+    if not expires_at_iso:
+        return False
+    try:
+        expires_at = datetime.fromisoformat(expires_at_iso)
+    except (ValueError, TypeError):
+        return False
+    return (datetime.now() - expires_at).total_seconds() <= SUMMARY_STALE_MAX_AGE_S
+
+
 def _schedule_summary_refresh(cache_key: str, user_id: int, include_sparklines: bool):
     """Kick off a background recompute of the portfolio summary (server-side SWR).
 
@@ -575,8 +606,14 @@ def _schedule_summary_refresh(cache_key: str, user_id: int, include_sparklines: 
 
     async def _refresh_job():
         try:
-            await _compute_mobile_portfolio_summary(
-                user_id, refresh=False, include_sparklines=include_sparklines)
+            await asyncio.wait_for(
+                _compute_mobile_portfolio_summary(
+                    user_id, refresh=False, include_sparklines=include_sparklines),
+                timeout=SUMMARY_REFRESH_TIMEOUT_S)
+        except asyncio.TimeoutError:
+            logger.warning(
+                f"Background summary refresh timed out after "
+                f"{SUMMARY_REFRESH_TIMEOUT_S}s for user {user_id} — slot freed")
         except Exception as e:
             logger.warning(f"Background summary refresh failed for user {user_id}: {e}")
         finally:
@@ -609,10 +646,11 @@ async def get_mobile_portfolio_summary(
         if cached:
             return cached
         # Stale-while-revalidate: on cache expiry serve the previous payload
-        # immediately and recompute in the background. refresh=true and
-        # first-ever requests (no cache row) still compute synchronously.
-        stale, _ = await get_stale_cache(cache_key, user_id=user_id)
-        if stale is not None:
+        # immediately and recompute in the background. refresh=true,
+        # first-ever requests (no cache row), and rows expired longer than
+        # SUMMARY_STALE_MAX_AGE_S all compute synchronously.
+        stale, expires_at = await get_stale_cache(cache_key, user_id=user_id)
+        if stale is not None and _stale_summary_servable(expires_at):
             _schedule_summary_refresh(cache_key, user_id, include_sparklines)
             return stale
 
