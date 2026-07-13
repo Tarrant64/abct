@@ -104,6 +104,11 @@ logger = logging.getLogger(__name__)
 
 # Cache TTL
 MOBILE_CACHE_TTL = 120  # 2 minutes for mobile responses
+
+# Native stake-account info (delegation/rewards) cache: changes on-chain at
+# epoch cadence (days); 10 minutes keeps the mobile staking read DB-only in
+# steady state so it can never queue behind scan traffic (P3-FIX3)
+STAKE_ACCOUNT_INFO_TTL_S = 600
 CHART_CACHE_TTL = 900  # 15 minutes for chart data
 
 # Native coin symbol/decimals per supported blockchain (used by /wallets)
@@ -1561,44 +1566,100 @@ async def get_mobile_defi_staking(refresh: bool = Query(False), user_id: int = D
     all_prices = await pricing_service.get_all_tracked_prices()
     ada_price = all_prices.get('ADA', {}).get('usd', 0)
 
-    # Track unique stake addresses to avoid duplicates
-    seen_stake_addresses = set()
+    # Add Cardano native-delegation positions.
+    # P3-FIX3 (deploy-6 repro): this section used to make ~2 SEQUENTIAL
+    # Blockfrost calls per wallet on EVERY read; each call individually
+    # queued behind in-flight scan traffic in the shared pacing bucket, so
+    # plain reads took 4.4s healthy and 60s+ during rescans. Now: stake
+    # addresses are derived LOCALLY (bech32, zero API calls; API only as a
+    # per-wallet fallback), account info is fetched in PARALLEL, and the
+    # result is cached (10 min TTL) so steady-state reads are DB-only.
+    from services.cardano import _derive_stake_key_local
 
-    # Add Cardano staking positions (if any)
-    for wallet in cardano_wallets:
+    async def _stake_address_cached(wallet):
+        """address -> stake address: local bech32 derivation (free), else a
+        long-TTL cached API lookup. The mapping is immutable, so negative
+        results are cached too — a malformed wallet row must not cost a
+        paced Blockfrost call on every read."""
+        address = wallet['address']
         try:
-            # Get stake address
-            stake_address = await cardano_service.get_stake_address(wallet['address'])
-            if stake_address and stake_address not in seen_stake_addresses:
-                seen_stake_addresses.add(stake_address)
-
-                # Get account info
-                account_info = await cardano_service.get_stake_account_info(stake_address)
-                delegated_ada = _as_float(account_info.get('controlled_ada', 0)) if account_info else 0.0
-                if account_info and delegated_ada > 0:
-                    delegated_usd = delegated_ada * ada_price
-                    rewards_ada = _as_float(account_info.get('withdrawable_ada', 0))
-                    rewards_usd = rewards_ada * ada_price
-
-                    total_staked_usd += delegated_usd
-                    total_rewards_usd += rewards_usd
-
-                    positions.append({
-                        "blockchain": "cardano",
-                        "stake_key": stake_address,
-                        "pool_id": account_info.get('pool_id', 'Unknown'),
-                        "pool_name": account_info.get('pool_name', 'Unknown'),
-                        "pool_ticker": account_info.get('pool_ticker', ''),
-                        "delegated_amount": round(delegated_ada, 2),
-                        "delegated_usd": round(delegated_usd, 2),
-                        "rewards_lifetime": round(rewards_ada, 2),
-                        "rewards_usd": round(rewards_usd, 2),
-                        "apy": 4.5,  # Approximate Cardano APY
-                        "active": True,
-                        "logo_url": logokit_service.get_crypto_logo_url("ADA", size=32)
-                    })
+            local = _derive_stake_key_local(address)
+        except Exception:
+            local = None
+        if local:
+            return local
+        cache_key = f"stake_address_{address}"
+        row = await get_cache(cache_key)
+        if row is not None:
+            return row.get('stake_address') or None
+        try:
+            resolved = await cardano_service.get_stake_address(address)
         except Exception as e:
-            logger.warning(f"Could not get staking info for wallet {wallet['id']}: {e}")
+            logger.warning(f"Could not get stake address for wallet {wallet['id']}: {e}")
+            return None
+        await set_cache(cache_key, {'stake_address': resolved or ''}, 86400)
+        return resolved
+
+    resolved_stakes = await asyncio.gather(
+        *[_stake_address_cached(w) for w in cardano_wallets],
+        return_exceptions=True,
+    )
+    stake_addresses = []
+    seen_stake_addresses = set()
+    for stake_address in resolved_stakes:
+        if isinstance(stake_address, (Exception, BaseException)) or not stake_address:
+            continue
+        if stake_address not in seen_stake_addresses:
+            seen_stake_addresses.add(stake_address)
+            stake_addresses.append(stake_address)
+
+    async def _account_info_cached(stake_address: str):
+        cache_key = f"stake_account_info_{stake_address}"
+        cached_info = await get_cache(cache_key)
+        if cached_info:
+            return stake_address, cached_info
+        info = await cardano_service.get_stake_account_info(stake_address)
+        if info:
+            info = {k: v for k, v in info.items() if k != '_raw'}
+            await set_cache(cache_key, info, STAKE_ACCOUNT_INFO_TTL_S)
+        return stake_address, info
+
+    account_infos = await asyncio.gather(
+        *[_account_info_cached(s) for s in stake_addresses],
+        return_exceptions=True,
+    )
+
+    for entry in account_infos:
+        if isinstance(entry, (Exception, BaseException)):
+            logger.warning(f"Could not get staking info: {entry}")
+            continue
+        stake_address, account_info = entry
+        try:
+            delegated_ada = _as_float(account_info.get('controlled_ada', 0)) if account_info else 0.0
+            if account_info and delegated_ada > 0:
+                delegated_usd = delegated_ada * ada_price
+                rewards_ada = _as_float(account_info.get('withdrawable_ada', 0))
+                rewards_usd = rewards_ada * ada_price
+
+                total_staked_usd += delegated_usd
+                total_rewards_usd += rewards_usd
+
+                positions.append({
+                    "blockchain": "cardano",
+                    "stake_key": stake_address,
+                    "pool_id": account_info.get('pool_id', 'Unknown'),
+                    "pool_name": account_info.get('pool_name', 'Unknown'),
+                    "pool_ticker": account_info.get('pool_ticker', ''),
+                    "delegated_amount": round(delegated_ada, 2),
+                    "delegated_usd": round(delegated_usd, 2),
+                    "rewards_lifetime": round(rewards_ada, 2),
+                    "rewards_usd": round(rewards_usd, 2),
+                    "apy": 4.5,  # Approximate Cardano APY
+                    "active": True,
+                    "logo_url": logokit_service.get_crypto_logo_url("ADA", size=32)
+                })
+        except Exception as e:
+            logger.warning(f"Could not get staking info for {stake_address[:20]}: {e}")
 
     # Get actual staking positions (tokens locked in smart contracts)
     # Use defi.get_staking_positions() which reads cache if warm, fetches from

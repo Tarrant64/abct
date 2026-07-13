@@ -78,6 +78,7 @@ def swr_env(monkeypatch):
     monkeypatch.setattr(defi_router, "is_demo_user", fake_is_demo)
 
     defi_router._staking_refresh_tasks.clear()
+    defi_router._staking_scan_completions.clear()
     return calls, started, release
 
 
@@ -98,11 +99,21 @@ async def test_stale_hit_serves_stale_and_revalidates_once(swr_env):
     await asyncio.sleep(0.05)
     assert calls == [(ADDRESS, 1)]
 
-    # Finishing the job clears the in-flight slot so a later stale hit can
-    # schedule again
+    # Finishing the job clears the in-flight slot; a stale hit inside the
+    # completion cooldown must NOT rescan (P3-FIX3), but once the cooldown
+    # expires, revalidation schedules again
     release.set()
     assert await _wait_until(lambda: not defi_router._staking_refresh_tasks)
 
+    await get_staking_positions(ADDRESS, refresh=False, user_id=1)
+    await asyncio.sleep(0.05)
+    assert len(calls) == 1  # cooldown held
+
+    import time as _t
+    key = f"1:staking_positions_{ADDRESS}"
+    defi_router._staking_scan_completions[key] = (
+        _t.monotonic() - defi_router.STAKING_RESCAN_COOLDOWN_S - 1
+    )
     await get_staking_positions(ADDRESS, refresh=False, user_id=1)
     assert await _wait_until(lambda: len(calls) == 2)
 

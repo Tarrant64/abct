@@ -9,6 +9,7 @@ import asyncio
 import logging
 import sys
 import os
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.defi import defi_service
@@ -186,17 +187,35 @@ async def analyze_wallet_defi(address: str, user_id: int = Depends(verify_sessio
 # portfolio-summary scheduler): at most one per user+address at a time
 _staking_refresh_tasks: dict = {}
 
+# Per-wallet scan-COMPLETION timestamps (monotonic). The rescan cooldown
+# keys on when this wallet's last scan FINISHED — not on the cache row's
+# cached_at, which the downgrade guard may legitimately refuse to update.
+# Deploy-6 repro: a full scan wave takes ~140 s (5-slot scan semaphore +
+# paced Blockfrost; live worst ~3 min), so any window shorter than the wave
+# reschedules the wallets that finished early — 14 of 48 rescanned with a
+# 60 s window in the repro. The window must exceed the worst wave duration.
+_staking_scan_completions: dict = {}
+STAKING_RESCAN_COOLDOWN_S = 300
+
 
 def _schedule_staking_refresh(address: str, user_id: int):
     """Kick off a background staking recompute after serving a stale row.
 
     Freshness must not depend on the user hard-pulling: the stale hit
     answers instantly and this job repopulates the cache behind it. Runs
-    the normal compute path (never refresh=True semantics); concurrent
-    stale hits piggyback on the in-flight task instead of stampeding.
+    the normal compute path (never refresh=True semantics). Concurrent
+    stale hits piggyback on the in-flight task instead of stampeding, and a
+    wallet whose scan COMPLETED within the cooldown is not rescanned —
+    regardless of whether the guard accepted its write, which also breaks
+    guard-refusal rescan loops. Cold wallets (never scanned) always fill.
     """
     task_key = f"{user_id}:staking_positions_{address}"
     if task_key in _staking_refresh_tasks:
+        return
+    completed_at = _staking_scan_completions.get(task_key)
+    if completed_at is not None and (
+        time.monotonic() - completed_at
+    ) < STAKING_RESCAN_COOLDOWN_S:
         return
 
     async def _refresh_job():
@@ -208,6 +227,7 @@ def _schedule_staking_refresh(address: str, user_id: int):
                 f"{address[:20]}...: {e}"
             )
         finally:
+            _staking_scan_completions[task_key] = time.monotonic()
             _staking_refresh_tasks.pop(task_key, None)
 
     _staking_refresh_tasks[task_key] = asyncio.create_task(_refresh_job())

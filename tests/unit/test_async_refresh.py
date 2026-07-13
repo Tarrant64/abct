@@ -78,6 +78,7 @@ async def env(monkeypatch):
     monkeypatch.setattr(defi_router, "_compute_staking_positions", slow_compute)
 
     defi_router._staking_refresh_tasks.clear()
+    defi_router._staking_scan_completions.clear()
     yield state
     # Unblock and drain any scheduled job INSIDE this test's event loop so
     # no background task leaks past loop teardown
@@ -88,6 +89,7 @@ async def env(monkeypatch):
         except Exception:
             pass
     defi_router._staking_refresh_tasks.clear()
+    defi_router._staking_scan_completions.clear()
 
 
 async def test_read_with_fresh_cache_never_touches_compute(env):
@@ -174,7 +176,7 @@ async def test_second_refresh_joins_inflight_scan(env):
     assert len(defi_router._staking_refresh_tasks) == 1
 
 
-async def test_background_completion_clears_slot_and_allows_next(env):
+async def test_background_completion_clears_slot_and_cooldown_holds(env):
     await _bounded(get_staking_positions(ADDRESS, refresh=True, user_id=1))
     await asyncio.sleep(0)
     assert env["compute_calls"] == 1
@@ -186,10 +188,23 @@ async def test_background_completion_clears_slot_and_allows_next(env):
         await asyncio.sleep(0.01)
     assert not defi_router._staking_refresh_tasks
 
-    env["release"] = asyncio.Event()  # next scan hangs again
+    # P3-FIX3: a wallet whose scan JUST completed is under the completion
+    # cooldown — another refresh must not rescan it (deploy-6 defect iv)
+    env["release"] = asyncio.Event()
     await _bounded(get_staking_positions(ADDRESS, refresh=True, user_id=1))
     await asyncio.sleep(0)
-    assert env["compute_calls"] == 2  # reschedulable after completion
+    assert env["compute_calls"] == 1  # cooldown held
+    assert not defi_router._staking_refresh_tasks
+
+    # After the cooldown expires, rescans work again
+    import time as _t
+    key = f"1:staking_positions_{ADDRESS}"
+    defi_router._staking_scan_completions[key] = (
+        _t.monotonic() - defi_router.STAKING_RESCAN_COOLDOWN_S - 1
+    )
+    await _bounded(get_staking_positions(ADDRESS, refresh=True, user_id=1))
+    await asyncio.sleep(0)
+    assert env["compute_calls"] == 2
     env["release"].set()
 
 
