@@ -1596,6 +1596,10 @@ async def get_mobile_defi_staking(refresh: bool = Query(False), user_id: int = D
             resolved = await cardano_service.get_stake_address(address)
         except Exception as e:
             logger.warning(f"Could not get stake address for wallet {wallet['id']}: {e}")
+            # Serve the last-known mapping rather than dropping the wallet
+            stale_row, _ = await get_stale_cache(cache_key)
+            if stale_row is not None:
+                return stale_row.get('stake_address') or None
             return None
         await set_cache(cache_key, {'stake_address': resolved or ''}, 86400)
         return resolved
@@ -1618,11 +1622,19 @@ async def get_mobile_defi_staking(refresh: bool = Query(False), user_id: int = D
         cached_info = await get_cache(cache_key)
         if cached_info:
             return stake_address, cached_info
-        info = await cardano_service.get_stake_account_info(stake_address)
+        try:
+            info = await cardano_service.get_stake_account_info(stake_address)
+        except Exception as e:
+            logger.warning(f"Stake account info fetch failed for {stake_address[:20]}: {e}")
+            info = None
         if info:
             info = {k: v for k, v in info.items() if k != '_raw'}
             await set_cache(cache_key, info, STAKE_ACCOUNT_INFO_TTL_S)
-        return stake_address, info
+            return stake_address, info
+        # Fetch failed — serve the expired cached info instead of letting the
+        # wallet's delegation row vanish because Blockfrost hiccuped
+        stale_info, _ = await get_stale_cache(cache_key)
+        return stake_address, stale_info
 
     account_infos = await asyncio.gather(
         *[_account_info_cached(s) for s in stake_addresses],

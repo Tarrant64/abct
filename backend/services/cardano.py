@@ -130,9 +130,9 @@ def _derive_stake_key_local(address: str) -> Optional[str]:
     addr_type = (header >> 4) & 0x0f
     network = header & 0x0f
 
-    # Type 0 = base address (payment key hash + stake key hash)
-    # Type 2 = base address (payment script hash + stake key hash)
-    # Type 3 = base address (payment script hash + stake script hash)
+    # CIP-19 base address types (payment credential / stake credential):
+    #   0 = key / key      1 = script / key
+    #   2 = key / script   3 = script / script
     # Only types 0-3 contain a stake credential
     if addr_type > 3:
         return None  # Enterprise, pointer, or other address — no stake key
@@ -143,9 +143,13 @@ def _derive_stake_key_local(address: str) -> Optional[str]:
         return None
 
     # Build reward (stake) address header:
-    # type 14 (0xe) for key hash stake cred, type 15 (0xf) for script stake cred
-    # Types 0,2 have key-hash stake cred; types 1,3 have script-hash stake cred
-    if addr_type in (0, 2):
+    # type 14 (0xe) for key hash stake cred, type 15 (0xf) for script stake
+    # cred. Per CIP-19, types 0 and 1 carry a KEY-hash stake credential.
+    # (The previous mapping (0,2)->key silently derived a script-stake
+    # address (stake17...) for the user's real addr1z payment-script
+    # wallets, misattributing their delegations — caught by the fixture
+    # test against Koios-verified pairs, 2026-07-12.)
+    if addr_type in (0, 1):
         reward_header = (0x0e << 4) | network  # 0xe0 | network = 0xe1 for mainnet
     else:
         reward_header = (0x0f << 4) | network  # 0xf0 | network = 0xf1 for mainnet
