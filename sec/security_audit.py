@@ -8,10 +8,102 @@ import os
 import re
 import json
 import sys
+import hashlib
+import subprocess
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass, asdict
 from datetime import datetime
+
+
+# ---------------------------------------------------------------------------
+# Wallet-address validation helpers (WALLET-* checks)
+#
+# Checksum verification is done wherever the address format supports it with
+# stdlib primitives only (sha256d for Base58Check, the BIP-173/350 polymod
+# for bech32/bech32m, blake2b for SS58). A candidate that fails its checksum
+# is NOT a wallet address and is never flagged — this is what keeps hashes,
+# identifiers, and random base58-ish tokens from producing false positives.
+# ---------------------------------------------------------------------------
+
+_B58_BTC_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+_B58_XRP_ALPHABET = "rpshnaf39wBUDNEGHJKLM4PQRST7VWXYZ2bcdeCg65jkm8oFqi1tuvAxyz"
+
+_BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+
+
+def _b58decode(s: str, alphabet: str = _B58_BTC_ALPHABET) -> Optional[bytes]:
+    """Decode a base58 string; None on any invalid character."""
+    num = 0
+    for ch in s:
+        idx = alphabet.find(ch)
+        if idx == -1:
+            return None
+        num = num * 58 + idx
+    raw = num.to_bytes((num.bit_length() + 7) // 8, "big")
+    # Leading zero bytes are encoded as the alphabet's zero character
+    pad = 0
+    zero = alphabet[0]
+    for ch in s:
+        if ch == zero:
+            pad += 1
+        else:
+            break
+    return b"\x00" * pad + raw
+
+
+def _b58check_valid(s: str, alphabet: str = _B58_BTC_ALPHABET) -> bool:
+    """True if s is valid Base58Check (4-byte double-SHA256 checksum)."""
+    raw = _b58decode(s, alphabet)
+    if raw is None or len(raw) < 5:
+        return False
+    payload, checksum = raw[:-4], raw[-4:]
+    return hashlib.sha256(hashlib.sha256(payload).digest()).digest()[:4] == checksum
+
+
+def _bech32_polymod(values) -> int:
+    gen = [0x3B6A57B2, 0x26508E6D, 0x1EA119FA, 0x3D4233DD, 0x2A1462B3]
+    chk = 1
+    for value in values:
+        top = chk >> 25
+        chk = (chk & 0x1FFFFFF) << 5 ^ value
+        for i in range(5):
+            chk ^= gen[i] if ((top >> i) & 1) else 0
+    return chk
+
+
+def _bech32_hrp_expand(hrp: str):
+    return [ord(x) >> 5 for x in hrp] + [0] + [ord(x) & 31 for x in hrp]
+
+
+def _bech32_valid(addr: str) -> Optional[str]:
+    """Verify bech32/bech32m checksum. Returns the hrp if valid, else None."""
+    if addr != addr.lower() and addr != addr.upper():
+        return None  # mixed case is invalid bech32
+    addr = addr.lower()
+    pos = addr.rfind("1")
+    if pos < 1 or pos + 7 > len(addr):
+        return None
+    hrp, data_part = addr[:pos], addr[pos + 1:]
+    data = []
+    for ch in data_part:
+        idx = _BECH32_CHARSET.find(ch)
+        if idx == -1:
+            return None
+        data.append(idx)
+    const = _bech32_polymod(_bech32_hrp_expand(hrp) + data)
+    if const in (1, 0x2BC830A3):  # bech32, bech32m
+        return hrp
+    return None
+
+
+def _ss58_valid(s: str) -> bool:
+    """Verify a short-form SS58 (Substrate/Polkadot) address checksum."""
+    raw = _b58decode(s)
+    if raw is None or len(raw) != 35:  # 1-byte type + 32-byte key + 2 checksum
+        return False
+    check = hashlib.blake2b(b"SS58PRE" + raw[:-2], digest_size=64).digest()[:2]
+    return check == raw[-2:]
 
 @dataclass
 class SecurityFinding:
@@ -370,6 +462,195 @@ class SecurityAuditor:
             except Exception as e:
                 print(f"Warning: Could not check {py_file}: {e}", file=sys.stderr)
 
+    # ------------------------------------------------------------------
+    # WALLET-*: wallet-address leak detection
+    # ------------------------------------------------------------------
+
+    WALLET_TEXT_EXTENSIONS = {
+        ".py", ".js", ".html", ".css", ".md", ".txt", ".json", ".yaml",
+        ".yml", ".sh", ".xml", ".example", ".cfg", ".ini", ".toml", ".sql",
+        ".env", ".conf",
+    }
+    WALLET_MAX_FILE_BYTES = 1_000_000
+    _SOLANA_CONTEXT = re.compile(
+        r"wallet|address|pubkey|public[_ ]key|account|recipient|solana|\bsol\b",
+        re.IGNORECASE,
+    )
+
+    # (name, regex, validator) — validator returns True when the candidate is
+    # a checksum-valid address of that chain.
+    _WALLET_VALIDATED_PATTERNS = [
+        ("Cardano",
+         re.compile(r"\b(?:addr|stake)(?:_test)?1[02-9ac-hj-np-z]{20,110}\b"),
+         lambda m: _bech32_valid(m) in ("addr", "stake", "addr_test", "stake_test")),
+        ("Bitcoin bech32",
+         re.compile(r"\bbc1[02-9ac-hj-np-z]{11,87}\b"),
+         lambda m: _bech32_valid(m) == "bc"),
+        ("Cosmos-family",
+         re.compile(r"\b(?:cosmos|osmo)1[02-9ac-hj-np-z]{20,60}\b"),
+         lambda m: _bech32_valid(m) in ("cosmos", "osmo")),
+        ("Bitcoin/Litecoin/Dogecoin/TRON base58",
+         re.compile(r"\b[13LMDT][1-9A-HJ-NP-Za-km-z]{24,34}\b"),
+         lambda m: _b58check_valid(m)),
+        ("XRP",
+         re.compile(r"\br[1-9A-HJ-NP-Za-km-z]{24,34}\b"),
+         lambda m: _b58check_valid(m, _B58_XRP_ALPHABET)),
+        ("Polkadot SS58",
+         re.compile(r"\b1[1-9A-HJ-NP-Za-km-z]{44,47}\b"),
+         lambda m: _ss58_valid(m)),
+    ]
+    _EVM_PATTERN = re.compile(r"\b0x[0-9a-fA-F]{40}\b")
+    _SOLANA_PATTERN = re.compile(r"\b[1-9A-HJ-NP-Za-km-z]{32,44}\b")
+
+    def _load_wallet_allowlist(self) -> set:
+        """Addresses the repo legitimately contains (spec vectors, protocol
+        contracts, demo data). One address per line; # comments allowed."""
+        path = self.project_root / "sec" / "wallet_allowlist.txt"
+        allow = set()
+        if path.exists():
+            for line in path.read_text(encoding="utf-8").splitlines():
+                line = line.split("#", 1)[0].strip()
+                if line:
+                    allow.add(line)
+        return allow
+
+    def _wallet_scan_files(self) -> List[Path]:
+        """Scan git-TRACKED text files only — untracked/ignored files cannot
+        leak through a push, and scanning them (local .env, venvs) would
+        produce blocking false positives. Falls back to the auditor's file
+        lists if git is unavailable."""
+        try:
+            out = subprocess.run(
+                ["git", "ls-files"], cwd=self.project_root,
+                capture_output=True, text=True, check=True, timeout=30,
+            ).stdout.splitlines()
+            files = [self.project_root / p for p in out]
+        except Exception:
+            files = self.python_files + self.js_files + self.html_files
+        result = []
+        for f in files:
+            rel = str(f.relative_to(self.project_root)) if f.is_absolute() else str(f)
+            if rel.startswith("sec/"):
+                continue  # the allowlist itself and audit tooling
+            if f.suffix.lower() not in self.WALLET_TEXT_EXTENSIONS:
+                continue
+            try:
+                if f.stat().st_size > self.WALLET_MAX_FILE_BYTES:
+                    continue
+            except OSError:
+                continue
+            result.append(f)
+        return result
+
+    def check_wallet_addresses(self):
+        """WALLET-001/002/003/004: wallet-address leak detection.
+
+        - WALLET-001 (CRITICAL, blocks): checksum-VALIDATED address of any
+          supported chain that is not in sec/wallet_allowlist.txt.
+        - WALLET-002 (HIGH, blocks): EVM 0x address in EIP-55 mixed case
+          (case pattern implies a checksummed real address; true keccak
+          verification needs a non-stdlib dependency, so case is the signal).
+        - WALLET-003 (MEDIUM, warns): EVM 0x address in uniform case —
+          could be a contract constant or copied address.
+        - WALLET-004 (MEDIUM, warns): Solana-shaped base58 on a line with
+          wallet context words. Solana has no checksum, so this class is
+          context-gated to stay usable.
+
+        WALLET-* findings are excluded from the accepted baseline snapshot:
+        the ONLY way to clear one is to remove the address or explicitly
+        allowlist it. A re-baseline cannot wave a wallet leak through.
+        """
+        allowlist = self._load_wallet_allowlist()
+
+        for path in self._wallet_scan_files():
+            try:
+                text = path.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+            for lineno, line in enumerate(text.splitlines(), 1):
+                claimed_spans = []
+
+                def overlaps(span):
+                    return any(s < span[1] and span[0] < e for s, e in claimed_spans)
+
+                for chain, pattern, validator in self._WALLET_VALIDATED_PATTERNS:
+                    for m in pattern.finditer(line):
+                        addr = m.group(0)
+                        if not validator(addr):
+                            continue
+                        claimed_spans.append(m.span())
+                        if addr in allowlist:
+                            continue
+                        self.add_finding(
+                            severity="CRITICAL",
+                            check_id="WALLET-001",
+                            check_name=f"Wallet Address Leak ({chain})",
+                            file_path=path,
+                            line_number=lineno,
+                            description=(f"Checksum-valid {chain} address "
+                                         f"{addr[:12]}… not in the allowlist"),
+                            recommendation=("Remove the address, or if it is a "
+                                            "public/spec/demo constant add the full "
+                                            "address to sec/wallet_allowlist.txt"),
+                        )
+
+                for m in self._EVM_PATTERN.finditer(line):
+                    addr = m.group(0)
+                    if overlaps(m.span()):
+                        continue
+                    claimed_spans.append(m.span())
+                    if addr in allowlist:
+                        continue
+                    hex_part = addr[2:]
+                    mixed_case = (hex_part != hex_part.lower()
+                                  and hex_part != hex_part.upper())
+                    if mixed_case:
+                        self.add_finding(
+                            severity="HIGH",
+                            check_id="WALLET-002",
+                            check_name="Wallet Address Leak (EVM, EIP-55 case)",
+                            file_path=path,
+                            line_number=lineno,
+                            description=(f"EIP-55 mixed-case EVM address "
+                                         f"{addr[:12]}… not in the allowlist"),
+                            recommendation=("Remove the address or add it to "
+                                            "sec/wallet_allowlist.txt"),
+                        )
+                    else:
+                        self.add_finding(
+                            severity="MEDIUM",
+                            check_id="WALLET-003",
+                            check_name="Possible Wallet Address (EVM, uniform case)",
+                            file_path=path,
+                            line_number=lineno,
+                            description=(f"EVM-shaped address {addr[:12]}… "
+                                         f"(uniform case) not in the allowlist"),
+                            recommendation=("Verify it is not a personal wallet; "
+                                            "allowlist contract constants in "
+                                            "sec/wallet_allowlist.txt"),
+                        )
+
+                if self._SOLANA_CONTEXT.search(line):
+                    for m in self._SOLANA_PATTERN.finditer(line):
+                        addr = m.group(0)
+                        if overlaps(m.span()) or addr in allowlist:
+                            continue
+                        # Pure-hex tokens are hashes/ids, not base58 addresses
+                        if re.fullmatch(r"[0-9a-fA-F]+", addr):
+                            continue
+                        self.add_finding(
+                            severity="MEDIUM",
+                            check_id="WALLET-004",
+                            check_name="Possible Wallet Address (Solana-shaped base58)",
+                            file_path=path,
+                            line_number=lineno,
+                            description=(f"Solana-shaped base58 string "
+                                         f"{addr[:12]}… on a wallet-context line"),
+                            recommendation=("Verify it is not a personal wallet; "
+                                            "allowlist legitimate constants in "
+                                            "sec/wallet_allowlist.txt"),
+                        )
+
     def run_all_checks(self) -> Tuple[int, int, int, int]:
         """Run all security checks and return counts by severity"""
         print("Running security audit...", file=sys.stderr)
@@ -384,6 +665,7 @@ class SecurityAuditor:
             ("Network binding", self.check_network_binding),
             ("Input validation", self.check_input_validation),
             ("Hardcoded secrets", self.check_secrets_in_code),
+            ("Wallet address leakage", self.check_wallet_addresses),
         ]
 
         for check_name, check_func in checks:

@@ -8,6 +8,7 @@ import os
 import sys
 import json
 import subprocess
+from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Tuple
 from security_audit import SecurityAuditor, SecurityFinding
@@ -154,7 +155,12 @@ class SecurityAgent:
                 print(f"    ... and {len(check_findings) - 3} more")
 
     def _load_baseline(self) -> set:
-        """Load baseline finding signatures from last saved audit report."""
+        """Load baseline finding signatures from last saved audit report.
+
+        WALLET-* findings are never honored from a baseline: a wallet-address
+        leak can only be cleared by removing the address or allowlisting it
+        in sec/wallet_allowlist.txt — re-baselining must not absorb one.
+        """
         baseline_path = self.project_root / "sec" / "baseline_audit.json"
         if not baseline_path.exists():
             return set()
@@ -164,18 +170,38 @@ class SecurityAgent:
             return {
                 f"{item['check_id']}:{item['file_path']}:{item['line_number']}"
                 for item in data.get("findings", [])
+                if not str(item.get("check_id", "")).startswith("WALLET")
             }
         except Exception:
             return set()
 
     def save_baseline(self):
-        """Snapshot current findings as the accepted baseline."""
-        report = self.auditor.generate_report(format="json")
+        """Snapshot current findings as the accepted baseline.
+
+        WALLET-* findings are excluded from the snapshot (see _load_baseline).
+        """
+        wallet = [f for f in self.auditor.findings if f.check_id.startswith("WALLET")]
+        kept = [f for f in self.auditor.findings if not f.check_id.startswith("WALLET")]
+        report = {
+            "timestamp": datetime.now().isoformat(),
+            "project_root": str(self.project_root),
+            "summary": {
+                "total": len(kept),
+                "critical": sum(1 for f in kept if f.severity == "CRITICAL"),
+                "high": sum(1 for f in kept if f.severity == "HIGH"),
+                "medium": sum(1 for f in kept if f.severity == "MEDIUM"),
+                "low": sum(1 for f in kept if f.severity == "LOW"),
+            },
+            "findings": [f.to_dict() for f in kept],
+        }
         baseline_path = self.project_root / "sec" / "baseline_audit.json"
         baseline_path.parent.mkdir(parents=True, exist_ok=True)
         with open(baseline_path, "w") as f:
-            f.write(report)
+            f.write(json.dumps(report, indent=2))
         print(f"\n✓ Baseline saved to {baseline_path}")
+        if wallet:
+            print(f"  ({len(wallet)} WALLET-* findings NOT baselined — resolve "
+                  f"via sec/wallet_allowlist.txt or by removing the address)")
 
     def run_pre_push_check(self, remote: str = None, url: str = None) -> int:
         """
