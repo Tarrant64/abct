@@ -130,7 +130,7 @@ docker-compose up -d
 
 For platform-specific instructions (TrueNAS, Synology, Portainer, etc.), see [Docker Deployment Guide](docs/DOCKER_DEPLOYMENT.md).
 
-> **Unraid users:** Use `abct-docker/deploy-from-git.sh` to pull from GitHub and rebuild (recommended).
+> **Unraid users:** Use `abct-docker/deploy_from_git.sh` to pull from GitHub and rebuild (recommended).
 
 ### Local Development
 
