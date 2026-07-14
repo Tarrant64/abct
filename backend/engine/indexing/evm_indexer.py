@@ -39,6 +39,7 @@ async def _syslog(level: str, msg: str, **extra):
 
 # Etherscan V2 unified API — single endpoint with chainid parameter
 ETHERSCAN_V2_URL = "https://api.etherscan.io/v2/api"
+BLOCKSCOUT_PRO_URL = "https://api.blockscout.com/v2/api"
 
 CHAIN_CONFIGS: Dict[str, Dict] = {
     "ethereum": {
@@ -59,6 +60,7 @@ CHAIN_CONFIGS: Dict[str, Dict] = {
 }
 
 _etherscan_keys = APIKeyManager("etherscan", "ETHERSCAN_API_KEY")
+_blockscout_keys = APIKeyManager("blockscout", "BLOCKSCOUT_API_KEY")
 
 # ERC-20 Transfer(address,address,uint256) event signature
 _TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
@@ -68,6 +70,33 @@ _TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df52
 _api_lock = asyncio.Lock()
 _MIN_CALL_INTERVAL = 0.35  # seconds between calls (~2.8/sec, safe margin for 3/sec limit)
 _last_call_time = 0.0
+
+
+async def _get_etherscan_compatible_provider() -> Optional[Dict[str, Any]]:
+    """Prefer Blockscout PRO, then fall back to Etherscan."""
+    blockscout_key = await _blockscout_keys.get_api_key()
+    if blockscout_key:
+        return {
+            "name": "Blockscout PRO",
+            "provider": "blockscout",
+            "base_url": BLOCKSCOUT_PRO_URL,
+            "chain_param": "chain_id",
+            "client_name": "blockscout",
+            "api_key": blockscout_key,
+        }
+
+    etherscan_key = await _etherscan_keys.get_api_key()
+    if etherscan_key:
+        return {
+            "name": "Etherscan",
+            "provider": "etherscan",
+            "base_url": ETHERSCAN_V2_URL,
+            "chain_param": "chainid",
+            "client_name": "etherscan",
+            "api_key": etherscan_key,
+        }
+
+    return None
 
 
 async def _rate_limited_get(client, url, params):
@@ -97,13 +126,13 @@ class EvmIndexer(TxIndexer):
             await _syslog("error", f"No EVM config for chain {self.chain.value}")
             return []
 
-        api_key = await _etherscan_keys.get_api_key()
-        if not api_key:
-            await _syslog("error", f"No Etherscan API key configured — "
+        provider = await _get_etherscan_compatible_provider()
+        if not provider:
+            await _syslog("error", f"No Blockscout or Etherscan API key configured - "
                           f"cannot index {self.chain.value} transactions")
             return []
 
-        client = get_client(config["client_name"], timeout=30.0)
+        client = get_client(provider["client_name"], timeout=30.0)
         entries: List[TxIndexEntry] = []
 
         # cursor_start/end may be block numbers (int-parseable) or ISO date strings
@@ -125,7 +154,7 @@ class EvmIndexer(TxIndexer):
         page = 1
         while True:
             params = {
-                "chainid": config["chainid"],
+                provider["chain_param"]: config["chainid"],
                 "module": "account",
                 "action": "txlist",
                 "address": account_id,
@@ -134,12 +163,12 @@ class EvmIndexer(TxIndexer):
                 "page": page,
                 "offset": 10000,
                 "sort": "asc",
-                "apikey": api_key,
+                "apikey": provider["api_key"],
             }
 
-            resp = await _rate_limited_get(client, config["base_url"], params)
+            resp = await _rate_limited_get(client, provider["base_url"], params)
             if resp.status_code != 200:
-                await _syslog("error", f"Etherscan txlist API returned {resp.status_code} "
+                await _syslog("error", f"{provider['name']} txlist API returned {resp.status_code} "
                               f"for {self.chain.value}")
                 break
 
@@ -147,7 +176,7 @@ class EvmIndexer(TxIndexer):
             result = data.get("result", [])
             # Etherscan returns error string in "result" on failure
             if isinstance(result, str):
-                await _syslog("warning", f"Etherscan txlist: {data.get('message', '')} — {result}")
+                await _syslog("warning", f"{provider['name']} txlist: {data.get('message', '')} - {result}")
                 break
             if not result:
                 break
@@ -172,7 +201,7 @@ class EvmIndexer(TxIndexer):
         page = 1
         while True:
             params = {
-                "chainid": config["chainid"],
+                provider["chain_param"]: config["chainid"],
                 "module": "account",
                 "action": "txlistinternal",
                 "address": account_id,
@@ -181,12 +210,12 @@ class EvmIndexer(TxIndexer):
                 "page": page,
                 "offset": 10000,
                 "sort": "asc",
-                "apikey": api_key,
+                "apikey": provider["api_key"],
             }
 
-            resp = await _rate_limited_get(client, config["base_url"], params)
+            resp = await _rate_limited_get(client, provider["base_url"], params)
             if resp.status_code != 200:
-                await _syslog("warning", f"Etherscan txlistinternal API returned {resp.status_code} "
+                await _syslog("warning", f"{provider['name']} txlistinternal API returned {resp.status_code} "
                               f"for {self.chain.value}")
                 break
 
@@ -222,7 +251,7 @@ class EvmIndexer(TxIndexer):
         page = 1
         while True:
             params = {
-                "chainid": config["chainid"],
+                provider["chain_param"]: config["chainid"],
                 "module": "account",
                 "action": "tokentx",
                 "address": account_id,
@@ -231,19 +260,19 @@ class EvmIndexer(TxIndexer):
                 "page": page,
                 "offset": 10000,
                 "sort": "asc",
-                "apikey": api_key,
+                "apikey": provider["api_key"],
             }
 
-            resp = await _rate_limited_get(client, config["base_url"], params)
+            resp = await _rate_limited_get(client, provider["base_url"], params)
             if resp.status_code != 200:
-                await _syslog("warning", f"Etherscan tokentx API returned {resp.status_code} "
+                await _syslog("warning", f"{provider['name']} tokentx API returned {resp.status_code} "
                               f"for {self.chain.value}")
                 break
 
             data = resp.json()
             result = data.get("result", [])
             if isinstance(result, str):
-                await _syslog("warning", f"Etherscan tokentx: {data.get('message', '')} — {result}")
+                await _syslog("warning", f"{provider['name']} tokentx: {data.get('message', '')} - {result}")
                 break
             if not result:
                 break
@@ -270,7 +299,7 @@ class EvmIndexer(TxIndexer):
             page += 1
 
         # ── Pre-hydrate: store Etherscan data as engine_tx_raw ───────────
-        await self._pre_hydrate(normal_txs, token_txs)
+        await self._pre_hydrate(normal_txs, token_txs, provider["provider"])
 
         hydrated_count = len(set(normal_txs.keys()) | set(token_txs.keys()))
         await _syslog("info", f"EVM({self.chain.value}) indexed {len(entries)} txs for "
@@ -283,7 +312,7 @@ class EvmIndexer(TxIndexer):
     # ------------------------------------------------------------------
 
     async def _pre_hydrate(self, normal_txs: Dict[str, Dict],
-                           token_txs: Dict[str, List[Dict]]):
+                           token_txs: Dict[str, List[Dict]], provider_name: str):
         """Convert Etherscan data to normalizer-expected format and store as tx_raw.
 
         This eliminates the need for Alchemy/RPC hydration calls.  The hydration
@@ -304,7 +333,7 @@ class EvmIndexer(TxIndexer):
                 "chain": self.chain.value,
                 "tx_id": tx_id,
                 "raw_data": raw_data,
-                "provider": "etherscan",
+                "provider": provider_name,
             })
 
         await engine_db.upsert_tx_raw_batch(batch)

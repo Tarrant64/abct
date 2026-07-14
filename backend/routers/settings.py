@@ -153,6 +153,21 @@ API_REGISTRY = {
         "rate_limit_note": "5 req/sec",
         "rate_limit_type": "quota"
     },
+    "blockscout": {
+        "name": "Blockscout PRO",
+        "category": "evm",
+        "description": "Free Etherscan-compatible multichain EVM explorer API for transaction data",
+        "required": False,
+        "docs_url": "https://docs.blockscout.com/devs/migrate-from-etherscan",
+        "env_var": "BLOCKSCOUT_API_KEY",
+        "pricing": "free",
+        "pricing_note": "Free tier available across supported Blockscout PRO chains",
+        "default_limit": None,
+        "default_period": 86400,
+        "period_label": "day",
+        "rate_limit_note": "5 req/sec on free tier",
+        "rate_limit_type": "none"
+    },
     "beaconchain": {
         "name": "Beaconchain",
         "category": "evm",

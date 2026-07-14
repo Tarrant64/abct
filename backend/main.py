@@ -1305,7 +1305,7 @@ async def api_status():
     saved_map = {s['api_name']: s for s in saved_settings}
 
     status_apis = {}
-    check_apis = ['blockfrost', 'cexplorer', 'blockstream', 'coinbase', 'alchemy', 'helius']
+    check_apis = ['blockfrost', 'cexplorer', 'blockstream', 'coinbase', 'alchemy', 'blockscout', 'helius']
     for api_id in check_apis:
         if api_id == 'blockstream':
             status_apis[api_id] = 'available'  # No key required

@@ -138,7 +138,7 @@ price source. Wallet reconciliation moved to Koios at the same time.
 
 ### Etherscan
 **Purpose:** Ethereum blockchain explorer API
-**Status:** Optional (required for Ethereum)
+**Status:** Optional fallback (Blockscout PRO is preferred when configured)
 **What it provides:**
 - Transaction history
 - Token transfers
@@ -153,6 +153,28 @@ price source. Wallet reconciliation moved to Koios at the same time.
 **Sign Up:** https://etherscan.io/apis
 **API Docs:** https://docs.etherscan.io/
 **Environment Variable:** `ETHERSCAN_API_KEY`
+
+---
+
+### Blockscout PRO
+**Purpose:** Free Etherscan-compatible multichain EVM explorer API
+**Status:** Optional (preferred for EVM transaction indexing when configured)
+**What it provides:**
+- Transaction history
+- Token transfers
+- Contract verification status
+- Gas prices
+
+**Rate Limits:**
+- Free tier: 5 calls/sec
+- Available across supported Blockscout PRO chains
+
+**Pricing:** Free tier available
+**Sign Up:** https://dev.blockscout.com/
+**API Docs:** https://docs.blockscout.com/devs/migrate-from-etherscan
+**Environment Variable:** `BLOCKSCOUT_API_KEY`
+
+**Note:** ABCT uses Blockscout's Etherscan-compatible endpoint first when this key is configured, then falls back to Etherscan.
 
 ---
 
@@ -594,6 +616,7 @@ This document is maintained alongside ABCT releases. Check [CHANGELOG.md](CHANGE
 | Charli3 | Cardano | No | Yes | `CHARLI3_API_KEY` |
 | Koios | Cardano | No | Yes (no key) | None |
 | Alchemy | EVM | No | Yes (30M CU/mo) | `ALCHEMY_API_KEY` |
+| Blockscout PRO | EVM | No | Yes (5 req/sec) | `BLOCKSCOUT_API_KEY` |
 | Etherscan | Ethereum | No | Yes (100k/day) | `ETHERSCAN_API_KEY` |
 | Basescan | Base | No | Yes (100k/day) | `ETHERSCAN_API_KEY` |
 | Polygonscan | Polygon | No | Yes (100k/day) | `ETHERSCAN_API_KEY` |

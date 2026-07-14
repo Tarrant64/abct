@@ -170,6 +170,15 @@ def create_default_registry() -> ProviderRegistry:
         burst_size=10,
     ))
     registry.register(Provider(
+        name="blockscout",
+        chains=evm_chains,
+        domains={WorkDomain.INDEX},
+        priority=65,
+        max_concurrency=3,
+        requests_per_second=5.0,
+        burst_size=10,
+    ))
+    registry.register(Provider(
         name="alchemy",
         chains=evm_chains,
         domains={WorkDomain.INDEX, WorkDomain.HYDRATE},

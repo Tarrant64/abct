@@ -111,6 +111,11 @@ class BackfillOrchestrator:
                 ChainId.POLYGON: EvmIndexer(ChainId.POLYGON),
                 ChainId.BASE: EvmIndexer(ChainId.BASE),
             },
+            "blockscout": {
+                ChainId.ETHEREUM: EvmIndexer(ChainId.ETHEREUM),
+                ChainId.POLYGON: EvmIndexer(ChainId.POLYGON),
+                ChainId.BASE: EvmIndexer(ChainId.BASE),
+            },
             "alchemy": {
                 ChainId.ETHEREUM: AlchemyEvmIndexer(ChainId.ETHEREUM),
                 ChainId.POLYGON: AlchemyEvmIndexer(ChainId.POLYGON),
