@@ -416,6 +416,101 @@ async def get_top_movers(
     return {"success": True, "movers": movers, "source": source}
 
 
+@router.get("/top-assets")
+async def get_top_assets(
+    limit: int = 20,
+    _user_id: int = Depends(verify_session)
+):
+    """
+    Top coins by market cap: symbol, name, price, 24h change. Consumed by the
+    mobile app's watch complication gallery (WATCH-5), which lets users track
+    prices of tokens they don't hold.
+
+    Unlike /top-movers this is cap-ordered and unfiltered, and its cache key
+    INCLUDES limit — top-movers' key omits it, so differing-limit callers
+    would poison each other's cached view (a trap this endpoint must avoid).
+    """
+    limit = max(1, min(limit, 50))
+    cache_key = f"prices:top_assets:{limit}"
+    from database import get_cache, set_cache
+    from config import CACHE_TTL_HOT
+
+    cached = await get_cache(cache_key)
+    if cached:
+        return {"success": True, "assets": cached, "source": "cache"}
+
+    source = "CoinGecko"
+    assets = None
+
+    # --- Try CoinGecko first ---
+    try:
+        client = get_client("coingecko", timeout=15.0)
+        resp = await client.get(
+            "https://api.coingecko.com/api/v3/coins/markets",
+            params={
+                "vs_currency": "usd",
+                "order": "market_cap_desc",
+                "per_page": limit,
+                "page": 1,
+                "price_change_percentage": "24h",
+                "sparkline": "false",
+            }
+        )
+
+        if resp.status_code == 200:
+            raw = resp.json()
+            assets = []
+            # Slice defensively — never trust upstream to honor per_page.
+            for coin in raw[:limit]:
+                assets.append({
+                    "symbol": (coin.get("symbol") or "").upper(),
+                    "name": coin.get("name"),
+                    "price": coin.get("current_price"),
+                    "change_24h": round(coin.get("price_change_percentage_24h") or 0, 2),
+                })
+        else:
+            logger.warning(f"CoinGecko markets returned {resp.status_code}, trying CoinPaprika")
+    except Exception as e:
+        logger.warning(f"CoinGecko top assets failed: {e}, trying CoinPaprika")
+
+    # --- CoinPaprika fallback ---
+    if assets is None:
+        try:
+            cp_client = get_client("coinpaprika", timeout=15.0)
+            cp_resp = await cp_client.get(
+                "https://api.coinpaprika.com/v1/tickers",
+                params={"limit": 250}
+            )
+
+            if cp_resp.status_code == 200:
+                source = "CoinPaprika"
+                tickers = cp_resp.json()
+                ranked = sorted(
+                    tickers,
+                    key=lambda t: (t.get("quotes", {}).get("USD", {}).get("market_cap") or 0),
+                    reverse=True,
+                )
+                assets = []
+                for t in ranked[:limit]:
+                    quotes = t.get("quotes", {}).get("USD", {})
+                    assets.append({
+                        "symbol": (t.get("symbol") or "").upper(),
+                        "name": t.get("name"),
+                        "price": quotes.get("price"),
+                        "change_24h": round(quotes.get("percent_change_24h") or 0, 2),
+                    })
+            else:
+                logger.error(f"CoinPaprika tickers returned {cp_resp.status_code}")
+        except Exception as e:
+            logger.error(f"CoinPaprika top assets also failed: {e}")
+
+    if assets is None:
+        return {"success": False, "error": "All market data sources failed", "assets": []}
+
+    await set_cache(cache_key, assets, CACHE_TTL_HOT)
+    return {"success": True, "assets": assets, "source": source}
+
+
 @router.get("/quota")
 async def get_quota(_user_id: int = Depends(verify_session)):
     """Get CoinGecko API usage stats with warning thresholds."""
