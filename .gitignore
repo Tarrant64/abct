@@ -178,8 +178,11 @@ install-unraid.sh
 test_*.sh
 test_*.py
 
-# E2E test suite (local only)
-tests/
+# E2E test suite and migration harness (local only).
+# Unit tests under tests/unit/ ARE tracked in the public repo — the
+# negation below overrides the broad test_*.py rules.
+tests/e2e/
+!tests/unit/test_*.py
 
 # Mobile API - now in production
 # backend/routers/mobile.py
@@ -241,8 +244,8 @@ SYNC_REPORT*.txt
 SECURITY_INCIDENT*.md
 
 # Test files in root
-test_*.py
-test-*.json
+/test_*.py
+/test-*.json
 
 # API keys and credentials files
 apikeys.rtf
