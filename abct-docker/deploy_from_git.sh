@@ -3,16 +3,21 @@
 # Usage: ./deploy_from_git.sh [options]
 #
 # Environment variables (or set defaults below):
-#   ABCT_STATIC_IP       - Static IP for container (default: 192.168.50.232)
+#   ABCT_STATIC_IP       - Optional static IP for the container on the Docker
+#                          network (unset = let Docker assign one)
 #   ABCT_DOCKER_NETWORK  - Docker network name (default: br0)
 #   ABCT_DATA_PATH       - Host path for persistent data (default: /mnt/user/appdata/abct-dashboard)
+#   ABCT_ENV_FILE        - Env file to load before deploying
+#                          (default: ${ABCT_DATA_PATH}/.env; legacy deployments
+#                          kept it at /mnt/user/appdata/ABCT/.env — point
+#                          ABCT_ENV_FILE there if yours still lives there)
 #   GIT_REPO             - GitHub repo URL (default: https://github.com/Tarrant64/abct.git)
 #   GIT_BRANCH           - Branch to deploy (default: main)
 
 set -e
 
 # --- Configuration ---
-ABCT_STATIC_IP="${ABCT_STATIC_IP:-192.168.50.232}"
+ABCT_STATIC_IP="${ABCT_STATIC_IP:-}"
 ABCT_DOCKER_NETWORK="${ABCT_DOCKER_NETWORK:-br0}"
 ABCT_DATA_PATH="${ABCT_DATA_PATH:-/mnt/user/appdata/abct-dashboard}"
 GIT_REPO="${GIT_REPO:-https://github.com/Tarrant64/abct.git}"
@@ -25,13 +30,13 @@ echo "================================================"
 echo " ABCT Dashboard - Deploy from Git"
 echo "================================================"
 echo " Network : ${ABCT_DOCKER_NETWORK}"
-echo " Static IP: ${ABCT_STATIC_IP}"
+echo " Static IP: ${ABCT_STATIC_IP:-(assigned by Docker)}"
 echo " Data path: ${ABCT_DATA_PATH}"
 echo " Repo     : ${GIT_REPO} (${GIT_BRANCH})"
 echo "================================================"
 
-# Load env file if present
-ENV_FILE="/mnt/user/appdata/ABCT/.env"
+# Load env file if present (may also set ABCT_STATIC_IP etc.)
+ENV_FILE="${ABCT_ENV_FILE:-${ABCT_DATA_PATH}/.env}"
 if [ -f "$ENV_FILE" ]; then
     echo "[1/7] Loading env from $ENV_FILE"
     set -a
@@ -60,12 +65,16 @@ echo "[5/7] Stopping old container (if running)..."
 docker stop "$CONTAINER_NAME" 2>/dev/null && docker rm "$CONTAINER_NAME" 2>/dev/null || true
 
 # Run new container
-echo "[6/7] Starting container on ${ABCT_DOCKER_NETWORK} @ ${ABCT_STATIC_IP}..."
+IP_ARGS=()
+if [ -n "$ABCT_STATIC_IP" ]; then
+    IP_ARGS=(--ip "$ABCT_STATIC_IP")
+fi
+echo "[6/7] Starting container on ${ABCT_DOCKER_NETWORK} @ ${ABCT_STATIC_IP:-(assigned by Docker)}..."
 docker run -d \
     --name "$CONTAINER_NAME" \
     --restart unless-stopped \
     --network "$ABCT_DOCKER_NETWORK" \
-    --ip "$ABCT_STATIC_IP" \
+    "${IP_ARGS[@]}" \
     -v "${ABCT_DATA_PATH}:/app/data" \
     -e "BLOCKFROST_API_KEY=${BLOCKFROST_API_KEY:-}" \
     -e "COINGECKO_API_KEY=${COINGECKO_API_KEY:-}" \
@@ -85,7 +94,7 @@ rm -rf "$CLONE_DIR"
 echo ""
 echo "================================================"
 echo " Deploy complete!"
-echo " Container IP : ${ABCT_STATIC_IP}"
+echo " Container IP : ${ABCT_STATIC_IP:-(assigned by Docker)}"
 echo " Check status : docker ps | grep ${CONTAINER_NAME}"
 echo " View logs    : docker logs -f ${CONTAINER_NAME}"
 echo "================================================"
