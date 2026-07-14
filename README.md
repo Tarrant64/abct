@@ -288,7 +288,7 @@ Built with [FastAPI](https://fastapi.tiangolo.com/), [Chart.js](https://www.char
 
 ### Blockchain Data Providers
 
-**Cardano**: [Blockfrost](https://blockfrost.io/), [TapTools](https://www.taptools.io/), [CExplorer](https://cexplorer.io/), [Koios](https://koios.rest/)
+**Cardano**: [Blockfrost](https://blockfrost.io/), [CExplorer](https://cexplorer.io/), [Koios](https://koios.rest/), [Charli3](https://charli3.io/)
 **Ethereum & EVM**: [Alchemy](https://www.alchemy.com/), [Ankr](https://www.ankr.com/), [Etherscan](https://etherscan.io/), [Basescan](https://basescan.org/), [Polygonscan](https://polygonscan.com/)
 **Solana**: [Helius](https://www.helius.dev/) · **Bitcoin**: [Blockstream](https://blockstream.info/) · **Algorand**: [Pera Wallet](https://developer.perawallet.app/), [Tatum](https://tatum.io/)
 **TON**: [TON Center](https://toncenter.com/) · **Stellar**: [Horizon API](https://horizon.stellar.org/) · **Substrate**: [Subscan](https://subscan.io/)

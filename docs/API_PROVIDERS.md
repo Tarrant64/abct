@@ -42,20 +42,24 @@ ABCT integrates with **16 different API providers** across 5 blockchain networks
 
 ---
 
-### TapTools
-**Purpose:** Cardano NFT floor prices and token analytics
-**Status:** Optional (recommended for NFT collectors)
+### Charli3
+**Purpose:** Cardano native token prices (oracle-backed)
+**Status:** Optional (recommended for Cardano token pricing)
 **What it provides:**
-- NFT collection floor prices
-- NFT listing data
-- Token price data
-- DeFi analytics
-- Wallet portfolio positions
+- Cardano native token price data
+- Token metadata and logos
+- ADA/USD reference pricing for LP valuation
 
 **Rate Limits:**
-- Varies by subscription plan
-- Free tier: ~100 calls/day
-- ABCT includes automatic scheduler to respect limits
+- Free tier available; limits vary by plan
+
+**Pricing:** Free tier available
+**Sign Up:** https://charli3.io/
+**API Docs:** https://api.charli3.io/api/v1
+**Environment Variable:** `CHARLI3_API_KEY`
+
+**Note:** Charli3 replaced TapTools (service sunset) as the Cardano token
+price source. Wallet reconciliation moved to Koios at the same time.
 
 ---
 
@@ -414,12 +418,14 @@ ABCT implements intelligent fallback strategies to ensure reliability:
 2. **Fallback 1:** CoinMarketCap (if available)
 3. **Fallback 2:** Coinbase Public API (major coins only)
 4. **Fallback 3:** DefiLlama (universal)
-5. **Cardano-specific:** TapTools (Cardano tokens)
+5. **Cardano-specific:** Charli3 (Cardano native tokens)
 
 ### NFT Metadata
-1. **Primary:** TapTools (Cardano) or Alchemy (EVM)
-2. **Fallback 1:** Koios (Cardano)
-3. **Fallback 2:** Blockfrost (Cardano)
+1. **Primary:** Alchemy (EVM) / Koios (Cardano)
+2. **Fallback:** Blockfrost (Cardano)
+
+> Cardano NFT floor pricing previously came from TapTools, which has
+> sunset its services; migration to a replacement source is in progress.
 
 ### EVM Transactions
 1. **Primary:** Alchemy
@@ -437,7 +443,7 @@ ABCT implements intelligent fallback strategies to ensure reliability:
 - **CoinGecko** - For price data (works without key)
 
 ### Optional (Per Use Case)
-- **TapTools** - If you collect Cardano NFTs
+- **Charli3** - For Cardano native token prices
 - **Alchemy** - If you use Ethereum/Polygon/Base
 - **Etherscan** - If you use Ethereum/Polygon/Base
 - **Helius** - If you use Solana
@@ -462,7 +468,7 @@ ABCT includes several features to minimize API costs:
 - **Price caching:** 5-minute refresh intervals
 
 ### Smart Scheduling
-- **NFT Scheduler:** Spreads TapTools calls across 24 hours
+- **NFT Scheduler:** Spreads NFT price refreshes across 24 hours
 - **Batch requests:** Combines multiple queries when possible
 - **Rate limit tracking:** Prevents exceeding free tier limits
 
@@ -490,8 +496,7 @@ Most APIs offer generous free tiers:
 5. **Etherscan** - 100,000 calls/day (free forever)
 
 ### Paid APIs
-Only TapTools requires a subscription for NFT features:
-- **TapTools** - $10/month (required for NFT floor prices)
+None required — every integrated provider offers a workable free tier.
 
 ### Sign-Up Process
 1. Visit the provider's website (links in each section above)
@@ -586,6 +591,7 @@ This document is maintained alongside ABCT releases. Check [CHANGELOG.md](CHANGE
 |----------|-----------|----------|-----------|--------------|
 | Blockfrost | Cardano | Yes | Yes (generous) | `BLOCKFROST_API_KEY` |
 | CExplorer | Cardano | No | Yes | `CEXPLORER_API_KEY` |
+| Charli3 | Cardano | No | Yes | `CHARLI3_API_KEY` |
 | Koios | Cardano | No | Yes (no key) | None |
 | Alchemy | EVM | No | Yes (30M CU/mo) | `ALCHEMY_API_KEY` |
 | Etherscan | Ethereum | No | Yes (100k/day) | `ETHERSCAN_API_KEY` |
