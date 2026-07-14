@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.0] - 2026-07-13
+
+### Added
+- **Cardano staking tracking overhaul**: native delegation plus DeFi protocol staking positions (Liqwid LQ via the official GraphQL API, Indigo, and existing protocol adapters) with cross-screen staking valuation and CDP net equity
+- **Local stake-address derivation**: base addresses resolve to their reward (stake) address locally per CIP-19 — no API round-trip — verified against CIP-19 specification test vectors
+- **Mobile API performance**: batched wallet and summary lookups, server-side stale-while-revalidate on cache expiry, `ETag`/`If-None-Match` conditional GETs on `/api/mobile/*`, and opt-in slim payloads on `/chart/portfolio-history`
+- **Top assets endpoint**: top assets by market cap for watch complication galleries
+- **Glass design language (v2)**: glass panels, frosted sticky headers, retuned dark-mode black-gloss theme, and expressive sheen variants across the dashboard
+- **Docker deployment guide** (`docs/DOCKER_DEPLOYMENT.md`) covering both shipped deployment patterns and platform notes
+
+### Changed
+- **TapTools integration removed** (the service has sunset): Cardano token pricing now comes from Charli3 with DefiLlama fallback, wallet reconciliation from Koios; explorer links point to cexplorer.io
+- Portfolio summary caching is partitioned per response variant and stale ages are capped, so background recomputes can no longer serve mismatched or endlessly stale payloads
+- `deploy_from_git.sh` env file location is configurable via `ABCT_ENV_FILE` and the container static IP is opt-in
+
+### Fixed
+- STRIKE is classified as liquid staking rather than governance, with corrected token image resolution
+- Staking rows no longer vanish when an upstream provider hiccups — expired cached account info is served until a fresh fetch succeeds, and empty provider responses are treated as indeterminate rather than confirmed exits
+- Per-wallet staking refresh cooldown with an immediate first fill for newly added wallets
+- Login rate limiting works again under current slowapi versions
+
+### Security
+- Summary cache variants are partitioned to prevent responses computed for one parameter set being served for another
+- Unit-test fixtures use CIP-19 specification and synthetic derivation vectors
+
 ## [1.0.0] - 2026-01-31
 
 ### 🎉 First Major Release - Production Ready
