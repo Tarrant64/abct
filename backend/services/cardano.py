@@ -146,9 +146,9 @@ def _derive_stake_key_local(address: str) -> Optional[str]:
     # type 14 (0xe) for key hash stake cred, type 15 (0xf) for script stake
     # cred. Per CIP-19, types 0 and 1 carry a KEY-hash stake credential.
     # (The previous mapping (0,2)->key silently derived a script-stake
-    # address (stake17...) for the user's real addr1z payment-script
-    # wallets, misattributing their delegations — caught by the fixture
-    # test against Koios-verified pairs, 2026-07-12.)
+    # address (stake17...) for addr1z payment-script wallets,
+    # misattributing their delegations — pinned by the derivation
+    # fixture test, 2026-07-12.)
     if addr_type in (0, 1):
         reward_header = (0x0e << 4) | network  # 0xe0 | network = 0xe1 for mainnet
     else:
