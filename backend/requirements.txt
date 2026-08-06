@@ -1,13 +1,13 @@
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
 httpx==0.26.0
-python-dotenv==1.0.0
+python-dotenv==1.2.2
 aiosqlite==0.19.0
 pydantic==2.5.3
 bech32==1.2.0
-PyJWT==2.10.1
-cryptography==42.0.0
-python-multipart>=0.0.7  # CVE-2024-24762 fix (Finding #10)
+PyJWT==2.13.0
+cryptography==49.0.0
+python-multipart>=0.0.31  # CVE-2024-24762 + later multipart DoS fixes
 bip_utils==2.9.3
 slowapi==0.1.9
 bcrypt==4.1.2
