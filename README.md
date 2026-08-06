@@ -2,8 +2,8 @@
 
 Personal multi-chain portfolio tracker built Cardano-first.
 
-![Version](https://img.shields.io/badge/version-1.15.2-brightgreen.svg)
-![Build](https://img.shields.io/badge/build-1772667842-blue.svg)
+![Version](https://img.shields.io/badge/version-1.15.3-brightgreen.svg)
+![Build](https://img.shields.io/badge/build-1772669294-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.109-teal.svg)
@@ -61,7 +61,7 @@ Protocol adapters detect positions automatically — no manual tracking needed:
 - **Transaction Analytics**: Multi-chain transaction history with full paginated fetching, filtering, analytics, and portfolio vs. BTC relative strength
 - **Security / Privacy**: Token approval monitoring, address poisoning scanner, Cardano Shield threat feed, spam token detection, Railgun contract detection, Zcash shielded pool stats, per-wallet privacy scoring, Monero and Secret Network support
 - **DePIN Tracking**: Iagon (Cardano) and Helium (Solana) infrastructure protocol monitoring
-- **DeFi Monitoring**: Auto-detected staking positions with APY and rewards across 100+ protocols
+- **DeFi Monitoring**: Auto-detected staking positions with APY and rewards across 80+ protocols
 - **NFT Collection**: Browse NFTs with floor price valuations across Cardano, Ethereum, and Solana, mobile-optimized scroll pagination
 - **Global Search**: Search across wallets, DeFi positions, staking, governance, and exchange results
 - **Per-Asset Charts**: Detailed token modal with per-asset price charting and enriched metadata
@@ -311,5 +311,5 @@ For detailed API information including rate limits and pricing, see [API Provide
 
 ---
 
-**Current Version:** v1.15.2 (BUILD 1772667842)
-**Last Updated:** March 4, 2026
+**Current Version:** v1.15.3 (BUILD 1772669294)
+**Last Updated:** August 5, 2026
