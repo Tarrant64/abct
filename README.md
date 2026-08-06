@@ -83,6 +83,12 @@ Protocol adapters detect positions automatically — no manual tracking needed:
 - **Cloudflare Tunnel**: Built-in secure remote access (auto-restores across container rebuilds)
 - **Encrypted API Keys**: All keys encrypted at rest in the database
 
+## Mobile App
+
+A native mobile client lives in [`mobile/`](mobile/) — a Flutter app for **iOS** with an **Apple Watch** companion (watch face complications for token prices and portfolio total). It connects to your self-hosted ABCT backend through Cloudflare Tunnel + Access with TLS certificate pinning and encrypted-at-rest connection profiles. **Android** support is planned from the same codebase.
+
+See [`mobile/README.md`](mobile/README.md) for setup, code-signing configuration, and build instructions.
+
 ## Important: Intended Use
 
 **ABCT is designed for personal, self-hosted use on trusted local networks.**

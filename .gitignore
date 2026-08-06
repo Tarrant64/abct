@@ -10,8 +10,9 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+# (anchored to repo root — mobile/lib/ holds the Flutter app's Dart sources)
+/lib/
+/lib64/
 parts/
 sdist/
 var/

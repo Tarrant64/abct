@@ -1,0 +1,48 @@
+name: abct_mobile
+# The build number (+N) must increase per device install: watchOS caches each
+# widget extension's complication descriptors and gallery recommendations per
+# version and will not re-query an "unchanged" extension. scripts/build_device.sh
+# overrides it automatically with the commit count (--build-number).
+version: 0.1.1+2
+publish_to: "none"
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+flutter:
+  uses-material-design: true
+  assets:
+    - abct-logo.png
+
+dependencies:
+  flutter:
+    sdk: flutter
+  dio: ^5.7.0
+  dio_cookie_manager: ^3.1.1
+  cookie_jar: ^4.0.8
+  path_provider: ^2.1.4
+  flutter_secure_storage: ^9.2.2
+  shared_preferences: ^2.3.2
+  cryptography: ^2.7.0
+  google_fonts: ^6.2.1
+  crypto: ^3.0.3
+  cached_network_image: ^3.4.1
+  fl_chart: ^0.69.0
+  local_auth: ^2.3.0
+  sentry_flutter: ^8.10.0
+  workmanager: ^0.9.0
+  flutter_local_notifications: ^17.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_launcher_icons: ^0.14.3
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "abct-logo.png"
+  remove_alpha_ios: true
+  min_sdk_android: 21
