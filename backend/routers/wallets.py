@@ -2089,7 +2089,7 @@ async def discover_xpub_addresses(data: dict, user_id: int = Depends(verify_sess
     if not bitcoin_service.xpub_available():
         raise HTTPException(
             status_code=503,
-            detail="xpub support not available. Install bip_utils package."
+            detail=bitcoin_service.xpub_unavailable_reason()
         )
 
     # Discover addresses
@@ -2135,7 +2135,7 @@ async def add_xpub_addresses(data: dict, user_id: int = Depends(verify_session))
         if not bitcoin_service.xpub_available():
             raise HTTPException(
                 status_code=503,
-                detail="xpub support not available. Install bip_utils package."
+                detail=bitcoin_service.xpub_unavailable_reason()
             )
 
         discovery = await bitcoin_service.discover_xpub_addresses(xpub, gap_limit=gap_limit)
@@ -2199,7 +2199,7 @@ async def xpub_status(user_id: int = Depends(verify_session)):
     """Check if xpub support is available."""
     return {
         'available': bitcoin_service.xpub_available(),
-        'message': 'bip_utils installed' if bitcoin_service.xpub_available() else 'Install bip_utils for xpub support'
+        'message': bitcoin_service.xpub_unavailable_reason() or 'bip_utils loaded - xpub support active'
     }
 
 
@@ -2293,7 +2293,7 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
             if not bitcoin_service.xpub_available():
                 raise HTTPException(
                     status_code=503,
-                    detail="xpub support not available. Install bip_utils package."
+                    detail=bitcoin_service.xpub_unavailable_reason()
                 )
 
             # Discover all addresses with balance

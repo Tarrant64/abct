@@ -10,19 +10,39 @@ from services.http_client import get_client
 
 logger = logging.getLogger(__name__)
 
-# Try to import bip_utils for xpub support
+# xpub support requires bip_utils. A broken import here disables extended-public-key
+# expansion entirely, which makes a funded xpub wallet report a zero balance rather
+# than an error - so the failure reason is kept and surfaced instead of swallowed.
+BIP_UTILS_AVAILABLE = False
+BIP_UTILS_ERROR: Optional[str] = None
 try:
     from bip_utils import (
-        Bip32Slip10Secp256k1,
         Bip44, Bip49, Bip84,
         Bip44Coins, Bip49Coins, Bip84Coins,
-        Bip44PublicKey, Bip49PublicKey, Bip84PublicKey,
-        Base58Decoder, Base58Encoder
+        Bip44Changes
     )
     BIP_UTILS_AVAILABLE = True
-except ImportError:
-    BIP_UTILS_AVAILABLE = False
-    logger.warning("bip_utils not installed - xpub support disabled")
+except Exception as e:
+    BIP_UTILS_ERROR = f"{type(e).__name__}: {e}"
+    logger.error(
+        "bip_utils unusable - Bitcoin xpub/ypub/zpub support is DISABLED (%s). "
+        "Extended public keys cannot be expanded to addresses; check the "
+        "bip_utils pin in backend/requirements.txt.",
+        BIP_UTILS_ERROR
+    )
+
+
+class XpubError(Exception):
+    """Raised when an extended public key cannot be expanded to addresses."""
+
+
+class XpubUnavailableError(XpubError):
+    """Raised when bip_utils is missing or incompatible."""
+
+
+class XpubDerivationError(XpubError):
+    """Raised when derivation fails for an otherwise well-formed xpub."""
+
 
 class BitcoinService:
     """Service for fetching Bitcoin wallet data using Blockstream API."""
@@ -189,50 +209,42 @@ class BitcoinService:
 
         Returns:
             List of (address, index) tuples
+
+        Raises:
+            XpubUnavailableError: bip_utils is missing or incompatible.
+            XpubDerivationError: the key is unsupported or derivation failed.
         """
         if not BIP_UTILS_AVAILABLE:
-            logger.error("bip_utils not available for xpub derivation")
-            return []
+            raise XpubUnavailableError(self.xpub_unavailable_reason())
+
+        xpub_type = self.get_xpub_type(xpub)
+        if not xpub_type:
+            raise XpubDerivationError("Unrecognized extended public key format")
+
+        # Bip49/Bip84 subclass Bip44Base, so they share one derivation shape;
+        # only the context class and coin enum differ per purpose.
+        derivers = {
+            'legacy': (Bip44, Bip44Coins.BITCOIN),            # BIP44 - 1...
+            'nested_segwit': (Bip49, Bip49Coins.BITCOIN),     # BIP49 - 3...
+            'native_segwit': (Bip84, Bip84Coins.BITCOIN),     # BIP84 - bc1...
+        }
+        if xpub_type not in derivers:
+            raise XpubDerivationError(
+                f"Testnet extended public keys are not supported ({xpub_type})"
+            )
+
+        bip_cls, coin = derivers[xpub_type]
+        chain = Bip44Changes.CHAIN_INT if change else Bip44Changes.CHAIN_EXT
 
         try:
-            xpub_type = self.get_xpub_type(xpub)
-            if not xpub_type:
-                logger.error(f"Unknown xpub type: {xpub[:10]}...")
-                return []
-
-            addresses = []
-            chain = 1 if change else 0  # 0 = external (receive), 1 = internal (change)
-
-            if xpub_type == 'legacy':
-                # BIP44 - Legacy addresses (1...)
-                bip44_ctx = Bip44.FromExtendedKey(xpub, Bip44Coins.BITCOIN)
-                for i in range(start_index, start_index + count):
-                    addr_ctx = bip44_ctx.Change(Bip44.ChainType(chain)).AddressIndex(i)
-                    addresses.append((addr_ctx.PublicKey().ToAddress(), i))
-
-            elif xpub_type == 'nested_segwit':
-                # BIP49 - Nested SegWit addresses (3...)
-                bip49_ctx = Bip49.FromExtendedKey(xpub, Bip49Coins.BITCOIN)
-                for i in range(start_index, start_index + count):
-                    addr_ctx = bip49_ctx.Change(Bip49.ChainType(chain)).AddressIndex(i)
-                    addresses.append((addr_ctx.PublicKey().ToAddress(), i))
-
-            elif xpub_type == 'native_segwit':
-                # BIP84 - Native SegWit addresses (bc1...)
-                bip84_ctx = Bip84.FromExtendedKey(xpub, Bip84Coins.BITCOIN)
-                for i in range(start_index, start_index + count):
-                    addr_ctx = bip84_ctx.Change(Bip84.ChainType(chain)).AddressIndex(i)
-                    addresses.append((addr_ctx.PublicKey().ToAddress(), i))
-
-            else:
-                logger.warning(f"Testnet xpub types not fully supported: {xpub_type}")
-                return []
-
-            return addresses
-
+            chain_ctx = bip_cls.FromExtendedKey(xpub, coin).Change(chain)
+            return [
+                (chain_ctx.AddressIndex(i).PublicKey().ToAddress(), i)
+                for i in range(start_index, start_index + count)
+            ]
         except Exception as e:
             logger.error(f"Error deriving addresses from xpub: {e}")
-            return []
+            raise XpubDerivationError(f"Address derivation failed: {e}") from e
 
     async def discover_xpub_addresses(
         self,
@@ -256,8 +268,8 @@ class BitcoinService:
         """
         if not BIP_UTILS_AVAILABLE:
             return {
-                'error': 'bip_utils not installed',
-                'message': 'Install bip_utils package to enable xpub support'
+                'error': 'xpub_unavailable',
+                'message': self.xpub_unavailable_reason()
             }
 
         xpub_type = self.get_xpub_type(xpub)
@@ -280,12 +292,21 @@ class BitcoinService:
             while consecutive_empty < gap_limit and index < max_addresses:
                 # Derive batch of addresses
                 batch_size = min(10, max_addresses - index)
-                addresses = self.derive_addresses_from_xpub(
-                    xpub,
-                    start_index=index,
-                    count=batch_size,
-                    change=is_change
-                )
+                try:
+                    addresses = self.derive_addresses_from_xpub(
+                        xpub,
+                        start_index=index,
+                        count=batch_size,
+                        change=is_change
+                    )
+                except XpubError as e:
+                    # Never fall through to a zero-balance "success": a derivation
+                    # failure is indistinguishable from an empty wallet downstream.
+                    logger.error(f"xpub discovery aborted: {e}")
+                    return {
+                        'error': 'xpub_derivation_failed',
+                        'message': str(e)
+                    }
 
                 if not addresses:
                     break
@@ -349,6 +370,15 @@ class BitcoinService:
     def xpub_available(self) -> bool:
         """Check if xpub support is available."""
         return BIP_UTILS_AVAILABLE
+
+    def xpub_unavailable_reason(self) -> Optional[str]:
+        """Explain why xpub support is off, or None when it is working."""
+        if BIP_UTILS_AVAILABLE:
+            return None
+        return (
+            f"xpub support disabled: bip_utils failed to load ({BIP_UTILS_ERROR}). "
+            "Verify the bip_utils pin in backend/requirements.txt."
+        )
 
 
 # Singleton instance

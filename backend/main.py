@@ -79,6 +79,7 @@ startup_status = {
     "snapshot_check": "pending",
     "nft_prices": "pending",
     "nft_scheduler": "pending",
+    "xpub": "pending",
     "ready": False
 }
 
@@ -338,6 +339,39 @@ async def lifespan(app: FastAPI):
             # Mark overall ready once NFT prices are done (last task)
             startup_status["ready"] = True
 
+    # --- Bitcoin xpub support self-test on startup ---
+    async def _check_xpub_support():
+        """Prove xpub derivation actually works, not just that the import resolved.
+
+        xpub support shipped broken and stayed broken because a failed bip_utils
+        import was logged at WARNING and never surfaced. Derive a known BIP84
+        test-vector address so any future breakage is loud at boot.
+        """
+        from services.bitcoin import bitcoin_service
+        # BIP84 spec test vector (public, from the BIP itself - not a real wallet)
+        ZPUB = ("zpub6rFR7y4Q2AijBEqTUquhVz398htDFrtymD9xYYfG1m4wAcvPhXNfE3EfH1r1"
+                "ADqtfSdVCToUG868RvUUkgDKf31mGDtKsAYz2oz2AGutZYs")
+        EXPECTED = "bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu"
+
+        reason = bitcoin_service.xpub_unavailable_reason()
+        if reason:
+            startup_status["xpub"] = "error"
+            logger.error(f"Bitcoin xpub support DISABLED: {reason}")
+            await log_service.error("bitcoin_xpub", reason)
+            return
+        try:
+            derived = bitcoin_service.derive_addresses_from_xpub(ZPUB, count=1)
+            if derived and derived[0][0] == EXPECTED:
+                startup_status["xpub"] = "ready"
+                logger.info("Bitcoin xpub support OK (BIP84 test vector verified)")
+                return
+            msg = f"xpub self-test derived unexpected address: {derived}"
+        except Exception as e:
+            msg = f"xpub self-test raised {type(e).__name__}: {e}"
+        startup_status["xpub"] = "error"
+        logger.error(f"Bitcoin xpub support BROKEN - {msg}")
+        await log_service.error("bitcoin_xpub", msg)
+
     # --- Blockfrost RYO health check on startup ---
     async def _check_blockfrost_ryo_health():
         """Test RYO node connectivity on startup, log result."""
@@ -455,6 +489,7 @@ async def lifespan(app: FastAPI):
     _background_tasks.append(asyncio.create_task(collect_nft_prices_background()))
     _background_tasks.append(asyncio.create_task(_run_health_checks_background()))
     _background_tasks.append(asyncio.create_task(_check_blockfrost_ryo_health()))
+    _background_tasks.append(asyncio.create_task(_check_xpub_support()))
     _background_tasks.append(asyncio.create_task(_init_dbsync_pool()))
     _background_tasks.append(asyncio.create_task(_periodic_blockfrost_sync_check()))
     _background_tasks.append(asyncio.create_task(_seed_defi_logos_background()))
