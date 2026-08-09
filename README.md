@@ -198,6 +198,20 @@ See [SECURITY.md](SECURITY.md) for full details.
 
 ## What's New
 
+### v1.16.x — V2 Dashboard, DeFi Expansion, Mobile App & Security Wave (Mar–Aug 2026)
+- **V2 "/next" Dashboard**: brought to full V1 parity — governance tab, wallet enhancements, NFT sort/detail, chain breakdown modal, stream charts, sortable columns, exchange drill-down, and a complete Settings page; client-side caching and parallel loading across all V2 pages
+- **DeFi Expansion**: LP position valuation for all 5 Cardano DEX adapters, Indigo CDP and Stability Pool detection, lending/borrowing detection on Cardano adapters, and Solana + EVM adapters enriched with real position data
+- **Cardano Staking Overhaul**: native delegation plus protocol staking (Liqwid LQ via official GraphQL, Indigo), cross-screen staking valuation, CDP net equity, and local CIP-19 stake-address derivation with no API round-trip
+- **ADA Handle Support**: detect, resolve, and display `$handles`
+- **Strike Finance V2**: vault and trading account tracking
+- **Provider Changes**: TapTools removed (service sunset) — Cardano pricing now via Charli3 with DefiLlama fallback and reconciliation via Koios; Blockscout added as a free-tier EVM provider (community PR #1)
+- **Mobile App**: Flutter iOS/watchOS client under `mobile/`, plus batched lookups, server-side stale-while-revalidate, and `ETag` conditional GETs on `/api/mobile/*`
+- **Glass Design Language (v2)**: glass panels, frosted sticky headers, retuned dark-mode black-gloss theme
+- **Security — xpub derivation repaired (v1.16.1)**: Bitcoin xpub/ypub/zpub support had never worked since the initial commit, and the swallowed failure meant a funded hardware-wallet xpub silently reported an empty wallet with a zero balance. It now fails loudly, with a startup self-test against published BIP84 vectors
+- **Security — credential store hardened (v1.16.2)**: `portfolio.db` and its WAL/SHM sidecars are now 0600 rather than world-readable, and `_decrypt_value` fails closed instead of returning raw ciphertext that was being used as a signing secret
+- **Security — dependency wave**: 56 Dependabot alerts closed (28 high), plus FastAPI 0.109 → 0.133.1 and starlette 0.35.1 → 1.6.0 (v1.16.3), clearing 7 starlette advisories and 1 FastAPI advisory
+- **MIT LICENSE**
+
 ### V2 Frontend — Professional Dashboard Redesign (March 2026)
 - **Parallel V2 UI**: Accessible at `/next/` — V1 remains fully intact at existing URLs
 - **Sidebar Navigation**: Collapsible left sidebar with icon + text labels across 3 sections (Portfolio, Analytics, System)
