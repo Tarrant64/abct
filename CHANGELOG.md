@@ -7,15 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.1.0] - 2026-07-13
+## [1.16.3] - 2026-08-09
+
+### Security
+- **FastAPI and Starlette upgraded**: `fastapi` 0.109.0 → 0.133.1 and `starlette` 0.35.1 → 1.6.0, clearing 7 Starlette advisories (14 OSV IDs counting GHSA/PYSEC aliases) plus `PYSEC-2024-38` on FastAPI — the largest remaining dependency exposure, and one Dependabot does not track
+- `starlette` is now **pinned explicitly**: FastAPI 0.133.1 declares only `starlette>=0.40.0` with no upper bound, so an unpinned install could resolve to an untested release and silently undo the fix
+- `pydantic` → 2.13.4 and `httpx` → 0.27.2 to satisfy the upgrade ladder
+
+### Changed
+- No source changes were required by the migration — the codebase was already on the Pydantic v2 API
+
+### Verified
+- 261 unit tests pass; full suite unchanged against baseline
+- Route table byte-identical at 405 routes
+- 19/19 runtime smoke checks, covering both multipart upload endpoints, slowapi rate limiting (real 429 plus `X-RateLimit` headers), `StreamingResponse`, `FileResponse`, Pydantic-body POST, and auth dependencies
+
+## [1.16.2] - 2026-08-09
+
+### Security
+- **Credential store permissions hardened**: `portfolio.db` holds every encrypted exchange credential but was created world-readable (0644). It is now 0600, along with the `-wal`/`-shm` sidecars, which SQLite creates using the main file's mode and which can contain recently written credential data. New installs are restricted automatically
+- **`_decrypt_value` now fails closed**: a value carrying the `enc:` prefix that could not be decrypted previously returned the **raw ciphertext**, which callers could not distinguish from a real credential and which was being used as a signing secret. Both failure paths now return `None`, so callers see a falsy credential and report "not configured"
+- Backward compatibility preserved: falsy input still passes through and values without the `enc:` prefix are still returned as-is, so pre-migration plaintext credentials keep working. The live database was audited first — 10 encrypted fields, all decrypting cleanly, 0 legacy plaintext
+
+### Fixed
+- **Registry-registered exchanges were excluded from portfolio totals**: three call sites each hardcoded the same seven legacy exchanges, so all 35 providers registered via `register_exchange()` were missing from snapshot totals, mobile top holdings, and the per-symbol source breakdown. The list is now derived from `EXCHANGE_REGISTRY` unioned with the legacy names through a shared helper so the three sites cannot drift again. This was latent — no configured exchange was affected, so no user-visible total changed
+- The source breakdown resolves display labels from the registry (`Crypto.com`, `WOO X`, `Independent Reserve`) instead of a `name.title()` fallback that mangled them
+- Aggregation degrades to the legacy list rather than dropping exchange value entirely if the lazy `routers.exchanges` import fails under standalone migration scripts
+
+## [1.16.1] - 2026-08-09
+
+### Security
+- **Bitcoin xpub derivation repaired — broken since the initial commit**. `backend/services/bitcoin.py` imported `Bip49PublicKey` and `Bip84PublicKey`, which have never existed in any `bip_utils` release (`Bip49` and `Bip84` subclass `Bip44Base` and share the single `Bip44PublicKey` type). The same function also called `Bip44.ChainType()`, which does not exist either; the real API is the `Bip44Changes` enum. This was not version drift — the `bip_utils==2.9.3` pin was unchanged since the initial commit
+- **Impact**: both failures were swallowed. The `ImportError` was logged at WARNING as "bip_utils not installed" (it was installed), and derivation errors returned `[]`, which `discover_xpub_addresses` treated as "no more addresses" and reported as a successful 0.00000000 BTC balance. **A funded hardware-wallet xpub silently rendered as an empty wallet with a zero balance**
+
+### Fixed
+- Import only names that exist; derive via `Bip44Changes.CHAIN_EXT`/`CHAIN_INT`
+- Collapsed the three copy-pasted per-BIP branches that propagated the bug
+- Raise `XpubUnavailableError`/`XpubDerivationError` instead of returning `[]`, so a derivation failure can no longer masquerade as a zero balance
+- Record and surface the real import failure reason at ERROR — the endpoints no longer tell users to install an already-installed package
+- Added a startup self-test that derives a known BIP84 vector and logs an ERROR plus a `log_service` entry if xpub support is degraded
 
 ### Added
+- `tests/unit/test_xpub_derivation.py` asserts derivation output against the published BIP44/49/84 vectors for the public "abandon…about" mnemonic, so a silent regression fails the suite instead of returning empty results
+
+## [1.16.0] - 2026-08-05
+
+Five months of accumulated work since v1.15.3, covering the V2 dashboard, a large DeFi and staking expansion, mobile API performance, and a full dependency-vulnerability sweep.
+
+### Added
+- **V2 "/next" dashboard**: a professional Cardano-first frontend with sidebar navigation, brought to full V1 parity across governance, wallets, NFT sort/detail, chain breakdown, stream charts, settings CRUD, logs, security, and backup — plus client-side API caching and parallel loading across all V2 pages
+- **DeFi adapter expansion**: LP position valuation for all 5 Cardano DEX adapters, Indigo Protocol CDP and Stability Pool detection, lending/borrowing position detection on Cardano protocol adapters, and Solana + EVM adapters enriched with real position data via REST APIs
+- **ADA Handle support**: detect, resolve, and display `$handles`
+- **Strike Finance V2**: vault and trading account tracking
+- **Blockscout provider**: free-tier Etherscan-compatible EVM provider (community PR #1) — self-hosters can register for their own key
+- **Mobile app**: Flutter iOS/watchOS client added under `mobile/`
 - **Cardano staking tracking overhaul**: native delegation plus DeFi protocol staking positions (Liqwid LQ via the official GraphQL API, Indigo, and existing protocol adapters) with cross-screen staking valuation and CDP net equity
 - **Local stake-address derivation**: base addresses resolve to their reward (stake) address locally per CIP-19 — no API round-trip — verified against CIP-19 specification test vectors
 - **Mobile API performance**: batched wallet and summary lookups, server-side stale-while-revalidate on cache expiry, `ETag`/`If-None-Match` conditional GETs on `/api/mobile/*`, and opt-in slim payloads on `/chart/portfolio-history`
 - **Top assets endpoint**: top assets by market cap for watch complication galleries
 - **Glass design language (v2)**: glass panels, frosted sticky headers, retuned dark-mode black-gloss theme, and expressive sheen variants across the dashboard
 - **Docker deployment guide** (`docs/DOCKER_DEPLOYMENT.md`) covering both shipped deployment patterns and platform notes
+- **MIT LICENSE**
+- 24-hour P&L column on the All Assets overview table
 
 ### Changed
 - **TapTools integration removed** (the service has sunset): Cardano token pricing now comes from Charli3 with DefiLlama fallback, wallet reconciliation from Koios; explorer links point to cexplorer.io
@@ -27,10 +80,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Staking rows no longer vanish when an upstream provider hiccups — expired cached account info is served until a fresh fetch succeeds, and empty provider responses are treated as indeterminate rather than confirmed exits
 - Per-wallet staking refresh cooldown with an immediate first fill for newly added wallets
 - Login rate limiting works again under current slowapi versions
+- DeFi totals that were excluded from the main dashboard now count toward portfolio value, and `/portfolio/all-holdings` matches `/portfolio/instant`
+- Duplicate staking and DeFi rows in `portfolio_positions` eliminated, with chain position writes guarded against upstream API failures
+- Chart loading failures for non-top-10 tokens (AVAX, HNT, NIGHT, and others) resolved
+- Portfolio value calculation includes tracked and custom tokens
+- DeFi adapters register at startup so the protocol registry is populated
+- A stale `loadHoldings()` can no longer overwrite a fresh sync result
 
 ### Security
+- **56 Dependabot alerts closed** (28 high), all pip-only direct dependencies: `cryptography` 42.0.0 → 50.0.0, `Pillow` 10.2.0 → 12.3.0, `PyJWT` 2.10.1 → 2.13.0, `python-multipart` 0.0.6 → 0.0.31, `python-dotenv` 1.0.0 → 1.2.2. The `backend/requirements.txt` `python-multipart` floor was raised to `>=0.0.31` so the unbounded spec can no longer resolve to a vulnerable release. No code changes were required
+- DOMPurify XSS protection applied to all V2 `innerHTML` assignments, and raw `innerHTML` replaced with `setSafeHTML`
+- Wallet-address leak detection added to the pre-push security gate
 - Summary cache variants are partitioned to prevent responses computed for one parameter set being served for another
 - Unit-test fixtures use CIP-19 specification and synthetic derivation vectors
+
+---
+
+> **Note on version numbering.** Releases v1.0.1 through v1.15.3 were tagged in git but never given CHANGELOG entries; the entry below jumps from 1.0.0 straight to that gap. The heading now labelled `[1.16.0]` was originally committed as `[1.1.0]` on 2026-07-13, which continued the CHANGELOG's own sequence rather than the released version line — by then git had already reached v1.15.3. It has been renumbered to the version its content actually shipped in. See the git tag history for the releases in between.
 
 ## [1.0.0] - 2026-01-31
 

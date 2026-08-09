@@ -1022,7 +1022,7 @@ API calls are rate-limited per endpoint. Check response headers for limit inform
 ### 📊 API Health
 Monitor API utilization and service status at `/apis.html`
     """,
-    version="1.15.3",
+    version="1.16.3",
     contact={
         "name": "ABCT Project",
         "url": "https://github.com/Tarrant64/abct",
