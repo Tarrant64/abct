@@ -17,6 +17,21 @@ _fernet: Optional[Fernet] = None
 ENCRYPTION_KEY_FILE = DATA_DIR / ".encryption_key"
 
 
+def restrict_file_permissions(path) -> None:
+    """Restrict a file to owner-only access (0600).
+
+    Used for anything under DATA_DIR that holds credentials: the encryption key
+    and the portfolio database (which stores encrypted API keys at rest).
+    Missing files and platforms without POSIX modes are ignored.
+    """
+    try:
+        target = Path(path)
+        if target.exists():
+            os.chmod(str(target), 0o600)
+    except OSError as e:
+        logger.warning("Could not restrict permissions on %s: %s", path, e)
+
+
 def init_encryption():
     """Initialize Fernet encryption for API key storage.
 
@@ -45,7 +60,7 @@ def init_encryption():
     key = Fernet.generate_key()
     ENCRYPTION_KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
     ENCRYPTION_KEY_FILE.write_bytes(key)
-    os.chmod(str(ENCRYPTION_KEY_FILE), 0o600)
+    restrict_file_permissions(ENCRYPTION_KEY_FILE)
     _fernet = Fernet(key)
     logger.info("Generated new encryption key and saved to %s", ENCRYPTION_KEY_FILE)
 
@@ -71,21 +86,36 @@ def _decrypt_value(stored: Optional[str]) -> Optional[str]:
 
     Handles both encrypted ('enc:' prefix) and plaintext values.
     Returns None for None/empty input.
-    Falls back to returning stored value if decryption fails.
+
+    Fails CLOSED: an 'enc:' value that cannot be decrypted returns None rather
+    than the raw ciphertext. Returning ciphertext would hand callers a string
+    that looks like a credential, which then gets used as a signing secret and
+    surfaces as a confusing auth failure instead of "wrong/missing key".
+    Callers treat a falsy credential as "not configured", which is the correct
+    outcome when the key is wrong or the row is corrupt.
     """
     if not stored:
         return stored
     if not stored.startswith("enc:"):
         return stored  # Plaintext (pre-migration or env var)
     if _fernet is None:
-        logger.warning("Encryption not initialized, cannot decrypt value")
-        return stored
+        logger.error(
+            "Encryption not initialized (init_encryption() never ran or the key "
+            "is unavailable) - cannot decrypt stored credential; treating as unset"
+        )
+        return None
     try:
         token = stored[4:]  # Strip 'enc:' prefix
         return _fernet.decrypt(token.encode('utf-8')).decode('utf-8')
-    except (InvalidToken, Exception) as e:
-        logger.error("Failed to decrypt value: %s", e)
-        return stored  # Return as-is rather than losing data
+    except InvalidToken:
+        logger.error(
+            "Failed to decrypt stored credential - wrong encryption key or corrupt "
+            "value; treating as unset (re-enter the credential to fix)"
+        )
+        return None
+    except Exception as e:
+        logger.error("Unexpected error decrypting stored credential: %s", e)
+        return None
 
 
 async def migrate_encrypt_api_keys():
@@ -303,6 +333,14 @@ async def init_db():
     async with aiosqlite.connect(DATABASE_PATH) as db:
         # Enable WAL mode for better concurrent read performance
         await db.execute("PRAGMA journal_mode=WAL")
+
+        # The database stores encrypted API credentials, so it must not be
+        # world-readable. SQLite creates the -wal/-shm sidecars with the main
+        # file's mode, so restrict all three (WAL is enabled just above).
+        restrict_file_permissions(DATABASE_PATH)
+        for sidecar in ("-wal", "-shm"):
+            restrict_file_permissions(str(DATABASE_PATH) + sidecar)
+
         await db.execute("PRAGMA synchronous=NORMAL")
         await db.execute("PRAGMA cache_size=-64000")  # 64MB page cache
         await db.execute("PRAGMA wal_autocheckpoint=1000")  # Checkpoint every ~4MB
