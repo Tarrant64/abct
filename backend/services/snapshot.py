@@ -343,17 +343,12 @@ class SnapshotService:
         """Get total exchange value from cached data (all exchanges)."""
         try:
             from database import get_cache
+            from services.exchange_names import get_aggregation_exchange_names
             total = 0.0
 
-            # Check all exchange cache keys
+            # Check all exchange cache keys, including registry-based exchanges
             exchange_keys = [
-                "coinbase_portfolio",
-                "binance_portfolio",
-                "binance_us_portfolio",
-                "okx_portfolio",
-                "bitget_portfolio",
-                "gate_portfolio",
-                "kucoin_portfolio",
+                f"{name}_portfolio" for name in get_aggregation_exchange_names()
             ]
             for key in exchange_keys:
                 cached = await get_cache(key, user_id=user_id)

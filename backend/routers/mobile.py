@@ -33,6 +33,7 @@ from services.pricing import pricing_service
 from services.logokit_service import logokit_service
 from services.token_metadata_cache import metadata_cache
 from services.cardano import cardano_service
+from services.exchange_names import get_aggregation_exchange_names, get_exchange_display_name
 from database import (
     get_all_wallets,
     get_wallet_balance,
@@ -941,7 +942,7 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
 
     # Merge exchange assets into top_holdings (so exchange-staked SOL etc. appear in totals)
     try:
-        exchange_names = ['coinbase', 'binance', 'binance_us', 'okx', 'bitget', 'gate', 'kucoin']
+        exchange_names = get_aggregation_exchange_names()
         exchange_caches = await asyncio.gather(*[
             get_cache(f"{name}_portfolio", user_id=user_id) for name in exchange_names
         ])
@@ -2596,7 +2597,7 @@ async def get_asset_wallet_breakdown(
             logger.debug(f"Native token breakdown failed for {symbol}: {e}")
 
     # 3. Exchange assets
-    exchange_names = ['coinbase', 'binance', 'binance_us', 'okx', 'bitget', 'gate', 'kucoin']
+    exchange_names = get_aggregation_exchange_names()
     exchange_caches = await asyncio.gather(*[
         get_cache(f"{name}_portfolio", user_id=user_id) for name in exchange_names
     ])
@@ -2613,7 +2614,7 @@ async def get_asset_wallet_breakdown(
             info = EXCHANGE_INFO.get(name, {})
             sources.append({
                 'source_type': 'exchange',
-                'label': info.get('display_name', name.title()),
+                'label': info.get('display_name') or get_exchange_display_name(name),
                 'amount': amount,
                 'value_usd': round(amount * current_price, 2),
                 'last_synced': datetime.utcnow().isoformat() + 'Z',
