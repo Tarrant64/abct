@@ -97,6 +97,10 @@ sec/baseline_audit.json
 data/nft_images/
 data/cache/
 
+# Token logo cache — re-downloaded on demand by services/image_cache.py and
+# excluded from the Docker build context, so new logos are never worth committing.
+data/token_images/
+
 # Demo NFT images (generated, not committed)
 frontend/demo-nfts/
 
