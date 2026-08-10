@@ -75,6 +75,7 @@ void main() {
       // Tap sign-in.
       await _tapSignIn(tester);
       await tester.pumpAndSettle(const Duration(seconds: 5));
+      await dismissBiometricOfferIfShown(tester);
 
       // After login, we should see the home screen with the bottom nav.
       // The home screen shows "Portfolio" as the first tab title.
@@ -143,34 +144,28 @@ void main() {
       expect(find.text('Portfolio'), findsWidgets);
 
       // Navigate to Assets tab.
-      await tester.tap(find.text('Assets'));
-      await tester.pumpAndSettle(const Duration(seconds: 3));
+      await tapNavTab(tester, 'Assets');
       // AppBar title should change to "Assets".
       expect(find.widgetWithText(AppBar, 'Assets'), findsOneWidget);
 
       // Navigate to Wallets tab.
-      await tester.tap(find.text('Wallets'));
-      await tester.pumpAndSettle(const Duration(seconds: 3));
+      await tapNavTab(tester, 'Wallets');
       expect(find.widgetWithText(AppBar, 'Wallets'), findsOneWidget);
 
       // Navigate to Staking tab.
-      await tester.tap(find.text('Staking'));
-      await tester.pumpAndSettle(const Duration(seconds: 3));
+      await tapNavTab(tester, 'Staking');
       expect(find.widgetWithText(AppBar, 'Staking'), findsOneWidget);
 
       // Navigate to NFTs tab.
-      await tester.tap(find.text('NFTs'));
-      await tester.pumpAndSettle(const Duration(seconds: 3));
+      await tapNavTab(tester, 'NFTs');
       expect(find.widgetWithText(AppBar, 'NFTs'), findsOneWidget);
 
       // Navigate to Settings tab.
-      await tester.tap(find.text('Settings'));
-      await tester.pumpAndSettle(const Duration(seconds: 3));
+      await tapNavTab(tester, 'Settings');
       expect(find.widgetWithText(AppBar, 'Settings'), findsOneWidget);
 
       // Navigate back to Overview.
-      await tester.tap(find.text('Overview'));
-      await tester.pumpAndSettle(const Duration(seconds: 3));
+      await tapNavTab(tester, 'Overview');
       expect(find.widgetWithText(AppBar, 'Portfolio'), findsOneWidget);
     });
   });
@@ -201,7 +196,7 @@ void main() {
       await _loginAndReachHome(tester, server);
 
       // Navigate to Assets tab.
-      await tester.tap(find.text('Assets'));
+      await tapNavTab(tester, 'Assets');
       await tester.pumpAndSettle(const Duration(seconds: 5));
 
       // The assets tab has a segmented control with Holdings, Wallets, Exchanges.
@@ -215,7 +210,7 @@ void main() {
       await _loginAndReachHome(tester, server);
 
       // Navigate to Staking tab.
-      await tester.tap(find.text('Staking'));
+      await tapNavTab(tester, 'Staking');
       await tester.pumpAndSettle(const Duration(seconds: 5));
 
       // Should see staking section headers from mock data.
@@ -267,6 +262,7 @@ Future<void> _loginAndReachHome(
 
   await _tapSignIn(tester);
   await tester.pumpAndSettle(const Duration(seconds: 5));
+  await dismissBiometricOfferIfShown(tester);
 
   // Verify we've reached the home screen.
   expect(find.text('Overview'), findsOneWidget,

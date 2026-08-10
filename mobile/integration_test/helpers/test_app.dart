@@ -5,6 +5,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:abct_mobile/app.dart';
@@ -49,4 +50,39 @@ Future<Widget> buildTestApp(MockServer server) async {
   await repo.saveSelectedIndex(0);
 
   return const AbctApp();
+}
+
+/// Dismisses the "Enable <biometric>?" offer the login screen raises after a
+/// successful manual sign-in.
+///
+/// The offer only appears when the OS reports an enrolled biometric, so it is
+/// invisible on a bare iOS Simulator but blocks every post-login assertion on
+/// an Android emulator with a fingerprint enrolled. Tests that only care about
+/// reaching the home screen call this instead of encoding either assumption.
+Future<void> dismissBiometricOfferIfShown(WidgetTester tester) async {
+  final notNow = find.widgetWithText(TextButton, 'Not now');
+  if (notNow.evaluate().isEmpty) return;
+  await tester.tap(notNow);
+  await tester.pumpAndSettle(const Duration(seconds: 3));
+}
+
+/// A bottom-navigation tab, located by label but scoped to the nav bar.
+///
+/// A bare `find.text('Wallets')` is ambiguous once a tab body puts the same
+/// word on screen — the Assets tab's segmented control has Holdings / Wallets
+/// / Exchanges, so tapping the Wallets tab from there matches two widgets and
+/// throws. Scoping to the [NavigationBar] keeps the target unique regardless
+/// of what the current tab renders.
+Finder navTab(String label) => find.descendant(
+      of: find.byType(NavigationBar),
+      matching: find.text(label),
+    );
+
+/// Taps a bottom-navigation tab by label and waits for the new tab to settle.
+///
+/// Timing-sensitive callers should tap [navTab] directly so they control the
+/// settle themselves.
+Future<void> tapNavTab(WidgetTester tester, String label) async {
+  await tester.tap(navTab(label));
+  await tester.pumpAndSettle(const Duration(seconds: 3));
 }

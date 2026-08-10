@@ -1,13 +1,25 @@
 import 'package:flutter/material.dart';
 
+import '../../core/services/background_sync.dart';
 import '../../core/storage/settings_repository.dart';
 import '../../theme/app_theme.dart';
 
 class SettingsController extends ChangeNotifier {
-  SettingsController({SettingsRepository? repository})
-      : _repository = repository ?? SettingsRepository();
+  SettingsController({
+    SettingsRepository? repository,
+    Future<void> Function()? registerPeriodicSync,
+    Future<void> Function()? cancelSync,
+  })  : _repository = repository ?? SettingsRepository(),
+        _registerPeriodicSync =
+            registerPeriodicSync ?? BackgroundSync.registerPeriodicSync,
+        _cancelSync = cancelSync ?? BackgroundSync.cancelSync;
 
   final SettingsRepository _repository;
+
+  /// Injected so unit tests can drive the toggle without a Workmanager
+  /// platform channel.
+  final Future<void> Function() _registerPeriodicSync;
+  final Future<void> Function() _cancelSync;
 
   AppThemeName _themeName = AppThemeName.light;
   bool _biometricEnabled = false;
@@ -75,6 +87,17 @@ class SettingsController extends ChangeNotifier {
     _backgroundSyncEnabled = enabled;
     notifyListeners();
     await _repository.saveBackgroundSyncEnabled(enabled);
+
+    // Saving the preference is not enough. Only BackgroundSync.reArmIfEnabled()
+    // reads it, and that runs once at launch — so without this the toggle would
+    // not take effect until the next cold start, and switching it OFF would
+    // never cancel work already registered (runPortfolioSyncTask does not
+    // re-check the preference, so it would keep syncing indefinitely).
+    if (enabled) {
+      await _registerPeriodicSync();
+    } else {
+      await _cancelSync();
+    }
   }
 
   Future<void> setNotificationsEnabled(bool enabled) async {

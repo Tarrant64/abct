@@ -1,10 +1,15 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
-  static Future<void> initialize() async {
+  /// Set up the plugin. [requestPermissions] must stay false when called from
+  /// a background isolate — there is no Activity there to host a permission
+  /// dialog, and the request would fail rather than prompt.
+  static Future<void> initialize({bool requestPermissions = true}) async {
     const androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings(
@@ -18,6 +23,18 @@ class NotificationService {
       macOS: iosSettings,
     );
     await _plugin.initialize(settings);
+    if (requestPermissions) await _requestAndroidPermissions();
+  }
+
+  /// iOS asks for notification permission through the Darwin init settings
+  /// above. Android 13 (API 33) made POST_NOTIFICATIONS a runtime grant, and
+  /// the plugin does not ask on its own — without this, every notification the
+  /// app posts is dropped silently.
+  static Future<void> _requestAndroidPermissions() async {
+    if (!Platform.isAndroid) return;
+    final android = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    await android?.requestNotificationsPermission();
   }
 
   static Future<void> show({

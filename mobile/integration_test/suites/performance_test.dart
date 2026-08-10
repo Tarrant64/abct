@@ -17,12 +17,27 @@ import 'package:integration_test/integration_test.dart';
 import '../helpers/mock_server.dart';
 import '../helpers/test_app.dart';
 
+/// Multiplier applied to every budget, from
+/// `--dart-define=ABCT_PERF_SCALE=<n>`.
+///
+/// The budgets below are calibrated for a release-mode iOS Simulator run. A
+/// debug build on the Android emulator is roughly an order of magnitude
+/// slower (login alone measures ~15s against a 2s budget), so the unscaled
+/// budgets fail there unconditionally and carry no signal. Running the suite
+/// scaled turns it into a crash/regression check on that target — the
+/// absolute numbers are only comparable against other runs at the same scale,
+/// never against the iOS figures.
+const int _perfScale = int.fromEnvironment('ABCT_PERF_SCALE', defaultValue: 1);
+
 /// Performance budget constants (in milliseconds).
 class _Budget {
-  static const int coldStartMs = 3000;
-  static const int loginFlowMs = 2000;
-  static const int tabNavigationMs = 500;
-  static const int dataRefreshMs = 2000;
+  static const int coldStartMs = 3000 * _perfScale;
+  static const int loginFlowMs = 2000 * _perfScale;
+  static const int tabNavigationMs = 500 * _perfScale;
+  static const int dataRefreshMs = 2000 * _perfScale;
+
+  /// Generous ceiling for the 3x6 rapid-switch stress test.
+  static const int rapidSwitchMs = 10000 * _perfScale;
 }
 
 void main() {
@@ -92,6 +107,10 @@ void main() {
       stopwatch.stop();
       final elapsed = stopwatch.elapsedMilliseconds;
 
+      // Dismissed after the clock stops: the biometric offer is a device-state
+      // artifact, not part of the login latency being budgeted.
+      await dismissBiometricOfferIfShown(tester);
+
       // Verify we reached the home screen.
       expect(find.text('Overview'), findsOneWidget);
 
@@ -115,7 +134,7 @@ void main() {
       for (final tab in ['Assets', 'Wallets', 'Staking', 'NFTs', 'Settings']) {
         final stopwatch = Stopwatch()..start();
 
-        await tester.tap(find.text(tab));
+        await tester.tap(navTab(tab));
         await tester.pumpAndSettle(const Duration(seconds: 5));
 
         stopwatch.stop();
@@ -181,7 +200,7 @@ void main() {
       // Rapidly switch through all tabs 3 times.
       for (int cycle = 0; cycle < 3; cycle++) {
         for (final tab in tabs) {
-          await tester.tap(find.text(tab));
+          await tester.tap(navTab(tab));
           await tester.pump(const Duration(milliseconds: 100));
         }
       }
@@ -193,7 +212,7 @@ void main() {
       _printTiming(
         'Rapid Tab Switching (3 cycles x ${tabs.length} tabs)',
         elapsed,
-        10000, // 10s generous budget for rapid switching
+        _Budget.rapidSwitchMs,
       );
 
       // Verify app is still in a good state.
@@ -221,6 +240,7 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('Sign in'));
         await tester.pumpAndSettle(const Duration(seconds: 5));
+        await dismissBiometricOfferIfShown(tester);
 
         // Navigate through all tabs.
         for (final tab in [
@@ -231,8 +251,7 @@ void main() {
           'Settings',
           'Overview',
         ]) {
-          await tester.tap(find.text(tab));
-          await tester.pumpAndSettle(const Duration(seconds: 3));
+          await tapNavTab(tester, tab);
         }
       }, reportKey: 'full_flow_timeline');
     });
@@ -260,6 +279,7 @@ Future<void> _loginAndReachHome(
 
   await tester.tap(find.text('Sign in'));
   await tester.pumpAndSettle(const Duration(seconds: 5));
+  await dismissBiometricOfferIfShown(tester);
 
   expect(find.text('Overview'), findsOneWidget,
       reason: 'Should be on home screen after login');

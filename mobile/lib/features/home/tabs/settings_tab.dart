@@ -1,5 +1,3 @@
-import 'dart:io' show Platform;
-
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
 
@@ -7,9 +5,9 @@ import '../../../core/build_info.dart';
 import '../../../core/models/connection_profile.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/cache_store.dart';
-import '../../../core/services/background_sync.dart';
 import '../../../core/storage/alert_repository.dart';
 import '../../../core/storage/biometric_credential_store.dart';
+import '../../../core/ui/biometric_labels.dart';
 import '../../../core/ui/haptics.dart';
 import '../../../core/ui/section_card.dart';
 import '../../../theme/app_theme.dart';
@@ -116,7 +114,7 @@ class _SettingsTabState extends State<SettingsTab> {
       Haptics.light();
 
       if (!mounted) return;
-      final bioLabel = Platform.isMacOS ? 'Touch ID' : 'Face ID';
+      final bioLabel = biometricLabel;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -152,7 +150,7 @@ class _SettingsTabState extends State<SettingsTab> {
                 children: [
                   SwitchListTile.adaptive(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Face ID / Touch ID'),
+                    title: Text(biometricSettingLabel),
                     subtitle:
                         const Text('Sign in with biometrics instead of password'),
                     value: controller.biometricEnabled,
@@ -209,16 +207,7 @@ class _SettingsTabState extends State<SettingsTab> {
                 subtitle: const Text(
                     'Periodic portfolio check with notifications'),
                 value: controller.backgroundSyncEnabled,
-                onChanged: (value) async {
-                  await controller.setBackgroundSyncEnabled(value);
-                  if (Platform.isIOS || Platform.isAndroid) {
-                    if (value) {
-                      await BackgroundSync.registerPeriodicSync();
-                    } else {
-                      await BackgroundSync.cancelSync();
-                    }
-                  }
-                },
+                onChanged: controller.setBackgroundSyncEnabled,
               ),
             ),
             const SizedBox(height: 16),

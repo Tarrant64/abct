@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/ui/biometric_labels.dart';
 import '../../core/ui/section_card.dart';
 import '../../theme/app_theme.dart';
 import '../profiles/profiles_screen.dart';
@@ -59,7 +60,7 @@ class SettingsScreen extends StatelessWidget {
                   children: [
                     SwitchListTile(
                       title: const Text('Biometric Authentication'),
-                      subtitle: const Text('Use Face ID / Touch ID to sign in'),
+                      subtitle: Text('Use $biometricLabelInline to sign in'),
                       value: controller.biometricEnabled,
                       onChanged: (value) =>
                           controller.setBiometricEnabled(value),

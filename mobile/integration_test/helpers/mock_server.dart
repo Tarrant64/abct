@@ -27,10 +27,12 @@ class MockServer {
   /// Number of times the login endpoint was hit.
   int get loginCount => _loginCount;
 
-  /// Start the mock server on a random available port.
-  static Future<MockServer> start() async {
+  /// Start the mock server. [port] 0 (the default) picks a random free port,
+  /// which is what the integration tests want; tool/mock_backend.dart pins a
+  /// fixed port instead so `adb reverse` can forward to it.
+  static Future<MockServer> start({int port = 0}) async {
     final mock = MockServer._();
-    mock._server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    mock._server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
     mock._server!.listen(mock._handleRequest);
     return mock;
   }

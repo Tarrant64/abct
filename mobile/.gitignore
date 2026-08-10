@@ -68,6 +68,9 @@ macos/Flutter/ephemeral/
 *.mobileprovision
 *.jks
 *.keystore
+# Android release signing — points at a keystore kept outside the repo.
+key.properties
+android/key.properties
 .env
 .env.*
 

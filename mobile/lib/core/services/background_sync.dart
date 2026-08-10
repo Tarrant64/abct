@@ -33,6 +33,11 @@ void callbackDispatcher() {
   );
 }
 
+/// The background isolate has no Activity, so it must not ask for Android's
+/// POST_NOTIFICATIONS grant — the app requests that on launch instead.
+Future<void> _initializeForBackground() =>
+    NotificationService.initialize(requestPermissions: false);
+
 /// Notification signature shared by [NotificationService.show] and
 /// [NotificationService.showPriceAlert].
 typedef ShowNotification = Future<void> Function({
@@ -52,8 +57,7 @@ typedef ShowNotification = Future<void> Function({
 Future<bool> runPortfolioSyncTask(
   String taskName, {
   ApiClient Function(ConnectionProfile profile) apiClientFactory = ApiClient.new,
-  Future<void> Function() initializeNotifications =
-      NotificationService.initialize,
+  Future<void> Function() initializeNotifications = _initializeForBackground,
   ShowNotification showNotification = NotificationService.show,
   ShowNotification showPriceAlert = NotificationService.showPriceAlert,
 }) async {
@@ -181,11 +185,30 @@ Future<bool> runPortfolioSyncTask(
 }
 
 class BackgroundSync {
+  /// Workmanager only ships iOS and Android implementations, so every entry
+  /// point below is a no-op elsewhere. The repo carries linux/, macos/, web/
+  /// and windows/ runner scaffolds, and on those the plugin throws
+  /// UnimplementedError ('No implementation found for workmanager on this
+  /// platform') — from the settings toggle that would land AFTER the
+  /// preference was saved and the switch repainted, leaving the UI claiming a
+  /// sync that was never scheduled.
+  ///
+  /// [kIsWeb] is checked separately because on web [defaultTargetPlatform]
+  /// reports the platform the BROWSER is running on — it happily returns
+  /// android or iOS there.
+  @visibleForTesting
+  static bool get isSupportedPlatform =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+
   static Future<void> initialize() async {
+    if (!isSupportedPlatform) return;
     await Workmanager().initialize(callbackDispatcher);
   }
 
   static Future<void> registerPeriodicSync() async {
+    if (!isSupportedPlatform) return;
     // Clear any registration made under the pre-upgrade uniqueName; the
     // replace policy below only covers work with the CURRENT name.
     await Workmanager().cancelByUniqueName(_kLegacyUniqueName);
@@ -205,6 +228,7 @@ class BackgroundSync {
   }
 
   static Future<void> cancelSync() async {
+    if (!isSupportedPlatform) return;
     await Workmanager().cancelByUniqueName(kPortfolioSyncTask);
   }
 

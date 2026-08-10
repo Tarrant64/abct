@@ -44,5 +44,18 @@ flutter_launcher_icons:
   android: true
   ios: true
   image_path: "abct-logo.png"
+  # Android 8+ masks the launcher icon to the launcher's shape. Without an
+  # adaptive pair it masks image_path directly, cropping the square logo.
+  # The foreground layer is the disc alone, alpha-cut out of the black field
+  # and scaled to the 72dp-of-108dp safe zone; the background repeats the
+  # artwork's own black so the mask edge has nothing to give away.
+  adaptive_icon_background: "#000000"
+  adaptive_icon_foreground: "abct-logo-adaptive-foreground.png"
+  # The foreground is already inset to the safe zone. The generator's default
+  # 16% inset would stack on top of that and shrink the disc to ~45% of the
+  # canvas, so it is turned off here rather than double-padding.
+  adaptive_icon_foreground_inset: 0
   remove_alpha_ios: true
-  min_sdk_android: 21
+  # Below 26 so the legacy square mipmaps are still emitted for API 24-25;
+  # matches the manifest's actual minSdk.
+  min_sdk_android: 24

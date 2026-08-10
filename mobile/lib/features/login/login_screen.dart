@@ -1,18 +1,17 @@
-import 'dart:io' show Platform;
-
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
 
 import '../../core/storage/alert_repository.dart';
 import '../../core/storage/biometric_credential_store.dart';
+import '../../core/ui/biometric_labels.dart';
 import '../../core/ui/haptics.dart';
 import '../home/home_shell_screen.dart';
 import '../settings/settings_scope.dart';
 import '../settings/settings_screen.dart';
 import 'login_controller.dart';
 
-String get _biometricLabel =>
-    Platform.isMacOS ? 'Touch ID' : 'Face ID';
+String get _biometricLabel => biometricLabel;
+String get _biometricLabelInline => biometricLabelInline;
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -49,8 +48,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_controller.profiles.isEmpty) return;
     if (_validateConnection() != null) return;
 
-    final hasCreds =
-        await _credentialStore.hasCredentials(_controller.current);
+    final hasCreds = await _credentialStore.hasCredentials(_controller.current);
     if (!mounted) return;
     if (hasCreds) {
       setState(() => _biometricReady = true);
@@ -172,7 +170,7 @@ class _LoginScreenState extends State<LoginScreen> {
         builder: (context) => AlertDialog(
           title: Text('Enable $_biometricLabel?'),
           content: Text(
-            'Use $_biometricLabel to sign in next time instead of entering your password.',
+            'Use $_biometricLabelInline to sign in next time instead of entering your password.',
           ),
           actions: [
             TextButton(
@@ -189,7 +187,8 @@ class _LoginScreenState extends State<LoginScreen> {
       if (enable != true || !mounted) return false;
 
       final didAuth = await localAuth.authenticate(
-        localizedReason: 'Verify $_biometricLabel to enable biometric sign-in',
+        localizedReason:
+            'Verify $_biometricLabelInline to enable biometric sign-in',
         options: const AuthenticationOptions(biometricOnly: true),
       );
       if (!didAuth || !mounted) return false;
@@ -295,7 +294,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                         ? null
                                         : _doBiometricLogin,
                                     icon: const Icon(Icons.fingerprint),
-                                    label: Text('Sign in with $_biometricLabel'),
+                                    label: Text(
+                                        'Sign in with $_biometricLabelInline'),
                                     style: FilledButton.styleFrom(
                                       padding: const EdgeInsets.symmetric(
                                           vertical: 14),
@@ -328,10 +328,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                   decoration: const InputDecoration(
                                     labelText: 'Username',
                                   ),
-                                  validator: (value) => value == null ||
-                                          value.trim().isEmpty
-                                      ? 'Enter a username'
-                                      : null,
+                                  validator: (value) =>
+                                      value == null || value.trim().isEmpty
+                                          ? 'Enter a username'
+                                          : null,
                                 ),
                                 const SizedBox(height: 12),
                                 TextFormField(
@@ -340,16 +340,15 @@ class _LoginScreenState extends State<LoginScreen> {
                                     labelText: 'Password',
                                   ),
                                   obscureText: true,
-                                  validator: (value) => value == null ||
-                                          value.isEmpty
-                                      ? 'Enter a password'
-                                      : null,
+                                  validator: (value) =>
+                                      value == null || value.isEmpty
+                                          ? 'Enter a password'
+                                          : null,
                                 ),
                                 const SizedBox(height: 16),
                                 ElevatedButton(
-                                  onPressed: _controller.loading
-                                      ? null
-                                      : _submit,
+                                  onPressed:
+                                      _controller.loading ? null : _submit,
                                   child: _controller.loading
                                       ? const SizedBox(
                                           height: 18,

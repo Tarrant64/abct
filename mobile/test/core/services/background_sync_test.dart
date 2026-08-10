@@ -6,6 +6,8 @@ import 'package:abct_mobile/core/models/portfolio_summary.dart';
 import 'package:abct_mobile/core/network/api_client.dart';
 import 'package:abct_mobile/core/services/background_sync.dart';
 import 'package:abct_mobile/core/storage/alert_repository.dart';
+import 'package:abct_mobile/core/storage/settings_repository.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -212,5 +214,44 @@ void main() {
 
     expect(result, isTrue);
     expect(await AlertRepository().loadSnapshot(), isNull);
+  });
+
+  group('platform guard', () {
+    tearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    test('iOS and Android are the only supported platforms', () {
+      for (final platform in TargetPlatform.values) {
+        debugDefaultTargetPlatformOverride = platform;
+        expect(
+          BackgroundSync.isSupportedPlatform,
+          platform == TargetPlatform.android || platform == TargetPlatform.iOS,
+          reason: 'workmanager ships no $platform implementation',
+        );
+      }
+    });
+
+    test('the plugin entry points no-op on an unsupported platform', () async {
+      // Without the guard these reach Workmanager and throw
+      // UnimplementedError. From the settings toggle that lands after the
+      // preference is saved and the switch repainted, so the UI would show
+      // sync as on with nothing scheduled behind it.
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+
+      await expectLater(BackgroundSync.initialize(), completes);
+      await expectLater(BackgroundSync.registerPeriodicSync(), completes);
+      await expectLater(BackgroundSync.cancelSync(), completes);
+    });
+
+    test('reArmIfEnabled stays silent on an unsupported platform even with '
+        'the preference on', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+      SharedPreferences.setMockInitialValues({});
+      // Written through the repository so this cannot go vacuous if the
+      // preference key is ever renamed.
+      await SettingsRepository().saveBackgroundSyncEnabled(true);
+      expect(await SettingsRepository().loadBackgroundSyncEnabled(), isTrue);
+
+      await expectLater(BackgroundSync.reArmIfEnabled(), completes);
+    });
   });
 }
