@@ -1449,7 +1449,8 @@ async def get_mobile_exchange_detail(
     except HTTPException as e:
         raise e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch {exchange_name} data: {str(e)}")
+        logger.error(f"Exchange holdings fetch failed for {exchange_name}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to fetch {exchange_name} data")
 
     # Get display info
     info = EXCHANGE_INFO.get(exchange_name, {

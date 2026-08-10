@@ -192,8 +192,9 @@ class SecurityAuditor:
                     for method in protected_methods:
                         pattern = rf'@router\.{method.lower()}\('
                         if re.search(pattern, line, re.IGNORECASE):
-                            # Check next 5 lines for auth dependency
-                            check_lines = lines[i:min(i+5, len(lines))]
+                            # Include the decorator line itself: route-level auth is
+                            # declared there as @router.post(..., dependencies=[Depends(...)])
+                            check_lines = lines[i-1:min(i+5, len(lines))]
                             has_auth = any(
                                 'Depends(verify_admin)' in l or
                                 'Depends(verify_session)' in l or
@@ -251,8 +252,42 @@ class SecurityAuditor:
             except Exception as e:
                 print(f"Warning: Could not check {js_file}: {e}", file=sys.stderr)
 
+    # Sinks that write markup into the DOM. Only these make DOMPurify relevant.
+    _HTML_SINK_RE = re.compile(
+        r'\.innerHTML\s*=|\.outerHTML\s*=|insertAdjacentHTML\s*\(|document\.write(?:ln)?\s*\('
+    )
+
+    def _loaded_scripts_have_sink(self, content: str) -> bool:
+        """True if a same-repo script referenced by <script src=...> writes markup.
+
+        Sources that resolve outside the repo — CDN URLs, and build-time generated
+        bundles such as Flutter's flutter_bootstrap.js — cannot be inspected and
+        are treated as sink-free.
+        """
+        srcs = re.findall(r'<script[^>]*\ssrc=["\']([^"\']+)["\']', content, re.IGNORECASE)
+        for src in srcs:
+            if src.startswith(('http://', 'https://', '//')):
+                continue
+            name = src.split('?')[0].rstrip('/').split('/')[-1]
+            for js_file in self.js_files:
+                if js_file.name != name:
+                    continue
+                try:
+                    if self._HTML_SINK_RE.search(js_file.read_text(encoding='utf-8', errors='ignore')):
+                        return True
+                except Exception:
+                    continue
+        return False
+
     def check_dompurify_loaded(self):
-        """HIGH-001: Check that DOMPurify is loaded in HTML files"""
+        """HIGH-001-DEP: Require DOMPurify on pages that can write markup.
+
+        A page needs the sanitizer only if it, or a same-repo script it loads,
+        writes to innerHTML/outerHTML/insertAdjacentHTML/document.write. Static
+        content pages and framework bootstraps that render through their own
+        engine have no such sink, and demanding the library there is noise that
+        trains reviewers to ignore the check.
+        """
         check_id = "HIGH-001-DEP"
         check_name = "Missing DOMPurify Library"
 
@@ -261,7 +296,10 @@ class SecurityAuditor:
                 with open(html_file, 'r', encoding='utf-8') as f:
                     content = f.read()
 
-                if 'dompurify' not in content.lower():
+                if 'dompurify' not in content.lower() and (
+                    self._HTML_SINK_RE.search(content)
+                    or self._loaded_scripts_have_sink(content)
+                ):
                     self.add_finding(
                         severity="HIGH",
                         check_id=check_id,
