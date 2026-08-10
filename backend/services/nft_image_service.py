@@ -7,10 +7,13 @@ Supports all chains: Cardano, Ethereum, Solana, Polygon, Base.
 
 import asyncio
 import httpx
+import ipaddress
 import logging
+import socket
 from io import BytesIO
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Union
 from datetime import datetime
+from urllib.parse import urlparse
 
 from config import (
     NFT_IMAGE_DB_PATH,
@@ -47,6 +50,39 @@ except ImportError:
     logger.warning("Pillow not installed - thumbnail generation disabled")
 
 
+# Only these schemes may ever be fetched. Anything else (file:, gopher:, ftp:,
+# data:, ...) is a way to read local resources through the fetcher.
+ALLOWED_URL_SCHEMES = frozenset({'http', 'https'})
+
+# Redirect hops to follow manually. Each hop is re-validated; the client itself
+# has redirect following disabled.
+MAX_REDIRECT_HOPS = 3
+
+# Ceilings on batch fan-out. Both the item count and the concurrency arrive from
+# the request body, so without these a single call can open an unbounded number
+# of outbound connections.
+MAX_BATCH_ITEMS = 500
+MAX_BATCH_CONCURRENCY = 10
+
+# Error strings returned to callers. These are deliberately coarse: fetch errors
+# are persisted as `error_message` and surfaced by the unauthenticated
+# /nfts/images/{chain}/{asset}/info endpoint, so anything specific (host, port,
+# upstream status) would turn a failed fetch into a network-probing oracle.
+# The precise cause is logged server-side instead.
+ERR_URL_REJECTED = "Image URL rejected"
+ERR_FETCH_FAILED = "Image could not be fetched"
+ERR_TOO_LARGE = "Image too large"
+ERR_BAD_FORMAT = "Unsupported image format"
+
+
+class BlockedURLError(Exception):
+    """Raised when a URL is not allowed to be fetched (SSRF guard)."""
+
+
+class ResponseTooLargeError(Exception):
+    """Raised when a response body exceeds the download cap."""
+
+
 class NFTImageService:
     """Service for caching and serving NFT images."""
 
@@ -56,6 +92,10 @@ class NFTImageService:
         self.max_size_bytes = NFT_IMAGE_MAX_SIZE_MB * 1024 * 1024
         self.thumbnail_size = NFT_IMAGE_THUMBNAIL_SIZE
         self.mobile_size = NFT_IMAGE_MOBILE_SIZE
+        # Hard ceiling on bytes read off the wire. Above max_size_bytes so the
+        # "large image, try compressing it" path still works, but bounded so a
+        # hostile or broken URL cannot stream an unlimited body into memory.
+        self.max_download_bytes = self.max_size_bytes * 2
 
     async def initialize(self):
         """Initialize the service and database."""
@@ -74,7 +114,10 @@ class NFTImageService:
                     write=10.0,     # Request upload
                     pool=10.0       # Connection pool wait
                 ),
-                follow_redirects=True,
+                # Redirects are followed by hand in _fetch_guarded so that every
+                # hop gets re-validated. Letting httpx follow them would let a
+                # public URL bounce to an internal one after the pre-flight check.
+                follow_redirects=False,
                 limits=httpx.Limits(
                     max_connections=100,        # Increase connection pool
                     max_keepalive_connections=20
@@ -153,6 +196,172 @@ class NFTImageService:
 
         return url
 
+    # ========================================================================
+    # SSRF guard
+    # ========================================================================
+
+    @staticmethod
+    def _is_blocked_address(ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> Optional[str]:
+        """
+        Decide whether an address may be connected to.
+
+        Returns a reason string if the address is off limits, or None if it is a
+        normal public address. IPv6 forms that wrap an IPv4 address
+        (::ffff:127.0.0.1, 6to4, Teredo) are unwrapped so the v4 rules apply to
+        the address actually reached.
+        """
+        candidates = [ip]
+        if isinstance(ip, ipaddress.IPv6Address):
+            if ip.ipv4_mapped:
+                candidates.append(ip.ipv4_mapped)
+            if ip.sixtofour:
+                candidates.append(ip.sixtofour)
+            if ip.teredo:
+                candidates.extend(ip.teredo)
+
+        for candidate in candidates:
+            # Covers loopback, RFC1918, link-local (incl. 169.254.169.254 cloud
+            # metadata), unique-local fc00::/7 and fe80::/10.
+            if candidate.is_loopback:
+                return "loopback address"
+            if candidate.is_link_local:
+                return "link-local address"
+            if candidate.is_private:
+                return "private address"
+            if candidate.is_multicast:
+                return "multicast address"
+            if candidate.is_reserved:
+                return "reserved address"
+            if candidate.is_unspecified:
+                return "unspecified address"
+            # Catch-all for ranges the flags above miss - notably CGNAT
+            # (100.64.0.0/10), which reports is_private False but is not
+            # globally routable. Multicast is checked above because it is one of
+            # the few non-routable ranges that reports is_global True.
+            if not candidate.is_global:
+                return "non-global address"
+
+        return None
+
+    async def _resolve_host(self, host: str) -> List[str]:
+        """
+        Resolve a hostname to every address it maps to.
+
+        Split out so tests can stub name resolution. A bare IP literal resolves
+        to itself, so no special case is needed for those.
+        """
+        loop = asyncio.get_running_loop()
+        infos = await loop.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+        # Deduplicate while preserving order.
+        return list(dict.fromkeys(info[4][0] for info in infos))
+
+    async def _validate_fetch_url(self, url: str) -> None:
+        """
+        Reject URLs that could be used to reach infrastructure that is not meant
+        to be publicly reachable (SSRF). Raises BlockedURLError.
+
+        Residual risk - DNS rebinding: this resolves the name and then hands the
+        URL to httpx, which resolves it again when it connects. A hostname whose
+        record flips between a public and a private address in that window can
+        still slip through. Closing it properly means pinning the validated
+        address for the connection (a custom transport), which is not done here.
+        The check does stop the ordinary cases: direct IP literals, names that
+        resolve to internal space, and redirects into it.
+        """
+        try:
+            parsed = urlparse(url)
+        except ValueError as exc:
+            raise BlockedURLError("malformed URL") from exc
+
+        scheme = (parsed.scheme or '').lower()
+        if scheme not in ALLOWED_URL_SCHEMES:
+            raise BlockedURLError(f"scheme '{scheme}' is not allowed")
+
+        try:
+            host = parsed.hostname
+        except ValueError as exc:
+            raise BlockedURLError("malformed host in URL") from exc
+
+        if not host:
+            raise BlockedURLError("URL has no host")
+
+        try:
+            addresses = await self._resolve_host(host)
+        except (socket.gaierror, UnicodeError, OSError) as exc:
+            raise BlockedURLError(f"host '{host}' did not resolve") from exc
+
+        if not addresses:
+            raise BlockedURLError(f"host '{host}' did not resolve")
+
+        # Every record must be acceptable. A name that returns a mix of public
+        # and private addresses is treated as hostile, not as partially usable.
+        for address in addresses:
+            try:
+                ip = ipaddress.ip_address(address)
+            except ValueError as exc:
+                raise BlockedURLError(f"unparseable address '{address}'") from exc
+
+            reason = self._is_blocked_address(ip)
+            if reason:
+                raise BlockedURLError(f"host '{host}' resolves to {reason} ({ip})")
+
+    async def _fetch_guarded(self, client: httpx.AsyncClient, url: str) -> Tuple[bytes, str]:
+        """
+        Fetch a URL with the SSRF guard applied to the initial URL and to every
+        redirect hop, streaming the body under a size cap.
+
+        Returns (body, content_type). Raises BlockedURLError, ResponseTooLargeError,
+        or the usual httpx exceptions.
+        """
+        current_url = url
+
+        for _ in range(MAX_REDIRECT_HOPS + 1):
+            await self._validate_fetch_url(current_url)
+
+            # follow_redirects is also False on the shared client; passing it
+            # here too means this loop stays correct even if that changes.
+            async with client.stream(
+                'GET', current_url, follow_redirects=False
+            ) as response:
+                if response.is_redirect:
+                    location = response.headers.get('location')
+                    if not location:
+                        raise BlockedURLError("redirect without a location header")
+                    # Resolve relative redirects against the URL we just fetched,
+                    # then loop so the new target is validated before we follow it.
+                    current_url = str(httpx.URL(current_url).join(location))
+                    continue
+
+                if response.status_code >= 400:
+                    raise httpx.HTTPStatusError(
+                        f"HTTP {response.status_code}",
+                        request=response.request,
+                        response=response,
+                    )
+
+                # Trust Content-Length only to fail fast; the streaming counter
+                # below is what actually enforces the cap, since the header can
+                # be absent or a lie.
+                declared = response.headers.get('content-length')
+                if declared and declared.isdigit() and int(declared) > self.max_download_bytes:
+                    raise ResponseTooLargeError(
+                        f"declared {declared} bytes, cap is {self.max_download_bytes}"
+                    )
+
+                chunks: List[bytes] = []
+                total = 0
+                async for chunk in response.aiter_bytes():
+                    total += len(chunk)
+                    if total > self.max_download_bytes:
+                        raise ResponseTooLargeError(
+                            f"body exceeded cap of {self.max_download_bytes} bytes"
+                        )
+                    chunks.append(chunk)
+
+                return b''.join(chunks), response.headers.get('content-type', '')
+
+        raise BlockedURLError(f"exceeded {MAX_REDIRECT_HOPS} redirect hops")
+
     def _detect_image_format(self, content_type: str, data: bytes) -> str:
         """Detect image format from content-type or magic bytes."""
         # Check content-type header
@@ -204,9 +413,18 @@ class NFTImageService:
             Tuple of (image_data, image_format, error_message)
         """
         if not url:
-            return None, None, "No URL provided"
+            return None, None, ERR_URL_REJECTED
 
         normalized_url = self._normalize_image_url(url)
+
+        # Reject up front so a hostile URL does not burn the retry/backoff loop.
+        # Every hop is validated again inside _fetch_guarded.
+        try:
+            await self._validate_fetch_url(normalized_url)
+        except BlockedURLError as e:
+            logger.warning(f"Blocked image URL {normalized_url!r}: {e}")
+            return None, None, ERR_URL_REJECTED
+
         client = await self._get_client()
 
         # Build gateway fallback list for IPFS URLs
@@ -224,7 +442,7 @@ class NFTImageService:
 
         # Retry loop
         for attempt in range(max_retries):
-            for gateway_idx, try_url in enumerate(urls_to_try):
+            for try_url in urls_to_try:
                 try:
                     # Add delay on retries
                     if attempt > 0:
@@ -232,20 +450,17 @@ class NFTImageService:
                         await asyncio.sleep(delay)
                         logger.debug(f"Retry {attempt + 1}/{max_retries} for {try_url[:50]}...")
 
-                    response = await client.get(try_url)
-                    response.raise_for_status()
-
-                    data = response.content
+                    data, content_type = await self._fetch_guarded(client, try_url)
 
                     # Size check BEFORE compression
                     if len(data) > self.max_size_bytes:
                         logger.info(f"Large image ({len(data)} bytes), attempting compression...")
 
-                        content_type = response.headers.get('content-type', '')
                         image_format = self._detect_image_format(content_type, data)
 
                         if image_format == 'unknown':
-                            last_error = "Unknown image format for large file"
+                            last_error = ERR_BAD_FORMAT
+                            logger.debug(f"Unknown format for large file at {try_url[:50]}...")
                             continue
 
                         # Try compression
@@ -255,15 +470,19 @@ class NFTImageService:
                             logger.info(f"✓ Compression successful: {len(data)} → {len(compressed_data)} bytes")
                             return compressed_data, new_format, None
                         else:
-                            last_error = f"Image too large even after compression: {len(compressed_data)} bytes (max: {self.max_size_bytes})"
+                            last_error = ERR_TOO_LARGE
+                            logger.debug(
+                                f"Still too large after compression: {len(compressed_data)} bytes "
+                                f"(max: {self.max_size_bytes})"
+                            )
                             continue
 
                     # Normal size - detect format
-                    content_type = response.headers.get('content-type', '')
                     image_format = self._detect_image_format(content_type, data)
 
                     if image_format == 'unknown':
-                        last_error = "Unknown image format"
+                        last_error = ERR_BAD_FORMAT
+                        logger.debug(f"Unknown image format at {try_url[:50]}...")
                         continue
 
                     # Apply compression to all images for consistency and space savings
@@ -271,29 +490,44 @@ class NFTImageService:
 
                     return compressed_data, final_format, None
 
-                except httpx.TimeoutException as e:
-                    last_error = f"Timeout on {try_url[:50]}... (attempt {attempt + 1})"
-                    logger.debug(last_error)
+                except BlockedURLError as e:
+                    # Only reachable via a redirect hop; the initial URL was
+                    # validated before this loop. Do not retry it - move to the
+                    # next gateway, if any.
+                    last_error = ERR_URL_REJECTED
+                    logger.warning(f"Blocked redirect while fetching {try_url!r}: {e}")
+                    continue
+
+                except ResponseTooLargeError as e:
+                    last_error = ERR_TOO_LARGE
+                    logger.warning(f"Oversized response from {try_url!r}: {e}")
+                    continue
+
+                except httpx.TimeoutException:
+                    last_error = ERR_FETCH_FAILED
+                    logger.debug(f"Timeout on {try_url[:50]}... (attempt {attempt + 1})")
                     continue  # Try next gateway
 
                 except httpx.HTTPStatusError as e:
+                    last_error = ERR_FETCH_FAILED
                     if e.response.status_code == 429:
                         # Rate limited - wait longer and try next gateway
-                        last_error = f"Rate limited by {try_url[:30]}... (attempt {attempt + 1})"
-                        logger.debug(last_error)
+                        logger.debug(f"Rate limited by {try_url[:30]}... (attempt {attempt + 1})")
                         await asyncio.sleep(5 * (attempt + 1))
                         continue
                     else:
-                        last_error = f"HTTP {e.response.status_code} for {try_url[:50]}... (attempt {attempt + 1})"
-                        logger.debug(last_error)
+                        logger.debug(
+                            f"HTTP {e.response.status_code} for {try_url[:50]}... "
+                            f"(attempt {attempt + 1})"
+                        )
                         continue
 
                 except Exception as e:
-                    last_error = f"Error fetching {try_url[:50]}...: {str(e)} (attempt {attempt + 1})"
-                    logger.debug(last_error)
+                    last_error = ERR_FETCH_FAILED
+                    logger.debug(f"Error fetching {try_url[:50]}...: {e} (attempt {attempt + 1})")
                     continue
 
-        return None, None, f"All retries exhausted: {last_error}"
+        return None, None, last_error or ERR_FETCH_FAILED
 
     def _generate_thumbnail(self, image_data: bytes, image_format: str) -> Optional[bytes]:
         """Generate a thumbnail from image data."""
@@ -533,8 +767,20 @@ class NFTImageService:
         """
         await self.initialize()
 
+        # Clamp caller-supplied fan-out. Anything past the item cap is reported
+        # as skipped rather than silently dropped.
+        max_concurrent = max(1, min(int(max_concurrent or 1), MAX_BATCH_CONCURRENCY))
+        nfts = list(nfts or [])
+        over_cap = max(0, len(nfts) - MAX_BATCH_ITEMS)
+        if over_cap:
+            logger.warning(
+                f"Batch image cache request had {len(nfts)} items; "
+                f"processing the first {MAX_BATCH_ITEMS}"
+            )
+            nfts = nfts[:MAX_BATCH_ITEMS]
+
         semaphore = asyncio.Semaphore(max_concurrent)
-        results = {'fetched': 0, 'failed': 0, 'skipped': 0, 'errors': []}
+        results = {'fetched': 0, 'failed': 0, 'skipped': over_cap, 'errors': []}
 
         async def fetch_one(nft):
             async with semaphore:
@@ -669,6 +915,9 @@ class NFTImageService:
     async def process_pending(self, blockchain: str = None, limit: int = 50, max_concurrent: int = 5) -> dict:
         """Process pending images in the queue."""
         await self.initialize()
+
+        limit = max(1, min(int(limit or 1), MAX_BATCH_ITEMS))
+        max_concurrent = max(1, min(int(max_concurrent or 1), MAX_BATCH_CONCURRENCY))
 
         pending = await get_pending_images(blockchain, limit)
         if not pending:

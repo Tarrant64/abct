@@ -399,6 +399,38 @@ services:
       - internal
 ```
 
+### Outbound Fetch Controls (SSRF)
+
+NFT metadata carries image URLs that the server fetches on the user's behalf, and
+the cached bytes are readable back through `/nfts/images/{chain}/{asset}`. That
+makes the image fetcher a request-forgery surface, so
+`backend/services/nft_image_service.py` constrains it:
+
+- **Scheme allowlist** — only `http` and `https`. `file:`, `gopher:`, `ftp:`,
+  `data:` and friends are rejected before any connection is attempted.
+- **Address filtering** — the hostname is resolved and *every* returned address is
+  checked with `ipaddress`. Loopback, RFC1918, link-local (including the
+  `169.254.169.254` cloud metadata endpoint), CGNAT, multicast, reserved and
+  unspecified ranges are refused, as are the IPv6 spellings of the same
+  (`::1`, `fc00::/7`, `fe80::/10`, `::ffff:127.0.0.1`, 6to4 and Teredo wrappers).
+  A host that returns a mix of public and internal addresses is refused outright.
+- **Redirects are followed manually**, at most `MAX_REDIRECT_HOPS`, with the full
+  check re-run on every hop. Automatic redirect following is disabled on the HTTP
+  client, since it would otherwise sidestep the pre-flight check.
+- **Response bodies are capped** at twice the configured max image size and read
+  as a stream, so a hostile endpoint cannot exhaust memory.
+- **Fetch errors are generic** (`Image URL rejected`, `Image could not be
+  fetched`). Failures are persisted and served by the unauthenticated
+  `.../info` endpoint, so upstream hosts, ports and status codes are kept to the
+  server-side log rather than becoming a network-probing oracle.
+- **Batch fan-out is bounded** by `MAX_BATCH_ITEMS` and `MAX_BATCH_CONCURRENCY`.
+
+**Known residual risk — DNS rebinding.** Validation resolves the name, then httpx
+resolves it again when it connects. A record that flips between a public and an
+internal address inside that window can still get through. Closing it requires
+pinning the validated address for the connection, which is not implemented.
+Coverage lives in `tests/unit/test_nft_image_ssrf.py`.
+
 ---
 
 ## SSL/HTTPS Configuration

@@ -4,7 +4,7 @@ NFT Router - API endpoints for NFT data.
 
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List, Dict
 import asyncio
 import sys
@@ -13,7 +13,11 @@ import logging
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.nft import nft_service
-from services.nft_image_service import nft_image_service
+from services.nft_image_service import (
+    nft_image_service,
+    MAX_BATCH_ITEMS,
+    MAX_BATCH_CONCURRENCY,
+)
 from services.ethereum_nft import ethereum_nft_service
 from services.solana_nft import solana_nft_service
 from services.polygon import polygon_service
@@ -1521,9 +1525,12 @@ class ImageCacheRequest(BaseModel):
 
 
 class BatchImageCacheRequest(BaseModel):
-    nfts: List[dict]
+    # Bounded so one request cannot fan out an unlimited number of outbound
+    # fetches. The service clamps these too; this just rejects earlier, with a
+    # 422 instead of a silent truncation.
+    nfts: List[dict] = Field(..., max_length=MAX_BATCH_ITEMS)
     blockchain: str
-    max_concurrent: Optional[int] = 5
+    max_concurrent: Optional[int] = Field(5, ge=1, le=MAX_BATCH_CONCURRENCY)
 
 
 @router.get("/images/config", dependencies=[Depends(verify_session)])
