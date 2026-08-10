@@ -1526,7 +1526,7 @@ class BatchImageCacheRequest(BaseModel):
     max_concurrent: Optional[int] = 5
 
 
-@router.get("/images/config")
+@router.get("/images/config", dependencies=[Depends(verify_session)])
 async def get_image_cache_config():
     """
     Get NFT image cache configuration and status.
@@ -1535,11 +1535,13 @@ async def get_image_cache_config():
     return await nft_image_service.get_config()
 
 
-@router.post("/images/config")
+@router.post("/images/config", dependencies=[Depends(verify_admin)])
 async def update_image_cache_config(config: ImageCacheConfigUpdate):
     """
     Update NFT image cache configuration.
     Use 'enabled: true' to turn on image caching.
+    Requires admin authentication - this surface controls service-wide
+    resource limits (max image size, enabled chains, auto-fetch).
     """
     updates = {k: v for k, v in config.dict().items() if v is not None}
     if not updates:
@@ -1548,14 +1550,14 @@ async def update_image_cache_config(config: ImageCacheConfigUpdate):
     return await nft_image_service.update_config(updates)
 
 
-@router.post("/images/enable")
+@router.post("/images/enable", dependencies=[Depends(verify_session)])
 async def enable_image_cache():
     """Enable NFT image caching."""
     await nft_image_service.set_enabled(True)
     return {'enabled': True, 'message': 'NFT image caching enabled'}
 
 
-@router.post("/images/disable")
+@router.post("/images/disable", dependencies=[Depends(verify_session)])
 async def disable_image_cache():
     """Disable NFT image caching."""
     await nft_image_service.set_enabled(False)
@@ -1573,6 +1575,14 @@ async def get_cached_image(blockchain: str, asset_id: str):
     """
     Get a cached NFT image.
     Returns the raw image data with appropriate content-type.
+
+    Intentionally unauthenticated: this URL is consumed directly as an <img>
+    src by the web dashboard and by Image.network in the mobile app, neither of
+    which can attach an Authorization header. The same applies to the
+    /thumbnail and /mobile variants below. The content is public NFT artwork,
+    but note this is the read-back channel for anything the cache fetched, so
+    the URL validation in NFTImageService is what keeps internal responses from
+    ever landing in the cache in the first place.
     """
     image_data, image_format = await nft_image_service.get_image(asset_id, blockchain)
 
@@ -1700,7 +1710,7 @@ async def get_cached_image_info(blockchain: str, asset_id: str):
     }
 
 
-@router.post("/images/cache")
+@router.post("/images/cache", dependencies=[Depends(verify_session)])
 async def cache_single_image(request: ImageCacheRequest):
     """
     Cache a single NFT image.
@@ -1714,7 +1724,7 @@ async def cache_single_image(request: ImageCacheRequest):
     return result
 
 
-@router.post("/images/cache/batch")
+@router.post("/images/cache/batch", dependencies=[Depends(verify_session)])
 async def cache_batch_images(request: BatchImageCacheRequest):
     """
     Cache multiple NFT images in parallel.
@@ -1728,7 +1738,7 @@ async def cache_batch_images(request: BatchImageCacheRequest):
     return result
 
 
-@router.post("/images/process-pending")
+@router.post("/images/process-pending", dependencies=[Depends(verify_admin)])
 async def process_pending_images(
     blockchain: Optional[str] = None,
     limit: int = 50,
@@ -1737,6 +1747,7 @@ async def process_pending_images(
     """
     Process pending images in the queue.
     Fetches images that were registered but not yet downloaded.
+    Requires admin authentication - bulk maintenance across the whole cache.
     """
     result = await nft_image_service.process_pending(
         blockchain=blockchain,
@@ -1746,7 +1757,7 @@ async def process_pending_images(
     return result
 
 
-@router.post("/images/backfill-mobile")
+@router.post("/images/backfill-mobile", dependencies=[Depends(verify_admin)])
 async def backfill_mobile_images(
     blockchain: Optional[str] = None,
     limit: int = 500,
@@ -1755,6 +1766,7 @@ async def backfill_mobile_images(
     """
     Generate mobile-optimized images for existing cached images that don't have one.
     Reads existing full-size image_data and creates 400x400 WebP mobile versions.
+    Requires admin authentication - bulk maintenance across the whole cache.
     """
     result = await nft_image_service.backfill_mobile_images(
         blockchain=blockchain,
@@ -1774,11 +1786,12 @@ async def get_pending_images(blockchain: Optional[str] = None, limit: int = 50):
     }
 
 
-@router.delete("/images/clear")
+@router.delete("/images/clear", dependencies=[Depends(verify_admin)])
 async def clear_image_cache(blockchain: Optional[str] = None):
     """
     Clear the image cache.
     Optionally filter by blockchain to only clear images from one chain.
+    Requires admin authentication - destructive, affects every user.
     """
     deleted = await nft_image_service.clear_cache(blockchain)
     return {
@@ -2848,4 +2861,4 @@ async def get_nft_wall_details(
         raise
     except Exception as e:
         logger.error(f"Error getting NFT details for {blockchain}:{asset_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to load NFT details")

@@ -410,13 +410,14 @@ async def delete_certificate():
     }
 
 
-@router.post("/apply-pending")
+@router.post("/apply-pending", dependencies=[Depends(verify_admin)])
 async def apply_pending_mode():
     """
     Apply the pending SSL mode change.
 
     This is called after a restart to confirm the mode change was applied.
-    Internal use - typically called by the startup process.
+    Requires admin authentication - it commits a server-wide SSL mode change,
+    matching the auth level on the endpoint that stages the pending mode.
     """
     settings = await get_security_settings()
     pending_mode = settings.get('pending_mode')
