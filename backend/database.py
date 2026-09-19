@@ -482,6 +482,24 @@ async def init_db():
             ON balance_anomalies(wallet_id, detected_at)
         """)
 
+        # Stake-key rediscovery additions log (ABCT-STAKE-REDISCOVERY-20260919).
+        # Persisted per the same lesson as balance_anomalies: log-only records
+        # do not survive a container restart during an incident.
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS stake_rediscovery_additions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                stake_address TEXT NOT NULL,
+                address TEXT NOT NULL,
+                wallet_id INTEGER,
+                added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+            )
+        """)
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_stake_rediscovery_user
+            ON stake_rediscovery_additions(user_id, added_at)
+        """)
+
         # Create indexes for multi-user performance
         await db.execute("CREATE INDEX IF NOT EXISTS idx_balances_user_id ON balances(user_id)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_balances_wallet_id ON balances(wallet_id)")
@@ -1433,6 +1451,21 @@ async def count_wallets_in_bucket(bucket: int, bucket_count: int) -> int:
         return row[0] if row else 0
 
 
+async def get_all_cardano_wallets() -> list:
+    """Every registered Cardano wallet across every user
+    (ABCT-STAKE-REDISCOVERY-20260919) -- explicit, not routed through
+    get_all_wallets()'s get_current_user_id() fallback, for the same reason
+    get_wallets_due_for_bgsync() isn't: this is a background job with no
+    request context, and that fallback is process-global mutable state."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM wallets WHERE blockchain = 'cardano' ORDER BY user_id, id"
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+
 async def get_wallet_by_address(address: str, blockchain: str = None, user_id: int = None):
     """Get a wallet by its address for a specific user.
 
@@ -1610,6 +1643,32 @@ async def get_recent_balance_anomalies(user_id: int, limit: int = 20) -> list:
             LEFT JOIN wallets w ON w.id = ba.wallet_id
             WHERE ba.user_id = ?
             ORDER BY ba.detected_at DESC
+            LIMIT ?
+        """, (user_id, limit))
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+
+async def record_stake_rediscovery_addition(user_id: int, stake_address: str,
+                                             address: str, wallet_id: int) -> None:
+    """Persist one auto-added address (ABCT-STAKE-REDISCOVERY-20260919)."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("""
+            INSERT INTO stake_rediscovery_additions
+                (user_id, stake_address, address, wallet_id, added_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (user_id, stake_address, address, wallet_id, datetime.now()))
+        await db.commit()
+
+
+async def get_recent_stake_rediscovery_additions(user_id: int, limit: int = 50) -> list:
+    """Recent auto-added addresses for a user, newest first."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("""
+            SELECT * FROM stake_rediscovery_additions
+            WHERE user_id = ?
+            ORDER BY added_at DESC
             LIMIT ?
         """, (user_id, limit))
         rows = await cursor.fetchall()

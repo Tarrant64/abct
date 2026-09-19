@@ -47,7 +47,7 @@ import os
 # Add backend directory to Python path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from config import PROJECT_ROOT, DATA_DIR, CERTS_DIR, DEFAULT_CERT_PATH, DEFAULT_KEY_PATH, NFT_SCHEDULER_ENABLED, WALLET_BGSYNC_ENABLED, DBSYNC_PG_ENABLED, ALLOWED_ORIGINS
+from config import PROJECT_ROOT, DATA_DIR, CERTS_DIR, DEFAULT_CERT_PATH, DEFAULT_KEY_PATH, NFT_SCHEDULER_ENABLED, WALLET_BGSYNC_ENABLED, STAKE_REDISCOVERY_ENABLED, DBSYNC_PG_ENABLED, ALLOWED_ORIGINS
 from database import init_db, init_encryption, migrate_encrypt_api_keys
 from nft_image_database import init_nft_image_db
 from routers import wallets, portfolio, defi, prices, exchanges, nfts, custom_tokens, settings, security, logs, nft_scheduler as nft_scheduler_router, backup, auth, dashboard, mobile, nmkr, cache, spam, transactions, demo, cloudflare, system, balance_history, analytics, intelligence, search, pnl
@@ -60,6 +60,7 @@ from middleware import RequestSizeLimitMiddleware, RATE_LIMITING_AVAILABLE
 from services.logging_service import get_logging_service
 from services.nft_scheduler import nft_scheduler
 from services.wallet_balance_scheduler import wallet_balance_scheduler
+from services.stake_rediscovery_scheduler import stake_rediscovery_service
 
 # Import DeFi adapter packages to trigger self-registration with protocol_registry
 import services.defi_protocols.cardano  # noqa: F401
@@ -81,6 +82,7 @@ startup_status = {
     "nft_prices": "pending",
     "nft_scheduler": "pending",
     "wallet_bgsync": "pending",
+    "stake_rediscovery": "pending",
     "xpub": "pending",
     "ready": False
 }
@@ -831,6 +833,24 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Could not start wallet balance background sync: {e}")
         await log_service.warning("main", f"Wallet balance background sync failed to start: {e}")
 
+    # Optionally start Cardano stake-key address rediscovery
+    # (ABCT-STAKE-REDISCOVERY-20260919) -- daily, off by default.
+    startup_status["stake_rediscovery"] = "initializing"
+    try:
+        if STAKE_REDISCOVERY_ENABLED:
+            logger.info("Stake-key rediscovery is enabled, starting...")
+            await stake_rediscovery_service.start()
+            startup_status["stake_rediscovery"] = "running"
+            await log_service.info("main", "Stake-key rediscovery started")
+        else:
+            startup_status["stake_rediscovery"] = "disabled"
+            logger.info("Stake-key rediscovery disabled (set STAKE_REDISCOVERY_ENABLED=true to enable)")
+
+    except Exception as e:
+        startup_status["stake_rediscovery"] = "error"
+        logger.warning(f"Could not start stake-key rediscovery: {e}")
+        await log_service.warning("main", f"Stake-key rediscovery failed to start: {e}")
+
     # Initialize V2 engine orchestrator
     try:
         from engine.orchestrator import backfill_orchestrator
@@ -995,6 +1015,10 @@ async def lifespan(app: FastAPI):
         # Stop wallet balance background sync
         logger.info("Shutting down wallet balance background sync...")
         await wallet_balance_scheduler.stop()
+
+        # Stop stake-key rediscovery
+        logger.info("Shutting down stake-key rediscovery...")
+        await stake_rediscovery_service.stop()
 
         # Close DB Sync connection pool (if active)
         if DBSYNC_PG_ENABLED:

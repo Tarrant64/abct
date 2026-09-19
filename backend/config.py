@@ -351,3 +351,38 @@ WALLET_BGSYNC_LOCK_TTL_MINUTES = int(os.getenv("WALLET_BGSYNC_LOCK_TTL_MINUTES",
 # activity (even a large partial withdrawal is usually a smaller fraction of
 # a HODL wallet's total), comfortably below the 78% drop that triggered this.
 BALANCE_ANOMALY_PCT_THRESHOLD = float(os.getenv("BALANCE_ANOMALY_PCT_THRESHOLD", "0.5"))
+
+# Cardano Stake-Key Address Rediscovery (ABCT-STAKE-REDISCOVERY-20260919)
+# Root cause fix for the same incident as the guard above: ABCT tracks a
+# fixed list of manually-registered payment addresses, but a Cardano
+# hardware wallet's "account" is really a stake key with an open-ended,
+# growing set of derived payment addresses. The existing discovery flow
+# (routers/wallets.py's /discover + /add-multiple) only ever runs once, at
+# add-time, on explicit user action -- any address the hardware wallet
+# derives afterward is permanently invisible to ABCT with no code path that
+# would ever notice it. This re-runs that same, already-correct discovery
+# logic periodically per stake key the user has already registered.
+#
+# Kill switch defaults to OFF, matching WALLET_BGSYNC_ENABLED's precedent --
+# ship dark, let the user opt in after confirming behavior in logs.
+STAKE_REDISCOVERY_ENABLED = os.getenv("STAKE_REDISCOVERY_ENABLED", "false").lower() == "true"
+# Daily, not hourly: a hardware wallet deriving a new receive address is a
+# low-frequency event tied to user activity (initiated withdrawals/deposits
+# on the device), not something that changes minute to minute like a
+# balance. A day of lag before ABCT notices a newly-used address is an
+# acceptable trade for a ~10x lower interval than the balance sync and a
+# correspondingly lighter footprint against Blockfrost.
+STAKE_REDISCOVERY_INTERVAL_HOURS = int(os.getenv("STAKE_REDISCOVERY_INTERVAL_HOURS", "24"))
+# Same hard-rate-ceiling approach as WALLET_BGSYNC_DISPATCH_DELAY_SECONDS:
+# items (wallets being stake-resolved, then distinct stake keys being
+# queried for new addresses) are processed strictly one at a time with at
+# least this many seconds between them, independent of provider latency.
+# Longer than the balance sync's 0.5s because this job runs once a day, not
+# once an hour, so there is no reason to hurry, and each "item" here can
+# itself fan out into more than one call (stake resolution, then address
+# listing, then a balance check per newly found address).
+STAKE_REDISCOVERY_DISPATCH_DELAY_SECONDS = float(os.getenv("STAKE_REDISCOVERY_DISPATCH_DELAY_SECONDS", "1.0"))
+# Cross-process advisory lock TTL -- longer than the balance sync's because
+# a full daily pass over every registered Cardano wallet, at >=1s/item, can
+# legitimately take a while for a user with many wallets.
+STAKE_REDISCOVERY_LOCK_TTL_MINUTES = int(os.getenv("STAKE_REDISCOVERY_LOCK_TTL_MINUTES", "120"))
