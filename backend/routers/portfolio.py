@@ -35,9 +35,24 @@ class TokenTrackRequest(BaseModel):
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 logger = logging.getLogger(__name__)
 
-# Cache TTL in seconds (7 days for portfolio so it persists between sessions, only cleared on manual refresh)
+# Cache TTL in seconds.
+#
+# ABCT-BACKEND-QTYCACHE-20260918: the summary-level cache used to be pinned to
+# CACHE_TTL_PERSISTENT (7 days), which meant the whole /portfolio/summary
+# response — including per-wallet quantities — could not change for up to a
+# week without an explicit refresh=True. That 7-day cache also fully shadowed
+# the per-wallet cache below (fetch_wallet_data's WALLET_DATA_CACHE_TTL),
+# which was never reached in the normal read path.
+#
+# Fix: derive PORTFOLIO_CACHE_TTL from WALLET_DATA_CACHE_TTL so there is one
+# source of truth for staleness. The summary now naturally re-runs its
+# per-wallet fan-out at most every WALLET_DATA_CACHE_TTL seconds, and that
+# fan-out is itself bounded by the (already-existing) per-wallet cache, so
+# this does not increase external call volume beyond what the per-wallet
+# cache already allowed for refresh=True calls today.
 from config import CACHE_TTL_PERSISTENT, CACHE_TTL_WARM, CACHE_TTL_HOT
-PORTFOLIO_CACHE_TTL = CACHE_TTL_PERSISTENT  # 7 days
+WALLET_DATA_CACHE_TTL = CACHE_TTL_HOT  # 5 minutes - per-wallet balance/assets/stake cache
+PORTFOLIO_CACHE_TTL = WALLET_DATA_CACHE_TTL  # was CACHE_TTL_PERSISTENT (7 days)
 STAKE_CACHE_TTL = CACHE_TTL_WARM  # 1 hour for stake address lookups
 
 async def calculate_wallet_native_assets_value(wallet_id: int, blockchain: str, user_id: int):
@@ -480,7 +495,7 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
     stake_groups = {}  # stake_address -> list of wallets
 
     # Fetch all wallet data in parallel (balances, assets, native values, stake addresses)
-    WALLET_DATA_CACHE_TTL = 300  # 5 minutes
+    # WALLET_DATA_CACHE_TTL is defined at module level (shared with PORTFOLIO_CACHE_TTL above).
 
     async def fetch_wallet_data(wallet):
         """Fetch balance, assets, native value, and stake address for a single wallet."""
