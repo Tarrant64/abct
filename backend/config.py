@@ -306,3 +306,26 @@ NFT_SCHEDULER_ENABLED = os.getenv("NFT_SCHEDULER_ENABLED", "false").lower() == "
 NFT_UPDATE_INTERVAL_MINUTES = int(os.getenv("NFT_UPDATE_INTERVAL_MINUTES", "15"))
 NFT_CALLS_PER_UPDATE = int(os.getenv("NFT_CALLS_PER_UPDATE", "1"))
 NFT_MAX_DAILY_CALLS = int(os.getenv("NFT_MAX_DAILY_CALLS", "95"))  # Leave buffer under 100
+
+# Wallet Balance Background Sync Configuration (ABCT-BGSYNC-20260919)
+# Kill switch defaults to OFF: this is a new job that runs continuously against
+# live provider infrastructure once enabled -- ship it dark, let the user turn
+# it on after confirming behavior in logs. Requires a container restart to
+# change (read once at process start, same as NFT_SCHEDULER_ENABLED above).
+WALLET_BGSYNC_ENABLED = os.getenv("WALLET_BGSYNC_ENABLED", "false").lower() == "true"
+# One wallet_id-modulo bucket ticks per minute; a wallet's bucket is
+# (wallet_id % WALLET_BGSYNC_BUCKET_COUNT), so each wallet is due once per
+# WALLET_BGSYNC_BUCKET_COUNT minutes (60 = hourly, per the accepted design).
+WALLET_BGSYNC_BUCKET_COUNT = int(os.getenv("WALLET_BGSYNC_BUCKET_COUNT", "60"))
+# Skip a wallet whose balances row was updated more recently than this --
+# avoids redundant work when a user just refreshed it themselves.
+WALLET_BGSYNC_SKIP_RECENT_MINUTES = int(os.getenv("WALLET_BGSYNC_SKIP_RECENT_MINUTES", "5"))
+# Wallets within one cycle's bucket are refreshed strictly one at a time with
+# at least this many seconds between them -- a hard ceiling on how often this
+# scheduler *starts* a new wallet's refresh, independent of provider latency
+# or bucket size. See the rate-math in the task report.
+WALLET_BGSYNC_DISPATCH_DELAY_SECONDS = float(os.getenv("WALLET_BGSYNC_DISPATCH_DELAY_SECONDS", "0.5"))
+# Cross-process advisory lock TTL: long enough to cover a real cycle, short
+# enough that a crashed holder self-heals quickly (a few missed buckets, not
+# a long outage).
+WALLET_BGSYNC_LOCK_TTL_MINUTES = int(os.getenv("WALLET_BGSYNC_LOCK_TTL_MINUTES", "3"))

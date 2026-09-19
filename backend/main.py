@@ -47,7 +47,7 @@ import os
 # Add backend directory to Python path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from config import PROJECT_ROOT, DATA_DIR, CERTS_DIR, DEFAULT_CERT_PATH, DEFAULT_KEY_PATH, NFT_SCHEDULER_ENABLED, DBSYNC_PG_ENABLED, ALLOWED_ORIGINS
+from config import PROJECT_ROOT, DATA_DIR, CERTS_DIR, DEFAULT_CERT_PATH, DEFAULT_KEY_PATH, NFT_SCHEDULER_ENABLED, WALLET_BGSYNC_ENABLED, DBSYNC_PG_ENABLED, ALLOWED_ORIGINS
 from database import init_db, init_encryption, migrate_encrypt_api_keys
 from nft_image_database import init_nft_image_db
 from routers import wallets, portfolio, defi, prices, exchanges, nfts, custom_tokens, settings, security, logs, nft_scheduler as nft_scheduler_router, backup, auth, dashboard, mobile, nmkr, cache, spam, transactions, demo, cloudflare, system, balance_history, analytics, intelligence, search, pnl
@@ -59,6 +59,7 @@ from services.cardano_shield import cardano_shield
 from middleware import RequestSizeLimitMiddleware, RATE_LIMITING_AVAILABLE
 from services.logging_service import get_logging_service
 from services.nft_scheduler import nft_scheduler
+from services.wallet_balance_scheduler import wallet_balance_scheduler
 
 # Import DeFi adapter packages to trigger self-registration with protocol_registry
 import services.defi_protocols.cardano  # noqa: F401
@@ -79,6 +80,7 @@ startup_status = {
     "snapshot_check": "pending",
     "nft_prices": "pending",
     "nft_scheduler": "pending",
+    "wallet_bgsync": "pending",
     "xpub": "pending",
     "ready": False
 }
@@ -809,6 +811,26 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Could not initialize NFT scheduler: {e}")
         await log_service.warning("main", f"NFT scheduler initialization failed: {e}")
 
+    # Optionally start wallet balance background sync (ABCT-BGSYNC-20260919)
+    # -- keeps on-chain quantities current without a manual refresh. Off by
+    # default (WALLET_BGSYNC_ENABLED); non-blocking (just schedules a job on
+    # the running loop, does not wait for or run a cycle here).
+    startup_status["wallet_bgsync"] = "initializing"
+    try:
+        if WALLET_BGSYNC_ENABLED:
+            logger.info("Wallet balance background sync is enabled, starting...")
+            await wallet_balance_scheduler.start()
+            startup_status["wallet_bgsync"] = "running"
+            await log_service.info("main", "Wallet balance background sync started")
+        else:
+            startup_status["wallet_bgsync"] = "disabled"
+            logger.info("Wallet balance background sync disabled (set WALLET_BGSYNC_ENABLED=true to enable)")
+
+    except Exception as e:
+        startup_status["wallet_bgsync"] = "error"
+        logger.warning(f"Could not start wallet balance background sync: {e}")
+        await log_service.warning("main", f"Wallet balance background sync failed to start: {e}")
+
     # Initialize V2 engine orchestrator
     try:
         from engine.orchestrator import backfill_orchestrator
@@ -969,6 +991,10 @@ async def lifespan(app: FastAPI):
         # Stop NFT scheduler
         logger.info("Shutting down NFT scheduler...")
         await nft_scheduler.stop()
+
+        # Stop wallet balance background sync
+        logger.info("Shutting down wallet balance background sync...")
+        await wallet_balance_scheduler.stop()
 
         # Close DB Sync connection pool (if active)
         if DBSYNC_PG_ENABLED:

@@ -446,6 +446,19 @@ async def init_db():
             )
         """)
 
+        # Cross-process advisory locks (ABCT-BGSYNC-20260919). SQLite-backed
+        # so it works correctly even if the app is ever run with more than
+        # one worker process sharing this DB file -- see
+        # try_acquire_scheduler_lock/release_scheduler_lock below.
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS scheduler_locks (
+                lock_name TEXT PRIMARY KEY,
+                holder TEXT NOT NULL,
+                acquired_at TIMESTAMP NOT NULL,
+                expires_at TIMESTAMP NOT NULL
+            )
+        """)
+
         # Create indexes for multi-user performance
         await db.execute("CREATE INDEX IF NOT EXISTS idx_balances_user_id ON balances(user_id)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_balances_wallet_id ON balances(wallet_id)")
@@ -1352,6 +1365,51 @@ async def get_all_wallets(user_id: int = None):
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
+
+async def get_wallets_due_for_bgsync(bucket: int, bucket_count: int, skip_recent_minutes: int):
+    """Wallets due for a background balance sync this cycle (ABCT-BGSYNC-20260919).
+
+    Explicitly queries across ALL users -- deliberately does NOT go through
+    get_all_wallets()'s get_current_user_id() fallback, since that's a
+    process-global mutable (not a per-request contextvar) and this is a
+    background job with no request context to scope to; depending on that
+    fallback landing on None would be fragile if someone ever wires up
+    set_current_user_id() for per-request scoping later.
+
+    A wallet is due when (wallet_id % bucket_count) == bucket AND its most
+    recent balances row (if any) is older than skip_recent_minutes -- a
+    wallet with no balances row yet (never synced) is always due.
+    """
+    cutoff = datetime.now() - timedelta(minutes=skip_recent_minutes)
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("""
+            SELECT w.*
+            FROM wallets w
+            WHERE (w.id % ?) = ?
+            AND NOT EXISTS (
+                SELECT 1 FROM balances b
+                WHERE b.wallet_id = w.id
+                AND b.updated_at > ?
+            )
+            ORDER BY w.id
+        """, (bucket_count, bucket, cutoff))
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+
+async def count_wallets_in_bucket(bucket: int, bucket_count: int) -> int:
+    """Total wallets in a given bgsync bucket, regardless of recency --
+    used alongside get_wallets_due_for_bgsync() to report an accurate
+    skipped-as-recent count for cycle observability (ABCT-BGSYNC-20260919)."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute(
+            "SELECT COUNT(*) FROM wallets WHERE (id % ?) = ?", (bucket_count, bucket)
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else 0
+
+
 async def get_wallet_by_address(address: str, blockchain: str = None, user_id: int = None):
     """Get a wallet by its address for a specific user.
 
@@ -1460,6 +1518,54 @@ async def clear_wallet_balances(wallet_id: int):
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute("DELETE FROM balances WHERE wallet_id = ?", (wallet_id,))
         await db.commit()
+
+
+async def try_acquire_scheduler_lock(lock_name: str, holder: str, ttl_seconds: int) -> bool:
+    """Attempt to acquire a cross-process advisory lock (ABCT-BGSYNC-20260919).
+
+    Backed by the scheduler_locks table so it works correctly across
+    multiple OS processes sharing this SQLite file (e.g. if the app were
+    ever run with more than one uvicorn/gunicorn worker) -- an in-memory
+    guard (a plain asyncio.Lock or APScheduler's max_instances=1) only
+    protects against overlap *within* one process.
+
+    Atomic: the UPDATE only fires if no row exists yet, or the existing
+    row's lease has expired (a crashed holder self-heals after ttl_seconds
+    instead of blocking forever). Returns True iff this call is the one
+    that ends up holding the lock afterward.
+    """
+    now = datetime.now()
+    expires_at = now + timedelta(seconds=ttl_seconds)
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("""
+            INSERT INTO scheduler_locks (lock_name, holder, acquired_at, expires_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(lock_name) DO UPDATE SET
+                holder = excluded.holder,
+                acquired_at = excluded.acquired_at,
+                expires_at = excluded.expires_at
+            WHERE scheduler_locks.expires_at < excluded.acquired_at
+        """, (lock_name, holder, now, expires_at))
+        await db.commit()
+
+        cursor = await db.execute(
+            "SELECT holder FROM scheduler_locks WHERE lock_name = ?", (lock_name,)
+        )
+        row = await cursor.fetchone()
+        return bool(row) and row[0] == holder
+
+
+async def release_scheduler_lock(lock_name: str, holder: str) -> None:
+    """Release a lock acquired via try_acquire_scheduler_lock, but only if
+    this holder still owns it (a no-op if the lease already expired and was
+    stolen by someone else -- never release a lock we don't actually hold)."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute(
+            "DELETE FROM scheduler_locks WHERE lock_name = ? AND holder = ?",
+            (lock_name, holder),
+        )
+        await db.commit()
+
 
 async def save_native_assets(wallet_id: int, assets: list, user_id: int = None):
     """Save native assets for a wallet."""
