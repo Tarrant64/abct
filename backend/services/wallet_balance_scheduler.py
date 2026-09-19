@@ -141,9 +141,11 @@ class WalletBalanceSchedulerService:
                         succeeded += 1
                     else:
                         failed += 1
+                        error_type = (result or {}).get("error_type", "UnknownError")
+                        error_msg = (result or {}).get("error", "no result")
                         logger.warning(
-                            "wallet_balance_bgsync: wallet %s refresh reported failure: %s",
-                            wallet.get("id"), result.get("error") if result else "no result",
+                            "wallet_balance_bgsync: wallet %s refresh failed: %s: %s",
+                            wallet.get("id"), error_type, error_msg,
                         )
                 except Exception as e:
                     # Belt-and-suspenders: _refresh_wallet_balance already
@@ -153,8 +155,8 @@ class WalletBalanceSchedulerService:
                     # raises before entering that try block.
                     failed += 1
                     logger.warning(
-                        "wallet_balance_bgsync: wallet %s raised during refresh: %s",
-                        wallet.get("id"), e,
+                        "wallet_balance_bgsync: wallet %s raised during refresh: %s: %s",
+                        wallet.get("id"), type(e).__name__, e,
                     )
 
                 # Hard rate ceiling: wait before starting the NEXT wallet,

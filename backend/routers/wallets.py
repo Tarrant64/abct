@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 import asyncio
+import logging
 import sys
 import os
 
@@ -123,6 +124,7 @@ def append_to_wallets_file(address: str, label: Optional[str] = None) -> bool:
         return False
 
 router = APIRouter(prefix="/wallets", tags=["wallets"])
+logger = logging.getLogger(__name__)
 
 class WalletCreate(BaseModel):
     address: str
@@ -1820,10 +1822,12 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         }
 
     except Exception as e:
+        logger.warning(f"_refresh_wallet_balance failed for {blockchain} wallet {wallet_id} ({address}): {type(e).__name__}: {e}")
         return {
             'address': address,
             'success': False,
-            'error': str(e)
+            'error': str(e),
+            'error_type': type(e).__name__,
         }
 
 
