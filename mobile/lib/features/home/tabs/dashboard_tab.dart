@@ -137,6 +137,17 @@ class _DashboardTabState extends State<DashboardTab> {
       );
       return;
     }
+    // A background revalidation racing a fresher hard refresh (or a second
+    // revalidation) must never roll the display backward in time — see
+    // _isStalerThanDisplayed (ABCT-MOBILE-STALE-20260918 follow-up).
+    if (_isStalerThanDisplayed(summary)) {
+      developer.log(
+        'Ignoring stale revalidated summary '
+        '(payload=${summary.lastUpdated}, displayed=${_cachedSummary?.lastUpdated})',
+        name: 'DashboardTab',
+      );
+      return;
+    }
     _cachedSummary = summary;
     _persistTotal(summary.totalValueUsd);
     final history = _historyCache[_selectedRange];
@@ -149,6 +160,28 @@ class _DashboardTabState extends State<DashboardTab> {
         historyLoading: history == null,
       ));
     });
+  }
+
+  /// Whether [candidate] is older than the summary already on screen.
+  ///
+  /// A cache-sourced response — an ordinary load, a foreground-resume
+  /// reload, or a background revalidation — must never roll the display
+  /// backward in time relative to what's already shown. This is the
+  /// defense-in-depth complement to the cache-key canonicalization fix
+  /// (CacheStore._canonicalize): that fix keeps the client cache itself
+  /// consistent, but nothing upstream of it stops two in-flight responses
+  /// from applying to the UI out of arrival order. Only an explicit hard
+  /// refresh is exempt from this check (applied at its call site) — it
+  /// always demands a live server recompute and must win unconditionally.
+  ///
+  /// Missing timestamps on either side fail OPEN (not stale) — this guards
+  /// against regressions, it does not make `last_updated` a hard
+  /// requirement of the payload shape.
+  bool _isStalerThanDisplayed(PortfolioSummary candidate) {
+    final displayed = _cachedSummary?.lastUpdated;
+    final incoming = candidate.lastUpdated;
+    if (displayed == null || incoming == null) return false;
+    return incoming.isBefore(displayed);
   }
 
   /// Applies a freshly revalidated `/chart/portfolio-history` payload,
@@ -250,13 +283,30 @@ class _DashboardTabState extends State<DashboardTab> {
         revalidate: revalidate,
       );
 
-      final summary = await _api.getPortfolioSummary(
+      final fetched = await _api.getPortfolioSummary(
         refresh: refresh,
         revalidate: revalidate,
         includeSparklines: false,
       );
-      _cachedSummary = summary;
-      _persistTotal(summary.totalValueUsd);
+      // A hard refresh (refresh=true) always wins — it's the user
+      // explicitly demanding a live server recompute. Everything else here
+      // is cache-sourced (a plain cold-start/resume load, or a network-first
+      // soft pull answered from the server's own SWR row) and must not roll
+      // the display backward: e.g. a foreground-resume reload racing a
+      // still-in-flight fresher write must not clobber it with older data
+      // (ABCT-MOBILE-STALE-20260918 follow-up; see _isStalerThanDisplayed).
+      final bool acceptFetched = refresh || !_isStalerThanDisplayed(fetched);
+      final summary = acceptFetched ? fetched : (_cachedSummary ?? fetched);
+      if (acceptFetched) {
+        _cachedSummary = summary;
+        _persistTotal(summary.totalValueUsd);
+      } else {
+        developer.log(
+          'Discarding stale cache-sourced summary '
+          '(payload=${fetched.lastUpdated}, displayed=${summary.lastUpdated})',
+          name: 'DashboardTab',
+        );
+      }
       unawaited(_syncWatchSnapshot(
         summary,
         history7d:

@@ -351,6 +351,64 @@ void main() {
     });
   });
 
+  group('CacheStore refresh-param canonicalization (ABCT-MOBILE-STALE-20260918)',
+      () {
+    // Regression coverage for the mobile staleness bug: a hard
+    // pull-to-refresh (`?refresh=true`) must land in the same cache entry
+    // that an ordinary load (cold start, foreground resume) reads back —
+    // otherwise the refresh's fresh data is invisible to every subsequent
+    // plain load.
+    test('a refresh=true write is visible to a subsequent plain read',
+        () async {
+      final store = CacheStore.forDirectory(tmpDir);
+      const plainUrl =
+          'https://x/api/mobile/portfolio/summary?include_sparklines=false';
+      const refreshUrl =
+          'https://x/api/mobile/portfolio/summary?refresh=true&include_sparklines=false';
+
+      // Simulates the ordinary cold-open/resume load that happened earlier
+      // (e.g. an overnight background fetch) — this is the "stale" value
+      // the bug kept re-serving forever.
+      await store.write(plainUrl, {'total_value_usd': 100.0}, 120);
+
+      // Simulates the user's manual hard refresh moments later.
+      await store.write(refreshUrl, {'total_value_usd': 250.0}, 120);
+
+      // The next ordinary (non-refresh) load must see the refreshed value,
+      // not the earlier plain-write value.
+      expect(await store.read(plainUrl), {'total_value_usd': 250.0});
+      // And it must be a single shared entry, not two independent ones.
+      expect(tmpDir.listSync().whereType<File>().length, 1);
+    });
+
+    test('a plain write is visible to a subsequent refresh=true read',
+        () async {
+      final store = CacheStore.forDirectory(tmpDir);
+      const plainUrl = 'https://x/api/mobile/wallets';
+      const refreshUrl = 'https://x/api/mobile/wallets?refresh=true';
+
+      await store.write(plainUrl, {'wallets': []}, 300);
+
+      expect(await store.read(refreshUrl), {'wallets': []});
+    });
+
+    test('other query parameters are NOT collapsed — only refresh is',
+        () async {
+      final store = CacheStore.forDirectory(tmpDir);
+      const sparklines =
+          'https://x/api/mobile/portfolio/summary?include_sparklines=true';
+      const noSparklines =
+          'https://x/api/mobile/portfolio/summary?include_sparklines=false';
+
+      await store.write(sparklines, 'with-sparklines', 300);
+      await store.write(noSparklines, 'no-sparklines', 300);
+
+      expect(await store.read(sparklines), 'with-sparklines');
+      expect(await store.read(noSparklines), 'no-sparklines');
+      expect(tmpDir.listSync().whereType<File>().length, 2);
+    });
+  });
+
   group('Cache TTL calculation', () {
     test('TTL of 300s sets expires_at 5 minutes ahead', () {
       final entry = _makeEntry('data', 300);

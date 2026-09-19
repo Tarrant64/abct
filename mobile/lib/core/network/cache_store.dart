@@ -98,8 +98,45 @@ class CacheStore {
   }
 
   String _fileKey(String url) {
-    final hash = sha256.convert(utf8.encode(url)).toString();
+    final hash = sha256.convert(utf8.encode(_canonicalize(url))).toString();
     return hash.substring(0, 32);
+  }
+
+  /// Strips the `refresh` control parameter before keying the cache.
+  ///
+  /// `refresh=true` (a hard pull-to-refresh) is a request-time instruction
+  /// to bypass cache SERVING — it is not part of the resource's identity.
+  /// Before this normalization, `.../summary?refresh=true` and
+  /// `.../summary` hashed to two different files, so a hard refresh's fresh
+  /// response was written to a cache entry that ordinary loads (cold start,
+  /// foreground resume, silent background reload — none of which pass
+  /// `refresh=true`) never read back. Those ordinary loads kept serving
+  /// whatever the last plain request had written — observed as the mobile
+  /// dashboard reverting to hours-old data (e.g. an overnight snapshot)
+  /// moments after a manual refresh had shown current values
+  /// (ABCT-MOBILE-STALE-20260918). Canonicalizing here, at the single choke
+  /// point every read/write/touch goes through, makes a hard refresh and the
+  /// ordinary load of the same resource share one cache entry.
+  static String _canonicalize(String url) {
+    final uri = Uri.parse(url);
+    if (!uri.queryParameters.containsKey('refresh')) return url;
+    final params = Map<String, String>.from(uri.queryParameters)
+      ..remove('refresh');
+    // Rebuilt from components rather than `uri.replace(...)`: `replace`
+    // treats an explicit `queryParameters: null` as "keep the original
+    // query" (it can't tell omitted-argument from explicit-null), so it
+    // can't be used to clear the query when `refresh` was the only param.
+    // A freshly constructed Uri has no such ambiguity — `queryParameters:
+    // null` there means exactly "no query component".
+    return Uri(
+      scheme: uri.scheme,
+      userInfo: uri.userInfo.isEmpty ? null : uri.userInfo,
+      host: uri.host,
+      port: uri.hasPort ? uri.port : null,
+      path: uri.path,
+      queryParameters: params.isEmpty ? null : params,
+      fragment: uri.hasFragment ? uri.fragment : null,
+    ).toString();
   }
 
   Future<File> _fileFor(String url) async {

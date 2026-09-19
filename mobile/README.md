@@ -78,6 +78,21 @@ decoded/encoded off the UI isolate; writes are atomic (tmp file + rename).
 Entries carry the server ETag. `clear()` wipes both layers and is called on
 logout — do not weaken this.
 
+Entries are keyed by the full request URL, **except** the `refresh` query
+parameter, which is stripped before hashing (`_canonicalize` in
+`_fileKey`). `refresh=true` only tells the interceptor to bypass cache
+*serving*; it isn't part of the resource's identity. Before this
+normalization, a hard pull-to-refresh (`…/summary?refresh=true`) wrote its
+fresh response into a different cache entry than the one every ordinary
+load (`…/summary`, no `refresh` param — cold start, foreground resume,
+silent background reload) read from, so the refresh's data was invisible to
+the very next reopen, which kept re-serving whatever the last plain
+request had written (observed as the dashboard reverting to an hours-old
+snapshot moments after a manual refresh — ABCT-MOBILE-STALE-20260918). Any
+new "escape hatch" query param added to a request must be evaluated for the
+same trap: if it doesn't change what data is returned, only how the cache
+treats the request, strip it in `_canonicalize` too.
+
 **Cache interceptor** (`network/cache_interceptor.dart`) — stale-while-
 revalidate on every GET:
 - Fresh entry → served instantly (`x-cache: HIT`); if older than 30s it also
@@ -134,6 +149,19 @@ Branch `refactor/fable-performance`, phases MOBILE-1..7:
 6. Value-equality chart repaints + RepaintBoundary; slim history payloads.
 7. Dead code removal, NFT URL + holdings sort memoization, e2e login-tap fix,
    this documentation.
+
+### Bug fix log
+
+- **2026-09-18 (ABCT-MOBILE-STALE-20260918)** — Cache store keyed entries by
+  the literal request URL, so a hard refresh's `?refresh=true` request and
+  the plain request used by every ordinary load hashed to two different
+  cache files. The refresh's fresh data was written to a slot nothing ever
+  read again; ordinary loads (cold start, resume) kept serving whatever a
+  plain request had last written, which could be hours old. Fixed by
+  stripping `refresh` from the URL before hashing in
+  `CacheStore._fileKey`/`_canonicalize`, so both requests share one entry.
+  See tests in `test/core/network/cache_store_test.dart` (group
+  "CacheStore refresh-param canonicalization").
 
 ## E2E Tests
 
