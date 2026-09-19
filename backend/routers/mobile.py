@@ -790,9 +790,18 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
     tracked_tokens_value = snapshot_totals.get('tracked_tokens_usd', 0) or 0
     custom_tokens_value = snapshot_totals.get('custom_tokens_usd', 0) or 0
 
-    # Calculate total (matches web: coins + tracked tokens + custom tokens + staking + defi + exchanges + NFTs)
+    # ABCT-NFT-TOGGLE-20260919: mobile used to be the only surface that always
+    # included NFT value in the total. It now honors the same server-side
+    # per-user preference the web endpoints do (default off), so mobile and
+    # web agree. `nfts_value` (raw) is kept for breakdown.nfts.value_usd below
+    # — informational, unaffected by the preference — only the amount folded
+    # into total_value_usd is gated.
+    include_nfts_in_total = await portfolio.get_nft_inclusion_preference(user_id)
+    nfts_value_for_total = nfts_value if include_nfts_in_total else 0
+
+    # Calculate total (matches web: coins + tracked tokens + custom tokens + staking + defi + exchanges + NFTs [if enabled])
     total_value_usd = (self_custody_value + tracked_tokens_value + custom_tokens_value +
-                       exchanges_value + nfts_value + staking_value + defi_value)
+                       exchanges_value + nfts_value_for_total + staking_value + defi_value)
 
     # Calculate percentages
     for blockchain_summary in blockchain_summaries:
@@ -1002,7 +1011,7 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
         if live_staking > staking_value:
             staking_value = live_staking
             total_value_usd = (self_custody_value + tracked_tokens_value + custom_tokens_value +
-                               exchanges_value + nfts_value + staking_value + defi_value)
+                               exchanges_value + nfts_value_for_total + staking_value + defi_value)
             # Recalculate blockchain percentages with updated total
             for bs in blockchain_summaries:
                 bs['percentage'] = round(

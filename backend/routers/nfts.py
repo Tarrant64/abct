@@ -1264,10 +1264,54 @@ async def get_all_chains_nft_summary(user_id: int = Depends(verify_session)):
             'algo': algo_price,
             'bnb': bnb_price,
             'avax': avax_price
-        }
+        },
+        'price_staleness': await _get_nft_price_staleness(),
     }
     await set_cache(cache_key, result, ttl_seconds=CACHE_TTL_HOT, user_id=user_id)
     return result
+
+
+# Beyond this age, Cardano floor-price data (nft_floor_prices — sourced from
+# the now-retired TapTools) is flagged stale rather than served silently.
+# This does not touch the pricing pipeline or delete any rows; it only
+# reports their age. See ABCT-NFT-TOGGLE-20260919 piece 4.
+NFT_PRICE_STALE_THRESHOLD_DAYS = 30
+
+
+async def _get_nft_price_staleness() -> dict:
+    """Report how old the Cardano NFT floor-price data is.
+
+    Reuses the existing database.get_nft_price_stats() (already used by
+    /nfts/prices/coverage) rather than adding a new query against
+    nft_floor_prices.
+    """
+    from datetime import datetime
+    from database import get_nft_price_stats
+
+    try:
+        stats = await get_nft_price_stats()
+    except Exception as e:
+        logger.debug(f"[NFT Staleness] get_nft_price_stats failed: {e}")
+        return {
+            'newest_fetch': None, 'oldest_fetch': None,
+            'days_since_update': None, 'is_stale': False,
+        }
+
+    newest_fetch = stats.get('newest_fetch')
+    days_since_update = None
+    if newest_fetch:
+        try:
+            newest_dt = datetime.fromisoformat(newest_fetch)
+            days_since_update = (datetime.utcnow() - newest_dt).days
+        except Exception:
+            days_since_update = None
+
+    return {
+        'newest_fetch': newest_fetch,
+        'oldest_fetch': stats.get('oldest_fetch'),
+        'days_since_update': days_since_update,
+        'is_stale': days_since_update is not None and days_since_update > NFT_PRICE_STALE_THRESHOLD_DAYS,
+    }
 
 
 async def _fetch_taptools_floors(policy_ids: list, nft_svc) -> Dict[str, float]:

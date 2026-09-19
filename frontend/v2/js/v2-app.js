@@ -202,8 +202,14 @@ async function loadDashboard() {
             } else if (nftData.chains) {
                 Object.values(nftData.chains).forEach(function(c) { nftTotal += (parseFloat(c.total_value_usd) || 0); });
             }
+            renderNftPriceStaleness(nftData.price_staleness);
         }
         setText('statNfts', formatCurrency(nftTotal));
+
+        // ABCT-NFT-TOGGLE-20260919: caption reflecting whether the headline
+        // total currently includes NFT value — fire-and-forget, doesn't block
+        // the rest of the dashboard.
+        renderNftInclusionCaption();
 
         // Load full holdings for the table (slightly delayed to prioritize above-fold)
         loadHoldings();
@@ -450,6 +456,50 @@ function renderWeeklyChange(historyData) {
         const pctSuffix = (canComputePct && isFinite(changePct)) ? ` (${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%)` : '';
         setSafeHTML(heroEl, `<span class="change-arrow">${isPositive ? '&#9650;' : '&#9660;'}</span> ${formatCurrency(Math.abs(changeVal))}${pctSuffix}`);
     }
+}
+
+
+// ============================================================================
+// RENDERING — NFT INCLUSION CAPTION & PRICE STALENESS
+// ============================================================================
+// ABCT-NFT-TOGGLE-20260919: the headline total and history chart only
+// include NFT value when the user's server-side preference is on (default
+// off). This caption states which is currently in effect — copy is fixed by
+// design (see /settings.html's toggle for where it's changed) and must
+// reflect live state, not a static string.
+
+async function renderNftInclusionCaption() {
+    const el = document.getElementById('nftInclusionCaption');
+    if (!el) return;
+    try {
+        const resp = await v2Fetch('/portfolio/preferences');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        el.textContent = data.include_nfts_in_total
+            ? 'Includes NFTs · estimated values'
+            : 'Excludes NFTs · estimated values';
+    } catch (e) {
+        // Leave the caption blank rather than guessing at the server's state.
+        console.error('Failed to load NFT inclusion preference:', e);
+    }
+}
+
+// Piece 4 of ABCT-NFT-TOGGLE-20260919: nft_floor_prices (Cardano) is sourced
+// from the now-retired TapTools with no live refresh — surface its age
+// instead of serving it silently. `staleness` is /nfts/all/summary's
+// `price_staleness` field: {newest_fetch, oldest_fetch, days_since_update, is_stale}.
+function renderNftPriceStaleness(staleness) {
+    const el = document.getElementById('statNftsStale');
+    if (!el) return;
+    if (!staleness || staleness.days_since_update === null || staleness.days_since_update === undefined) {
+        el.style.display = 'none';
+        return;
+    }
+    const days = staleness.days_since_update;
+    const label = days <= 0 ? 'Prices updated today' : `Prices ${days}d old`;
+    el.textContent = label;
+    el.className = `v2-stat-sub ${staleness.is_stale ? 'negative' : ''}`.trim();
+    el.style.display = '';
 }
 
 

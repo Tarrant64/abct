@@ -382,6 +382,19 @@
                 <!-- System Tab -->
                 <div id="tabSystem" class="settings-tab-content" style="display:none">
                     <div class="v2-card" style="margin-bottom:16px;">
+                        <div class="v2-card-header"><span class="v2-card-title">Portfolio Display</span></div>
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:4px 0;">
+                            <div>
+                                <div style="font-size:13px;font-weight:600;color:var(--v2-text-heading);">Include NFTs in portfolio total</div>
+                                <div style="font-size:12px;color:var(--v2-text-muted);margin-top:2px;max-width:480px;">
+                                    Applies to the headline total and the history chart on the Dashboard. NFT
+                                    valuations are estimates from a stale pricing source, so this is off by default.
+                                </div>
+                            </div>
+                            <label class="cd-toggle"><input type="checkbox" id="includeNftsToggle"><span class="cd-toggle-slider"></span></label>
+                        </div>
+                    </div>
+                    <div class="v2-card" style="margin-bottom:16px;">
                         <div class="v2-card-header"><span class="v2-card-title">System Controls</span></div>
                         <div style="display:flex;gap:12px;flex-wrap:wrap;">
                             <button class="v2-btn v2-btn-secondary" id="restartBackendBtn">Restart Backend</button>
@@ -1450,6 +1463,42 @@
             } catch(e) {
                 document.getElementById('startupTasksContent').textContent = 'Failed to load startup tasks.';
             }
+
+            loadNftInclusionPreference();
+        }
+
+        // ABCT-NFT-TOGGLE-20260919: server-side preference for whether NFT
+        // value is folded into the Dashboard's headline total + history chart.
+        async function loadNftInclusionPreference() {
+            const toggle = document.getElementById('includeNftsToggle');
+            if (!toggle) return;
+            try {
+                const resp = await v2Fetch('/portfolio/preferences');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    toggle.checked = !!data.include_nfts_in_total;
+                }
+            } catch (e) {
+                console.error('Failed to load portfolio preferences:', e);
+            }
+            toggle.addEventListener('change', async () => {
+                const include = toggle.checked;
+                toggle.disabled = true;
+                try {
+                    const resp = await v2Fetch('/portfolio/preferences', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ include_nfts_in_total: include }),
+                    });
+                    if (!resp.ok) throw new Error('save failed');
+                    showToast(include ? 'NFTs now included in portfolio total' : 'NFTs excluded from portfolio total', 'success');
+                } catch (e) {
+                    toggle.checked = !include; // revert on failure
+                    showToast('Failed to save preference', 'error');
+                } finally {
+                    toggle.disabled = false;
+                }
+            });
         }
 
         function renderStartupTasks(data) {

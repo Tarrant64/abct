@@ -265,9 +265,20 @@ async def get_history_data(
 
     rows = await get_unified_daily_totals(user_id, start_date=query_start)
 
+    # get_unified_daily_totals() sums ALL source types (incl. NFTs) into
+    # total_value. This chart feeds the V2 dashboard, whose headline total
+    # (/portfolio/instant, /portfolio/all-holdings) excludes NFT value unless
+    # the user's include_nfts_in_total preference is on — subtract the NFT
+    # component here too so the two agree under both settings
+    # (ABCT-NFT-TOGGLE-20260919).
+    from routers.portfolio import get_nft_inclusion_preference
+    include_nfts = await get_nft_inclusion_preference(user_id)
+
     data = []
     for row in rows:
         total = row.get('total_value', 0) or 0
+        if not include_nfts:
+            total = total - (row.get('nft_value', 0) or 0)
         data.append({
             'date': row['date'],
             'value': round(total, 2),

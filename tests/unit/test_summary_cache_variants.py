@@ -98,10 +98,16 @@ def _stub_compute_upstreams(monkeypatch):
     async def get_all_native_assets(user_id):
         return {"valuable_assets": []}
 
+    async def get_nft_inclusion_preference(user_id):
+        # ABCT-NFT-TOGGLE-20260919: default preference (excluded) — matches
+        # get_user_setting's own default when a user has never set it.
+        return False
+
     portfolio_stub = types.SimpleNamespace(
         get_portfolio_summary=get_portfolio_summary,
         get_portfolio_totals=get_portfolio_totals,
         get_all_native_assets=get_all_native_assets,
+        get_nft_inclusion_preference=get_nft_inclusion_preference,
     )
 
     async def get_all_exchanges_summary(user_id):

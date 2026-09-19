@@ -10,7 +10,8 @@ from database import (
     get_all_wallets, get_wallet_balance, get_wallet_assets,
     get_cache, set_cache, clear_cache,
     get_all_token_metadata, toggle_token_tracking, get_tracked_tokens,
-    save_token_metadata, update_native_asset_decimals
+    save_token_metadata, update_native_asset_decimals,
+    get_user_setting, set_user_setting
 )
 from services.cardano import cardano_service
 from services.pricing import pricing_service
@@ -54,6 +55,46 @@ from config import CACHE_TTL_PERSISTENT, CACHE_TTL_WARM, CACHE_TTL_HOT
 WALLET_DATA_CACHE_TTL = CACHE_TTL_HOT  # 5 minutes - per-wallet balance/assets/stake cache
 PORTFOLIO_CACHE_TTL = WALLET_DATA_CACHE_TTL  # was CACHE_TTL_PERSISTENT (7 days)
 STAKE_CACHE_TTL = CACHE_TTL_WARM  # 1 hour for stake address lookups
+
+# ABCT-NFT-TOGGLE-20260919: server-side preference for whether NFT value is
+# folded into portfolio totals. Default OFF — NFT valuations come from a
+# stale/dead data source (see nft_floor_prices staleness surfaced in
+# /nfts/all/summary), and prior to this change NFTs were silently excluded
+# from every web total anyway. Follows the same per-user key/value pattern
+# already used by routers/balance_history.py's /schedule endpoint.
+NFT_INCLUSION_SETTING_KEY = 'include_nfts_in_total'
+
+
+async def get_nft_inclusion_preference(user_id: int) -> bool:
+    """Whether this user's portfolio totals should include NFT value. Default False."""
+    value = await get_user_setting(user_id, NFT_INCLUSION_SETTING_KEY, '0')
+    return value == '1'
+
+
+class NFTPreferenceRequest(BaseModel):
+    include_nfts_in_total: bool
+
+
+@router.get("/preferences")
+async def get_portfolio_preferences(user_id: int = Depends(verify_session)):
+    """Get the user's portfolio display preferences."""
+    return {"include_nfts_in_total": await get_nft_inclusion_preference(user_id)}
+
+
+@router.post("/preferences")
+async def set_portfolio_preferences(body: NFTPreferenceRequest, user_id: int = Depends(verify_session)):
+    """Set the user's portfolio display preferences."""
+    await set_user_setting(user_id, NFT_INCLUSION_SETTING_KEY, '1' if body.include_nfts_in_total else '0')
+    # NFT inclusion changes what several cached totals mean — drop them so the
+    # next read recomputes under the new preference instead of serving a
+    # value computed under the old one for the rest of its TTL.
+    for key in (f"portfolio_instant_{user_id}", f"all_holdings_{user_id}", f"all_holdings_{user_id}_all", f"portfolio_totals_{user_id}"):
+        try:
+            await clear_cache(key, user_id=user_id)
+        except Exception:
+            pass
+    return {"status": "ok", "include_nfts_in_total": body.include_nfts_in_total}
+
 
 async def calculate_wallet_native_assets_value(wallet_id: int, blockchain: str, user_id: int):
     """Calculate total USD value of non-ignored native assets for a wallet."""
@@ -1896,6 +1937,22 @@ async def get_all_holdings(
         logger.debug(f"[All Holdings] portfolio_positions total fallback failed: {e}")
         total_value = holdings_sum
 
+    # NFTs are intentionally NOT part of the merged `holdings` dict above —
+    # they're collection floor-price valuations, not tokens with a market
+    # price/quantity. Add NFT value straight into the total (gated by the
+    # user's include_nfts_in_total preference, default off) rather than as a
+    # synthetic holdings row, so it doesn't get miscategorized as "Liquid" by
+    # the frontend's source-based reconciliation (v2-app.js reconcileStatCards()).
+    nft_value_usd = 0.0
+    if await get_nft_inclusion_preference(user_id):
+        try:
+            from routers.nfts import get_all_chains_nft_summary
+            nft_summary = await get_all_chains_nft_summary(user_id=user_id)
+            nft_value_usd = float(nft_summary.get('total_value_usd', 0) or 0)
+            total_value += nft_value_usd
+        except Exception as e:
+            logger.debug(f"[All Holdings] NFT summary fetch failed: {e}")
+
     # Fetch sparklines + CoinGecko image URLs
     from services.pricing import ASSET_TO_COINGECKO
     sparklines, cg_images = await _fetch_sparklines_and_images(list(holdings.keys()))
@@ -1922,6 +1979,7 @@ async def get_all_holdings(
     result = {
         'holdings': sorted_holdings,
         'total_value_usd': round(total_value, 2),
+        'nft_value_usd': round(nft_value_usd, 2),
         'count': len(sorted_holdings),
     }
     await set_cache(cache_key, result, ttl_seconds=CACHE_TTL_HOT, user_id=user_id)
@@ -2068,6 +2126,12 @@ async def get_portfolio_history(
 
     rows = await get_unified_daily_totals(user_id, start_date=start_date)
 
+    # get_unified_daily_totals() sums ALL source types (incl. NFTs) into
+    # total_value. Subtract the NFT component when the user's preference is
+    # off so this history series agrees with /portfolio/instant and
+    # /portfolio/all-holdings under both settings (ABCT-NFT-TOGGLE-20260919).
+    include_nfts = await get_nft_inclusion_preference(user_id)
+
     history = []
     for row in rows:
         on_chain = row.get('on_chain_value', 0) or 0
@@ -2078,6 +2142,8 @@ async def get_portfolio_history(
         tracked_tokens = row.get('tracked_tokens_value', 0) or 0
         custom_tokens = row.get('custom_tokens_value', 0) or 0
         total = row.get('total_value', 0) or 0
+        if not include_nfts:
+            total = total - nfts
 
         history.append({
             "date": row['date'],
@@ -2303,6 +2369,21 @@ async def get_portfolio_instant(user_id: int = Depends(verify_session)):
         # Update price to the best available
         if price > 0:
             symbol_agg[sym]['price_usd'] = price
+
+    # NFT value is not tracked in portfolio_positions (NFTs are valued via
+    # collection floor prices, not quantity x market price like the fungible
+    # positions above) — source it from the same summary the NFT tiles use
+    # so numbers agree, gated by the user's include_nfts_in_total preference
+    # (default off — see ABCT-NFT-TOGGLE-20260919).
+    if await get_nft_inclusion_preference(user_id):
+        try:
+            from routers.nfts import get_all_chains_nft_summary
+            nft_summary = await get_all_chains_nft_summary(user_id=user_id)
+            nft_value_usd = float(nft_summary.get('total_value_usd', 0) or 0)
+            if nft_value_usd > 0:
+                breakdown['nft'] = nft_value_usd
+        except Exception as e:
+            logger.debug(f"[Portfolio Instant] NFT summary fetch failed: {e}")
 
     total_usd = sum(breakdown.values())
 
