@@ -365,6 +365,12 @@ async def get_coinbase_portfolio(user_id: int = Depends(verify_session), refresh
     await set_cache(cache_key, result, EXCHANGE_CACHE_TTL, user_id=user_id)
 
     # Fire-and-forget: write exchange positions to portfolio_positions
+    # ABCT-COINBASE-POSITIONS-20260919: this is the Coinbase-specific
+    # endpoint (not the generic process_exchange_portfolio() below, which
+    # takes exchange_name as a real parameter) -- it never had that
+    # parameter, so this referenced an undefined name and raised NameError
+    # on every call that reached it, silently, for as long as this block
+    # has existed.
     try:
         from database import upsert_portfolio_positions_batch
         pp_rows = []
@@ -374,13 +380,18 @@ async def get_coinbase_portfolio(user_id: int = Depends(verify_session), refresh
             if currency and balance > 0:
                 pp_rows.append({
                     'user_id': user_id, 'symbol': currency, 'quantity': balance,
-                    'source_type': 'exchange', 'source_detail': exchange_name,
+                    'source_type': 'exchange', 'source_detail': 'coinbase',
                     'chain': '', 'last_price_usd': float(asset.get('price', 0)),
                 })
         if pp_rows:
             await upsert_portfolio_positions_batch(pp_rows)
     except Exception as e:
-        logger.debug(f"Portfolio positions exchange write failed: {e}")
+        # WARNING, not DEBUG (ABCT-COINBASE-POSITIONS-20260919): this write
+        # silently failed on every single invocation for months at DEBUG
+        # level, which is exactly why nobody noticed. Still fire-and-forget
+        # -- a failure here must not break the endpoint -- just loud enough
+        # to actually be seen next time.
+        logger.warning(f"Portfolio positions exchange write failed: {e}")
 
     return result
 
