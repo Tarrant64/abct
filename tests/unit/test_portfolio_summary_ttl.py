@@ -52,6 +52,7 @@ if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
 import routers.portfolio as portfolio  # noqa: E402
+import config  # noqa: E402
 
 USER_ID = 42
 WALLET_ID = 1
@@ -244,3 +245,21 @@ def test_portfolio_cache_ttl_matches_wallet_cache_ttl():
     shadows the inner one again."""
     assert portfolio.PORTFOLIO_CACHE_TTL == portfolio.WALLET_DATA_CACHE_TTL
     assert portfolio.PORTFOLIO_CACHE_TTL < 3600  # well under an hour, nowhere near 7 days
+
+
+def test_portfolio_quantity_cache_ttl_is_the_perf_stopgap_value():
+    """ABCT-SUMMARY-PERF-20260919: guards the specific 20-minute stopgap
+    value (and that it's still the source for both TTLs) so a future edit
+    doesn't silently drift back toward the 5-minute setting that turned a
+    ~weekly expensive recompute into a ~every-5-minutes one."""
+    assert config.PORTFOLIO_QUANTITY_CACHE_TTL_SECONDS == 1200  # 20 minutes
+    assert portfolio.PORTFOLIO_CACHE_TTL == config.PORTFOLIO_QUANTITY_CACHE_TTL_SECONDS
+    assert portfolio.WALLET_DATA_CACHE_TTL == config.PORTFOLIO_QUANTITY_CACHE_TTL_SECONDS
+
+
+def test_portfolio_quantity_cache_ttl_is_decoupled_from_cache_ttl_hot():
+    """ABCT-SUMMARY-PERF-20260919 deliberately split this off from
+    CACHE_TTL_HOT (which also governs unrelated caches -- prices, exchange
+    balances) so that tuning one doesn't silently move the other. Guards
+    against re-merging them back into a single shared constant."""
+    assert config.PORTFOLIO_QUANTITY_CACHE_TTL_SECONDS != config.CACHE_TTL_HOT

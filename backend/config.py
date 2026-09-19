@@ -386,3 +386,27 @@ STAKE_REDISCOVERY_DISPATCH_DELAY_SECONDS = float(os.getenv("STAKE_REDISCOVERY_DI
 # a full daily pass over every registered Cardano wallet, at >=1s/item, can
 # legitimately take a while for a user with many wallets.
 STAKE_REDISCOVERY_LOCK_TTL_MINUTES = int(os.getenv("STAKE_REDISCOVERY_LOCK_TTL_MINUTES", "120"))
+
+# Portfolio Quantity Cache TTL Stopgap (ABCT-SUMMARY-PERF-20260919)
+# ABCT-BACKEND-QTYCACHE-20260918 tied the summary-level and per-wallet
+# quantity caches to WALLET_DATA_CACHE_TTL (5 minutes, at the time equal to
+# CACHE_TTL_HOT) to fix a 7-day staleness bug. Side effect discovered in
+# production: for a user with many Cardano wallets, the full per-wallet
+# recompute this cache guards costs ~20s (an unthrottled burst of Koios
+# calls -- see ABCT-CARDANO-ACCOUNT-LEVEL-20260919 for the real fix, and
+# ABCT-SUMMARY-PERF-20260919 for the throttle). At a 5-minute TTL that
+# recompute now runs roughly every 5 minutes instead of roughly weekly --
+# whoever's request lands on the cold window eats the full 20s, which on
+# mobile exceeds the client's HTTP timeout and looks like a hard failure.
+#
+# This constant is now independent of CACHE_TTL_HOT (which also governs
+# unrelated things -- prices, exchange balances -- that should not be
+# affected by this change). 20 minutes: a 4x reduction in how often the
+# expensive recompute can fire, immediate and proportional relief while the
+# account-level redesign and the Koios throttle land; quantities stale for
+# up to 20 minutes is a real but minor regression against the account-level
+# fix's target of "as fresh as the sync makes it," and utterly minor next to
+# the 7-day staleness this was fixed from. Intended to be temporary -- once
+# ABCT-CARDANO-ACCOUNT-LEVEL-20260919 collapses the per-wallet fan-out to
+# ~1 call per stake key, this can likely drop back toward 5 minutes.
+PORTFOLIO_QUANTITY_CACHE_TTL_SECONDS = int(os.getenv("PORTFOLIO_QUANTITY_CACHE_TTL_SECONDS", "1200"))

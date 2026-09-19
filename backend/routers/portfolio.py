@@ -51,9 +51,22 @@ logger = logging.getLogger(__name__)
 # fan-out is itself bounded by the (already-existing) per-wallet cache, so
 # this does not increase external call volume beyond what the per-wallet
 # cache already allowed for refresh=True calls today.
-from config import CACHE_TTL_PERSISTENT, CACHE_TTL_WARM, CACHE_TTL_HOT
-WALLET_DATA_CACHE_TTL = CACHE_TTL_HOT  # 5 minutes - per-wallet balance/assets/stake cache
-PORTFOLIO_CACHE_TTL = WALLET_DATA_CACHE_TTL  # was CACHE_TTL_PERSISTENT (7 days)
+#
+# ABCT-SUMMARY-PERF-20260919: that 5-minute value (originally CACHE_TTL_HOT)
+# turned an expensive recompute (~20s for a user with many Cardano wallets,
+# an unthrottled Koios burst) from a roughly-weekly event into a
+# roughly-every-5-minutes one, and mobile clients started timing out on
+# whichever request landed on the cold window. Stopgap: both TTLs now come
+# from their own dedicated constant, PORTFOLIO_QUANTITY_CACHE_TTL_SECONDS
+# (config.py, default 20 minutes) — decoupled from CACHE_TTL_HOT so this
+# change doesn't also affect unrelated caches (prices, exchange balances)
+# that constant still governs. See config.py's comment for the full
+# reasoning and the real fixes this is holding the line until
+# (ABCT-CARDANO-ACCOUNT-LEVEL-20260919, ABCT-SUMMARY-PERF-20260919's Koios
+# throttle).
+from config import CACHE_TTL_PERSISTENT, CACHE_TTL_WARM, CACHE_TTL_HOT, PORTFOLIO_QUANTITY_CACHE_TTL_SECONDS
+WALLET_DATA_CACHE_TTL = PORTFOLIO_QUANTITY_CACHE_TTL_SECONDS  # per-wallet balance/assets/stake cache
+PORTFOLIO_CACHE_TTL = WALLET_DATA_CACHE_TTL  # was CACHE_TTL_PERSISTENT (7 days), then 5 minutes
 STAKE_CACHE_TTL = CACHE_TTL_WARM  # 1 hour for stake address lookups
 
 # ABCT-NFT-TOGGLE-20260919: server-side preference for whether NFT value is
