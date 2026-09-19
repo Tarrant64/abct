@@ -33,7 +33,7 @@ from services.moralis import moralis_service
 from services.approval_checker import approval_checker, CHAIN_MAP
 from services.cardano_shield import cardano_shield
 from services.cardano_token_registry import cardano_token_registry
-from database import save_balance, clear_wallet_balances, get_cache, set_cache
+from database import save_balance, get_cache, set_cache
 
 router = APIRouter(prefix="/privacy", tags=["privacy"])
 logger = logging.getLogger(__name__)
@@ -1023,7 +1023,6 @@ async def set_monero_balance(
         )
 
     try:
-        await clear_wallet_balances(wallet_id)
         await save_balance(wallet_id, f"{amount_xmr:.12f}", 'XMR')
 
         return {

@@ -1417,7 +1417,16 @@ async def update_wallet_ada_handle(wallet_id: int, ada_handle: Optional[str]):
 
 
 async def save_balance(wallet_id: int, amount: str, unit: str, user_id: int = None):
-    """Save or update the balance for a wallet."""
+    """Save or update the balance for a wallet.
+
+    ABCT-BALANCE-ATOMIC-20260919: replaces any existing balance row(s) for
+    this wallet_id and inserts the new one on a single connection/single
+    commit, so a concurrent reader (get_wallet_balance, get_wallet_balances_bulk)
+    can never observe a transient state where this wallet has zero balance
+    rows. Callers should no longer call clear_wallet_balances() separately
+    before this -- that used to run on its own connection/commit, leaving
+    exactly that zero-row window open between the two commits.
+    """
     async with aiosqlite.connect(DATABASE_PATH) as db:
         # Get user_id from wallet if not provided
         if user_id is None:
@@ -1428,6 +1437,10 @@ async def save_balance(wallet_id: int, amount: str, unit: str, user_id: int = No
             else:
                 raise ValueError(f"Wallet {wallet_id} not found")
 
+        # Clear any existing row(s) for this wallet first -- same connection,
+        # not yet committed, so this and the insert below are atomic together.
+        await db.execute("DELETE FROM balances WHERE wallet_id = ?", (wallet_id,))
+
         await db.execute("""
             INSERT INTO balances (wallet_id, user_id, amount, unit, updated_at)
             VALUES (?, ?, ?, ?, ?)
@@ -1435,7 +1448,15 @@ async def save_balance(wallet_id: int, amount: str, unit: str, user_id: int = No
         await db.commit()
 
 async def clear_wallet_balances(wallet_id: int):
-    """Clear existing balances for a wallet before refresh."""
+    """Clear existing balances for a wallet.
+
+    ABCT-BALANCE-ATOMIC-20260919: no longer called before save_balance() --
+    save_balance() now clears+inserts atomically on its own. Kept for any
+    external/ad-hoc use (e.g. wallet deletion flows) that genuinely wants to
+    clear balances without immediately writing a new one; flagged to the
+    team rather than removed since nothing in this codebase calls it as of
+    this change (all former call sites were the redundant pre-save clear).
+    """
     async with aiosqlite.connect(DATABASE_PATH) as db:
         await db.execute("DELETE FROM balances WHERE wallet_id = ?", (wallet_id,))
         await db.commit()

@@ -9,7 +9,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database import (
     get_all_wallets, get_wallet_by_address, save_wallet,
-    save_balance, clear_wallet_balances, save_native_assets,
+    save_balance, save_native_assets,
     get_wallet_assets, get_wallet_balance,
     get_cache, set_cache,
     update_wallet_ada_handle
@@ -752,7 +752,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         if blockchain == 'cardano':
             info = await cardano_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, info['balance_ada'], 'ADA')
                 await save_native_assets(wallet_id, info['native_assets'])
 
@@ -774,7 +773,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'bitcoin':
             info = await bitcoin_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, info['balance_btc'], 'BTC')
                 return {
                     'address': address,
@@ -790,7 +788,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
             # Service handles fallback to public RPC internally
             info = await ethereum_service.get_address_balance(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_eth']), 'ETH')
                 # Save ERC-20 tokens as native assets (empty if using public RPC fallback)
                 erc20_assets = [
@@ -830,7 +827,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
             # Service handles fallback to public RPC internally
             info = await solana_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_sol']), 'SOL')
                 # Save SPL tokens as native assets (empty if using public RPC fallback)
                 spl_assets = [
@@ -864,7 +860,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
             # Service handles fallback to public RPC internally
             info = await polygon_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_matic']), 'MATIC')
                 # Save ERC-20 tokens as native assets (empty if using public RPC fallback)
                 polygon_assets = [
@@ -891,7 +886,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
             # Service handles fallback to public RPC internally
             info = await base_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_eth']), 'ETH_BASE')
                 # Save ERC-20 tokens as native assets (empty if using public RPC fallback)
                 base_assets = [
@@ -917,7 +911,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'algorand':
             info = await algorand_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_algo']), 'ALGO')
                 algorand_assets = [
                     {
@@ -942,7 +935,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'bsc':
             info = await bsc_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_bnb']), 'BNB')
                 bsc_assets = [
                     {
@@ -967,7 +959,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'arbitrum':
             info = await arbitrum_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_eth']), 'ETH_ARB')
                 arb_assets = [
                     {
@@ -992,7 +983,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'avalanche':
             info = await avalanche_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_avax']), 'AVAX')
                 avax_assets = [
                     {
@@ -1017,7 +1007,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'optimism':
             info = await optimism_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_eth']), 'ETH_OP')
                 op_assets = [
                     {
@@ -1042,7 +1031,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'zksync':
             info = await zksync_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_eth']), 'ETH_ZK')
                 zk_assets = [
                     {
@@ -1067,7 +1055,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'linea':
             info = await linea_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_eth']), 'ETH_LINEA')
                 linea_assets = [
                     {
@@ -1092,7 +1079,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'scroll':
             info = await scroll_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_eth']), 'ETH_SCROLL')
                 scroll_assets = [
                     {
@@ -1117,7 +1103,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'fantom':
             info = await fantom_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_ftm']), 'FTM')
                 ftm_assets = [
                     {
@@ -1142,7 +1127,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'cronos':
             info = await cronos_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_cro']), 'CRO')
                 cro_assets = [
                     {
@@ -1167,7 +1151,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'gnosis':
             info = await gnosis_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_xdai']), 'xDAI')
                 gnosis_assets = [
                     {
@@ -1192,7 +1175,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'moonbeam':
             info = await moonbeam_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_glmr']), 'GLMR')
                 glmr_assets = [
                     {
@@ -1217,7 +1199,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'tron':
             info = await tron_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_trx']), 'TRX')
                 tron_assets = [
                     {
@@ -1242,7 +1223,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'xrp':
             info = await xrp_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_xrp']), 'XRP')
                 xrp_assets = [
                     {
@@ -1267,7 +1247,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'hedera':
             info = await hedera_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_hbar']), 'HBAR')
                 hedera_assets = [
                     {
@@ -1292,7 +1271,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'multiversx':
             info = await multiversx_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_egld']), 'EGLD')
                 mx_assets = [
                     {
@@ -1317,7 +1295,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'sui':
             info = await sui_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_sui']), 'SUI')
                 sui_assets = [
                     {
@@ -1342,7 +1319,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'aptos':
             info = await aptos_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_apt']), 'APT')
                 apt_assets = [
                     {
@@ -1367,7 +1343,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'filecoin':
             info = await filecoin_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_fil']), 'FIL')
                 return {
                     'address': address,
@@ -1381,7 +1356,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'litecoin':
             info = await litecoin_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_ltc']), 'LTC')
                 return {
                     'address': address,
@@ -1395,7 +1369,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'dogecoin':
             info = await dogecoin_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_doge']), 'DOGE')
                 return {
                     'address': address,
@@ -1409,7 +1382,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'zcash':
             info = await zcash_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_zec']), 'ZEC')
                 return {
                     'address': address,
@@ -1423,7 +1395,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'tezos':
             info = await tezos_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_xtz']), 'XTZ')
                 tezos_assets = [
                     {
@@ -1448,7 +1419,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'stacks':
             info = await stacks_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_stx']), 'STX')
                 stx_assets = [
                     {
@@ -1473,7 +1443,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'vechain':
             info = await vechain_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_vet']), 'VET')
                 vet_assets = []
                 for t in info.get('tokens', []):
@@ -1501,7 +1470,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'cosmos':
             info = await cosmos_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_atom']), 'ATOM')
                 cosmos_assets = []
                 for t in info.get('tokens', []):
@@ -1528,7 +1496,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'near':
             info = await near_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_near']), 'NEAR')
                 near_assets = [
                     {
@@ -1553,7 +1520,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'icp':
             info = await icp_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_icp']), 'ICP')
                 return {
                     'address': address,
@@ -1567,7 +1533,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'kaia':
             info = await kaia_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_klay']), 'KLAY')
                 kaia_assets = [
                     {
@@ -1592,7 +1557,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'osmosis':
             info = await osmosis_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_osmo']), 'OSMO')
                 return {
                     'address': address,
@@ -1606,7 +1570,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'celestia':
             info = await celestia_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_tia']), 'TIA')
                 return {
                     'address': address,
@@ -1620,7 +1583,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'injective':
             info = await injective_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_inj']), 'INJ')
                 return {
                     'address': address,
@@ -1634,7 +1596,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'dydx':
             info = await dydx_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_dydx']), 'DYDX')
                 return {
                     'address': address,
@@ -1648,7 +1609,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'sei':
             info = await sei_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_sei']), 'SEI')
                 return {
                     'address': address,
@@ -1662,7 +1622,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'akash':
             info = await akash_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_akt']), 'AKT')
                 return {
                     'address': address,
@@ -1676,7 +1635,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'ton':
             info = await ton_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_ton']), 'TON')
                 ton_assets = [
                     {
@@ -1701,7 +1659,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'polkadot':
             info = await polkadot_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_dot']), 'DOT')
                 return {
                     'address': address,
@@ -1715,7 +1672,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'kusama':
             info = await kusama_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_ksm']), 'KSM')
                 return {
                     'address': address,
@@ -1729,7 +1685,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'stellar':
             info = await stellar_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_xlm']), 'XLM')
                 stellar_assets = [
                     {
@@ -1754,7 +1709,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'kaspa':
             info = await kaspa_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_kas']), 'KAS')
                 return {
                     'address': address,
@@ -1768,7 +1722,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'ergo':
             info = await ergo_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_erg']), 'ERG')
                 return {
                     'address': address,
@@ -1782,7 +1735,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'iota':
             info = await iota_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_iota']), 'IOTA')
                 return {
                     'address': address,
@@ -1796,7 +1748,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'waves':
             info = await waves_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_waves']), 'WAVES')
                 return {
                     'address': address,
@@ -1810,7 +1761,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'mina':
             info = await mina_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_mina']), 'MINA')
                 return {
                     'address': address,
@@ -1824,7 +1774,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'zilliqa':
             info = await zilliqa_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_zil']), 'ZIL')
                 return {
                     'address': address,
@@ -1854,7 +1803,6 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
         elif blockchain == 'secret_network':
             info = await secret_network_service.get_address_info(address)
             if info:
-                await clear_wallet_balances(wallet_id)
                 await save_balance(wallet_id, str(info['balance_scrt']), 'SCRT')
                 return {
                     'address': address,
