@@ -13,7 +13,8 @@ from database import (
     save_balance, save_native_assets,
     get_wallet_assets, get_wallet_balance,
     get_cache, set_cache,
-    update_wallet_ada_handle
+    update_wallet_ada_handle,
+    get_recent_balance_anomalies
 )
 from config import CACHE_TTL_COLD
 from services.cardano import cardano_service, is_stake_address, detect_ada_handle
@@ -559,6 +560,15 @@ async def get_wallet_assets_by_id(wallet_id: int, user_id: int = Depends(verify_
         "blockchain": wallet['blockchain'],
         "native_coin_price_usd": native_balance['price_usd'] if native_balance else None
     }
+
+@router.get("/anomalies")
+async def get_balance_anomalies(user_id: int = Depends(verify_session), limit: int = 20):
+    """Recent flagged balance changes for this user's wallets
+    (ABCT-BALANCE-GUARD-20260919). Alerts only -- a flagged change was still
+    written; this is visibility, not a pending-approval queue."""
+    anomalies = await get_recent_balance_anomalies(user_id, limit=limit)
+    return {"anomalies": anomalies, "count": len(anomalies)}
+
 
 @router.get("/detect")
 async def detect_address(address: str, user_id: int = Depends(verify_session)):

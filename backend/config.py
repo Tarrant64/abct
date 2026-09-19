@@ -329,3 +329,25 @@ WALLET_BGSYNC_DISPATCH_DELAY_SECONDS = float(os.getenv("WALLET_BGSYNC_DISPATCH_D
 # enough that a crashed holder self-heals quickly (a few missed buckets, not
 # a long outage).
 WALLET_BGSYNC_LOCK_TTL_MINUTES = int(os.getenv("WALLET_BGSYNC_LOCK_TTL_MINUTES", "3"))
+
+# Balance Anomaly Guard (ABCT-BALANCE-GUARD-20260919)
+# Root cause: the 2026-09-19 "vault" incident wasn't a write bug -- a wallet
+# lost 78% of its stored ADA in a single legitimate refresh because 3 of its
+# 11 real payment addresses were never registered with ABCT, so a correct
+# fetch of only the 9 known addresses looked, from the DB's point of view,
+# like a huge and completely silent drop. Nothing compared the new value to
+# the old one. This guard does not fix that root cause (see
+# ABCT-STAKE-REDISCOVERY-20260919) -- it makes ANY future large jump, from
+# whatever cause, visible instead of silent. It never blocks or rolls back a
+# write: a user legitimately moving funds out produces the exact same signal
+# as a bug, and refusing that write would corrupt real data.
+#
+# Percentage-based, not absolute: save_balance() operates on raw per-chain
+# unit amounts (ADA, BTC, DOGE, ...) with no price context available at that
+# layer, so a fixed absolute threshold would be meaningless across chains
+# (0.01 BTC vs 10,000 DOGE). A relative threshold catches the same class of
+# incident (a large fraction of a wallet's value disappearing or appearing
+# in one write) regardless of unit or chain. 50% default: rare for organic
+# activity (even a large partial withdrawal is usually a smaller fraction of
+# a HODL wallet's total), comfortably below the 78% drop that triggered this.
+BALANCE_ANOMALY_PCT_THRESHOLD = float(os.getenv("BALANCE_ANOMALY_PCT_THRESHOLD", "0.5"))

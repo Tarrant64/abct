@@ -3,7 +3,7 @@ import logging
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
-from config import DATABASE_PATH, DATA_DIR
+from config import DATABASE_PATH, DATA_DIR, BALANCE_ANOMALY_PCT_THRESHOLD
 from typing import Optional
 from cryptography.fernet import Fernet, InvalidToken
 
@@ -457,6 +457,29 @@ async def init_db():
                 acquired_at TIMESTAMP NOT NULL,
                 expires_at TIMESTAMP NOT NULL
             )
+        """)
+
+        # Balance anomaly log (ABCT-BALANCE-GUARD-20260919). Persisted, not
+        # log-only: a container restart during an incident destroys stdout
+        # history (this is exactly what happened investigating the vault
+        # incident this table exists because of), so an anomaly that only
+        # ever existed in logs would not survive the next one.
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS balance_anomalies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                wallet_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                blockchain TEXT,
+                unit TEXT NOT NULL,
+                old_value TEXT NOT NULL,
+                new_value TEXT NOT NULL,
+                pct_change REAL NOT NULL,
+                detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+            )
+        """)
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_balance_anomalies_wallet
+            ON balance_anomalies(wallet_id, detected_at)
         """)
 
         # Create indexes for multi-user performance
@@ -1484,7 +1507,14 @@ async def save_balance(wallet_id: int, amount: str, unit: str, user_id: int = No
     rows. Callers should no longer call clear_wallet_balances() separately
     before this -- that used to run on its own connection/commit, leaving
     exactly that zero-row window open between the two commits.
+
+    ABCT-BALANCE-GUARD-20260919: also compares the incoming value against
+    whatever was previously stored and flags (logs + persists) a change past
+    BALANCE_ANOMALY_PCT_THRESHOLD. This NEVER blocks or alters the write --
+    see the guard's own docstring/config comment for why a large legitimate
+    change must look identical to a bug from here and must still be saved.
     """
+    previous_amount = None
     async with aiosqlite.connect(DATABASE_PATH) as db:
         # Get user_id from wallet if not provided
         if user_id is None:
@@ -1495,6 +1525,16 @@ async def save_balance(wallet_id: int, amount: str, unit: str, user_id: int = No
             else:
                 raise ValueError(f"Wallet {wallet_id} not found")
 
+        # Read whatever is currently stored BEFORE clearing it -- this is the
+        # anomaly guard's "before" value. Read-only, does not affect the
+        # atomicity of the clear+insert below.
+        cursor = await db.execute(
+            "SELECT amount FROM balances WHERE wallet_id = ?", (wallet_id,)
+        )
+        prev_row = await cursor.fetchone()
+        if prev_row is not None:
+            previous_amount = prev_row[0]
+
         # Clear any existing row(s) for this wallet first -- same connection,
         # not yet committed, so this and the insert below are atomic together.
         await db.execute("DELETE FROM balances WHERE wallet_id = ?", (wallet_id,))
@@ -1504,6 +1544,77 @@ async def save_balance(wallet_id: int, amount: str, unit: str, user_id: int = No
             VALUES (?, ?, ?, ?, ?)
         """, (wallet_id, user_id, amount, unit, datetime.now()))
         await db.commit()
+
+    # Anomaly check happens AFTER the write has already committed -- alert,
+    # never block. A failure in here must never look like a failed save.
+    try:
+        await _check_balance_anomaly(wallet_id, user_id, unit, previous_amount, amount)
+    except Exception as e:
+        logger.warning(f"Balance anomaly check failed for wallet {wallet_id} (write already saved): {e}")
+
+
+async def _check_balance_anomaly(wallet_id: int, user_id: int, unit: str,
+                                  previous_amount, new_amount) -> None:
+    """Flag a large change in a wallet's balance (ABCT-BALANCE-GUARD-20260919).
+
+    Skips: no previous value (first-ever write for this wallet), or previous
+    value of exactly 0 (a wallet going from empty to funded is not an
+    anomaly, it's the normal first-funding case -- and the percentage of a
+    0 -> N change is undefined/infinite anyway).
+    """
+    if previous_amount is None:
+        return
+    try:
+        old_val = float(previous_amount)
+        new_val = float(new_amount)
+    except (TypeError, ValueError):
+        return
+    if old_val == 0:
+        return
+
+    pct_change = (new_val - old_val) / old_val
+    if abs(pct_change) < BALANCE_ANOMALY_PCT_THRESHOLD:
+        return
+
+    blockchain = None
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute("SELECT blockchain FROM wallets WHERE id = ?", (wallet_id,))
+        row = await cursor.fetchone()
+        if row:
+            blockchain = row[0]
+
+        await db.execute("""
+            INSERT INTO balance_anomalies
+                (wallet_id, user_id, blockchain, unit, old_value, new_value, pct_change, detected_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (wallet_id, user_id, blockchain, unit, str(previous_amount), str(new_amount),
+              pct_change, datetime.now()))
+        await db.commit()
+
+    logger.warning(
+        f"Balance anomaly: wallet {wallet_id} ({blockchain}) {unit} changed "
+        f"{old_val} -> {new_val} ({pct_change:+.1%}) -- write was NOT blocked, "
+        f"flagged for review only."
+    )
+
+
+async def get_recent_balance_anomalies(user_id: int, limit: int = 20) -> list:
+    """Recent balance anomalies for a user, newest first (ABCT-BALANCE-GUARD-
+    20260919) -- so a flagged change is discoverable via an API call rather
+    than requiring a direct DB query."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("""
+            SELECT ba.*, w.label, w.address
+            FROM balance_anomalies ba
+            LEFT JOIN wallets w ON w.id = ba.wallet_id
+            WHERE ba.user_id = ?
+            ORDER BY ba.detected_at DESC
+            LIMIT ?
+        """, (user_id, limit))
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
 
 async def clear_wallet_balances(wallet_id: int):
     """Clear existing balances for a wallet.
