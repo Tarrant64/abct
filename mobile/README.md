@@ -199,6 +199,27 @@ A build made any other way shows `unknown — built without
 scripts/build_device.sh` in Settings → About and should not be used to judge
 app behavior.
 
+### Quick deploy via Makefile
+
+For everyday installs, `Makefile` in this directory wraps
+`scripts/build_device.sh` so you don't have to remember flags or your
+phone's UDID:
+
+```bash
+make deploy                  # build, re-sign, and install on the default iPhone
+make deploy DEVICE=<udid>    # target a different device for this run only
+make build-only              # build + re-sign only, skip install (compile-error check)
+make verify                  # print what to check on-device after an install
+make help                    # list all targets (also the default — bare `make` is safe)
+```
+
+`ABCT_DEVICE_ID` exported in your shell overrides the Makefile's built-in
+default device without editing the file; an explicit `DEVICE=` on the
+command line always wins over both. `make deploy` and `make build-only` are
+thin wrappers — they still call `scripts/build_device.sh`, so the git-SHA
+stamping, dirty-tree check, and framework re-signing described above all
+still apply.
+
 ## Android
 
 The Android build targets phones running Android 7.0 (API 24) or newer and is
