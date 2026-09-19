@@ -170,6 +170,10 @@ async function loadDashboard() {
         if (results[2].status === 'fulfilled' && results[2].value && results[2].value.data) {
             v2State.chartData = results[2].value.data;
             renderChart(results[2].value.data);
+            // 7-Day Change is derived from this same response — no extra network call.
+            renderWeeklyChange(results[2].value.data);
+        } else {
+            renderWeeklyChange(null);
         }
 
         // Process tx stats
@@ -347,28 +351,13 @@ function renderPortfolioHero(data) {
     setText('statLiquid', formatCurrency(liquid));
     setText('statStaked', formatCurrency(staked));
 
-    // Change data
-    if (data.change_7d_usd !== undefined || data.change_7d_pct !== undefined) {
-        const changeEl = document.getElementById('heroChange');
-        const changeVal = data.change_7d_usd || 0;
-        const changePct = data.change_7d_pct || 0;
-        const isPositive = changeVal >= 0;
-        changeEl.className = `v2-hero-change ${isPositive ? 'positive' : 'negative'}`;
-        setSafeHTML(changeEl, `<span class="change-arrow">${isPositive ? '&#9650;' : '&#9660;'}</span> ${formatCurrency(Math.abs(changeVal))} (${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%)`);
-    }
-
     // Last updated
     setText('heroLastUpdated', `Last updated: ${new Date().toLocaleTimeString()}`);
 
-    // 7d change stat
-    if (data.change_7d_usd !== undefined) {
-        const statEl = document.getElementById('stat7dChange');
-        statEl.textContent = formatCurrency(Math.abs(data.change_7d_usd || 0));
-        const pctEl = document.getElementById('stat7dPct');
-        const pct = data.change_7d_pct || 0;
-        pctEl.textContent = `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
-        pctEl.className = `v2-stat-sub ${pct >= 0 ? 'positive' : 'negative'}`;
-    }
+    // Note: 7-Day Change (heroChange / stat7dChange / stat7dPct) is NOT derived
+    // from /portfolio/instant — that response never carries change_7d_usd/pct.
+    // It's computed by renderWeeklyChange() from the /balance-history/data?range=1w
+    // response already fetched in loadDashboard().
 }
 
 
@@ -404,6 +393,62 @@ function reconcileStatCards() {
     if (liquid > 0 || staked > 0) {
         setText('statLiquid', formatCurrency(liquid));
         setText('statStaked', formatCurrency(staked));
+    }
+}
+
+
+// ============================================================================
+// RENDERING — 7-DAY CHANGE
+// ============================================================================
+
+// Computes the 7-day portfolio change (absolute + %) from the
+// /balance-history/data?range=1w response already fetched for the chart in
+// loadDashboard() — no separate network call. Points are ordered oldest -> newest
+// (backend: ORDER BY wdb.date ASC), so the delta is last - first in the window.
+function renderWeeklyChange(historyData) {
+    const statEl = document.getElementById('stat7dChange');
+    const pctEl = document.getElementById('stat7dPct');
+    const heroEl = document.getElementById('heroChange');
+
+    function showEmpty() {
+        if (statEl) statEl.textContent = '--';
+        if (pctEl) { pctEl.textContent = ''; pctEl.className = 'v2-stat-sub'; }
+        if (heroEl) { setSafeHTML(heroEl, ''); heroEl.className = 'v2-hero-change'; }
+    }
+
+    const points = historyData && Array.isArray(historyData.data) ? historyData.data : [];
+    if (points.length < 2) { showEmpty(); return; }
+
+    const first = points[0];
+    const last = points[points.length - 1];
+    const firstValue = parseFloat(first.total_value ?? first.value);
+    const lastValue = parseFloat(last.total_value ?? last.value);
+
+    if (!isFinite(firstValue) || !isFinite(lastValue)) { showEmpty(); return; }
+
+    const changeVal = lastValue - firstValue;
+    const isPositive = changeVal >= 0;
+    // Can't compute a meaningful percent off a zero/negative starting value —
+    // show the dollar change only rather than dividing by zero.
+    const canComputePct = firstValue > 0;
+    const changePct = canComputePct ? (changeVal / firstValue) * 100 : null;
+
+    if (statEl) statEl.textContent = formatCurrency(Math.abs(changeVal));
+
+    if (pctEl) {
+        if (canComputePct && isFinite(changePct)) {
+            pctEl.textContent = `${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%`;
+            pctEl.className = `v2-stat-sub ${changePct >= 0 ? 'positive' : 'negative'}`;
+        } else {
+            pctEl.textContent = '';
+            pctEl.className = 'v2-stat-sub';
+        }
+    }
+
+    if (heroEl) {
+        heroEl.className = `v2-hero-change ${isPositive ? 'positive' : 'negative'}`;
+        const pctSuffix = (canComputePct && isFinite(changePct)) ? ` (${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%)` : '';
+        setSafeHTML(heroEl, `<span class="change-arrow">${isPositive ? '&#9650;' : '&#9660;'}</span> ${formatCurrency(Math.abs(changeVal))}${pctSuffix}`);
     }
 }
 
