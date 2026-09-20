@@ -31,6 +31,8 @@ from database import (
     get_latest_balance_history_job,
     get_unpriced_date_ranges,
     update_balance_history_prices,
+    get_stake_group_wallets,
+    set_wallet_stake_address,
 )
 from services.api_key_manager import APIKeyManager
 from services.cardano import cardano_service
@@ -232,7 +234,55 @@ class BalanceHistoryService:
         cutoff = (datetime.utcnow() - timedelta(days=max_days_back)).strftime('%Y-%m-%d')
 
         if chain == 'cardano':
-            daily_balances = await self._collect_cardano(address, latest_date, cutoff)
+            # ABCT-CARDANO-ACCOUNT-LEVEL-20260919 (materializer): identical
+            # canonical-row treatment to the live balance/native-asset fix
+            # in routers/wallets.py, so the chart agrees with the
+            # corrected live total instead of recreating the same
+            # missing-address undercount in the history series. A Cardano
+            # hardware wallet's addresses share one stake key; within a
+            # group, only the canonical wallet gets a history row, and its
+            # series is the SUM of every group member's address-level
+            # replay for that date, not just its own address.
+            stake_address = wallet.get('stake_address')
+            if not stake_address:
+                try:
+                    stake_address = await cardano_service.get_stake_address(address)
+                except Exception as e:
+                    logger.debug(f"Stake address resolution failed for wallet {wallet_id}: {e}")
+                    stake_address = None
+                if stake_address:
+                    try:
+                        await set_wallet_stake_address(wallet_id, stake_address)
+                    except Exception as e:
+                        logger.warning(f"Failed to persist stake_address for wallet {wallet_id}: {e}")
+
+            if stake_address:
+                group = await get_stake_group_wallets(user_id, stake_address)
+                canonical_id = group[0]['id'] if group else wallet_id
+                if wallet_id != canonical_id:
+                    # Non-canonical group member: the canonical member's
+                    # own collection (its own turn in this same loop)
+                    # already carries the group's full account-level
+                    # series. Writing this wallet's own per-address series
+                    # here would double-count it in
+                    # get_balance_history_aggregated's SUM(...) GROUP BY
+                    # balance_date across all of a user's wallets --
+                    # identical failure mode to the live-balance/
+                    # native-asset collapse. No collection for this
+                    # wallet_id going forward; existing historical rows
+                    # already written under it are left exactly as they
+                    # are (not backfilled, not deleted -- see commit
+                    # message / report for what that means for the chart).
+                    logger.info(
+                        f"Skipping balance history collection for non-canonical "
+                        f"stake-group member wallet {wallet_id} (canonical={canonical_id})"
+                    )
+                    return
+                daily_balances = await self._collect_cardano_account(group, latest_date, cutoff)
+            else:
+                # Enterprise address (no stake key): unaffected, original
+                # single-address path.
+                daily_balances = await self._collect_cardano(address, latest_date, cutoff)
         elif chain == 'bitcoin':
             daily_balances = await self._collect_bitcoin(address, latest_date, cutoff)
         elif chain in ('ethereum', 'polygon', 'base'):
@@ -480,6 +530,52 @@ class BalanceHistoryService:
             daily_balances = self._fill_daily_gaps(daily_balances)
 
         return daily_balances
+
+    async def _collect_cardano_account(self, group: List[dict], latest_date: str,
+                                       cutoff: str) -> Dict[str, float]:
+        """Sum daily balances across every address in a Cardano stake
+        group into one account-level series, attributed only to the
+        canonical wallet -- the history-series counterpart of the
+        account-level ADA/native-asset fix in routers/wallets.py.
+
+        Each member's own address-level series (from _collect_cardano) is
+        already dense/forward-filled from that address's own first
+        transaction date through today. Summing the per-date union of
+        those series, with each series's last-known value carried forward
+        for dates it doesn't itself contain (0 before an address's first
+        transaction), gives the group's true account-level daily total --
+        the same total Koios's account_info reports live, just
+        reconstructed day-by-day instead of read as a single current
+        figure.
+        """
+        per_address_series: List[Dict[str, float]] = []
+        for member in group:
+            try:
+                series = await self._collect_cardano(member['address'], latest_date, cutoff)
+            except Exception as e:
+                logger.error(
+                    f"Error collecting cardano history for stake-group member "
+                    f"wallet {member.get('id')}: {e}"
+                )
+                series = {}
+            if series:
+                per_address_series.append(series)
+
+        if not per_address_series:
+            return {}
+
+        all_dates = sorted({d for series in per_address_series for d in series})
+        summed: Dict[str, float] = {}
+        last_per_series = [0.0] * len(per_address_series)
+        for date_str in all_dates:
+            total = 0.0
+            for i, series in enumerate(per_address_series):
+                if date_str in series:
+                    last_per_series[i] = series[date_str]
+                total += last_per_series[i]
+            summed[date_str] = total
+
+        return summed
 
     async def _collect_bitcoin(self, address: str, latest_date: str,
                                cutoff: str) -> Dict[str, float]:
