@@ -166,14 +166,34 @@ async def calculate_wallet_native_assets_value(wallet_id: int, blockchain: str, 
         if actual_qty == 0:
             continue
 
-        # Try on-chain wallet data first for Cardano
+        # Try on-chain wallet data first for Cardano.
+        # ABCT-CARDANO-TAPTOOLS-KEYFIX-20260919: this used to read
+        # pos.get('adaValue', 0) -- camelCase -- but services/taptools.py
+        # only ever sets pos['ada_value'] -- snake_case. The lookup always
+        # missed, total_ada was always 0.0, and because this was `elif` (not
+        # a second `if`), a real Koios match ALSO skipped the ticker-based
+        # fallback that would otherwise have priced the asset. Net effect:
+        # any Cardano native asset Koios successfully matched got $0,
+        # silently, forever -- worse than not having the integration, since
+        # the more assets Koios recognized, the more of the portfolio
+        # disappeared. Confirmed live: user reported "a ton showing 0s."
+        #
+        # Fix: correct the key name, and stop using elif -- a Koios match
+        # with a genuine positive value should still skip the fallback
+        # (avoid double-pricing when we have better on-chain data), but a
+        # match that comes back zero/missing must fall through to the
+        # ticker price rather than being silently left unpriced the way
+        # today's bug does.
+        priced_on_chain = False
         if blockchain == 'cardano' and asset.get('asset_id') in taptools_positions:
             pos = taptools_positions[asset['asset_id']]
-            total_ada = float(pos.get('adaValue', 0))
+            total_ada = float(pos.get('ada_value', 0) or 0)
             if total_ada > 0 and ada_price_usd:
                 total_value_usd += total_ada * ada_price_usd
-        # Fallback to direct USD pricing
-        elif asset.get('ticker'):
+                priced_on_chain = True
+        # Fallback to direct USD pricing -- runs whenever the on-chain path
+        # didn't produce a usable value, not only when there was no match.
+        if not priced_on_chain and asset.get('ticker'):
             try:
                 price_usd = await pricing_service.get_price(asset['ticker'].upper())
                 if price_usd and price_usd > 0:
