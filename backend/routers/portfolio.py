@@ -110,10 +110,39 @@ async def set_portfolio_preferences(body: NFTPreferenceRequest, user_id: int = D
 
 
 async def calculate_wallet_native_assets_value(wallet_id: int, blockchain: str, user_id: int):
-    """Calculate total USD value of non-ignored native assets for a wallet."""
+    """Calculate total USD value of non-ignored native assets for a wallet.
+
+    ABCT-CARDANO-TAPTOOLS-KEYFIX-20260919 (round 2 -- round 1 fixed a real
+    but secondary bug, a camelCase/snake_case key mismatch, without fixing
+    the actual cause of the user's "a ton showing 0s" report):
+
+    This used to treat a Koios match (an asset present in the stake
+    account's on-chain position list) as having ALREADY priced the asset,
+    via pos['ada_value'], and skip ticker-based pricing on that assumption
+    (`elif`, not a second `if`). That assumption was always false --
+    services/taptools.py hardcodes ada_value=0 for every position because
+    Koios does not return pricing data at all, only quantity/existence
+    (confirmed: no code path anywhere ever sets a position's ada_value to
+    anything but 0). Fixing only the key name would still have yielded $0
+    for every match, because the field itself never holds a real value
+    under any circumstance -- worse than no integration, since the MORE
+    assets Koios recognized, the MORE of the portfolio silently zeroed.
+
+    A Koios match confirms an asset exists in the account; it is not a
+    price. Ticker-based pricing is currently the ONLY real pricing path
+    for Cardano native assets, so it now runs unconditionally for every
+    asset with a ticker, rather than being gated behind match status. The
+    on-chain position lookup this function used to do (a live Koios call
+    per Cardano wallet, feeding only the now-removed dead branch) has been
+    removed entirely -- it fetched data nothing here actually used for
+    pricing, at a real cost (one more Koios call in the per-wallet fan-out
+    -- see ABCT-SUMMARY-PERF-20260919). If a future change wants Koios-
+    sourced quantity/existence data here, it should be its own clearly-
+    purposed fetch, not a leftover from when this integration was TapTools
+    (which did provide ADA-denominated values, unlike Koios).
+    """
     import aiosqlite
     from config import DATABASE_PATH
-    from services.taptools import taptools_wallet_service
 
     # Get non-ignored assets
     async with aiosqlite.connect(DATABASE_PATH) as db:
@@ -138,24 +167,6 @@ async def calculate_wallet_native_assets_value(wallet_id: int, blockchain: str, 
     if not assets:
         return 0.0
 
-    # Get ADA price for conversions
-    ada_price_usd = await pricing_service.get_price('ADA')
-
-    # For Cardano, try to get on-chain wallet data for pricing
-    taptools_positions = {}
-    if blockchain == 'cardano' and await taptools_wallet_service.is_configured() and assets:
-        try:
-            wallet_address = assets[0].get('wallet_address')
-            if wallet_address:
-                portfolio = await taptools_wallet_service.get_wallet_portfolio(wallet_address)
-                if portfolio and portfolio.get('positions'):
-                    for pos in portfolio['positions']:
-                        unit = pos.get('unit', '')
-                        if unit and unit != 'lovelace':
-                            taptools_positions[unit] = pos
-        except Exception:
-            pass
-
     total_value_usd = 0.0
 
     for asset in assets:
@@ -166,40 +177,31 @@ async def calculate_wallet_native_assets_value(wallet_id: int, blockchain: str, 
         if actual_qty == 0:
             continue
 
-        # Try on-chain wallet data first for Cardano.
-        # ABCT-CARDANO-TAPTOOLS-KEYFIX-20260919: this used to read
-        # pos.get('adaValue', 0) -- camelCase -- but services/taptools.py
-        # only ever sets pos['ada_value'] -- snake_case. The lookup always
-        # missed, total_ada was always 0.0, and because this was `elif` (not
-        # a second `if`), a real Koios match ALSO skipped the ticker-based
-        # fallback that would otherwise have priced the asset. Net effect:
-        # any Cardano native asset Koios successfully matched got $0,
-        # silently, forever -- worse than not having the integration, since
-        # the more assets Koios recognized, the more of the portfolio
-        # disappeared. Confirmed live: user reported "a ton showing 0s."
-        #
-        # Fix: correct the key name, and stop using elif -- a Koios match
-        # with a genuine positive value should still skip the fallback
-        # (avoid double-pricing when we have better on-chain data), but a
-        # match that comes back zero/missing must fall through to the
-        # ticker price rather than being silently left unpriced the way
-        # today's bug does.
-        priced_on_chain = False
-        if blockchain == 'cardano' and asset.get('asset_id') in taptools_positions:
-            pos = taptools_positions[asset['asset_id']]
-            total_ada = float(pos.get('ada_value', 0) or 0)
-            if total_ada > 0 and ada_price_usd:
-                total_value_usd += total_ada * ada_price_usd
-                priced_on_chain = True
-        # Fallback to direct USD pricing -- runs whenever the on-chain path
-        # didn't produce a usable value, not only when there was no match.
-        if not priced_on_chain and asset.get('ticker'):
+        # Ticker-based pricing -- the only real pricing path currently
+        # available for Cardano (and every other chain's) native assets.
+        priced = False
+        if asset.get('ticker'):
             try:
                 price_usd = await pricing_service.get_price(asset['ticker'].upper())
                 if price_usd and price_usd > 0:
                     total_value_usd += actual_qty * price_usd
+                    priced = True
             except Exception:
                 pass
+
+        if not priced:
+            # Explicit, not silent: an asset with no ticker match anywhere
+            # (or a ticker whose price lookup failed/returned nothing)
+            # contributes $0 to the total the exact same way a genuinely
+            # worthless asset would -- log it so "why is my total lower
+            # than expected" is answerable from logs instead of requiring
+            # a DB query, the same lesson as the balance anomaly guard
+            # (ABCT-BALANCE-GUARD-20260919).
+            logger.info(
+                "Native asset unpriced: wallet=%s asset_id=%s ticker=%s -- "
+                "contributing $0 to portfolio value",
+                wallet_id, asset.get('asset_id'), asset.get('ticker'),
+            )
 
     return total_value_usd
 

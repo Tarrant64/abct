@@ -1,26 +1,35 @@
 """
 Regression tests for ABCT-CARDANO-TAPTOOLS-KEYFIX-20260919.
 
-Root cause: routers/portfolio.py's calculate_wallet_native_assets_value()
-read `pos.get('adaValue', 0)` (camelCase) from a Koios-matched position, but
-services/taptools.py's get_wallet_portfolio() only ever sets
-`pos['ada_value']` (snake_case). The lookup always missed -> total_ada was
-always 0.0 -> because the pricing branch was `elif`, not a second `if`, a
-genuine Koios match ALSO skipped the ticker-based fallback that would
-otherwise have priced the asset. Confirmed live: user reported "a ton
-showing 0s" -- the more assets Koios recognized, the more of the portfolio
-silently disappeared.
+CONFIRMED LIVE: user reported "a ton showing 0s" on their dashboard.
 
-Fix: correct the key name, and replace elif with an explicit
-`priced_on_chain` flag so the ticker fallback only gets skipped when the
-on-chain path produced a REAL usable value -- a Koios match that comes
-back zero or missing must still fall through to ticker pricing.
+Root cause, round 2 (round 1 -- fixing the pos.get('adaValue', 0) /
+pos['ada_value'] camelCase mismatch alone -- was a real but secondary bug
+that would NOT have fixed the user's report): the `elif` in
+calculate_wallet_native_assets_value() treated a Koios "match" (an asset
+present in the stake account's on-chain position list) as having ALREADY
+priced the asset, skipping the ticker-based fallback that would otherwise
+price it. That assumption was always false, independent of the key-name
+bug: services/taptools.py hardcodes `'ada_value': 0` for every position
+because Koios does not return pricing data at all -- only quantity and
+existence. So even with the key name fixed, every "matched" asset would
+still read ada_value=0, `total_ada > 0` would still fail, and the ticker
+fallback would still never run. The more assets Koios recognized, the more
+of the portfolio silently zeroed -- worse than no integration at all.
 
-Mocks taptools_wallet_service and pricing_service -- no live calls.
-Exercises the real calculate_wallet_native_assets_value against a real
-temporary SQLite file.
+Fix: a Koios match is not a price. The on-chain position lookup (a live
+Koios call that fed only this now-removed dead branch) has been removed
+entirely, and ticker-based pricing -- the only real pricing path currently
+available for Cardano native assets -- now runs unconditionally for every
+asset with a ticker. An asset that ends up unpriced (no ticker anywhere,
+or a ticker whose price lookup failed) is logged explicitly rather than
+silently folded into a $0 contribution with no trace.
+
+No live calls -- pricing_service is mocked. Exercises the real
+calculate_wallet_native_assets_value against a real temporary SQLite file.
 """
 
+import logging
 import os
 import sqlite3
 import sys
@@ -74,49 +83,36 @@ def _insert_asset(db_path, asset_id, ticker_metadata=None, quantity="1000000", d
     conn.close()
 
 
-def _install_common_mocks(monkeypatch, positions, ada_price=1.0, ticker_prices=None):
-    ticker_prices = ticker_prices or {}
-
-    async def fake_is_configured():
-        return True
-
-    async def fake_get_wallet_portfolio(address):
-        return {"positions": positions}
-
-    async def fake_get_price(symbol):
-        if symbol == "ADA":
-            return ada_price
-        return ticker_prices.get(symbol, 0)
-
-    monkeypatch.setattr(portfolio.taptools_wallet_service, "is_configured", fake_is_configured)
-    monkeypatch.setattr(portfolio.taptools_wallet_service, "get_wallet_portfolio", fake_get_wallet_portfolio)
-    monkeypatch.setattr(portfolio.pricing_service, "get_price", fake_get_price)
-
-
 @pytest.mark.asyncio
-async def test_koios_matched_asset_with_real_value_gets_priced(tmp_path, monkeypatch):
+async def test_asset_koios_would_have_matched_gets_priced_via_ticker(tmp_path, monkeypatch):
+    """The exact shape of the user's report: an asset Koios recognizes
+    (would have been in taptools_positions under the old code) must still
+    get a real, non-zero valuation -- via ticker pricing, since Koios never
+    provides a price. Verified to fail against the pre-fix code below."""
     db_path = _make_test_db(tmp_path)
     monkeypatch.setattr(config, "DATABASE_PATH", db_path)
-    _insert_asset(db_path, "policyANDassetSTRIKE")
+    _insert_asset(db_path, "policyANDassetSTRIKE", ticker_metadata="STRIKE", quantity="5", decimals=0)
 
-    positions = [{"unit": "policyANDassetSTRIKE", "ada_value": 100.0}]
-    _install_common_mocks(monkeypatch, positions, ada_price=0.5)
+    async def fake_get_price(symbol):
+        return 10.0 if symbol == "STRIKE" else 0
+
+    monkeypatch.setattr(portfolio.pricing_service, "get_price", fake_get_price)
 
     total = await portfolio.calculate_wallet_native_assets_value(WALLET_ID, "cardano", USER_ID)
 
-    # 100 ADA worth * $0.50/ADA = $50 -- this is the regression: pre-fix,
-    # pos.get('adaValue', 0) always returned 0, so this was always $0.
-    assert total == pytest.approx(50.0)
+    assert total == pytest.approx(50.0)  # 5 STRIKE * $10.00
 
 
 @pytest.mark.asyncio
-async def test_unmatched_asset_still_falls_back_to_ticker_price(tmp_path, monkeypatch):
+async def test_unmatched_asset_still_prices_correctly(tmp_path, monkeypatch):
     db_path = _make_test_db(tmp_path)
     monkeypatch.setattr(config, "DATABASE_PATH", db_path)
     _insert_asset(db_path, "policyANDassetUNKNOWN", ticker_metadata="UNKNOWN", quantity="10", decimals=0)
 
-    positions = []  # Koios has no position for this asset at all
-    _install_common_mocks(monkeypatch, positions, ticker_prices={"UNKNOWN": 2.0})
+    async def fake_get_price(symbol):
+        return 2.0 if symbol == "UNKNOWN" else 0
+
+    monkeypatch.setattr(portfolio.pricing_service, "get_price", fake_get_price)
 
     total = await portfolio.calculate_wallet_native_assets_value(WALLET_ID, "cardano", USER_ID)
 
@@ -124,37 +120,19 @@ async def test_unmatched_asset_still_falls_back_to_ticker_price(tmp_path, monkey
 
 
 @pytest.mark.asyncio
-async def test_koios_match_with_zero_value_still_falls_back_to_ticker_price(tmp_path, monkeypatch):
-    """The specific case the old elif silently broke: Koios recognizes the
-    asset (asset_id is in taptools_positions) but returns a zero/absent
-    ada_value -- this must NOT be left unpriced."""
+async def test_unpriced_asset_is_logged_explicitly_not_silent(tmp_path, monkeypatch, caplog):
+    """An asset with no ticker anywhere must not just silently contribute
+    $0 -- it should be discoverable from logs without a DB query."""
     db_path = _make_test_db(tmp_path)
     monkeypatch.setattr(config, "DATABASE_PATH", db_path)
-    _insert_asset(db_path, "policyANDassetINDY", ticker_metadata="INDY", quantity="5", decimals=0)
+    _insert_asset(db_path, "policyANDassetNOTICKER", ticker_metadata=None, quantity="1", decimals=0)
 
-    positions = [{"unit": "policyANDassetINDY", "ada_value": 0}]  # matched, but zero
-    _install_common_mocks(monkeypatch, positions, ticker_prices={"INDY": 3.0})
+    with caplog.at_level(logging.INFO, logger="routers.portfolio"):
+        total = await portfolio.calculate_wallet_native_assets_value(WALLET_ID, "cardano", USER_ID)
 
-    total = await portfolio.calculate_wallet_native_assets_value(WALLET_ID, "cardano", USER_ID)
-
-    assert total == pytest.approx(15.0), (
-        "a Koios match with a zero value must still fall through to ticker pricing, "
-        "not end up silently unpriced"
+    assert total == 0.0
+    assert any("unpriced" in r.message.lower() and "policyANDassetNOTICKER" in r.message for r in caplog.records), (
+        "an unpriced asset must be logged by asset_id, not just silently dropped"
     )
 
 
-@pytest.mark.asyncio
-async def test_koios_match_with_real_value_does_not_also_apply_ticker_fallback(tmp_path, monkeypatch):
-    """Once a Koios match carries a real non-zero value, the ticker fallback
-    must be skipped -- not double-priced."""
-    db_path = _make_test_db(tmp_path)
-    monkeypatch.setattr(config, "DATABASE_PATH", db_path)
-    _insert_asset(db_path, "policyANDassetLQ", ticker_metadata="LQ", quantity="7", decimals=0)
-
-    positions = [{"unit": "policyANDassetLQ", "ada_value": 10.0}]
-    _install_common_mocks(monkeypatch, positions, ada_price=2.0, ticker_prices={"LQ": 999.0})
-
-    total = await portfolio.calculate_wallet_native_assets_value(WALLET_ID, "cardano", USER_ID)
-
-    # Must be 10 ADA * $2.00 = $20 (on-chain path), NOT also + 7 * $999 (ticker fallback).
-    assert total == pytest.approx(20.0)
