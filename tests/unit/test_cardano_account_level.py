@@ -60,6 +60,7 @@ def _make_test_db(tmp_path):
             label TEXT,
             label_is_auto INTEGER DEFAULT 0,
             stake_address TEXT,
+            ada_handle TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(user_id, address, blockchain)
@@ -214,3 +215,149 @@ async def test_blockfrost_fallback_arithmetic_matches_koios_fixture():
     svc.get_stake_account_info = fake_get_stake_account_info
     utxo = await cm.CardanoService.get_account_utxo_ada(svc, STAKE_ADDRESS)
     assert utxo == pytest.approx(36958.050955)  # == Koios utxo, exactly
+
+
+# --- Commit 3: account-level native assets --------------------------------
+#
+# Same missing-address bug, token half: STRIKE/INDY/LQ (and everything
+# else) sitting in an unregistered address were invisible the same way ADA
+# was. Fix: source token quantity/existence from Koios's account_assets
+# (already fetched via get_wallet_portfolio for the ADA balance -- one call
+# now does both), attributed to the canonical wallet only. Same
+# write-time-collapse dedup as ADA: a token existing 9x in a stake group
+# must appear in native_assets exactly once, not 9 times.
+
+
+def _insert_native_asset(db_path, wallet_id, asset_id, quantity="1", user_id=USER_ID):
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "INSERT INTO native_assets (wallet_id, user_id, asset_id, policy_id, asset_name, quantity, decimals) "
+        "VALUES (?, ?, ?, '', '', ?, 0)",
+        (wallet_id, user_id, asset_id, quantity),
+    )
+    conn.commit()
+    conn.close()
+
+
+@pytest.mark.asyncio
+async def test_native_assets_appear_once_per_stake_group_not_nine_times(tmp_path, monkeypatch):
+    """The token-side twin of the ADA dedup test: 9 wallets, 1 stake key,
+    a Koios account_assets list with 2 tokens -- each token must end up in
+    native_assets exactly once (on the canonical wallet), never 9 times."""
+    db_path = _make_test_db(tmp_path)
+    monkeypatch.setattr(database, "DATABASE_PATH", db_path)
+
+    wallet_ids = []
+    for i in range(9):
+        wid = _insert_wallet(db_path, f"addr1_vault_{i}", label="vault" if i == 3 else None,
+                              stake_address=STAKE_ADDRESS)
+        wallet_ids.append(wid)
+    canonical_id = wallet_ids[3]
+
+    # Pre-existing per-address rows on a couple of NON-canonical wallets --
+    # simulating what the old per-address fetch left behind. These must be
+    # cleared, not left to double-count alongside the canonical row.
+    _insert_native_asset(db_path, wallet_ids[0], "policySTRIKE_stale", quantity="999")
+
+    async def fake_get_wallet_portfolio(address):
+        return {
+            "utxo_ada": 36958.050955,
+            "rewards_available_ada": 1393.039880,
+            "positions": [
+                {"unit": "policySTRIKE", "policy_id": "policy", "asset_name": "STRIKE",
+                 "raw_quantity": 500, "decimals": 0},
+                {"unit": "policyINDY", "policy_id": "policy2", "asset_name": "INDY",
+                 "raw_quantity": 250, "decimals": 0},
+            ],
+        }
+
+    monkeypatch.setattr(wallets_router.taptools_wallet_service, "get_wallet_portfolio", fake_get_wallet_portfolio)
+
+    for i, wid in enumerate(wallet_ids):
+        wallet = await database.get_wallet_by_address(f"addr1_vault_{i}", "cardano", user_id=USER_ID)
+        await wallets_router._refresh_wallet_balance(wallet)
+
+    conn = sqlite3.connect(db_path)
+    rows = conn.execute("SELECT wallet_id, asset_id, quantity FROM native_assets").fetchall()
+    conn.close()
+
+    strike_rows = [r for r in rows if r[1] == "policySTRIKE"]
+    indy_rows = [r for r in rows if r[1] == "policyINDY"]
+    stale_rows = [r for r in rows if r[1] == "policySTRIKE_stale"]
+
+    assert len(strike_rows) == 1 and strike_rows[0][0] == canonical_id and strike_rows[0][2] == "500"
+    assert len(indy_rows) == 1 and indy_rows[0][0] == canonical_id and indy_rows[0][2] == "250"
+    assert stale_rows == [], "a non-canonical member's stale per-address assets must be cleared, not left to double-count"
+
+
+@pytest.mark.asyncio
+async def test_ada_handle_detection_restored_for_grouped_wallet(tmp_path, monkeypatch):
+    """ADA Handle detection reads per-address native_assets and went inert
+    for grouped wallets once the ADA-only commit stopped calling the
+    per-address fetch for them. Restored via account-level assets here --
+    a strict superset of what the old per-address fetch could ever find."""
+    db_path = _make_test_db(tmp_path)
+    monkeypatch.setattr(database, "DATABASE_PATH", db_path)
+    wallet_id = _insert_wallet(db_path, "addr1_handle_wallet", label="vault", stake_address=STAKE_ADDRESS)
+
+    handle_asset_name = "chriscata"
+    handle_policy_id = "f0ff48bbb7bbe9d59a40f1ce90e9e9d0ff5002ec48f232b49ca0fb9a"  # ADA_HANDLE_POLICY_ID
+
+    async def fake_get_wallet_portfolio(address):
+        return {
+            "utxo_ada": 100.0,
+            "rewards_available_ada": 0.0,
+            "positions": [
+                {"unit": f"{handle_policy_id}{handle_asset_name}", "policy_id": handle_policy_id,
+                 "asset_name": handle_asset_name, "raw_quantity": 1, "decimals": 0},
+            ],
+        }
+
+    monkeypatch.setattr(wallets_router.taptools_wallet_service, "get_wallet_portfolio", fake_get_wallet_portfolio)
+
+    wallet = await database.get_wallet_by_address("addr1_handle_wallet", "cardano", user_id=USER_ID)
+    result = await wallets_router._refresh_wallet_balance(wallet)
+
+    assert result["ada_handle"] == "$chriscata"
+
+    conn = sqlite3.connect(db_path)
+    row = conn.execute("SELECT ada_handle FROM wallets WHERE id = ?", (wallet_id,)).fetchone()
+    conn.close()
+    assert row[0] == "$chriscata"
+
+
+@pytest.mark.asyncio
+async def test_enterprise_address_native_assets_path_still_unaffected(tmp_path, monkeypatch):
+    """Enterprise addresses (no stake key) must keep using the original
+    per-address native_assets fetch, completely untouched by commit 3."""
+    db_path = _make_test_db(tmp_path)
+    monkeypatch.setattr(database, "DATABASE_PATH", db_path)
+    _insert_wallet(db_path, "addr1_enterprise2", stake_address=None)
+
+    async def fake_get_stake_address(address):
+        return None
+
+    async def fake_get_address_info(address):
+        return {
+            "balance_ada": "10.0",
+            "native_assets": [{"asset_id": "policyX", "policy_id": "p", "asset_name": "X",
+                                "quantity": "3", "decimals": 0}],
+            "source": "blockfrost",
+        }
+
+    portfolio_called = []
+
+    async def fake_get_wallet_portfolio(address):
+        portfolio_called.append(address)
+        return None
+
+    monkeypatch.setattr(cardano_module.cardano_service, "get_stake_address", fake_get_stake_address)
+    monkeypatch.setattr(cardano_module.cardano_service, "get_address_info", fake_get_address_info)
+    monkeypatch.setattr(wallets_router.taptools_wallet_service, "get_wallet_portfolio", fake_get_wallet_portfolio)
+
+    wallet = await database.get_wallet_by_address("addr1_enterprise2", "cardano", user_id=USER_ID)
+    result = await wallets_router._refresh_wallet_balance(wallet)
+
+    assert result["success"] is True
+    assert result["native_assets_count"] == 1
+    assert portfolio_called == []

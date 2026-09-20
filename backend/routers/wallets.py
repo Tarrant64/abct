@@ -815,14 +815,56 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
 
                     if account_ada is not None:
                         await save_balance(wallet_id, str(account_ada), 'ADA')
+
+                        # ABCT-CARDANO-ACCOUNT-LEVEL-20260919 (native
+                        # assets): the same missing-address bug applied to
+                        # STRIKE/INDY/LQ and every other token, not just
+                        # ADA -- a token sitting in one of the 3 addresses
+                        # ABCT never registered was invisible the same way.
+                        # Koios's account_assets (already fetched above via
+                        # get_wallet_portfolio, just previously used only
+                        # for valuation) is account-wide, so source token
+                        # quantity/existence from it here rather than the
+                        # per-address native_assets fetch. Only available
+                        # when the Koios path succeeded -- the Blockfrost
+                        # fallback (ADA-only) has no asset list, so a
+                        # fallback-only refresh leaves native_assets as
+                        # whatever they were until Koios next succeeds.
+                        account_assets = []
+                        ada_handle = None
+                        if portfolio and portfolio.get('positions') is not None:
+                            account_assets = [
+                                {
+                                    'asset_id': pos.get('unit', ''),
+                                    'policy_id': pos.get('policy_id', ''),
+                                    'asset_name': pos.get('asset_name', ''),
+                                    'quantity': str(pos.get('raw_quantity', 0)),
+                                    'decimals': pos.get('decimals', 0),
+                                }
+                                for pos in portfolio['positions']
+                            ]
+                            await save_native_assets(wallet_id, account_assets)
+                            # Restored: this ran on the old per-address
+                            # fetch and went inert once that fetch stopped
+                            # running for grouped wallets in the ADA-only
+                            # commit. account_assets covers the whole
+                            # account, so detection here is a strict
+                            # superset of what the per-address path could
+                            # ever find.
+                            ada_handle = detect_ada_handle(account_assets)
+                            if ada_handle:
+                                await update_wallet_ada_handle(wallet_id, ada_handle)
+
                         # Collapse at write time: exactly one row in this
-                        # stake group may hold a nonzero balance, or every
-                        # SUM(balances) query across the app double-counts
-                        # this account (the vault bug in reverse).
+                        # stake group may hold a nonzero balance or the
+                        # account's tokens, or every SUM(balances)/asset
+                        # query across the app double- (or N-times-)
+                        # counts this account (the vault bug in reverse).
                         for member in group:
                             if member['id'] != wallet_id:
                                 try:
                                     await save_balance(member['id'], '0', 'ADA')
+                                    await save_native_assets(member['id'], [])
                                 except Exception as e:
                                     logger.warning(f"Failed to zero sibling wallet {member['id']}: {e}")
 
@@ -835,6 +877,8 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
                             'stake_address': stake_address,
                             'canonical': True,
                             'rewards_available_ada': portfolio.get('rewards_available_ada') if portfolio else None,
+                            'native_assets_count': len(account_assets),
+                            'ada_handle': ada_handle,
                         }
                     # Both Koios and the Blockfrost fallback failed -- fall
                     # through to the per-address path below rather than
@@ -843,9 +887,13 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
                 else:
                     # Non-canonical member of an already-resolved stake
                     # group: the canonical member's own refresh (above)
-                    # already carries or will carry this account's balance.
-                    # No external call needed for this wallet at all.
+                    # already carries or will carry this account's balance
+                    # and tokens. No external call needed for this wallet
+                    # at all -- defensively re-zero both here too (cheap,
+                    # DB-only) in case this wallet's own turn comes up
+                    # before the canonical member has ever run.
                     await save_balance(wallet_id, '0', 'ADA')
+                    await save_native_assets(wallet_id, [])
                     return {
                         'address': address,
                         'success': True,
