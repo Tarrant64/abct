@@ -633,6 +633,32 @@ class CardanoService:
             logger.error(f"Error getting stake account info: {e}")
             return None
 
+    async def get_account_utxo_ada(self, stake_address: str) -> Optional[float]:
+        """UTXO-held (spendable) ADA for a stake account, via Blockfrost
+        (ABCT-CARDANO-ACCOUNT-LEVEL-20260919 fallback -- Koios's 'utxo'
+        field is primary and needs no arithmetic; this exists for when
+        Koios is unavailable).
+
+        Blockfrost's /accounts/{stake_address} has no direct UTXO-only
+        field -- controlled_amount includes unclaimed rewards. Spendable
+        balance = controlled_amount - withdrawable_amount. Verified against
+        a real account (2026-09-19 investigation): total_balance
+        38351.090835 - rewards_available 1393.039880 = utxo 36958.050955,
+        i.e. this identity held exactly for Koios's equivalent fields; see
+        tests/unit/test_cardano_account_level.py for the fixture assertion.
+        Not yet independently confirmed against Blockfrost's own fields for
+        the same account (no live call made) -- treat this fallback as
+        provisional until that's checked against real Blockfrost data.
+        """
+        account_info = await self.get_stake_account_info(stake_address)
+        if not account_info:
+            return None
+        controlled = account_info.get('controlled_ada')
+        withdrawable = account_info.get('withdrawable_ada')
+        if controlled is None or withdrawable is None:
+            return None
+        return controlled - withdrawable
+
     async def get_addresses_from_stake(self, stake_address: str) -> Optional[list]:
         """
         Get all payment addresses associated with a stake address.

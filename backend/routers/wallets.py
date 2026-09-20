@@ -14,10 +14,12 @@ from database import (
     get_wallet_assets, get_wallet_balance,
     get_cache, set_cache,
     update_wallet_ada_handle,
-    get_recent_balance_anomalies
+    get_recent_balance_anomalies,
+    set_wallet_stake_address, get_stake_group_wallets
 )
 from config import CACHE_TTL_COLD
 from services.cardano import cardano_service, is_stake_address, detect_ada_handle
+from services.taptools import taptools_wallet_service
 from services.bitcoin import bitcoin_service
 from services.ethereum import ethereum_service
 from services.solana import solana_service
@@ -762,6 +764,100 @@ async def _refresh_wallet_balance(wallet: dict) -> dict:
 
     try:
         if blockchain == 'cardano':
+            # ABCT-CARDANO-ACCOUNT-LEVEL-20260919: a Cardano hardware wallet
+            # reports the whole STAKE ACCOUNT, not one payment address --
+            # ABCT was summing individually-registered addresses, which is
+            # only ever as complete as the addresses the user happened to
+            # register. Route through the account level when a stake key is
+            # known; fall back to the original per-address fetch below for
+            # enterprise addresses (no stake key) or if the account-level
+            # fetch fails outright.
+            stake_address = wallet.get('stake_address')
+            if not stake_address:
+                try:
+                    stake_address = await cardano_service.get_stake_address(address)
+                except Exception as e:
+                    logger.debug(f"Stake address resolution failed for wallet {wallet_id}: {e}")
+                    stake_address = None
+                if stake_address:
+                    try:
+                        await set_wallet_stake_address(wallet_id, stake_address)
+                    except Exception as e:
+                        logger.warning(f"Failed to persist stake_address for wallet {wallet_id}: {e}")
+
+            if stake_address:
+                user_id = wallet.get('user_id')
+                group = await get_stake_group_wallets(user_id, stake_address) if user_id else []
+                canonical_id = group[0]['id'] if group else wallet_id
+
+                if wallet_id == canonical_id:
+                    portfolio = None
+                    account_ada = None
+                    account_source = None
+                    try:
+                        portfolio = await taptools_wallet_service.get_wallet_portfolio(address)
+                    except Exception as e:
+                        logger.warning(f"Koios account portfolio failed for stake {stake_address[:12]}...: {e}")
+                    if portfolio and portfolio.get('utxo_ada') is not None:
+                        account_ada = portfolio['utxo_ada']
+                        account_source = 'koios-account'
+                    else:
+                        # Blockfrost fallback -- see get_account_utxo_ada's
+                        # docstring for the controlled-minus-withdrawable
+                        # derivation and its fixture verification.
+                        try:
+                            fallback_ada = await cardano_service.get_account_utxo_ada(stake_address)
+                            if fallback_ada is not None:
+                                account_ada = fallback_ada
+                                account_source = 'blockfrost-account'
+                        except Exception as e:
+                            logger.warning(f"Blockfrost account fallback failed for stake {stake_address[:12]}...: {e}")
+
+                    if account_ada is not None:
+                        await save_balance(wallet_id, str(account_ada), 'ADA')
+                        # Collapse at write time: exactly one row in this
+                        # stake group may hold a nonzero balance, or every
+                        # SUM(balances) query across the app double-counts
+                        # this account (the vault bug in reverse).
+                        for member in group:
+                            if member['id'] != wallet_id:
+                                try:
+                                    await save_balance(member['id'], '0', 'ADA')
+                                except Exception as e:
+                                    logger.warning(f"Failed to zero sibling wallet {member['id']}: {e}")
+
+                        return {
+                            'address': address,
+                            'success': True,
+                            'balance': account_ada,
+                            'unit': 'ADA',
+                            'source': account_source,
+                            'stake_address': stake_address,
+                            'canonical': True,
+                            'rewards_available_ada': portfolio.get('rewards_available_ada') if portfolio else None,
+                        }
+                    # Both Koios and the Blockfrost fallback failed -- fall
+                    # through to the per-address path below rather than
+                    # reporting failure, so a transient outage doesn't wipe
+                    # out a previously-correct balance with nothing.
+                else:
+                    # Non-canonical member of an already-resolved stake
+                    # group: the canonical member's own refresh (above)
+                    # already carries or will carry this account's balance.
+                    # No external call needed for this wallet at all.
+                    await save_balance(wallet_id, '0', 'ADA')
+                    return {
+                        'address': address,
+                        'success': True,
+                        'balance': 0.0,
+                        'unit': 'ADA',
+                        'source': 'stake-group-member',
+                        'stake_address': stake_address,
+                        'canonical': False,
+                    }
+
+            # Enterprise address (no stake key) or the account-level fetch
+            # failed above -- original per-address path, unchanged.
             info = await cardano_service.get_address_info(address)
             if info:
                 await save_balance(wallet_id, info['balance_ada'], 'ADA')

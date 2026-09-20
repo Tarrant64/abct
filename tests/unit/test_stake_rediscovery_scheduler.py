@@ -38,6 +38,8 @@ def _make_test_db(tmp_path):
             address TEXT NOT NULL,
             blockchain TEXT NOT NULL,
             label TEXT,
+            label_is_auto INTEGER DEFAULT 0,
+            stake_address TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(user_id, address, blockchain)

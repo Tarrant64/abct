@@ -15,6 +15,7 @@ The public interface mirrors the old TapToolsWalletService so that
 the portfolio router endpoints continue to work without changes.
 """
 
+import asyncio
 import httpx
 import logging
 from typing import Dict, List, Optional
@@ -85,7 +86,10 @@ class WalletReconciliationService:
 
         Returns dict compatible with the old TapTools response shape:
             {
-                'ada_balance': float,        # Total ADA in lovelace / 1e6
+                'ada_balance': float,        # UTXO-held ADA -- spendable balance (== 'utxo_ada')
+                'utxo_ada': float,           # Same value, explicit name
+                'rewards_available_ada': float,  # Unclaimed staking rewards -- NOT in ada_balance
+                'total_balance_ada': float,  # utxo_ada + rewards_available_ada
                 'ada_value': float,          # ADA balance (value not available from Koios)
                 'liquid_value': float,       # Same as ada_balance (Koios has no DeFi split)
                 'num_tokens': int,           # Count of native asset types (excl. ADA)
@@ -94,6 +98,16 @@ class WalletReconciliationService:
                 'nft_positions': [...],      # NFT positions (quantity == 1)
                 'source': 'Koios'
             }
+
+        ABCT-CARDANO-ACCOUNT-LEVEL-20260919: 'ada_balance' now reports
+        Koios's 'utxo' field (spendable ADA held in UTXOs at this stake
+        key), matching what hardware wallets display, rather than folding
+        in unclaimed rewards -- see 'rewards_available_ada' for those
+        separately. Previously this read a field literally named 'amount',
+        which does not exist in Koios's account_info response (confirmed
+        against the real schema fields: utxo, rewards_available,
+        total_balance) -- ada_balance was effectively always 0 before this
+        fix, silently.
         """
         # Derive stake key from address
         stake_address = await self._address_to_stake(address)
@@ -107,16 +121,23 @@ class WalletReconciliationService:
             return cached
 
         try:
-            # 1. ADA balance
-            info = await self._koios_get("/account_info", {"_stake_address": stake_address})
+            # account_info and account_assets are independent of each other
+            # (both take only stake_address) -- gather them concurrently
+            # rather than sequentially, a free latency win once resolve
+            # (above) has the stake key.
+            info, assets = await asyncio.gather(
+                self._koios_get("/account_info", {"_stake_address": stake_address}),
+                self._koios_get("/account_assets", {"_stake_address": stake_address}),
+            )
+
             if not info or not isinstance(info, list) or not info:
                 return None
             account = info[0]
-            ada_lovelace = int(account.get('amount', 0))
-            ada_balance = ada_lovelace / 1_000_000.0
+            utxo_ada = float(account.get('utxo', 0) or 0)
+            rewards_available_ada = float(account.get('rewards_available', 0) or 0)
+            total_balance_ada = float(account.get('total_balance', utxo_ada + rewards_available_ada) or 0)
+            ada_balance = utxo_ada
 
-            # 2. Native assets
-            assets = await self._koios_get("/account_assets", {"_stake_address": stake_address})
             positions = []
             nft_positions = []
             num_tokens = 0
@@ -164,6 +185,9 @@ class WalletReconciliationService:
 
             result = {
                 'ada_balance': ada_balance,
+                'utxo_ada': utxo_ada,
+                'rewards_available_ada': rewards_available_ada,
+                'total_balance_ada': total_balance_ada,
                 'ada_value': ada_balance,  # Koios has no pricing
                 'liquid_value': ada_balance,  # no DeFi split on-chain
                 'num_tokens': num_tokens,
@@ -171,6 +195,7 @@ class WalletReconciliationService:
                 'positions': positions,
                 'nft_positions': nft_positions,
                 'source': 'Koios',
+                'stake_address': stake_address,
             }
 
             await self._cache_set(cache_key, result)

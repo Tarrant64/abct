@@ -192,6 +192,7 @@ class StakeRediscoveryService:
                                     new_addr, "cardano",
                                     label=f"Discovered ({stake_address[:12]}...)",
                                     user_id=user_id,
+                                    is_auto_label=True,
                                 )
                                 saved = await get_wallet_by_address(
                                     new_addr, "cardano", user_id=user_id
