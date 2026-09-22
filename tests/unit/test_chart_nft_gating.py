@@ -67,12 +67,21 @@ def _install_null_cache(monkeypatch):
 # get_unified_chart
 # ---------------------------------------------------------------------------
 
+ON_CHAIN_VALUE = 13000.0
+EXCHANGE_VALUE = 1109.58
+# total_value is deliberately the sum of every component below (including
+# NFTs) so the on_chain + off_chain == total identity is meaningful to
+# assert, matching how the snapshot writer actually builds this row
+# (services/snapshot.py sums every component, NFTs included, unconditionally).
+TOTAL_VALUE_WITH_NFTS = ON_CHAIN_VALUE + EXCHANGE_VALUE + NFT_VALUE_USD
+
+
 async def _wdb_rows_fixture():
     return [{
         "date": "2026-09-20",
-        "total_value": 17225.86,
-        "on_chain_value": 13000.0,
-        "exchange_value": 1109.58,
+        "total_value": TOTAL_VALUE_WITH_NFTS,
+        "on_chain_value": ON_CHAIN_VALUE,
+        "exchange_value": EXCHANGE_VALUE,
         "staking_value": 0.0,
         "defi_value": 0.0,
         "nft_value": NFT_VALUE_USD,
@@ -96,12 +105,21 @@ async def test_unified_chart_excludes_nfts_by_default(monkeypatch):
     # Informational breakdown always reports the raw NFT component...
     assert point["breakdown"]["components"]["nfts"] == pytest.approx(NFT_VALUE_USD)
     # ...but the total (what the mobile chart plots) has it subtracted.
-    assert point["total_value"] == pytest.approx(17225.86 - NFT_VALUE_USD)
+    assert point["total_value"] == pytest.approx(TOTAL_VALUE_WITH_NFTS - NFT_VALUE_USD)
+    # ABCT-MOBILE-VALUE-MISMATCH-20260921-B: off_chain_value_usd is a
+    # component surfaced directly to the client and must be gated the same
+    # way as total, not just total on its own -- otherwise on_chain +
+    # off_chain != total, and off_chain alone silently re-exposes NFT value.
+    assert point["off_chain_value"] == pytest.approx(EXCHANGE_VALUE)
+    assert point["on_chain_value"] + point["off_chain_value"] == pytest.approx(point["total_value"])
 
 
 async def test_unified_chart_includes_nfts_when_enabled(monkeypatch):
     result = await _run_unified_chart(monkeypatch, include_nfts=True)
-    assert result["data"][0]["total_value"] == pytest.approx(17225.86)
+    point = result["data"][0]
+    assert point["total_value"] == pytest.approx(TOTAL_VALUE_WITH_NFTS)
+    assert point["off_chain_value"] == pytest.approx(EXCHANGE_VALUE + NFT_VALUE_USD)
+    assert point["on_chain_value"] + point["off_chain_value"] == pytest.approx(point["total_value"])
 
 
 async def test_unified_chart_cache_key_varies_with_preference(monkeypatch):

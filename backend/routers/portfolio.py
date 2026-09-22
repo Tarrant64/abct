@@ -2602,9 +2602,19 @@ async def get_unified_chart(
         # above — this is what makes the mobile chart's latest point agree
         # with /portfolio/summary's header total instead of silently
         # re-including stale NFT valuations (ABCT-MOBILE-VALUE-MISMATCH-20260921).
+        #
+        # off_chain_value_usd must be gated the same way as total (not just
+        # total on its own) — ABCT-MOBILE-VALUE-MISMATCH-20260921-B: off_chain
+        # is a component of total (total = on_chain + off_chain, conceptually)
+        # and is surfaced to the client directly as off_chain_value_usd, so
+        # leaving NFTs in it while excluding them from total left the two
+        # inconsistent with each other (and with get_24h_hourly_chart, which
+        # already gates its own off_chain via nft_usd_for_total). nfts stays
+        # unconditional in breakdown.components below — informational only.
+        nfts_for_total = nfts if include_nfts else 0.0
         if not include_nfts:
             total = total - nfts
-        off_chain = exchange + staking + defi + nfts
+        off_chain = exchange + staking + defi + nfts_for_total
 
         data.append({
             "date": row['date'],

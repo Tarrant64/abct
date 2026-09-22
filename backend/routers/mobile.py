@@ -849,6 +849,19 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
 
     # Merge native tokens (IAG, STRIKE, etc.) into top_holdings
     # Place BEFORE staking merge so staking amounts ADD to native amounts
+    #
+    # ABCT-MOBILE-VALUE-MISMATCH-20260921-B: track how much of each chain's
+    # native_tokens_value_usd (from blockchain_summaries, computed by
+    # calculate_wallet_native_assets_value in portfolio.py) actually got
+    # itemized into a top_holdings row here. That figure and this merge's
+    # source (get_all_native_assets — a SEPARATE valuation with its own
+    # pricing/filtering) are independently computed and are not guaranteed
+    # to agree token-for-token, for ANY chain, not just Cardano. Any
+    # shortfall is made up below with one explicit "other <chain> tokens"
+    # placeholder row per chain, so a chain's declared native-token value
+    # is never silently dropped from top_holdings, and is never
+    # double-counted against tokens that WERE itemized here.
+    token_value_by_chain: Dict[str, float] = {}
     try:
         native_assets_data = await portfolio.get_all_native_assets(user_id=user_id)
         # Two passes so the per-token name/image resolutions run concurrently:
@@ -882,8 +895,38 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
                 "percentage": 0,
                 "image_url": token_image,
             }
+            chain = asset.get('blockchain', '')
+            if chain:
+                token_value_by_chain[chain] = token_value_by_chain.get(chain, 0.0) + val
     except Exception as e:
         logger.debug(f"Could not merge native tokens for top holdings: {e}")
+
+    # Reconcile: any chain whose declared native_tokens_value_usd exceeds
+    # what got itemized above gets one placeholder row for the remainder,
+    # so top_holdings never quietly loses value for chains whose tokens
+    # get_all_native_assets() didn't itemize the same way (e.g. no ticker
+    # match, a different price source, or a token skipped as "already
+    # counted" against an unrelated coin symbol).
+    for bs in blockchain_summaries:
+        declared = bs.get('native_tokens_value_usd', 0) or 0
+        if declared <= 0.01:
+            continue
+        covered = token_value_by_chain.get(bs['name'], 0.0)
+        shortfall = declared - covered
+        if shortfall <= 0.01:
+            continue
+        placeholder_symbol = f"{bs['symbol']}-OTHER"
+        symbol_agg[placeholder_symbol] = {
+            "name": f"Other {bs['name'].title()} tokens",
+            "symbol": placeholder_symbol,
+            "value_usd": round(shortfall, 2),
+            "native_amount": 0,
+            "native_price_usd": 0,
+            "price_change_24h": 0,
+            "wallet_count": bs['wallet_count'],
+            "percentage": 0,
+            "image_url": bs['image_url'],
+        }
 
     # Merge staking positions into top_holdings (per-token breakdown).
     # iter_staking_token_values is the shared valuation for EVERY position
