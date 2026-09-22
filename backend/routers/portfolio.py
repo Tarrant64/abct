@@ -2523,9 +2523,17 @@ async def get_unified_chart(
     }
     days = range_to_days.get(range, 7)
 
+    # ABCT-MOBILE-VALUE-MISMATCH-20260921: the NFT-inclusion preference must
+    # be part of the cache key (like mobile's own summary cache — see
+    # _summary_cache_key in routers/mobile.py) so a toggle takes effect
+    # immediately instead of waiting out a stale cached row computed under
+    # the other setting.
+    include_nfts = await get_nft_inclusion_preference(user_id)
+    nft_suffix = '' if include_nfts else '_exnft'
+
     # Check cache first
     chain_suffix = '_by_chain' if by_chain else ''
-    cache_key = f"unified_chart_{user_id}_{range}{chain_suffix}"
+    cache_key = f"unified_chart_{user_id}_{range}{chain_suffix}{nft_suffix}"
     cached = await get_cache(cache_key, user_id=user_id)
     if cached:
         cached['from_cache'] = True
@@ -2587,6 +2595,15 @@ async def get_unified_chart(
         tracked_tokens = row.get('tracked_tokens_value', 0) or 0
         custom_tokens = row.get('custom_tokens_value', 0) or 0
         total = row.get('total_value', 0) or 0
+        # row['total_value'] is the snapshot writer's sum, which always
+        # includes NFTs (services/snapshot.py bakes nft_value_usd into every
+        # historical row regardless of the user's preference). Subtract it
+        # here when the preference is off, same as get_portfolio_history()
+        # above — this is what makes the mobile chart's latest point agree
+        # with /portfolio/summary's header total instead of silently
+        # re-including stale NFT valuations (ABCT-MOBILE-VALUE-MISMATCH-20260921).
+        if not include_nfts:
+            total = total - nfts
         off_chain = exchange + staking + defi + nfts
 
         data.append({
@@ -2626,7 +2643,11 @@ async def get_24h_hourly_chart(
     by hourly historical prices. Off-chain values (exchanges, staking, DeFi,
     NFTs) are added as a static offset from the current portfolio totals.
     """
-    cache_key = f"portfolio_24h_hourly_{user_id}"
+    # ABCT-MOBILE-VALUE-MISMATCH-20260921: cache key must vary with the NFT
+    # preference (same reasoning as get_unified_chart above) so a toggle
+    # isn't masked by a cached row computed under the other setting.
+    include_nfts = await get_nft_inclusion_preference(user_id)
+    cache_key = f"portfolio_24h_hourly_{user_id}" + ('' if include_nfts else '_exnft')
     if not refresh:
         cached = await get_cache(cache_key, user_id=user_id)
         if cached:
@@ -2684,14 +2705,20 @@ async def get_24h_hourly_chart(
     # Sort timestamps chronologically
     sorted_times = sorted(all_times.keys())
 
-    # Static off-chain offset from current totals
+    # Static off-chain offset from current totals.
+    # totals['nft_usd'] (get_portfolio_totals) is the raw, ungated NFT value
+    # straight off the latest wallet_daily_balances row — it is reported in
+    # the breakdown below as informational regardless of the preference
+    # (same convention as get_portfolio_history/get_unified_chart), but only
+    # folded into off_chain/total when the preference is on.
     exchange_usd = float(totals.get('exchange_usd', 0) or 0)
     staking_usd = float(totals.get('staking_usd', 0) or 0)
     defi_usd = float(totals.get('defi_usd', 0) or 0)
     nft_usd = float(totals.get('nft_usd', 0) or 0)
+    nft_usd_for_total = nft_usd if include_nfts else 0.0
     tracked_tokens_usd = float(totals.get('tracked_tokens_usd', 0) or 0)
     custom_tokens_usd = float(totals.get('custom_tokens_usd', 0) or 0)
-    off_chain = exchange_usd + staking_usd + defi_usd + nft_usd
+    off_chain = exchange_usd + staking_usd + defi_usd + nft_usd_for_total
 
     # Build chart data points with carry-forward pricing.
     # Different tokens may have prices at different timestamps (e.g. ADA hourly

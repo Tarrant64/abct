@@ -814,18 +814,31 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
     blockchain_summaries.sort(key=lambda x: x['value_usd'], reverse=True)
 
     # Build top_holdings: aggregate by symbol (combine same-symbol across chains + staking)
+    #
+    # ABCT-MOBILE-VALUE-MISMATCH-20260921: bs['value_usd'] is the per-CHAIN
+    # display total (native_coin_value + native_tokens_value — see
+    # blockchain_summaries above), meant for the "blockchains" list card
+    # ("$X held on Cardano"). It must NOT be copied into the per-SYMBOL
+    # top_holdings bucket here: that silently folded every other Cardano
+    # native token's (IAG, STRIKE, etc.) USD value into the "ADA" row, while
+    # those same tokens are ALSO added as their own top_holdings entries a
+    # few lines below — double-counted, and inflating what the app displays
+    # as "ADA" above its true market value (the discrepancy vs.
+    # /portfolio/all-holdings, which only ever uses native_coin_value_usd
+    # for the coin's own row). Use native_coin_value_usd — the coin alone —
+    # so the two surfaces agree.
     symbol_agg = {}
     for bs in blockchain_summaries:
         sym = bs['symbol']
         if sym in symbol_agg:
-            symbol_agg[sym]['value_usd'] += bs['value_usd']
+            symbol_agg[sym]['value_usd'] += bs['native_coin_value_usd']
             symbol_agg[sym]['native_amount'] += bs['native_amount']
             symbol_agg[sym]['wallet_count'] += bs['wallet_count']
         else:
             symbol_agg[sym] = {
                 "name": bs['name'],
                 "symbol": sym,
-                "value_usd": bs['value_usd'],
+                "value_usd": bs['native_coin_value_usd'],
                 "native_amount": bs['native_amount'],
                 "native_price_usd": bs['native_price_usd'],
                 "price_change_24h": bs['price_change_24h'],
