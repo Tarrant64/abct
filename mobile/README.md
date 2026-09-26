@@ -162,6 +162,19 @@ Branch `refactor/fable-performance`, phases MOBILE-1..7:
   `CacheStore._fileKey`/`_canonicalize`, so both requests share one entry.
   See tests in `test/core/network/cache_store_test.dart` (group
   "CacheStore refresh-param canonicalization").
+- **2026-09-21 (ABCT-MOBILE-CHART-TOTAL-20260921)** — The Overview chart's
+  current-day point came from `wallet_daily_balances`, a periodic snapshot
+  recorded on its own schedule, while the Overview header
+  (`_compute_mobile_portfolio_summary`) recomputes live on every call, so
+  the two could disagree on "now" even after the same-day NFT-inclusion
+  gate fix (ABCT-MOBILE-VALUE-MISMATCH-20260921). Rather than reconcile two
+  independently computed numbers, `/api/mobile/chart/portfolio-history`'s
+  latest point now reuses the header's own live computation verbatim
+  (`_apply_live_total_to_latest_chart_point` in `backend/routers/mobile.py`),
+  for every range; earlier points are untouched, demo users are exempt, and
+  a failure in the override degrades to the original point rather than
+  losing the response. See tests in
+  `tests/unit/test_mobile_chart_total_matches_summary.py`.
 
 ## E2E Tests
 

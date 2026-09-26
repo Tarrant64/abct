@@ -2131,6 +2131,66 @@ async def get_mobile_portfolio_breakdown_history(
     return result
 
 
+def _apply_live_total_to_latest_chart_point(point: dict, live_summary: dict) -> None:
+    """Overwrite a wallet_daily_balances-shaped chart point's totals in place
+    with the numbers /api/mobile/portfolio/summary just computed live, so the
+    chart's latest point and the header agree exactly instead of drifting
+    apart (ABCT-MOBILE-CHART-TOTAL-20260921).
+
+    wallet_daily_balances is a periodically-collected snapshot (written by
+    services/offchain_collector.py and engine/materializer.py on their own
+    schedules), independent of this request, while
+    _compute_mobile_portfolio_summary recomputes live on every call — so the
+    two can disagree on the *current* point even though both fold in the
+    same NFT-inclusion gate. Rather than reconcile two independently
+    computed numbers, the chart's latest point now literally reuses the
+    header's own live computation (single source of truth). Only the last
+    point is touched; historical points have no live source to reconcile
+    against (see the backfill proposal in the task report) and are left as
+    wallet_daily_balances recorded them.
+
+    `point` keys match the get_unified_chart/get_24h_hourly_chart row shape
+    (total_value/on_chain_value/off_chain_value/breakdown.components) and
+    are mutated in place; `live_summary` is a _compute_mobile_portfolio_summary
+    result.
+    """
+    total = float(live_summary.get('total_value_usd', 0) or 0)
+    b = live_summary.get('breakdown', {}) or {}
+    self_custody = float((b.get('self_custody') or {}).get('value_usd', 0) or 0)
+    exchanges = float((b.get('exchanges') or {}).get('value_usd', 0) or 0)
+    staking = float((b.get('staking') or {}).get('value_usd', 0) or 0)
+    defi = float((b.get('defi') or {}).get('value_usd', 0) or 0)
+    # Raw/ungated — informational only, same convention breakdown.nfts
+    # already uses everywhere else in this file (see breakdown.components
+    # in get_unified_chart/get_24h_hourly_chart).
+    nfts = float((b.get('nfts') or {}).get('value_usd', 0) or 0)
+    tracked_tokens = float((b.get('tracked_tokens') or {}).get('value_usd', 0) or 0)
+    custom_tokens = float((b.get('custom_tokens') or {}).get('value_usd', 0) or 0)
+
+    # tracked_tokens/custom_tokens are reported outside on_chain/off_chain,
+    # same convention get_unified_chart/get_24h_hourly_chart already use for
+    # historical points, so off_chain is the total's residual after
+    # self-custody and those two (this folds the gated NFT contribution into
+    # off_chain without needing a separate preference lookup here).
+    off_chain = total - self_custody - tracked_tokens - custom_tokens
+
+    point['total_value'] = round(total, 2)
+    point['on_chain_value'] = round(self_custody, 2)
+    point['off_chain_value'] = round(off_chain, 2)
+    point['breakdown'] = {
+        'chains': (point.get('breakdown') or {}).get('chains', {}),
+        'components': {
+            'wallets': round(self_custody, 2),
+            'exchange': round(exchanges, 2),
+            'staking': round(staking, 2),
+            'defi': round(defi, 2),
+            'nfts': round(nfts, 2),
+            'tracked_tokens': round(tracked_tokens, 2),
+            'custom_tokens': round(custom_tokens, 2),
+        }
+    }
+
+
 @router.get("/chart/portfolio-history")
 async def get_mobile_portfolio_history(
     user_id: int = Depends(verify_session),
@@ -2150,6 +2210,13 @@ async def get_mobile_portfolio_history(
     unchanged and guaranteed. Default (slim=false) is byte-identical to the
     pre-slim response, including per-point "on_chain_value_usd",
     "off_chain_value_usd", and the six-component "breakdown".
+
+    ABCT-MOBILE-CHART-TOTAL-20260921: for non-demo users the LATEST point
+    (today/now) has its total_value_usd/on_chain_value_usd/off_chain_value_usd/
+    breakdown overwritten with the live numbers /portfolio/summary just
+    computed (see _apply_live_total_to_latest_chart_point), so the chart's
+    latest point always equals the header total. Every earlier point is
+    unchanged, still sourced from wallet_daily_balances.
     """
     try:
         # 24h range uses dedicated hourly endpoint
@@ -2164,6 +2231,24 @@ async def get_mobile_portfolio_history(
             unified_data = await portfolio.get_unified_chart(user_id=user_id, range=unified_range)
 
         data_points = unified_data.get('data', [])
+
+        # Overwrite the latest point with the live header total (see
+        # _apply_live_total_to_latest_chart_point docstring). Demo users keep
+        # their pre-generated demo series untouched. Any failure in this
+        # block (including the demo-user lookup itself) degrades to the
+        # original (pre-fix) wallet_daily_balances-sourced point rather than
+        # losing the whole chart response.
+        if data_points:
+            try:
+                username = await get_username_by_user_id(user_id)
+                if not (username and await is_demo_user(username)):
+                    live_summary = await _compute_mobile_portfolio_summary(
+                        user_id, refresh=False, include_sparklines=False)
+                    _apply_live_total_to_latest_chart_point(data_points[-1], live_summary)
+            except Exception as e:
+                logger.warning(
+                    f"Mobile chart: live total override failed for user {user_id}: {e}")
+
         if data_points:
             values = [(point.get('total_value') or 0) for point in data_points]
             starting_value = values[0] if values else 0
