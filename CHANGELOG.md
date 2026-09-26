@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **ADA Handle resolution failed for CIP-68 handles (GH #4)**: `resolve_ada_handle()` only built the legacy CIP-25 Blockfrost asset id (`ADA_HANDLE_POLICY_ID + hex(handle)`), so adding a wallet by handle returned "not found" for any handle minted or upgraded to CIP-68 — the majority of handles today. CIP-68 handles carry the `(222)` user-token label prefix (`000de140`) on the asset name under the same policy. The resolver now tries the CIP-68 asset id first, falls back to the legacy id, normalises the input (`$`/whitespace/case), and picks the actual quantity-1 holder if Blockfrost returns more than one address entry. `detect_ada_handle()` (auto-detection of a handle already held by a tracked wallet) had the mirror-image bug — a CIP-68 asset name fails the caller's UTF-8 decode and was left as raw hex instead of handle text — and is fixed the same way. 14 new unit tests (mocked Blockfrost, no live calls/API keys) added in `tests/unit/test_ada_handle_cip68_resolution.py`.
+
 ## [1.16.3] - 2026-08-09
 
 ### Security

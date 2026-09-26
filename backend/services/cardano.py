@@ -166,6 +166,42 @@ def _derive_stake_key_local(address: str) -> Optional[str]:
 
 ADA_HANDLE_POLICY_ID = 'f0ff48bbb7bbe9d59a40f1ce90e9e9d0ff5002ec48f232b49ca0fb9a'
 
+# CIP-67 asset-name label for the CIP-68 (222) "user token". ADA Handles
+# minted or upgraded to CIP-68 carry this 4-byte hex prefix before the
+# handle text in the asset name; the holder's wallet holds this user
+# token, while the paired reference token (label 100 / "000643b0") sits
+# at a script address holding the on-chain datum. See GH issue #4
+# (ABCT-ISSUE4-CIP68-2026-09-26).
+CIP68_HANDLE_LABEL_HEX = "000de140"
+
+
+def _is_hex_string(value: str) -> bool:
+    """True if value is a well-formed (even-length) hex string."""
+    if not value or len(value) % 2 != 0:
+        return False
+    try:
+        int(value, 16)
+        return True
+    except ValueError:
+        return False
+
+
+def _pick_handle_holder(addresses: List[dict]) -> Optional[str]:
+    """Pick the holder address from a Blockfrost /assets/{id}/addresses
+    response body.
+
+    ADA Handles are unique NFTs (quantity 1). In the ordinary case there
+    is exactly one entry; in the rare case Blockfrost returns more than
+    one (e.g. a UTXO split), prefer the entry actually holding quantity
+    '1' over just taking the first row.
+    """
+    if not addresses:
+        return None
+    for entry in addresses:
+        if entry.get('quantity') == '1':
+            return entry.get('address')
+    return addresses[0].get('address')
+
 
 def detect_ada_handle(native_assets: List[dict]) -> Optional[str]:
     """Detect an ADA Handle from a list of native assets.
@@ -179,7 +215,18 @@ def detect_ada_handle(native_assets: List[dict]) -> Optional[str]:
         policy_id = asset.get('policy_id', '')
         if policy_id == ADA_HANDLE_POLICY_ID:
             asset_name = asset.get('asset_name', '')
-            # asset_name is already decoded from hex in _get_address_blockfrost
+            if not asset_name:
+                continue
+            # CIP-68 handles fail the utf-8 decode the caller attempts
+            # before handing us asset_name (the 000de140 label bytes are
+            # not valid UTF-8 continuation bytes), so we see the raw hex
+            # string here instead of decoded text. Strip the label and
+            # decode the remainder before treating it as handle text.
+            if _is_hex_string(asset_name) and asset_name.lower().startswith(CIP68_HANDLE_LABEL_HEX):
+                try:
+                    asset_name = bytes.fromhex(asset_name[len(CIP68_HANDLE_LABEL_HEX):]).decode('utf-8')
+                except (ValueError, UnicodeDecodeError):
+                    continue
             if asset_name:
                 return f'${asset_name}'
     return None
@@ -278,7 +325,12 @@ class CardanoService:
         """Resolve an ADA Handle (e.g., '$chriscata') to a Cardano address.
 
         Uses the Blockfrost API to look up the handle NFT and find the
-        address that holds it.
+        address that holds it. Handles minted or upgraded since the
+        standard moved to CIP-68 carry the (222) user-token label prefix
+        (000de140) on the asset name under the same policy; older handles
+        use the bare legacy CIP-25 asset name. We try CIP-68 first (the
+        common case for handles resolved today) and fall back to legacy.
+        See GH issue #4 (ABCT-ISSUE4-CIP68-2026-09-26).
 
         Args:
             handle: The handle with or without '$' prefix
@@ -286,34 +338,47 @@ class CardanoService:
         Returns:
             The Cardano address holding the handle, or None if not found.
         """
-        # Strip '$' prefix if present
-        handle_name = handle.lstrip('$')
+        # Strip '$' prefix and whitespace, then normalise case: ADA Handles
+        # are minted lowercase-only, so a user-typed mixed-case handle
+        # (e.g. '$ChrisCata') must be lowercased to match the on-chain
+        # asset name.
+        handle_name = handle.strip().lstrip('$').strip().lower()
         if not handle_name:
             return None
 
         # Encode handle name to hex for asset lookup
         handle_hex = handle_name.encode('utf-8').hex()
-        asset_id = f"{ADA_HANDLE_POLICY_ID}{handle_hex}"
+        candidate_asset_ids = [
+            f"{ADA_HANDLE_POLICY_ID}{CIP68_HANDLE_LABEL_HEX}{handle_hex}",  # CIP-68 (222) user token
+            f"{ADA_HANDLE_POLICY_ID}{handle_hex}",  # legacy CIP-25 asset name
+        ]
 
-        try:
-            response = await blockfrost_fetch(
-                f"/assets/{asset_id}/addresses",
-                headers=await self._get_blockfrost_headers(),
-                timeout=30.0
-            )
+        for asset_id in candidate_asset_ids:
+            try:
+                response = await blockfrost_fetch(
+                    f"/assets/{asset_id}/addresses",
+                    headers=await self._get_blockfrost_headers(),
+                    timeout=30.0
+                )
 
-            if response.status_code == 200:
-                data = response.json()
-                if data and len(data) > 0:
-                    # The first address holding the handle NFT is the owner
-                    return data[0].get('address')
+                if response.status_code == 200:
+                    data = response.json()
+                    if data:
+                        holder = _pick_handle_holder(data)
+                        if holder:
+                            return holder
+                elif response.status_code != 404:
+                    logger.info(
+                        f"ADA Handle '{handle_name}' lookup for asset "
+                        f"{asset_id} returned status {response.status_code}"
+                    )
 
-            logger.info(f"ADA Handle '{handle_name}' not found (status {response.status_code})")
-            return None
+            except Exception as e:
+                logger.error(f"Error resolving ADA Handle '{handle_name}' via {asset_id}: {e}")
+                continue
 
-        except Exception as e:
-            logger.error(f"Error resolving ADA Handle '{handle_name}': {e}")
-            return None
+        logger.info(f"ADA Handle '{handle_name}' not found (checked CIP-68 and legacy asset ids)")
+        return None
 
     async def _get_address_blockfrost(self, address: str) -> Optional[dict]:
         """Fetch address data from Blockfrost API."""

@@ -268,3 +268,4 @@ archive/
 # - General noise that shouldn't be in the GitHub repo
 EXCLUDE/
 cdp_api_key*.json
+.venv/
