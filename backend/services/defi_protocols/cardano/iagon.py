@@ -13,11 +13,12 @@ import asyncio
 import logging
 from typing import List, Optional
 
-from config import BLOCKFROST_API_KEY, BLOCKFROST_BASE_URL
+from config import BLOCKFROST_BASE_URL
 from services.http_client import get_client, blockfrost_fetch
 from services.defi_protocols.base_adapter import (
     ProtocolAdapter, ProtocolPosition, DetectionMethod, PositionType
 )
+from services.defi_protocols.cardano.utils import get_blockfrost_headers
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +86,7 @@ class IagonAdapter(ProtocolAdapter):
         from database import get_cache, set_cache
 
         try:
-            headers = {"project_id": BLOCKFROST_API_KEY}
+            headers = await get_blockfrost_headers()
             client = get_client("blockfrost", timeout=15.0)
 
             # Load incremental scan state from persistent cache (7-day TTL)

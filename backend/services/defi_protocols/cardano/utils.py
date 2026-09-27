@@ -9,10 +9,26 @@ import bech32
 import logging
 from typing import Optional, Dict, List, Tuple
 
-from config import BLOCKFROST_API_KEY, BLOCKFROST_BASE_URL
+from config import BLOCKFROST_BASE_URL
 from services.http_client import blockfrost_fetch
+from services.api_key_manager import APIKeyManager
 
 logger = logging.getLogger(__name__)
+
+# DB-stored key (Settings page) first, env var fallback — matches every
+# other Blockfrost caller in the app. Shared by every Cardano DeFi protocol
+# adapter in this package. See ABCT-BF-KEY-UNIFY-2026-09-27.
+_blockfrost_keys = APIKeyManager("blockfrost", "BLOCKFROST_API_KEY")
+
+
+async def get_blockfrost_headers() -> dict:
+    """
+    Get Blockfrost headers with the key resolved from DB (Settings page)
+    first, env var fallback, per request — a key saved via Settings takes
+    effect without a restart.
+    """
+    key = await _blockfrost_keys.get_api_key()
+    return {"project_id": key} if key else {}
 
 
 def get_payment_credential(address: str) -> Optional[str]:
@@ -54,7 +70,7 @@ async def get_stake_address(address: str) -> Optional[str]:
         Stake address string (stake1...) or None
     """
     try:
-        headers = {"project_id": BLOCKFROST_API_KEY}
+        headers = await get_blockfrost_headers()
         response = await blockfrost_fetch(
             f"/addresses/{address}",
             headers=headers,
@@ -79,7 +95,7 @@ async def check_token_in_wallet(address: str, policy_id: str) -> list:
         List of matching assets with their quantities, or empty list
     """
     try:
-        headers = {"project_id": BLOCKFROST_API_KEY}
+        headers = await get_blockfrost_headers()
         page = 1
         matched = []
         while True:
@@ -130,7 +146,7 @@ async def get_wallet_utxos_at_script(
         List of matching UTXOs with amounts and datum info
     """
     try:
-        headers = {"project_id": BLOCKFROST_API_KEY}
+        headers = await get_blockfrost_headers()
         page = 1
         matched_utxos = []
         while True:
@@ -225,7 +241,7 @@ async def get_lp_token_info(unit: str) -> Optional[Dict]:
         Dict with total_supply, policy_id, asset_name_hex, metadata, or None
     """
     try:
-        headers = {"project_id": BLOCKFROST_API_KEY}
+        headers = await get_blockfrost_headers()
         response = await blockfrost_fetch(
             f"/assets/{unit}",
             headers=headers,
@@ -382,7 +398,7 @@ async def resolve_lp_value(
         # The pool address is typically a script address that holds the pool NFT
         # with the same policy as the LP token. Query Blockfrost for addresses
         # holding this specific asset.
-        headers = {"project_id": BLOCKFROST_API_KEY}
+        headers = await get_blockfrost_headers()
         response = await blockfrost_fetch(
             f"/assets/{lp_unit}/addresses",
             headers=headers,

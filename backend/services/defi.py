@@ -15,8 +15,16 @@ import logging
 
 import sys
 sys.path.insert(0, str(__file__).rsplit('/', 2)[0])
-from config import BLOCKFROST_API_KEY, BLOCKFROST_BASE_URL
+from config import BLOCKFROST_BASE_URL
 from services.http_client import get_client, blockfrost_fetch
+from services.api_key_manager import APIKeyManager
+
+# Shared Blockfrost key resolver: DB-stored key (Settings page) first, env
+# var fallback — same precedence/caching as engine/indexing/cardano_indexer.py
+# and friends. Resolved per-request (subject to the manager's own TTL cache),
+# never read once at import time, so a key saved via Settings takes effect
+# without a restart. See ABCT-BF-KEY-UNIFY-2026-09-27.
+_blockfrost_keys = APIKeyManager("blockfrost", "BLOCKFROST_API_KEY")
 
 # Protocol API endpoints
 INDIGO_API_BASE = "https://analytics.indigoprotocol.io"
@@ -495,35 +503,16 @@ class DeFiService:
     """Service for tracking Cardano DeFi positions."""
 
     def __init__(self):
-        # Default headers from env (used as fallback). The actual Blockfrost
-        # key is loaded from the DB at request time via _get_headers() —
-        # users typically save their key via the dashboard UI rather than
-        # in env vars, so a static env-only header would 403 immediately.
-        self.headers = {"project_id": BLOCKFROST_API_KEY}
-        self._blockfrost_key_cache = None
-        self._blockfrost_cache_time = None
-        self._blockfrost_cache_ttl = 60  # seconds
+        pass
 
     async def _get_headers(self) -> dict:
-        """Get Blockfrost headers with key resolved from DB (cached) or env fallback."""
-        from datetime import datetime, timedelta
-        now = datetime.utcnow()
-        if self._blockfrost_key_cache is not None and self._blockfrost_cache_time:
-            if now - self._blockfrost_cache_time < timedelta(seconds=self._blockfrost_cache_ttl):
-                return {"project_id": self._blockfrost_key_cache} if self._blockfrost_key_cache else {}
-        try:
-            from database import get_api_key
-            db_key = await get_api_key('blockfrost', user_id=1)
-            if db_key:
-                self._blockfrost_key_cache = db_key
-                self._blockfrost_cache_time = now
-                return {"project_id": db_key}
-        except Exception:
-            pass
-        env_key = BLOCKFROST_API_KEY or ''
-        self._blockfrost_key_cache = env_key
-        self._blockfrost_cache_time = now
-        return {"project_id": env_key} if env_key else {}
+        """
+        Get Blockfrost headers with the key resolved from DB (Settings page)
+        first, env var fallback — via the shared APIKeyManager so this stays
+        in lockstep with every other Blockfrost caller in the app.
+        """
+        key = await _blockfrost_keys.get_api_key()
+        return {"project_id": key} if key else {}
 
     async def analyze_wallet_defi(self, address: str) -> Optional[Dict]:
         """

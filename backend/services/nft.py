@@ -25,13 +25,18 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import BLOCKFROST_API_KEY, BLOCKFROST_BASE_URL, TAPTOOLS_API_KEY
+from config import BLOCKFROST_BASE_URL, TAPTOOLS_API_KEY
 from database import (
     get_all_wallets, get_wallet_assets, get_cache, set_cache,
     save_nft_floor_price, get_latest_nft_floor_price, get_all_nft_floor_prices,
     get_collections_needing_price_update, get_nft_price_stats
 )
 from services.http_client import get_client, blockfrost_fetch
+from services.api_key_manager import APIKeyManager
+
+# DB-stored key (Settings page) first, env var fallback — matches every
+# other Blockfrost caller in the app. See ABCT-BF-KEY-UNIFY-2026-09-27.
+_blockfrost_keys = APIKeyManager("blockfrost", "BLOCKFROST_API_KEY")
 
 # Import new priority NFT metadata services
 try:
@@ -66,7 +71,6 @@ class NFTService:
         self.nft_cache: Dict[str, dict] = {}  # In-memory cache for quick access
         self.collection_cache: Dict[str, dict] = {}  # policy_id -> collection data
         self.last_full_refresh: Optional[datetime] = None
-        self.blockfrost_headers = {"project_id": BLOCKFROST_API_KEY}
         self.taptools_headers = {"x-api-key": TAPTOOLS_API_KEY} if TAPTOOLS_API_KEY else {}
         self._db_cache_loaded = False  # Track if we've loaded from DB cache
         self._rate_limited = False  # Track if we've hit TapTools rate limit
@@ -75,6 +79,15 @@ class NFTService:
     def is_taptools_configured(self) -> bool:
         """Check if TapTools API key is configured."""
         return bool(TAPTOOLS_API_KEY)
+
+    async def _get_blockfrost_headers(self) -> dict:
+        """
+        Get Blockfrost headers with the key resolved from DB (Settings page)
+        first, env var fallback, per request via the shared APIKeyManager —
+        a key saved via Settings takes effect without a restart.
+        """
+        key = await _blockfrost_keys.get_api_key()
+        return {"project_id": key} if key else {}
 
     def is_rate_limited(self) -> bool:
         """Check if we're currently rate limited by TapTools."""
@@ -284,7 +297,7 @@ class NFTService:
         try:
             response = await blockfrost_fetch(
                 f"/assets/{asset_id}",
-                headers=self.blockfrost_headers,
+                headers=await self._get_blockfrost_headers(),
                 timeout=15.0
             )
 
@@ -680,7 +693,7 @@ class NFTService:
         try:
             response = await blockfrost_fetch(
                 f"/assets/policy/{policy_id}",
-                headers=self.blockfrost_headers,
+                headers=await self._get_blockfrost_headers(),
                 params={"count": 1},
                 timeout=30.0
             )
@@ -693,7 +706,7 @@ class NFTService:
                     if first_asset_id:
                         asset_response = await blockfrost_fetch(
                             f"/assets/{first_asset_id}",
-                            headers=self.blockfrost_headers,
+                            headers=await self._get_blockfrost_headers(),
                             timeout=30.0
                         )
 

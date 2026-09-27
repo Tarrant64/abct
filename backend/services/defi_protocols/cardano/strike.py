@@ -17,12 +17,12 @@ import asyncio
 import logging
 from typing import List, Optional
 
-from config import BLOCKFROST_API_KEY, BLOCKFROST_BASE_URL
+from config import BLOCKFROST_BASE_URL
 from services.http_client import get_client, blockfrost_fetch
 from services.defi_protocols.base_adapter import (
     ProtocolAdapter, ProtocolPosition, DetectionMethod, PositionType
 )
-from services.defi_protocols.cardano.utils import get_payment_credential
+from services.defi_protocols.cardano.utils import get_payment_credential, get_blockfrost_headers
 
 logger = logging.getLogger(__name__)
 
@@ -80,9 +80,13 @@ class StrikeAdapter(ProtocolAdapter):
             accumulated_rewards = 0
 
             # Check for pending rewards in the staking UTXOs datum
+            # NOTE: previously read `self.headers`, which this class never
+            # set — every call here raised AttributeError, silently caught
+            # by the broad except below (pending rewards always None).
+            # Fixed alongside the Blockfrost key-precedence unification.
             response = await blockfrost_fetch(
                 f"/addresses/{STRIKE_STAKING_ADDRESS}/utxos",
-                headers=self.headers,
+                headers=await get_blockfrost_headers(),
                 params={"count": 100},
                 timeout=15.0
             )
