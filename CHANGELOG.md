@@ -9,9 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-09-27
+
+### Added
+- **Android app — initial version, build from source**: the Flutter mobile client under `mobile/` (previously iOS/watchOS only) now builds for Android — real application ID, `INTERNET`/notification permissions, biometrics hosted correctly on Android, an adaptive launcher icon, and release-signing support via your own keystore. No pre-built APK ships with this release; see `mobile/README.md` and `mobile/android/README-signing.md` to build from source
+- Blockfrost "run-your-own" (self-hosted-compatible backend) tests using documentation addresses, exercising the `BLOCKFROST_BASE_URL` self-hosted path
+
+### Changed
+- Server-side NFT-inclusion preference for portfolio totals
+- V2 dashboard: 7-Day Change now computed client-side from balance-history data
+- Quantity-cache TTL raised to 20 minutes as a stopgap for a performance regression (`PORTFOLIO_QUANTITY_CACHE_TTL_SECONDS`)
+- Mobile: chart's latest point now matches the live portfolio total, and the Overview chart/header agree with the Assets tab; dashboard no longer reverts to stale cached data on refresh
+
 ### Fixed
 - **ADA Handle resolution failed for CIP-68 handles (GH #4)**: `resolve_ada_handle()` only built the legacy CIP-25 Blockfrost asset id (`ADA_HANDLE_POLICY_ID + hex(handle)`), so adding a wallet by handle returned "not found" for any handle minted or upgraded to CIP-68 — the majority of handles today. CIP-68 handles carry the `(222)` user-token label prefix (`000de140`) on the asset name under the same policy. The resolver now tries the CIP-68 asset id first, falls back to the legacy id, normalises the input (`$`/whitespace/case), and picks the actual quantity-1 holder if Blockfrost returns more than one address entry. `detect_ada_handle()` (auto-detection of a handle already held by a tracked wallet) had the mirror-image bug — a CIP-68 asset name fails the caller's UTF-8 decode and was left as raw hex instead of handle text — and is fixed the same way. 14 new unit tests (mocked Blockfrost, no live calls/API keys) added in `tests/unit/test_ada_handle_cip68_resolution.py`.
-- **DeFi and NFT lookups ignored a Blockfrost key saved via Settings**: `backend/services/defi.py`, `backend/routers/defi.py`, `backend/routers/custom_tokens.py`, `backend/routers/nfts.py`, `backend/services/nft.py`, and every Cardano DeFi protocol adapter under `backend/services/defi_protocols/cardano/` (iagon, surf, liqwid, strike, and the shared `utils.py`) read `BLOCKFROST_API_KEY` straight from `config.py` — a process-start env-var read — instead of going through `APIKeyManager`, which checks the database-stored key (Settings page) first and falls back to the env var, same as every wallet-balance/staking path. Production runs with the env var deliberately blank and the real key stored in the DB, so DeFi position pricing, NFT metadata/custom-token lookups, and several DeFi-protocol staking/rewards scans all silently sent an empty key to hosted Blockfrost and got 403s whenever the self-hosted backend fell back to the hosted API — observed live in the 2026-09-26 N5 drill. All of the above now resolve the key per request through the shared `APIKeyManager`/`get_blockfrost_headers()` helpers (DB first, env fallback, no import-time caching), so a key change on the Settings page takes effect without a restart. Also fixed in `strike.py`: `get_pending_rewards()` referenced `self.headers`, which that class never set, so every call raised `AttributeError`, silently swallowed by a broad `except` — pending STRIKE rewards were always reported as unavailable. 14 new unit tests (mocked DB/HTTP, no live calls/real keys) added in `tests/unit/test_blockfrost_key_unify.py`.
+- **DeFi and NFT lookups ignored a Blockfrost key saved via Settings**: `backend/services/defi.py`, `backend/routers/defi.py`, `backend/routers/custom_tokens.py`, `backend/routers/nfts.py`, `backend/services/nft.py`, and every Cardano DeFi protocol adapter under `backend/services/defi_protocols/cardano/` (iagon, surf, liqwid, strike, and the shared `utils.py`) read `BLOCKFROST_API_KEY` straight from `config.py` — a process-start env-var read — instead of going through `APIKeyManager`, which checks the database-stored key (Settings page) first and falls back to the env var, same as every wallet-balance/staking path. Production runs with the env var deliberately blank and the real key stored in the DB, so DeFi position pricing, NFT metadata/custom-token lookups, and several DeFi-protocol staking/rewards scans all silently sent an empty key to hosted Blockfrost and got 403s whenever the self-hosted backend fell back to the hosted API — observed live in the 2026-09-26 N5 drill. All of the above now resolve the key per request through the shared `APIKeyManager`/`get_blockfrost_headers()` helpers (DB first, env fallback, no import-time caching), so a key change on the Settings page takes effect without a restart. Also fixed in `strike.py`: `get_pending_rewards()` referenced `self.headers`, which that class never set, so every call raised `AttributeError`, silently swallowed by a broad `except` — pending STRIKE rewards were always reported as unavailable (#7). 14 new unit tests (mocked DB/HTTP, no live calls/real keys) added in `tests/unit/test_blockfrost_key_unify.py`.
+- Restore ADA Handle detection for grouped (stake-account) wallets and source account-level native assets from Koios; the `balance_history` materializer now applies the same account-level canonical-row treatment
+- Ticker pricing was still dead behind a Koios "match" being treated as a price
+- An `adaValue`/`ada_value` key mismatch was zeroing out Cardano token valuations
+- Query the Cardano ADA balance at the stake-account level
+- Periodic Cardano stake-key address rediscovery, so wallets don't go stale as new addresses are used
+- Alert-only guard against silent large balance changes
+- Bounded background sync for on-chain wallet balances
+- `save_balance()` clear+insert is now atomic, closing a zero-balance race
+- Portfolio-summary cache no longer shadows the per-wallet quantity cache
+- An undefined `exchange_name` that broke Coinbase's `portfolio_positions` write
+- A missing logger in `routers/wallets.py` that crashed error-path requests
+
+### Security
+- SSRF blocked in the NFT image fetcher, with bounded fan-out
+- Authentication required on 9 state-changing NFT image and SSL endpoints
 
 ## [1.16.3] - 2026-08-09
 

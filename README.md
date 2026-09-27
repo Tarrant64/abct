@@ -2,8 +2,8 @@
 
 Personal multi-chain portfolio tracker built Cardano-first.
 
-![Version](https://img.shields.io/badge/version-1.16.3-brightgreen.svg)
-![Build](https://img.shields.io/badge/build-1786304190-blue.svg)
+![Version](https://img.shields.io/badge/version-1.17.0-brightgreen.svg)
+![Build](https://img.shields.io/badge/build-1790518471-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.133-teal.svg)
@@ -85,7 +85,7 @@ Protocol adapters detect positions automatically — no manual tracking needed:
 
 ## Mobile App
 
-A native mobile client lives in [`mobile/`](mobile/) — a Flutter app for **iOS** with an **Apple Watch** companion (watch face complications for token prices and portfolio total). It connects to your self-hosted ABCT backend through Cloudflare Tunnel + Access with TLS certificate pinning and encrypted-at-rest connection profiles. **Android** support is planned from the same codebase.
+A native mobile client lives in [`mobile/`](mobile/) — a Flutter app for **iOS** with an **Apple Watch** companion (watch face complications for token prices and portfolio total), plus an **Android** build (v1.17.0, initial version — build from source, no pre-built APK yet). It connects to your self-hosted ABCT backend through Cloudflare Tunnel + Access with TLS certificate pinning and encrypted-at-rest connection profiles.
 
 See [`mobile/README.md`](mobile/README.md) for setup, code-signing configuration, and build instructions.
 
@@ -197,6 +197,14 @@ All API keys should be **read-only**. Never grant withdrawal or trading permissi
 See [SECURITY.md](SECURITY.md) for full details.
 
 ## What's New
+
+### v1.17.0 — CIP-68 ADA Handle Fix, Wallet Reliability & Android Companion (Sep 2026)
+- **ADA Handle resolution fixed for CIP-68 handles**: adding a wallet by handle failed for the majority of handles in circulation today (any handle minted or upgraded since the standard moved to CIP-68) — the resolver now tries the CIP-68 asset id first and falls back to the legacy id, so both old- and new-style handles resolve (Issue #4, PR #6)
+- **Android app — initial version, build from source**: the mobile client (previously iOS/watchOS only) now has a working Android build — see [`mobile/README.md`](mobile/README.md); no pre-built APK in this release
+- **Blockfrost Settings key honored everywhere**: DeFi, NFT, and custom-token lookups previously used only the environment-variable Blockfrost key instead of the one saved in Settings, so they failed whenever the self-hosted backend fell back to hosted Blockfrost; pending STRIKE rewards now load too (#7)
+- **Wallet reliability**: account-level ADA Handle detection and native-asset sourcing for grouped/stake-account wallets, periodic stake-key address rediscovery, atomic balance writes, and a valuation-zeroing key mismatch fixed
+- **Security**: SSRF blocked in the NFT image fetcher, and 9 state-changing NFT image/SSL endpoints now require authentication
+- See the [v1.17.0 release notes](https://github.com/Tarrant64/abct/releases/tag/v1.17.0) for the complete list
 
 ### v1.16.x — V2 Dashboard, DeFi Expansion, Mobile App & Security Wave (Mar–Aug 2026)
 - **V2 "/next" Dashboard**: brought to full V1 parity — governance tab, wallet enhancements, NFT sort/detail, chain breakdown modal, stream charts, sortable columns, exchange drill-down, and a complete Settings page; client-side caching and parallel loading across all V2 pages
@@ -331,5 +339,5 @@ For detailed API information including rate limits and pricing, see [API Provide
 
 ---
 
-**Current Version:** v1.16.3 (BUILD 1786304190)
-**Last Updated:** August 5, 2026
+**Current Version:** v1.17.0 (BUILD 1790518471)
+**Last Updated:** September 27, 2026
