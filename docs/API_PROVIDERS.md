@@ -291,6 +291,7 @@ price source. Wallet reconciliation moved to Koios at the same time.
 - UTXO data
 - Transaction history
 - xpub support (BIP44, BIP49, BIP84)
+- BTC Karma staking detection (`backend/services/btc_karma.py`): address txs + vault outspend status, mempool.space first with blockstream.info as fallback (typically 2 calls per Bitcoin wallet per hour, cached 1 h)
 
 **Rate Limits:**
 - No API key required

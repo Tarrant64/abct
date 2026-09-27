@@ -46,6 +46,7 @@
         .defi-card[data-protocol="Surf Lending"] { border-left-color: #3b82f6; }
         .defi-card[data-protocol="Iagon"] { border-left-color: #f59e0b; }
         .defi-card[data-protocol="Helium"] { border-left-color: #8b5cf6; }
+        .defi-card[data-protocol="BTC Karma"] { border-left-color: #f7931a; }
         .defi-card[data-protocol="Chainlink Staking"] { border-left-color: #375bd2; }
         .defi-card[data-protocol="Marginfi"] { border-left-color: #14f195; }
         .defi-card[data-protocol="Kamino"] { border-left-color: #00d2ff; }
@@ -82,6 +83,7 @@
         .defi-badge-chain.cardano { background: rgba(0, 51, 173, 0.2); color: #4a8aff; }
         .defi-badge-chain.ethereum { background: rgba(98, 126, 234, 0.2); color: #8da0f0; }
         .defi-badge-chain.solana { background: rgba(20, 241, 149, 0.2); color: #14f195; }
+        .defi-badge-chain.bitcoin { background: rgba(247, 147, 26, 0.2); color: #f7931a; }
         .defi-badge-chain.exchange { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
 
         /* Card amount & value */
@@ -281,7 +283,7 @@
         let defiSortCol = 'value';
         let defiSortDir = 'desc';
         let defiView = 'cards';
-        let _walletAddresses = { cardano: [], solana: [], ethereum: [] };
+        let _walletAddresses = { cardano: [], solana: [], ethereum: [], bitcoin: [] };
 
         /* ============================================================
            LOCALSTORAGE CACHE — instant display on page load (matches V1)
@@ -486,11 +488,13 @@
                 var cardanoWallets = wallets.filter(function(w) { return w.blockchain === 'cardano'; });
                 var solanaWallets = wallets.filter(function(w) { return w.blockchain === 'solana'; });
                 var ethereumWallets = wallets.filter(function(w) { return w.blockchain === 'ethereum'; });
+                var bitcoinWallets = wallets.filter(function(w) { return w.blockchain === 'bitcoin' && /^(bc1|[13])/.test(w.address || ''); });
 
                 _walletAddresses = {
                     cardano: cardanoWallets.map(function(w) { return w.address; }),
                     solana: solanaWallets.map(function(w) { return w.address; }),
                     ethereum: ethereumWallets.map(function(w) { return w.address; }),
+                    bitcoin: bitcoinWallets.map(function(w) { return w.address; }),
                 };
 
                 // Extract exchange stablecoins
@@ -653,6 +657,31 @@
                     });
                 }
 
+                // Phase 2c: BTC Karma stakes for Bitcoin wallets (read from the Bitcoin chain)
+                if (bitcoinWallets.length > 0) {
+                    var btcKarmaResults = await Promise.all(bitcoinWallets.map(function(w) {
+                        return v2Fetch('/defi/btc-karma/' + encodeURIComponent(w.address)).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; });
+                    }));
+                    btcKarmaResults.forEach(function(bd) {
+                        if (!bd || !bd.protocols) return;
+                        Object.keys(bd.protocols).forEach(function(protocol) {
+                            var data = bd.protocols[protocol];
+                            if (!allStaking[protocol]) {
+                                allStaking[protocol] = { staked: {}, pending_rewards: 0, reward_token: data.reward_token || '', rewards_url: data.rewards_url || null, blockchain: data.blockchain || 'bitcoin', category: data.category || null, status: data.status || null, note: data.note || null };
+                            }
+                            (data.staked || []).forEach(function(stake) {
+                                if (!allStaking[protocol].staked[stake.token]) {
+                                    allStaking[protocol].staked[stake.token] = { amount: 0, positions: 0, logo_url: stake.logo_url };
+                                }
+                                allStaking[protocol].staked[stake.token].amount += parseFloat(stake.amount) || 0;
+                                allStaking[protocol].staked[stake.token].positions += (stake.positions || 0);
+                                allStaking[protocol].status = null;
+                            });
+                            if (data.note && !allStaking[protocol].note) allStaking[protocol].note = data.note;
+                        });
+                    });
+                }
+
                 // Phase 3: Fetch lending summary
                 var lendingData = null;
                 try {
@@ -782,6 +811,14 @@
                     var rewardsUrl = protocolData.rewards_url;
                     var stakingChain = protocolData.blockchain || 'cardano';
                     protocolSet.add(protocol);
+
+                    if (protocolData.status === 'unavailable' && Object.keys(stakes).length === 0) {
+                        html += '<div class="defi-card depin-timeout" data-protocol="' + escapeAttr(protocol) + '">' +
+                            '<div class="defi-card-header">' + logoImgHtml(protocolData.reward_token || protocol, null, 32) +
+                            '<span class="defi-card-protocol">' + getChainBadge(stakingChain) + ' ' + escapeHtml(protocol) + '</span></div>' +
+                            '<div class="defi-card-timeout">Data unavailable &mdash; chain API unreachable</div></div>';
+                        return;
+                    }
 
                     Object.keys(stakes).forEach(function(token) {
                         var data = stakes[token];
@@ -916,8 +953,9 @@
                             (hasV2 ? '<span class="defi-badge defi-badge-v2">V2</span>' : '') +
                             (hasPending ? '<span class="defi-badge defi-badge-rewards">Rewards</span>' : '') +
                             '</div></div>' +
-                            '<div class="defi-card-amount v2-blur">' + data.amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4}) + ' <span style="font-size:14px;font-weight:400">' + escapeHtml(token) + '</span></div>' +
+                            '<div class="defi-card-amount v2-blur">' + data.amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: token === 'BTC' ? 8 : 4}) + ' <span style="font-size:14px;font-weight:400">' + escapeHtml(token) + '</span></div>' +
                             '<div class="defi-card-value v2-blur">' + formatCurrency(usdValue) + '</div>' +
+                            (protocolData.note ? '<div class="defi-delegation-detail">' + escapeHtml(protocolData.note) + '</div>' : '') +
                             pendingHtml +
                             v2Html +
                             '<div class="defi-card-actions">' +
@@ -2093,6 +2131,10 @@
                     var addresses = _walletAddresses.cardano || [];
                     for (var i = 0; i < addresses.length; i++) {
                         await v2Fetch('/defi/staking/' + addresses[i] + '?refresh=true');
+                    }
+                    var btcAddresses = _walletAddresses.bitcoin || [];
+                    for (var j = 0; j < btcAddresses.length; j++) {
+                        await v2Fetch('/defi/btc-karma/' + encodeURIComponent(btcAddresses[j]) + '?refresh=true');
                     }
                 }
                 await v2Fetch('/defi/summary?refresh=true');

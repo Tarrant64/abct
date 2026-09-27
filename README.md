@@ -53,6 +53,7 @@ Protocol adapters detect positions automatically — no manual tracking needed:
 - **Cardano** (13): Minswap, SundaeSwap V3, WingRiders, Splash, Djed, FluidTokens, Lenfi, MuesliSwap, Liqwid, Indigo, Strike Finance, Surf Protocol, Iagon
 - **EVM** (55+): Aave v3, Compound v3, Uniswap v3 LP, Curve, Balancer, EigenLayer, Maker/Spark, Morpho, GMX, Pendle, Stargate, Aerodrome, Velodrome, Radiant, Benqi, SushiSwap, Yearn v3, Beefy, Synthetix, Liquity, Camelot, Abracadabra, PancakeSwap v3, and more
 - **Solana** (15): Marinade, Jito, Orca, Raydium, Drift, MarginFi, Kamino, Jupiter Perps, Blazestake, and more
+- **Bitcoin** (1): BTC Karma staking — staked BTC read from the vault UTXOs of your tracked Bitcoin address, with the Cardano reward wallet it is bound to
 
 ### Portfolio & Analytics
 - **Dashboard**: Dynamic blockchain cards, allocation donut chart, market heatmap, global market cap widget, unified All Assets table with zero-balance toggle
