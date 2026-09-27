@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **BTC Karma Bitcoin staking card (DeFi page)**: tracked Bitcoin wallets are now scanned for [BTC Karma](https://staking.btckarma.io) stakes, shown as a "Bitcoin · BTC Karma" card under Staked Positions with the staked BTC, its USD value and the Cardano wallet that receives the KARMA rewards. Data comes straight from the Bitcoin chain through the public Esplora API (mempool.space, blockstream.info fallback) — no BTC Karma login or key. A stake is a transaction spent from your address that pays a P2WSH vault and carries an `OP_RETURN` of `CB|` + blake2b-512 of the bound Cardano address; an unspent vault is an active stake, so unstaking removes the card on its own. To use it, add the Bitcoin address you staked from as an ordinary Bitcoin wallet (single address, not an xpub). Unlock time and KARMA reward balances are not public on-chain and are not shown. New endpoint `GET /defi/btc-karma/{address}` (1 h cache, stale-cache fallback, shows "Data unavailable" rather than erroring). 24 new unit tests in `tests/unit/test_btc_karma.py` (recorded mainnet responses, no live calls).
+
 ## [1.17.0] - 2026-09-27
 
 ### Added

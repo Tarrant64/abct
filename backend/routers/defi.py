@@ -703,6 +703,62 @@ async def get_helium_rewards(address: str, refresh: bool = False, user_id: int =
     return result
 
 
+@router.get("/btc-karma/{address}")
+async def get_btc_karma_staking_data(address: str, refresh: bool = False, user_id: int = Depends(verify_session)):
+    """Get BTC Karma Bitcoin staking positions funded from a Bitcoin address.
+
+    Reads the vault outputs straight from the Bitcoin chain (public Esplora
+    API). On API failure the last good result is served, else the card is
+    reported as unavailable - the DeFi page never errors on this endpoint.
+    """
+    from services.btc_karma import (
+        get_btc_karma_staking, is_valid_btc_address, BtcKarmaUnavailable, PROTOCOL_NAME,
+    )
+
+    if not is_valid_btc_address(address):
+        raise HTTPException(status_code=400, detail="Invalid Bitcoin address")
+
+    cache_key = f"btc_karma_staking_{address}"
+
+    if not refresh:
+        cached = await get_cache(cache_key, user_id=user_id)
+        if cached:
+            cached['from_cache'] = True
+            return cached
+
+    wallets = await get_all_wallets(user_id=user_id)
+    cardano_wallets = [
+        {'address': w['address'], 'label': w.get('label')}
+        for w in wallets if w['blockchain'] == 'cardano'
+    ]
+
+    try:
+        result = await get_btc_karma_staking(address, cardano_wallets)
+    except BtcKarmaUnavailable as e:
+        logger.warning(f"[BTC Karma] Chain lookup failed for {address[:12]}...: {e}")
+        stale, _ = await get_stale_cache(cache_key, user_id=user_id)
+        if stale:
+            stale['from_cache'] = True
+            stale['stale_fallback'] = True
+            return stale
+        return {
+            "protocols": {
+                PROTOCOL_NAME: {
+                    "staked": [], "blockchain": "bitcoin", "category": "staking",
+                    "status": "unavailable", "rewards_url": "https://staking.btckarma.io",
+                }
+            },
+            "address": address,
+        }
+
+    if not result:
+        result = {"protocols": {}, "address": address, "message": "No BTC Karma stakes found"}
+
+    result['from_cache'] = False
+    await set_cache(cache_key, result, CACHE_TTL_WARM, user_id=user_id)
+    return result
+
+
 @router.get("/iagon/{address}")
 async def get_iagon_staking_data(address: str, refresh: bool = False, user_id: int = Depends(verify_session)):
     """Get Iagon staking positions for a Cardano wallet address."""
