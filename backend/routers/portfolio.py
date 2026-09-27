@@ -1211,6 +1211,38 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
         except Exception as e:
             logger.debug(f"Portfolio positions staking write failed: {e}")
 
+        # BTC Karma stakes — same shared valuation as Cardano staking above,
+        # but the sats are on Bitcoin: staking_portfolio_rows() hardcodes
+        # chain='cardano' so it is not reused here. Without this write the
+        # staked BTC never reaches portfolio_positions and /portfolio/instant
+        # under-reports the total (ABCT-BTC-TOTALS-AUDIT-2026-09-27).
+        try:
+            from services.defi import iter_staking_token_values as _pp_stk_entries
+            _pp_btc_addrs = [w['address'] for w in _pp_wallets if w['blockchain'] == 'bitcoin']
+            for addr in _pp_btc_addrs:
+                karma_cache = await _pp_get_cache(f"btc_karma_staking_{addr}", user_id=user_id)
+                if not karma_cache:
+                    karma_cache = await _pp_get_cache(f"btc_karma_staking_{addr}")
+                if not karma_cache or not isinstance(karma_cache, dict) or not karma_cache.get('protocols'):
+                    continue
+                for protocol_name, protocol_data in karma_cache['protocols'].items():
+                    detail_base = protocol_name.lower().replace(' ', '_')
+                    for entry in _pp_stk_entries(protocol_data, all_prices):
+                        if entry['amount'] <= 0:
+                            continue
+                        detail = f"{detail_base}_rewards" if entry['kind'] == 'reward' else detail_base
+                        pp_rows.append({
+                            'user_id': user_id, 'symbol': entry['token'],
+                            'quantity': entry['amount'],
+                            'source_type': 'staking', 'source_detail': detail,
+                            'chain': 'bitcoin',
+                            'last_price_usd': (
+                                entry['usd'] / entry['amount'] if entry['amount'] > 0 else 0
+                            ),
+                        })
+        except Exception as e:
+            logger.debug(f"Portfolio positions BTC Karma write failed: {e}")
+
         # DeFi positions from cached DeFi summary
         try:
             defi_cache = await _pp_get_cache(f"defi_summary_{user_id}", user_id=user_id)
@@ -1780,6 +1812,22 @@ async def get_all_holdings(
     else:
         staking_caches = []
 
+    # Fetch BTC Karma stakes for all Bitcoin wallets, same call-the-endpoint
+    # pattern as Cardano staking above. BTC Karma moves staked sats to a
+    # per-stake vault address (never the staker's own address), so this is
+    # a locked-elsewhere position that has already left the wallet's L1
+    # balance — it must be added here or it silently disappears from every
+    # holdings total (ABCT-BTC-TOTALS-AUDIT-2026-09-27).
+    bitcoin_addrs = [w['address'] for w in wallets if w['blockchain'] == 'bitcoin']
+    if bitcoin_addrs:
+        from routers.defi import get_btc_karma_staking_data
+        btc_karma_caches = await asyncio.gather(*[
+            get_btc_karma_staking_data(addr, refresh=False, user_id=user_id)
+            for addr in bitcoin_addrs
+        ], return_exceptions=True)
+    else:
+        btc_karma_caches = []
+
     # Fetch exchange data from cache
     exchange_names = ['coinbase', 'binance', 'binance_us', 'okx', 'bitget', 'gate', 'kucoin']
     exchange_caches = await asyncio.gather(*[
@@ -1917,6 +1965,27 @@ async def get_all_holdings(
                 amount = entry['amount']
                 if market > 0 and abs(entry['usd'] - amount * market) > 1e-9:
                     amount = entry['usd'] / market  # net-equivalent (CDPs)
+                raw = entry.get('raw') or {}
+                _merge_holding(
+                    holdings, token, amount, 0,
+                    all_prices, name=protocol_name,
+                    logo_url=raw.get('logo_url', ''), source='staking',
+                )
+
+    # --- 4b. BTC Karma stakes (Bitcoin, same shared valuation) ---
+    for cached in btc_karma_caches:
+        if isinstance(cached, (Exception, BaseException)) or not cached or not isinstance(cached, dict) or not cached.get('protocols'):
+            continue
+        for protocol_name, protocol_data in cached['protocols'].items():
+            for entry in _stk_entries(protocol_data, all_prices):
+                if entry['kind'] == 'reward' or not entry['priced']:
+                    continue
+                token = entry['token']
+                price_info = all_prices.get(_PRICE_SYMBOL.get(token, token), {})
+                market = price_info.get('usd', 0) if isinstance(price_info, dict) else 0
+                amount = entry['amount']
+                if market > 0 and abs(entry['usd'] - amount * market) > 1e-9:
+                    amount = entry['usd'] / market
                 raw = entry.get('raw') or {}
                 _merge_holding(
                     holdings, token, amount, 0,
@@ -2208,7 +2277,11 @@ async def get_portfolio_history(
 # Bump when the staking/DeFi valuation semantics change: cached totals rows
 # computed by an OLDER valuation are ignored, so a deploy never serves a
 # stale bucket for its TTL. v2 = P3a shared valuation (all position kinds).
-TOTALS_VALUATION_VERSION = 2
+# v3 = get_staking_value() now includes BTC Karma Bitcoin stakes
+# (ABCT-BTC-TOTALS-AUDIT-2026-09-27) — a pre-deploy cached row would
+# otherwise under-report staking_usd for its whole TTL, same failure shape
+# as the 2026-07-12 rollback (D2) this version guard was added for.
+TOTALS_VALUATION_VERSION = 3
 
 
 @router.get("/totals")

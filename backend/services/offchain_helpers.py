@@ -49,6 +49,29 @@ async def get_staking_value(prices: dict, user_id: int = None) -> float:
                 for protocol_name, protocol_data in (cached.get('protocols') or {}).items():
                     for entry in iter_staking_token_values(protocol_data, prices):
                         total_usd += entry['usd']
+            elif wallet['blockchain'] == 'bitcoin':
+                # BTC Karma stakes move the staked sats to a per-stake P2WSH
+                # vault address (never the staker's own address — see
+                # services/btc_karma.find_stake_outputs), so they have
+                # already left this wallet's on-chain balance by the time a
+                # stake confirms. Without this branch the staked BTC simply
+                # disappeared from every total (ABCT-BTC-TOTALS-AUDIT-2026-09-27) —
+                # it is a locked-elsewhere position, same bucket as Cardano
+                # DeFi-locked ADA, not a double count of the wallet balance.
+                cache_key = f"btc_karma_staking_{wallet['address']}"
+                cached = await get_cache(cache_key, user_id=user_id)
+                if not cached:
+                    cached = await get_cache(cache_key)
+                if not cached:
+                    cached = await _stale_fallback(cache_key, user_id=user_id)
+                    if not cached:
+                        cached = await _stale_fallback(cache_key)
+                if not cached:
+                    continue
+                from services.defi import iter_staking_token_values
+                for protocol_name, protocol_data in (cached.get('protocols') or {}).items():
+                    for entry in iter_staking_token_values(protocol_data, prices):
+                        total_usd += entry['usd']
 
         return total_usd
     except Exception as e:
