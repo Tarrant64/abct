@@ -754,9 +754,10 @@ async def debug_iagon_staking(address: str, user_id: int = Depends(verify_sessio
         IAGON_BATCHER_ADDRESS
     )
     from services.http_client import blockfrost_fetch
-    from config import BLOCKFROST_API_KEY
 
-    headers = {"project_id": BLOCKFROST_API_KEY}
+    # DB-stored key (Settings page) first, env fallback — same resolver
+    # defi_service uses for every other Blockfrost call in this file.
+    headers = await defi_service._get_headers()
 
     # Check scan state cache
     scan_state = await get_cache(f"iagon_scan_state_{address}")

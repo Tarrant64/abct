@@ -22,8 +22,13 @@ from middleware.auth import verify_admin
 from middleware.demo_mode import is_demo_user
 from auth_utils import verify_session
 from services.http_client import get_client
+from services.api_key_manager import APIKeyManager
 
 router = APIRouter(prefix="/custom-tokens", tags=["custom-tokens"])
+
+# DB-stored key (Settings page) first, env var fallback — matches every
+# other Blockfrost caller in the app. See ABCT-BF-KEY-UNIFY-2026-09-27.
+_blockfrost_keys = APIKeyManager("blockfrost", "BLOCKFROST_API_KEY")
 
 
 class TokenAddRequest(BaseModel):
@@ -196,10 +201,10 @@ async def lookup_cardano_token(policy_id: str, asset_name: str = "") -> dict:
     """
     Look up Cardano token information from various sources.
     """
-    from config import BLOCKFROST_API_KEY
     from services.http_client import blockfrost_fetch
 
-    if not BLOCKFROST_API_KEY:
+    blockfrost_key = await _blockfrost_keys.get_api_key()
+    if not blockfrost_key:
         return None
 
     try:
@@ -209,7 +214,7 @@ async def lookup_cardano_token(policy_id: str, asset_name: str = "") -> dict:
         # Try Blockfrost for token info
         response = await blockfrost_fetch(
             f"/assets/{asset_id}",
-            headers={"project_id": BLOCKFROST_API_KEY},
+            headers={"project_id": blockfrost_key},
             timeout=30.0
         )
 

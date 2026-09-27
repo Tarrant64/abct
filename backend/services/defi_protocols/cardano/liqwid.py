@@ -13,13 +13,14 @@ import asyncio
 import logging
 from typing import List, Optional, Dict
 
-from config import BLOCKFROST_API_KEY, BLOCKFROST_BASE_URL
+from config import BLOCKFROST_BASE_URL
 from services.http_client import get_client, blockfrost_fetch
 from services.defi_protocols.base_adapter import (
     ProtocolAdapter, ProtocolPosition, DetectionMethod, PositionType
 )
 from services.defi_protocols.cardano.utils import (
-    get_payment_credential, get_stake_address, check_token_in_wallet
+    get_payment_credential, get_stake_address, check_token_in_wallet,
+    get_blockfrost_headers,
 )
 
 logger = logging.getLogger(__name__)
@@ -114,7 +115,7 @@ class LiqwidAdapter(ProtocolAdapter):
             if not payment_cred:
                 return []
 
-            headers = {"project_id": BLOCKFROST_API_KEY}
+            headers = await get_blockfrost_headers()
             sem = asyncio.Semaphore(5)
 
             async def fetch_page(pg):
