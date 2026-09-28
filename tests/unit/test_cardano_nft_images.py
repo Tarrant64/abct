@@ -79,7 +79,10 @@ def test_attach_sets_image_url_and_schedules_only_unknown(svc, monkeypatch):
     ]
     svc.attach_image_urls(nfts, user_id=1)
 
-    assert nfts[0]["image_url"] == "https://ipfs.io/ipfs/" + CID
+    # IPFS images are offered on the configured display gateways (first one as
+    # image_url, the rest as ordered fallbacks) - ABCT-NFT-DIAG2-2026-09-28
+    assert nfts[0]["image_url"].startswith("https://") and nfts[0]["image_url"].endswith("/ipfs/" + CID)
+    assert all(u.endswith("/ipfs/" + CID) for u in nfts[0]["image_fallbacks"])
     assert nfts[1]["image_url"] is None and nfts[2]["image_url"] is None
     assert scheduled == [(1, [ASSET_2])]
 

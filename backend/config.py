@@ -301,6 +301,22 @@ IPFS_GATEWAYS = [
     "https://gateway.pinata.cloud/ipfs/",
 ]
 
+# IPFS gateways used for NFT images shown in the browser (ABCT-NFT-DIAG2-2026-09-28).
+# The page tries them in order and falls back to the next one when an image
+# fails to load. ipfs.io answers hot-linked images with a Cloudflare challenge
+# (HTTP 403/429), so it is no longer first. Override with a comma-separated
+# list of https:// gateway prefixes ending in "/ipfs/".
+_DEFAULT_NFT_DISPLAY_IPFS_GATEWAYS = (
+    "https://ipfs.blockfrost.dev/ipfs/,"
+    "https://gateway.pinata.cloud/ipfs/,"
+    "https://ipfs.io/ipfs/,"
+    "https://dweb.link/ipfs/"
+)
+NFT_DISPLAY_IPFS_GATEWAYS = [
+    g.strip() for g in os.getenv("NFT_DISPLAY_IPFS_GATEWAYS", _DEFAULT_NFT_DISPLAY_IPFS_GATEWAYS).split(",")
+    if g.strip().lower().startswith("https://")
+]
+
 # NFT Background Scheduler Configuration
 NFT_SCHEDULER_ENABLED = os.getenv("NFT_SCHEDULER_ENABLED", "false").lower() == "true"
 NFT_UPDATE_INTERVAL_MINUTES = int(os.getenv("NFT_UPDATE_INTERVAL_MINUTES", "15"))

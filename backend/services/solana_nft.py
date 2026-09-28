@@ -10,6 +10,7 @@ Helius Digital Asset Standard (DAS) API provides:
 Uses persistent database caching to reduce API calls and survive restarts.
 """
 
+import hashlib
 import httpx
 import logging
 from typing import Dict, List, Optional
@@ -30,6 +31,17 @@ SOL_NFT_CACHE_KEY = "sol_nft_all_data"
 SOL_NFT_CACHE_TTL = 86400 * 30  # 30 days - persistent until manual refresh
 
 
+def wallet_fingerprint(addresses) -> str:
+    """Stable, non-reversible fingerprint of a set of wallet addresses.
+
+    Stored next to the cached NFTs so a wallet added or removed after the
+    last fetch is noticed (ABCT-NFT-DIAG2-2026-09-28). Only a hash is kept,
+    never the addresses themselves.
+    """
+    joined = "\n".join(sorted({a for a in addresses if a}))
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
+
+
 class SolanaNFTService(APIKeyManager):
     """Service for fetching Solana NFTs from Helius DAS API."""
 
@@ -41,6 +53,8 @@ class SolanaNFTService(APIKeyManager):
         self._cache_ttl = timedelta(hours=24)  # In-memory cache validity
         self.last_refresh: Optional[datetime] = None
         self._db_cache_loaded = False
+        # Fingerprint of the wallet set the cached NFTs were fetched for
+        self._wallet_fingerprint: Optional[str] = None
 
     async def is_configured(self) -> bool:
         """Check if the API key is configured."""
@@ -256,17 +270,41 @@ class SolanaNFTService(APIKeyManager):
         Returns:
             List of all NFTs across all Solana wallets
         """
+        # A cache built for a different set of Solana wallets (one was added or
+        # removed since) is stale no matter how young it is: without this, a
+        # newly added wallet's NFTs stayed hidden for up to 24 h (in-memory TTL)
+        # or 30 days (persistent cache). ABCT-NFT-DIAG2-2026-09-28.
+        current_fp = None
+        if not force_refresh:
+            try:
+                wallets_now = await get_all_wallets(user_id=user_id)
+                current_fp = wallet_fingerprint(
+                    w['address'] for w in wallets_now if w.get('blockchain') == 'solana'
+                )
+            except Exception as e:
+                logger.debug(f"Could not fingerprint Solana wallets: {e}")
+
         # Try to load from persistent database cache first
         if not force_refresh and not self._db_cache_loaded:
             cached_data = await get_cache(SOL_NFT_CACHE_KEY)
             if cached_data:
-                logger.info(f"Loaded {len(cached_data.get('nfts', []))} Solana NFTs from persistent cache")
                 self._nft_cache = {nft['asset_id']: nft for nft in cached_data.get('nfts', [])}
                 self._collection_cache = cached_data.get('collections', {})
                 self.last_refresh = datetime.fromisoformat(cached_data['last_refresh']) if cached_data.get('last_refresh') else None
+                self._wallet_fingerprint = cached_data.get('wallet_fingerprint')
                 self._db_cache_loaded = True
-                return list(self._nft_cache.values())
+                if current_fp is None or self._wallet_fingerprint == current_fp:
+                    logger.info(f"Loaded {len(cached_data.get('nfts', []))} Solana NFTs from persistent cache")
+                    return list(self._nft_cache.values())
+                logger.info("Solana wallets changed since the persistent NFT cache was saved - refetching")
+                force_refresh = True
             self._db_cache_loaded = True
+
+        if (not force_refresh and current_fp is not None
+                and self._wallet_fingerprint is not None
+                and self._wallet_fingerprint != current_fp):
+            logger.info("Solana wallets changed since the last NFT fetch - refetching")
+            force_refresh = True
 
         # Check in-memory cache validity
         if not force_refresh and self._is_cache_valid():
@@ -286,6 +324,7 @@ class SolanaNFTService(APIKeyManager):
 
         all_nfts = []
         self._nft_cache.clear()
+        fetched_fp = wallet_fingerprint(w['address'] for w in sol_wallets)
 
         for wallet in sol_wallets:
             address = wallet['address']
@@ -327,6 +366,7 @@ class SolanaNFTService(APIKeyManager):
             logger.info(f"Fetched {total_fetched} NFTs for Solana wallet {address[:8]}...")
 
         self.last_refresh = datetime.now()
+        self._wallet_fingerprint = fetched_fp
 
         # Save to persistent database cache
         await self._save_to_db_cache()
@@ -339,7 +379,8 @@ class SolanaNFTService(APIKeyManager):
             cache_data = {
                 'nfts': list(self._nft_cache.values()),
                 'collections': self._collection_cache,
-                'last_refresh': self.last_refresh.isoformat() if self.last_refresh else None
+                'last_refresh': self.last_refresh.isoformat() if self.last_refresh else None,
+                'wallet_fingerprint': self._wallet_fingerprint,
             }
             await set_cache(SOL_NFT_CACHE_KEY, cache_data, SOL_NFT_CACHE_TTL)
             logger.info(f"Saved {len(self._nft_cache)} Solana NFTs to persistent cache")
@@ -404,6 +445,7 @@ class SolanaNFTService(APIKeyManager):
         self._collection_cache.clear()
         self.last_refresh = None
         self._db_cache_loaded = False
+        self._wallet_fingerprint = None
 
     async def get_status(self) -> dict:
         """Get service status and configuration."""

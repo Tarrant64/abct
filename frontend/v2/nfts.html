@@ -182,6 +182,8 @@
         let currentNftChain = 'all';
         let currentSort = 'value';
         let groupByCollection = false;
+        const NFT_RENDER_STEP = 100;
+        let nftRenderLimit = NFT_RENDER_STEP;
 
         document.addEventListener('DOMContentLoaded', () => {
             v2InitShell('nfts');
@@ -259,8 +261,8 @@
                 // Count unique collections
                 const collectionSet = new Set();
                 flattenNfts(allNfts).forEach(n => {
-                    const col = n._collection || n.collection || n.policy_id || '';
-                    if (col) collectionSet.add(col);
+                    const col = nftCollectionName(n);
+                    if (col) collectionSet.add(n._chain + ':' + col);
                 });
                 setText('nftCollectionCount', collectionSet.size.toString());
 
@@ -283,8 +285,74 @@
             return items;
         }
 
+        // ------------------------------------------------------------------
+        // Images and collection names (ABCT-NFT-DIAG2-2026-09-28)
+        // The API gives image_url plus ordered image_fallbacks (the same IPFS
+        // content on other gateways). A failed image tries the next URL before
+        // giving up; only https:// and data:image/ URLs are ever used.
+        // ------------------------------------------------------------------
+        function nftSafeImageUrl(u) {
+            if (typeof u !== 'string') return '';
+            const t = u.trim();
+            const l = t.toLowerCase();
+            return (l.indexOf('https://') === 0 || l.indexOf('data:image/') === 0) ? t : '';
+        }
+
+        function nftImageCandidates(nft) {
+            const list = [nft.image_url]
+                .concat(Array.isArray(nft.image_fallbacks) ? nft.image_fallbacks : [])
+                .concat([nft.image, nft.thumbnail]);
+            const out = [];
+            list.forEach(u => {
+                const safe = nftSafeImageUrl(u);
+                if (safe && out.indexOf(safe) === -1) out.push(safe);
+            });
+            return out;
+        }
+
+        // onExhausted: 'placeholder' (grid card), 'hide-tile' (gallery), 'modal'
+        function nftImgTag(nft, onExhausted, extra) {
+            const candidates = nftImageCandidates(nft);
+            if (!candidates.length) return '';
+            return '<img src="' + escapeAttr(candidates[0]) + '"' +
+                ' data-fallbacks="' + escapeAttr(JSON.stringify(candidates.slice(1))) + '"' +
+                ' data-exhausted="' + escapeAttr(onExhausted) + '"' +
+                (extra || '') + ' onerror="nftImgFallback(this)">';
+        }
+
+        function nftImgFallback(img) {
+            let rest = [];
+            try { rest = JSON.parse(img.getAttribute('data-fallbacks') || '[]'); } catch (e) { rest = []; }
+            const next = rest.length ? nftSafeImageUrl(rest[0]) : '';
+            if (next) {
+                img.setAttribute('data-fallbacks', JSON.stringify(rest.slice(1)));
+                img.src = next;
+                return;
+            }
+            img.onerror = null;
+            const mode = img.getAttribute('data-exhausted');
+            const parent = img.parentElement;
+            if (mode === 'hide-tile' && parent) {
+                parent.style.display = 'none';
+            } else if (mode === 'modal' && parent) {
+                parent.innerHTML = '<div style="padding:80px;text-align:center;font-size:64px;opacity:0.15">&#127912;</div>';
+            } else {
+                img.style.display = 'none';
+                if (img.nextElementSibling) img.nextElementSibling.style.display = 'block';
+            }
+        }
+
+        // Collection objects ({id, name, ...}) must not render as "[object Object]"
+        function nftCollectionName(nft) {
+            let c = nft._collection || nft.collection;
+            if (c && typeof c === 'object') c = c.name || c.id || '';
+            if (!c) c = nft.policy_id || '';
+            return typeof c === 'string' ? c : String(c);
+        }
+
         function filterNftChain(chain) {
             currentNftChain = chain;
+            nftRenderLimit = NFT_RENDER_STEP;
             document.querySelectorAll('.nft-chain-tab').forEach(t => t.classList.toggle('active', t.dataset.chain === chain));
             renderNftGrid();
         }
@@ -312,7 +380,7 @@
                 // Group by collection
                 const groups = {};
                 items.forEach(nft => {
-                    const col = nft._collection || nft.collection || nft.policy_id || 'Uncategorized';
+                    const col = nftCollectionName(nft) || 'Uncategorized';
                     if (!groups[col]) groups[col] = [];
                     groups[col].push(nft);
                 });
@@ -329,10 +397,23 @@
                     nftItems.slice(0, 30).forEach(nft => { html += renderNftCard(nft); });
                 });
             } else {
-                items.slice(0, 100).forEach(nft => { html += renderNftCard(nft); });
+                // Render in steps: a hard cap of 100 hid every chain whose NFTs
+                // sort below the 100th card by value (Solana, Algorand, ...).
+                items.slice(0, nftRenderLimit).forEach(nft => { html += renderNftCard(nft); });
+                if (items.length > nftRenderLimit) {
+                    html += '<div style="grid-column:1/-1;text-align:center;padding:8px 0;"><button class="v2-sync-btn" id="nftShowMoreBtn">Show more (' + (items.length - nftRenderLimit) + ' more)</button></div>';
+                }
             }
 
             setSafeHTML(grid, html);
+
+            const showMore = document.getElementById('nftShowMoreBtn');
+            if (showMore) {
+                showMore.addEventListener('click', () => {
+                    nftRenderLimit += NFT_RENDER_STEP;
+                    renderNftGrid();
+                });
+            }
 
             // Attach click handlers to cards for detail modal
             grid.querySelectorAll('.nft-card').forEach(card => {
@@ -342,8 +423,8 @@
 
         function renderNftCard(nft) {
             const name = nft.name || nft.asset_name || nft.token_name || 'Unnamed';
-            const collection = nft._collection || nft.collection || nft.policy_id || '';
-            const imgUrl = nft.image_url || nft.image || nft.thumbnail || '';
+            const collection = nftCollectionName(nft);
+            const imgTag = nftImgTag(nft, 'placeholder', ' alt="" loading="lazy"');
             const value = parseFloat(nft.floor_price_usd || nft.value_usd || nft.price_usd) || 0;
 
             // Store nft data on a global indexed array for modal retrieval
@@ -352,10 +433,10 @@
 
             return '<div class="nft-card" data-nft-idx="' + idx + '">' +
                 '<div class="nft-card-img">' +
-                (imgUrl ? '<img src="' + escapeAttr(imgUrl) + '" alt="" loading="lazy" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'"><span class="placeholder" style="display:none">&#127912;</span>' : '<span class="placeholder">&#127912;</span>') +
+                (imgTag ? imgTag + '<span class="placeholder" style="display:none">&#127912;</span>' : '<span class="placeholder">&#127912;</span>') +
                 '</div>' +
                 '<div class="nft-card-info">' +
-                '<div class="nft-card-name" title="' + escapeAttr(name) + '">' + escapeHtml(name) + '</div>' +
+                '<div class="nft-card-name" title="' + escapeAttr(String(name)) + '">' + escapeHtml(name) + '</div>' +
                 '<div class="nft-card-collection">' + escapeHtml(collection) + '</div>' +
                 '<div style="margin-top:4px;"><span class="v2-chain-badge chain-' + escapeAttr(nft._chain || '') + '">' + escapeHtml(nft._chain || '') + '</span></div>' +
                 (value > 0 ? '<div class="nft-card-value">' + formatCurrency(value) + '</div>' : '') +
@@ -379,14 +460,14 @@
             const traitsEl = document.getElementById('nftModalTraits');
 
             const name = nft.name || nft.asset_name || nft.token_name || 'Unnamed';
-            const collection = nft._collection || nft.collection || nft.policy_id || '';
-            const imgUrl = nft.image_url || nft.image || nft.thumbnail || '';
+            const collection = nftCollectionName(nft);
+            const imgTag = nftImgTag(nft, 'modal', ' alt="' + escapeAttr(String(name)) + '"');
             const value = parseFloat(nft.floor_price_usd || nft.value_usd || nft.price_usd) || 0;
             const chain = nft._chain || '';
 
             // Image
-            if (imgUrl) {
-                setSafeHTML(imgContainer, '<img src="' + escapeAttr(imgUrl) + '" alt="' + escapeAttr(name) + '" onerror="this.parentElement.innerHTML=\'<div style=padding:80px;text-align:center;font-size:64px;opacity:0.15>&#127912;</div>\'">');
+            if (imgTag) {
+                setSafeHTML(imgContainer, imgTag);
             } else {
                 setSafeHTML(imgContainer, '<div style="padding:80px;text-align:center;font-size:64px;opacity:0.15">&#127912;</div>');
             }
@@ -476,16 +557,15 @@
             var masonry = document.getElementById('nftWallMasonry');
             var items = flattenNfts(allNfts);
             // Filter to those with images only
-            items = items.filter(function(n) { return n.image_url || n.image || n.thumbnail; });
+            items = items.filter(function(n) { return nftImageCandidates(n).length > 0; });
             if (!items.length) {
                 masonry.innerHTML = '<div style="text-align:center;padding:80px;color:var(--v2-text-muted);font-size:14px;">No NFTs with images to display.</div>';
             } else {
                 var html = '';
                 items.forEach(function(nft, idx) {
-                    var imgUrl = nft.image_url || nft.image || nft.thumbnail || '';
                     var name = nft.name || nft.asset_name || nft.token_name || 'Unnamed';
                     html += '<div class="nft-wall-item" data-wall-idx="' + idx + '">' +
-                        '<img src="' + escapeAttr(imgUrl) + '" alt="" loading="lazy" onerror="this.parentElement.style.display=\'none\'">' +
+                        nftImgTag(nft, 'hide-tile', ' alt="" loading="lazy"') +
                         '<div class="nft-wall-label">' + escapeHtml(name) + '</div></div>';
                 });
                 masonry.innerHTML = html;
