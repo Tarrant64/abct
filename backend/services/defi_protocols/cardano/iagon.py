@@ -206,9 +206,17 @@ class IagonAdapter(ProtocolAdapter):
 
                 # Track last block for incremental scan
                 last_block = from_block or 0
+                # True if any UTxO fetch in this scan failed. A failed tx's
+                # IAG flow is skipped below (`continue`), so its flow is
+                # never counted this run. If we still advanced/saved
+                # last_block_height past it, the next incremental scan would
+                # start after it and that flow would be permanently lost
+                # (see ABCT-IAGON-SCANSTATE-FIX-2026-09-28).
+                scan_had_failures = False
 
                 for i, tx_data in enumerate(utxo_results):
                     if isinstance(tx_data, Exception) or tx_data is None:
+                        scan_had_failures = True
                         continue
 
                     tx_block = all_txs[i].get('block_height', 0)
@@ -255,14 +263,32 @@ class IagonAdapter(ProtocolAdapter):
                         if net_batcher < 0 and user_receives_iag > 0:
                             total_rewards += user_receives_iag
 
-                # Save scan state persistently (7-day TTL)
-                await set_cache(scan_key, {
-                    'version': SCAN_STATE_VERSION,
-                    'staking_deposits': staking_deposits,
-                    'staking_withdrawals': staking_withdrawals,
-                    'total_rewards': total_rewards,
-                    'last_block_height': last_block
-                }, ttl_seconds=604800)
+                # Save scan state persistently (7-day TTL) — but only if every
+                # UTxO fetch in this scan succeeded. Saving a state that
+                # advanced past a failed fetch would make the skipped
+                # transaction's IAG flow permanently unrecoverable (the next
+                # scan resumes after it and never retries it). Leaving the
+                # previous scan state untouched means the next scan retries
+                # this same range from scratch, self-healing like a full
+                # rescan does.
+                if scan_had_failures:
+                    failed_count = sum(
+                        1 for r in utxo_results
+                        if isinstance(r, Exception) or r is None
+                    )
+                    logger.warning(
+                        f"[Iagon] Not saving scan state for {address[:20]}... — "
+                        f"{failed_count} UTxO fetch(es) failed this scan; "
+                        f"will retry from block {from_block if from_block else 'genesis'} next time"
+                    )
+                else:
+                    await set_cache(scan_key, {
+                        'version': SCAN_STATE_VERSION,
+                        'staking_deposits': staking_deposits,
+                        'staking_withdrawals': staking_withdrawals,
+                        'total_rewards': total_rewards,
+                        'last_block_height': last_block
+                    }, ttl_seconds=604800)
 
             net_staked = staking_deposits - staking_withdrawals
 
