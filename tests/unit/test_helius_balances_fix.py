@@ -30,7 +30,12 @@ BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
-# Fake, non-real Solana-address-shaped strings (base58, 32-44 chars)
+# Fake, non-real Solana-address-shaped strings (base58, 32-44 chars). They
+# must stay base58-valid: SolanaService.is_solana_address() runs for real
+# in these tests (only get_api_key/is_configured are mocked) and gates
+# get_address_info(), so an invalid shape would short-circuit before the
+# code under test ever runs. Allowlisted in sec/wallet_allowlist.txt,
+# same convention as the existing DemoSo1ana*/JUPyiw... synthetic entries.
 WALLET_A = "So1anaFakeWa11etAddressForTests111111111"
 WALLET_B = "So1anaFakeWa11etAddressForTestsBBBBBBBBBB"
 
