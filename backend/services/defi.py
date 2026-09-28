@@ -1682,7 +1682,9 @@ class DeFiService:
 
             # Load incremental scan state from persistent cache (7-day TTL)
             # Version marker: bump when calculation logic changes to invalidate stale data
-            SCAN_STATE_VERSION = 5  # v5: exclude deprecated old staking contract (refunded separately)
+            SCAN_STATE_VERSION = 6  # v6: force one rescan post-deploy so pre-existing rows that may
+            # have skipped a transaction due to a failed UTxO fetch (fixed by this change; see
+            # scan_had_failures below) are never trusted as a resume point without being re-verified
             scan_key = f"iagon_scan_state_{address}"
             scan_state = await get_cache(scan_key)
 

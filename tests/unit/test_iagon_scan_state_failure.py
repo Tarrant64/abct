@@ -31,6 +31,13 @@ Covered, for BOTH implementations:
 2. One UTxO fetch fails -> scan state is NOT saved this run, and the next
    scan (which now has no saved state to resume from) does a full rescan
    that includes the previously-skipped transaction.
+3. Follow-up from ABCT-PR13-16-REVIEW-2026-09-28 (#14 note 1): SCAN_STATE_VERSION
+   was bumped 5->6 in both implementations so the first scan after deploy
+   discards any pre-existing v5 row rather than trusting it as a resume
+   point. A v5 row saved by `main` before this fix may itself already be
+   "holed" (missing a transaction the pre-fix bug silently skipped) --
+   version-gating forces one full rescan to repair it, instead of letting
+   #13's newest-row read make that holed row the permanent resume point.
 """
 
 import os
@@ -229,6 +236,39 @@ class TestIagonAdapterScanState:
         assert fake_cache.store[SCAN_KEY]["staking_deposits"] == 3_000_000
         assert fake_cache.store[SCAN_KEY]["last_block_height"] == 101
 
+    @pytest.mark.asyncio
+    async def test_stale_v5_row_is_ignored_and_fully_rescanned(self, monkeypatch, fake_cache):
+        """SCAN_STATE_VERSION was bumped 5->6 specifically so a pre-existing
+        v5 row left by main before this deploy -- which may itself have
+        silently skipped a transaction due to the bug this PR fixes -- is
+        never trusted as a resume point. Seed a v5 row shaped exactly like
+        that: last_block_height=101 (past tx1's block 100) but
+        staking_deposits only reflects tx2, as if tx1's UTxO fetch had
+        failed on some prior scan and state was (incorrectly, pre-fix)
+        still saved. A v6-aware scan must discard it, do a full rescan
+        (from_block=None), and recover tx1."""
+        fake_cache.store[SCAN_KEY] = {
+            "version": 5,
+            "staking_deposits": 2_000_000,  # legacy: only tx2 (2 IAG) counted
+            "staking_withdrawals": 0,
+            "total_rewards": 0,
+            "last_block_height": 101,  # a v5-trusting resume would skip tx1 (block 100) forever
+        }
+        _install_iagon_adapter_fakes(monkeypatch, fail_hashes=set())
+        adapter = IagonAdapter()
+
+        positions = await adapter.detect_positions(ADDRESS)
+
+        # Full rescan recovers tx1 (1 IAG) + tx2 (2 IAG) = 3 IAG, not the
+        # legacy 2 IAG a trusted v5 resume-from-101 would have stayed at.
+        assert len(positions) == 1
+        assert positions[0].amount == pytest.approx(3.0)
+
+        saved = fake_cache.store[SCAN_KEY]
+        assert saved["version"] == 6
+        assert saved["staking_deposits"] == 3_000_000
+        assert saved["last_block_height"] == 101
+
 
 # ---------------------------------------------------------------------------
 # DeFiService._get_iagon_staking_inner (services/defi.py)
@@ -279,3 +319,28 @@ class TestDeFiServiceIagonScanState:
         assert second["total_staked_iag"] == pytest.approx(3.0)
         assert fake_cache.store[SCAN_KEY]["staking_deposits"] == 3_000_000
         assert fake_cache.store[SCAN_KEY]["last_block_height"] == 101
+
+    @pytest.mark.asyncio
+    async def test_stale_v5_row_is_ignored_and_fully_rescanned(
+        self, monkeypatch, fake_cache, service
+    ):
+        """Same v6 legacy-row guarantee as
+        TestIagonAdapterScanState.test_stale_v5_row_is_ignored_and_fully_rescanned,
+        for the DeFiService copy of the scan."""
+        fake_cache.store[SCAN_KEY] = {
+            "version": 5,
+            "staking_deposits": 2_000_000,  # legacy: only tx2 (2 IAG) counted
+            "staking_withdrawals": 0,
+            "total_rewards": 0,
+            "last_block_height": 101,  # a v5-trusting resume would skip tx1 (block 100) forever
+        }
+        _install_defi_service_fakes(monkeypatch, service, fail_hashes=set())
+
+        result = await service.get_iagon_staking(ADDRESS)
+
+        assert result is not None
+        assert result["total_staked_iag"] == pytest.approx(3.0)
+        saved = fake_cache.store[SCAN_KEY]
+        assert saved["version"] == 6
+        assert saved["staking_deposits"] == 3_000_000
+        assert saved["last_block_height"] == 101
