@@ -24,6 +24,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database import get_cache, set_cache
 from services.api_key_manager import APIKeyManager
 from services.http_client import get_client
+from services.alchemy_nft_utils import (
+    build_owner_params, drop_spam, previous_nft_list, restore_failed_wallets,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -506,15 +509,9 @@ class EVMChainService(APIKeyManager):
 
         try:
             client = get_client("alchemy", timeout=30.0)
-            params = {
-                'owner': address,
-                'withMetadata': 'true',
-                'excludeFilters[]': 'SPAM',
-                'pageSize': 100
-            }
-
-            if page_key:
-                params['pageKey'] = page_key
+            # No excludeFilters[]=SPAM: Alchemy rejects it on free-tier keys
+            # (HTTP 400). Spam is filtered client-side by drop_spam() below.
+            params = build_owner_params(address, page_key)
 
             response = await client.get(
                 f"{await self._get_nft_url()}/getNFTsForOwner",
@@ -525,7 +522,7 @@ class EVMChainService(APIKeyManager):
                 logger.error(f"Alchemy {self.config['name']} NFT API error: {response.status_code}")
                 return None
 
-            return response.json()
+            return drop_spam(response.json())
 
         except Exception as e:
             logger.error(f"Error fetching {self.config['name']} NFTs: {e}")
@@ -608,6 +605,11 @@ class EVMChainService(APIKeyManager):
             logger.info(f"No {self.config['name']} wallets provided")
             return []
 
+        # Snapshot last-known NFTs so a failed wallet fetch does not wipe them
+        previous_nfts = previous_nft_list(
+            self._nft_cache, None if self._nft_cache else await get_cache(self._nft_cache_key)
+        )
+        failed_wallets = set()
         all_nfts = []
         self._nft_cache.clear()
 
@@ -619,6 +621,8 @@ class EVMChainService(APIKeyManager):
                 data = await self.get_nfts_for_owner(address, page_key)
 
                 if not data:
+                    if page_key is None:
+                        failed_wallets.add(address)
                     break
 
                 owned_nfts = data.get('ownedNfts', [])
@@ -643,6 +647,14 @@ class EVMChainService(APIKeyManager):
                     break
 
             logger.info(f"Fetched {len(all_nfts)} NFTs for {self.config['name']} wallet {address[:10]}...")
+
+        restored = restore_failed_wallets(self._nft_cache, previous_nfts, failed_wallets)
+        if restored:
+            logger.warning(
+                f"{self.config['name']} NFT fetch failed for {len(failed_wallets)} wallet(s); "
+                f"kept {restored} previously cached NFTs instead of dropping them"
+            )
+            all_nfts = list(self._nft_cache.values())
 
         self.last_nft_refresh = datetime.now()
 
