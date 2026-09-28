@@ -6,6 +6,20 @@ Helius API provides comprehensive Solana data including:
 - SPL token balances
 - NFT holdings
 - Transaction history
+
+Note: the legacy Helius v0 `/addresses/{address}/balances` REST endpoint
+(HELIUS_BASE_URL) has been retired by Helius (returns HTTP 404 "Method not
+found" as of 2026-09). Balances are now fetched via the Helius DAS
+`searchAssets` JSON-RPC method (tokenType="fungible", displayOptions with
+showNativeBalance) on the RPC endpoint, which is the currently documented,
+GA (non-beta), free-tier-compatible way to get native SOL + SPL token
+balances in one call. Docs checked 2026-09-28:
+https://www.helius.dev/docs/api-reference/das/searchassets
+https://www.helius.dev/docs/api-reference/das/getassetsbyowner
+https://www.helius.dev/docs/das/fungible-token-extension
+(The newer REST "Wallet API" /v1/wallet/{address}/balances was considered
+but is explicitly Beta with "endpoints and response formats may change"
+and costs 100 credits/call, so it was not used here.)
 """
 
 import httpx
@@ -16,7 +30,7 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import HELIUS_BASE_URL
+from config import HELIUS_RPC_URL
 from services.api_key_manager import APIKeyManager
 from services.http_client import get_client
 
@@ -31,7 +45,7 @@ class SolanaService(APIKeyManager):
 
     def __init__(self):
         super().__init__(api_name='helius', env_var='HELIUS_API_KEY')
-        self.base_url = HELIUS_BASE_URL
+        self.rpc_url = HELIUS_RPC_URL
         self.public_rpc_url = "https://api.mainnet-beta.solana.com"
         self._balance_cache: Dict[str, dict] = {}
         self._cache_ttl = timedelta(minutes=5)
@@ -53,46 +67,6 @@ class SolanaService(APIKeyManager):
         # Base58 character set (no 0, O, I, l)
         base58_chars = set('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz')
         return all(c in base58_chars for c in address)
-
-    async def _fetch_token_metadata(self, client: httpx.AsyncClient, mint_addresses: List[str]) -> Dict[str, dict]:
-        """
-        Fetch token metadata for a list of mint addresses.
-        Returns a dict mapping mint address to metadata.
-        """
-        if not mint_addresses:
-            return {}
-
-        try:
-            response = await client.post(
-                f"{self.base_url}/token-metadata",
-                params={"api-key": await self.get_api_key()},
-                json={"mintAccounts": mint_addresses}
-            )
-
-            if response.status_code != 200:
-                logger.warning(f"Token metadata API error: {response.status_code}")
-                return {}
-
-            metadata_list = response.json()
-            result = {}
-
-            for item in metadata_list:
-                mint = item.get('account', '')
-                on_chain = item.get('onChainMetadata', {})
-                metadata = on_chain.get('metadata', {})
-                data = metadata.get('data', {})
-
-                if data:
-                    result[mint] = {
-                        'symbol': data.get('symbol', ''),
-                        'name': data.get('name', ''),
-                    }
-
-            return result
-
-        except Exception as e:
-            logger.warning(f"Error fetching token metadata: {e}")
-            return {}
 
     async def get_address_info(self, address: str) -> Optional[dict]:
         """
@@ -128,10 +102,33 @@ class SolanaService(APIKeyManager):
 
         try:
             client = get_client("helius", timeout=30.0)
-            # Get SOL balance and token balances using the balances endpoint
-            response = await client.get(
-                f"{self.base_url}/addresses/{address}/balances",
-                params={"api-key": await self.get_api_key()}
+            api_key = await self.get_api_key()
+
+            # Get SOL + SPL token balances via the Helius DAS `searchAssets`
+            # JSON-RPC method. tokenType="fungible" restricts results to
+            # fungible tokens (excludes NFTs), and displayOptions with
+            # showNativeBalance folds the native SOL balance into the same
+            # call. This replaces the retired v0 REST `/addresses/{address}
+            # /balances` endpoint (HTTP 404 as of 2026-09).
+            payload = {
+                "jsonrpc": "2.0",
+                "id": f"get-balances-{address}",
+                "method": "searchAssets",
+                "params": {
+                    "ownerAddress": address,
+                    "tokenType": "fungible",
+                    "page": 1,
+                    "limit": 1000,
+                    "displayOptions": {
+                        "showNativeBalance": True,
+                        "showZeroBalance": False
+                    }
+                }
+            }
+
+            response = await client.post(
+                f"{self.rpc_url}/?api-key={api_key}",
+                json=payload
             )
 
             if response.status_code != 200:
@@ -140,35 +137,45 @@ class SolanaService(APIKeyManager):
 
             data = response.json()
 
+            if "error" in data:
+                logger.error(f"Helius DAS API error: {data['error']}")
+                return None
+
+            result = data.get("result", {})
+
             # Parse native SOL balance
-            native_balance = data.get('nativeBalance', 0)
+            native_balance_info = result.get('nativeBalance') or {}
+            native_balance = native_balance_info.get('lamports', 0)
             balance_sol = native_balance / LAMPORTS_PER_SOL
 
-            # Parse SPL tokens - first pass to get balances
+            # Parse SPL (fungible) tokens
             tokens = []
-            unknown_mints = []
 
-            for token in data.get('tokens', []):
+            for item in result.get('items', []):
                 try:
-                    mint = token.get('mint', '')
-                    amount = token.get('amount', 0)
-                    decimals = token.get('decimals', 0)
+                    # Defensive: searchAssets(tokenType="fungible") should
+                    # already exclude NFTs, but skip anything that isn't a
+                    # fungible asset in case of API-shape changes.
+                    interface = item.get('interface', '')
+                    if interface not in ('FungibleToken', 'FungibleAsset'):
+                        continue
 
-                    # Calculate human-readable balance
+                    token_info = item.get('token_info', {}) or {}
+                    mint = item.get('id', '')
+                    amount = token_info.get('balance', 0)
+                    decimals = token_info.get('decimals', 0)
+
+                    # Calculate human-readable balance (token_info.balance
+                    # is the raw on-chain integer amount)
                     balance = amount / (10 ** decimals) if decimals > 0 else amount
 
                     # Skip tokens with zero balance
                     if balance <= 0:
                         continue
 
-                    # Get token info if available
-                    token_info = token.get('tokenInfo', {})
                     symbol = token_info.get('symbol', '')
-                    name = token_info.get('name', '')
-
-                    # Track mints that need metadata lookup
-                    if not symbol:
-                        unknown_mints.append(mint)
+                    content_metadata = (item.get('content') or {}).get('metadata', {}) or {}
+                    name = content_metadata.get('name', '')
 
                     tokens.append({
                         'mint': mint,
@@ -181,17 +188,6 @@ class SolanaService(APIKeyManager):
                 except Exception as e:
                     logger.debug(f"Error parsing token: {e}")
                     continue
-
-            # Fetch metadata for tokens with unknown symbols
-            if unknown_mints:
-                metadata = await self._fetch_token_metadata(client, unknown_mints)
-
-                # Update tokens with fetched metadata
-                for token in tokens:
-                    if token['symbol'] == 'UNKNOWN' and token['mint'] in metadata:
-                        meta = metadata[token['mint']]
-                        token['symbol'] = meta.get('symbol', 'UNKNOWN')
-                        token['name'] = meta.get('name', '')
 
             result_data = {
                 'address': address,
