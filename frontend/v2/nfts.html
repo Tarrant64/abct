@@ -28,6 +28,7 @@
         .nft-chain-tab.chain-solana.active { background: rgba(20, 241, 149, 0.15); border-color: #3dffb3; color: #3dffb3; }
         .nft-chain-tab.chain-polygon.active { background: rgba(130, 71, 229, 0.15); border-color: #a673f0; color: #a673f0; }
         .nft-chain-tab.chain-base.active { background: rgba(0, 82, 255, 0.15); border-color: #5c9eff; color: #5c9eff; }
+        .nft-chain-tab.chain-algorand.active { background: rgba(160, 160, 160, 0.15); border-color: #c8c8c8; color: #c8c8c8; }
 
         /* Sort controls */
         .nft-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
@@ -118,6 +119,7 @@
                     <button class="nft-chain-tab chain-solana" data-chain="solana">Solana</button>
                     <button class="nft-chain-tab chain-polygon" data-chain="polygon">Polygon</button>
                     <button class="nft-chain-tab chain-base" data-chain="base">Base</button>
+                    <button class="nft-chain-tab chain-algorand" data-chain="algorand">Algorand</button>
                 </div>
 
                 <!-- Sort & Group Controls -->
@@ -219,7 +221,7 @@
         async function loadNfts() {
             try {
                 var useCached = typeof v2CachedFetch === 'function';
-                const chains = ['cardano', 'ethereum', 'solana', 'polygon', 'base'];
+                const chains = ['cardano', 'ethereum', 'solana', 'polygon', 'base', 'algorand'];
                 const promises = chains.map(chain => {
                     // Cardano NFTs use the root endpoint /nfts, others use /nfts/{chain}
                     const url = chain === 'cardano' ? '/nfts' : '/nfts/' + chain;
