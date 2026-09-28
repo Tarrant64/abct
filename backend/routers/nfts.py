@@ -106,6 +106,14 @@ async def get_all_nfts(user_id: int = Depends(verify_session), force_refresh: bo
     # Sort by USD value (valued first, then unvalued)
     filtered_nfts.sort(key=lambda x: (x.get('price_usd') is None, -(x.get('price_usd') or 0)))
 
+    # Give every NFT an image_url (resolved from on-chain metadata; unknown ones
+    # are resolved in the background and appear on a later load). Never fails
+    # the list: images are best-effort.
+    try:
+        nft_service.attach_image_urls(filtered_nfts, user_id=user_id)
+    except Exception as e:
+        logger.warning(f"Could not attach Cardano NFT image URLs: {e}")
+
     return {
         'nfts': filtered_nfts,
         'total_count': len(filtered_nfts),

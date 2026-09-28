@@ -16,6 +16,7 @@ This minimizes calls to TapTools (limited paid API) by only using it for floor p
 while getting metadata from free or alternative sources.
 """
 
+import asyncio
 import httpx
 import logging
 import json
@@ -27,7 +28,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import BLOCKFROST_BASE_URL, TAPTOOLS_API_KEY
 from database import (
-    get_all_wallets, get_wallet_assets, get_cache, set_cache,
+    get_all_wallets, get_wallet_assets, get_cache, set_cache, get_stale_cache,
     save_nft_floor_price, get_latest_nft_floor_price, get_all_nft_floor_prices,
     get_collections_needing_price_update, get_nft_price_stats
 )
@@ -62,6 +63,10 @@ NFT_CACHE_KEY = "nft_all_data"
 COLLECTION_CACHE_KEY_PREFIX = "nft_collection_"
 NFT_CACHE_TTL = 86400 * 30  # 30 days - persistent until manual refresh
 COLLECTION_CACHE_DURATION = timedelta(hours=24)  # In-memory cache for collection lookups
+# Cardano NFT image resolution (ABCT-NFT-DIAG-2026-09-27): images are resolved in
+# the background, a bounded batch at a time, and persisted in the NFT cache.
+IMAGE_BACKFILL_BATCH = 100
+IMAGE_BACKFILL_CONCURRENCY = 5
 
 
 class NFTService:
@@ -75,6 +80,7 @@ class NFTService:
         self._db_cache_loaded = False  # Track if we've loaded from DB cache
         self._rate_limited = False  # Track if we've hit TapTools rate limit
         self._rate_limit_reset: Optional[datetime] = None  # When rate limit resets
+        self._image_backfill_task: Optional[asyncio.Task] = None
 
     def is_taptools_configured(self) -> bool:
         """Check if TapTools API key is configured."""
@@ -159,6 +165,8 @@ class NFTService:
         # Handle ipfs:// protocol
         if url.startswith('ipfs://'):
             ipfs_hash = url[7:]
+            if ipfs_hash.startswith('ipfs/'):
+                ipfs_hash = ipfs_hash[5:]
             return f"https://ipfs.io/ipfs/{ipfs_hash}"
 
         # Handle Qm... IPFS hashes
@@ -346,6 +354,9 @@ class NFTService:
         # Always load floor prices from database first to reduce API calls
         await self.load_floor_prices_from_db()
 
+        # Image URLs already resolved for these NFTs survive a full refresh
+        previous_images = await self._previous_image_urls(user_id)
+
         wallets = await get_all_wallets(user_id=user_id)
         cardano_wallets = [w for w in wallets if w['blockchain'] == 'cardano']
 
@@ -373,6 +384,9 @@ class NFTService:
                     'wallet_address': wallet['address'],
                     'wallet_label': wallet.get('label', ''),
                 }
+                if previous_images.get(asset_id):
+                    nft_data['image'] = previous_images[asset_id]
+                    nft_data['image_checked'] = True
 
                 all_nfts.append(nft_data)
 
@@ -773,6 +787,136 @@ class NFTService:
             nft['price_source'] = None
 
         return nft
+
+    # ------------------------------------------------------------------
+    # Image URLs for the NFT list (ABCT-NFT-DIAG-2026-09-27)
+    #
+    # GET /nfts never carried an image URL for Cardano NFTs: images were only
+    # ever reachable through the optional image cache (disabled in production),
+    # so the /next NFT page showed a placeholder for every Cardano NFT.
+    # attach_image_urls() gives every NFT an ``image_url`` from its resolved
+    # CIP-25 / CIP-68 metadata image (NFT CDN -> NMKR -> Blockfrost-compatible
+    # backend) and resolves unknown ones in the background, persisting them in
+    # the user's NFT cache so each image is looked up once.
+    # ------------------------------------------------------------------
+
+    async def _previous_image_urls(self, user_id: Optional[int]) -> Dict[str, str]:
+        """asset_id -> image URL from the user's existing NFT cache (even if expired)."""
+        if user_id is None:
+            return {}
+        try:
+            data, _ = await get_stale_cache(NFT_CACHE_KEY, user_id=user_id)
+        except Exception as e:
+            logger.debug(f"Could not read previous NFT cache for images: {e}")
+            return {}
+        if not isinstance(data, dict):
+            return {}
+        return {
+            n['asset_id']: n['image']
+            for n in data.get('nfts', [])
+            if isinstance(n, dict) and n.get('asset_id') and n.get('image')
+        }
+
+    @staticmethod
+    def _safe_display_url(url) -> Optional[str]:
+        """Only hand the browser https:// URLs or inline data:image/ URIs.
+
+        On-chain metadata is attacker-controlled: an ``http://`` URL could point
+        a viewer's browser at a LAN host, and other schemes have no business in
+        an <img src>.
+        """
+        if not isinstance(url, str) or not url:
+            return None
+        lowered = url.strip().lower()
+        if lowered.startswith('https://') or lowered.startswith('data:image/'):
+            return url.strip()
+        return None
+
+    def attach_image_urls(self, nfts: List[dict], user_id: Optional[int] = None) -> List[dict]:
+        """Set ``image_url`` on each NFT and schedule resolution of unknown images.
+
+        Never blocks on the network: NFTs whose image is not known yet get
+        ``image_url = None`` now and a background task resolves them.
+        """
+        missing = []
+        for nft in nfts:
+            if not isinstance(nft, dict):
+                continue
+            url = self._safe_display_url(nft.get('image'))
+            nft['image_url'] = url
+            if not url and not nft.get('image_checked') and nft.get('asset_id'):
+                missing.append(nft['asset_id'])
+        if missing and user_id is not None:
+            self._schedule_image_backfill(user_id, missing)
+        return nfts
+
+    def _schedule_image_backfill(self, user_id: int, asset_ids: List[str]) -> bool:
+        """Start one background resolution task (no-op if one is already running)."""
+        if self._image_backfill_task is not None and not self._image_backfill_task.done():
+            return False
+        try:
+            self._image_backfill_task = asyncio.create_task(
+                self._backfill_images(user_id, list(asset_ids))
+            )
+        except RuntimeError:
+            # No running event loop (e.g. sync caller) - resolve on a later request
+            return False
+        return True
+
+    async def _backfill_images(self, user_id: int, asset_ids: List[str]) -> Dict[str, Optional[str]]:
+        """Resolve image URLs for ``asset_ids`` and merge them into the user's NFT cache.
+
+        Works in batches of IMAGE_BACKFILL_BATCH and saves after each batch, so
+        images start appearing before the whole wallet has been resolved.
+        """
+        sem = asyncio.Semaphore(IMAGE_BACKFILL_CONCURRENCY)
+        all_results: Dict[str, Optional[str]] = {}
+
+        async def one(asset_id: str, results: Dict[str, Optional[str]]):
+            async with sem:
+                try:
+                    results[asset_id] = await self._fetch_nft_image_url(asset_id)
+                except Exception as e:
+                    logger.debug(f"Image resolution failed for {asset_id[:20]}...: {e}")
+                    results[asset_id] = None
+
+        for i in range(0, len(asset_ids), IMAGE_BACKFILL_BATCH):
+            batch = asset_ids[i:i + IMAGE_BACKFILL_BATCH]
+            results: Dict[str, Optional[str]] = {}
+            await asyncio.gather(*(one(a, results) for a in batch))
+            await self._merge_image_results(user_id, results)
+            all_results.update(results)
+
+        found = sum(1 for v in all_results.values() if v)
+        logger.info(f"Resolved {found}/{len(asset_ids)} Cardano NFT image URLs")
+        return all_results
+
+    async def _merge_image_results(self, user_id: int, results: Dict[str, Optional[str]]) -> None:
+        """Merge resolved image URLs into the user's NFT cache, keeping its expiry.
+
+        Re-reads the cache at save time and only touches image fields, so a full
+        refresh that happened meanwhile is not overwritten with stale data.
+        """
+        try:
+            data, expires_at = await get_stale_cache(NFT_CACHE_KEY, user_id=user_id)
+            if not (isinstance(data, dict) and data.get('nfts')):
+                return
+            for nft in data['nfts']:
+                aid = nft.get('asset_id') if isinstance(nft, dict) else None
+                if aid in results:
+                    if results[aid]:
+                        nft['image'] = results[aid]
+                    nft['image_checked'] = True
+            ttl = NFT_CACHE_TTL
+            if expires_at:
+                try:
+                    remaining = (datetime.fromisoformat(expires_at) - datetime.now()).total_seconds()
+                    ttl = max(60, int(remaining))
+                except ValueError:
+                    pass
+            await set_cache(NFT_CACHE_KEY, data, ttl, user_id=user_id)
+        except Exception as e:
+            logger.error(f"Error saving resolved NFT image URLs: {e}")
 
     async def batch_fetch_image_urls(self, nfts: List[dict], max_concurrent: int = 5) -> Dict[str, str]:
         """
