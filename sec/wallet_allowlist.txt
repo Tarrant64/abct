@@ -349,6 +349,8 @@ Demo2So1anaStakingAddr987654321XYZ  # backend/services/demo_wallet_service.py
 DemoSo1anaWa11etAddress123456789ABC  # backend/services/demo_populator.py
 Epm4KfTj4DMrvqn6Bwg2Tr2N8vhQuNbuK8bESFp4k33K  # backend/services/defi_protocols/solana/raydium.py
 So11111111111111111111111111111111111111112  # backend/services/defi_protocols/solana/jupiter_perps.py
+So1anaFakeWa11etAddressForTests111111111  # synthetic fake test fixture in tests/unit/test_helius_balances_fix.py
+So1anaFakeWa11etAddressForTestsBBBBBBBBBB  # synthetic fake test fixture in tests/unit/test_helius_balances_fix.py
 TuLipcqtGVXP9XR62wM8WWCm6a9vhLs7T1uoWBk6FDs  # backend/services/defi_protocols/solana/tulip.py
 
 # --- Well-known public test vectors used by tests/unit/test_wallet_leak_check.py ---
