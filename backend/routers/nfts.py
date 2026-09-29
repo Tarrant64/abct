@@ -25,6 +25,7 @@ from services.polygon import polygon_service
 from services.base import base_service
 from services.algorand_nft import algorand_nft_service
 from services.evm_chain import bsc_service, arbitrum_service, avalanche_service
+from services.alchemy_nft_utils import evm_fanout_wallets
 from services.pricing import pricing_service
 from services.nft_price_client import nft_price_client
 from services.demo_nft_service import demo_nft_service
@@ -552,7 +553,7 @@ async def get_polygon_nfts(user_id: int = Depends(verify_session), force_refresh
 
     # Get all Polygon wallets
     wallets = await get_all_wallets(user_id=user_id)
-    polygon_wallets = [w for w in wallets if w['blockchain'] == 'polygon']
+    polygon_wallets = evm_fanout_wallets(wallets)  # ABCT-EVM-FANOUT-2026-09-28: every EVM-family wallet, not just rows stored as 'polygon'
 
     if not polygon_wallets:
         return {
@@ -614,7 +615,7 @@ async def get_polygon_nft_summary(user_id: int = Depends(verify_session)):
 
     # Get all Polygon wallets
     wallets = await get_all_wallets(user_id=user_id)
-    polygon_wallets = [w for w in wallets if w['blockchain'] == 'polygon']
+    polygon_wallets = evm_fanout_wallets(wallets)  # ABCT-EVM-FANOUT-2026-09-28: every EVM-family wallet, not just rows stored as 'polygon'
 
     summary = await polygon_service.get_nft_summary(polygon_wallets)
 
@@ -649,7 +650,7 @@ async def refresh_polygon_nfts(user_id: int = Depends(verify_session)):
 
     # Get all Polygon wallets
     wallets = await get_all_wallets(user_id=user_id)
-    polygon_wallets = [w for w in wallets if w['blockchain'] == 'polygon']
+    polygon_wallets = evm_fanout_wallets(wallets)  # ABCT-EVM-FANOUT-2026-09-28: every EVM-family wallet, not just rows stored as 'polygon'
 
     polygon_service.clear_cache()
     all_nfts = await polygon_service.get_all_polygon_nfts(polygon_wallets, force_refresh=True)
@@ -701,7 +702,7 @@ async def get_base_nfts(user_id: int = Depends(verify_session), force_refresh: b
 
     # Get Base wallets
     wallets = await get_all_wallets(user_id=user_id)
-    base_wallets = [w for w in wallets if w['blockchain'] == 'base']
+    base_wallets = evm_fanout_wallets(wallets)  # ABCT-EVM-FANOUT-2026-09-28: every EVM-family wallet, not just rows stored as 'base'
 
     if not base_wallets:
         return {
@@ -753,7 +754,7 @@ async def get_base_nft_summary(user_id: int = Depends(verify_session)):
         }
 
     wallets = await get_all_wallets(user_id=user_id)
-    base_wallets = [w for w in wallets if w['blockchain'] == 'base']
+    base_wallets = evm_fanout_wallets(wallets)  # ABCT-EVM-FANOUT-2026-09-28: every EVM-family wallet, not just rows stored as 'base'
 
     summary = await base_service.get_nft_summary(base_wallets)
 
@@ -779,7 +780,7 @@ async def refresh_base_nfts(user_id: int = Depends(verify_session)):
         return {'success': False, 'message': 'Alchemy API key not configured'}
 
     wallets = await get_all_wallets(user_id=user_id)
-    base_wallets = [w for w in wallets if w['blockchain'] == 'base']
+    base_wallets = evm_fanout_wallets(wallets)  # ABCT-EVM-FANOUT-2026-09-28: every EVM-family wallet, not just rows stored as 'base'
 
     base_service.clear_cache()
     all_nfts = await base_service.get_all_base_nfts(base_wallets, force_refresh=True)
@@ -1156,8 +1157,8 @@ async def get_all_chains_nft_summary(user_id: int = Depends(verify_session)):
         arbitrum_service.is_configured(),
         avalanche_service.is_configured(),
     )
-    polygon_wallets = [w for w in wallets if w['blockchain'] == 'polygon']
-    base_wallets = [w for w in wallets if w['blockchain'] == 'base']
+    polygon_wallets = evm_fanout_wallets(wallets)  # ABCT-EVM-FANOUT-2026-09-28: every EVM-family wallet, not just rows stored as 'polygon'
+    base_wallets = evm_fanout_wallets(wallets)  # ABCT-EVM-FANOUT-2026-09-28: every EVM-family wallet, not just rows stored as 'base'
     bsc_wallets = [w for w in wallets if w['blockchain'] == 'bsc']
     arb_wallets = [w for w in wallets if w['blockchain'] == 'arbitrum']
     avax_wallets = [w for w in wallets if w['blockchain'] == 'avalanche']
@@ -1920,8 +1921,8 @@ async def get_nft_wall_status(user_id: int = Depends(verify_session)):
 
     # Pre-fetch wallets once (needed for polygon and base)
     wallets = await get_all_wallets(user_id=user_id)
-    polygon_wallets = [w for w in wallets if w['blockchain'] == 'polygon']
-    base_wallets = [w for w in wallets if w['blockchain'] == 'base']
+    polygon_wallets = evm_fanout_wallets(wallets)  # ABCT-EVM-FANOUT-2026-09-28: every EVM-family wallet, not just rows stored as 'polygon'
+    base_wallets = evm_fanout_wallets(wallets)  # ABCT-EVM-FANOUT-2026-09-28: every EVM-family wallet, not just rows stored as 'base'
 
     # Check which chains are configured (all async, run in parallel)
     eth_configured, sol_configured, poly_configured, base_configured = await asyncio.gather(
@@ -2090,7 +2091,7 @@ async def cache_all_nft_images(
 
                 elif chain == 'polygon' and await polygon_service.is_configured():
                     wallets = await get_all_wallets(user_id=user_id)
-                    polygon_wallets = [w for w in wallets if w['blockchain'] == 'polygon']
+                    polygon_wallets = evm_fanout_wallets(wallets)  # ABCT-EVM-FANOUT-2026-09-28: every EVM-family wallet, not just rows stored as 'polygon'
                     nfts = await polygon_service.get_all_polygon_nfts(polygon_wallets, force_refresh=False)
                     for nft in nfts:
                         if _get_nft_image_url(nft):
@@ -2101,7 +2102,7 @@ async def cache_all_nft_images(
 
                 elif chain == 'base' and await base_service.is_configured():
                     wallets = await get_all_wallets(user_id=user_id)
-                    base_wallets = [w for w in wallets if w['blockchain'] == 'base']
+                    base_wallets = evm_fanout_wallets(wallets)  # ABCT-EVM-FANOUT-2026-09-28: every EVM-family wallet, not just rows stored as 'base'
                     nfts = await base_service.get_all_base_nfts(base_wallets, force_refresh=False)
                     for nft in nfts:
                         if _get_nft_image_url(nft):
@@ -2347,8 +2348,8 @@ async def get_nfts_with_images(
 
     # Pre-fetch wallets once (needed for polygon/base)
     wallets = await get_all_wallets(user_id=user_id)
-    polygon_wallets = [w for w in wallets if w['blockchain'] == 'polygon']
-    base_wallets = [w for w in wallets if w['blockchain'] == 'base']
+    polygon_wallets = evm_fanout_wallets(wallets)  # ABCT-EVM-FANOUT-2026-09-28: every EVM-family wallet, not just rows stored as 'polygon'
+    base_wallets = evm_fanout_wallets(wallets)  # ABCT-EVM-FANOUT-2026-09-28: every EVM-family wallet, not just rows stored as 'base'
 
     # Check configured status for async services
     eth_configured = ethereum_nft_service.is_configured()  # sync
@@ -2704,7 +2705,7 @@ async def get_nft_wall_details(
 
         elif blockchain == 'polygon':
             wallets = await get_all_wallets(user_id=user_id)
-            polygon_wallets = [w for w in wallets if w['blockchain'] == 'polygon']
+            polygon_wallets = evm_fanout_wallets(wallets)  # ABCT-EVM-FANOUT-2026-09-28: every EVM-family wallet, not just rows stored as 'polygon'
             nfts = await polygon_service.get_all_polygon_nfts(polygon_wallets, force_refresh=False)
 
             parts = asset_id.split('_')
@@ -2721,7 +2722,7 @@ async def get_nft_wall_details(
 
         elif blockchain == 'base':
             wallets = await get_all_wallets(user_id=user_id)
-            base_wallets = [w for w in wallets if w['blockchain'] == 'base']
+            base_wallets = evm_fanout_wallets(wallets)  # ABCT-EVM-FANOUT-2026-09-28: every EVM-family wallet, not just rows stored as 'base'
             nfts = await base_service.get_all_base_nfts(base_wallets, force_refresh=False)
 
             parts = asset_id.split('_')
@@ -2782,12 +2783,12 @@ async def get_nft_wall_details(
                 price_key = 'eth'
             elif blockchain == 'polygon':
                 wallets = await get_all_wallets(user_id=user_id)
-                polygon_wallets = [w for w in wallets if w['blockchain'] == 'polygon']
+                polygon_wallets = evm_fanout_wallets(wallets)  # ABCT-EVM-FANOUT-2026-09-28: every EVM-family wallet, not just rows stored as 'polygon'
                 all_nfts = await polygon_service.get_all_polygon_nfts(polygon_wallets, force_refresh=False)
                 price_key = 'matic'
             else:  # base
                 wallets = await get_all_wallets(user_id=user_id)
-                base_wallets = [w for w in wallets if w['blockchain'] == 'base']
+                base_wallets = evm_fanout_wallets(wallets)  # ABCT-EVM-FANOUT-2026-09-28: every EVM-family wallet, not just rows stored as 'base'
                 all_nfts = await base_service.get_all_base_nfts(base_wallets, force_refresh=False)
                 price_key = 'eth'
 

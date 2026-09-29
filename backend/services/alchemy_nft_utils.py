@@ -17,7 +17,69 @@ list, wiping the last known-good data. ``restore_failed_wallets`` keeps the
 previously cached NFTs for any wallet whose fetch failed.
 """
 
+import hashlib
 from typing import Dict, Iterable, List, Optional, Set
+
+
+# ABCT-EVM-FANOUT-2026-09-28: one EVM private key/address can hold assets on
+# any EVM chain. Wallets are stored one-row-per-(address, blockchain)
+# (database.py wallets table, UNIQUE(user_id, address, blockchain)), and
+# utils/address.detect_blockchain files any bare 0x address as 'ethereum'
+# (chain prefixes like 'polygon:0x...' are the only way a row gets a
+# different EVM blockchain value). Before this fix, each EVM NFT/balance
+# fetcher only ever queried addresses whose OWN row said that exact chain,
+# so a real Polygon/Base holder stored as 'ethereum' was invisible to
+# /nfts/polygon and /nfts/base. EVM_ADDRESS_CHAINS is every blockchain value
+# that is an EVM address (a "donor" of candidate addresses); a wallet whose
+# blockchain is any of these is fanned out to every chain in
+# EVM_FANOUT_TARGET_CHAINS instead of only its own stored chain.
+EVM_ADDRESS_CHAINS = frozenset({
+    'ethereum', 'polygon', 'base', 'bsc', 'arbitrum', 'avalanche',
+})
+
+# Chains this fan-out actually queries per ABCT-EVM-FANOUT-2026-09-28 (user
+# decision, 2026-09-28). BSC/Arbitrum/Avalanche wallets are still valid
+# ADDRESS DONORS above (their 0x address is equally an Ethereum/Polygon/Base
+# address), but their own dedicated endpoints are out of scope for this fix.
+EVM_FANOUT_TARGET_CHAINS = ('ethereum', 'polygon', 'base')
+
+
+def evm_fanout_wallets(wallets: Iterable[dict]) -> List[dict]:
+    """Every EVM-family wallet, deduplicated by address (case-insensitive).
+
+    Used to build the candidate address list for an EVM NFT/balance fetcher
+    that should query every EVM address the user has ever registered, not
+    just the ones whose own DB row happens to already say that chain. First
+    occurrence wins on a duplicate address (stable, deterministic ordering
+    from the input list).
+    """
+    seen: Set[str] = set()
+    result: List[dict] = []
+    for w in wallets:
+        addr = w.get('address') if isinstance(w, dict) else None
+        if not addr:
+            continue
+        if w.get('blockchain') not in EVM_ADDRESS_CHAINS:
+            continue
+        key = addr.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(w)
+    return result
+
+
+def wallet_fingerprint(addresses: Iterable[str]) -> str:
+    """Stable, non-reversible fingerprint of a set of addresses (case-insensitive).
+
+    Stored next to a cached fetch result so an EVM wallet added or removed
+    after the last fetch is noticed instead of hiding behind a long TTL.
+    Mirrors services/solana_nft.py's wallet_fingerprint (kept as an
+    independent copy here rather than imported, so the EVM caching path
+    does not depend on the Solana module). ABCT-EVM-FANOUT-2026-09-28.
+    """
+    joined = "\n".join(sorted({a.lower() for a in addresses if a}))
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
 
 
 def build_owner_params(address: str, page_key: Optional[str] = None, page_size: int = 100) -> Dict[str, str]:
