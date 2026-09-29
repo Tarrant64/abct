@@ -21,6 +21,7 @@ from services.logokit_service import logokit_service
 from services.token_metadata_cache import metadata_cache
 from services.nmkr_service import nmkr_service
 from services.demo_wallet_service import demo_wallet_service
+from services.evm_balance_fanout import get_evm_fanout_summary
 from auth_utils import verify_session
 from database import get_username_by_user_id
 from middleware.demo_mode import is_demo_user
@@ -1064,6 +1065,38 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
 
     # Sort stake groups by total_ada descending
     summary['cardano']['stake_groups'].sort(key=lambda x: x['total_ada'], reverse=True)
+
+    # EVM cross-chain balance/token fan-out (ABCT-EVM-FANOUT-2026-09-28):
+    # a bare 0x address is always stored as 'ethereum' (utils/address.
+    # detect_blockchain), so an address genuinely used on Polygon/Base held
+    # real balances this summary never asked about. Adds ON TOP of the
+    # per-row totals above (never touches DB rows/wallets, never double
+    # counts -- see services/evm_balance_fanout._fanout_candidates). The
+    # `wallets` list dispatch field ('total_eth'/'total_matic') matches the
+    # per-row loop above.
+    try:
+        evm_fanout = await get_evm_fanout_summary(wallets)
+    except Exception as e:
+        logger.error(f"EVM balance fan-out failed, portfolio totals unaffected: {e}")
+        evm_fanout = {}
+
+    _evm_fanout_total_field = {'ethereum': 'total_eth', 'polygon': 'total_matic', 'base': 'total_eth'}
+    for _chain, _extra in evm_fanout.items():
+        if not _extra or _chain not in summary:
+            continue
+        _field = _evm_fanout_total_field.get(_chain)
+        if _field:
+            summary[_chain][_field] = summary[_chain].get(_field, 0) + _extra.get('extra_native', 0)
+        summary[_chain]['token_count'] = summary[_chain].get('token_count', 0) + _extra.get('extra_token_count', 0)
+        summary[_chain]['native_assets_value_usd'] = (
+            summary[_chain].get('native_assets_value_usd', 0) + _extra.get('extra_value_usd', 0)
+        )
+        # Visible separately from the per-wallet totals above so the origin
+        # of the increase is auditable (not folded silently into
+        # wallet_count, which stays "real registered wallets for this chain").
+        summary[_chain]['fanout_extra_native'] = _extra.get('extra_native', 0)
+        summary[_chain]['fanout_extra_value_usd'] = _extra.get('extra_value_usd', 0)
+        summary[_chain]['fanout_addresses_count'] = _extra.get('addresses_count', 0)
 
     # Round totals for display
     summary['cardano']['total_ada'] = round(summary['cardano']['total_ada'], 6)

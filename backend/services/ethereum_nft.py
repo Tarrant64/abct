@@ -24,6 +24,7 @@ from services.api_key_manager import APIKeyManager
 from services.http_client import get_client
 from services.alchemy_nft_utils import (
     build_owner_params, drop_spam, previous_nft_list, restore_failed_wallets,
+    evm_fanout_wallets, wallet_fingerprint,
 )
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,9 @@ class EthereumNFTService(APIKeyManager):
         self._cache_ttl = timedelta(hours=24)  # In-memory cache validity
         self.last_refresh: Optional[datetime] = None
         self._db_cache_loaded = False  # Track if we've loaded from DB cache
+        # Fingerprint of the EVM address set the cached NFTs were fetched for
+        # (ABCT-EVM-FANOUT-2026-09-28, same pattern as solana_nft.py's #16 fix)
+        self._wallet_fingerprint: Optional[str] = None
 
     async def is_configured(self) -> bool:
         """Check if the API key is configured."""
@@ -142,26 +146,58 @@ class EthereumNFTService(APIKeyManager):
 
     async def get_all_ethereum_nfts(self, user_id: int = None, force_refresh: bool = False) -> List[dict]:
         """
-        Fetch all NFTs for all Ethereum wallets.
+        Fetch all NFTs across every EVM-family wallet (Ethereum, Polygon, Base,
+        BSC, Arbitrum, Avalanche rows all queried against Ethereum mainnet).
         Uses persistent database cache that survives server restarts.
+
+        ABCT-EVM-FANOUT-2026-09-28: a bare 0x address is always stored as
+        'ethereum' (utils/address.detect_blockchain), so an address genuinely
+        added for Polygon/Base could equally hold Ethereum-mainnet assets.
+        Every EVM-family wallet is now a candidate, deduplicated by address
+        (evm_fanout_wallets), not just rows whose own blockchain says
+        'ethereum'.
 
         Args:
             force_refresh: Force refresh from API, ignoring cache
 
         Returns:
-            List of all NFTs across all Ethereum wallets
+            List of all NFTs across all EVM-family wallets, as seen on
+            Ethereum mainnet
         """
+        # A cache built for a different EVM address set (one was added or
+        # removed since) is stale no matter how young it is -- mirrors
+        # services/solana_nft.py's wallet_fingerprint fix (#16).
+        current_fp = None
+        if not force_refresh:
+            try:
+                wallets_now = await get_all_wallets(user_id=user_id)
+                current_fp = wallet_fingerprint(
+                    w['address'] for w in evm_fanout_wallets(wallets_now)
+                )
+            except Exception as e:
+                logger.debug(f"Could not fingerprint EVM wallets: {e}")
+
         # Try to load from persistent database cache first
         if not force_refresh and not self._db_cache_loaded:
             cached_data = await get_cache(ETH_NFT_CACHE_KEY)
             if cached_data:
-                logger.info(f"Loaded {len(cached_data.get('nfts', []))} Ethereum NFTs from persistent cache")
                 self._nft_cache = {nft['asset_id']: nft for nft in cached_data.get('nfts', [])}
                 self._collection_cache = cached_data.get('collections', {})
                 self.last_refresh = datetime.fromisoformat(cached_data['last_refresh']) if cached_data.get('last_refresh') else None
+                self._wallet_fingerprint = cached_data.get('wallet_fingerprint')
                 self._db_cache_loaded = True
-                return list(self._nft_cache.values())
+                if current_fp is None or self._wallet_fingerprint == current_fp:
+                    logger.info(f"Loaded {len(cached_data.get('nfts', []))} Ethereum NFTs from persistent cache")
+                    return list(self._nft_cache.values())
+                logger.info("EVM wallets changed since the persistent Ethereum NFT cache was saved - refetching")
+                force_refresh = True
             self._db_cache_loaded = True
+
+        if (not force_refresh and current_fp is not None
+                and self._wallet_fingerprint is not None
+                and self._wallet_fingerprint != current_fp):
+            logger.info("EVM wallets changed since the last Ethereum NFT fetch - refetching")
+            force_refresh = True
 
         # Check in-memory cache validity
         if not force_refresh and self._is_cache_valid():
@@ -171,12 +207,12 @@ class EthereumNFTService(APIKeyManager):
             logger.warning("Alchemy API key not configured")
             return []
 
-        # Get all Ethereum wallets
+        # Get every EVM-family wallet (not just rows stored as 'ethereum')
         wallets = await get_all_wallets(user_id=user_id)
-        eth_wallets = [w for w in wallets if w['blockchain'] == 'ethereum']
+        eth_wallets = evm_fanout_wallets(wallets)
 
         if not eth_wallets:
-            logger.info("No Ethereum wallets found")
+            logger.info("No EVM wallets found")
             return []
 
         # Snapshot last-known NFTs so a failed wallet fetch does not wipe them
@@ -186,6 +222,7 @@ class EthereumNFTService(APIKeyManager):
         failed_wallets = set()
         all_nfts = []
         self._nft_cache.clear()
+        fetched_fp = wallet_fingerprint(w['address'] for w in eth_wallets)
 
         for wallet in eth_wallets:
             address = wallet['address']
@@ -232,6 +269,7 @@ class EthereumNFTService(APIKeyManager):
             all_nfts = list(self._nft_cache.values())
 
         self.last_refresh = datetime.now()
+        self._wallet_fingerprint = fetched_fp
 
         # Save to persistent database cache
         await self._save_to_db_cache()
@@ -244,7 +282,8 @@ class EthereumNFTService(APIKeyManager):
             cache_data = {
                 'nfts': list(self._nft_cache.values()),
                 'collections': self._collection_cache,
-                'last_refresh': self.last_refresh.isoformat() if self.last_refresh else None
+                'last_refresh': self.last_refresh.isoformat() if self.last_refresh else None,
+                'wallet_fingerprint': self._wallet_fingerprint,
             }
             await set_cache(ETH_NFT_CACHE_KEY, cache_data, ETH_NFT_CACHE_TTL)
             logger.info(f"Saved {len(self._nft_cache)} Ethereum NFTs to persistent cache")
@@ -309,6 +348,7 @@ class EthereumNFTService(APIKeyManager):
         self._collection_cache.clear()
         self.last_refresh = None
         self._db_cache_loaded = False
+        self._wallet_fingerprint = None
 
     async def get_status(self) -> dict:
         """Get service status and configuration."""
