@@ -7,6 +7,7 @@ Each API has a registered test type:
   - "query": GET url with {key} substituted in query string
   - "url": GET url with {key} substituted in the URL path
   - "json_rpc": POST a JSON-RPC request with key in the URL
+  - "solana_rpc": POST a standard Solana JSON-RPC `getHealth` request with key in the URL
   - "service": Delegate to an exchange service's test_connection() method
 """
 
@@ -33,11 +34,19 @@ API_HEALTH_TESTS = {
 
     # Query-param: ("query", url_with_{key}_placeholder)
     "etherscan":     ("query", "https://api.etherscan.io/v2/api?chainid=1&module=stats&action=ethprice&apikey={key}"),
-    "helius":        ("query", "https://api.helius.xyz/v0/addresses/11111111111111111111111111111111/balances?api-key={key}"),
 
     # URL-embedded key + JSON-RPC: ("json_rpc", url_with_{key}_placeholder)
     "alchemy":       ("json_rpc", "https://eth-mainnet.g.alchemy.com/v2/{key}"),
     "ankr":          ("json_rpc", "https://rpc.ankr.com/multichain/{key}"),
+
+    # Solana JSON-RPC: ("solana_rpc", url_with_{key}_placeholder)
+    # The old Helius v0 REST `/addresses/{address}/balances` endpoint used
+    # here was retired (HTTP 404 "Method not found" as of 2026-09). A plain
+    # `getHealth` call against the Helius RPC endpoint is a lightweight,
+    # address-independent connectivity + key check. Docs checked 2026-09-28:
+    # https://www.helius.dev/docs/rpc/guides/getbalance (standard Solana
+    # JSON-RPC methods are proxied by the Helius RPC endpoint).
+    "helius":        ("solana_rpc", "https://mainnet.helius-rpc.com/?api-key={key}"),
 
     # Exchange services: ("service", module_attr_name)
     "binance":       ("service", "binance_service"),
@@ -95,6 +104,8 @@ async def run_api_test(api_id: str, api_key: str = None,
             return await _test_query(api_id, api_key, test_config)
         elif test_type == "json_rpc":
             return await _test_json_rpc(api_id, api_key, test_config)
+        elif test_type == "solana_rpc":
+            return await _test_solana_rpc(api_id, api_key, test_config)
         elif test_type == "service":
             return await _test_service(api_id, api_key, api_secret, api_passphrase, test_config)
         else:
@@ -177,6 +188,43 @@ async def _test_json_rpc(api_id: str, api_key: str, config: tuple) -> dict:
         "jsonrpc": "2.0",
         "id": 1,
         "method": "eth_blockNumber",
+        "params": []
+    }
+    response = await client.post(url, json=payload, timeout=10.0)
+    status = response.status_code
+    success = status < 400
+
+    if success:
+        try:
+            data = response.json()
+            if "error" in data:
+                return {"success": False, "tested": True,
+                        "message": data["error"].get("message", "RPC error"),
+                        "status_code": status}
+        except Exception:
+            pass
+        return {"success": True, "tested": True,
+                "message": "Connected successfully", "status_code": status}
+    else:
+        return {"success": False, "tested": True,
+                "message": f"HTTP {status}", "status_code": status}
+
+
+async def _test_solana_rpc(api_id: str, api_key: str, config: tuple) -> dict:
+    """Test API with a lightweight, address-independent Solana JSON-RPC call.
+
+    Uses the standard `getHealth` method (no params, no wallet address
+    needed) rather than a specific balances/asset lookup, so the test
+    can't itself break if a provider retires a REST convenience endpoint.
+    """
+    _, url_template = config
+    url = url_template.replace("{key}", api_key)
+    client = get_client("api_health_test", timeout=15.0)
+
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "getHealth",
         "params": []
     }
     response = await client.post(url, json=payload, timeout=10.0)
