@@ -23,6 +23,7 @@ from database import get_cache, set_cache
 from services.http_client import get_client
 from services.alchemy_nft_utils import (
     build_owner_params, drop_spam, previous_nft_list, restore_failed_wallets,
+    wallet_fingerprint,
 )
 
 logger = logging.getLogger(__name__)
@@ -80,6 +81,9 @@ class BaseService(APIKeyManager):
         self._nft_cache_ttl = timedelta(hours=24)
         self.last_nft_refresh: Optional[datetime] = None
         self._db_cache_loaded = False
+        # Fingerprint of the EVM address set the cached NFTs were fetched for
+        # (ABCT-EVM-FANOUT-2026-09-28, same pattern as solana_nft.py's #16 fix)
+        self._wallet_fingerprint: Optional[str] = None
 
     async def _get_v2_url(self) -> str:
         """Get Alchemy v2 API URL with API key."""
@@ -496,23 +500,42 @@ class BaseService(APIKeyManager):
         Fetch all NFTs for all Base wallets.
 
         Args:
-            wallets: List of Base wallet dictionaries
+            wallets: Candidate address list for Base mainnet. As of
+                ABCT-EVM-FANOUT-2026-09-28 the caller (routers/nfts.py) passes
+                every EVM-family wallet (services.alchemy_nft_utils.evm_fanout_wallets),
+                not just rows whose own blockchain says 'base' -- a bare 0x
+                address is always stored as 'ethereum' even when it genuinely
+                holds Base NFTs.
             force_refresh: Force refresh from API
 
         Returns:
             List of all NFTs
         """
+        # A cache built for a different EVM address set (one was added or
+        # removed since) is stale no matter how young it is -- mirrors
+        # services/solana_nft.py's wallet_fingerprint fix (#16).
+        current_fp = wallet_fingerprint(w['address'] for w in wallets if w.get('address'))
+
         # Try to load from persistent database cache first
         if not force_refresh and not self._db_cache_loaded:
             cached_data = await get_cache(BASE_NFT_CACHE_KEY)
             if cached_data:
-                logger.info(f"Loaded {len(cached_data.get('nfts', []))} Base NFTs from persistent cache")
                 self._nft_cache = {nft['asset_id']: nft for nft in cached_data.get('nfts', [])}
                 self._collection_cache = cached_data.get('collections', {})
                 self.last_nft_refresh = datetime.fromisoformat(cached_data['last_refresh']) if cached_data.get('last_refresh') else None
+                self._wallet_fingerprint = cached_data.get('wallet_fingerprint')
                 self._db_cache_loaded = True
-                return list(self._nft_cache.values())
+                if self._wallet_fingerprint == current_fp:
+                    logger.info(f"Loaded {len(cached_data.get('nfts', []))} Base NFTs from persistent cache")
+                    return list(self._nft_cache.values())
+                logger.info("EVM wallets changed since the persistent Base NFT cache was saved - refetching")
+                force_refresh = True
             self._db_cache_loaded = True
+
+        if (not force_refresh and self._wallet_fingerprint is not None
+                and self._wallet_fingerprint != current_fp):
+            logger.info("EVM wallets changed since the last Base NFT fetch - refetching")
+            force_refresh = True
 
         # Check in-memory cache validity
         if not force_refresh and self._is_nft_cache_valid():
@@ -583,6 +606,7 @@ class BaseService(APIKeyManager):
             all_nfts = list(self._nft_cache.values())
 
         self.last_nft_refresh = datetime.now()
+        self._wallet_fingerprint = current_fp
 
         # Save to persistent database cache
         await self._save_nft_cache()
@@ -595,7 +619,8 @@ class BaseService(APIKeyManager):
             cache_data = {
                 'nfts': list(self._nft_cache.values()),
                 'collections': self._collection_cache,
-                'last_refresh': self.last_nft_refresh.isoformat() if self.last_nft_refresh else None
+                'last_refresh': self.last_nft_refresh.isoformat() if self.last_nft_refresh else None,
+                'wallet_fingerprint': self._wallet_fingerprint,
             }
             await set_cache(BASE_NFT_CACHE_KEY, cache_data, BASE_CACHE_TTL)
             logger.info(f"Saved {len(self._nft_cache)} Base NFTs to persistent cache")
@@ -663,6 +688,7 @@ class BaseService(APIKeyManager):
         self._collection_cache.clear()
         self.last_nft_refresh = None
         self._db_cache_loaded = False
+        self._wallet_fingerprint = None
 
     async def get_status(self) -> dict:
         """Get service status."""
