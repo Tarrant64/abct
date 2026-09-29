@@ -13,6 +13,7 @@ import logging
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.nft import nft_service
+from services.nft_display_images import attach_display_images
 from services.nft_image_service import (
     nft_image_service,
     MAX_BATCH_ITEMS,
@@ -844,6 +845,11 @@ async def get_algorand_nfts(user_id: int = Depends(verify_session), force_refres
             all_nfts.extend(nfts)
         except Exception as e:
             logger.error(f"Error fetching Algorand NFTs for {wallet['address'][:12]}...: {e}")
+
+    # Offer IPFS images on several gateways, like Cardano (ABCT-NFT-DIAG2-2026-09-28)
+    for nft in all_nfts:
+        if isinstance(nft, dict):
+            attach_display_images(nft, nft.get('image_url'))
 
     return {
         'configured': True,

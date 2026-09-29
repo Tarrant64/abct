@@ -34,6 +34,7 @@ from database import (
 )
 from services.http_client import get_client, blockfrost_fetch
 from services.api_key_manager import APIKeyManager
+from services.nft_display_images import attach_display_images
 
 # DB-stored key (Settings page) first, env var fallback — matches every
 # other Blockfrost caller in the app. See ABCT-BF-KEY-UNIFY-2026-09-27.
@@ -842,8 +843,11 @@ class NFTService:
         for nft in nfts:
             if not isinstance(nft, dict):
                 continue
-            url = self._safe_display_url(nft.get('image'))
-            nft['image_url'] = url
+            # IPFS images are offered on several gateways (image_url + ordered
+            # image_fallbacks): the public ipfs.io gateway alone now blocks
+            # hot-linked images (ABCT-NFT-DIAG2-2026-09-28).
+            attach_display_images(nft, nft.get('image'))
+            url = nft['image_url']
             if not url and not nft.get('image_checked') and nft.get('asset_id'):
                 missing.append(nft['asset_id'])
         if missing and user_id is not None:
