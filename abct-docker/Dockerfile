@@ -74,7 +74,11 @@ WORKDIR /app
 COPY backend/ /app/backend/
 
 # Copy frontend code
+# nginx workers run as www-data and serve /app/frontend directly. COPY keeps the build context's
+# file modes, so a checkout made under a restrictive umask (e.g. 027 -> 0640 files / 0750 dirs)
+# gives 403 on /, /classic and every /static + /next/static asset. Normalise to world-readable.
 COPY frontend/ /app/frontend/
+RUN chmod -R a+rX /app/frontend
 
 # Copy nginx configuration
 # Remove default config and install ours
