@@ -1988,7 +1988,7 @@ async def get_cache(key: str, user_id: Optional[int] = None):
             )
         else:
             cursor = await db.execute(
-                "SELECT value, expires_at FROM cache WHERE user_id IS NULL AND key = ?",
+                "SELECT value, expires_at FROM cache WHERE user_id IS NULL AND key = ? ORDER BY id DESC LIMIT 1",
                 (key,)
             )
         row = await cursor.fetchone()
@@ -2014,7 +2014,7 @@ async def get_stale_cache(key: str, user_id: Optional[int] = None):
             )
         else:
             cursor = await db.execute(
-                "SELECT value, expires_at FROM cache WHERE user_id IS NULL AND key = ?",
+                "SELECT value, expires_at FROM cache WHERE user_id IS NULL AND key = ? ORDER BY id DESC LIMIT 1",
                 (key,)
             )
         row = await cursor.fetchone()
@@ -2035,14 +2035,32 @@ async def set_cache(key: str, value, ttl_seconds: int = 300, user_id: Optional[i
     """
     import json
     expires_at = datetime.now() + timedelta(seconds=ttl_seconds)
+    payload = json.dumps(value)
     async with aiosqlite.connect(DATABASE_PATH) as db:
-        await db.execute("""
-            INSERT INTO cache (user_id, key, value, expires_at)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(user_id, key) DO UPDATE SET
-                value = excluded.value,
-                expires_at = excluded.expires_at
-        """, (user_id, key, json.dumps(value), expires_at.isoformat()))
+        if user_id is None:
+            # SQLite treats NULLs as distinct in UNIQUE(user_id, key), so the
+            # ON CONFLICT upsert below never fires for system-wide entries and
+            # every write used to INSERT a new row, while get_cache() read the
+            # oldest one. Update in place instead; insert only when absent.
+            # (Updating every matching row also heals legacy duplicates.)
+            cursor = await db.execute(
+                "UPDATE cache SET value = ?, expires_at = ?, updated_at = CURRENT_TIMESTAMP "
+                "WHERE user_id IS NULL AND key = ?",
+                (payload, expires_at.isoformat(), key)
+            )
+            if cursor.rowcount == 0:
+                await db.execute(
+                    "INSERT INTO cache (user_id, key, value, expires_at) VALUES (NULL, ?, ?, ?)",
+                    (key, payload, expires_at.isoformat())
+                )
+        else:
+            await db.execute("""
+                INSERT INTO cache (user_id, key, value, expires_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(user_id, key) DO UPDATE SET
+                    value = excluded.value,
+                    expires_at = excluded.expires_at
+            """, (user_id, key, payload, expires_at.isoformat()))
         await db.commit()
 
 
