@@ -1554,6 +1554,7 @@ async def _map_staking_protocol_positions(
     protocol_data: dict,
     all_prices: dict,
     ada_price: float,
+    blockchain: str = "cardano",
 ) -> tuple[list, float, float, bool]:
     """Map one protocol's cached staking entry to mobile position dicts.
 
@@ -1575,6 +1576,8 @@ async def _map_staking_protocol_positions(
     staked_usd_total = 0.0
     rewards_usd_total = 0.0
     has_unpriced = False
+    # BTC is quoted to 8 decimals; ADA/ Cardano tokens round at 6 as before
+    decimals = 8 if blockchain == "bitcoin" else 6
 
     logo_cache: dict = {}
 
@@ -1595,9 +1598,9 @@ async def _map_staking_protocol_positions(
         staked_usd_total += entry['usd']
 
         position = {
-            "blockchain": "cardano",
+            "blockchain": blockchain,
             "protocol": protocol_name,
-            "staked_amount": round(entry['amount'], 6),
+            "staked_amount": round(entry['amount'], decimals),
             "staked_symbol": entry['token'],
             "staked_usd": round(entry['usd'], 2),
             "rewards_amount": 0,
@@ -1810,6 +1813,47 @@ async def get_mobile_defi_staking(refresh: bool = Query(False), user_id: int = D
                     has_unpriced = has_unpriced or proto_unpriced
             except Exception as e:
                 logger.warning(f"Could not process staking positions: {e}")
+
+    # BTC Karma stakes for Bitcoin wallets. Same call-the-endpoint pattern
+    # as routers/portfolio.py uses for the web DeFi page, and the same
+    # btc_karma_staking_* cache + iter_staking_token_values valuation that
+    # offchain_helpers.get_staking_value reads for net-worth totals, so the
+    # mobile card count and staked totals agree with the web DeFi page by
+    # construction. The Flutter staking model parses blockchain/protocol/
+    # staked_amount/staked_usd/staked_symbol aliases and already renders a
+    # bitcoin chain badge, so no client rebuild is needed.
+    bitcoin_wallets = [w for w in all_wallets if w['blockchain'] == 'bitcoin']
+    if bitcoin_wallets:
+        btc_karma_caches = await asyncio.gather(*[
+            defi.get_btc_karma_staking_data(
+                wallet['address'], refresh=refresh, user_id=user_id
+            )
+            for wallet in bitcoin_wallets
+        ], return_exceptions=True)
+
+        for cached in btc_karma_caches:
+            try:
+                if isinstance(cached, (Exception, BaseException)) or not cached or not isinstance(cached, dict):
+                    continue
+                if not cached.get('protocols'):
+                    continue
+                for protocol_name, protocol_data in cached['protocols'].items():
+                    # 'unavailable' status carries an empty staked array —
+                    # it maps to no positions, contributing nothing to totals
+                    if protocol_data.get('status') == 'unavailable':
+                        continue
+                    proto_positions, staked_usd, rewards_usd, proto_unpriced = (
+                        await _map_staking_protocol_positions(
+                            protocol_name, protocol_data, all_prices, ada_price,
+                            blockchain='bitcoin',
+                        )
+                    )
+                    positions.extend(proto_positions)
+                    total_staked_usd += staked_usd
+                    total_rewards_usd += rewards_usd
+                    has_unpriced = has_unpriced or proto_unpriced
+            except Exception as e:
+                logger.warning(f"Could not process BTC Karma staking positions: {e}")
 
     return {
         "total_staked_usd": round(total_staked_usd, 2),
