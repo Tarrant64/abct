@@ -11,7 +11,7 @@ No test performs real network I/O: name resolution is stubbed per test and all
 HTTP goes through httpx.MockTransport.
 """
 
-import io
+import base64
 import os
 import sys
 
@@ -64,12 +64,18 @@ def mock_client(handler):
 
 
 def png_bytes():
-    """A real 1x1 PNG so format detection and compression run for real."""
-    from PIL import Image
+    """A real 1x1 PNG so format detection and compression run for real.
 
-    buf = io.BytesIO()
-    Image.new("RGB", (1, 1), (255, 0, 0)).save(buf, format="PNG")
-    return buf.getvalue()
+    WQ-0375: previously built with PIL at runtime, which made this test
+    depend on Pillow. Pillow is an OPTIONAL dependency of the image service
+    (nft_image_service guards its import with PILLOW_AVAILABLE and is not in
+    backend/requirements.txt), so the test must not require it — an embedded
+    1x1 red PNG constant gives the same real bytes with no dependency.
+    """
+    return base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4"
+        "nGP4z8BQDwAEgAF/ppoNKQAAAABJRU5ErkJggg=="
+    )
 
 
 # ---------------------------------------------------------------------------
