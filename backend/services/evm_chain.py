@@ -22,6 +22,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database import get_cache, set_cache
+from services import nft_pricing
 from services.api_key_manager import APIKeyManager
 from services.http_client import get_client
 from services.alchemy_nft_utils import (
@@ -538,7 +539,7 @@ class EVMChainService(APIKeyManager):
 
         collection = contract.get('openSeaMetadata', {})
         collection_name = collection.get('collectionName') or contract.get('name', 'Unknown Collection')
-        floor_price = collection.get('floorPrice', 0)
+        floor_price = collection.get('floorPrice')  # None = unpriced (WQ-0058), not 0
 
         image = nft_data.get('image', {})
         image_url = image.get('cachedUrl') or image.get('originalUrl') or image.get('pngUrl', '')
@@ -685,39 +686,42 @@ class EVMChainService(APIKeyManager):
         """
         all_nfts = await self.get_all_nfts(wallets)
 
-        collections = {}
         floor_price_key = f"floor_price_{self.native_symbol.lower()}"
         total_value_key = f"total_value_{self.native_symbol.lower()}"
+
+        # Unpriced NFTs (no floor from the provider) are excluded from the
+        # totals instead of summing as 0 (WQ-0058).
+        groups = nft_pricing.collection_floor_rollup(all_nfts, floor_price_key)
+
+        collections = []
         total_value = 0.0
-
-        for nft in all_nfts:
-            collection_name = nft['collection']['name']
-
-            if collection_name not in collections:
-                collections[collection_name] = {
-                    'name': collection_name,
-                    'contract_address': nft['contract_address'],
-                    floor_price_key: nft['collection'].get(floor_price_key, 0),
-                    'verified': nft['collection']['verified'],
-                    'nft_count': 0,
-                    total_value_key: 0.0,
-                    'nfts': []
-                }
-
-            collections[collection_name]['nft_count'] += 1
-            floor_price = nft['collection'].get(floor_price_key, 0) or 0
-            collections[collection_name][total_value_key] += floor_price
-            total_value += floor_price
-            collections[collection_name]['nfts'].append({
-                'name': nft['name'],
-                'token_id': nft['token_id'],
-                'image_url': nft['image_url'],
-                'links': nft['links']
+        unpriced_nfts = 0
+        for collection_name, group in groups.items():
+            first = next(n for n in all_nfts
+                         if (n.get('collection') or {}).get('name') == collection_name)
+            total_value += group['total_native']
+            unpriced_nfts += group['unpriced_count']
+            collections.append({
+                'name': collection_name,
+                'contract_address': first['contract_address'],
+                floor_price_key: nft_pricing.price_floor_native(first['collection'], floor_price_key),
+                'verified': first['collection']['verified'],
+                'nft_count': group['count'],
+                'priced_count': group['priced_count'],
+                'unpriced_count': group['unpriced_count'],
+                total_value_key: group['total_native'],
+                'nfts': [{
+                    'name': n['name'],
+                    'token_id': n['token_id'],
+                    'image_url': n['image_url'],
+                    'links': n['links']
+                } for n in all_nfts if (n.get('collection') or {}).get('name') == collection_name]
             })
 
         return {
-            'collections': list(collections.values()),
+            'collections': collections,
             'total_collections': len(collections),
+            'unpriced_nfts': unpriced_nfts,
             'total_nfts': len(all_nfts),
             total_value_key: total_value,
             'last_updated': self.last_nft_refresh.isoformat() if self.last_nft_refresh else None

@@ -28,6 +28,7 @@ from services.evm_chain import bsc_service, arbitrum_service, avalanche_service
 from services.alchemy_nft_utils import evm_fanout_wallets
 from services.pricing import pricing_service
 from services.nft_price_client import nft_price_client
+from services import nft_pricing
 from services.demo_nft_service import demo_nft_service
 from database import get_all_wallets, get_username_by_user_id
 from middleware.auth import verify_admin
@@ -298,21 +299,26 @@ async def get_ethereum_nfts(user_id: int = Depends(verify_session), force_refres
     total_value_usd = 0.0
 
     for nft in all_nfts:
-        floor_price_eth = nft['collection'].get('floor_price_eth', 0) or 0
-        usd_value = floor_price_eth * eth_price
+        # WQ-0058: no floor -> unpriced (floor_price_usd None, excluded from
+        # the totals), never a silent 0 in the portfolio sum.
+        floor_price_eth = nft_pricing.price_floor_native(nft['collection'], 'floor_price_eth')
+        usd_value = nft_pricing.priced_usd(nft_pricing.native_price_or_none(eth_price), floor_price_eth)
         nft['floor_price_usd'] = usd_value
-        total_value_usd += usd_value
+        if usd_value is not None:
+            total_value_usd += usd_value
 
-    # Sort by USD value (highest first)
-    all_nfts.sort(key=lambda x: x.get('floor_price_usd', 0), reverse=True)
+    # Sort by USD value (highest first, unpriced last)
+    all_nfts.sort(key=lambda x: (x.get('floor_price_usd') is None, -(x.get('floor_price_usd') or 0)))
 
     return {
         'configured': True,
         'nfts': all_nfts,
         'total_count': len(all_nfts),
-        'valued_count': sum(1 for n in all_nfts if n.get('floor_price_usd', 0) > 0),
+        'valued_count': sum(1 for n in all_nfts if n.get('floor_price_usd') is not None),
+        'unpriced_nfts': sum(1 for n in all_nfts if n.get('floor_price_usd') is None),
         'total_value_usd': total_value_usd,
-        'total_value_eth': sum(n['collection'].get('floor_price_eth', 0) or 0 for n in all_nfts),
+        'total_value_eth': sum(
+            g['total_native'] for g in nft_pricing.collection_floor_rollup(all_nfts, 'floor_price_eth').values()),
         'eth_price': eth_price,
         'last_updated': ethereum_nft_service.last_refresh.isoformat() if ethereum_nft_service.last_refresh else None
     }
@@ -429,10 +435,13 @@ async def get_solana_nfts(user_id: int = Depends(verify_session), force_refresh:
     total_value_usd = 0.0
 
     for nft in all_nfts:
-        floor_price_sol = nft['collection'].get('floor_price_sol', 0) or 0
-        usd_value = floor_price_sol * sol_price
+        # WQ-0058: no floor -> unpriced (floor_price_usd None, excluded from
+        # the totals), never a silent 0 in the portfolio sum.
+        floor_price_sol = nft_pricing.price_floor_native(nft['collection'], 'floor_price_sol')
+        usd_value = nft_pricing.priced_usd(nft_pricing.native_price_or_none(sol_price), floor_price_sol)
         nft['floor_price_usd'] = usd_value
-        total_value_usd += usd_value
+        if usd_value is not None:
+            total_value_usd += usd_value
 
     # Sort by collection name for now
     all_nfts.sort(key=lambda x: x['collection'].get('name', ''))
@@ -441,9 +450,11 @@ async def get_solana_nfts(user_id: int = Depends(verify_session), force_refresh:
         'configured': True,
         'nfts': all_nfts,
         'total_count': len(all_nfts),
-        'valued_count': sum(1 for n in all_nfts if n.get('floor_price_usd', 0) > 0),
+        'valued_count': sum(1 for n in all_nfts if n.get('floor_price_usd') is not None),
+        'unpriced_nfts': sum(1 for n in all_nfts if n.get('floor_price_usd') is None),
         'total_value_usd': total_value_usd,
-        'total_value_sol': sum(n['collection'].get('floor_price_sol', 0) or 0 for n in all_nfts),
+        'total_value_sol': sum(
+            g['total_native'] for g in nft_pricing.collection_floor_rollup(all_nfts, 'floor_price_sol').values()),
         'sol_price': sol_price,
         'last_updated': solana_nft_service.last_refresh.isoformat() if solana_nft_service.last_refresh else None
     }
@@ -573,21 +584,26 @@ async def get_polygon_nfts(user_id: int = Depends(verify_session), force_refresh
     total_value_usd = 0.0
 
     for nft in all_nfts:
-        floor_price_matic = nft['collection'].get('floor_price_matic', 0) or 0
-        usd_value = floor_price_matic * matic_price
+        # WQ-0058: no floor -> unpriced (floor_price_usd None, excluded from
+        # the totals), never a silent 0 in the portfolio sum.
+        floor_price_matic = nft_pricing.price_floor_native(nft['collection'], 'floor_price_matic')
+        usd_value = nft_pricing.priced_usd(nft_pricing.native_price_or_none(matic_price), floor_price_matic)
         nft['floor_price_usd'] = usd_value
-        total_value_usd += usd_value
+        if usd_value is not None:
+            total_value_usd += usd_value
 
-    # Sort by USD value (highest first)
-    all_nfts.sort(key=lambda x: x.get('floor_price_usd', 0), reverse=True)
+    # Sort by USD value (highest first, unpriced last)
+    all_nfts.sort(key=lambda x: (x.get('floor_price_usd') is None, -(x.get('floor_price_usd') or 0)))
 
     return {
         'configured': True,
         'nfts': all_nfts,
         'total_count': len(all_nfts),
-        'valued_count': sum(1 for n in all_nfts if n.get('floor_price_usd', 0) > 0),
+        'valued_count': sum(1 for n in all_nfts if n.get('floor_price_usd') is not None),
+        'unpriced_nfts': sum(1 for n in all_nfts if n.get('floor_price_usd') is None),
         'total_value_usd': total_value_usd,
-        'total_value_matic': sum(n['collection'].get('floor_price_matic', 0) or 0 for n in all_nfts),
+        'total_value_matic': sum(
+            g['total_native'] for g in nft_pricing.collection_floor_rollup(all_nfts, 'floor_price_matic').values()),
         'matic_price': matic_price,
         'last_updated': polygon_service.last_nft_refresh.isoformat() if polygon_service.last_nft_refresh else None
     }
@@ -721,14 +737,19 @@ async def get_base_nfts(user_id: int = Depends(verify_session), force_refresh: b
     # Add USD values to NFTs
     total_value_usd = 0
     for nft in all_nfts:
-        floor_eth = nft['collection'].get('floor_price_eth', 0) or 0
-        nft['floor_price_usd'] = floor_eth * eth_price
-        total_value_usd += nft['floor_price_usd']
+        # WQ-0058: unpriced NFTs are excluded from the total, not summed as 0.
+        floor_eth = nft_pricing.price_floor_native(nft['collection'], 'floor_price_eth')
+        usd_value = nft_pricing.priced_usd(nft_pricing.native_price_or_none(eth_price), floor_eth)
+        nft['floor_price_usd'] = usd_value
+        if usd_value is not None:
+            total_value_usd += usd_value
 
     return {
         'configured': True,
         'nfts': all_nfts,
         'total_count': len(all_nfts),
+        'valued_count': sum(1 for n in all_nfts if n.get('floor_price_usd') is not None),
+        'unpriced_nfts': sum(1 for n in all_nfts if n.get('floor_price_usd') is None),
         'total_value_usd': total_value_usd,
         'eth_price': eth_price,
         'last_updated': base_service.last_nft_refresh.isoformat() if base_service.last_nft_refresh else None
@@ -910,18 +931,22 @@ async def get_bsc_nfts(user_id: int = Depends(verify_session), force_refresh: bo
 
     total_value_usd = 0.0
     for nft in all_nfts:
-        floor_price_bnb = nft['collection'].get('floor_price_bnb', 0) or 0
-        usd_value = floor_price_bnb * bnb_price
+        # WQ-0058: unpriced NFTs are excluded from the total, not summed as 0.
+        floor_price_bnb = nft_pricing.price_floor_native(nft['collection'], 'floor_price_bnb')
+        usd_value = nft_pricing.priced_usd(nft_pricing.native_price_or_none(bnb_price), floor_price_bnb)
         nft['floor_price_usd'] = usd_value
-        total_value_usd += usd_value
+        if usd_value is not None:
+            total_value_usd += usd_value
 
-    all_nfts.sort(key=lambda x: x.get('floor_price_usd', 0), reverse=True)
+    all_nfts.sort(key=lambda x: (x.get('floor_price_usd') is None, -(x.get('floor_price_usd') or 0)))
 
     return {
         'configured': True, 'nfts': all_nfts, 'total_count': len(all_nfts),
-        'valued_count': sum(1 for n in all_nfts if n.get('floor_price_usd', 0) > 0),
+        'valued_count': sum(1 for n in all_nfts if n.get('floor_price_usd') is not None),
+        'unpriced_nfts': sum(1 for n in all_nfts if n.get('floor_price_usd') is None),
         'total_value_usd': total_value_usd,
-        'total_value_bnb': sum(n['collection'].get('floor_price_bnb', 0) or 0 for n in all_nfts),
+        'total_value_bnb': sum(
+            g['total_native'] for g in nft_pricing.collection_floor_rollup(all_nfts, 'floor_price_bnb').values()),
         'bnb_price': bnb_price,
         'last_updated': bsc_service.last_nft_refresh.isoformat() if bsc_service.last_nft_refresh else None
     }
@@ -989,18 +1014,22 @@ async def get_arbitrum_nfts(user_id: int = Depends(verify_session), force_refres
 
     total_value_usd = 0.0
     for nft in all_nfts:
-        floor_price_eth = nft['collection'].get('floor_price_eth', 0) or 0
-        usd_value = floor_price_eth * eth_price
+        # WQ-0058: unpriced NFTs are excluded from the total, not summed as 0.
+        floor_price_eth = nft_pricing.price_floor_native(nft['collection'], 'floor_price_eth')
+        usd_value = nft_pricing.priced_usd(nft_pricing.native_price_or_none(eth_price), floor_price_eth)
         nft['floor_price_usd'] = usd_value
-        total_value_usd += usd_value
+        if usd_value is not None:
+            total_value_usd += usd_value
 
-    all_nfts.sort(key=lambda x: x.get('floor_price_usd', 0), reverse=True)
+    all_nfts.sort(key=lambda x: (x.get('floor_price_usd') is None, -(x.get('floor_price_usd') or 0)))
 
     return {
         'configured': True, 'nfts': all_nfts, 'total_count': len(all_nfts),
-        'valued_count': sum(1 for n in all_nfts if n.get('floor_price_usd', 0) > 0),
+        'valued_count': sum(1 for n in all_nfts if n.get('floor_price_usd') is not None),
+        'unpriced_nfts': sum(1 for n in all_nfts if n.get('floor_price_usd') is None),
         'total_value_usd': total_value_usd,
-        'total_value_eth': sum(n['collection'].get('floor_price_eth', 0) or 0 for n in all_nfts),
+        'total_value_eth': sum(
+            g['total_native'] for g in nft_pricing.collection_floor_rollup(all_nfts, 'floor_price_eth').values()),
         'eth_price': eth_price,
         'last_updated': arbitrum_service.last_nft_refresh.isoformat() if arbitrum_service.last_nft_refresh else None
     }
@@ -1068,18 +1097,22 @@ async def get_avalanche_nfts(user_id: int = Depends(verify_session), force_refre
 
     total_value_usd = 0.0
     for nft in all_nfts:
-        floor_price_avax = nft['collection'].get('floor_price_avax', 0) or 0
-        usd_value = floor_price_avax * avax_price
+        # WQ-0058: unpriced NFTs are excluded from the total, not summed as 0.
+        floor_price_avax = nft_pricing.price_floor_native(nft['collection'], 'floor_price_avax')
+        usd_value = nft_pricing.priced_usd(nft_pricing.native_price_or_none(avax_price), floor_price_avax)
         nft['floor_price_usd'] = usd_value
-        total_value_usd += usd_value
+        if usd_value is not None:
+            total_value_usd += usd_value
 
-    all_nfts.sort(key=lambda x: x.get('floor_price_usd', 0), reverse=True)
+    all_nfts.sort(key=lambda x: (x.get('floor_price_usd') is None, -(x.get('floor_price_usd') or 0)))
 
     return {
         'configured': True, 'nfts': all_nfts, 'total_count': len(all_nfts),
-        'valued_count': sum(1 for n in all_nfts if n.get('floor_price_usd', 0) > 0),
+        'valued_count': sum(1 for n in all_nfts if n.get('floor_price_usd') is not None),
+        'unpriced_nfts': sum(1 for n in all_nfts if n.get('floor_price_usd') is None),
         'total_value_usd': total_value_usd,
-        'total_value_avax': sum(n['collection'].get('floor_price_avax', 0) or 0 for n in all_nfts),
+        'total_value_avax': sum(
+            g['total_native'] for g in nft_pricing.collection_floor_rollup(all_nfts, 'floor_price_avax').values()),
         'avax_price': avax_price,
         'last_updated': avalanche_service.last_nft_refresh.isoformat() if avalanche_service.last_nft_refresh else None
     }
@@ -2378,7 +2411,9 @@ async def get_nfts_with_images(
                     'thumbnail_url': f"/nfts/images/cardano/{asset_id}/thumbnail",
                     'mobile_url': f"/nfts/images/cardano/{asset_id}/mobile" if cached_images[key].get('has_mobile') else None,
                     'floor_price': nft.get('price_ada'),
-                    'floor_price_usd': (nft.get('price_ada') or 0) * prices['ada'],
+                    # WQ-0058: unpriced -> null USD, not 0
+                    'floor_price_usd': nft_pricing.priced_usd(
+                        nft_pricing.native_price_or_none(prices['ada']), nft.get('price_ada')),
                     'native_symbol': 'ADA', 'image_info': cached_images[key]
                 })
         return result, total
@@ -2393,7 +2428,7 @@ async def get_nfts_with_images(
             asset_id = f"{nft.get('contract_address')}_{nft.get('token_id')}"
             key = f"ethereum:{asset_id}"
             if key in cached_images:
-                floor_eth = nft.get('collection', {}).get('floor_price_eth', 0) or 0
+                floor_eth = nft_pricing.price_floor_native(nft.get('collection', {}), 'floor_price_eth')
                 result.append({
                     'asset_id': asset_id, 'blockchain': 'ethereum',
                     'name': nft.get('name', 'Unknown'),
@@ -2402,7 +2437,7 @@ async def get_nfts_with_images(
                     'image_url': f"/nfts/images/ethereum/{asset_id}",
                     'thumbnail_url': f"/nfts/images/ethereum/{asset_id}/thumbnail",
                     'mobile_url': f"/nfts/images/ethereum/{asset_id}/mobile" if cached_images[key].get('has_mobile') else None,
-                    'floor_price': floor_eth, 'floor_price_usd': floor_eth * prices['eth'],
+                    'floor_price': floor_eth, 'floor_price_usd': nft_pricing.priced_usd(nft_pricing.native_price_or_none(prices['eth']), floor_eth),
                     'native_symbol': 'ETH', 'image_info': cached_images[key]
                 })
         return result, total
@@ -2417,7 +2452,7 @@ async def get_nfts_with_images(
             asset_id = nft.get('mint') or nft.get('asset_id')
             key = f"solana:{asset_id}"
             if key in cached_images:
-                floor_sol = nft.get('collection', {}).get('floor_price_sol', 0) or 0
+                floor_sol = nft_pricing.price_floor_native(nft.get('collection', {}), 'floor_price_sol')
                 result.append({
                     'asset_id': asset_id, 'blockchain': 'solana',
                     'name': nft.get('name', 'Unknown'),
@@ -2425,7 +2460,7 @@ async def get_nfts_with_images(
                     'image_url': f"/nfts/images/solana/{asset_id}",
                     'thumbnail_url': f"/nfts/images/solana/{asset_id}/thumbnail",
                     'mobile_url': f"/nfts/images/solana/{asset_id}/mobile" if cached_images[key].get('has_mobile') else None,
-                    'floor_price': floor_sol, 'floor_price_usd': floor_sol * prices['sol'],
+                    'floor_price': floor_sol, 'floor_price_usd': nft_pricing.priced_usd(nft_pricing.native_price_or_none(prices['sol']), floor_sol),
                     'native_symbol': 'SOL', 'image_info': cached_images[key]
                 })
         return result, total
@@ -2440,7 +2475,7 @@ async def get_nfts_with_images(
             asset_id = f"{nft.get('contract_address')}_{nft.get('token_id')}"
             key = f"polygon:{asset_id}"
             if key in cached_images:
-                floor_matic = nft.get('collection', {}).get('floor_price_matic', 0) or 0
+                floor_matic = nft_pricing.price_floor_native(nft.get('collection', {}), 'floor_price_matic')
                 result.append({
                     'asset_id': asset_id, 'blockchain': 'polygon',
                     'name': nft.get('name', 'Unknown'),
@@ -2448,7 +2483,7 @@ async def get_nfts_with_images(
                     'image_url': f"/nfts/images/polygon/{asset_id}",
                     'thumbnail_url': f"/nfts/images/polygon/{asset_id}/thumbnail",
                     'mobile_url': f"/nfts/images/polygon/{asset_id}/mobile" if cached_images[key].get('has_mobile') else None,
-                    'floor_price': floor_matic, 'floor_price_usd': floor_matic * prices['matic'],
+                    'floor_price': floor_matic, 'floor_price_usd': nft_pricing.priced_usd(nft_pricing.native_price_or_none(prices['matic']), floor_matic),
                     'native_symbol': 'POL', 'image_info': cached_images[key]
                 })
         return result, total
@@ -2463,7 +2498,7 @@ async def get_nfts_with_images(
             asset_id = f"{nft.get('contract_address')}_{nft.get('token_id')}"
             key = f"base:{asset_id}"
             if key in cached_images:
-                floor_eth = nft.get('collection', {}).get('floor_price_eth', 0) or 0
+                floor_eth = nft_pricing.price_floor_native(nft.get('collection', {}), 'floor_price_eth')
                 result.append({
                     'asset_id': asset_id, 'blockchain': 'base',
                     'name': nft.get('name', 'Unknown'),
@@ -2471,7 +2506,7 @@ async def get_nfts_with_images(
                     'image_url': f"/nfts/images/base/{asset_id}",
                     'thumbnail_url': f"/nfts/images/base/{asset_id}/thumbnail",
                     'mobile_url': f"/nfts/images/base/{asset_id}/mobile" if cached_images[key].get('has_mobile') else None,
-                    'floor_price': floor_eth, 'floor_price_usd': floor_eth * prices['eth'],
+                    'floor_price': floor_eth, 'floor_price_usd': nft_pricing.priced_usd(nft_pricing.native_price_or_none(prices['eth']), floor_eth),
                     'native_symbol': 'ETH', 'image_info': cached_images[key]
                 })
         return result, total
@@ -2501,7 +2536,7 @@ async def get_nfts_with_images(
             total_by_chain[chain_name] = total
 
     # Sort by value (highest first)
-    all_nfts.sort(key=lambda x: x.get('floor_price_usd', 0), reverse=True)
+    all_nfts.sort(key=lambda x: (x.get('floor_price_usd') is None, -(x.get('floor_price_usd') or 0)))
 
     # Group by chain for summary
     by_chain = {}

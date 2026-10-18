@@ -22,6 +22,7 @@ from config import ALCHEMY_BASE_URL
 from database import get_all_wallets, get_cache, set_cache
 from services.api_key_manager import APIKeyManager
 from services.http_client import get_client
+from services import nft_pricing
 from services.alchemy_nft_utils import (
     build_owner_params, drop_spam, previous_nft_list, restore_failed_wallets,
     evm_fanout_wallets, wallet_fingerprint,
@@ -112,7 +113,7 @@ class EthereumNFTService(APIKeyManager):
         # Get collection info
         collection = contract.get('openSeaMetadata', {})
         collection_name = collection.get('collectionName') or contract.get('name', 'Unknown Collection')
-        floor_price_eth = collection.get('floorPrice', 0)
+        floor_price_eth = collection.get('floorPrice')  # None = unpriced (WQ-0058), not 0
 
         # Get image
         image = nft_data.get('image', {})
@@ -299,41 +300,43 @@ class EthereumNFTService(APIKeyManager):
         """
         all_nfts = await self.get_all_ethereum_nfts(user_id=user_id)
 
-        # Group by collection
-        collections = {}
+        # Group by collection. WQ-0058: an NFT whose collection has no floor
+        # price is UNPRICED — counted but excluded from the totals — instead
+        # of being summed as 0 like a genuinely worthless collection.
+        groups = nft_pricing.collection_floor_rollup(all_nfts, 'floor_price_eth')
+
+        collections = []
         total_value_eth = 0.0
-
-        for nft in all_nfts:
-            collection_name = nft['collection']['name']
-
-            if collection_name not in collections:
-                collections[collection_name] = {
-                    'name': collection_name,
-                    'contract_address': nft['contract_address'],
-                    'floor_price_eth': nft['collection']['floor_price_eth'],
-                    'verified': nft['collection']['verified'],
-                    'nft_count': 0,
-                    'total_value_eth': 0.0,
-                    'nfts': []
-                }
-
-            collections[collection_name]['nft_count'] += 1
-            floor_price = nft['collection'].get('floor_price_eth', 0) or 0
-            collections[collection_name]['total_value_eth'] += floor_price
-            total_value_eth += floor_price
-            collections[collection_name]['nfts'].append({
-                'name': nft['name'],
-                'token_id': nft['token_id'],
-                'image_url': nft['image_url'],
-                'links': nft['links']
+        unpriced_nfts = 0
+        for collection_name, group in groups.items():
+            first = next(n for n in all_nfts
+                         if (n.get('collection') or {}).get('name') == collection_name)
+            total_value_eth += group['total_native']
+            unpriced_nfts += group['unpriced_count']
+            collections.append({
+                'name': collection_name,
+                'contract_address': first['contract_address'],
+                'floor_price_eth': nft_pricing.price_floor_native(first['collection'], 'floor_price_eth'),
+                'verified': first['collection']['verified'],
+                'nft_count': group['count'],
+                'priced_count': group['priced_count'],
+                'unpriced_count': group['unpriced_count'],
+                'total_value_eth': group['total_native'],
+                'nfts': [{
+                    'name': n['name'],
+                    'token_id': n['token_id'],
+                    'image_url': n['image_url'],
+                    'links': n['links']
+                } for n in all_nfts if (n.get('collection') or {}).get('name') == collection_name]
             })
 
         return {
-            'collections': list(collections.values()),
+            'collections': collections,
             'total_collections': len(collections),
             'total_nfts': len(all_nfts),
+            'unpriced_nfts': unpriced_nfts,
             'total_value_eth': total_value_eth,
-            'last_updated': self.last_refresh.isoformat() if self.last_refresh else None
+            'last_updated': self.last_refresh.isoformat() if self.last_refresh else None,
         }
 
     def _is_cache_valid(self) -> bool:

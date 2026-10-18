@@ -11,6 +11,40 @@ from typing import Optional, Dict, Any
 logger = logging.getLogger(__name__)
 
 
+def cardano_metadata_fields(data: dict) -> Dict[str, Any]:
+    """Extract name/symbol/decimals from a Blockfrost /assets/{unit} payload.
+
+    WQ-0058: the fungible ticker/decimals come from Blockfrost's ``metadata``
+    field — the CIP-26 token-registry (off-chain) block — NOT from
+    ``onchain_metadata`` (the CIP-25/68 on-chain block, populated mainly for
+    NFTs). The old code read the ticker from onchain_metadata and discarded
+    the registry ticker for most fungible tokens
+    (ABCT-TOKEN-REGISTRY-RESEARCH-2026-09-27, finding 1a). The on-chain block
+    stays as a fallback for self-describing tokens that were never registered.
+    """
+    registry = data.get("metadata") or {}
+    onchain = data.get("onchain_metadata") or {}
+
+    def _field(*blocks, key, default=""):
+        for block in blocks:
+            value = block.get(key)
+            if value is not None and value != "":
+                return value
+        return default
+
+    decimals = _field(registry, onchain, key="decimals", default=0)
+    if isinstance(decimals, str):
+        try:
+            decimals = int(decimals)
+        except ValueError:
+            decimals = 0
+    return {
+        "name": _field(registry, onchain, key="name", default=data.get("asset_name", "")),
+        "symbol": _field(registry, onchain, key="ticker"),
+        "decimals": decimals,
+    }
+
+
 class TokenMetadataEnricher:
     """Resolves token metadata (name, symbol, decimals) for assets."""
 
@@ -106,12 +140,7 @@ class TokenMetadataEnricher:
                     raise ValueError(f"Blockfrost returned {resp.status_code}")
 
                 data = resp.json()
-                metadata = data.get("onchain_metadata", {}) or {}
-                return {
-                    "name": metadata.get("name", data.get("asset_name", "")),
-                    "symbol": metadata.get("ticker", ""),
-                    "decimals": data.get("metadata", {}).get("decimals", 0) if data.get("metadata") else 0,
-                }
+                return cardano_metadata_fields(data)
 
             return await cardano_query(
                 sql_fn=_sql,
