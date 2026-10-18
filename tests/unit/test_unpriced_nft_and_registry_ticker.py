@@ -26,7 +26,12 @@ BACKEND_DIR = os.path.abspath(
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
-from services import nft_pricing  # noqa: E402
+from services import nft_pricing  # noqa: E402  (stdlib only)
+
+# The backend modules imported inside the tests below pull in httpx/fastapi/
+# pydantic/aiosqlite/dotenv at import time; stub those for this module only
+# when they are not installed (tests/conftest.py, offline_stubs).
+pytestmark = pytest.mark.usefixtures("offline_stubs")
 
 
 # ---------------------------------------------------------------------------

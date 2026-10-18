@@ -4,14 +4,19 @@ Shared fixtures for the unit tests (WQ-0058).
 The hub test boundary runs tests in a minimal, offline environment (system
 python3 + pytest only, no network). Several backend modules import third-party
 packages (httpx, fastapi, starlette, pydantic, aiosqlite, python-dotenv) at
-module import time even for pure-math code paths. This conftest installs a
-last-resort meta-path finder that stubs any package on a fixed third-party
-list (and its submodules, at any depth) when the real package is not
-importable, so offline unit tests can exercise the real aggregation logic
-without a full application stack. The finder sits AFTER the normal path
-finder, so a real installed package always wins. Tests that care about network
-behaviour stub the transport themselves (monkeypatch), exactly as the
-httpx-mocking tests do.
+module import time even for pure-math code paths. The `offline_stubs` fixture
+below stubs exactly those packages (and their submodules) when the real
+package is not importable, so offline unit tests can exercise the real
+aggregation logic without a full application stack.
+
+The stubs are OPT-IN and MODULE-SCOPED (WQ-0368 review): a test module asks
+for them with `pytestmark = pytest.mark.usefixtures("offline_stubs")` and
+imports backend modules inside its tests. Nothing is stubbed while other test
+modules are collected or run, so a missing dependency there still fails with
+an honest ModuleNotFoundError, and at teardown every stub module and every
+backend module imported against the stubs is dropped from sys.modules so no
+stub leaks into a later test. A real installed package always wins: a root is
+only stubbed when importlib cannot find it.
 
 The stubs are auto-extending classes: they can be instantiated, subclassed
 (e.g. `class X(BaseHTTPMiddleware)`), and chained through any attribute path.
@@ -25,6 +30,7 @@ they work with and without pytest-asyncio.
 
 import importlib.abc
 import importlib.machinery
+import importlib.util
 import os
 import sys
 import types
@@ -37,14 +43,13 @@ BACKEND_DIR = os.path.abspath(
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
-# Top-level third-party distribution names the backend imports at module
-# scope. Anything under these names (including submodules) is stubbed when the
-# real package is not installed.
-STUB_ROOTS = {
+# Top-level third-party packages the backend modules exercised by the opt-in
+# tests import at module scope. Keep this list to what those tests need: a
+# package whose behaviour a test depends on (bech32, cbor2, msgpack, ...) must
+# never be stubbed, or its test passes or fails against a fake.
+STUB_ROOTS = frozenset({
     "httpx", "dotenv", "aiosqlite", "fastapi", "starlette", "pydantic",
-    "jwt", "PIL", "multipart", "bcrypt", "websockets", "uvicorn", "slowapi",
-    "bech32", "cbor2", "msgpack",
-}
+})
 
 
 def _passthrough(args, kwargs):
@@ -71,6 +76,8 @@ class _StubMeta(type):
 
 
 class _StubBase(metaclass=_StubMeta):
+    __test__ = False  # never collected, even if named like TestClient
+
     def __init__(self, *args, **kwargs):
         self._stub_args = args
 
@@ -104,11 +111,14 @@ class _StubAttr(types.ModuleType):
 
 
 class _StubFinder(importlib.abc.MetaPathFinder, importlib.abc.Loader):
-    """Last-resort finder: any module under a STUB_ROOTS name gets a stub."""
+    """Last-resort finder: any module under one of `roots` gets a stub."""
+
+    def __init__(self, roots):
+        self.roots = frozenset(roots)
 
     def find_spec(self, fullname, path=None, target=None):
         root = fullname.split(".")[0]
-        if root not in STUB_ROOTS:
+        if root not in self.roots:
             return None
         return importlib.machinery.ModuleSpec(fullname, self, is_package=True)
 
@@ -121,8 +131,37 @@ class _StubFinder(importlib.abc.MetaPathFinder, importlib.abc.Loader):
         pass
 
 
-if not any(isinstance(f, _StubFinder) for f in sys.meta_path):
-    sys.meta_path.append(_StubFinder())
+def _missing_roots():
+    return sorted(r for r in STUB_ROOTS if importlib.util.find_spec(r) is None)
+
+
+def _imported_against_stubs(name, module, roots):
+    if name.split(".")[0] in roots:
+        return True
+    path = getattr(module, "__file__", None) or ""
+    return os.path.abspath(path).startswith(BACKEND_DIR + os.sep)
+
+
+@pytest.fixture(scope="module")
+def offline_stubs():
+    """Stub the missing STUB_ROOTS packages for one test module only.
+
+    Yields the sorted list of roots that were actually stubbed (empty when the
+    full stack is installed). Backend modules must be imported inside the
+    tests, not at the test module's top level, unless they import no
+    third-party package.
+    """
+    roots = _missing_roots()
+    before = set(sys.modules)
+    finder = _StubFinder(roots)
+    sys.meta_path.append(finder)
+    try:
+        yield roots
+    finally:
+        sys.meta_path.remove(finder)
+        for name in set(sys.modules) - before:
+            if _imported_against_stubs(name, sys.modules[name], roots):
+                del sys.modules[name]
 
 
 @pytest.fixture
