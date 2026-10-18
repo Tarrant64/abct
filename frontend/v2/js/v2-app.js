@@ -357,8 +357,11 @@ function renderPortfolioHero(data) {
     setText('statLiquid', formatCurrency(liquid));
     setText('statStaked', formatCurrency(staked));
 
-    // Last updated
-    setText('heroLastUpdated', `Last updated: ${new Date().toLocaleTimeString()}`);
+    // Last updated — prefer the payload's own server timestamp, fall back to
+    // "now" when it carries none. Stamp: MM/DD H:MM AM/PM TZ, device-local.
+    const stampRaw = data.last_updated || data.lastUpdate;
+    const stamp = stampRaw ? parseServerDate(stampRaw) : new Date();
+    setText('heroLastUpdated', `Last updated: ${formatRefreshTimestamp(stamp)}`);
 
     // Note: 7-Day Change (heroChange / stat7dChange / stat7dPct) is NOT derived
     // from /portfolio/instant — that response never carries change_7d_usd/pct.
@@ -2176,6 +2179,42 @@ function logout() {
 // ============================================================================
 // FORMATTERS
 // ============================================================================
+
+// Local time-zone abbreviation for a Date, e.g. "CDT"/"CST" (mirrors
+// formatRefreshTimestamp in /static/js/app.js for the classic pages).
+function localTzAbbr(date) {
+    const d = date || new Date();
+    try {
+        const parts = new Intl.DateTimeFormat('en-US', { timeZoneName: 'short' }).formatToParts(d);
+        const tzn = parts.find(p => p.type === 'timeZoneName');
+        if (tzn && tzn.value) return tzn.value;
+    } catch (e) { /* fall through to offset form */ }
+    const off = -d.getTimezoneOffset();
+    const sign = off >= 0 ? '+' : '-';
+    const abs = Math.abs(off);
+    return `GMT${sign}${Math.floor(abs / 60)}${abs % 60 ? ':' + String(abs % 60).padStart(2, '0') : ''}`;
+}
+
+// Shared "last refreshed" stamp: MM/DD H:MM AM/PM TZ (e.g. "10/18 4:32 PM CDT"),
+// device-local time — same contract as the classic app's helper.
+function formatRefreshTimestamp(date) {
+    const d = date instanceof Date && !isNaN(date) ? date : new Date();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    return `${mm}/${dd} ${time} ${localTzAbbr(d)}`;
+}
+
+// Parse a server timestamp: some endpoints return naive UTC (no "Z" suffix),
+// which `new Date()` would otherwise misread as local time.
+function parseServerDate(ts) {
+    if (ts instanceof Date) return ts;
+    if (typeof ts !== 'string') return new Date(ts);
+    if (!ts.endsWith('Z') && !ts.includes('+')) {
+        ts = ts.replace(' ', 'T') + 'Z';
+    }
+    return new Date(ts);
+}
 
 function formatCurrency(value) {
     if (value === null || value === undefined) return '$0.00';

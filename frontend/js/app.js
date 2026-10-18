@@ -193,6 +193,46 @@ function updateSummaryCardNftCounts() {
     }
 }
 
+// Local time-zone abbreviation for a Date, e.g. "CT" renders as "CDT"/"CST".
+// Intl gives the system abbreviation; the GMT-offset form is the last-resort
+// fallback so the stamp never silently loses its zone component.
+function localTzAbbr(date) {
+    const d = date || new Date();
+    try {
+        const parts = new Intl.DateTimeFormat('en-US', { timeZoneName: 'short' }).formatToParts(d);
+        const tzn = parts.find(p => p.type === 'timeZoneName');
+        if (tzn && tzn.value) return tzn.value;
+    } catch (e) { /* fall through to offset form */ }
+    const off = -d.getTimezoneOffset();
+    const sign = off >= 0 ? '+' : '-';
+    const abs = Math.abs(off);
+    return `GMT${sign}${Math.floor(abs / 60)}${abs % 60 ? ':' + String(abs % 60).padStart(2, '0') : ''}`;
+}
+
+// Shared "last refreshed" stamp: MM/DD H:MM AM/PM TZ (e.g. "10/18 4:32 PM CDT").
+// Device-local time (WYSIWYG against the system clock, so a phone that has
+// crossed a time zone still reads correctly); the zone abbreviation names
+// which local that was.
+function formatRefreshTimestamp(date) {
+    const d = date instanceof Date && !isNaN(date) ? date : new Date();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    return `${mm}/${dd} ${time} ${localTzAbbr(d)}`;
+}
+
+// Parse a server timestamp: the API returns naive UTC (server clock is UTC,
+// no "Z" suffix), which `new Date()` would otherwise misread as local time.
+// Same convention as parseUTCTimestamp() in settings.html.
+function parseServerDate(ts) {
+    if (ts instanceof Date) return ts;
+    if (typeof ts !== 'string') return new Date(ts);
+    if (!ts.endsWith('Z') && !ts.includes('+')) {
+        ts = ts.replace(' ', 'T') + 'Z';
+    }
+    return new Date(ts);
+}
+
 // Format USD currency
 function formatUSD(amount) {
     if (amount >= 1000000) {
@@ -1886,7 +1926,7 @@ async function loadPortfolioSummary() {
         if (data.last_updated) {
             const lastUpdatedEl = document.getElementById('lastUpdated');
             if (lastUpdatedEl) {
-                const lastUpdate = new Date(data.last_updated);
+                const lastUpdate = parseServerDate(data.last_updated);
                 const now = new Date();
                 const diffMinutes = Math.floor((now - lastUpdate) / 60000);
 
@@ -1903,8 +1943,10 @@ async function loadPortfolioSummary() {
                     timeAgo = `${days} day${days > 1 ? 's' : ''} ago`;
                 }
 
-                lastUpdatedEl.textContent = `Last updated: ${timeAgo}`;
-                lastUpdatedEl.title = `${lastUpdate.toLocaleString()}`;
+                lastUpdatedEl.textContent =
+                    `Last updated: ${formatRefreshTimestamp(lastUpdate)} (${timeAgo})`;
+                lastUpdatedEl.title =
+                    `${lastUpdate.toLocaleString()} ${localTzAbbr(lastUpdate)}`;
             }
         }
 
