@@ -258,6 +258,9 @@ async def get_lp_token_info(unit: str) -> Optional[Dict]:
             "asset_name_hex": data.get("asset_name", ""),
             "total_supply": int(data.get("quantity", "0")),
             "metadata": data.get("onchain_metadata"),
+            # WQ-0058: the registry (off-chain) block, kept separate so ticker
+            # readers can prefer it over the CIP-25 on-chain block.
+            "registry_metadata": data.get("metadata") or {},
             "fingerprint": data.get("fingerprint", ""),
         }
     except Exception as e:
@@ -521,9 +524,13 @@ async def resolve_lp_value(
         if token_a_label in ("Unknown", "") and reserve_a_unit == "lovelace":
             token_a_label = "ADA"
         if token_b_label in ("Unknown", ""):
-            # Try to get ticker from metadata
-            if b_info and b_info.get("metadata"):
-                token_b_label = b_info["metadata"].get("ticker", b_info["metadata"].get("name", "Token"))
+            # Try to get ticker from metadata. WQ-0058: prefer the registry
+            # (off-chain) block over the CIP-25 on-chain block for the ticker.
+            if b_info and (b_info.get("registry_metadata") or b_info.get("metadata")):
+                registry = b_info.get("registry_metadata") or {}
+                onchain_meta = b_info.get("metadata") or {}
+                token_b_label = (registry.get("ticker") or onchain_meta.get("ticker")
+                                 or registry.get("name") or onchain_meta.get("name", "Token"))
             else:
                 token_b_label = reserve_b_unit[56:70] if len(reserve_b_unit) > 56 else "Token"
                 try:

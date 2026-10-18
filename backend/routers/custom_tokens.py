@@ -220,14 +220,18 @@ async def lookup_cardano_token(policy_id: str, asset_name: str = "") -> dict:
 
         if response.status_code == 200:
             data = response.json()
-            metadata = data.get('onchain_metadata', {})
+            # WQ-0058: the registry (off-chain `metadata`) block is the ticker
+            # source; `onchain_metadata` (CIP-25) is only the fallback for
+            # tokens absent from the registry.
+            registry = data.get('metadata') or {}
+            onchain = data.get('onchain_metadata') or {}
             token_info = {
                 'policy_id': data.get('policy_id'),
                 'asset_name': data.get('asset_name'),
-                'name': metadata.get('name') or data.get('asset_name'),
-                'ticker': metadata.get('ticker'),
-                'decimals': metadata.get('decimals', 0),
-                'description': metadata.get('description'),
+                'name': registry.get('name') or onchain.get('name') or data.get('asset_name'),
+                'ticker': registry.get('ticker') or onchain.get('ticker'),
+                'decimals': registry.get('decimals', onchain.get('decimals', 0)),
+                'description': registry.get('description') or onchain.get('description'),
             }
 
             # Try to get price from our pricing service
