@@ -2598,13 +2598,13 @@ async def get_nfts_with_images(
                 'collection_name': first_nft['collection'],
                 'collection_id': collection_id,  # Include the policy_id or contract address
                 'count': len(nfts),
-                'total_floor_price_usd': sum(n.get('floor_price_usd', 0) for n in nfts),
+                'total_floor_price_usd': nft_pricing.group_total_usd(nfts),  # priced NFTs only; None if none is priced
                 'representative_nft': first_nft,
                 'asset_ids': [n['asset_id'] for n in nfts]
             })
 
         # Sort grouped by total value
-        grouped_nfts.sort(key=lambda x: x['total_floor_price_usd'], reverse=True)
+        grouped_nfts.sort(key=lambda x: nft_pricing.unpriced_last_desc(x['total_floor_price_usd']))
 
         response = {
             'nfts': all_nfts,

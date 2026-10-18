@@ -66,6 +66,22 @@ def priced_totals(prices, floors):
     return total, priced, unpriced
 
 
+def group_total_usd(nfts) -> Optional[float]:
+    """Total USD floor of a group of NFT dicts: the sum of the PRICED ones only.
+
+    ``floor_price_usd`` is None for an unpriced NFT (and ``.get(k, 0)`` would
+    return that None, not 0). A group with no priced NFT has no total (None,
+    shown as '-'), never $0.
+    """
+    priced = [n['floor_price_usd'] for n in nfts if n.get('floor_price_usd') is not None]
+    return sum(priced) if priced else None
+
+
+def unpriced_last_desc(value: Optional[float]):
+    """Sort key: priced values high to low, then the unpriced (None) ones."""
+    return (value is None, -(value or 0))
+
+
 def collection_floor_rollup(all_nfts, floor_key: str) -> dict:
     """Group NFTs by collection name and total ONLY the priced floors.
 

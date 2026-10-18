@@ -106,6 +106,23 @@ class TestCollectionFloorRollup:
         assert groups["Unknown Collection"]["unpriced_count"] == 1
 
 
+class TestGroupTotal:
+    """/nfts/wall/nfts?group_by_collection=true summed floor_price_usd with
+    .get(k, 0), which returns None for an unpriced NFT: TypeError, HTTP 500
+    for any portfolio holding one (pre-merge review of PR #22)."""
+
+    def test_mixed_group_sums_only_priced(self):
+        group = [{"floor_price_usd": 3.0}, {"floor_price_usd": None}, {"floor_price_usd": 0.0}, {}]
+        assert nft_pricing.group_total_usd(group) == 3.0
+
+    def test_all_unpriced_group_has_no_total_not_zero(self):
+        assert nft_pricing.group_total_usd([{"floor_price_usd": None}, {}]) is None
+
+    def test_groups_sort_priced_desc_then_unpriced(self):
+        totals = [None, 5.0, 0.0, 12.5, None]
+        assert sorted(totals, key=nft_pricing.unpriced_last_desc) == [12.5, 5.0, 0.0, None, None]
+
+
 class TestPricedTotals:
     def test_only_complete_pairs_sum(self):
         total, priced, unpriced = nft_pricing.priced_totals(
