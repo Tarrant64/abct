@@ -82,10 +82,34 @@ def _install_fake_cache(monkeypatch):
     return cache
 
 
+def _stub_metadata_cache(monkeypatch):
+    """WQ-0375: the summary/instant endpoints resolve top-holding names and
+    image URLs through the shared metadata_cache singleton (SQLite
+    token_metadata_cache table) — an offline unit test has no DB, so stub the
+    row getters to the same 'no cached metadata' answer (same pattern as
+    tests/unit/test_btc_totals_integration.py). With no cached image the code
+    falls back to the static display-name/LogoKit tables, which is what these
+    tests assert against."""
+    async def fake_get_metadata(self, symbol):
+        return None
+
+    async def fake_upsert(self, symbol, payload):
+        return None
+
+    import routers.mobile as _mobile
+    import routers.portfolio as _portfolio
+    for mod in (_mobile, _portfolio):
+        monkeypatch.setattr(type(mod.metadata_cache), "get_metadata",
+                            fake_get_metadata, raising=True)
+        monkeypatch.setattr(type(mod.metadata_cache), "upsert_metadata",
+                            fake_upsert, raising=True)
+
+
 def _stub_compute_upstreams(monkeypatch):
     """Stub every external await inside _compute_mobile_portfolio_summary so
     the real function (and its real cache-key construction) runs offline.
     Returns a recorder of sparkline-fetch and portfolio-refresh calls."""
+    _stub_metadata_cache(monkeypatch)
     recorder = {"sparkline_calls": 0, "portfolio_refresh_args": []}
 
     async def get_portfolio_summary(user_id, refresh):

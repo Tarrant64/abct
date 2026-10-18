@@ -50,6 +50,7 @@ import routers.mobile as mobile  # noqa: E402
 from tests.unit.test_summary_cache_variants import (  # noqa: E402
     _install_fake_cache,
     _stub_compute_upstreams,
+    _stub_metadata_cache,
 )
 
 USER_ID = 4242
@@ -118,6 +119,9 @@ def _fake_position(symbol, source_type, quantity, price):
 
 
 async def _run_instant(monkeypatch, include_nfts: bool, nft_value=NFT_VALUE_USD):
+    # /portfolio/instant resolves top-holding names/images via metadata_cache
+    # (SQLite) — stub it for the offline suite (WQ-0375; see helper docstring).
+    _stub_metadata_cache(monkeypatch)
     monkeypatch.setattr(database, "get_all_portfolio_positions",
                          lambda user_id: _positions_fixture())
     monkeypatch.setattr(database, "get_positions_freshness",
@@ -238,6 +242,9 @@ async def test_balance_history_data_includes_nfts_when_enabled(monkeypatch):
 # ---------------------------------------------------------------------------
 
 async def test_headline_and_history_move_by_the_same_nft_amount(monkeypatch):
+    # metadata_cache stub needed here too: this test calls
+    # portfolio.get_portfolio_instant directly, not via _run_instant (WQ-0375).
+    _stub_metadata_cache(monkeypatch)
     # Headline (/portfolio/instant)
     monkeypatch.setattr(database, "get_all_portfolio_positions",
                          lambda user_id: _positions_fixture())
