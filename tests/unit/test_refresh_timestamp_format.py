@@ -50,3 +50,18 @@ def test_admin_pages_use_the_shared_stamp():
 def test_classic_last_updated_parses_server_time_as_utc():
     # the dashboard header must not re-add the naive-UTC parsing bug
     assert "parseServerDate(data.last_updated)" in APP_JS
+
+
+def test_central_time_zone_resolves_to_cdt_cst():
+    # The user sits in US Central: a CT machine's zone abbreviation must be
+    # CDT (summer) / CST (winter). The web helper renders whatever the OS
+    # reports via Intl timeZoneName:short; this pins the zone data that
+    # makes CT users see exactly that.
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo("America/Chicago")
+    summer = datetime(2026, 7, 15, 17, 32, tzinfo=tz)
+    winter = datetime(2026, 1, 15, 17, 32, tzinfo=tz)
+    assert summer.tzname() == "CDT"
+    assert winter.tzname() == "CST"
