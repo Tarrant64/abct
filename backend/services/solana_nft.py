@@ -21,6 +21,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import HELIUS_RPC_URL
 from database import get_all_wallets, get_cache, set_cache
+from services import nft_pricing
 from services.api_key_manager import APIKeyManager
 from services.http_client import get_client
 
@@ -396,39 +397,42 @@ class SolanaNFTService(APIKeyManager):
         """
         all_nfts = await self.get_all_solana_nfts(user_id=user_id)
 
-        # Group by collection
-        collections = {}
+        # Group by collection. WQ-0058: Solana collections carry no floor at
+        # all today (floor_price_sol is always None), so every Solana NFT is
+        # UNPRICED and contributes nothing — previously it summed as 0,
+        # indistinguishable from a real $0 collection.
+        groups = nft_pricing.collection_floor_rollup(all_nfts, 'floor_price_sol')
+
+        collections = []
         total_value_sol = 0.0
-
-        for nft in all_nfts:
-            collection_name = nft['collection']['name']
-
-            if collection_name not in collections:
-                collections[collection_name] = {
-                    'name': collection_name,
-                    'collection_id': nft['collection']['id'],
-                    'floor_price_sol': nft['collection']['floor_price_sol'],
-                    'nft_count': 0,
-                    'total_value_sol': 0.0,
-                    'nfts': []
-                }
-
-            collections[collection_name]['nft_count'] += 1
-            floor_price = nft['collection'].get('floor_price_sol') or 0
-            collections[collection_name]['total_value_sol'] += floor_price
-            total_value_sol += floor_price
-            collections[collection_name]['nfts'].append({
-                'name': nft['name'],
-                'asset_id': nft['asset_id'],
-                'image_url': nft['image_url'],
-                'links': nft['links'],
-                'is_compressed': nft.get('is_compressed', False)
+        unpriced_nfts = 0
+        for collection_name, group in groups.items():
+            first = next(n for n in all_nfts
+                         if (n.get('collection') or {}).get('name') == collection_name)
+            total_value_sol += group['total_native']
+            unpriced_nfts += group['unpriced_count']
+            collections.append({
+                'name': collection_name,
+                'collection_id': first['collection'].get('id'),
+                'floor_price_sol': nft_pricing.price_floor_native(first['collection'], 'floor_price_sol'),
+                'nft_count': group['count'],
+                'priced_count': group['priced_count'],
+                'unpriced_count': group['unpriced_count'],
+                'total_value_sol': group['total_native'],
+                'nfts': [{
+                    'name': n['name'],
+                    'asset_id': n['asset_id'],
+                    'image_url': n['image_url'],
+                    'links': n['links'],
+                    'is_compressed': n.get('is_compressed', False)
+                } for n in all_nfts if (n.get('collection') or {}).get('name') == collection_name]
             })
 
         return {
-            'collections': list(collections.values()),
+            'collections': collections,
             'total_collections': len(collections),
             'total_nfts': len(all_nfts),
+            'unpriced_nfts': unpriced_nfts,
             'total_value_sol': total_value_sol,
             'last_updated': self.last_refresh.isoformat() if self.last_refresh else None
         }

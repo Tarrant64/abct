@@ -575,13 +575,19 @@ class CardanoService:
 
             if response.status_code == 200:
                 data = response.json()
+                # WQ-0058: keep the merged view for image/name consumers, but
+                # also return the two blocks separately so ticker/decimals
+                # readers can prefer the token-registry (off-chain `metadata`)
+                # block over the CIP-25 `onchain_metadata` block.
                 return {
                     'asset_id': asset_id,
                     'policy_id': data.get('policy_id'),
                     'asset_name': data.get('asset_name'),
                     'fingerprint': data.get('fingerprint'),
                     'quantity': data.get('quantity'),
-                    'metadata': data.get('onchain_metadata') or data.get('metadata')
+                    'metadata': data.get('metadata') or data.get('onchain_metadata'),
+                    'registry_metadata': data.get('metadata') or {},
+                    'onchain_metadata': data.get('onchain_metadata') or {},
                 }
             return None
 
@@ -617,6 +623,10 @@ class CardanoService:
             try:
                 metadata = await self.get_asset_metadata(asset_id)
                 if metadata and metadata.get('metadata'):
+                    # WQ-0058: ticker/decimals come from the token-registry
+                    # (off-chain `metadata`) block first; the CIP-25
+                    # `onchain_metadata` block is the fallback for unregistered
+                    # tokens. `metadata` here is already registry-preferred.
                     meta = metadata['metadata']
                     decimals = meta.get('decimals', 0)
                     ticker = meta.get('ticker')
