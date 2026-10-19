@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
-/// Subtle "as of HH:MM" caption for data that is older than [threshold].
+import 'value_formatters.dart';
+
+/// Subtle "as of MM/DD H:MM AM/PM TZ" caption for data older than [threshold].
 ///
 /// Renders nothing while the payload is recent — the common case stays
 /// visually unchanged. Once the data's age crosses the threshold the caption
@@ -40,9 +42,8 @@ class DataAgeCaption extends StatelessWidget {
     if (!isStale(updated, DateTime.now(), threshold: threshold)) {
       return const SizedBox.shrink();
     }
-    final local = TimeOfDay.fromDateTime(updated!.toLocal());
     return Text(
-      'as of ${local.format(context)}',
+      'as of ${ValueFormatters.timestamp(updated!.toIso8601String())}',
       style: TextStyle(
         fontSize: 12,
         color: color ?? Colors.white.withValues(alpha: 0.4),

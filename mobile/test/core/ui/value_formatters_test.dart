@@ -84,11 +84,27 @@ void main() {
   });
 
   group('ValueFormatters.timestamp', () {
-    test('formats ISO timestamp', () {
+    test('formats ISO timestamp as MM/DD h:mm AM/PM TZ', () {
       final result = ValueFormatters.timestamp('2025-06-15T10:30:00Z');
-      // Result depends on local timezone, so just check format
-      expect(result, contains('-'));
-      expect(result, contains(':'));
+      // Result depends on local timezone, so check the shape: a leading
+      // MM/DD date, a 12-hour clock with AM/PM, and a trailing zone label.
+      expect(
+        result,
+        matches(r'^\d{2}/\d{2} (1[0-2]|0?[1-9]):\d{2} (AM|PM) \S+$'),
+      );
+    });
+
+    test('stamp carries a zone component', () {
+      final result = ValueFormatters.timestamp('2025-06-15T10:30:00Z');
+      // Either the OS abbreviation (CDT, EST, ...) or the UTC offset
+      // fallback (UTC-5) — never empty.
+      final zone = result.split(' ').last;
+      expect(zone, isNotEmpty);
+      expect(
+        zone,
+        anyOf(matches(r'^[A-Z]{2,5}$'), matches(r'^UTC[+-]\d{1,2}(:\d{2})?$'),
+            matches(r'^UTC$')),
+      );
     });
 
     test('returns Unknown for null', () {
