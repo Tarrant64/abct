@@ -43,6 +43,9 @@ class ValueFormatters {
     return usd(value);
   }
 
+  // Refresh/sync stamp: "MM/DD h:mm AM/PM TZ" in device-local time
+  // (e.g. "10/18 4:32 PM CDT"). timeZoneName is the OS-reported
+  // abbreviation (CDT/CST/EDT/PST...), matching the web app's format.
   static String timestamp(String? isoText) {
     if (isoText == null || isoText.isEmpty) {
       return 'Unknown';
@@ -55,9 +58,23 @@ class ValueFormatters {
     final local = dt.toLocal();
     final mm = local.month.toString().padLeft(2, '0');
     final dd = local.day.toString().padLeft(2, '0');
-    final hh = local.hour.toString().padLeft(2, '0');
+    final h12 = local.hour % 12 == 0 ? 12 : local.hour % 12;
     final min = local.minute.toString().padLeft(2, '0');
-    return '${local.year}-$mm-$dd $hh:$min';
+    final amPm = local.hour < 12 ? 'AM' : 'PM';
+    final tz = local.timeZoneName.isNotEmpty ? local.timeZoneName : _utcOffset(local);
+    return '$mm/$dd $h12:$min $amPm $tz';
+  }
+
+  /// Fallback zone label when the OS reports no abbreviation: "UTC-5".
+  static String _utcOffset(DateTime local) {
+    final offset = local.timeZoneOffset;
+    if (offset == Duration.zero) return 'UTC';
+    final sign = offset.isNegative ? '-' : '+';
+    final hours = offset.inHours.abs();
+    final minutes = offset.inMinutes.remainder(60).abs();
+    return minutes == 0
+        ? 'UTC$sign$hours'
+        : 'UTC$sign$hours:${minutes.toString().padLeft(2, '0')}';
   }
 
   static String titleCase(String value) {
