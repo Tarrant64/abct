@@ -34,6 +34,7 @@ const V2_CACHE = {
         '/transactions/stats':      60 * 1000,   // 1 minute
         '/balance-history/data':    60 * 1000,   // 1 minute
         '/custom-tokens':          120 * 1000,   // 2 minutes
+        '/stocks':                 120 * 1000,   // 2 minutes (WQ-0382)
         '/spam/status':            120 * 1000,   // 2 minutes
         '/search':                  10 * 1000,   // 10 seconds — search results are contextual
         '_default':                 30 * 1000,   // Default 30s for unlisted endpoints
@@ -210,7 +211,7 @@ function v2PrefetchForPage(pageId) {
 
     switch (pageId) {
         case 'assets':
-            endpoints = ['/prices/all', '/wallets', '/exchanges/all', '/defi/summary', '/custom-tokens'];
+            endpoints = ['/prices/all', '/wallets', '/exchanges/all', '/defi/summary', '/custom-tokens', '/stocks'];
             break;
         case 'defi':
             endpoints = ['/prices/all', '/wallets', '/defi/summary', '/portfolio/all-holdings', '/portfolio/instant'];

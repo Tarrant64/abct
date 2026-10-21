@@ -426,3 +426,35 @@ STAKE_REDISCOVERY_LOCK_TTL_MINUTES = int(os.getenv("STAKE_REDISCOVERY_LOCK_TTL_M
 # ABCT-CARDANO-ACCOUNT-LEVEL-20260919 collapses the per-wallet fan-out to
 # ~1 call per stake key, this can likely drop back toward 5 minutes.
 PORTFOLIO_QUANTITY_CACHE_TTL_SECONDS = int(os.getenv("PORTFOLIO_QUANTITY_CACHE_TTL_SECONDS", "1200"))
+
+# Stock Engine (WQ-0382) -- manual stock/ETF tracking on keyless public feeds.
+# Separate from every crypto lookup path: its own service (services/stock_data.py),
+# its own scheduler (services/stock_scheduler.py), its own tables
+# (manual_stocks, stock_price_history). Providers chosen from a live reliability
+# assessment 2026-10-20 (10/10 rounds each, all four test tickers BITW GBTC NVDA
+# PLTR, cross-source agreement <=0.004%):
+#   primary  : CNBC restQuote  -- one batch call for ALL symbols, ~120ms median
+#   fallback : Nasdaq api quote+historical -- per-symbol, also the only daily-bar
+#              history source; needs assetclass=stocks|etf per symbol
+# Neither requires an API key. Both are scraped web endpoints, not contracted
+# APIs: treat them as best-effort, always fall through to the last stored price.
+STOCK_SCHEDULER_ENABLED = os.getenv("STOCK_SCHEDULER_ENABLED", "true").lower() == "true"
+# US equity market sessions, Eastern time. Cron is day_of_week mon-fri;
+# holidays simply re-fetch the (unchanged) last close -- harmless.
+# 3x a day per the user's instruction (2026-10-20): market open, midday, close.
+# Offset a few minutes past each boundary so the print we capture actually
+# exists (open auction clears ~9:30, closing auction prints after 16:00).
+STOCK_MARKET_TZ = os.getenv("STOCK_MARKET_TZ", "America/New_York")
+STOCK_REFRESH_TIMES = os.getenv("STOCK_REFRESH_TIMES", "09:35,12:00,16:05")
+# Quote cache TTL: a manual page load between the 3 scheduled runs should not
+# re-hit CNBC per view; 15 min keeps the UI honest without hammering a
+# keyless endpoint.
+STOCK_QUOTE_CACHE_TTL_SECONDS = int(os.getenv("STOCK_QUOTE_CACHE_TTL_SECONDS", "900"))
+# Daily bars change once a day (after close); cache a day.
+STOCK_HISTORY_CACHE_TTL_SECONDS = int(os.getenv("STOCK_HISTORY_CACHE_TTL_SECONDS", "86400"))
+# Cross-check log threshold: when the Nasdaq fallback was ALSO consulted for a
+# symbol CNBC already priced, warn if the two disagree by more than this %.
+STOCK_PRICE_SANITY_PCT = float(os.getenv("STOCK_PRICE_SANITY_PCT", "2.0"))
+# Scheduler cross-process lock TTL: a cycle is 1 CNBC call + a few Nasdaq
+# fallbacks; minutes, not hours.
+STOCK_SCHEDULER_LOCK_TTL_MINUTES = int(os.getenv("STOCK_SCHEDULER_LOCK_TTL_MINUTES", "10"))

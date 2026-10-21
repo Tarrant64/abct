@@ -6,13 +6,13 @@
     <title>Assets - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1792361669">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1792554567">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1792361669"></script>
+    <script src="/static/js/session-auth.js?v=1792554567"></script>
     <style>
         .assets-page {
             max-width: 1400px;
@@ -1139,6 +1139,7 @@
             <button class="assets-tab-btn" data-tab="defi" onclick="switchAssetsTab('defi')">DeFi</button>
             <button class="assets-tab-btn" data-tab="governance" onclick="switchAssetsTab('governance')">Governance</button>
             <button class="assets-tab-btn" data-tab="tokens" onclick="switchAssetsTab('tokens')">Custom Tokens</button>
+            <button class="assets-tab-btn" data-tab="stocks" onclick="switchAssetsTab('stocks')">Stocks</button>
             <button class="assets-tab-btn" data-tab="pnl" onclick="switchAssetsTab('pnl')">Profit &amp; Loss</button>
         </div>
 
@@ -1242,10 +1243,69 @@
             </section>
         </div>
 
+        <!-- Stocks Tab (WQ-0382: manual stock/ETF holdings, keyless 3x/day feed) -->
+        <div id="stocksTab" class="assets-tab-content">
+            <section class="custom-tokens-section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h2>Stocks &amp; ETFs</h2>
+                    <div class="section-summary" id="stocksSummary">
+                        <span>0 holdings</span>
+                    </div>
+                    <div class="header-actions" onclick="event.stopPropagation()">
+                        <button class="btn btn-primary btn-small" onclick="openAddStockModal()">+ Add Stock</button>
+                    </div>
+                    <button class="section-refresh-btn" onclick="event.stopPropagation(); loadStocks();" title="Refresh stock prices">&#10227;</button>
+                    <span class="collapse-icon">&#9660;</span>
+                </div>
+                <div id="stocksList" class="custom-tokens-list section-content">
+                    <p class="empty-state">No stocks tracked yet. Use "+ Add Stock" to track shares or ETF units manually.</p>
+                </div>
+                <p class="stock-schedule-note">Prices refresh automatically at market open, midday and close (ET), from public CNBC/Nasdaq feeds.</p>
+            </section>
+        </div>
+
         <!-- Profit & Loss Tab -->
         <div id="pnlTab" class="assets-tab-content">
             <div id="pnlContent">
                 <p class="loading-state">Loading P&L data...</p>
+            </div>
+        </div>
+
+        <!-- Add Stock Modal (WQ-0382) -->
+        <div id="addStockModal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Add Stock / ETF Holding</h3>
+                    <button class="modal-close" onclick="closeStockModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="modal-notice">Enter your <strong>manual quantity</strong> (shares or units). Prices come from public keyless feeds and refresh 3&times; a day: market open, midday, close.</p>
+                    <div class="form-group">
+                        <label for="stockSymbolInput">Ticker:</label>
+                        <input type="text" id="stockSymbolInput" placeholder="e.g., NVDA, BITW" maxlength="10"
+                               style="text-transform: uppercase" oninput="onStockSymbolInput()" autocomplete="off">
+                    </div>
+                    <div class="form-group">
+                        <label for="stockClassSelect">Type:</label>
+                        <select id="stockClassSelect">
+                            <option value="stock">Stock</option>
+                            <option value="etf">ETF</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="stockQuantityInput">Quantity (shares/units):</label>
+                        <input type="number" id="stockQuantityInput" min="0.000001" step="any" placeholder="e.g., 40">
+                    </div>
+                    <div class="form-group">
+                        <label for="stockCostBasisInput">Cost basis per share (optional):</label>
+                        <input type="number" id="stockCostBasisInput" min="0" step="any" placeholder="e.g., 120.50">
+                    </div>
+                    <div id="stockLookupResult" class="token-lookup-result hidden"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeStockModal()">Cancel</button>
+                    <button class="btn btn-primary" id="stockAddBtn" onclick="submitStockAdd()">Add Stock</button>
+                </div>
             </div>
         </div>
 
@@ -1651,14 +1711,16 @@ base:0x789..." oninput="previewImport()"></textarea>
         <p>ABCT - Assets | <span id="appVersion" style="opacity: 0.6;">v1.16.3 (BUILD 1786304190)</span></p>
     </footer>
 
-    <script src="/static/js/app.js?v=1792361669"></script>
-    <script src="/static/js/wallet-management.js?v=1792361669"></script>
-    <script src="/static/js/pnl-tab.js?v=1792361669"></script>
+    <script src="/static/js/app.js?v=1792554567"></script>
+    <script src="/static/js/wallet-management.js?v=1792554567"></script>
+    <script src="/static/js/pnl-tab.js?v=1792554567"></script>
+    <script src="/static/js/stocks-tab.js?v=1792554567"></script>
     <script>
         // Assets page tab switching
-        const ASSETS_TABS = ['wallets', 'exchanges', 'defi', 'governance', 'tokens', 'pnl'];
+        const ASSETS_TABS = ['wallets', 'exchanges', 'defi', 'governance', 'tokens', 'stocks', 'pnl'];
 
         let customTokensTabLoaded = false;
+        let stocksTabLoaded = false;
 
         function switchAssetsTab(tabName) {
             // Redirect old manageWallets hash to wallets
@@ -1678,6 +1740,13 @@ base:0x789..." oninput="previewImport()"></textarea>
                 customTokensTabLoaded = true;
                 if (typeof loadCustomTokens === 'function') {
                     loadCustomTokens();
+                }
+            }
+            // Lazy-load stock holdings on first visit (WQ-0382)
+            if (tabName === 'stocks' && !stocksTabLoaded) {
+                stocksTabLoaded = true;
+                if (typeof loadStocks === 'function') {
+                    loadStocks();
                 }
             }
             // Lazy-render governance tab on first visit

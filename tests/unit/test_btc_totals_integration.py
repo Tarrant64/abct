@@ -230,7 +230,10 @@ async def test_pre_fix_cached_totals_row_is_ignored(totals_env):
     totals = await portfolio_router.get_portfolio_totals(user_id=1)
 
     assert totals["staking_usd"] == pytest.approx(_expected_karma_usd())
-    assert totals["valuation_version"] == 3
+    # Assert against the constant, not a literal: the point is "an
+    # old-versioned cached row is RECOMPUTED", not "the version is 3".
+    # (WQ-0382 bumped the valuation to v4 to expire pre-stocks rows.)
+    assert totals["valuation_version"] == portfolio_router.TOTALS_VALUATION_VERSION
 
 
 # ---------------------------------------------------------------------------
