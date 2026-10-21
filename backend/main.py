@@ -1275,12 +1275,38 @@ async def v2_pages(page: str):
     return FileResponse(str(v2_path / "index.html"))
 
 # ============================================================================
-# V1 FRONTEND ROUTES (unchanged)
+# V1 FRONTEND ROUTES (legacy — deprecated; /next is the default, user order 2026-10-21)
 # ============================================================================
+# The classic dashboard is deprecated. "/" now lands on /next/. Every V1 URL
+# still works unchanged (deep links, bookmarks), and the same pages are also
+# reachable under /legacy/* per the deprecation decision.
 
 @app.get("/")
 async def root():
-    """Serve the main V1 dashboard."""
+    """Default dashboard is /next/ (WQ-0383); V1 moved to /legacy."""
+    return RedirectResponse(url="/next/", status_code=302)
+
+@app.get("/legacy")
+async def legacy_redirect():
+    """Redirect /legacy to /legacy/."""
+    return RedirectResponse(url="/legacy/", status_code=301)
+
+@app.get("/legacy/")
+async def legacy_index():
+    """Serve the legacy (V1) dashboard."""
+    return FileResponse(str(frontend_path / "index.html"))
+
+@app.get("/legacy/{page}")
+async def legacy_pages(page: str):
+    """Serve legacy (V1) pages by name, with or without the .html suffix.
+    Note: /static/* stays mounted for V1 assets, so legacy pages render as-is.
+    Unknown names fall back to the legacy index."""
+    name = page[:-5] if page.endswith(".html") else page
+    if not name.isidentifier() and not all(c.isalnum() or c in "-_" for c in name):
+        raise HTTPException(status_code=404, detail="Not found")
+    v1_page_file = frontend_path / f"{name}.html"
+    if v1_page_file.exists():
+        return FileResponse(str(v1_page_file))
     return FileResponse(str(frontend_path / "index.html"))
 
 @app.get("/login.html")

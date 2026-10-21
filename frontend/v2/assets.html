@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="/next/static/css/v2.css">
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
-    <script src="/static/js/session-auth.js?v=1792554567"></script>
+    <script src="/static/js/session-auth.js?v=1792582663"></script>
     <style>
         /* Chain filter tabs */
         .chain-filter-bar { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; padding: 8px; background: var(--v2-bg-card); border: 1px solid var(--v2-border); border-radius: var(--v2-radius-md); }
@@ -110,6 +110,7 @@
                     <button class="v2-tab" data-tab="defi">DeFi & Staking</button>
                     <button class="v2-tab" data-tab="governance">Governance</button>
                     <button class="v2-tab" data-tab="custom">Custom Tokens</button>
+                    <button class="v2-tab" data-tab="stocks">Stocks</button>
                     <button class="v2-tab" data-tab="pnl">P&L</button>
                 </div>
 
@@ -174,6 +175,19 @@
                     </div>
                 </div>
 
+                <div id="tabStocks" class="tab-content" style="display:none">
+                    <div class="v2-table-header">
+                        <span class="v2-table-title">Stocks & ETFs</span>
+                        <span id="stocksSummary" style="font-size:13px;color:var(--v2-text-muted);"></span>
+                        <button class="v2-btn v2-btn-primary" id="addStockBtn">+ Add Stock</button>
+                    </div>
+                    <div class="v2-table-wrapper" id="stocksContent">
+                        <div style="padding:40px;text-align:center;color:var(--v2-text-muted);">
+                            <div class="v2-skeleton v2-skeleton-chart" style="height:200px;"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="tabPnl" class="tab-content" style="display:none">
                     <div class="v2-table-header">
                         <span class="v2-table-title">Profit & Loss</span>
@@ -191,15 +205,48 @@
         </main>
     </div>
 
-    <script src="/next/static/js/v2-cache.js?v=1792554567"></script>
-    <script src="/next/static/js/v2-app.js?v=1792554567"></script>
-    <script src="/next/static/js/v2-shell.js?v=1792554567"></script>
+    <!-- Add Stock modal (WQ-0383) -->
+    <div class="v2-modal-overlay" id="v2StockOverlay" onclick="v2CloseAddStockModal()"></div>
+    <div class="v2-modal" id="v2StockModal" style="max-width:480px;">
+        <div class="v2-modal-header">
+            <span class="v2-modal-title">Add Stock / ETF Holding</span>
+            <button class="v2-modal-close" onclick="v2CloseAddStockModal()">&times;</button>
+        </div>
+        <div class="v2-modal-body">
+            <div style="margin-bottom:12px;">
+                <label style="display:block;font-size:12px;color:var(--v2-text-secondary);margin-bottom:4px;">Ticker</label>
+                <input type="text" id="v2StockSymbol" maxlength="10" autocomplete="off" style="width:100%;padding:8px 12px;border:1px solid var(--v2-border-input);border-radius:var(--v2-radius-sm);background:var(--v2-bg-input);color:var(--v2-text-primary);font-family:monospace;font-size:13px;text-transform:uppercase;" placeholder="e.g. NVDA" oninput="v2OnStockSymbolInput()">
+            </div>
+            <div id="v2StockLookupResult" style="display:none;margin-bottom:12px;padding:8px 12px;border-radius:var(--v2-radius-sm);font-size:12px;background:var(--v2-bg-input);border:1px solid var(--v2-border);"></div>
+            <div style="display:flex;gap:12px;margin-bottom:12px;">
+                <div style="flex:1;">
+                    <label style="display:block;font-size:12px;color:var(--v2-text-secondary);margin-bottom:4px;">Quantity</label>
+                    <input type="number" id="v2StockQty" min="0" step="any" style="width:100%;padding:8px 12px;border:1px solid var(--v2-border-input);border-radius:var(--v2-radius-sm);background:var(--v2-bg-input);color:var(--v2-text-primary);font-size:13px;" placeholder="0">
+                </div>
+                <div style="flex:1;">
+                    <label style="display:block;font-size:12px;color:var(--v2-text-secondary);margin-bottom:4px;">Cost basis / share (optional)</label>
+                    <input type="number" id="v2StockCost" min="0" step="any" style="width:100%;padding:8px 12px;border:1px solid var(--v2-border-input);border-radius:var(--v2-radius-sm);background:var(--v2-bg-input);color:var(--v2-text-primary);font-size:13px;" placeholder="$0.00">
+                </div>
+            </div>
+            <div style="font-size:11px;color:var(--v2-text-muted);margin-bottom:16px;">Manual entry for holdings without an API feed. Prices refresh automatically at market open, midday and close (keyless public feeds).</div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;">
+                <button class="v2-btn v2-btn-secondary v2-btn-sm" onclick="v2CloseAddStockModal()">Cancel</button>
+                <button class="v2-btn v2-btn-primary v2-btn-sm" id="v2StockAddBtn" onclick="v2SubmitStockAdd()">Add Stock</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/next/static/js/v2-cache.js?v=1792582663"></script>
+    <script src="/next/static/js/v2-app.js?v=1792582663"></script>
+    <script src="/next/static/js/v2-shell.js?v=1792582663"></script>
+    <script src="/next/static/js/v2-stocks.js?v=1792582663"></script>
     <script>
         let assetPrices = {};
         let allWallets = [];
         let currentWalletChainFilter = 'all';
         let defiSummaryData = null;
         let governanceLoaded = false;
+        let stocksLoaded = false;
         let stakingDataByWallet = {};
         let walletSortCol = 'value';
         let walletSortDir = 'desc';
@@ -228,6 +275,7 @@
             });
             document.getElementById('addWalletBtn').addEventListener('click', showAddWalletModal);
             document.getElementById('addTokenBtn').addEventListener('click', showAddTokenModal);
+            document.getElementById('addStockBtn').addEventListener('click', v2OpenAddStockModal);
             document.getElementById('computePnlBtn').addEventListener('click', computePnl);
 
             loadAssetsPage();
@@ -288,6 +336,12 @@
             if (tab === 'governance' && !governanceLoaded) {
                 governanceLoaded = true;
                 loadGovernanceTab();
+            }
+
+            // Lazy-load stocks on first visit (WQ-0383)
+            if (tab === 'stocks' && !stocksLoaded) {
+                stocksLoaded = true;
+                loadStocksTab();
             }
 
             // Update URL hash
@@ -955,7 +1009,7 @@
 
         // Handle hash-based tab navigation
         const hash = window.location.hash.replace('#', '');
-        if (hash && ['wallets', 'exchanges', 'defi', 'governance', 'custom', 'pnl'].includes(hash)) {
+        if (hash && ['wallets', 'exchanges', 'defi', 'governance', 'custom', 'stocks', 'pnl'].includes(hash)) {
             document.addEventListener('DOMContentLoaded', () => switchAssetTab(hash));
         }
     </script>
