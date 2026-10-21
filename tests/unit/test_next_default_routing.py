@@ -66,8 +66,12 @@ def test_nginx_root_sends_to_next_both_configs():
 def test_nginx_legacy_proxies_to_backend_both_configs():
     for fname in ("nginx.conf", "nginx-ssl.conf"):
         body = _nginx_body(fname)
-        m = re.search(r"location /legacy \{([^}]*)\}", body)
-        assert m, f"{fname}: /legacy location block missing"
+        # ^~ is pinned: a plain prefix location LOSES to the regex `\.html$`
+        # no-cache block (regex beats prefix), so /legacy/assets.html fell
+        # through to a static try of $root/legacy/assets.html -> 404
+        # (live defect at 5cc53eb, WQ-0383b). ^~ stops the regex search.
+        m = re.search(r"location \^~ /legacy \{([^}]*)\}", body)
+        assert m, f"{fname}: '^~ location /legacy' block missing (^~ pins it above the .html regex)"
         assert "proxy_pass http://127.0.0.1:8000;" in m.group(1), \
             f"{fname}: /legacy must proxy to FastAPI (try_files would serve V1 index at the wrong path)"
 
