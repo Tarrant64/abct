@@ -608,6 +608,55 @@ async def init_db():
             ON custom_tokens(blockchain)
         """)
 
+        # Manual stocks/ETF holdings for offline portfolio tracking (WQ-0382).
+        # Deliberately its own table (not custom_tokens): quantities are
+        # user-entered, prices come from the keyless stock engine (services/
+        # stock_data.py), and nothing here touches a chain.
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS manual_stocks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id),
+                symbol TEXT NOT NULL,
+                name TEXT,
+                quantity REAL NOT NULL,
+                cost_basis REAL,
+                asset_class TEXT DEFAULT 'stock',
+                price_usd REAL,
+                prev_close_usd REAL,
+                change_pct REAL,
+                price_source TEXT,
+                last_price_update TIMESTAMP,
+                include_in_total INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, symbol)
+            )
+        """)
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_manual_stocks_user_id
+            ON manual_stocks(user_id)
+        """)
+
+        # One price observation per symbol per trading day (the 3 scheduled
+        # intraday runs update the same day's row; the 16:05 ET run lands the
+        # close). Kept per-symbol, not per-user: the price is global.
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS stock_price_history (
+                symbol TEXT NOT NULL,
+                trade_date TEXT NOT NULL,
+                open REAL,
+                high REAL,
+                low REAL,
+                close REAL,
+                volume REAL,
+                last_price REAL,
+                source TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (symbol, trade_date)
+            )
+        """)
+
         # Token metadata cache - stores decimals and other token info
         await db.execute("""
             CREATE TABLE IF NOT EXISTS token_metadata (
@@ -2681,6 +2730,226 @@ async def update_custom_token_prices(prices: dict):
                 WHERE UPPER(ticker) = UPPER(?)
             """, (price, datetime.now(), ticker))
         await db.commit()
+
+
+# ============================================================================
+# MANUAL STOCKS (WQ-0382) -- manual quantity + keyless public price feed.
+# Separate from custom_tokens/crypto on purpose; see services/stock_data.py.
+# ============================================================================
+
+async def add_manual_stock(stock_data: dict, user_id: int = None) -> int:
+    """Add (or replace quantity on) a manual stock holding for a user.
+
+    Args:
+        stock_data: {symbol, quantity, name?, cost_basis?, asset_class?,
+                     price_usd?, prev_close_usd?, change_pct?, price_source?}
+        user_id: User ID (defaults to current user from context)
+
+    Returns:
+        Row id.
+    """
+    if user_id is None:
+        user_id = get_current_user_id()
+
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute("""
+            INSERT INTO manual_stocks (
+                user_id, symbol, name, quantity, cost_basis, asset_class,
+                price_usd, prev_close_usd, change_pct, price_source,
+                last_price_update
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, symbol) DO UPDATE SET
+                quantity = excluded.quantity,
+                name = COALESCE(excluded.name, manual_stocks.name),
+                cost_basis = COALESCE(excluded.cost_basis, manual_stocks.cost_basis),
+                asset_class = COALESCE(excluded.asset_class, manual_stocks.asset_class),
+                price_usd = COALESCE(excluded.price_usd, manual_stocks.price_usd),
+                prev_close_usd = COALESCE(excluded.prev_close_usd, manual_stocks.prev_close_usd),
+                change_pct = COALESCE(excluded.change_pct, manual_stocks.change_pct),
+                price_source = COALESCE(excluded.price_source, manual_stocks.price_source),
+                last_price_update = COALESCE(excluded.last_price_update, manual_stocks.last_price_update),
+                updated_at = CURRENT_TIMESTAMP
+        """, (
+            user_id,
+            stock_data['symbol'].strip().upper(),
+            stock_data.get('name'),
+            float(stock_data['quantity']),
+            stock_data.get('cost_basis'),
+            stock_data.get('asset_class', 'stock'),
+            stock_data.get('price_usd'),
+            stock_data.get('prev_close_usd'),
+            stock_data.get('change_pct'),
+            stock_data.get('price_source'),
+            datetime.now() if stock_data.get('price_usd') else None,
+        ))
+        await db.commit()
+        return cursor.lastrowid
+
+
+async def get_all_manual_stocks(user_id: int = None) -> list:
+    """All manual stock holdings for a user."""
+    if user_id is None:
+        user_id = get_current_user_id()
+
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("""
+            SELECT * FROM manual_stocks
+            WHERE user_id = ?
+            ORDER BY symbol
+        """, (user_id,))
+        return [dict(row) for row in await cursor.fetchall()]
+
+
+async def get_manual_stock_by_id(stock_id: int, user_id: int = None) -> dict:
+    """One manual stock holding by id (scoped to the user)."""
+    if user_id is None:
+        user_id = get_current_user_id()
+
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM manual_stocks WHERE id = ? AND user_id = ?",
+            (stock_id, user_id),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+
+async def get_manual_stock_by_symbol(symbol: str, user_id: int = None) -> dict:
+    """One manual stock holding by symbol (scoped to the user)."""
+    if user_id is None:
+        user_id = get_current_user_id()
+
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT * FROM manual_stocks WHERE symbol = ? AND user_id = ?",
+            (symbol.strip().upper(), user_id),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+
+async def update_manual_stock(stock_id: int, updates: dict, user_id: int = None):
+    """Update quantity/label-ish fields of a manual stock holding."""
+    if user_id is None:
+        user_id = get_current_user_id()
+
+    allowed = {'quantity', 'name', 'cost_basis', 'asset_class',
+               'include_in_total', 'price_usd', 'prev_close_usd',
+               'change_pct', 'price_source', 'last_price_update'}
+    fields = {k: v for k, v in updates.items() if k in allowed}
+    if not fields:
+        return
+    fields['updated_at'] = 'CURRENT_TIMESTAMP'
+    sets = ", ".join(
+        f"{k} = CURRENT_TIMESTAMP" if v == 'CURRENT_TIMESTAMP' else f"{k} = ?"
+        for k, v in fields.items()
+    )
+    values = [v for v in fields.values() if v != 'CURRENT_TIMESTAMP'] + [stock_id, user_id]
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute(
+            f"UPDATE manual_stocks SET {sets} WHERE id = ? AND user_id = ?",
+            values,
+        )
+        await db.commit()
+
+
+async def delete_manual_stock(stock_id: int, user_id: int = None):
+    """Delete a manual stock holding (scoped to the user)."""
+    if user_id is None:
+        user_id = get_current_user_id()
+
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute(
+            "DELETE FROM manual_stocks WHERE id = ? AND user_id = ?",
+            (stock_id, user_id),
+        )
+        await db.commit()
+
+
+async def get_tracked_stock_symbols() -> list:
+    """Distinct symbols across ALL users' manual holdings (the scheduler's
+    work list), with a suggested asset_class per symbol ('etf' wins a tie)."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("""
+            SELECT symbol,
+                   CASE WHEN SUM(CASE WHEN asset_class = 'etf' THEN 1 ELSE 0 END) > 0
+                        THEN 'etf' ELSE 'stock' END AS asset_class
+            FROM manual_stocks
+            GROUP BY symbol
+            ORDER BY symbol
+        """)
+        return [dict(row) for row in await cursor.fetchall()]
+
+
+async def apply_stock_prices(prices: dict):
+    """Write fetched quotes onto every user's manual_stocks rows.
+
+    Args:
+        prices: {SYMBOL: {price_usd, prev_close_usd?, change_pct?, source}}
+    Only symbols present in the dict are touched; a symbol the engine could
+    not price keeps its last stored price (never zeroed).
+    """
+    now = datetime.now()
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        for symbol, q in prices.items():
+            await db.execute("""
+                UPDATE manual_stocks
+                SET price_usd = ?, prev_close_usd = ?, change_pct = ?,
+                    price_source = ?, last_price_update = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE symbol = ?
+            """, (
+                q.get('price_usd'), q.get('prev_close_usd'),
+                q.get('change_pct'), q.get('source'), now,
+                symbol.strip().upper(),
+            ))
+        await db.commit()
+
+
+async def upsert_stock_price_history(symbol: str, trade_date: str,
+                                     fields: dict, source: str = None):
+    """Insert-or-update one (symbol, trade_date) price row."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("""
+            INSERT INTO stock_price_history
+                (symbol, trade_date, open, high, low, close, volume,
+                 last_price, source, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(symbol, trade_date) DO UPDATE SET
+                open = COALESCE(excluded.open, stock_price_history.open),
+                high = COALESCE(excluded.high, stock_price_history.high),
+                low = COALESCE(excluded.low, stock_price_history.low),
+                close = COALESCE(excluded.close, stock_price_history.close),
+                volume = COALESCE(excluded.volume, stock_price_history.volume),
+                last_price = COALESCE(excluded.last_price, stock_price_history.last_price),
+                source = COALESCE(excluded.source, stock_price_history.source),
+                updated_at = CURRENT_TIMESTAMP
+        """, (
+            symbol.strip().upper(), trade_date,
+            fields.get('open'), fields.get('high'), fields.get('low'),
+            fields.get('close'), fields.get('volume'),
+            fields.get('last_price'), source,
+        ))
+        await db.commit()
+
+
+async def get_stock_price_history(symbol: str, days: int = 90) -> list:
+    """Daily bars for one symbol, oldest first (up to `days` most recent)."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("""
+            SELECT * FROM (
+                SELECT * FROM stock_price_history
+                WHERE symbol = ?
+                ORDER BY trade_date DESC LIMIT ?
+            ) ORDER BY trade_date ASC
+        """, (symbol.strip().upper(), days))
+        return [dict(row) for row in await cursor.fetchall()]
+
 
 
 # ============================================================================
