@@ -339,9 +339,10 @@ function extractHoldingsFromSummary(data) {
 function renderPortfolioHero(data) {
     const total = parseFloat(data.total_usd) || parseFloat(data.total_value_usd) || parseFloat(data.total_portfolio_value) || 0;
 
-    // Breakdown from /portfolio/instant: {chain, exchange, tracked_token, custom_token, staking, defi, nft}
+    // Breakdown from /portfolio/instant: {chain, exchange, tracked_token, custom_token, manual_stock, staking, defi, nft}
     const bd = data.breakdown || {};
-    const liquid = (parseFloat(bd.chain) || 0) + (parseFloat(bd.exchange) || 0) + (parseFloat(bd.tracked_token) || 0) + (parseFloat(bd.custom_token) || 0);
+    // manual_stock (WQ-0382) counts as liquid like the other holdings.
+    const liquid = (parseFloat(bd.chain) || 0) + (parseFloat(bd.exchange) || 0) + (parseFloat(bd.tracked_token) || 0) + (parseFloat(bd.custom_token) || 0) + (parseFloat(bd.manual_stock) || 0);
     const staked = (parseFloat(bd.staking) || 0) + (parseFloat(bd.defi) || 0);
 
     // Save breakdown for later reconciliation with all-holdings total
@@ -397,6 +398,11 @@ function reconcileStatCards() {
     // Get exchange total from instant breakdown if available (more accurate)
     const bd = v2State.instantBreakdown;
     const exchangeTotal = bd ? (parseFloat(bd.exchange) || 0) : 0;
+    // /portfolio/all-holdings does not carry manual stock rows (WQ-0382), so
+    // the holdings-based liquid above would silently drop them -- re-add the
+    // instant breakdown's manual_stock bucket to stay consistent with the hero.
+    const manualStockTotal = bd ? (parseFloat(bd.manual_stock) || 0) : 0;
+    liquid += manualStockTotal;
 
     // Only update if we have meaningful data
     if (liquid > 0 || staked > 0) {

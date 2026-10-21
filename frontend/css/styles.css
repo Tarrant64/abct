@@ -6479,6 +6479,44 @@ body.privacy-mode .nft-collection-header .collection-name .blur-value {
     border-color: var(--accent-cardano);
 }
 
+/* Stock holdings (WQ-0382) reuse the token-item row; these tune the extras */
+.custom-token-item.stock:hover {
+    border-color: var(--accent-success);
+}
+
+.stock-change {
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+
+.stock-change.up { color: var(--accent-success); background: rgba(0, 210, 106, 0.12); }
+.stock-change.down { color: var(--accent-error); background: rgba(239, 68, 68, 0.12); }
+
+.stock-pnl {
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-left: 6px;
+}
+
+.stock-pnl.up { color: var(--accent-success); }
+.stock-pnl.down { color: var(--accent-error); }
+
+.stock-stamp {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.stock-schedule-note {
+    margin-top: 12px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.stock-found { color: var(--accent-success); }
+.stock-found-price { display: block; margin-top: 4px; }
+
 .custom-token-item.tracked {
     border-color: var(--accent-success);
     background: linear-gradient(135deg, var(--bg-card) 0%, rgba(0, 210, 106, 0.1) 100%);

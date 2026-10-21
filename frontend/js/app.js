@@ -772,8 +772,12 @@ function updateTotalPortfolioValue() {
     // Custom tokens value (from toggle selections)
     const customTokensTotal = customTokensValue || 0;
 
+    // Manual stock/ETF holdings (WQ-0382 stock engine; manual quantities,
+    // keyless 3x/day prices) -- counts as liquid like the other holdings.
+    const stocksTotal = (typeof stocksValue !== 'undefined' && stocksValue) || 0;
+
     // Portfolio breakdown: Liquid / Staked / NFTs
-    const liquidTotal = walletsTotal + exchangesTotal + trackedTokensTotal + customTokensTotal;
+    const liquidTotal = walletsTotal + exchangesTotal + trackedTokensTotal + customTokensTotal + stocksTotal;
     const stakedTotal = stakingTotal + defiTotal;
 
     // Total portfolio value = sum of breakdown categories
@@ -3143,6 +3147,8 @@ async function loadStakeKeyGovernanceInfo(stakeGroups) {
 let nativeTokensData = null;
 let trackedTokensValue = 0;
 let customTokensValue = 0;
+let stocksValue = 0;   // WQ-0382 manual stock holdings (set by stocks-tab.js)
+let stocks = [];       // WQ-0382 current stock rows (populated by stocks-tab.js)
 
 // Load native assets (cached by default, pass true to force refresh)
 async function loadNativeAssets(forceRefresh = false) {
@@ -8979,6 +8985,8 @@ function calculateChartValues(historyData, categories) {
         if (categories.defi) value += breakdown.defi || 0;
         if (categories.nfts) value += breakdown.nfts || 0;
         if (categories.trackedTokens) value += breakdown.tracked_tokens || 0;
+        // WQ-0382 stocks bucket: no chart toggle exists for it, always in.
+        value += breakdown.stocks || 0;
 
         return value;
     });
@@ -9022,8 +9030,9 @@ function getCurrentPortfolioTotal() {
     const nftsTotal = getNftTotalUsd();
     const trackedTokensTotal = trackedTokensValue || 0;
     const customTokensTotal = customTokensValue || 0;
+    const stocksTotal = (typeof stocksValue !== 'undefined' && stocksValue) || 0;
 
-    return walletsTotal + exchangesTotal + stakingTotal + defiTotal + nftsTotal + trackedTokensTotal + customTokensTotal;
+    return walletsTotal + exchangesTotal + stakingTotal + defiTotal + nftsTotal + trackedTokensTotal + customTokensTotal + stocksTotal;
 }
 
 function getCurrentPortfolioBreakdown() {
@@ -9062,7 +9071,9 @@ function getCurrentPortfolioBreakdown() {
         defi: defiTotal,
         exchange: exchangesTotal,
         nfts: nftsTotal,
-        tracked_tokens: trackedTokensTotal + customTokensTotal
+        tracked_tokens: trackedTokensTotal + customTokensTotal,
+        // own bucket so chart/tooltips never mislabel stocks as tokens
+        stocks: (typeof stocksValue !== 'undefined' && stocksValue) || 0
     };
 }
 
@@ -9464,6 +9475,9 @@ function renderPortfolioChart(historyData, range) {
                                 if (breakdown.tracked_tokens > 0) {
                                     lines.push(`Tokens: ${formatUSD(breakdown.tracked_tokens)}`);
                                 }
+                                if (breakdown.stocks > 0) {
+                                    lines.push(`Stocks: ${formatUSD(breakdown.stocks)}`);
+                                }
                             }
 
                             return lines;
@@ -9768,7 +9782,7 @@ function renderV2Chart(data, range) {
                             // Component breakdown
                             const comps = point.breakdown?.components;
                             if (comps) {
-                                const compLabels = {wallets: 'Wallets', exchange: 'Exchange', staking: 'Staking', defi: 'DeFi', nfts: 'NFTs', tracked_tokens: 'Tracked'};
+                                const compLabels = {wallets: 'Wallets', exchange: 'Exchange', staking: 'Staking', defi: 'DeFi', nfts: 'NFTs', tracked_tokens: 'Tracked', stocks: 'Stocks'};
                                 for (const [key, label] of Object.entries(compLabels)) {
                                     const val = comps[key] || 0;
                                     if (val > 0) lines.push(`  ${label}: ${formatUSD(val)}`);

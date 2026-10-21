@@ -1336,6 +1336,25 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
         except Exception as e:
             logger.debug(f"Portfolio positions custom tokens write failed: {e}")
 
+        # Manual stock/ETF holdings (WQ-0382 stock engine): user-entered
+        # quantity x last engine price (CNBC/Nasdaq, refreshed 3x a day).
+        try:
+            from database import get_all_manual_stocks
+            for s in await get_all_manual_stocks(user_id=user_id):
+                if s.get('include_in_total', 1) != 1:
+                    continue
+                qty = float(s.get('quantity') or 0)
+                price = float(s.get('price_usd') or 0)
+                if not s.get('symbol') or qty <= 0 or price <= 0:
+                    continue
+                pp_rows.append({
+                    'user_id': user_id, 'symbol': s['symbol'], 'quantity': qty,
+                    'source_type': 'manual_stock', 'source_detail': str(s.get('id', '')),
+                    'chain': '', 'last_price_usd': price,
+                })
+        except Exception as e:
+            logger.debug(f"Portfolio positions manual stocks write failed: {e}")
+
         if pp_rows:
             # Clear stale staking/defi rows before re-inserting fresh data.
             # Prevents accumulation of old protocol entries when current scans
@@ -2281,7 +2300,9 @@ async def get_portfolio_history(
 # (ABCT-BTC-TOTALS-AUDIT-2026-09-27) — a pre-deploy cached row would
 # otherwise under-report staking_usd for its whole TTL, same failure shape
 # as the 2026-07-12 rollback (D2) this version guard was added for.
-TOTALS_VALUATION_VERSION = 3
+# v4: adds the manual_stocks_usd bucket (WQ-0382 stock engine); a cached v3
+# row served to mobile/summary would omit tracked stock value from the total.
+TOTALS_VALUATION_VERSION = 4
 
 
 @router.get("/totals")
@@ -2377,6 +2398,24 @@ async def get_portfolio_totals(user_id: int = Depends(verify_session), refresh: 
     except Exception as e:
         logging.debug(f"Could not compute tracked tokens value: {e}")
 
+    # Manual stock/ETF holdings (WQ-0382): quantity x the stock engine's
+    # stored price (refreshed 3x a day at open/midday/close ET by
+    # services/stock_scheduler.py). Deliberately NOT run through the crypto
+    # pricing service -- stocks are not in it, and the engine's own price is
+    # the freshest one that exists for these symbols.
+    manual_stocks_usd = 0.0
+    try:
+        from database import get_all_manual_stocks
+        for s in await get_all_manual_stocks(user_id=user_id):
+            if s.get('include_in_total', 1) != 1:
+                continue
+            qty = float(s.get('quantity') or 0)
+            price = float(s.get('price_usd') or 0)
+            if qty > 0 and price > 0:
+                manual_stocks_usd += qty * price
+    except Exception as e:
+        logging.debug(f"Could not compute manual stocks value: {e}")
+
     # Custom tokens: compute from user's custom token entries × current prices
     custom_tokens_usd = 0.0
     try:
@@ -2401,6 +2440,7 @@ async def get_portfolio_totals(user_id: int = Depends(verify_session), refresh: 
         "nft_usd": float(latest.get('nft_value', 0) or 0),
         "tracked_tokens_usd": tracked_tokens_usd,
         "custom_tokens_usd": custom_tokens_usd,
+        "manual_stocks_usd": manual_stocks_usd,
         "snapshot_time": latest.get('date'),
         "valuation_version": TOTALS_VALUATION_VERSION,
     }
@@ -2420,6 +2460,12 @@ async def get_portfolio_instant(user_id: int = Depends(verify_session)):
 
     positions = await get_all_portfolio_positions(user_id)
     freshness = await get_positions_freshness(user_id)
+
+    # Manual stock/ETF holdings (WQ-0382) join `positions` through
+    # portfolio_positions source_type 'manual_stock' (written by the summary
+    # endpoint's pp_rows pass, same as custom_token), valued at
+    # manual_stocks.price_usd -- the stock engine's 3x/day open/midday/close
+    # refresh keeps that price current without any crypto price service.
 
     if not positions:
         return {
@@ -2509,7 +2555,11 @@ async def get_portfolio_instant(user_id: int = Depends(verify_session)):
             'price_change_24h': agg['price_change_24h'],
             'allocation_pct': alloc,
             'sources': sorted(agg['sources']),
-            'image_url': (meta.get('image_url') if meta else None) or logokit_service.get_crypto_logo_url(agg['symbol'], size=64),
+            # Manual stocks have no crypto logo; None lets the client render
+            # a ticker tile instead of a 404-ing coin image.
+            'image_url': (None if {'manual_stock'} & agg['sources'] else
+                          (meta.get('image_url') if meta else None) or
+                          logokit_service.get_crypto_logo_url(agg['symbol'], size=64)),
         })
 
     return {
