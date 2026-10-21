@@ -166,12 +166,16 @@ class StockDataService:
             raise RuntimeError(f"HTTP {resp.status_code}")
 
         out: Dict[str, dict] = {}
+        requested = set(symbols)
         quotes = (resp.json()
                       .get("FormattedQuoteResult", {})
                       .get("FormattedQuote", []))
         for q in quotes:
             sym = normalize_symbol(q.get("symbol", ""))
-            if not sym or q.get("code") != 0:
+            # code!=0 is CNBC's "unknown symbol" marker; the requested-set
+            # guard keeps a stray echo from pricing something we never asked
+            # for.
+            if not sym or sym not in requested or q.get("code") != 0:
                 continue
             price = _to_float(q.get("last"))
             if not price or price <= 0:
@@ -214,6 +218,14 @@ class StockDataService:
                     pd_ = data.get("primaryData") or {}
                     price = _to_float(pd_.get("lastSalePrice"))
                     if not price or price <= 0:
+                        continue
+                    # The API echoes the resolved symbol; a mismatch means we
+                    # were served someone else's quote -- never store it.
+                    echoed = normalize_symbol(data.get("symbol") or "")
+                    if echoed and echoed != sym:
+                        logger.warning(
+                            "stock_data: nasdaq echoed %s for %s, ignoring",
+                            echoed, sym)
                         continue
                     out[sym] = {
                         "price_usd": price,

@@ -2752,7 +2752,7 @@ async def add_manual_stock(stock_data: dict, user_id: int = None) -> int:
         user_id = get_current_user_id()
 
     async with aiosqlite.connect(DATABASE_PATH) as db:
-        cursor = await db.execute("""
+        await db.execute("""
             INSERT INTO manual_stocks (
                 user_id, symbol, name, quantity, cost_basis, asset_class,
                 price_usd, prev_close_usd, change_pct, price_source,
@@ -2782,8 +2782,17 @@ async def add_manual_stock(stock_data: dict, user_id: int = None) -> int:
             stock_data.get('price_source'),
             datetime.now() if stock_data.get('price_usd') else None,
         ))
+        # ON CONFLICT DO UPDATE leaves lastrowid unset on the conflict path,
+        # so resolve the row explicitly -- an add over an existing symbol
+        # must still return that row's id.
+        symbol = stock_data['symbol'].strip().upper()
+        cursor = await db.execute(
+            "SELECT id FROM manual_stocks WHERE user_id = ? AND symbol = ?",
+            (user_id, symbol),
+        )
+        row = await cursor.fetchone()
         await db.commit()
-        return cursor.lastrowid
+        return row[0] if row else None
 
 
 async def get_all_manual_stocks(user_id: int = None) -> list:

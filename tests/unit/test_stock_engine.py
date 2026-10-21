@@ -49,7 +49,7 @@ CNBC_PAYLOAD = {"FormattedQuoteResult": {"FormattedQuote": [
      "previous_day_closing": "52.47", "curmktstatus": "REG_MKT",
      "type": "STOCK", "subType": "Exchange Traded Fund",
      "exchange": "NYSE Arca", "last_time": "2026-10-20T20:00:00.079-0400"},
-    {"symbol": "NOTATICKER123", "code": 1},
+    {"symbol": "BADSYM", "code": 1},
 ]}}
 
 NASDAQ_QUOTE_PAYLOAD = {"data": {
@@ -94,10 +94,11 @@ class FakeClient:
             return FakeResponse(200, NASDAQ_HIST_PAYLOAD)
         if "/info" in url:
             assetclass = (params or {}).get("assetclass")
-            if assetclass == "stocks":
-                return FakeResponse(200, {"data": {"symbol": "GBTC",
-                                                   "primaryData": {}}})
-            return FakeResponse(200, NASDAQ_QUOTE_PAYLOAD)
+            if "/GBTC/info" in url and assetclass == "etf":
+                return FakeResponse(200, NASDAQ_QUOTE_PAYLOAD)
+            # 'stocks' lookups and unknown symbols come back without
+            # primaryData, like a real ETF-as-stock query.
+            return FakeResponse(200, {"data": {"primaryData": {}}})
         return FakeResponse(404, {})
 
 
@@ -137,6 +138,16 @@ def _make_stock_db(tmp_path):
             source TEXT,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (symbol, trade_date)
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE cache (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            key TEXT NOT NULL,
+            value TEXT NOT NULL,
+            expires_at TIMESTAMP NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
     conn.execute("""
@@ -203,9 +214,11 @@ def test_nasdaq_date():
 def test_cnbc_batch_parse_skips_bad_symbols(stock_db, fake_feed):
     svc = StockDataService()
     quotes = asyncio.run(svc.get_quotes(
-        ["NVDA", "BITW", "NOTATICKER123"], use_cache=False))
+        ["NVDA", "BITW", "BADSYM", "TOOLONGSYMBOL123"], use_cache=False))
     assert set(quotes) == {"NVDA", "BITW"}           # code=1 skipped
-    assert fake_feed.calls[0][1]["symbols"] == "NVDA|BITW|NOTATICKER123"  # 1 call
+    # the too-long junk symbol never even reaches the feed (client-side
+    # validation); the one real CNBC call carries only valid symbols
+    assert fake_feed.calls[0][1]["symbols"] == "NVDA|BITW|BADSYM"
     nvda = quotes["NVDA"]
     assert nvda["price_usd"] == 216.47
     assert nvda["prev_close_usd"] == 217.09
