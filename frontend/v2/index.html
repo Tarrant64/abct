@@ -90,17 +90,18 @@
                         </div>
                     </div>
                     <div class="v2-stat-card glass-card glass-sheen-5">
+                        <div class="v2-stat-label">Stocks</div>
+                        <div class="v2-stat-value v2-blur" id="statStocks">
+                            <span class="v2-skeleton v2-skeleton-value"></span>
+                        </div>
+                        <div class="v2-stat-sub" id="statStocksChg"></div>
+                    </div>
+                    <div class="v2-stat-card glass-card glass-sheen-1">
                         <div class="v2-stat-label">7-Day Change</div>
                         <div class="v2-stat-value" id="stat7dChange">
                             <span class="v2-skeleton v2-skeleton-value"></span>
                         </div>
                         <div class="v2-stat-sub" id="stat7dPct"></div>
-                    </div>
-                    <div class="v2-stat-card glass-card glass-sheen-1">
-                        <div class="v2-stat-label">Transactions (7d)</div>
-                        <div class="v2-stat-value" id="statTx7d">
-                            <span class="v2-skeleton v2-skeleton-value"></span>
-                        </div>
                     </div>
                 </div>
 
@@ -138,6 +139,7 @@
                             <span id="collectStatus" style="font-size:11px;color:var(--v2-text-muted);display:none;"></span>
                         </div>
                         <div class="v2-chart-ranges" id="chartRanges">
+                            <button class="v2-range-btn" data-range="24h" onclick="loadChart('24h')">24H</button>
                             <button class="v2-range-btn active" data-range="1w" onclick="loadChart('1w')">1W</button>
                             <button class="v2-range-btn" data-range="1m" onclick="loadChart('1m')">1M</button>
                             <button class="v2-range-btn" data-range="3m" onclick="loadChart('3m')">3M</button>
@@ -145,6 +147,11 @@
                             <button class="v2-range-btn" data-range="1y" onclick="loadChart('1y')">1Y</button>
                             <button class="v2-range-btn" data-range="all" onclick="loadChart('all')">ALL</button>
                         </div>
+                        <div class="v2-chart-ranges" id="chartDetailToggle" title="Detail uses live intraday feeds (5-min on 24H, hourly on 1W); Smooth is the daily history">
+                            <button class="v2-range-btn active" data-detail="0" onclick="setChartDetail(false)">Smooth</button>
+                            <button class="v2-range-btn" data-detail="1" onclick="setChartDetail(true)">Detail</button>
+                        </div>
+                        <div id="chartDetailNote" style="display:none;font-size:10px;color:var(--v2-text-muted);width:100%;text-align:right;"></div>
                     </div>
                     <div class="v2-chart-container glass-card glass-sheen-3" id="chartContainer">
                         <div class="v2-chart-canvas-wrapper">
