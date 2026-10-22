@@ -235,6 +235,35 @@ async function loadHoldings(refresh = false) {
         }
         v2State.holdings = data.holdings || [];
 
+        // Manual stock/ETF holdings (WQ-0384): all-holdings carries the stock
+        // VALUE in its total (portfolio_positions manual_stock rows) but not a
+        // row per symbol, so the dashboard table/donut silently omitted them.
+        // Fetch /stocks and append the tracked ones as first-class rows.
+        try {
+            var stocksResp = (typeof v2CachedFetch === 'function')
+                ? (await v2CachedFetch('/stocks')).data
+                : (await (await v2Fetch('/stocks')).json());
+            if (stocksResp && Array.isArray(stocksResp.stocks)) {
+                stocksResp.stocks.forEach(function (s) {
+                    if (s.include_in_total !== 1 || !(s.value_usd > 0)) return;
+                    v2State.holdings.push({
+                        symbol: s.symbol,
+                        name: s.name || s.symbol,
+                        amount: s.quantity,
+                        price_usd: s.price_usd,
+                        value_usd: s.value_usd,
+                        price_change_24h: s.change_pct || 0,
+                        source: 'manual_stock',
+                        blockchain: 'stocks',
+                        logo_url: null,
+                        description: s.description || null,
+                    });
+                });
+            }
+        } catch (e) {
+            console.error('Stock holdings merge failed:', e);
+        }
+
         // Enrich holdings with inferred blockchain and price data
         v2State.holdings.forEach(h => {
             if (!h.blockchain) {
@@ -398,11 +427,15 @@ function reconcileStatCards() {
     // Get exchange total from instant breakdown if available (more accurate)
     const bd = v2State.instantBreakdown;
     const exchangeTotal = bd ? (parseFloat(bd.exchange) || 0) : 0;
-    // /portfolio/all-holdings does not carry manual stock rows (WQ-0382), so
-    // the holdings-based liquid above would silently drop them -- re-add the
-    // instant breakdown's manual_stock bucket to stay consistent with the hero.
+    // /portfolio/all-holdings does not carry manual stock ROWS (WQ-0382);
+    // loadHoldings() appends them from /stocks (WQ-0384). If that merge ran,
+    // their value is already in the holdings-based liquid above — re-add the
+    // instant breakdown's manual_stock bucket only for what is still missing
+    // (e.g. the /stocks fetch failed), so the total never double-counts.
     const manualStockTotal = bd ? (parseFloat(bd.manual_stock) || 0) : 0;
-    liquid += manualStockTotal;
+    const manualStockInHoldings = holdings.reduce(
+        (s, h) => s + ((h.source || '').toLowerCase() === 'manual_stock' ? (parseFloat(h.value_usd) || 0) : 0), 0);
+    if (manualStockInHoldings <= 0) liquid += manualStockTotal;
 
     // Only update if we have meaningful data
     if (liquid > 0 || staked > 0) {

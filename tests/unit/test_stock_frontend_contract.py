@@ -50,8 +50,28 @@ def test_v2_surface_knows_manual_stock_bucket():
     v2 = _read("frontend", "v2", "js", "v2-app.js")
     assert "parseFloat(bd.manual_stock)" in v2, \
         "v2 hero liquid must include the manual_stock breakdown bucket"
-    assert "liquid += manualStockTotal;" in v2, \
-        "v2 reconcileStatCards must re-add manual_stock (all-holdings lacks it)"
+    # WQ-0384: the dashboard merges /stocks rows into the holdings table, so
+    # the reconcile re-add of the instant bucket must be conditional (no
+    # double-count when the rows are already in the holdings sum).
+    assert "manualStockInHoldings" in v2, \
+        "reconcileStatCards must not double-count stock rows merged from /stocks"
+
+
+def test_stocks_edit_and_description_surface():
+    # WQ-0384: click-to-edit modal (add+edit share one form), description /
+    # custodian field, on BOTH the v2 and legacy Assets tabs.
+    v2js = _read("frontend", "v2", "js", "v2-stocks.js")
+    assert "v2OpenEditStockModal" in v2js and "'PUT'" in v2js, \
+        "v2 stocks tab must support editing via PUT /stocks/{id}"
+    assert "v2StockDesc" in v2js, "v2 modal must carry the description field"
+    v2html = _read("frontend", "v2", "assets.html")
+    assert 'id="v2StockDesc"' in v2html and 'id="v2StockModalTitle"' in v2html
+    legacy = _read("frontend", "js", "stocks-tab.js")
+    assert "openEditStockModal" in legacy and "'PUT'" in legacy, \
+        "legacy stocks tab must support editing too"
+    assert "stockDescInput" in legacy
+    legacy_html = _read("frontend", "assets.html")
+    assert 'id="stockDescInput"' in legacy_html
 
 
 def test_assets_page_wires_the_stocks_tab():

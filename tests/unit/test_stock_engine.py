@@ -124,6 +124,7 @@ def _make_stock_db(tmp_path):
             price_source TEXT,
             last_price_update TIMESTAMP,
             include_in_total INTEGER DEFAULT 1,
+            description TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(user_id, symbol)
@@ -271,23 +272,35 @@ def test_manual_stock_crud_roundtrip(stock_db):
     async def scenario():
         sid = await database.add_manual_stock(
             {"symbol": "nvda", "quantity": 10, "cost_basis": 150.0,
-             "price_usd": 216.47, "price_source": "cnbc"}, USER_ID)
+             "price_usd": 216.47, "price_source": "cnbc",
+             "description": "Fidelity"}, USER_ID)
         row = await database.get_manual_stock_by_id(sid, USER_ID)
         assert row["symbol"] == "NVDA"
         assert row["price_usd"] == 216.47
         assert row["last_price_update"] is not None
+        assert row["description"] == "Fidelity"
 
         # same symbol again: quantity replaces, price survives
         sid2 = await database.add_manual_stock(
             {"symbol": "NVDA", "quantity": 12}, USER_ID)
         row = await database.get_manual_stock_by_id(sid2, USER_ID)
         assert row["quantity"] == 12 and row["price_usd"] == 216.47
+        assert row["description"] == "Fidelity"  # COALESCE keeps the note
         assert len(await database.get_all_manual_stocks(USER_ID)) == 1
 
         await database.update_manual_stock(sid, {"quantity": 7, "bogus": 1},
                                            USER_ID)
         row = await database.get_manual_stock_by_id(sid, USER_ID)
         assert row["quantity"] == 7
+
+        # WQ-0384 edit path: description updates and can be cleared to NULL
+        await database.update_manual_stock(sid, {"description": "Wells Fargo"},
+                                           USER_ID)
+        row = await database.get_manual_stock_by_id(sid, USER_ID)
+        assert row["description"] == "Wells Fargo"
+        await database.update_manual_stock(sid, {"description": None}, USER_ID)
+        row = await database.get_manual_stock_by_id(sid, USER_ID)
+        assert row["description"] is None
 
         # user scoping: another user cannot see/touch it
         assert await database.get_manual_stock_by_id(sid, 999) is None

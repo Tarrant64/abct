@@ -46,6 +46,12 @@ class StockAddRequest(BaseModel):
     cost_basis: Optional[float] = None      # USD per share (optional)
     asset_class: Optional[str] = "stock"    # stock | etf
     include_in_total: Optional[int] = 1
+    description: Optional[str] = None       # custodian note ("Fidelity", ...)
+
+    @field_validator("description")
+    @classmethod
+    def _trim_desc(cls, v):
+        return v.strip()[:120] or None if v else None
 
     @field_validator("symbol")
     @classmethod
@@ -76,6 +82,12 @@ class StockUpdateRequest(BaseModel):
     cost_basis: Optional[float] = None
     asset_class: Optional[str] = None
     include_in_total: Optional[int] = None
+    description: Optional[str] = None
+
+    @field_validator("description")
+    @classmethod
+    def _trim_desc(cls, v):
+        return v.strip()[:120] or None if v else None
 
     @field_validator("quantity")
     @classmethod
@@ -130,6 +142,7 @@ def _enrich(row: dict, quotes: dict) -> dict:
                               if hasattr(row.get("last_price_update"), "isoformat")
                               else row.get("last_price_update")),
         "include_in_total": row.get("include_in_total", 1),
+        "description": row.get("description"),
     }
 
 
@@ -175,6 +188,7 @@ async def add_stock(request: StockAddRequest,
         "prev_close_usd": q.get("prev_close_usd"),
         "change_pct": q.get("change_pct"),
         "price_source": q.get("source"),
+        "description": request.description,
     }, user_id)
 
     row = await get_manual_stock_by_id(stock_id, user_id)
@@ -261,7 +275,11 @@ async def update_stock(stock_id: int, request: StockUpdateRequest,
     if not row:
         raise HTTPException(status_code=404, detail="Stock holding not found")
     updates = request.model_dump(exclude_unset=True)
-    updates = {k: v for k, v in updates.items() if v is not None}
+    # Explicit nulls are meaningful only for the clearable fields (cost
+    # basis, description). Other fields must never be nulled through PUT.
+    for k in ("quantity", "name", "asset_class", "include_in_total"):
+        if k in updates and updates[k] is None:
+            del updates[k]
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
     await update_manual_stock(stock_id, updates, user_id)
