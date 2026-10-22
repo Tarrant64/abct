@@ -52,6 +52,8 @@ let v2State = {
     sidebarCollapsed: localStorage.getItem('v2_sidebar_collapsed') === 'true',
     chartInstance: null,
     sparklines: {},
+    // WQ-0385: 'smooth' = daily totals; 'detail' = intraday feeds (24H/1W only)
+    chartDetail: localStorage.getItem('v2_chart_detail') === 'true',
     totalPortfolioValue: 0,
     instantBreakdown: null,  // Cache /portfolio/instant breakdown for reconciliation
 };
@@ -150,7 +152,7 @@ async function loadDashboard() {
             useCached ? v2CachedFetch('/prices/all') : v2Fetch('/prices/all').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }),
             useCached ? v2CachedFetch('/portfolio/instant') : v2Fetch('/portfolio/instant').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }),
             useCached ? v2CachedFetch('/balance-history/data?range=1w') : v2Fetch('/balance-history/data?range=1w').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }),
-            useCached ? v2CachedFetch('/transactions/stats?days=7') : v2Fetch('/transactions/stats?days=7').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }),
+            useCached ? v2CachedFetch('/stocks') : v2Fetch('/stocks').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }),
             useCached ? v2CachedFetch('/exchanges/all') : v2Fetch('/exchanges/all').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }),
             useCached ? v2CachedFetch('/nfts/all/summary') : v2Fetch('/nfts/all/summary').then(function(r) { return r.ok ? r.json().then(function(d) { return { data: d }; }) : { data: null }; }),
         ]);
@@ -172,13 +174,19 @@ async function loadDashboard() {
             renderChart(results[2].value.data);
             // 7-Day Change is derived from this same response — no extra network call.
             renderWeeklyChange(results[2].value.data);
+            // WQ-0385: a persisted Detail preference applies to the initial
+            // 1w chart too (loadChart re-fetches with granular=true and syncs
+            // the toggle button state; server caches it for 2 minutes).
+            if (v2State.chartDetail && v2State.chartData.mode !== 'intraday') {
+                loadChart(v2State.currentChartRange || '1w');
+            }
         } else {
             renderWeeklyChange(null);
         }
 
         // Process tx stats
         if (results[3].status === 'fulfilled' && results[3].value && results[3].value.data) {
-            renderTxStats(results[3].value.data);
+            renderStocksStat(results[3].value.data);
         }
 
         // Process exchanges
@@ -563,6 +571,7 @@ function renderChart(data) {
     let labels = [];
     let values = [];
 
+    const isIntraday = data.mode === 'intraday';
     if (data.data && Array.isArray(data.data)) {
         data.data.forEach(point => {
             labels.push(point.date || point.timestamp || '');
@@ -593,12 +602,36 @@ function renderChart(data) {
     }
 
     // Format labels
+    const intradayRange = isIntraday && data.range === '24h';
     const formattedLabels = labels.map(l => {
         try {
-            const d = new Date(l);
+            // Intraday points carry unix seconds; daily points a date string.
+            const d = (isIntraday && typeof l === 'number') ? new Date(l * 1000) : new Date(l);
+            if (isIntraday && intradayRange) {
+                return d.toLocaleString('en-US', { weekday: 'short', hour: 'numeric' });
+            }
+            if (isIntraday) {
+                return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric' });
+            }
             return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         } catch { return l; }
     });
+
+    // WQ-0385 detail-mode note under the chart controls.
+    const noteEl = document.getElementById('chartDetailNote');
+    if (noteEl) {
+        if (isIntraday) {
+            const excl = (data.excluded_symbols || []);
+            noteEl.textContent = 'Detail: ' + (data.granularity || 'intraday') + ' live-feed estimate of current holdings' +
+                (excl.length ? ' (excl. ' + excl.slice(0, 6).join(', ') + (excl.length > 6 ? '…' : '') + ')' : '');
+            noteEl.style.display = '';
+        } else if (data.granular_unavailable) {
+            noteEl.textContent = 'Detail feed unavailable — showing daily history';
+            noteEl.style.display = '';
+        } else {
+            noteEl.style.display = 'none';
+        }
+    }
 
     // Determine line color from CSS var
     const style = getComputedStyle(document.documentElement);
@@ -621,9 +654,11 @@ function renderChart(data) {
                 borderColor: lineColor,
                 backgroundColor: fillColor,
                 fill: true,
-                tension: 0.35,
+                // WQ-0385: straight segments in detail mode so the actual
+                // fluctuation shows; smooth curve for the daily view.
+                tension: isIntraday ? 0 : 0.35,
                 borderWidth: 2,
-                pointRadius: 0,
+                pointRadius: isIntraday ? (values.length > 200 ? 0 : 1.5) : 0,
                 pointHoverRadius: 5,
                 pointHoverBackgroundColor: lineColor,
                 pointHoverBorderColor: '#fff',
@@ -679,8 +714,17 @@ async function loadChart(range) {
     v2State.currentChartRange = range;
 
     // Update active button (only range buttons, not the by-chain toggle)
-    document.querySelectorAll('.v2-chart-ranges .v2-range-btn[data-range]').forEach(btn => {
+    document.querySelectorAll('#chartRanges .v2-range-btn[data-range]').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.range === range);
+    });
+
+    // WQ-0385 Smooth/Detail toggle state + availability: intraday detail
+    // exists only for 24H and 1W (keyless feed granularity limit).
+    const detailAvailable = (range === '24h' || range === '1w');
+    const detailBtns = document.querySelectorAll('#chartDetailToggle .v2-range-btn[data-detail]');
+    detailBtns.forEach(btn => {
+        btn.style.display = detailAvailable ? '' : 'none';
+        btn.classList.toggle('active', (btn.dataset.detail === '1') === !!v2State.chartDetail);
     });
 
     // Show skeleton
@@ -694,7 +738,9 @@ async function loadChart(range) {
     }
 
     try {
-        const response = await v2Fetch(`${API_BASE}/balance-history/data?range=${range}`);
+        let url = `${API_BASE}/balance-history/data?range=${range}`;
+        if (v2State.chartDetail && detailAvailable) url += '&granular=true';
+        const response = await v2Fetch(url);
         if (response.ok) {
             const data = await response.json();
             v2State.chartData = data;
@@ -705,14 +751,45 @@ async function loadChart(range) {
     }
 }
 
+// WQ-0385: Smooth (daily history) <-> Detail (intraday feeds) chart mode.
+function setChartDetail(on) {
+    v2State.chartDetail = !!on;
+    localStorage.setItem('v2_chart_detail', on ? 'true' : 'false');
+    loadChart(v2State.currentChartRange || '1w');
+}
+
 
 // ============================================================================
-// RENDERING — TX STATS
+// RENDERING — STOCKS STAT CARD (WQ-0385, replaced Transactions (7d))
 // ============================================================================
 
-function renderTxStats(data) {
-    const count = data.total_transactions || data.total_count || data.count || 0;
-    setText('statTx7d', count.toLocaleString());
+function renderStocksStat(data) {
+    const stocks = (data && data.stocks || []).filter(s => s.include_in_total === 1);
+    const total = (data && data.tracked_total_usd) || 0;
+    setText('statStocks', stocks.length ? formatCurrency(total) : '--');
+    const chgEl = document.getElementById('statStocksChg');
+    if (!chgEl) return;
+    if (!stocks.length) {
+        chgEl.textContent = '';
+        return;
+    }
+    // Dollar change since previous close, summed over tracked holdings with
+    // a known day change (value - value/(1+chg)).
+    let chgUsd = 0, has = false;
+    stocks.forEach(s => {
+        if (s.change_pct == null || s.value_usd == null) return;
+        const prevVal = s.value_usd / (1 + s.change_pct / 100);
+        chgUsd += s.value_usd - prevVal;
+        has = true;
+    });
+    if (!has) {
+        chgEl.textContent = stocks.length + ' holding' + (stocks.length !== 1 ? 's' : '');
+        chgEl.className = 'v2-stat-sub';
+        return;
+    }
+    chgEl.textContent = (chgUsd >= 0 ? '+' : '-') + formatCurrency(Math.abs(chgUsd)) +
+        ' today · ' + stocks.length + ' holding' + (stocks.length !== 1 ? 's' : '');
+    chgEl.className = 'v2-stat-sub ' + (chgUsd >= 0 ? 'positive' : 'negative');
 }
 
 
@@ -1425,12 +1502,12 @@ async function syncAll() {
         }
 
         // 2. Refresh DeFi + NFTs in parallel (not covered by /portfolio/refresh)
-        const [pricesRes, defiRes, nftRes, historyRes, txStatsRes] = await Promise.allSettled([
+        const [pricesRes, defiRes, nftRes, historyRes, stocksRes] = await Promise.allSettled([
             v2Fetch(`${API_BASE}/prices/all`),
             v2Fetch(`${API_BASE}/defi/summary?refresh=true`),
             v2Fetch(`${API_BASE}/nfts/all/summary`),
             v2Fetch(`${API_BASE}/balance-history/data?range=${v2State.currentChartRange || '1w'}`),
-            v2Fetch(`${API_BASE}/transactions/stats?days=7`),
+            v2Fetch(`${API_BASE}/stocks`),
         ]);
 
         // Process prices
@@ -1463,10 +1540,10 @@ async function syncAll() {
             renderChart(data);
         }
 
-        // Process tx stats
-        if (txStatsRes.status === 'fulfilled' && txStatsRes.value.ok) {
-            const data = await txStatsRes.value.json();
-            renderTxStats(data);
+        // Process stocks stat card
+        if (stocksRes.status === 'fulfilled' && stocksRes.value.ok) {
+            const data = await stocksRes.value.json();
+            renderStocksStat(data);
         }
 
         // 3. Refresh full holdings (uses fresh caches from step 1)

@@ -205,18 +205,87 @@ async def cancel_collection(user_id: int = Depends(verify_session)):
     return {"status": "cancelled"}
 
 
+async def _get_granular_history(user_id: int, rng: str) -> dict:
+    """WQ-0385 intraday mode for /balance-history/data (24h/1w).
+
+    Prices CURRENT positions across the intraday window (an estimate -- see
+    services/intraday_history). On any failure it degrades to the daily
+    series (mode 'daily', granular_available False) instead of erroring.
+    """
+    from database import get_all_portfolio_positions, get_cache, set_cache
+    from services.intraday_history import INTRADAY_RANGES, build_intraday_series
+
+    cache_key = f"bh_granular_{rng}_{user_id}"
+    cached = await get_cache(cache_key, user_id=user_id)
+    if cached:
+        return cached
+
+    try:
+        from services.pricing import ASSET_TO_COINGECKO
+        positions = await get_all_portfolio_positions(user_id)
+        symbols: dict = {}  # symbol -> [kind, total_qty]
+        excluded: set = set()
+        for p in positions:
+            src = (p.get("source_type") or "").lower()
+            if src == "nft":
+                continue  # NFT floors have no intraday source; excluded
+            sym = (p.get("symbol") or "").upper()
+            qty = float(p.get("quantity") or 0)
+            price = float(p.get("last_price_usd") or 0)
+            if not sym or qty <= 0 or price <= 0:
+                continue
+            if src == "manual_stock":
+                kind = "stock"
+            else:
+                kind = ASSET_TO_COINGECKO.get(sym)
+                if not kind:
+                    excluded.add(sym)
+                    continue
+            entry = symbols.setdefault(sym, [kind, 0.0])
+            entry[1] += qty
+
+        include = [(s, k, q) for s, (k, q) in symbols.items()]
+        result = await build_intraday_series(user_id, rng, include)
+        result["excluded_symbols"] = sorted(set(result["excluded_symbols"]) | excluded)
+        if len(result["data"]) < 3:
+            raise RuntimeError(f"only {len(result['data'])} intraday points")
+        await set_cache(cache_key, result, ttl_seconds=120, user_id=user_id)
+        return result
+    except Exception as e:
+        logger.warning("granular history failed (range=%s): %s -- daily fallback", rng, e)
+        resp = await get_history_data(user_id=user_id, range=rng,
+                                      start_date=None, end_date=None,
+                                      granular=False)
+        resp["mode"] = "daily"
+        resp["granular_unavailable"] = True
+        return resp
+
+
 @router.get("/data")
 async def get_history_data(
     user_id: int = Depends(verify_session),
     range: str = Query("1y", description="Time range: 24h, 1w, 1m, 3m, 6m, 1y, 2y, all"),
     start_date: str = Query(None, description="Start date for custom range (YYYY-MM-DD)"),
     end_date: str = Query(None, description="End date for custom range (YYYY-MM-DD)"),
+    granular: bool = Query(False, description="Intraday series (5-min 24h, hourly 1w) from live feeds instead of daily totals"),
 ):
     """Get aggregated balance history data for chart rendering.
 
     Uses the V2 engine (canonical events + price history) as primary source.
     Falls back to V1 balance_history table if engine has no data.
+
+    granular=true (WQ-0385) switches 24h/1w to services/intraday_history:
+    current positions priced against keyless intraday feeds (CoinGecko
+    5-min/hourly, Nasdaq intraday for manual stocks) -- spiky detail the
+    daily totals cannot show. Other ranges ignore the flag (no free source
+    has finer than daily beyond ~a week) and return the daily series with
+    mode 'daily'.
     """
+    # granular must be a real bool: direct (non-FastAPI) callers get the
+    # Query() marker object, which is truthy -- tests/unit/test_nft_toggle.py
+    # calls this function directly and must keep hitting the daily path.
+    if granular is True and range in ("24h", "1w"):
+        return await _get_granular_history(user_id, range)
     # Demo users get pre-generated fake history
     username = await get_username_by_user_id(user_id)
     if username and await is_demo_user(username):
