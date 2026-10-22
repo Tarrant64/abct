@@ -819,6 +819,13 @@ async def init_db():
             await db.execute("ALTER TABLE wallets ADD COLUMN label_is_auto INTEGER DEFAULT 0")
         except Exception:
             pass  # Column already exists
+
+        # WQ-0384: free-text custodian/description for a manual stock holding
+        # ("Fidelity", "Wells", ...) shown in the Stocks tabs.
+        try:
+            await db.execute("ALTER TABLE manual_stocks ADD COLUMN description TEXT")
+        except Exception:
+            pass  # Column already exists
         await db.execute("""
             CREATE INDEX IF NOT EXISTS idx_wallets_stake_address
             ON wallets(user_id, stake_address)
@@ -2756,8 +2763,8 @@ async def add_manual_stock(stock_data: dict, user_id: int = None) -> int:
             INSERT INTO manual_stocks (
                 user_id, symbol, name, quantity, cost_basis, asset_class,
                 price_usd, prev_close_usd, change_pct, price_source,
-                last_price_update
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                last_price_update, description
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id, symbol) DO UPDATE SET
                 quantity = excluded.quantity,
                 name = COALESCE(excluded.name, manual_stocks.name),
@@ -2768,6 +2775,7 @@ async def add_manual_stock(stock_data: dict, user_id: int = None) -> int:
                 change_pct = COALESCE(excluded.change_pct, manual_stocks.change_pct),
                 price_source = COALESCE(excluded.price_source, manual_stocks.price_source),
                 last_price_update = COALESCE(excluded.last_price_update, manual_stocks.last_price_update),
+                description = COALESCE(excluded.description, manual_stocks.description),
                 updated_at = CURRENT_TIMESTAMP
         """, (
             user_id,
@@ -2781,6 +2789,7 @@ async def add_manual_stock(stock_data: dict, user_id: int = None) -> int:
             stock_data.get('change_pct'),
             stock_data.get('price_source'),
             datetime.now() if stock_data.get('price_usd') else None,
+            stock_data.get('description'),
         ))
         # ON CONFLICT DO UPDATE leaves lastrowid unset on the conflict path,
         # so resolve the row explicitly -- an add over an existing symbol
@@ -2847,7 +2856,8 @@ async def update_manual_stock(stock_id: int, updates: dict, user_id: int = None)
 
     allowed = {'quantity', 'name', 'cost_basis', 'asset_class',
                'include_in_total', 'price_usd', 'prev_close_usd',
-               'change_pct', 'price_source', 'last_price_update'}
+               'change_pct', 'price_source', 'last_price_update',
+               'description'}
     fields = {k: v for k, v in updates.items() if k in allowed}
     if not fields:
         return

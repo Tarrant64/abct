@@ -61,13 +61,16 @@ function displayStocks(data) {
             `<span class="stock-pnl ${s.unrealized_pnl_usd >= 0 ? 'up' : 'down'}" title="Unrealized P&L">${s.unrealized_pnl_usd >= 0 ? '+' : '-'}${formatUSD(Math.abs(s.unrealized_pnl_usd))}</span>` : '';
         const stamp = s.last_price_update ?
             `<span class="stock-stamp">${formatRefreshTimestamp(s.last_price_update)}</span>` : '';
+        const custodian = s.description ?
+            `<span class="token-chain" title="Custodian">${escapeHtmlStock(s.description)}</span>` : '';
         const valueNum = s.value_usd || 0;
 
         html += `
             <div class="custom-token-item stock ${isTracked ? 'tracked' : ''}"
-                 data-stock-id="${s.id}" data-value="${valueNum}">
+                 data-stock-id="${s.id}" data-value="${valueNum}"
+                 style="cursor:pointer" onclick="openEditStockModal(${s.id})" title="Click to edit">
                 <div class="token-toggle">
-                    <label class="toggle-switch">
+                    <label class="toggle-switch" onclick="event.stopPropagation()">
                         <input type="checkbox" ${isTracked ? 'checked' : ''}
                                onchange="toggleStockTracking(${s.id}, this.checked, ${valueNum})">
                         <span class="toggle-slider"></span>
@@ -77,6 +80,7 @@ function displayStocks(data) {
                     <div class="token-name">${escapeHtmlStock(s.name || s.symbol)}</div>
                     <div class="token-meta">
                         <span class="token-chain">${escapeHtmlStock(s.symbol)}</span>
+                        ${custodian}
                         <span class="token-price">${price}</span>
                         ${chgHtml}
                         ${stamp}
@@ -86,7 +90,7 @@ function displayStocks(data) {
                     <div class="token-quantity">${qty} sh</div>
                     <div class="token-usd">${value} ${pnlHtml}</div>
                 </div>
-                <button class="delete-token-btn" onclick="deleteStock(${s.id})" title="Remove holding">&times;</button>
+                <button class="delete-token-btn" onclick="event.stopPropagation(); deleteStock(${s.id})" title="Remove holding">&times;</button>
             </div>
         `;
     }
@@ -102,16 +106,32 @@ function escapeHtmlStock(text) {
 
 function openAddStockModal() {
     if (window.isDemoMode && window.isDemoMode()) { window.showDemoModeAlert(); return; }
-    const modal = document.getElementById('addStockModal');
-    document.getElementById('stockSymbolInput').value = '';
-    document.getElementById('stockQuantityInput').value = '';
-    document.getElementById('stockCostBasisInput').value = '';
+    openEditStockModal(null);
+}
+
+// One modal for add and edit (WQ-0384): pass a stock id to edit.
+function openEditStockModal(stockId) {
+    if (window.isDemoMode && window.isDemoMode()) { window.showDemoModeAlert(); return; }
+    const stock = stockId ? (stocks || []).find(s => s.id === stockId) : null;
+    window._stockEditId = stock ? stockId : null;
+    window._stockLookup = stock ? { found: true, asset_class: stock.asset_class } : null;
+    const title = document.querySelector('#addStockModal .modal-header h3');
+    if (title) title.textContent = stock ? 'Edit ' + stock.symbol : 'Add Stock / ETF Holding';
+    const sym = document.getElementById('stockSymbolInput');
+    sym.value = stock ? stock.symbol : '';
+    sym.readOnly = !!stock;  // ticker identifies the holding; not editable
+    document.getElementById('stockQuantityInput').value = stock ? stock.quantity : '';
+    document.getElementById('stockCostBasisInput').value =
+        (stock && stock.cost_basis != null) ? stock.cost_basis : '';
+    const desc = document.getElementById('stockDescInput');
+    if (desc) desc.value = (stock && stock.description) ? stock.description : '';
     const result = document.getElementById('stockLookupResult');
     result.classList.add('hidden');
     setSafeHTML(result, '');
-    window._stockLookup = null;
-    modal.classList.remove('hidden');
-    document.getElementById('stockSymbolInput').focus();
+    const btn = document.getElementById('stockAddBtn');
+    if (btn) btn.textContent = stock ? 'Save Changes' : 'Add Stock';
+    document.getElementById('addStockModal').classList.remove('hidden');
+    (stock ? document.getElementById('stockQuantityInput') : sym).focus();
 }
 
 function closeStockModal() {
@@ -166,7 +186,11 @@ async function submitStockAdd() {
     const symbol = document.getElementById('stockSymbolInput').value.trim().toUpperCase();
     const quantity = parseFloat(document.getElementById('stockQuantityInput').value);
     const costBasis = document.getElementById('stockCostBasisInput').value;
-    const assetClass = document.getElementById('stockClassSelect').value;
+    const assetClassEl = document.getElementById('stockClassSelect');
+    const assetClass = assetClassEl ? assetClassEl.value : 'stock';
+    const descEl = document.getElementById('stockDescInput');
+    const description = descEl ? descEl.value.trim() : '';
+    const editing = window._stockEditId != null;
 
     if (!symbol || !(quantity > 0)) {
         result.classList.remove('hidden');
@@ -177,33 +201,45 @@ async function submitStockAdd() {
 
     const btn = document.getElementById('stockAddBtn');
     btn.disabled = true;
-    btn.textContent = 'Adding...';
+    btn.textContent = editing ? 'Saving...' : 'Adding...';
     try {
-        const body = { symbol, quantity, asset_class: assetClass };
-        if (costBasis) body.cost_basis = parseFloat(costBasis);
-        const resp = await authFetch(`${API_BASE}/stocks`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-        });
+        let resp;
+        if (editing) {
+            const body = { quantity, description: description || null };
+            body.cost_basis = costBasis ? parseFloat(costBasis) : null;
+            resp = await authFetch(`${API_BASE}/stocks/${window._stockEditId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+        } else {
+            const body = { symbol, quantity, asset_class: assetClass };
+            if (costBasis) body.cost_basis = parseFloat(costBasis);
+            if (description) body.description = description;
+            resp = await authFetch(`${API_BASE}/stocks`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+        }
         const data = await resp.json().catch(() => ({}));
         if (!resp.ok) {
             result.classList.remove('hidden');
             result.className = 'token-lookup-result error';
-            setSafeHTML(result, `<span>${escapeHtmlStock(data.detail || 'Could not add ' + symbol)}</span>`);
+            setSafeHTML(result, `<span>${escapeHtmlStock(data.detail || ('Could not ' + (editing ? 'update ' : 'add ') + symbol))}</span>`);
             return;
         }
         closeStockModal();
         await loadStocks();
-        showStatus(`${symbol} added -- ${data.stock && data.stock.price_usd != null ? 'priced at $' + data.stock.price_usd.toFixed(2) : 'awaiting next scheduled price run'}`, 'success');
+        showStatus(`${symbol} ${editing ? 'updated' : 'added'} -- ${data.stock && data.stock.price_usd != null ? 'priced at $' + data.stock.price_usd.toFixed(2) : 'awaiting next scheduled price run'}`, 'success');
     } catch (e) {
-        console.error('Error adding stock:', e);
+        console.error('Error saving stock:', e);
         result.classList.remove('hidden');
         result.className = 'token-lookup-result error';
-        setSafeHTML(result, '<span>Error adding stock. Please try again.</span>');
+        setSafeHTML(result, '<span>Error saving stock. Please try again.</span>');
     } finally {
         btn.disabled = false;
-        btn.textContent = 'Add Stock';
+        btn.textContent = editing ? 'Save Changes' : 'Add Stock';
     }
 }
 
