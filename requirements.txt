@@ -9,5 +9,5 @@ bech32==1.2.0
 PyJWT==2.15.1
 cryptography==50.0.0
 python-multipart==0.0.31
-Pillow==12.3.0
+Pillow==13.0.0
 bcrypt==4.1.2
