@@ -281,7 +281,10 @@ async def get_history_data(
     has finer than daily beyond ~a week) and return the daily series with
     mode 'daily'.
     """
-    if granular and range in ("24h", "1w"):
+    # granular must be a real bool: direct (non-FastAPI) callers get the
+    # Query() marker object, which is truthy -- tests/unit/test_nft_toggle.py
+    # calls this function directly and must keep hitting the daily path.
+    if granular is True and range in ("24h", "1w"):
         return await _get_granular_history(user_id, range)
     # Demo users get pre-generated fake history
     username = await get_username_by_user_id(user_id)

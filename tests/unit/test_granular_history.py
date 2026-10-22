@@ -44,8 +44,9 @@ def test_intraday_ranges_are_the_supported_pairs():
 
 def test_granular_flag_only_shortcuts_short_ranges():
     src = _read("backend", "routers", "balance_history.py")
-    assert 'if granular and range in ("24h", "1w"):' in src, \
-        "granular must map only 24h/1w to intraday; longer ranges stay daily"
+    assert 'if granular is True and range in ("24h", "1w"):' in src, \
+        "granular must map only 24h/1w to intraday (strict True: direct " \
+        "callers pass the Query marker, which is truthy)"
     assert "granular_unavailable" in src, \
         "failure must degrade to daily with a flag, never error the chart"
 
