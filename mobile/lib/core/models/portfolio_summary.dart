@@ -51,6 +51,9 @@ class PortfolioBreakdown {
     required this.defi,
     required this.trackedTokens,
     required this.customTokens,
+    // WQ-0386: manual stock/ETF holdings bucket. Optional with a zero
+    // default so an older server (no stocks key) parses unchanged.
+    this.stocks = const BreakdownItem(valueUsd: 0, percentage: 0),
   });
 
   final BreakdownItem selfCustody;
@@ -60,6 +63,7 @@ class PortfolioBreakdown {
   final BreakdownItem defi;
   final BreakdownItem trackedTokens;
   final BreakdownItem customTokens;
+  final BreakdownItem stocks;
 
   factory PortfolioBreakdown.fromJson(Map<String, dynamic> json) {
     return PortfolioBreakdown(
@@ -70,12 +74,14 @@ class PortfolioBreakdown {
       defi: BreakdownItem.fromJson(JsonUtils.map(json['defi'])),
       trackedTokens: BreakdownItem.fromJson(JsonUtils.map(json['tracked_tokens'])),
       customTokens: BreakdownItem.fromJson(JsonUtils.map(json['custom_tokens'])),
+      stocks: BreakdownItem.fromJson(JsonUtils.map(json['stocks'])),
     );
   }
 }
 
 class BreakdownItem {
-  BreakdownItem({
+  // const (WQ-0386): PortfolioBreakdown.stocks uses a const default value.
+  const BreakdownItem({
     required this.valueUsd,
     required this.percentage,
   });

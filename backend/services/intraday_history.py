@@ -60,9 +60,56 @@ async def _http_json(url: str, params: Optional[dict] = None,
     return resp.json()
 
 
-async def _coingecko_intraday(cg_id: str, days: int) -> List[Tuple[int, float]]:
+_YAHOO_INTERVAL = {1: ("5m", "1d"), 7: ("1h", "7d")}
+
+
+def _parse_yahoo_chart(data: dict) -> List[Tuple[int, float]]:
+    """Yahoo v8 chart payload -> [(utc_s, usd)]. Pure, tested directly."""
+    try:
+        res = (data.get("chart") or {}).get("result") or []
+        r0 = res[0]
+        ts = r0.get("timestamp") or []
+        closes = (r0.get("indicators") or {}).get("quote") or [{}]
+        close = closes[0].get("close") or []
+        return [(int(t), float(c))
+                for t, c in zip(ts, close) if t and c and float(c) > 0]
+    except Exception:
+        return []
+
+
+async def _yahoo_intraday(symbol: str, days: int) -> List[Tuple[int, float]]:
+    """Yahoo Finance chart for crypto pairs (SYMBOL-USD): the keyless
+    fallback when CoinGecko's free tier rate-limits a burst. Sparse points
+    are fine -- the caller forward-fills."""
+    interval, rng = _YAHOO_INTERVAL.get(days, ("5m", "1d"))
+    yahoo_sym = "MATIC-USD" if symbol.upper() == "POL" else f"{symbol.upper()}-USD"
+    key = f"yahoo:{yahoo_sym}:{days}"
+    now = datetime.now(timezone.utc).timestamp()
+    hit = _PRICE_CACHE.get(key)
+    if hit and now - hit[0] < _PRICE_TTL_S:
+        return hit[1]
+    try:
+        data = await _http_json(
+            f"https://query1.finance.yahoo.com/v8/finance/chart/{yahoo_sym}",
+            params={"interval": interval, "range": rng},
+            headers={"User-Agent": "Mozilla/5.0"})
+        pts = _parse_yahoo_chart(data)
+        if pts:
+            _PRICE_CACHE[key] = (now, pts)
+        return pts
+    except Exception as e:
+        if hit and now - hit[0] < _STALE_GUARD_S:
+            return hit[1]
+        logger.debug("intraday: yahoo %s failed: %s", yahoo_sym, e)
+        return []
+
+
+async def _coingecko_intraday(cg_id: str, days: int,
+                              symbol: str = "") -> List[Tuple[int, float]]:
     """CoinGecko market_chart: [(utc_s, usd)]. 5-min points at days=1,
-    hourly at days=7 (free tier granularity)."""
+    hourly at days=7 (free tier granularity). Falls back to Yahoo when CG
+    refuses (429 burst) or returns nothing -- WQ-0386: a rate-limited burst
+    of ~19 symbols used to leave most of the portfolio 'excluded'."""
     key = f"cg:{cg_id}"
     now = datetime.now(timezone.utc).timestamp()
     hit = _PRICE_CACHE.get(key)
@@ -78,6 +125,12 @@ async def _coingecko_intraday(cg_id: str, days: int) -> List[Tuple[int, float]]:
             _PRICE_CACHE[key] = (now, pts)
         return pts
     except Exception as e:
+        # CG refused this call outright -> live Yahoo fallback (not just the
+        # stale cache). WQ-0386.
+        if symbol:
+            y = await _yahoo_intraday(symbol, days)
+            if y:
+                return y
         # A 429 backoff: serve the stale series if recent-ish, else empty.
         if hit and now - hit[0] < _STALE_GUARD_S:
             return hit[1]
@@ -170,8 +223,13 @@ async def build_intraday_series(user_id: int, rng: str,
                         series = await _nasdaq_intraday(symbol, d)
                         if series:
                             break
+                if not series:
+                    # Nasdaq refused (bot wall, nothing this window): Yahoo
+                    # equity chart carries the same intraday buckets. WQ-0386.
+                    series = await _yahoo_intraday(symbol, days)
                 return symbol, series
-            return symbol, await _coingecko_intraday(kind, days)
+            return symbol, await _coingecko_intraday(kind, days,
+                                                     symbol=symbol)
 
     results = await asyncio.gather(*(fetch(s, k) for s, k, _ in include_symbols))
     series_by_symbol = dict(results)

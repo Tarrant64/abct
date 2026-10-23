@@ -252,8 +252,17 @@ async function loadHoldings(refresh = false) {
                 ? (await v2CachedFetch('/stocks')).data
                 : (await (await v2Fetch('/stocks')).json());
             if (stocksResp && Array.isArray(stocksResp.stocks)) {
+                // WQ-0386: /portfolio/all-holdings now returns stock rows
+                // itself; this pass only backfills symbols the endpoint
+                // missed (server merge failed / row not yet materialized),
+                // so the table never shows a ticker twice.
+                var _seenSyms = {};
+                v2State.holdings.forEach(function (h) {
+                    _seenSyms[String(h.symbol || '').toUpperCase()] = true;
+                });
                 stocksResp.stocks.forEach(function (s) {
                     if (s.include_in_total !== 1 || !(s.value_usd > 0)) return;
+                    if (_seenSyms[String(s.symbol || '').toUpperCase()]) return;
                     v2State.holdings.push({
                         symbol: s.symbol,
                         name: s.name || s.symbol,

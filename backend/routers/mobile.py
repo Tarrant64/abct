@@ -572,7 +572,9 @@ def _summary_cache_key(user_id: int, include_sparklines: bool) -> str:
     through this helper.
     """
     variant = "sparklines" if include_sparklines else "nosparklines"
-    return f"mobile_portfolio_summary_{user_id}_{variant}"
+    # v2 (WQ-0386): the payload now folds manual stocks into the total and
+    # carries breakdown.stocks; a cached v1 row would omit both for its TTL.
+    return f"mobile_portfolio_summary_v2_{user_id}_{variant}"
 
 
 # In-flight background summary recomputes, keyed by cache key (SWR stampede guard)
@@ -789,6 +791,11 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
     defi_value = snapshot_totals.get('defi_usd', 0) or 0
     tracked_tokens_value = snapshot_totals.get('tracked_tokens_usd', 0) or 0
     custom_tokens_value = snapshot_totals.get('custom_tokens_usd', 0) or 0
+    # WQ-0386: manual stock/ETF holdings (stock engine's stored 3x/day
+    # price). The mobile header total silently omitted them: the bucket has
+    # existed in get_portfolio_totals since v4 but mobile never folded it
+    # in, so the phone under-reported every user with tracked stocks.
+    stocks_value = float(snapshot_totals.get('manual_stocks_usd', 0) or 0)
 
     # ABCT-NFT-TOGGLE-20260919: mobile used to be the only surface that always
     # included NFT value in the total. It now honors the same server-side
@@ -801,7 +808,8 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
 
     # Calculate total (matches web: coins + tracked tokens + custom tokens + staking + defi + exchanges + NFTs [if enabled])
     total_value_usd = (self_custody_value + tracked_tokens_value + custom_tokens_value +
-                       exchanges_value + nfts_value_for_total + staking_value + defi_value)
+                       exchanges_value + nfts_value_for_total + staking_value + defi_value +
+                       stocks_value)
 
     # Calculate percentages
     for blockchain_summary in blockchain_summaries:
@@ -927,6 +935,38 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
             "percentage": 0,
             "image_url": bs['image_url'],
         }
+
+    # Merge manual stock/ETF holdings into top_holdings (WQ-0386) so the
+    # phone's holdings list matches the web dashboard's. Valued at the stock
+    # engine's stored price (same number the breakdown bucket uses); no logo
+    # -- image_url stays empty and the app renders its letter fallback.
+    try:
+        from database import get_all_manual_stocks
+        for s in await get_all_manual_stocks(user_id=user_id):
+            if s.get('include_in_total', 1) != 1:
+                continue
+            sym = (s.get('symbol') or '').strip().upper()
+            try:
+                qty = float(s.get('quantity') or 0)
+                price = float(s.get('price_usd') or 0)
+            except (TypeError, ValueError):
+                continue
+            if not sym or qty <= 0 or price <= 0:
+                continue
+            value = round(qty * price, 2)
+            symbol_agg[sym] = {
+                "name": s.get('name') or sym,
+                "symbol": sym,
+                "value_usd": value,
+                "native_amount": qty,
+                "native_price_usd": price,
+                "price_change_24h": round(float(s.get('change_pct') or 0), 2),
+                "wallet_count": 0,
+                "percentage": 0,
+                "image_url": "",
+            }
+    except Exception as e:
+        logger.debug(f"Could not merge manual stocks into top_holdings: {e}")
 
     # Merge staking positions into top_holdings (per-token breakdown).
     # iter_staking_token_values is the shared valuation for EVERY position
@@ -1153,6 +1193,10 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
             "custom_tokens": {
                 "value_usd": round(custom_tokens_value, 2),
                 "percentage": round((custom_tokens_value / total_value_usd * 100) if total_value_usd > 0 else 0, 1)
+            },
+            "stocks": {
+                "value_usd": round(stocks_value, 2),
+                "percentage": round((stocks_value / total_value_usd * 100) if total_value_usd > 0 else 0, 1)
             }
         },
         "blockchains": blockchain_summaries,
@@ -2130,7 +2174,8 @@ async def get_mobile_portfolio_breakdown_history(
     """
     Stacked composition history by source type for mobile area charts.
     """
-    cache_key = f"mobile_breakdown_history_{user_id}_{range}"
+    # v2 (WQ-0386): components now include the stocks bucket.
+    cache_key = f"mobile_breakdown_history_v2_{user_id}_{range}"
 
     cached = await get_cache(cache_key, user_id=user_id)
     if cached:
@@ -2155,6 +2200,7 @@ async def get_mobile_portfolio_breakdown_history(
                 "defi": round(float(components.get("defi") or 0), 2),
                 "nfts": round(float(components.get("nfts") or 0), 2),
                 "tracked_tokens": round(float(components.get("tracked_tokens") or 0), 2),
+                "stocks": round(float(components.get("stocks") or 0), 2),
             },
         })
 
@@ -2210,6 +2256,7 @@ def _apply_live_total_to_latest_chart_point(point: dict, live_summary: dict) -> 
     nfts = float((b.get('nfts') or {}).get('value_usd', 0) or 0)
     tracked_tokens = float((b.get('tracked_tokens') or {}).get('value_usd', 0) or 0)
     custom_tokens = float((b.get('custom_tokens') or {}).get('value_usd', 0) or 0)
+    stocks = float((b.get('stocks') or {}).get('value_usd', 0) or 0)
 
     # tracked_tokens/custom_tokens are reported outside on_chain/off_chain,
     # same convention get_unified_chart/get_24h_hourly_chart already use for
@@ -2231,6 +2278,7 @@ def _apply_live_total_to_latest_chart_point(point: dict, live_summary: dict) -> 
             'nfts': round(nfts, 2),
             'tracked_tokens': round(tracked_tokens, 2),
             'custom_tokens': round(custom_tokens, 2),
+            'stocks': round(stocks, 2),
         }
     }
 

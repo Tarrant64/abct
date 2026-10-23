@@ -1793,7 +1793,8 @@ async def get_all_holdings(
     from database import get_all_wallets
 
     # Check cache first (5-min HOT TTL) — separate cache for include_all mode
-    cache_key = f"all_holdings_{user_id}" + ("_all" if include_all else "")
+    # v2 (WQ-0386): rows now include manual stocks.
+    cache_key = f"all_holdings_v2_{user_id}" + ("_all" if include_all else "")
     if not refresh:
         cached = await get_cache(cache_key, user_id=user_id)
         if cached:
@@ -2027,6 +2028,39 @@ async def get_all_holdings(
                 all_prices, name=asset.get('name', currency),
                 source='exchange',
             )
+
+    # Manual stock/ETF holdings (WQ-0386): first-class rows so every client
+    # of this endpoint (mobile Assets tab included -- it has no client-side
+    # /stocks merge) lists tracked stocks, valued at the stock engine's
+    # stored 3x/day price. Not run through the crypto price service, and no
+    # crypto logo (clients render a ticker/letter tile for logo_url=null).
+    try:
+        from database import get_all_manual_stocks
+        for s in await get_all_manual_stocks(user_id=user_id):
+            if s.get('include_in_total', 1) != 1:
+                continue
+            sym = (s.get('symbol') or '').strip().upper()
+            try:
+                qty = float(s.get('quantity') or 0)
+                price = float(s.get('price_usd') or 0)
+            except (TypeError, ValueError):
+                continue
+            if not sym or qty <= 0 or price <= 0:
+                continue
+            holdings[sym] = {
+                'symbol': sym,
+                'name': s.get('name') or sym,
+                'amount': qty,
+                'price_usd': price,
+                'value_usd': qty * price,
+                'price_change_24h': float(s.get('change_pct') or 0),
+                'wallet_count': 0,
+                'logo_url': None,
+                'source': 'manual_stock',
+                'description': s.get('description'),
+            }
+    except Exception as e:
+        logger.debug(f"[All Holdings] manual stocks merge failed: {e}")
 
     # Sort by value descending
     sorted_holdings = sorted(
@@ -2282,6 +2316,15 @@ async def get_portfolio_history(
             }
         })
 
+    # WQ-0386: same stock overlay as the unified chart (see there).
+    stocks_map = await _stock_chart_overlay(user_id, start_date)
+    if stocks_map:
+        for point in history:
+            sv = stocks_map.get(point["date"])
+            if sv:
+                point["value"] = round(point["value"] + sv, 2)
+                point["breakdown"]["stocks"] = round(sv, 2)
+
     latest = rows[-1]['date'] if rows else None
 
     return {
@@ -2467,7 +2510,17 @@ async def get_portfolio_instant(user_id: int = Depends(verify_session)):
     # manual_stocks.price_usd -- the stock engine's 3x/day open/midday/close
     # refresh keeps that price current without any crypto price service.
 
-    if not positions:
+    # WQ-0386: the stocks merge below reads manual_stocks directly, so an
+    # empty positions table must NOT early-return -- a stocks-only portfolio
+    # still has positions to report (was: has_positions False, total 0).
+    _manual_stocks_rows = []
+    try:
+        from database import get_all_manual_stocks
+        _manual_stocks_rows = await get_all_manual_stocks(user_id=user_id)
+    except Exception as e:
+        logger.debug(f"[Portfolio Instant] manual stocks fetch failed: {e}")
+
+    if not positions and not _manual_stocks_rows:
         return {
             "total_usd": 0,
             "breakdown": {},
@@ -2487,6 +2540,7 @@ async def get_portfolio_instant(user_id: int = Depends(verify_session)):
     # Aggregate by source_type (breakdown) and by symbol (top holdings)
     breakdown = {}
     symbol_agg = {}  # symbol → {quantity, value, sources, price, chain}
+    _stock_syms_in_positions = set()  # WQ-0386: valued by the pass below
 
     for pos in positions:
         sym = pos['symbol']
@@ -2506,6 +2560,8 @@ async def get_portfolio_instant(user_id: int = Depends(verify_session)):
 
         # Breakdown by source_type
         breakdown[source_type] = breakdown.get(source_type, 0) + value
+        if source_type == 'manual_stock':
+            _stock_syms_in_positions.add(pos['symbol'].upper())
 
         # Aggregate by symbol
         if sym not in symbol_agg:
@@ -2538,6 +2594,43 @@ async def get_portfolio_instant(user_id: int = Depends(verify_session)):
                 breakdown['nft'] = nft_value_usd
         except Exception as e:
             logger.debug(f"[Portfolio Instant] NFT summary fetch failed: {e}")
+
+    # Manual stock/ETF holdings (WQ-0386): join straight from manual_stocks
+    # rather than relying on the portfolio_positions pass, which only runs
+    # inside the full summary (mobile reads /instant directly, so its
+    # headline total silently missed stocks until now). The positions pass
+    # above stays for the web summary path; whichever wrote last, the prices
+    # agree (both value at manual_stocks.price_usd), and this block skips
+    # symbols the positions pass already counted so nothing double-counts.
+    try:
+        for s in _manual_stocks_rows:
+            if s.get('include_in_total', 1) != 1:
+                continue
+            sym = (s.get('symbol') or '').strip().upper()
+            try:
+                qty = float(s.get('quantity') or 0)
+                price = float(s.get('price_usd') or 0)
+            except (TypeError, ValueError):
+                continue
+            if not sym or qty <= 0 or price <= 0:
+                continue
+            value = qty * price
+            if sym not in _stock_syms_in_positions:
+                # Positions pass didn't value it — contribute to the total.
+                breakdown['manual_stock'] = breakdown.get('manual_stock', 0) + value
+            if sym in symbol_agg:
+                # Positions pass already valued it; keep the fresher price.
+                agg = symbol_agg[sym]
+                agg['sources'].add('manual_stock')
+            else:
+                symbol_agg[sym] = {
+                    'symbol': sym, 'quantity': qty, 'value_usd': value,
+                    'price_usd': price,
+                    'price_change_24h': float(s.get('change_pct') or 0),
+                    'sources': {'manual_stock'},
+                }
+    except Exception as e:
+        logger.debug(f"[Portfolio Instant] manual stocks merge failed: {e}")
 
     total_usd = sum(breakdown.values())
 
@@ -2624,6 +2717,18 @@ async def refresh_portfolio(user_id: int = Depends(verify_session)):
 
 
 @router.get("/chart/unified")
+async def _stock_chart_overlay(user_id: int, start_date):
+    """Daily stock-value map for chart overlays (WQ-0386). Any failure in
+    the reconstruction degrades to no overlay — the chart still renders the
+    wallet component rather than erroring."""
+    try:
+        from services.stock_history import stock_daily_values
+        return await stock_daily_values(user_id, start_date=start_date)
+    except Exception as e:
+        logger.debug(f"Stock chart overlay failed (proceeding without): {e}")
+        return {}
+
+
 async def get_unified_chart(
     user_id: int = Depends(verify_session),
     range: str = Query("1w", description="Time range: 24h, 1w, 1m, 3m, 6m, 1y, all"),
@@ -2655,8 +2760,10 @@ async def get_unified_chart(
     nft_suffix = '' if include_nfts else '_exnft'
 
     # Check cache first
+    # v2 (WQ-0386): rows now carry the stock overlay; a cached pre-overlay
+    # row would undershoot the headline total for its whole TTL.
     chain_suffix = '_by_chain' if by_chain else ''
-    cache_key = f"unified_chart_{user_id}_{range}{chain_suffix}{nft_suffix}"
+    cache_key = f"unified_chart_v2_{user_id}_{range}{chain_suffix}{nft_suffix}"
     cached = await get_cache(cache_key, user_id=user_id)
     if cached:
         cached['from_cache'] = True
@@ -2758,7 +2865,24 @@ async def get_unified_chart(
             }
         })
 
-    logger.info(f"Unified chart: {len(data)} points from wallet_daily_balances")
+    # WQ-0386: manual stock/ETF holdings were never part of
+    # wallet_daily_balances (wallet-collection architecture), so the chart
+    # line undershot the headline total for every user with stocks. Overlay
+    # the reconstructed daily stock component (services/stock_history: the
+    # engine's own daily bars, created_at floor, weekend forward-fill).
+    # Dates before a holding existed contribute nothing.
+    stocks_map = await _stock_chart_overlay(user_id, start_date)
+    if stocks_map:
+        for point in data:
+            sv = stocks_map.get(point["date"])
+            if sv:
+                point["total_value"] = round(point["total_value"] + sv, 2)
+                point["off_chain_value"] = round(
+                    (point.get("off_chain_value") or 0) + sv, 2)
+                comps = point["breakdown"]["components"]
+                comps["stocks"] = round(sv, 2)
+        logger.info(f"Unified chart: +stock overlay on {len(data)} points")
+
     result = {"data": data, "coverage": _compute_chart_coverage(data)}
     await set_cache(cache_key, result, ttl_seconds=CACHE_TTL_WARM, user_id=user_id)
     return result
@@ -2780,7 +2904,8 @@ async def get_24h_hourly_chart(
     # preference (same reasoning as get_unified_chart above) so a toggle
     # isn't masked by a cached row computed under the other setting.
     include_nfts = await get_nft_inclusion_preference(user_id)
-    cache_key = f"portfolio_24h_hourly_{user_id}" + ('' if include_nfts else '_exnft')
+    # v2 (WQ-0386): 24h series now carries the stock component too.
+    cache_key = f"portfolio_24h_hourly_v2_{user_id}" + ('' if include_nfts else '_exnft')
     if not refresh:
         cached = await get_cache(cache_key, user_id=user_id)
         if cached:
@@ -2851,7 +2976,10 @@ async def get_24h_hourly_chart(
     nft_usd_for_total = nft_usd if include_nfts else 0.0
     tracked_tokens_usd = float(totals.get('tracked_tokens_usd', 0) or 0)
     custom_tokens_usd = float(totals.get('custom_tokens_usd', 0) or 0)
-    off_chain = exchange_usd + staking_usd + defi_usd + nft_usd_for_total
+    # Manual stocks are a static intraday offset like exchanges/staking/DeFi
+    # (the engine prices them 3x/day; there is no per-hour stock curve here).
+    stocks_usd = float(totals.get('manual_stocks_usd', 0) or 0)
+    off_chain = exchange_usd + staking_usd + defi_usd + nft_usd_for_total + stocks_usd
 
     # Build chart data points with carry-forward pricing.
     # Different tokens may have prices at different timestamps (e.g. ADA hourly
@@ -2893,6 +3021,7 @@ async def get_24h_hourly_chart(
                     "nfts": round(nft_usd, 2),
                     "tracked_tokens": round(tracked_tokens_usd, 2),
                     "custom_tokens": round(custom_tokens_usd, 2),
+                    "stocks": round(stocks_usd, 2),
                 }
             }
         })
