@@ -80,6 +80,29 @@ def test_chart_detail_toggle_wired():
     assert "data.mode === 'intraday'" in app
 
 
+def test_header_controls_are_static():
+    """WQ-0387: the range buttons and Smooth/Detail pill must not move when
+    ranges change or the detail note appears (user screenshots: controls
+    drifted left/right). The pill is disabled-in-place, never removed, and
+    the note lives OUTSIDE the flex header row."""
+    html = _read("frontend", "v2", "index.html")
+    assert 'class="v2-chart-controls"' in html, \
+        "ranges + detail toggle must sit in one pinned right-hand group"
+    # note must not be a header flex child (a 100%-width child inside the
+    # header was what re-centered the buttons when it appeared)
+    header = html[html.index('v2-chart-header'):html.index('chartContainer')]
+    assert 'id="chartDetailNote"' not in header.split('</div>\n                    </div>')[0] \
+        or 'margin:-6px 0 8px' in html
+    css = _read("frontend", "v2", "css", "v2.css")
+    assert ".v2-chart-controls" in css and "flex-shrink: 0" in css
+    assert "v2-detail-disabled" in css
+    app = _read("frontend", "v2", "js", "v2-app.js")
+    assert "v2-detail-disabled" in app
+    assert "btn.disabled = !detailAvailable" in app
+    assert "btn.style.display = detailAvailable" not in app, \
+        "hiding the buttons was the drift; disable in place instead"
+
+
 def test_detail_preference_persists_and_reapplies():
     app = _read("frontend", "v2", "js", "v2-app.js")
     assert "v2_chart_detail" in app, "detail mode must persist across loads"

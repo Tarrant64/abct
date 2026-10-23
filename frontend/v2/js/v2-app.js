@@ -729,12 +729,22 @@ async function loadChart(range) {
 
     // WQ-0385 Smooth/Detail toggle state + availability: intraday detail
     // exists only for 24H and 1W (keyless feed granularity limit).
+    // WQ-0387: unavailable ranges DISABLE the pill in place rather than
+    // hiding the buttons — a header control that appears/disappears shifts
+    // everything next to it (user: controls must be static).
     const detailAvailable = (range === '24h' || range === '1w');
-    const detailBtns = document.querySelectorAll('#chartDetailToggle .v2-range-btn[data-detail]');
-    detailBtns.forEach(btn => {
-        btn.style.display = detailAvailable ? '' : 'none';
-        btn.classList.toggle('active', (btn.dataset.detail === '1') === !!v2State.chartDetail);
-    });
+    const detailToggle = document.getElementById('chartDetailToggle');
+    if (detailToggle) {
+        detailToggle.classList.toggle('v2-detail-disabled', !detailAvailable);
+        detailToggle.querySelectorAll('.v2-range-btn[data-detail]').forEach(btn => {
+            btn.disabled = !detailAvailable;
+            // on unavailable ranges the pill sits greyed with Smooth lit
+            // (the chart really is showing the daily history there)
+            const isSmooth = btn.dataset.detail === '0';
+            btn.classList.toggle('active',
+                detailAvailable ? (isSmooth === !v2State.chartDetail) : isSmooth);
+        });
+    }
 
     // Show skeleton
     const skeleton = document.getElementById('chartSkeleton');
@@ -762,6 +772,13 @@ async function loadChart(range) {
 
 // WQ-0385: Smooth (daily history) <-> Detail (intraday feeds) chart mode.
 function setChartDetail(on) {
+    // WQ-0387: the Detail pill is disabled-but-visible on ranges without
+    // intraday feeds; ignore any Detail click that slips through. Smooth is
+    // always clickable.
+    if (on) {
+        const range = v2State.currentChartRange || '1w';
+        if (range !== '24h' && range !== '1w') return;
+    }
     v2State.chartDetail = !!on;
     localStorage.setItem('v2_chart_detail', on ? 'true' : 'false');
     loadChart(v2State.currentChartRange || '1w');

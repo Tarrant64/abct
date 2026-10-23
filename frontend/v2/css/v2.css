@@ -1245,6 +1245,26 @@ a:hover { opacity: 0.85; }
     margin-bottom: 12px;
 }
 
+/* WQ-0387: the range buttons and the Smooth/Detail pill live in one
+   right-hand group that never grows or recenters when the Detail note or
+   the by-chain button appears — the header controls are static. */
+.v2-chart-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    min-height: 34px;
+}
+
+.v2-chart-ranges.v2-detail-disabled .v2-range-btn {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.v2-chart-ranges.v2-detail-disabled .v2-range-btn.active {
+    opacity: 1;
+}
+
 .v2-chart-ranges {
     display: flex;
     gap: 4px;
