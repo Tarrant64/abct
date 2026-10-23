@@ -355,6 +355,22 @@ async def get_history_data(
             'chains': {},  # Per-chain breakdown not available from unified totals
         })
 
+    # WQ-0386: manual stocks are not in wallet_daily_balances -- overlay the
+    # reconstructed daily stock component (services/stock_history) so the
+    # chart line agrees with the headline total, which already counts stocks.
+    try:
+        from services.stock_history import stock_daily_values
+        stocks_map = await stock_daily_values(user_id, start_date=query_start)
+    except Exception as e:
+        logger.debug(f"stock overlay skipped: {e}")
+        stocks_map = {}
+    if stocks_map:
+        for point in data:
+            sv = stocks_map.get(point['date'])
+            if sv:
+                point['value'] = round(point['value'] + sv, 2)
+                point['total_value'] = point['value']
+
     logger.info(f"Balance history: {len(data)} data points from wallet_daily_balances")
     return {'data': data, 'coverage': _compute_coverage(data)}
 
