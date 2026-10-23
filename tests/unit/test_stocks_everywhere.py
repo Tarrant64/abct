@@ -163,6 +163,18 @@ def test_all_holdings_returns_stock_rows_server_side():
     assert "_seenSyms[String(s.symbol || '').toUpperCase()]" in app
 
 
+def test_mobile_chart_code_untouched():
+    """User constraint: mobile gets NO chart changes. The stocks work lands
+    only in models/endpoints -- the chart painter and the mobile dashboard
+    chart code must not carry stock logic."""
+    painter = _read("mobile", "lib", "core", "ui", "line_chart_painter.dart")
+    assert "stock" not in painter.lower()
+    dashboard = _read("mobile", "lib", "features", "home", "tabs",
+                      "dashboard_tab.dart")
+    chart_section = dashboard[dashboard.index("class _PortfolioChart"):]
+    assert "stock" not in chart_section.lower()
+
+
 # ------------------------------------------------ mobile instant via stubs
 
 def test_instant_includes_manual_stock_from_manual_stocks(monkeypatch):
