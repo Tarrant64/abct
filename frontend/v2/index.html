@@ -6,12 +6,12 @@
     <title>ABCT - Portfolio Dashboard</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/next/static/css/v2.css?v=1792725703">
+    <link rel="stylesheet" href="/next/static/css/v2.css?v=1792755143">
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
     <script defer src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
-    <script src="/static/js/session-auth.js?v=1792725703"></script>
+    <script src="/static/js/session-auth.js?v=1792755143"></script>
 </head>
 <body>
     <div class="v2-layout" id="v2Layout">
@@ -138,6 +138,7 @@
                             </button>
                             <span id="collectStatus" style="font-size:11px;color:var(--v2-text-muted);display:none;"></span>
                         </div>
+                        <div class="v2-chart-controls">
                         <div class="v2-chart-ranges" id="chartRanges">
                             <button class="v2-range-btn" data-range="24h" onclick="loadChart('24h')">24H</button>
                             <button class="v2-range-btn active" data-range="1w" onclick="loadChart('1w')">1W</button>
@@ -151,8 +152,9 @@
                             <button class="v2-range-btn active" data-detail="0" onclick="setChartDetail(false)">Smooth</button>
                             <button class="v2-range-btn" data-detail="1" onclick="setChartDetail(true)">Detail</button>
                         </div>
-                        <div id="chartDetailNote" style="display:none;font-size:10px;color:var(--v2-text-muted);width:100%;text-align:right;"></div>
+                        </div>
                     </div>
+                    <div id="chartDetailNote" style="display:none;font-size:10px;color:var(--v2-text-muted);text-align:right;margin:-6px 0 8px;"></div>
                     <div class="v2-chart-container glass-card glass-sheen-3" id="chartContainer">
                         <div class="v2-chart-canvas-wrapper">
                             <canvas id="portfolioChart"></canvas>
@@ -227,9 +229,9 @@
     </div>
 
     <!-- V2 App Scripts -->
-    <script src="/next/static/js/v2-cache.js?v=1792725703"></script>
-    <script src="/next/static/js/v2-app.js?v=1792725703"></script>
-    <script src="/next/static/js/v2-shell.js?v=1792725703"></script>
+    <script src="/next/static/js/v2-cache.js?v=1792755143"></script>
+    <script src="/next/static/js/v2-app.js?v=1792755143"></script>
+    <script src="/next/static/js/v2-shell.js?v=1792755143"></script>
     <script>
         // v2-shell.js injects sidebar and user menu; v2-app.js DOMContentLoaded
         // handles dashboard data loading (guarded by heroValue element check)
