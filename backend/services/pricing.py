@@ -365,10 +365,37 @@ class PricingService:
         except Exception as e:
             logger.warning(f"Charli3 pricing failed: {e}")
 
-        # DefiLlama final fallback
+        # DefiLlama final fallback (price only -- its current-price endpoint
+        # carries no change field, hence the DexScreener enrichment below).
         missing = [s for s in symbols if self.cache.get(s.upper(), {}).get('usd', 0) == 0]
         if missing:
             await self._fetch_from_defillama(missing)
+
+        # WQ-0397: neither source that survives without an API key here
+        # (Charli3 is keyless-dead -> None, DefiLlama is price_only) carries a
+        # 24h change, so cardano natives showed a flat 0.00% everywhere while
+        # their click-through charts moved. Enrich every cardano symbol we
+        # hold a price for with DexScreener's deepest-pool change (it can
+        # also refine the price itself to the same pool the change comes
+        # from -- one consistent reading per token). Tokens DexScreener
+        # doesn't index (e.g. LQ) keep price + 0 rather than borrowed data.
+        try:
+            from services.dexscreener import (get_cardano_token_data,
+                                              to_price_cache_entry)
+            want = [s for s in symbols
+                    if self.cache.get(s.upper(), {}).get('usd', 0) > 0]
+            ds = await get_cardano_token_data(want)
+            for sym, data in ds.items():
+                entry = to_price_cache_entry(data)
+                prev = self.cache.get(sym) or {}
+                # never overwrite a good price with a stale/thin pool quote
+                if prev.get('usd', 0) > 0 and not data.get('liquidity_usd'):
+                    entry['usd'] = prev['usd']
+                # keep richer fields already present
+                entry.setdefault('market_cap', prev.get('market_cap', 0))
+                self.cache[sym] = entry
+        except Exception as e:
+            logger.debug(f"DexScreener change enrichment failed: {e}")
 
     async def _fetch_major_prices(self, symbols: List[str]) -> None:
         """Route: CoinGecko -> CMC -> Coinbase -> DefiLlama for major coins."""
