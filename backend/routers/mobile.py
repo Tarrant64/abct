@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 import hashlib
 import httpx
 import logging
+import time
 import sys
 import os
 import asyncio
@@ -101,6 +102,11 @@ class _ConditionalGetRoute(APIRoute):
 
 
 router = APIRouter(prefix="/api/mobile", tags=["mobile"], route_class=_ConditionalGetRoute)
+
+# Process start marker for the honest uptime reading on GET /api/mobile/status
+# (NAT-PRROUTE 2026-10-28: the endpoint shipped a hardcoded uptime_seconds: 0).
+# Module import time == app boot time for the single-process container.
+_PROCESS_START_TIME = time.time()
 logger = logging.getLogger(__name__)
 
 # Cache TTL
@@ -2978,7 +2984,7 @@ async def get_mobile_api_status():
         "status": "healthy",
         "version": "1.0.0",
         "build": str(int(time.time())),
-        "uptime_seconds": 0,  # TODO: Calculate actual uptime
+        "uptime_seconds": max(0, int(time.time() - _PROCESS_START_TIME)),
         "services": {
             "database": db_status,
             "blockchain_apis": "operational",
