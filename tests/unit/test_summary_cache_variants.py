@@ -257,6 +257,11 @@ async def test_swr_recompute_does_not_overwrite_other_variant(monkeypatch):
 
 
 async def test_refresh_true_recomputes_only_its_variant(monkeypatch):
+    """ABCT-MOBILE-PERF-20261103: a hard pull answers from the current
+    cache row immediately and runs its forced recompute deduped in the
+    background (it used to compute the full provider fan-out inline,
+    ~20 s, blocking the event loop). Only its own variant is rewritten.
+    """
     cache = _install_fake_cache(monkeypatch)
     recorder = _stub_compute_upstreams(monkeypatch)
 
@@ -269,9 +274,12 @@ async def test_refresh_true_recomputes_only_its_variant(monkeypatch):
 
     served = await mobile.get_mobile_portfolio_summary(
         user_id=USER, refresh=True, include_sparklines=True)
-    assert served != old_sparks
+    assert served == old_sparks  # current data served right away
+    assert sparks_key in mobile._summary_refresh_tasks  # hard pull in background
+
+    assert await _wait_until(lambda: not mobile._summary_refresh_tasks)
     assert recorder["portfolio_refresh_args"] == [True]  # force-refresh passed through
-    assert cache.store[sparks_key] == served
+    assert cache.store[sparks_key] != old_sparks  # own row recomputed
     assert cache.store[nosparks_key] == old_nosparks  # other variant untouched
 
 

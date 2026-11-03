@@ -12,6 +12,7 @@ Uses persistent database caching to reduce API calls and survive restarts.
 
 import httpx
 import logging
+import time
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 import sys
@@ -49,6 +50,15 @@ class EthereumNFTService(APIKeyManager):
         # Fingerprint of the EVM address set the cached NFTs were fetched for
         # (ABCT-EVM-FANOUT-2026-09-28, same pattern as solana_nft.py's #16 fix)
         self._wallet_fingerprint: Optional[str] = None
+        # ABCT-MOBILE-PERF-20261103: on HTTP 429 Alchemy wants us to back
+        # off, not retry per wallet in a tight loop — the old behavior
+        # (error log + None, caller retries next wallet immediately)
+        # turned one rate limit into a storm that pinned the whole
+        # summary/chart compute for its full timeout. While cooling down,
+        # get_nfts_for_owner returns None without any HTTP call and
+        # callers keep their previous data (restore_failed_wallets).
+        self._cooldown_until: float = 0.0  # time.monotonic() deadline
+        self._cooldown_logged: bool = False
 
     async def is_configured(self) -> bool:
         """Check if the API key is configured."""
@@ -70,6 +80,15 @@ class EthereumNFTService(APIKeyManager):
             logger.warning("Alchemy API key not configured")
             return None
 
+        # 429 backoff: no HTTP call at all while cooling down (ABCT-MOBILE-PERF-20261103)
+        if time.monotonic() < self._cooldown_until:
+            if not self._cooldown_logged:
+                logger.warning(
+                    f"Alchemy 429 backoff: skipping NFT fetches for another "
+                    f"{self._cooldown_until - time.monotonic():.0f}s")
+                self._cooldown_logged = True
+            return None
+
         api_key = await self.get_api_key()
         try:
             client = get_client("alchemy", timeout=30.0)
@@ -81,6 +100,19 @@ class EthereumNFTService(APIKeyManager):
                 f"{self.base_url}/{api_key}/getNFTsForOwner",
                 params=params
             )
+
+            if response.status_code == 429:
+                retry_after = 60.0
+                try:
+                    retry_after = float(response.headers.get('Retry-After', 60))
+                except (TypeError, ValueError):
+                    pass
+                retry_after = max(15.0, min(retry_after, 300.0))
+                self._cooldown_until = time.monotonic() + retry_after
+                self._cooldown_logged = False
+                logger.warning(
+                    f"Alchemy rate limited (429) — backing off {retry_after:.0f}s")
+                return None
 
             if response.status_code != 200:
                 logger.error(f"Alchemy API error: {response.status_code} - {response.text}")

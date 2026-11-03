@@ -56,11 +56,33 @@ class _NullCache:
     async def set_cache(self, key, value, ttl_seconds=300, user_id=None):
         return None
 
+    async def get_stale_cache(self, key, user_id=None):
+        # ABCT-MOBILE-PERF-20261103: the 24h chart's bounded cold path also
+        # reads stale rows; tests with a null cache must stub it too.
+        return None, None
+
+
+class _MemoryCache:
+    """Working in-memory cache -- set_cache feeds get_cache."""
+
+    def __init__(self):
+        self.store = {}
+
+    async def get_cache(self, key, user_id=None):
+        return self.store.get(key)
+
+    async def set_cache(self, key, value, ttl_seconds=300, user_id=None):
+        self.store[key] = value
+
+    async def get_stale_cache(self, key, user_id=None):
+        return (self.store.get(key), None) if key in self.store else (None, None)
+
 
 def _install_null_cache(monkeypatch):
     cache = _NullCache()
     monkeypatch.setattr(portfolio, "get_cache", cache.get_cache)
     monkeypatch.setattr(portfolio, "set_cache", cache.set_cache)
+    monkeypatch.setattr(portfolio, "get_stale_cache", cache.get_stale_cache)
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +196,12 @@ async def _historical_prices_fixture(symbols, days=1):
 
 
 async def _run_24h_chart(monkeypatch, include_nfts: bool):
-    _install_null_cache(monkeypatch)
+    # ABCT-MOBILE-PERF-20261103: the bounded cold path round-trips through
+    # the cache (task result lands via set_cache), so use a working cache.
+    memcache = _MemoryCache()
+    monkeypatch.setattr(portfolio, "get_cache", memcache.get_cache)
+    monkeypatch.setattr(portfolio, "set_cache", memcache.set_cache)
+    monkeypatch.setattr(portfolio, "get_stale_cache", memcache.get_stale_cache)
     monkeypatch.setattr(portfolio, "get_portfolio_summary", lambda user_id, refresh=False: _summary_fixture())
     monkeypatch.setattr(portfolio, "get_portfolio_totals", lambda user_id: _totals_fixture())
     monkeypatch.setattr(portfolio.pricing_service, "get_historical_prices", _historical_prices_fixture)
@@ -204,13 +231,15 @@ async def test_24h_chart_includes_nfts_when_enabled(monkeypatch):
 async def test_24h_chart_cache_key_varies_with_preference(monkeypatch):
     seen_keys = []
 
-    class RecordingCache(_NullCache):
+    class RecordingCache(_MemoryCache):
         async def get_cache(self, key, user_id=None):
             seen_keys.append(key)
-            return None
+            return await super().get_cache(key, user_id=user_id)
 
-    monkeypatch.setattr(portfolio, "get_cache", RecordingCache().get_cache)
-    monkeypatch.setattr(portfolio, "set_cache", _NullCache().set_cache)
+    memcache = RecordingCache()
+    monkeypatch.setattr(portfolio, "get_cache", memcache.get_cache)
+    monkeypatch.setattr(portfolio, "set_cache", memcache.set_cache)
+    monkeypatch.setattr(portfolio, "get_stale_cache", memcache.get_stale_cache)
     monkeypatch.setattr(portfolio, "get_portfolio_summary", lambda user_id, refresh=False: _summary_fixture())
     monkeypatch.setattr(portfolio, "get_portfolio_totals", lambda user_id: _totals_fixture())
     monkeypatch.setattr(portfolio.pricing_service, "get_historical_prices", _historical_prices_fixture)
