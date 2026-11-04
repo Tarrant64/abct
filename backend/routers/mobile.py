@@ -120,6 +120,15 @@ SUMMARY_STALE_MAX_AGE_S = 600
 # variant's refresh until the next container restart.
 SUMMARY_REFRESH_TIMEOUT_S = 120
 
+# ABCT-MOBILE-PERF-20261103: a user-initiated hard refresh (refresh=true)
+# NEVER computes live provider calls in-request. With a servable cache row
+# it answers from the cache and lets the background task do the hard pull;
+# with no row at all (first ever request) it bounded-waits that long for
+# the background compute, then gives up with 503 instead of holding the
+# event loop for ~20 s (which starved even the 0.01 s summary call in the
+# app's 5-request open burst past the client's 20 s receiveTimeout).
+MOBILE_REFRESH_BOUNDED_WAIT_S = 10
+
 # Native stake-account info (delegation/rewards) cache: changes on-chain at
 # epoch cadence (days); 10 minutes keeps the mobile staking read DB-only in
 # steady state so it can never queue behind scan traffic (P3-FIX3)
@@ -598,11 +607,18 @@ def _stale_summary_servable(expires_at_iso: Optional[str]) -> bool:
     return (datetime.now() - expires_at).total_seconds() <= SUMMARY_STALE_MAX_AGE_S
 
 
-def _schedule_summary_refresh(cache_key: str, user_id: int, include_sparklines: bool):
+def _schedule_summary_refresh(cache_key: str, user_id: int, include_sparklines: bool,
+                              force_refresh: bool = False):
     """Kick off a background recompute of the portfolio summary (server-side SWR).
 
     At most one recompute per cache key runs at a time; concurrent stale
     hits piggyback on the in-flight task instead of stampeding upstream APIs.
+
+    ABCT-MOBILE-PERF-20261103: force_refresh=True (a user's hard pull)
+    propagates to the sub-services so staking/DeFi/NFT buckets are
+    recomputed too (D2) — but the hard pull still happens in the
+    background; the route never computes it in-request (see the summary
+    route and MOBILE_REFRESH_BOUNDED_WAIT_S).
     """
     if cache_key in _summary_refresh_tasks:
         return
@@ -611,7 +627,7 @@ def _schedule_summary_refresh(cache_key: str, user_id: int, include_sparklines: 
         try:
             await asyncio.wait_for(
                 _compute_mobile_portfolio_summary(
-                    user_id, refresh=False, include_sparklines=include_sparklines),
+                    user_id, refresh=force_refresh, include_sparklines=include_sparklines),
                 timeout=SUMMARY_REFRESH_TIMEOUT_S)
         except asyncio.TimeoutError:
             logger.warning(
@@ -644,6 +660,56 @@ async def get_mobile_portfolio_summary(
     """
     cache_key = _summary_cache_key(user_id, include_sparklines)
 
+    async def _bounded_first_compute() -> Optional[dict]:
+        """Compute via the deduped background slot, bounded-wait, re-read cache.
+
+        Returns the payload or None if the compute didn't land inside
+        MOBILE_REFRESH_BOUNDED_WAIT_S (the task itself keeps running and
+        its row becomes the next caller's cache hit).
+        """
+        _schedule_summary_refresh(cache_key, user_id, include_sparklines,
+                                  force_refresh=refresh)
+        task = _summary_refresh_tasks.get(cache_key)
+        if task is None:
+            return None
+        done, _pending = await asyncio.wait(
+            {task}, timeout=MOBILE_REFRESH_BOUNDED_WAIT_S)
+        if not done:
+            return None
+        return await get_cache(cache_key, user_id=user_id)
+
+    # ABCT-MOBILE-PERF-20261103: a hard pull NEVER computes in-request.
+    # The old behavior awaited the full provider fan-out (exchanges, NFTs,
+    # defi, every chain) which measured ~20 s and blocked the single-worker
+    # event loop — in the app's 5-request open burst even the 0.01 s
+    # summary starved past the client's 20 s receiveTimeout. Now:
+    #   - a servable row (fresh OR stale) is served immediately and the
+    #     hard pull runs deduped in the background;
+    #   - no row at all → bounded wait for that background compute, then
+    #     503 (the app retries; the compute keeps running and lands in the
+    #     cache for the retry or the next SWR hit).
+    if refresh:
+        cached = await get_cache(cache_key, user_id=user_id)
+        if cached is not None:
+            _schedule_summary_refresh(cache_key, user_id, include_sparklines,
+                                      force_refresh=True)
+            return cached
+        # A stale-but-servable row is still "current data" — serve it and
+        # let the hard pull run in the background (over-age rows are never
+        # served: the stale-cap contract holds).
+        stale, _exp = await get_stale_cache(cache_key, user_id=user_id)
+        if stale is not None and _stale_summary_servable(_exp):
+            _schedule_summary_refresh(cache_key, user_id, include_sparklines,
+                                      force_refresh=True)
+            return stale
+        served = await _bounded_first_compute()
+        if served is not None:
+            return served
+        raise HTTPException(
+            status_code=503,
+            detail="Portfolio data is still loading; retry shortly",
+            headers={"Retry-After": "5"})
+
     if not refresh:
         cached = await get_cache(cache_key, user_id=user_id)
         if cached:
@@ -657,7 +723,72 @@ async def get_mobile_portfolio_summary(
             _schedule_summary_refresh(cache_key, user_id, include_sparklines)
             return stale
 
-    return await _compute_mobile_portfolio_summary(user_id, refresh, include_sparklines)
+        # ABCT-MOBILE-PERF-20261103: no servable row at all (first ever
+        # request, or one too old to serve as a placeholder) — same
+        # treatment as the hard pull: compute through the deduped
+        # background slot with a bounded wait instead of holding the
+        # event loop for the full provider fan-out. The stale-cap contract
+        # is preserved: an over-age row is never served, so the payload
+        # that lands (from the bounded wait, the retry, or the next SWR
+        # hit) is always freshly computed (PRICE-1 echo loop).
+        served = await _bounded_first_compute()
+        if served is not None:
+            return served
+        raise HTTPException(
+            status_code=503,
+            detail="Portfolio data is still loading; retry shortly",
+            headers={"Retry-After": "5"})
+
+
+# ABCT-MOBILE-PERF-20261103: the app's open burst is 5 parallel requests
+# (instant, summary no-sparklines, chart 7d, chart 24h, summary refresh=true).
+# After the bounded-wait changes above none of them compute in-request any
+# more, but on a COLD cache the burst would still all pile onto the same
+# background compute / 503. This warmer runs every
+# MOBILE_CACHE_WARM_INTERVAL_S and keeps the exact rows those five calls
+# read perpetually fresh, so in steady state the whole burst is a cache
+# hit measured in milliseconds (the summary sub-layers have their own
+# multi-minute caches, so a warm pass is DB/assembly work, not provider
+# fan-out).
+MOBILE_CACHE_WARM_INTERVAL_S = 90
+
+
+async def mobile_cache_warmer():
+    """Periodically precompute the mobile summary + chart cache rows."""
+    from database import get_all_users
+    while True:
+        try:
+            users = await get_all_users()
+            for u in users:
+                uid = u['id'] if isinstance(u, dict) else u[0]
+                is_demo = u.get('is_demo') if isinstance(u, dict) else u[2]
+                if is_demo:
+                    continue
+                try:
+                    await asyncio.wait_for(
+                        _compute_mobile_portfolio_summary(
+                            uid, refresh=False, include_sparklines=False),
+                        timeout=SUMMARY_REFRESH_TIMEOUT_S)
+                    await asyncio.wait_for(
+                        _compute_mobile_portfolio_summary(
+                            uid, refresh=False, include_sparklines=True),
+                        timeout=SUMMARY_REFRESH_TIMEOUT_S)
+                    await asyncio.wait_for(
+                        portfolio.get_24h_hourly_chart(user_id=uid, refresh=False),
+                        timeout=SUMMARY_REFRESH_TIMEOUT_S)
+                    # Same ranges the app maps (7d->1w, 4w->1m); direct
+                    # calls, exactly like the mobile chart route does.
+                    for unified_range in ("1w", "1m"):
+                        await asyncio.wait_for(
+                            portfolio.get_unified_chart(user_id=uid, range=unified_range),
+                            timeout=SUMMARY_REFRESH_TIMEOUT_S)
+                except asyncio.TimeoutError:
+                    logger.warning(f"Mobile cache warm timed out for user {uid}")
+                except Exception as e:
+                    logger.warning(f"Mobile cache warm failed for user {uid}: {e}")
+        except Exception as e:
+            logger.warning(f"Mobile cache warmer pass failed: {e}")
+        await asyncio.sleep(MOBILE_CACHE_WARM_INTERVAL_S)
 
 
 async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include_sparklines: bool):
@@ -2334,9 +2465,25 @@ async def get_mobile_portfolio_history(
             try:
                 username = await get_username_by_user_id(user_id)
                 if not (username and await is_demo_user(username)):
-                    live_summary = await _compute_mobile_portfolio_summary(
-                        user_id, refresh=False, include_sparklines=False)
-                    _apply_live_total_to_latest_chart_point(data_points[-1], live_summary)
+                    # ABCT-MOBILE-PERF-20261103: the override now reads the
+                    # CACHED summary only. It used to call
+                    # _compute_mobile_portfolio_summary inline, which fans
+                    # out to exchanges/NFTs (Alchemy)/defi and measured
+                    # 17-18 s per chart request — blocking the event loop
+                    # so the app's whole open burst starved. With no
+                    # cached row the latest point simply stays DB-sourced
+                    # (same as any override failure) and a background
+                    # summary compute is scheduled so the next burst has
+                    # it; the header total the app displays still comes
+                    # from /portfolio/summary, not from this chart.
+                    live_summary = await get_cache(
+                        _summary_cache_key(user_id, False), user_id=user_id)
+                    if live_summary:
+                        _apply_live_total_to_latest_chart_point(
+                            data_points[-1], live_summary)
+                    else:
+                        _schedule_summary_refresh(
+                            _summary_cache_key(user_id, False), user_id, False)
             except Exception as e:
                 logger.warning(
                     f"Mobile chart: live total override failed for user {user_id}: {e}")

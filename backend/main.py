@@ -491,6 +491,10 @@ async def lifespan(app: FastAPI):
 
     # Start background tasks (non-blocking) — V1 snapshot tasks removed (V2 only)
     _background_tasks.append(asyncio.create_task(warm_caches_background()))
+    # ABCT-MOBILE-PERF-20261103: precompute the mobile summary/chart rows
+    # the app's 5-request open burst reads, so it never computes in-request.
+    from routers.mobile import mobile_cache_warmer
+    _background_tasks.append(asyncio.create_task(mobile_cache_warmer()))
     _background_tasks.append(asyncio.create_task(collect_nft_prices_background()))
     _background_tasks.append(asyncio.create_task(_run_health_checks_background()))
     _background_tasks.append(asyncio.create_task(_check_blockfrost_ryo_health()))

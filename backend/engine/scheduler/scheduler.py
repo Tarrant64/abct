@@ -22,6 +22,28 @@ logger = logging.getLogger(__name__)
 # Type for stage executor functions
 StageExecutor = Callable[[Dict[str, Any], Provider], Awaitable[bool]]
 
+# ABCT-MOBILE-PERF-20261103: "No provider available for chain:domain" was
+# logged ~5x/s when a domain has no registered provider (cardano:normalize).
+# Warn at most once per chain:domain per window; repeats are debug-level.
+NO_PROVIDER_WARN_INTERVAL_S = 300
+_no_provider_warn_at: Dict[str, float] = {}
+
+
+def _warn_no_provider(key: str) -> None:
+    """Warn about a missing provider at most once per key per window.
+
+    ABCT-MOBILE-PERF-20261103: the un-throttled warning fired ~5x/s for
+    cardano:normalize and buried everything else in the logs.
+    """
+    now = time.monotonic()
+    last = _no_provider_warn_at.get(key, 0.0)
+    if now - last >= NO_PROVIDER_WARN_INTERVAL_S:
+        _no_provider_warn_at[key] = now
+        logger.warning(f"No provider available for {key} "
+                       f"(suppressing repeats for {NO_PROVIDER_WARN_INTERVAL_S}s)")
+    else:
+        logger.debug(f"No provider available for {key}")
+
 
 class WorkUnitScheduler:
     """Schedules and executes work units across providers."""
@@ -78,7 +100,10 @@ class WorkUnitScheduler:
         # Find best available provider
         provider = self.registry.get_best_candidate(chain, domain)
         if not provider:
-            logger.warning(f"No provider available for {chain.value}:{domain.value}")
+            # ABCT-MOBILE-PERF-20261103: this warning fired ~5x/s when a
+            # chain has no registered provider (cardano:normalize), drowning
+            # the logs. Throttled in _warn_no_provider.
+            _warn_no_provider(f"{chain.value}:{domain.value}")
             await engine_db.update_work_unit(wu_id, status='retry',
                                               error_message='No provider available')
             return False

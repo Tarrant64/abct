@@ -84,6 +84,27 @@ def _live_summary():
     }
 
 
+class _SummaryCache:
+    """ABCT-MOBILE-PERF-20261103: the chart's live-total override now reads
+    the CACHED summary instead of computing one inline. This store serves
+    the no-sparklines summary row (live total) and misses everything else."""
+
+    def __init__(self):
+        self.store = {}
+
+    def seed_summary(self, user_id):
+        self.store[mobile._summary_cache_key(user_id, False)] = _live_summary()
+
+    async def get_cache(self, key, user_id=None):
+        return self.store.get(key)
+
+    async def get_stale_cache(self, key, user_id=None):
+        return (self.store[key], None) if key in self.store else (None, None)
+
+    async def set_cache(self, key, value, ttl_seconds=300, user_id=None):
+        self.store[key] = value
+
+
 @pytest.fixture
 def client(monkeypatch):
     async def fake_unified(user_id=None, range=None):
@@ -98,19 +119,27 @@ def client(monkeypatch):
     async def fake_is_demo_user(username):
         return False
 
-    async def fake_summary(user_id, refresh, include_sparklines):
-        return _live_summary()
+    async def compute_must_not_run(user_id, refresh, include_sparklines):
+        raise AssertionError(
+            "chart path must not compute a summary (ABCT-MOBILE-PERF-20261103: "
+            "cache-only override)")
 
     class FrozenDatetime(datetime):
         @classmethod
         def utcnow(cls):
             return datetime(2026, 9, 22, 1, 30, 0)
 
+    store = _SummaryCache()
+    store.seed_summary(1)
+    monkeypatch.setattr(mobile, "get_cache", store.get_cache)
+    monkeypatch.setattr(mobile, "get_stale_cache", store.get_stale_cache)
+    monkeypatch.setattr(mobile, "set_cache", store.set_cache)
     monkeypatch.setattr(mobile.portfolio, "get_unified_chart", fake_unified)
     monkeypatch.setattr(mobile.portfolio, "get_24h_hourly_chart", fake_hourly)
     monkeypatch.setattr(mobile, "get_username_by_user_id", fake_username)
     monkeypatch.setattr(mobile, "is_demo_user", fake_is_demo_user)
-    monkeypatch.setattr(mobile, "_compute_mobile_portfolio_summary", fake_summary)
+    monkeypatch.setattr(mobile, "_compute_mobile_portfolio_summary",
+                        compute_must_not_run)
     monkeypatch.setattr(mobile, "datetime", FrozenDatetime)
     app = FastAPI()
     app.include_router(mobile.router)
@@ -178,10 +207,10 @@ def test_demo_user_keeps_stale_point_untouched(client, monkeypatch):
 
 
 def test_override_failure_degrades_to_original_point(client, monkeypatch):
-    async def failing_summary(user_id, refresh, include_sparklines):
+    async def failing_cache_read(key, user_id=None):
         raise RuntimeError("upstream data source unavailable")
 
-    monkeypatch.setattr(mobile, "_compute_mobile_portfolio_summary", failing_summary)
+    monkeypatch.setattr(mobile, "get_cache", failing_cache_read)
 
     resp = client.get(URL)
     assert resp.status_code == 200

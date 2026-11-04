@@ -8,7 +8,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database import (
     get_all_wallets, get_wallet_balance, get_wallet_assets,
-    get_cache, set_cache, clear_cache,
+    get_cache, set_cache, clear_cache, get_stale_cache,
     get_all_token_metadata, toggle_token_tracking, get_tracked_tokens,
     save_token_metadata, update_native_asset_decimals,
     get_user_setting, set_user_setting
@@ -2888,6 +2888,139 @@ async def get_unified_chart(
     return result
 
 
+# ABCT-MOBILE-PERF-20261103: the 24h hourly compute (chain summary +
+# totals + hourly price fan-out) used to run inline in the request on
+# every cache miss (~17 s cold, blocking the single-worker event loop
+# and starving the mobile app's whole open burst). It now runs in a
+# deduped background task the route bounded-waits on (see
+# get_24h_hourly_chart). Body extracted verbatim.
+CHART_24H_COMPUTE_TIMEOUT_S = 120
+CHART_24H_BOUNDED_WAIT_S = 10
+_24h_compute_tasks: dict = {}
+
+
+async def _build_24h_hourly_payload(user_id: int, include_nfts: bool, cache_key: str) -> dict:
+        # Get current portfolio summary + totals in parallel
+        summary, totals = await asyncio.gather(
+            get_portfolio_summary(user_id=user_id, refresh=False),
+            get_portfolio_totals(user_id=user_id),
+        )
+
+        # Extract per-token quantities from chain summary using _CHAIN_MAP
+        holdings = {}  # symbol -> quantity
+        for chain, (symbol, _display, amount_field) in _CHAIN_MAP.items():
+            chain_data = summary.get(chain, {})
+            qty = float(chain_data.get(amount_field, 0) or 0)
+            if qty > 0:
+                # Use price lookup symbol (e.g. ETH_BASE -> ETH) to avoid duplicates
+                price_sym = _PRICE_SYMBOL.get(symbol, symbol)
+                holdings[price_sym] = holdings.get(price_sym, 0) + qty
+
+        if not holdings:
+            return {
+                "data": [],
+                "coverage": {"oldest_date": None, "newest_date": None, "total_days": 0}
+            }
+
+        # Fetch 24h hourly prices for all held tokens
+        historical = await pricing_service.get_historical_prices(
+            list(holdings.keys()), days=1
+        )
+
+        if not historical:
+            return {
+                "data": [],
+                "coverage": {"oldest_date": None, "newest_date": None, "total_days": 0}
+            }
+
+        # Build time -> {symbol: price} index from historical data
+        # Each symbol has entries like {'date': 'YYYY-MM-DD HH:MM', 'price': float, 'time': unix_ts}
+        # Normalize timestamps to hour boundaries so that Charli3 (e.g. "14:00")
+        # and DefiLlama (e.g. "14:05") merge into the same bucket instead of
+        # interleaving into separate data points that cause sawtooth oscillation.
+        all_times = {}  # date_str -> {symbol: price}
+        for symbol, entries in historical.items():
+            for entry in entries:
+                date_str = entry['date']
+                # Truncate "YYYY-MM-DD HH:MM" → "YYYY-MM-DD HH:00"
+                if ' ' in date_str and ':' in date_str:
+                    date_str = date_str[:date_str.rfind(':')] + ':00'
+                if date_str not in all_times:
+                    all_times[date_str] = {}
+                all_times[date_str][symbol] = entry['price']
+
+        # Sort timestamps chronologically
+        sorted_times = sorted(all_times.keys())
+
+        # Static off-chain offset from current totals.
+        # totals['nft_usd'] (get_portfolio_totals) is the raw, ungated NFT value
+        # straight off the latest wallet_daily_balances row — it is reported in
+        # the breakdown below as informational regardless of the preference
+        # (same convention as get_portfolio_history/get_unified_chart), but only
+        # folded into off_chain/total when the preference is on.
+        exchange_usd = float(totals.get('exchange_usd', 0) or 0)
+        staking_usd = float(totals.get('staking_usd', 0) or 0)
+        defi_usd = float(totals.get('defi_usd', 0) or 0)
+        nft_usd = float(totals.get('nft_usd', 0) or 0)
+        nft_usd_for_total = nft_usd if include_nfts else 0.0
+        tracked_tokens_usd = float(totals.get('tracked_tokens_usd', 0) or 0)
+        custom_tokens_usd = float(totals.get('custom_tokens_usd', 0) or 0)
+        # Manual stocks are a static intraday offset like exchanges/staking/DeFi
+        # (the engine prices them 3x/day; there is no per-hour stock curve here).
+        stocks_usd = float(totals.get('manual_stocks_usd', 0) or 0)
+        off_chain = exchange_usd + staking_usd + defi_usd + nft_usd_for_total + stocks_usd
+
+        # Build chart data points with carry-forward pricing.
+        # Different tokens may have prices at different timestamps (e.g. ADA hourly
+        # from Charli3 vs BTC hourly from DefiLlama). Carry forward the last known
+        # price per symbol to prevent sawtooth patterns from missing data points.
+        last_known_price = {}  # symbol -> last seen price
+        data = []
+        for date_str in sorted_times:
+            prices_at_time = all_times[date_str]
+            # Update last known prices with any new data at this timestamp
+            for sym, price in prices_at_time.items():
+                if price > 0:
+                    last_known_price[sym] = price
+
+            on_chain = 0.0
+            for symbol, qty in holdings.items():
+                price = last_known_price.get(symbol, 0)
+                if price > 0:
+                    on_chain += qty * price
+
+            if on_chain == 0:
+                continue  # Skip points where no prices are available
+
+            total = on_chain + off_chain + tracked_tokens_usd + custom_tokens_usd
+            # Use 'T' separator for hourly data so frontend detects hourly format
+            display_date = date_str.replace(' ', 'T') if ' ' in date_str else date_str
+            data.append({
+                "date": display_date,
+                "total_value": round(total, 2),
+                "on_chain_value": round(on_chain, 2),
+                "off_chain_value": round(off_chain, 2),
+                "breakdown": {
+                    "chains": {},
+                    "components": {
+                        "wallets": round(on_chain, 2),
+                        "exchange": round(exchange_usd, 2),
+                        "staking": round(staking_usd, 2),
+                        "defi": round(defi_usd, 2),
+                        "nfts": round(nft_usd, 2),
+                        "tracked_tokens": round(tracked_tokens_usd, 2),
+                        "custom_tokens": round(custom_tokens_usd, 2),
+                        "stocks": round(stocks_usd, 2),
+                    }
+                }
+            })
+
+        logger.info(f"24h hourly chart: {len(data)} points from holdings × prices")
+        result = {"data": data, "coverage": _compute_chart_coverage(data)}
+        await set_cache(cache_key, result, ttl_seconds=CACHE_TTL_HOT, user_id=user_id)
+        return result
+
+
 @router.get("/chart/24h-hourly")
 async def get_24h_hourly_chart(
     user_id: int = Depends(verify_session),
@@ -2911,125 +3044,47 @@ async def get_24h_hourly_chart(
         if cached:
             return cached
 
-    # Get current portfolio summary + totals in parallel
-    summary, totals = await asyncio.gather(
-        get_portfolio_summary(user_id=user_id, refresh=False),
-        get_portfolio_totals(user_id=user_id),
-    )
+    # ABCT-MOBILE-PERF-20261103: cold computes are bounded and deduped.
+    # The old code awaited the inline body on every miss; now a background
+    # task does the work while the request bounded-waits, falling back to
+    # the stale row (if any) or an empty valid payload — never holding the
+    # event loop for the price/summary fan-out. refresh=true (explicit
+    # user intent, web surfaces) still computes synchronously.
+    if refresh:
+        result = await _build_24h_hourly_payload(user_id, include_nfts, cache_key)
+        return result
 
-    # Extract per-token quantities from chain summary using _CHAIN_MAP
-    holdings = {}  # symbol -> quantity
-    for chain, (symbol, _display, amount_field) in _CHAIN_MAP.items():
-        chain_data = summary.get(chain, {})
-        qty = float(chain_data.get(amount_field, 0) or 0)
-        if qty > 0:
-            # Use price lookup symbol (e.g. ETH_BASE -> ETH) to avoid duplicates
-            price_sym = _PRICE_SYMBOL.get(symbol, symbol)
-            holdings[price_sym] = holdings.get(price_sym, 0) + qty
+    existing = _24h_compute_tasks.get(cache_key)
+    if existing is None or existing.done():
+        async def _job():
+            try:
+                return await asyncio.wait_for(
+                    _build_24h_hourly_payload(user_id, include_nfts, cache_key),
+                    timeout=CHART_24H_COMPUTE_TIMEOUT_S)
+            except asyncio.TimeoutError:
+                logger.warning(f"24h hourly compute timed out after "
+                               f"{CHART_24H_COMPUTE_TIMEOUT_S}s for user {user_id}")
+            except Exception as e:
+                logger.warning(f"24h hourly compute failed for user {user_id}: {e}")
+            finally:
+                _24h_compute_tasks.pop(cache_key, None)
+        _24h_compute_tasks[cache_key] = asyncio.create_task(_job())
+        existing = _24h_compute_tasks[cache_key]
 
-    if not holdings:
-        return {
-            "data": [],
-            "coverage": {"oldest_date": None, "newest_date": None, "total_days": 0}
-        }
-
-    # Fetch 24h hourly prices for all held tokens
-    historical = await pricing_service.get_historical_prices(
-        list(holdings.keys()), days=1
-    )
-
-    if not historical:
-        return {
-            "data": [],
-            "coverage": {"oldest_date": None, "newest_date": None, "total_days": 0}
-        }
-
-    # Build time -> {symbol: price} index from historical data
-    # Each symbol has entries like {'date': 'YYYY-MM-DD HH:MM', 'price': float, 'time': unix_ts}
-    # Normalize timestamps to hour boundaries so that Charli3 (e.g. "14:00")
-    # and DefiLlama (e.g. "14:05") merge into the same bucket instead of
-    # interleaving into separate data points that cause sawtooth oscillation.
-    all_times = {}  # date_str -> {symbol: price}
-    for symbol, entries in historical.items():
-        for entry in entries:
-            date_str = entry['date']
-            # Truncate "YYYY-MM-DD HH:MM" → "YYYY-MM-DD HH:00"
-            if ' ' in date_str and ':' in date_str:
-                date_str = date_str[:date_str.rfind(':')] + ':00'
-            if date_str not in all_times:
-                all_times[date_str] = {}
-            all_times[date_str][symbol] = entry['price']
-
-    # Sort timestamps chronologically
-    sorted_times = sorted(all_times.keys())
-
-    # Static off-chain offset from current totals.
-    # totals['nft_usd'] (get_portfolio_totals) is the raw, ungated NFT value
-    # straight off the latest wallet_daily_balances row — it is reported in
-    # the breakdown below as informational regardless of the preference
-    # (same convention as get_portfolio_history/get_unified_chart), but only
-    # folded into off_chain/total when the preference is on.
-    exchange_usd = float(totals.get('exchange_usd', 0) or 0)
-    staking_usd = float(totals.get('staking_usd', 0) or 0)
-    defi_usd = float(totals.get('defi_usd', 0) or 0)
-    nft_usd = float(totals.get('nft_usd', 0) or 0)
-    nft_usd_for_total = nft_usd if include_nfts else 0.0
-    tracked_tokens_usd = float(totals.get('tracked_tokens_usd', 0) or 0)
-    custom_tokens_usd = float(totals.get('custom_tokens_usd', 0) or 0)
-    # Manual stocks are a static intraday offset like exchanges/staking/DeFi
-    # (the engine prices them 3x/day; there is no per-hour stock curve here).
-    stocks_usd = float(totals.get('manual_stocks_usd', 0) or 0)
-    off_chain = exchange_usd + staking_usd + defi_usd + nft_usd_for_total + stocks_usd
-
-    # Build chart data points with carry-forward pricing.
-    # Different tokens may have prices at different timestamps (e.g. ADA hourly
-    # from Charli3 vs BTC hourly from DefiLlama). Carry forward the last known
-    # price per symbol to prevent sawtooth patterns from missing data points.
-    last_known_price = {}  # symbol -> last seen price
-    data = []
-    for date_str in sorted_times:
-        prices_at_time = all_times[date_str]
-        # Update last known prices with any new data at this timestamp
-        for sym, price in prices_at_time.items():
-            if price > 0:
-                last_known_price[sym] = price
-
-        on_chain = 0.0
-        for symbol, qty in holdings.items():
-            price = last_known_price.get(symbol, 0)
-            if price > 0:
-                on_chain += qty * price
-
-        if on_chain == 0:
-            continue  # Skip points where no prices are available
-
-        total = on_chain + off_chain + tracked_tokens_usd + custom_tokens_usd
-        # Use 'T' separator for hourly data so frontend detects hourly format
-        display_date = date_str.replace(' ', 'T') if ' ' in date_str else date_str
-        data.append({
-            "date": display_date,
-            "total_value": round(total, 2),
-            "on_chain_value": round(on_chain, 2),
-            "off_chain_value": round(off_chain, 2),
-            "breakdown": {
-                "chains": {},
-                "components": {
-                    "wallets": round(on_chain, 2),
-                    "exchange": round(exchange_usd, 2),
-                    "staking": round(staking_usd, 2),
-                    "defi": round(defi_usd, 2),
-                    "nfts": round(nft_usd, 2),
-                    "tracked_tokens": round(tracked_tokens_usd, 2),
-                    "custom_tokens": round(custom_tokens_usd, 2),
-                    "stocks": round(stocks_usd, 2),
-                }
-            }
-        })
-
-    logger.info(f"24h hourly chart: {len(data)} points from holdings × prices")
-    result = {"data": data, "coverage": _compute_chart_coverage(data)}
-    await set_cache(cache_key, result, ttl_seconds=CACHE_TTL_HOT, user_id=user_id)
-    return result
+    done, _pending = await asyncio.wait({existing}, timeout=CHART_24H_BOUNDED_WAIT_S)
+    result = existing.result() if (done and not existing.cancelled()) else None
+    if result is not None:
+        return result
+    result = await get_cache(cache_key, user_id=user_id)
+    if result is not None:
+        return result
+    stale, _exp = await get_stale_cache(cache_key, user_id=user_id)
+    if stale is not None:
+        return stale
+    return {
+        "data": [],
+        "coverage": {"oldest_date": None, "newest_date": None, "total_days": 0}
+    }
 
 
 @router.post("/history/rebuild")
