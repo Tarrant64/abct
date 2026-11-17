@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.17.6] - 2026-11-17
+
+Fixes the main dashboard showing stale numbers after asset, stock or wallet edits (PR #48). Adds per-item refresh and a return-to-tab freshness check, and advances the app version strings to 1.17.6.
+
 ### Fixed
 - **Asset/wallet quantity edits did not show on the main dashboard until a full SYNC (ABCT-ASSET-FRESHNESS-20261117)**: editing a manual stock (e.g. BITW), custom token or wallet changed the source row but nothing invalidated the server-side derived caches (`portfolio_summary_*`, `portfolio_totals_*`, `all_holdings_v2_*`, charts, mobile summary), so a reload kept serving the old numbers for the cache TTL. Separately, `GET /portfolio/instant` (the dashboard hero) preferred the `portfolio_positions` `manual_stock` snapshot, which only a full summary pass rewrites, over the edited `manual_stocks` row, so the stale quantity won even with no cache involved. Every stock / custom-token / wallet write endpoint (add, edit, delete, toggle, label, ignore-asset, wallet file sync, refresh all) now invalidates the user's derived portfolio caches through the new `services/portfolio_freshness.py` (`@invalidates_portfolio`, runs only after a successful write), stock writes also drop the stale snapshot rows, and `/portfolio/instant` reads stocks straight from `manual_stocks`. No TTL was shortened and no schema or env var changed.
 
