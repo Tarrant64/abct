@@ -539,7 +539,8 @@ async def get_quota(_user_id: int = Depends(verify_session)):
             }
         return {"configured": True, "error": f"API returned {response.status_code}"}
     except Exception as e:
-        return {"configured": False, "error": str(e)}
+        logger.warning(f"CoinGecko quota check failed: {e}")
+        return {"configured": False, "error": f"Quota check failed ({type(e).__name__})"}
 
 
 @router.get("/stream/cardano")
@@ -584,7 +585,7 @@ async def stream_cardano_prices(_user_id: int = Depends(verify_session_sse)):
 
         except Exception as e:
             logger.error(f"SSE stream error: {e}")
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            yield f"data: {json.dumps({'error': 'stream error'})}\n\n"
 
     return StreamingResponse(
         event_generator(),
