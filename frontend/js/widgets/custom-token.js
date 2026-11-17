@@ -9,16 +9,6 @@ let customTokenIntervals = new Map();
 /**
  * Render custom token widget
  */
-// Escape text for safe interpolation into innerHTML (tickers are user input).
-function escapeTokenHtml(value) {
-    return String(value == null ? '' : value)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
-
 async function renderCustomToken(container, widgetId, config = {}) {
     const ticker = config.ticker || null;
 
@@ -338,4 +328,14 @@ function formatMarketCapCompact(marketCap) {
         suffix = 'K';
     }
     return `$${value}${suffix}`;
+}
+
+// Escape text for safe interpolation into innerHTML (tickers are user input).
+function escapeTokenHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
