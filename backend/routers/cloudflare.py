@@ -165,6 +165,12 @@ def _write_cloudflared_program(token: str):
     try:
         with open(SUPERVISORD_CONF, "w") as f:
             f.write(content)
+        # The tunnel token lives in the command= line, so keep the file
+        # owner-only (supervisord runs as root in the container).
+        try:
+            os.chmod(SUPERVISORD_CONF, 0o600)
+        except OSError as chmod_err:
+            logger.warning(f"Could not restrict supervisord.conf permissions: {chmod_err}")
         logger.info("Wrote [program:cloudflared] into supervisord.conf")
         return True
     except OSError as e:
