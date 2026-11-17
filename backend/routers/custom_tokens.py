@@ -21,6 +21,7 @@ from services.pricing import pricing_service
 from middleware.auth import verify_admin
 from middleware.demo_mode import is_demo_user
 from auth_utils import verify_session
+from services.portfolio_freshness import invalidates_portfolio
 from services.http_client import get_client
 from services.api_key_manager import APIKeyManager
 
@@ -102,6 +103,7 @@ async def list_custom_tokens(user_id: int = Depends(verify_session)):
 
 
 @router.post("")
+@invalidates_portfolio("custom token added")
 async def add_token(user_id: int = Depends(verify_session), request: TokenAddRequest = None):
     """
     Add a new custom token for manual tracking.
@@ -277,7 +279,26 @@ async def get_token(token_id: int, user_id: int = Depends(verify_session)):
     return token
 
 
+@router.post("/{token_id}/refresh")
+async def refresh_token(token_id: int, user_id: int = Depends(verify_session)):
+    """Lightweight per-token refresh (no full SYNC).
+
+    Custom-token quantities are manual and prices come from the shared
+    pricing service, so a per-item refresh is: verify ownership, drop the
+    user's derived portfolio caches (totals re-price on the next read) and
+    return the re-read token. 404 if the token is not the caller's.
+    """
+    token = await get_custom_token_by_id(token_id, user_id=user_id)
+    if not token:
+        raise HTTPException(status_code=404, detail="Token not found")
+    from services.portfolio_freshness import invalidate_user_portfolio_caches
+    version = await invalidate_user_portfolio_caches(user_id, "custom token refreshed")
+    return {"status": "success", "token": await get_token(token_id, user_id=user_id),
+            "portfolio_version": version}
+
+
 @router.put("/{token_id}")
+@invalidates_portfolio("custom token updated")
 async def update_token(token_id: int, user_id: int = Depends(verify_session), request: TokenUpdateRequest = None):
     """Update a custom token's quantity or label."""
     token = await get_custom_token_by_id(token_id, user_id=user_id)
@@ -299,6 +320,7 @@ async def update_token(token_id: int, user_id: int = Depends(verify_session), re
 
 
 @router.delete("/{token_id}")
+@invalidates_portfolio("custom token removed")
 async def remove_token(token_id: int, user_id: int = Depends(verify_session)):
     """Remove a custom token from tracking."""
     token = await get_custom_token_by_id(token_id, user_id=user_id)
@@ -316,6 +338,7 @@ class TokenToggleRequest(BaseModel):
 
 
 @router.post("/{token_id}/toggle")
+@invalidates_portfolio("custom token toggled")
 async def toggle_token_inclusion(token_id: int, user_id: int = Depends(verify_session), request: TokenToggleRequest = None):
     """Toggle whether a custom token is included in the portfolio total."""
     token = await get_custom_token_by_id(token_id, user_id=user_id)

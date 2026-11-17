@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Asset/wallet quantity edits did not show on the main dashboard until a full SYNC (ABCT-ASSET-FRESHNESS-20261117)**: editing a manual stock (e.g. BITW), custom token or wallet changed the source row but nothing invalidated the server-side derived caches (`portfolio_summary_*`, `portfolio_totals_*`, `all_holdings_v2_*`, charts, mobile summary), so a reload kept serving the old numbers for the cache TTL. Separately, `GET /portfolio/instant` (the dashboard hero) preferred the `portfolio_positions` `manual_stock` snapshot, which only a full summary pass rewrites, over the edited `manual_stocks` row, so the stale quantity won even with no cache involved. Every stock / custom-token / wallet write endpoint (add, edit, delete, toggle, label, ignore-asset, wallet file sync, refresh all) now invalidates the user's derived portfolio caches through the new `services/portfolio_freshness.py` (`@invalidates_portfolio`, runs only after a successful write), stock writes also drop the stale snapshot rows, and `/portfolio/instant` reads stocks straight from `manual_stocks`. No TTL was shortened and no schema or env var changed.
+
+### Added
+- **Per-item refresh, no full SYNC**: `POST /stocks/{id}/refresh` (re-quotes that one symbol, bypassing the quote cache), `POST /custom-tokens/{id}/refresh`, and the existing `POST /wallets/{address}/refresh` now also invalidates the derived caches and that wallet's cached balance. All require the normal session and 404 if the item is not the caller's (the wallet refresh previously did not check ownership). Refresh buttons added on the Stocks table rows and next to stock tickers in the main dashboard holdings table.
+- **Return-to-tab freshness**: `GET /portfolio/version` returns a cheap per-user change token (one cache row, no external calls). The V2 dashboard compares it when the tab regains focus (throttled to once per 10 s, no timers, no polling) and reloads its numbers only if it changed.
+- 13 new unit tests in `tests/unit/test_portfolio_freshness.py`.
+
 ## [1.17.5] - 2026-11-17
 
 Rolls up everything on main since v1.17.0 (the code that is currently deployed plus the code-scanning fixes) and advances the app version strings from the stale 1.16.3 to 1.17.5. Includes 61 code-scanning fixes across three batches (PRs #43, #44, #45). Notable changes since v1.17.0: stock/ETF engine and dashboard (WQ-0378..0387), /next as default dashboard with classic at /legacy, DexScreener 24h change for Cardano tokens, non-blocking provider calls for mobile (#42), PyJWT and Pillow security bumps, BTC Karma staking, NFT/Solana/Iagon/cache fixes.

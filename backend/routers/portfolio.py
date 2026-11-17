@@ -94,6 +94,19 @@ async def get_portfolio_preferences(user_id: int = Depends(verify_session)):
     return {"include_nfts_in_total": await get_nft_inclusion_preference(user_id)}
 
 
+@router.get("/version")
+async def get_portfolio_version_token(user_id: int = Depends(verify_session)):
+    """Cheap change token for the caller's portfolio.
+
+    Changes whenever an asset/wallet/stock edit or per-item refresh
+    invalidates the server-side portfolio caches. Clients compare it on tab
+    focus and refetch only when it differs. One cache row read; no external
+    API calls.
+    """
+    from services.portfolio_freshness import get_portfolio_version
+    return {"version": await get_portfolio_version(user_id)}
+
+
 @router.post("/preferences")
 async def set_portfolio_preferences(body: NFTPreferenceRequest, user_id: int = Depends(verify_session)):
     """Set the user's portfolio display preferences."""
@@ -2057,6 +2070,7 @@ async def get_all_holdings(
                 'wallet_count': 0,
                 'logo_url': None,
                 'source': 'manual_stock',
+                'stock_id': s.get('id'),
                 'description': s.get('description'),
             }
     except Exception as e:
@@ -2546,6 +2560,14 @@ async def get_portfolio_instant(user_id: int = Depends(verify_session)):
         sym = pos['symbol']
         qty = pos['quantity']
         source_type = pos['source_type']
+
+        # ABCT-ASSET-FRESHNESS-20261117: manual_stock snapshot rows are only
+        # rewritten by a full summary pass, so after a quantity edit they
+        # carried the OLD quantity and (via _stock_syms_in_positions) masked
+        # the edited manual_stocks row below. manual_stocks is authoritative
+        # and is merged directly further down, so skip the snapshot rows.
+        if source_type == 'manual_stock':
+            continue
 
         # Get fresh price
         price_sym = _instant_price_sym.get(sym, sym)

@@ -199,6 +199,11 @@ See [SECURITY.md](SECURITY.md) for full details.
 
 ## What's New
 
+### Unreleased — Dashboard freshness
+- Editing a stock, custom token or wallet now shows on the main dashboard immediately (server caches are invalidated on every write), with no full SYNC needed
+- Per-item refresh: refresh a single stock holding (Stocks table or main holdings table), custom token or wallet without re-syncing everything (`POST /stocks/{id}/refresh`, `POST /custom-tokens/{id}/refresh`, `POST /wallets/{address}/refresh`)
+- The dashboard checks `GET /portfolio/version` when you return to the tab and reloads only if something changed
+
 ### v1.17.5 — Stocks, New Default Dashboard, NFT & Staking Fixes, Security Hardening (Nov 2026)
 - **Stocks & ETFs**: track manual stock/ETF holdings on a keyless price feed (CNBC + Nasdaq, Yahoo intraday fallback). New Stocks stat card and tab, stock rows on the dashboard with click-to-edit, stocks in charts, a granular intraday Portfolio History mode, and stock totals on mobile
 - **`/next` is now the default dashboard**: the V2 dashboard opens at the site root; the classic dashboard moved to `/legacy`

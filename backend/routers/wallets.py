@@ -74,6 +74,7 @@ from utils.address import parse_wallets_file, detect_blockchain, detect_blockcha
 from config import WALLETS_FILE, DATA_DIR
 from middleware.demo_mode import is_demo_user
 from auth_utils import verify_session
+from services.portfolio_freshness import invalidates_portfolio
 from database import get_username_by_user_id
 
 
@@ -608,6 +609,7 @@ async def get_wallet(address: str, user_id: int = Depends(verify_session)):
     }
 
 @router.post("/sync")
+@invalidates_portfolio("wallet file sync")
 async def sync_wallets_from_file(user_id: int = Depends(verify_session)):
     """
     Sync wallets from the wallets.txt file.
@@ -676,6 +678,7 @@ async def sync_wallets_from_file(user_id: int = Depends(verify_session)):
     }
 
 @router.post("/refresh")
+@invalidates_portfolio("all wallets refreshed")
 async def refresh_all_balances(user_id: int = Depends(verify_session)):
     """Refresh balances for all tracked wallets in parallel."""
     # Demo mode: return fake refresh result
@@ -736,11 +739,22 @@ async def refresh_all_balances(user_id: int = Depends(verify_session)):
 @router.post("/{address}/refresh")
 async def refresh_wallet_balance(address: str, user_id: int = Depends(verify_session)):
     """Refresh balance for a specific wallet."""
-    wallet = await get_wallet_by_address(address)
-    if not wallet:
+    wallet = await get_wallet_by_address(address, user_id=user_id)
+    # Ownership: the wallet must belong to the caller (404, not 403, so wallet
+    # existence is not disclosed across users).
+    if not wallet or wallet.get('user_id') not in (None, user_id):
         raise HTTPException(status_code=404, detail="Wallet not found")
 
-    return await _refresh_wallet_balance(wallet)
+    result = await _refresh_wallet_balance(wallet)
+
+    # Per-wallet refresh (no full SYNC): drop this wallet's cached balance and
+    # the user's derived portfolio caches so totals pick the new balance up on
+    # the next read. Only the one wallet hit the network.
+    if isinstance(result, dict) and result.get('success'):
+        from services.portfolio_freshness import invalidate_user_portfolio_caches
+        result['portfolio_version'] = await invalidate_user_portfolio_caches(
+            user_id, "wallet refreshed", wallet_ids=[wallet['id']])
+    return result
 
 
 async def get_stored_balance(wallet_id: int, unit: str) -> Optional[str]:
@@ -2123,6 +2137,7 @@ async def discover_related_wallets(data: dict, user_id: int = Depends(verify_ses
 
 
 @router.post("/add-multiple")
+@invalidates_portfolio("wallets added")
 async def add_multiple_wallets(data: dict, user_id: int = Depends(verify_session)):
     """
     Add multiple Cardano wallets at once.
@@ -2221,6 +2236,7 @@ async def discover_xpub_addresses(data: dict, user_id: int = Depends(verify_sess
 
 
 @router.post("/xpub/add")
+@invalidates_portfolio("xpub wallets added")
 async def add_xpub_addresses(data: dict, user_id: int = Depends(verify_session)):
     """
     Add discovered Bitcoin addresses from an xpub.
@@ -2310,6 +2326,7 @@ async def xpub_status(user_id: int = Depends(verify_session)):
 
 
 @router.post("")
+@invalidates_portfolio("wallet added")
 async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session)):
     """
     Add a new wallet to track.
@@ -2490,12 +2507,12 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error adding wallet: {e}")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Failed to add wallet: {str(e)}")
+        logger.exception("Error adding wallet")
+        raise HTTPException(status_code=500, detail=f"Failed to add wallet ({type(e).__name__}); see server log")
 
 
 @router.delete("/stake-group/{stake_address}")
+@invalidates_portfolio("stake group deleted")
 async def delete_stake_group(stake_address: str, user_id: int = Depends(verify_session)):
     """Delete all wallets belonging to a Cardano stake key group."""
     from database import delete_wallet as db_delete_wallet
@@ -2536,6 +2553,7 @@ async def delete_stake_group(stake_address: str, user_id: int = Depends(verify_s
 
 
 @router.put("/stake-group/{stake_address}/label")
+@invalidates_portfolio("stake group label")
 async def update_stake_group_label(stake_address: str, data: dict, user_id: int = Depends(verify_session)):
     """Update the label for all wallets in a Cardano stake key group."""
     import aiosqlite
@@ -2584,6 +2602,7 @@ async def update_stake_group_label(stake_address: str, data: dict, user_id: int 
 
 
 @router.patch("/{address}")
+@invalidates_portfolio("wallet updated")
 async def update_wallet(address: str, update: WalletUpdate, user_id: int = Depends(verify_session)):
     """Update wallet label."""
     from database import update_wallet_label
@@ -2638,6 +2657,7 @@ def remove_from_wallets_file(address: str) -> bool:
 
 
 @router.delete("/{address:path}")
+@invalidates_portfolio("wallet deleted")
 async def delete_wallet(address: str, user_id: int = Depends(verify_session)):
     """Delete a wallet and all its associated data, including from wallets.txt."""
     # Demo mode: block deletion
@@ -2680,6 +2700,7 @@ async def delete_wallet(address: str, user_id: int = Depends(verify_session)):
 
 
 @router.put("/{wallet_id}/label")
+@invalidates_portfolio("wallet label")
 async def update_wallet_label(wallet_id: int, data: dict, user_id: int = Depends(verify_session)):
     """Update the label for a wallet."""
     import aiosqlite
@@ -2773,6 +2794,7 @@ async def clear_ethereum_cache(user_id: int = Depends(verify_session)):
 
 
 @router.post("/assets/{asset_id}/toggle-ignore")
+@invalidates_portfolio("asset ignore toggled")
 async def toggle_asset_ignore(asset_id: int, user_id: int = Depends(verify_session)):
     """Toggle the ignore flag for a native asset."""
     import aiosqlite

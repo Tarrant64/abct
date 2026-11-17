@@ -72,7 +72,10 @@ function renderStocksTab(data) {
             '<td class="right">' + (s.price_usd != null ? formatPrice(s.price_usd) : '--') + '</td>' +
             '<td class="right">' + chgHtml + '</td>' +
             '<td class="right v2-blur">' + (s.value_usd != null ? formatCurrency(s.value_usd) + pnl : '--') + '</td>' +
-            '<td class="right" onclick="event.stopPropagation()"><button class="v2-btn v2-btn-ghost v2-btn-sm" style="color:var(--v2-red)" ' +
+            '<td class="right" onclick="event.stopPropagation()" style="white-space:nowrap">' +
+            '<button class="v2-btn v2-btn-ghost v2-btn-sm" title="Refresh this holding only (no full sync)" ' +
+            'onclick="v2RefreshStock(' + s.id + ', this)">&#10227;</button>' +
+            '<button class="v2-btn v2-btn-ghost v2-btn-sm" style="color:var(--v2-red)" ' +
             'onclick="v2DeleteStock(' + s.id + ')" title="Remove holding">&times;</button></td>' +
             '</tr>';
     });
@@ -213,6 +216,28 @@ function v2InvalidateStockCaches() {
     V2_CACHE.clearByPrefix('/portfolio/instant');
     V2_CACHE.clearByPrefix('/portfolio/all-holdings');
     V2_CACHE.clearByPrefix('/portfolio/summary');
+}
+
+// Lightweight per-holding refresh: re-quotes ONE symbol server-side and drops
+// the server + client portfolio caches. Does not run the full SYNC.
+async function v2RefreshStock(stockId, btn) {
+    if (btn) btn.disabled = true;
+    try {
+        const resp = await v2Fetch('/stocks/' + stockId + '/refresh', { method: 'POST' });
+        if (!resp.ok) throw new Error('refresh failed');
+        const data = await resp.json();
+        v2InvalidateStockCaches();
+        if (typeof showToast === 'function') {
+            showToast((data.stock && data.stock.symbol || 'Holding') +
+                (data.price_refreshed ? ' refreshed' : ' re-read (no fresh quote available)'), 'success');
+        }
+        if (typeof loadStocksTab === 'function') await loadStocksTab();
+    } catch (e) {
+        console.error('Error refreshing stock:', e);
+        if (typeof showToast === 'function') showToast('Refresh failed', 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
 }
 
 async function v2ToggleStock(stockId, include) {
