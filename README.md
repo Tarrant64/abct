@@ -2,7 +2,7 @@
 
 Personal multi-chain portfolio tracker built Cardano-first.
 
-![Version](https://img.shields.io/badge/version-1.17.5-brightgreen.svg)
+![Version](https://img.shields.io/badge/version-1.17.6-brightgreen.svg)
 ![Build](https://img.shields.io/badge/build-1794935464-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
@@ -199,7 +199,7 @@ See [SECURITY.md](SECURITY.md) for full details.
 
 ## What's New
 
-### Unreleased — Dashboard freshness
+### v1.17.6 — Dashboard Freshness (Nov 2026)
 - Editing a stock, custom token or wallet now shows on the main dashboard immediately (server caches are invalidated on every write), with no full SYNC needed
 - Per-item refresh: refresh a single stock holding (Stocks table or main holdings table), custom token or wallet without re-syncing everything (`POST /stocks/{id}/refresh`, `POST /custom-tokens/{id}/refresh`, `POST /wallets/{address}/refresh`)
 - The dashboard checks `GET /portfolio/version` when you return to the tab and reloads only if something changed
@@ -356,5 +356,5 @@ For detailed API information including rate limits and pricing, see [API Provide
 
 ---
 
-**Current Version:** v1.17.5 (BUILD 1794935464)
+**Current Version:** v1.17.6 (BUILD 1794935464)
 **Last Updated:** November 17, 2026
