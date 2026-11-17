@@ -673,7 +673,7 @@ async def get_uniswap_positions(address: str, user_id: int = Depends(verify_sess
         }
     except Exception as e:
         logger.error(f"Error fetching Uniswap positions for {address}: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Failed to fetch Uniswap positions"}
 
 
 @router.get("/helium/{address}")

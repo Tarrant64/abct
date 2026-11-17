@@ -171,7 +171,7 @@ async def populate_demo_stream(user_id: int = Depends(verify_session_sse)):
             error_data = {
                 "progress": 0,
                 "status": "error",
-                "current_step": f"Error: {str(e)}"
+                "current_step": "Demo setup failed - see server logs"
             }
             yield f"data: {json.dumps(error_data)}\n\n"
 

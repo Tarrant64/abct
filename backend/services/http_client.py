@@ -111,7 +111,7 @@ async def fetch_with_retry(
             # Retryable status code - back off and try again
             delay = backoff_base * (2 ** attempt)
             logger.warning(
-                f"HTTP {response.status_code} from {url} (attempt {attempt + 1}/{max_retries + 1}), "
+                f"HTTP {response.status_code} from {_redact_url(url)} (attempt {attempt + 1}/{max_retries + 1}), "
                 f"retrying in {delay:.1f}s"
             )
             await asyncio.sleep(delay)
@@ -124,7 +124,7 @@ async def fetch_with_retry(
 
             delay = backoff_base * (2 ** attempt)
             logger.warning(
-                f"HTTP error {type(exc).__name__} for {url} (attempt {attempt + 1}/{max_retries + 1}), "
+                f"HTTP error {type(exc).__name__} for {_redact_url(url)} (attempt {attempt + 1}/{max_retries + 1}), "
                 f"retrying in {delay:.1f}s"
             )
             await asyncio.sleep(delay)
@@ -320,3 +320,16 @@ async def close_all():
             logger.warning(f"Error closing HTTP client '{name}': {e}")
     _clients.clear()
     logger.info(f"Closed {len(client_names)} HTTP client(s)")
+
+
+def _redact_url(url) -> str:
+    """Return scheme://host/path only (no userinfo, query or fragment) for safe logging."""
+    try:
+        from urllib.parse import urlsplit
+        parts = urlsplit(str(url))
+        host = parts.hostname or ""
+        if parts.port:
+            host = f"{host}:{parts.port}"
+        return f"{parts.scheme}://{host}{parts.path}" if parts.scheme else parts.path
+    except Exception:
+        return "<unparseable-url>"

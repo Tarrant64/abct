@@ -835,5 +835,6 @@ function _escHtml(str) {
     if (!str) return '';
     const div = document.createElement('div');
     div.textContent = String(str);
-    return div.innerHTML;
+    // textContent->innerHTML leaves quotes untouched; escape them for attribute contexts
+    return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }

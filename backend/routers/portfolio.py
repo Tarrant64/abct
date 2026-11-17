@@ -3165,7 +3165,7 @@ async def rebuild_wallet_history(
             logger.info(f"Rebuild: no engine_events, migrating on-chain from V1 balance_history")
             await materializer.materialize_onchain_from_v1_balance_history(user_id)
     except Exception as e:
-        onchain_error = str(e)
+        onchain_error = f"On-chain materialization failed ({type(e).__name__}); see server logs"
         logger.error(f"Rebuild: on-chain materialization failed: {e}", exc_info=True)
 
     # Materialize off-chain from V1 snapshots (legacy data)
@@ -3173,7 +3173,7 @@ async def rebuild_wallet_history(
     try:
         await materializer.materialize_offchain_from_v1(user_id)
     except Exception as e:
-        offchain_error = str(e)
+        offchain_error = f"Off-chain materialization failed ({type(e).__name__}); see server logs"
         logger.error(f"Rebuild: off-chain materialization failed: {e}", exc_info=True)
 
     # Gap-fill
@@ -3304,7 +3304,7 @@ async def backfill_history_prices(user_id: int = Depends(verify_session)):
 
         except Exception as e:
             logger.error(f"Backfill: {symbol} failed: {e}")
-            results.append({"symbol": symbol, "status": f"error: {str(e)}", "updated": 0})
+            results.append({"symbol": symbol, "status": f"error ({type(e).__name__})", "updated": 0})
 
     # Clear chart cache so new data shows up
     for r in ('24h', '1w', '1m', '3m', '6m', '1y', 'all'):
@@ -3357,7 +3357,8 @@ async def get_v2_health(user_id: int = Depends(verify_session)):
             row = await cursor.fetchone()
             health['engine_price_history_count'] = row[0]
     except Exception as e:
-        health['engine_error'] = str(e)
+        logger.error(f"V2 health: engine table check failed: {e}")
+        health['engine_error'] = f"Engine tables unavailable ({type(e).__name__})"
 
     # Missing dates detection
     if health.get('oldest_date') and health.get('newest_date'):

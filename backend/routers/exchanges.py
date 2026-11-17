@@ -459,10 +459,11 @@ async def get_all_exchanges_summary(user_id: int = Depends(verify_session)):
                 result["total_usd"] += exchange_data.get("total_usd", 0)
                 result["total_assets"] += exchange_data.get("asset_count", 0)
             except Exception as e:
+                logger.error(f"Exchange summary failed for {name}: {e}")
                 result["exchanges"].append({
                     "name": name,
                     "status": "error",
-                    "error": str(e)
+                    "error": f"Failed to load exchange data ({type(e).__name__})"
                 })
 
     return result
@@ -958,7 +959,7 @@ async def refresh_exchange_transactions(
                 }
             except Exception as e:
                 logger.error(f"Error refreshing Coinbase transactions: {e}")
-                results["coinbase"] = {"error": str(e)}
+                results["coinbase"] = {"error": f"Refresh failed ({type(e).__name__})"}
 
     if not exchange or exchange == "binance":
         if await binance_service.ensure_configured():
@@ -975,7 +976,7 @@ async def refresh_exchange_transactions(
                 }
             except Exception as e:
                 logger.error(f"Error refreshing Binance transactions: {e}")
-                results["binance"] = {"error": str(e)}
+                results["binance"] = {"error": f"Refresh failed ({type(e).__name__})"}
 
     if not exchange or exchange == "binance_us":
         if await binance_us_service.ensure_configured():
@@ -992,7 +993,7 @@ async def refresh_exchange_transactions(
                 }
             except Exception as e:
                 logger.error(f"Error refreshing Binance.US transactions: {e}")
-                results["binance_us"] = {"error": str(e)}
+                results["binance_us"] = {"error": f"Refresh failed ({type(e).__name__})"}
 
     # Invalidate transaction and analytics caches
     await clear_cache("exchange_transactions_", user_id=user_id)

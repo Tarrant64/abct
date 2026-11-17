@@ -2066,7 +2066,7 @@ async def get_mobile_nfts_summary(
             "total_floor_value_usd": 0,
             "collections": [],
             "last_updated": datetime.utcnow().isoformat() + "Z",
-            "error": str(e)
+            "error": "Unable to load data"
         }
 
     # Filter by blockchain if specified
@@ -2560,7 +2560,7 @@ async def get_mobile_portfolio_history(
                 "highest_value": 0, "lowest_value": 0
             },
             "last_updated": datetime.utcnow().isoformat() + "Z",
-            "error": str(e)
+            "error": "Unable to load data"
         }
 
 
