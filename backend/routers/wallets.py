@@ -2507,9 +2507,8 @@ async def add_wallet(wallet: WalletCreate, user_id: int = Depends(verify_session
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error adding wallet: {e}")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Failed to add wallet: {str(e)}")
+        logger.exception("Error adding wallet")
+        raise HTTPException(status_code=500, detail=f"Failed to add wallet ({type(e).__name__}); see server log")
 
 
 @router.delete("/stake-group/{stake_address}")
