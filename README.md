@@ -2,8 +2,8 @@
 
 Personal multi-chain portfolio tracker built Cardano-first.
 
-![Version](https://img.shields.io/badge/version-1.17.0-brightgreen.svg)
-![Build](https://img.shields.io/badge/build-1790518471-blue.svg)
+![Version](https://img.shields.io/badge/version-1.17.5-brightgreen.svg)
+![Build](https://img.shields.io/badge/build-1794935464-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.9+-green.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.133-teal.svg)
@@ -340,5 +340,5 @@ For detailed API information including rate limits and pricing, see [API Provide
 
 ---
 
-**Current Version:** v1.17.0 (BUILD 1790518471)
+**Current Version:** v1.17.5 (BUILD 1794935464)
 **Last Updated:** September 27, 2026

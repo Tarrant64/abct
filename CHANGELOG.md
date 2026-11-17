@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.17.5] - 2026-11-17
+
+Rolls up everything on main since v1.17.0 (the code that is currently deployed plus the code-scanning fixes) and advances the app version strings from the stale 1.16.3 to 1.17.5. Includes 61 code-scanning fixes across three batches (PRs #43, #44, #45). Notable changes since v1.17.0: stock/ETF engine and dashboard (WQ-0378..0387), /next as default dashboard with classic at /legacy, DexScreener 24h change for Cardano tokens, non-blocking provider calls for mobile (#42), PyJWT and Pillow security bumps, BTC Karma staking, NFT/Solana/Iagon/cache fixes.
+
 ### Added
 - **BTC Karma Bitcoin staking card (DeFi page)**: tracked Bitcoin wallets are now scanned for [BTC Karma](https://staking.btckarma.io) stakes, shown as a "Bitcoin · BTC Karma" card under Staked Positions with the staked BTC, its USD value and the Cardano wallet that receives the KARMA rewards. Data comes straight from the Bitcoin chain through the public Esplora API (mempool.space, blockstream.info fallback) — no BTC Karma login or key. A stake is a transaction spent from your address that pays a P2WSH vault and carries an `OP_RETURN` of `CB|` + blake2b-512 of the bound Cardano address; an unspent vault is an active stake, so unstaking removes the card on its own. To use it, add the Bitcoin address you staked from as an ordinary Bitcoin wallet (single address, not an xpub). Unlock time and KARMA reward balances are not public on-chain and are not shown. New endpoint `GET /defi/btc-karma/{address}` (1 h cache, stale-cache fallback, shows "Data unavailable" rather than erroring). 24 new unit tests in `tests/unit/test_btc_karma.py` (recorded mainnet responses, no live calls).
 
