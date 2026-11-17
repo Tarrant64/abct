@@ -127,7 +127,7 @@
                     // Redirect safely
                     var params = new URLSearchParams(window.location.search);
                     var redirectTo = params.get('redirect');
-                    if (redirectTo && redirectTo.startsWith('/')) {
+                    if (redirectTo && /^\/(?![\/\\])/.test(redirectTo)) {
                         window.location.href = redirectTo;
                     } else {
                         window.location.href = '/next/';

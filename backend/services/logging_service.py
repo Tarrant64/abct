@@ -83,9 +83,9 @@ class LogEntry:
 
         # Remove absolute file paths (keep relative paths for context)
         # Match any absolute path with backend/frontend in it
-        message = re.sub(r'/[^"\s]+/(backend|frontend)/', r'.../\1/', message)
-        message = re.sub(r'C:\\[^"\s]+\\(backend|frontend)\\', r'...\\\\\\1\\\\', message)
-        message = re.sub(r'/[^"\s]+/(Deployment)/', r'.../\1/', message)  # Also handle Deployment paths
+        message = re.sub(r'/[^"\s]{1,512}/(backend|frontend)/', r'.../\1/', message)
+        message = re.sub(r'C:\\[^"\s]{1,512}\\(backend|frontend)\\', r'...\\\\\\1\\\\', message)
+        message = re.sub(r'/[^"\s]{1,512}/(Deployment)/', r'.../\1/', message)  # Also handle Deployment paths
 
         return message
 

@@ -432,7 +432,10 @@ async def auth_status():
                 row = await cursor.fetchone()
                 session_count = row[0] if row else 0
     except Exception as e:
-        user_count = f"Error: {e}"
+        # Do not leak exception text from an unauthenticated endpoint.
+        import logging
+        logging.getLogger(__name__).error(f"auth/status database check failed: {type(e).__name__}", exc_info=True)
+        user_count = "unavailable"
 
     # Security: Do not expose default credentials or demo account details via API.
     # Previously returned default_credentials and demo_account fields here,

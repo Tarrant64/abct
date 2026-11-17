@@ -9,6 +9,7 @@ Falls back to LogoKit if original source unavailable.
 import asyncio
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -18,6 +19,20 @@ from services.http_client import get_client
 logger = logging.getLogger(__name__)
 
 IMAGE_DIR = DATA_DIR / "token_images"
+
+# Token symbols may contain unusual characters (e.g. "$ADA", unicode tickers),
+# so this is a denylist of what makes a path unsafe: separators, whitespace and
+# control characters. ".." is rejected separately.
+_SAFE_SYMBOL_RE = re.compile(r"[^\\/\s\x00-\x1f\x7f]{1,64}")
+
+
+def is_safe_symbol(symbol: str) -> bool:
+    """True if *symbol* can be used as a cache filename stem without path tricks."""
+    return (
+        isinstance(symbol, str)
+        and _SAFE_SYMBOL_RE.fullmatch(symbol) is not None
+        and ".." not in symbol
+    )
 
 
 class ImageCacheService:
@@ -31,9 +46,21 @@ class ImageCacheService:
         await asyncio.to_thread(self._dir.mkdir, parents=True, exist_ok=True)
         logger.info(f"Image cache directory ready: {self._dir}")
 
+    def _safe_path(self, symbol: str) -> Optional[Path]:
+        """Resolve the cache file for *symbol*, or None if it would escape the cache dir."""
+        if not is_safe_symbol(symbol):
+            return None
+        base = Path(os.path.realpath(self._dir))
+        candidate = Path(os.path.realpath(base / f"{symbol.lower()}.png"))
+        if not str(candidate).startswith(str(base) + os.sep):
+            return None
+        return candidate
+
     async def get_image_path(self, symbol: str) -> Optional[str]:
         """Return the path to a cached image, or None if not cached."""
-        path = self._dir / f"{symbol.lower()}.png"
+        path = self._safe_path(symbol)
+        if path is None:
+            return None
         exists = await asyncio.to_thread(path.exists)
         if exists:
             return str(path)
@@ -56,7 +83,10 @@ class ImageCacheService:
                 logger.debug(f"Non-image content-type for {symbol}: {content_type}")
                 return False
 
-            dest = self._dir / f"{symbol.lower()}.png"
+            dest = self._safe_path(symbol)
+            if dest is None:
+                logger.warning("Refusing to cache image for unsafe symbol")
+                return False
             await asyncio.to_thread(dest.write_bytes, response.content)
             logger.debug(f"Cached image for {symbol} ({len(response.content)} bytes)")
             return True
