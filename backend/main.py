@@ -43,6 +43,7 @@ from datetime import datetime
 import logging
 import sys
 import os
+import re
 
 # Add backend directory to Python path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -1258,6 +1259,21 @@ app.mount("/next/static", StaticFiles(directory=str(v2_path)), name="v2-static")
 # V2 is a parallel professional UI at /next/* using the same backend APIs.
 # V1 remains untouched at all existing URLs.
 
+_PAGE_NAME_RE = re.compile(r"[A-Za-z0-9_-]{1,100}")
+
+
+def _safe_page_file(base_dir, name: str):
+    """Return <base_dir>/<name>.html if name is a plain page name and the file exists
+    inside base_dir; otherwise None (callers fall back to the SPA index)."""
+    if not _PAGE_NAME_RE.fullmatch(name):
+        return None
+    base = os.path.realpath(str(base_dir))
+    candidate = os.path.realpath(os.path.join(base, f"{name}.html"))
+    if not candidate.startswith(base + os.sep) or not os.path.isfile(candidate):
+        return None
+    return candidate
+
+
 @app.get("/next")
 async def v2_redirect():
     """Redirect /next to /next/."""
@@ -1272,8 +1288,8 @@ async def v2_dashboard():
 async def v2_pages(page: str):
     """Serve V2 sub-pages. All pages use the same SPA shell (index.html).
     Note: /next/static/* is handled by the StaticFiles mount above (mounts take priority)."""
-    v2_page_file = v2_path / f"{page}.html"
-    if v2_page_file.exists():
+    v2_page_file = _safe_page_file(v2_path, page)
+    if v2_page_file is not None:
         return FileResponse(str(v2_page_file))
     # Fallback to main V2 index for SPA-style client routing
     return FileResponse(str(v2_path / "index.html"))
@@ -1306,10 +1322,10 @@ async def legacy_pages(page: str):
     Note: /static/* stays mounted for V1 assets, so legacy pages render as-is.
     Unknown names fall back to the legacy index."""
     name = page[:-5] if page.endswith(".html") else page
-    if not name.isidentifier() and not all(c.isalnum() or c in "-_" for c in name):
+    if not _PAGE_NAME_RE.fullmatch(name):
         raise HTTPException(status_code=404, detail="Not found")
-    v1_page_file = frontend_path / f"{name}.html"
-    if v1_page_file.exists():
+    v1_page_file = _safe_page_file(frontend_path, name)
+    if v1_page_file is not None:
         return FileResponse(str(v1_page_file))
     return FileResponse(str(frontend_path / "index.html"))
 

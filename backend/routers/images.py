@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 
 from auth_utils import verify_session
-from services.image_cache import image_cache_service
+from services.image_cache import image_cache_service, is_safe_symbol
 from services.logokit_service import logokit_service
 
 router = APIRouter(prefix="/images", tags=["images"])
@@ -26,6 +26,8 @@ async def get_token_image(symbol: str, _user_id: int = Depends(verify_session)):
     If all sources fail, redirect to LogoKit.
     """
     symbol = symbol.upper()
+    if not is_safe_symbol(symbol):
+        raise HTTPException(status_code=404, detail="Not found")
 
     # Try serving from cache
     path = await image_cache_service.get_image_path(symbol)

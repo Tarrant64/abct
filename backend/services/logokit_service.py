@@ -8,6 +8,7 @@ and blockchain assets using the LogoKit API.
 from config import LOGOKIT_API_KEY, LOGOKIT_BASE_URL
 from typing import Optional, Dict
 import logging
+from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,7 @@ class LogoKitService:
         symbol = symbol.upper()
 
         # Build URL
-        url = f"{self.base_url}/crypto/{symbol}?token={self.api_key}"
+        url = f"{self.base_url}/crypto/{quote(symbol, safe='')}?token={self.api_key}"
 
         # Add optional parameters
         if size:
