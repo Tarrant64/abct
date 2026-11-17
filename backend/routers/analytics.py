@@ -36,8 +36,8 @@ async def get_chain_metrics(user_id: int = Depends(verify_session)):
         data = await chain_analytics_service.get_chain_overview()
         return {"success": True, "chains": data.get("chains", {}), "timestamp": data.get("timestamp")}
     except Exception as e:
-        logger.error(f"Error fetching chain metrics: {e}")
-        return {"success": False, "error": str(e), "chains": {}}
+        logger.exception("Error fetching chain metrics")
+        return {"success": False, "error": f"Chain metrics request failed ({type(e).__name__})", "chains": {}}
 
 
 @router.get("/chain-metrics/{chain}")
@@ -51,8 +51,8 @@ async def get_chain_metric(chain: str, user_id: int = Depends(verify_session)):
         chain_data = data.get("chains", {}).get(chain, {})
         return {"success": True, "chain": chain, "metrics": chain_data}
     except Exception as e:
-        logger.error(f"Error fetching metrics for {chain}: {e}")
-        return {"success": False, "error": str(e)}
+        logger.exception(f"Error fetching metrics for {chain}")
+        return {"success": False, "error": f"Metrics request failed ({type(e).__name__})"}
 
 
 @router.get("/chain-fees-history/{chain}")
@@ -69,8 +69,8 @@ async def get_chain_fees_history(
         history = await chain_analytics_service.get_chain_fees_history(chain, days)
         return {"success": True, "chain": chain, "days": days, "history": history}
     except Exception as e:
-        logger.error(f"Error fetching fee history for {chain}: {e}")
-        return {"success": False, "error": str(e), "history": []}
+        logger.exception(f"Error fetching fee history for {chain}")
+        return {"success": False, "error": f"Fee history request failed ({type(e).__name__})", "history": []}
 
 
 @router.get("/market-summary")
@@ -147,8 +147,8 @@ async def get_market_summary(user_id: int = Depends(verify_session)):
         await set_cache(cache_key, result, ttl_seconds=CACHE_TTL_HOT)
         return result
     except Exception as e:
-        logger.error(f"Error fetching market summary: {e}")
-        return {"success": False, "error": str(e)}
+        logger.exception("Error fetching market summary")
+        return {"success": False, "error": f"Market summary request failed ({type(e).__name__})"}
 
 
 @router.get("/relative-strength")
@@ -196,8 +196,8 @@ async def get_relative_strength(
             await set_cache(cache_key, response, CACHE_TTL_WARM)
         return response
     except Exception as e:
-        logger.error(f"Error fetching relative strength: {e}")
-        return {"success": False, "error": str(e), "assets": {}}
+        logger.exception("Error fetching relative strength")
+        return {"success": False, "error": f"Relative strength request failed ({type(e).__name__})", "assets": {}}
 
 
 # ---- Crypto Market Data (Stablecoins, Chains TVL, RWA) ----
@@ -213,8 +213,8 @@ async def get_top_cryptos(
         data = await chain_analytics_service.get_top_cryptos(limit, source)
         return {"success": True, **data}
     except Exception as e:
-        logger.error(f"Error fetching top cryptos: {e}")
-        return {"success": False, "error": str(e), "cryptos": [], "source": source}
+        logger.exception("Error fetching top cryptos")
+        return {"success": False, "error": f"Top cryptos request failed ({type(e).__name__})", "cryptos": [], "source": source}
 
 
 @router.get("/market/stablecoins")
@@ -224,8 +224,8 @@ async def get_stablecoin_market(user_id: int = Depends(verify_session)):
         data = await chain_analytics_service.get_stablecoin_market()
         return {"success": True, **data}
     except Exception as e:
-        logger.error(f"Error fetching stablecoin market: {e}")
-        return {"success": False, "error": str(e), "total_stablecoin_mcap": 0, "stablecoins": []}
+        logger.exception("Error fetching stablecoin market")
+        return {"success": False, "error": f"Stablecoin market request failed ({type(e).__name__})", "total_stablecoin_mcap": 0, "stablecoins": []}
 
 
 @router.get("/market/chains-tvl")
@@ -238,8 +238,8 @@ async def get_all_chains_tvl(
         data = await chain_analytics_service.get_all_chains_tvl(limit)
         return {"success": True, **data}
     except Exception as e:
-        logger.error(f"Error fetching chains TVL: {e}")
-        return {"success": False, "error": str(e), "total_tvl": 0, "chains": []}
+        logger.exception("Error fetching chains TVL")
+        return {"success": False, "error": f"Chains TVL request failed ({type(e).__name__})", "total_tvl": 0, "chains": []}
 
 
 @router.get("/market/chains-tvl-history")
@@ -253,8 +253,8 @@ async def get_chains_tvl_history(
         data = await chain_analytics_service.get_chains_tvl_history_multi(limit, days)
         return {"success": True, **data}
     except Exception as e:
-        logger.error(f"Error fetching chains TVL history: {e}")
-        return {"success": False, "error": str(e), "chains": [], "series": []}
+        logger.exception("Error fetching chains TVL history")
+        return {"success": False, "error": f"Chains TVL history request failed ({type(e).__name__})", "chains": [], "series": []}
 
 
 @router.get("/market/rwa")
@@ -267,8 +267,8 @@ async def get_rwa_protocols(
         data = await chain_analytics_service.get_rwa_protocols(limit)
         return {"success": True, **data}
     except Exception as e:
-        logger.error(f"Error fetching RWA protocols: {e}")
-        return {"success": False, "error": str(e), "total_rwa_tvl": 0, "protocols": []}
+        logger.exception("Error fetching RWA protocols")
+        return {"success": False, "error": f"RWA protocols request failed ({type(e).__name__})", "total_rwa_tvl": 0, "protocols": []}
 
 
 # ---- Gas / Chain Breakdown / DEX Analytics ----
@@ -290,8 +290,8 @@ async def get_gas_prices(
 
         return {"success": True, **data}
     except Exception as e:
-        logger.error(f"Error fetching gas prices: {e}")
-        return {"success": False, "error": str(e)}
+        logger.exception("Error fetching gas prices")
+        return {"success": False, "error": f"Gas prices request failed ({type(e).__name__})"}
 
 
 @router.get("/chain-breakdown/{blockchain}")
@@ -375,8 +375,8 @@ async def get_chain_breakdown(
         await set_cache(cache_key, result, CACHE_TTL_WARM)
         return {"success": True, **result}
     except Exception as e:
-        logger.error(f"Error fetching chain breakdown for {blockchain}: {e}")
-        return {"success": False, "error": str(e)}
+        logger.exception(f"Error fetching chain breakdown for {blockchain}")
+        return {"success": False, "error": f"Chain breakdown request failed ({type(e).__name__})"}
 
 
 @router.get("/cardano-dex")
@@ -393,8 +393,8 @@ async def get_cardano_dex_analytics(user_id: int = Depends(verify_session)):
 
         return {"success": True, "dexes": groups}
     except Exception as e:
-        logger.error(f"Error fetching Cardano DEX analytics: {e}")
-        return {"success": False, "error": str(e)}
+        logger.exception("Error fetching Cardano DEX analytics")
+        return {"success": False, "error": f"Cardano DEX analytics request failed ({type(e).__name__})"}
 
 
 # ---- TradFi Endpoints (Phase 3) ----
@@ -412,8 +412,8 @@ async def get_tradfi_summary(user_id: int = Depends(verify_session)):
     except ImportError:
         return {"success": False, "configured": False, "message": "TradFi service not available"}
     except Exception as e:
-        logger.error(f"Error fetching TradFi summary: {e}")
-        return {"success": False, "error": str(e)}
+        logger.exception("Error fetching TradFi summary")
+        return {"success": False, "error": f"TradFi summary request failed ({type(e).__name__})"}
 
 
 @router.get("/tradfi/history/{symbol}")
@@ -440,8 +440,8 @@ async def get_tradfi_history(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error fetching TradFi history for {symbol}: {e}")
-        return {"success": False, "error": str(e)}
+        logger.exception(f"Error fetching TradFi history for {symbol}")
+        return {"success": False, "error": f"TradFi history request failed ({type(e).__name__})"}
 
 
 @router.get("/tradfi/correlation")
@@ -460,5 +460,5 @@ async def get_tradfi_correlation(
     except ImportError:
         return {"success": False, "configured": False}
     except Exception as e:
-        logger.error(f"Error computing correlation: {e}")
-        return {"success": False, "error": str(e)}
+        logger.exception("Error computing correlation")
+        return {"success": False, "error": f"Correlation request failed ({type(e).__name__})"}

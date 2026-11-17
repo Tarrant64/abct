@@ -351,8 +351,8 @@ async def get_counterparties(
         return {"success": True, "counterparties": results}
 
     except Exception as e:
-        logger.error(f"Error fetching counterparties: {e}")
-        return {"success": False, "error": str(e), "counterparties": []}
+        logger.exception("Error fetching counterparties")
+        return {"success": False, "error": f"Counterparties request failed ({type(e).__name__})", "counterparties": []}
 
 
 async def _get_exchange_trade_counts(user_id: int, time_filter: Optional[str] = None) -> dict:
@@ -605,8 +605,8 @@ async def get_flow_summary(
         return {"success": True, **result}
 
     except Exception as e:
-        logger.error(f"Error fetching flow summary: {e}")
-        return {"success": False, "error": str(e)}
+        logger.exception("Error fetching flow summary")
+        return {"success": False, "error": f"Flow summary request failed ({type(e).__name__})"}
 
 
 @router.get("/activity-heatmap")
@@ -699,8 +699,8 @@ async def get_activity_heatmap(
         return {"success": True, "heatmap": heatmap}
 
     except Exception as e:
-        logger.error(f"Error fetching activity heatmap: {e}")
-        return {"success": False, "error": str(e), "heatmap": []}
+        logger.exception("Error fetching activity heatmap")
+        return {"success": False, "error": f"Activity heatmap request failed ({type(e).__name__})", "heatmap": []}
 
 
 def _generate_demo_large_transactions():
@@ -911,5 +911,5 @@ async def get_large_transactions(
         return {"success": True, "transactions": results}
 
     except Exception as e:
-        logger.error(f"Error fetching large transactions: {e}")
-        return {"success": False, "error": str(e), "transactions": []}
+        logger.exception("Error fetching large transactions")
+        return {"success": False, "error": f"Large transactions request failed ({type(e).__name__})", "transactions": []}
