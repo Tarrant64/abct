@@ -459,7 +459,7 @@
 
             html += `<tr>
                 <td><span class="counterparty-address" title="${escapeHtml(addr)}">${escapeHtml(truncated)}</span>
-                    <button class="copy-addr-btn" onclick="copyAddress('${escapeHtml(addr)}')" title="Copy address">&#128203;</button></td>
+                    <button class="copy-addr-btn" data-addr="${escapeHtml(addr)}" title="Copy address">&#128203;</button></td>
                 <td><span class="counterparty-badge ${badgeClass}">${escapeHtml(cp.label || 'Unknown')}</span></td>
                 <td>${escapeHtml(chain)}</td>
                 <td>${cp.tx_count || 0}</td>
@@ -469,7 +469,7 @@
                 <td>${lastSeen}</td>
             </tr>`;
         }
-        tbody.innerHTML = html;
+        tbody.innerHTML = html; tbody.onclick = onCopyBtnClick;
         renderCpPagination();
     }
 
@@ -775,7 +775,7 @@
     function escapeHtml(str) {
         const div = document.createElement('div');
         div.textContent = str;
-        return div.innerHTML;
+        return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;'); // quotes too (attribute contexts)
     }
 
     function formatHour12(h) {
@@ -798,6 +798,12 @@
         const b = Math.round(low[2] + (high[2] - low[2]) * t);
         const a = (low[3] + (high[3] - low[3]) * t).toFixed(2);
         return `rgba(${r}, ${g}, ${b}, ${a})`;
+    }
+
+    // Delegated handler for the copy buttons (address kept in data-addr, never in inline JS)
+    function onCopyBtnClick(ev) {
+        const btn = ev.target.closest && ev.target.closest('.copy-addr-btn');
+        if (btn && btn.dataset.addr) window.copyAddress(btn.dataset.addr);
     }
 
 })();
