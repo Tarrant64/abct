@@ -199,6 +199,17 @@ See [SECURITY.md](SECURITY.md) for full details.
 
 ## What's New
 
+### v1.17.5 — Stocks, New Default Dashboard, NFT & Staking Fixes, Security Hardening (Nov 2026)
+- **Stocks & ETFs**: track manual stock/ETF holdings on a keyless price feed (CNBC + Nasdaq, Yahoo intraday fallback). New Stocks stat card and tab, stock rows on the dashboard with click-to-edit, stocks in charts, a granular intraday Portfolio History mode, and stock totals on mobile
+- **`/next` is now the default dashboard**: the V2 dashboard opens at the site root; the classic dashboard moved to `/legacy`
+- **BTC Karma staking**: Bitcoin staked through BTC Karma is read from the chain and shown on the DeFi page, and is now included in portfolio and asset totals and on mobile
+- **NFTs**: Cardano NFT images load again (multi-gateway IPFS fallback); Ethereum, Polygon and Base NFTs return on Alchemy free-tier keys, with EVM addresses checked on all three chains; Algorand and Solana NFTs appear on the NFT page; unpriced NFTs are excluded from totals
+- **Prices & charts**: DexScreener 24h change for Cardano native tokens, static chart-header controls (range and Smooth/Detail never shift), refresh stamps in local time (MM/DD, 12-hour)
+- **Reliability**: Solana balances restored after Helius retired its old endpoint, system-wide cache rows no longer pile up or read back stale, the Iagon staking scan retries after a failed fetch instead of skipping data, the mobile API no longer blocks on slow provider calls, and static assets are readable again in the Docker image
+- **Mobile**: BTC Karma stake exposed on the staking endpoint; the iOS project builds cleanly on the current toolchain
+- **Security hardening**: 61 code-scanning findings fixed in three batches with response shapes unchanged. This covers an open-redirect fix on login, path-traversal guards on token images and the `/next` and `/legacy` routes, DOM-XSS escaping, bounded log-redaction patterns, API keys stripped from logged URLs, and generic error messages in place of exception text on analytics, intelligence and about a dozen other endpoints (details go to the server log). The Cloudflare tunnel token file is now 0600. A further set of lower-risk findings was reviewed and deliberately left unchanged; reasons are in the release notes. Also PyJWT 2.15.1 and Pillow 13.0.0 dependency bumps
+- See the [v1.17.5 release notes](https://github.com/Tarrant64/abct/releases/tag/v1.17.5) and the [CHANGELOG](CHANGELOG.md) for the complete list
+
 ### v1.17.0 — CIP-68 ADA Handle Fix, Wallet Reliability & Android Companion (Sep 2026)
 - **ADA Handle resolution fixed for CIP-68 handles**: adding a wallet by handle failed for the majority of handles in circulation today (any handle minted or upgraded since the standard moved to CIP-68) — the resolver now tries the CIP-68 asset id first and falls back to the legacy id, so both old- and new-style handles resolve (Issue #4, PR #6)
 - **Android app — initial version, build from source**: the mobile client (previously iOS/watchOS only) now has a working Android build — see [`mobile/README.md`](mobile/README.md); no pre-built APK in this release
@@ -341,4 +352,4 @@ For detailed API information including rate limits and pricing, see [API Provide
 ---
 
 **Current Version:** v1.17.5 (BUILD 1794935464)
-**Last Updated:** September 27, 2026
+**Last Updated:** November 17, 2026
