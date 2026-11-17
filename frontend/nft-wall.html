@@ -1322,7 +1322,22 @@
                 img.addEventListener('error', function() {
                     const container = this.parentElement;
                     const blockchain = this.closest('.nft-card')?.getAttribute('data-blockchain') || '';
-                    container.innerHTML = '<span class="chain-badge ' + blockchain + '">' + blockchain + '</span><div class="no-image-placeholder"><div class="nft-text">NFT</div><div class="no-cache-text">No cached image found</div></div>';
+                    // Build with DOM APIs: blockchain comes from a data attribute.
+                    const safeChain = String(blockchain).replace(/[^A-Za-z0-9_-]/g, '');
+                    container.textContent = '';
+                    const badge = document.createElement('span');
+                    badge.className = 'chain-badge ' + safeChain;
+                    badge.textContent = blockchain;
+                    const placeholder = document.createElement('div');
+                    placeholder.className = 'no-image-placeholder';
+                    const nftText = document.createElement('div');
+                    nftText.className = 'nft-text';
+                    nftText.textContent = 'NFT';
+                    const noCache = document.createElement('div');
+                    noCache.className = 'no-cache-text';
+                    noCache.textContent = 'No cached image found';
+                    placeholder.append(nftText, noCache);
+                    container.append(badge, placeholder);
                 });
             });
 

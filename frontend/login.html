@@ -363,8 +363,8 @@
                     // sent to login (set by session-auth.js), or dashboard
                     const params = new URLSearchParams(window.location.search);
                     const redirectTo = params.get('redirect');
-                    // Only allow relative redirects (prevent open redirect attacks)
-                    if (redirectTo && redirectTo.startsWith('/')) {
+                    // Only allow same-origin relative redirects: a single leading '/' that is not '//' or '/\' (prevent open redirect attacks)
+                    if (redirectTo && /^\/(?![\/\\])/.test(redirectTo)) {
                         window.location.href = redirectTo;
                     } else {
                         window.location.href = '/';

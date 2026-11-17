@@ -1709,9 +1709,40 @@ function stripPrivacyLinks(root = document) {
     });
 }
 
+// Navigation target guard (CodeQL js/xss-through-dom): only same-origin http(s)
+// URLs or relative paths; blocks javascript:, data:, and protocol-relative //host.
+function isSafeNavUrl(url) {
+    if (typeof url !== 'string') return false;
+    const t = url.trim();
+    if (!t || /^[\\/]{2}/.test(t) || /^\/\\/.test(t)) return false;
+    try {
+        const u = new URL(t, window.location.href);
+        return (u.protocol === 'http:' || u.protocol === 'https:') && u.origin === window.location.origin;
+    } catch (e) {
+        return false;
+    }
+}
+
+// Privacy-mode links may legitimately point at external explorers: allow any
+// http(s) URL or relative path, never javascript:/data: or protocol-relative.
+function isSafeLinkUrl(url) {
+    if (typeof url !== 'string') return false;
+    const t = url.trim();
+    if (!t || /^[\\/]{2}/.test(t) || /^\/\\/.test(t)) return false;
+    try {
+        const u = new URL(t, window.location.href);
+        return u.protocol === 'http:' || u.protocol === 'https:';
+    } catch (e) {
+        return false;
+    }
+}
+
 function restorePrivacyLinks() {
     document.querySelectorAll('a[data-href]').forEach(link => {
-        link.setAttribute('href', link.getAttribute('data-href'));
+        const target = link.getAttribute('data-href');
+        if (isSafeLinkUrl(target)) {
+            link.setAttribute('href', target);
+        }
         link.removeAttribute('data-href');
     });
 }
@@ -11004,7 +11035,7 @@ function initGlobalSearch() {
                 e.preventDefault();
                 const url = el.getAttribute('data-search-nav');
                 closeSearch();
-                window.location.href = url;
+                if (isSafeNavUrl(url)) window.location.href = url;
             });
         });
 

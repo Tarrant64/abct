@@ -1751,7 +1751,7 @@ async function runGlobalSearch(query) {
             e.preventDefault();
             const href = el.getAttribute('data-href');
             resultsEl.style.display = 'none';
-            if (href) window.location.href = href;
+            if (href && isSafeNavUrl(href)) window.location.href = href;
         });
         // Hover effect
         el.addEventListener('mouseenter', () => { el.style.background = 'var(--v2-bg-table-row-hover)'; });
@@ -2458,6 +2458,20 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// Navigation target guard (CodeQL js/xss-through-dom): only same-origin http(s)
+// URLs or relative paths; blocks javascript:, data:, and protocol-relative //host.
+function isSafeNavUrl(url) {
+    if (typeof url !== 'string') return false;
+    const t = url.trim();
+    if (!t || /^[\\/]{2}/.test(t) || /^\/\\/.test(t)) return false;
+    try {
+        const u = new URL(t, window.location.href);
+        return (u.protocol === 'http:' || u.protocol === 'https:') && u.origin === window.location.origin;
+    } catch (e) {
+        return false;
+    }
 }
 
 function escapeAttr(text) {

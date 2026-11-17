@@ -9,6 +9,16 @@ let customTokenIntervals = new Map();
 /**
  * Render custom token widget
  */
+// Escape text for safe interpolation into innerHTML (tickers are user input).
+function escapeTokenHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 async function renderCustomToken(container, widgetId, config = {}) {
     const ticker = config.ticker || null;
 
@@ -66,7 +76,7 @@ async function renderCustomToken(container, widgetId, config = {}) {
         container.innerHTML = `
             <div class="widget-error">
                 <div class="widget-error-icon">⚠️</div>
-                <div>Token "${ticker}" not found</div>
+                <div>Token "${escapeTokenHtml(ticker)}" not found</div>
                 <p style="font-size: 0.85rem; margin: 0.5rem 0; color: var(--text-secondary);">
                     We searched CoinGecko but couldn't find this token.
                 </p>
@@ -160,7 +170,7 @@ function updateCustomTokenUI(container, ticker, data) {
     const html = `
         <div class="custom-token-display">
             <div class="token-header">
-                <div class="token-ticker">${ticker.toUpperCase()}</div>
+                <div class="token-ticker">${escapeTokenHtml(String(ticker).toUpperCase())}</div>
                 <button class="token-change-btn" onclick="changeCustomToken('${container.closest('.grid-stack-item')?.getAttribute('data-widget-id')}')" title="Change token">
                     ↻
                 </button>
