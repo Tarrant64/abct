@@ -921,7 +921,7 @@ function renderAssetsTable() {
                         <div class="v2-asset-icon">${logoHtml}</div>
                         <div class="v2-asset-info">
                             <div class="name">${escapeHtml(name)}</div>
-                            <div class="ticker">${escapeHtml(symbol)}${chain ? ' <span class="v2-chain-badge chain-' + escapeAttr(chain.toLowerCase()) + '">' + escapeHtml(chain) + '</span>' : ''}</div>
+                            <div class="ticker">${escapeHtml(symbol)}${(h.source === 'manual_stock' && h.stock_id) ? ' <button class="v2-btn v2-btn-ghost v2-btn-sm v2-row-refresh" data-stock-id="' + escapeAttr(String(h.stock_id)) + '" title="Refresh this holding only (no full sync)">&#10227;</button>' : ''}${chain ? ' <span class="v2-chain-badge chain-' + escapeAttr(chain.toLowerCase()) + '">' + escapeHtml(chain) + '</span>' : ''}</div>
                         </div>
                     </div>
                 </td>
@@ -944,6 +944,27 @@ function renderAssetsTable() {
     tbody.querySelectorAll('tr[data-symbol]').forEach(row => {
         row.addEventListener('click', () => {
             openAssetDetail(row.dataset.symbol, row.dataset.chain || '');
+        });
+    });
+
+    // Per-holding refresh (stocks): refresh ONE row server-side, then reload
+    // the dashboard numbers. Does not trigger the full SYNC.
+    tbody.querySelectorAll('.v2-row-refresh').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            btn.disabled = true;
+            try {
+                const resp = await v2Fetch(`${API_BASE}/stocks/${encodeURIComponent(btn.dataset.stockId)}/refresh`, { method: 'POST' });
+                if (!resp.ok) throw new Error('refresh failed');
+                if (typeof V2_CACHE !== 'undefined') {
+                    ['/portfolio', '/stocks'].forEach(p => V2_CACHE.clearByPrefix(p));
+                }
+                await loadDashboard();
+            } catch (err) {
+                console.error('Per-holding refresh failed:', err);
+                showToast('Refresh failed', 'error');
+                btn.disabled = false;
+            }
         });
     });
 

@@ -12,6 +12,7 @@ Endpoints:
   GET    /stocks/{id}           one holding
   PUT    /stocks/{id}           update quantity/cost basis/name/...
   DELETE /stocks/{id}           remove a holding
+  POST   /stocks/{id}/refresh   re-quote ONE holding + refresh portfolio caches
   GET    /stocks/{id}/history   daily bars (backfills once when empty)
   GET    /stocks/search?q=      symbol validation/lookup (add-dialog helper)
   GET    /stocks/scheduler      engine status (times, next runs, last cycle)
@@ -33,6 +34,7 @@ from database import (
 from services.stock_data import stock_data_service, normalize_symbol
 from services.stock_scheduler import stock_scheduler
 from auth_utils import verify_session
+from services.portfolio_freshness import invalidates_portfolio
 
 logger = logging.getLogger(__name__)
 
@@ -159,6 +161,7 @@ async def list_stocks(user_id: int = Depends(verify_session)):
 
 
 @router.post("")
+@invalidates_portfolio("stock added", clear_stock_positions=True)
 async def add_stock(request: StockAddRequest,
                     user_id: int = Depends(verify_session)):
     """Add a manual holding (or update the quantity of an existing symbol).
@@ -269,6 +272,7 @@ async def get_stock(stock_id: int, user_id: int = Depends(verify_session)):
 
 
 @router.put("/{stock_id}")
+@invalidates_portfolio("stock updated", clear_stock_positions=True)
 async def update_stock(stock_id: int, request: StockUpdateRequest,
                        user_id: int = Depends(verify_session)):
     row = await get_manual_stock_by_id(stock_id, user_id)
@@ -289,12 +293,45 @@ async def update_stock(stock_id: int, request: StockUpdateRequest,
 
 
 @router.delete("/{stock_id}")
+@invalidates_portfolio("stock deleted", clear_stock_positions=True)
 async def delete_stock(stock_id: int, user_id: int = Depends(verify_session)):
     row = await get_manual_stock_by_id(stock_id, user_id)
     if not row:
         raise HTTPException(status_code=404, detail="Stock holding not found")
     await delete_manual_stock(stock_id, user_id)
     return {"status": "success", "deleted_id": stock_id}
+
+
+@router.post("/{stock_id}/refresh")
+async def refresh_stock(stock_id: int, user_id: int = Depends(verify_session)):
+    """Lightweight per-holding refresh (no full SYNC).
+
+    Re-reads the holding's row, pulls a fresh live quote for that one symbol
+    (bypassing the quote cache), stores the new price, and drops the user's
+    derived portfolio caches so totals reflect it on the next read. The row
+    must belong to the caller (404 otherwise). If no source can price the
+    symbol the stored price is kept and `price_refreshed` is false.
+    """
+    row = await get_manual_stock_by_id(stock_id, user_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Stock holding not found")
+    quotes = await stock_data_service.get_quotes([row["symbol"]], use_cache=False)
+    q = quotes.get(row["symbol"])
+    if q and q.get("price_usd") is not None:
+        await update_manual_stock(stock_id, {
+            "price_usd": q["price_usd"],
+            "prev_close_usd": q.get("prev_close_usd"),
+            "change_pct": q.get("change_pct"),
+            "price_source": q.get("source"),
+            "last_price_update": "CURRENT_TIMESTAMP",
+        }, user_id)
+    from services.portfolio_freshness import invalidate_user_portfolio_caches
+    version = await invalidate_user_portfolio_caches(
+        user_id, "stock refreshed", clear_stock_positions=True)
+    row = await get_manual_stock_by_id(stock_id, user_id)
+    return {"status": "success", "price_refreshed": bool(q),
+            "stock": _enrich(row, {row["symbol"]: q} if q else {}),
+            "portfolio_version": version}
 
 
 @router.get("/{stock_id}/history")

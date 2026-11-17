@@ -492,6 +492,10 @@ Shared persistent `httpx.AsyncClient` instances via `get_client(name, timeout)`:
 | COLD | 86400s (24 hr) | NFT data, DeFi positions |
 | PERSISTENT | 604800s (7 days) | Portfolio summary |
 
+### Write-path invalidation
+
+TTLs bound staleness only for data that changes outside the app. Anything the user edits (stock, custom token, wallet add/remove/toggle/label, per-item refresh) must call `services/portfolio_freshness.invalidate_user_portfolio_caches` (usually via the `@invalidates_portfolio` decorator), which deletes the user's derived caches (summary, totals, instant, all-holdings, analytics, charts, mobile summary), optionally a wallet's `wallet_balance_{id}` cache and the stale `manual_stock` rows in `portfolio_positions`, and bumps the per-user token served by `GET /portfolio/version`. Do not shorten TTLs to fix freshness; that burns provider quota without fixing it.
+
 ## Technology Stack
 
 ### Backend

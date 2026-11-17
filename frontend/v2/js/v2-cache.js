@@ -262,3 +262,60 @@ if (typeof window !== 'undefined') {
     window.v2PrefetchCommon = v2PrefetchCommon;
     window.v2PrefetchForPage = v2PrefetchForPage;
 }
+
+
+// ============================================================================
+// FRESHNESS WATCH — refetch when the portfolio changed elsewhere
+// ============================================================================
+// The server bumps a per-user "portfolio version" whenever an asset / wallet /
+// stock edit or per-item refresh invalidates its caches (GET /portfolio/version,
+// one tiny row, no external API calls). When the tab regains focus we compare
+// it with the value seen at load and, only if it differs, drop the client
+// caches and reload the dashboard numbers. No timers, no polling.
+
+const V2_FRESHNESS = {
+    version: null,
+    lastCheck: 0,
+    MIN_INTERVAL_MS: 10 * 1000,
+
+    async check(force) {
+        const now = Date.now();
+        if (!force && now - this.lastCheck < this.MIN_INTERVAL_MS) return;
+        this.lastCheck = now;
+        let v = null;
+        try {
+            const resp = await v2Fetch('/portfolio/version');
+            if (!resp.ok) return;
+            v = (await resp.json()).version;
+        } catch (e) {
+            return;  // offline/auth hiccup: never disturb the page
+        }
+        if (v == null) return;
+        if (this.version === null) { this.version = v; return; }
+        if (v === this.version) return;
+        this.version = v;
+        ['/portfolio', '/stocks', '/wallets', '/custom-tokens', '/balance-history'].forEach(function (p) {
+            V2_CACHE.clearByPrefix(p);
+        });
+        if (document.getElementById('heroValue') && typeof loadDashboard === 'function') {
+            loadDashboard();
+        } else if (typeof window.v2OnPortfolioChanged === 'function') {
+            window.v2OnPortfolioChanged();
+        }
+    },
+
+    start() {
+        const self = this;
+        self.check(true);  // record the baseline version at load
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible') self.check(false);
+        });
+        window.addEventListener('focus', function () { self.check(false); });
+    },
+};
+
+if (typeof document !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', function () {
+        if (typeof v2Fetch === 'function' && localStorage.getItem('abct_token')) V2_FRESHNESS.start();
+    });
+}
