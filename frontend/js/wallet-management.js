@@ -66,7 +66,7 @@
     function getChainLogo(chainId) {
         if (CHAIN_LOGO_OVERRIDES[chainId]) return CHAIN_LOGO_OVERRIDES[chainId];
         const sym = CHAIN_SYMBOLS[chainId] || chainId.toUpperCase();
-        return `https://img.logokit.com/crypto/${sym}?size=32`;
+        return getLogoKitUrl(sym, 32);
     }
 
     // Entry point for lazy-loading from assets page

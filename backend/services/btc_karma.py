@@ -30,7 +30,6 @@ from typing import Dict, Iterable, List, Optional
 
 from config import BLOCKSTREAM_BASE_URL, MEMPOOL_BASE_URL
 from services.http_client import get_client
-from services.logokit_service import logokit_service
 
 logger = logging.getLogger(__name__)
 
@@ -238,7 +237,7 @@ async def get_btc_karma_staking(
                     'token': 'BTC',
                     'amount': total_sats / SATS_PER_BTC,
                     'positions': len(active),
-                    'logo_url': logokit_service.get_crypto_logo_url('BTC', size=32),
+                    'logo_url': None,
                 }],
                 'reward_token': REWARD_TOKEN,
                 'rewards_url': STAKING_URL,

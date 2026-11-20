@@ -2232,7 +2232,7 @@ class DeFiService:
         Tries in order:
         1. Database cache (ticker, policy_id, case-insensitive)
         2. Logostream API (dedicated logo service)
-        3. NMKR fallback chain (Token Registry -> Blockfrost -> LogoKit)
+        3. NMKR fallback chain (Token Registry -> Blockfrost)
         """
         policy_id_for_symbol = None
         asset_id_for_symbol = None
@@ -2272,18 +2272,7 @@ class DeFiService:
         except Exception as e:
             logger.error(f"Error in DB logo lookup for {token_symbol}: {e}")
 
-        # Strategy 4: Try Logostream API (dedicated logo service)
-        try:
-            from services.logostream import logostream_service
-            if await logostream_service.is_configured():
-                logo_url = await logostream_service.get_token_logo(token_symbol, chain='cardano')
-                if logo_url:
-                    logger.info(f"[DeFi Logo] Got logo for {token_symbol} via Logostream")
-                    return logo_url
-        except Exception as e:
-            logger.debug(f"Logostream lookup failed for {token_symbol}: {e}")
-
-        # Strategy 5: Use NMKR fallback chain (Token Registry -> Blockfrost -> LogoKit)
+        # Strategy 5: Use NMKR fallback chain (Token Registry -> Blockfrost)
         if policy_id_for_symbol:
             try:
                 from services.nmkr_service import nmkr_service

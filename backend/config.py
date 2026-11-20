@@ -46,10 +46,7 @@ CHARLI3_API_KEY = os.getenv("CHARLI3_API_KEY", "")
 TAPTOOLS_API_KEY = os.getenv("TAPTOOLS_API_KEY", "")
 ANKR_API_KEY = os.getenv("ANKR_API_KEY", "")
 
-# LogoKit API Configuration
-LOGOKIT_API_KEY = os.getenv('LOGOKIT_API_KEY', '')
-LOGOKIT_BASE_URL = 'https://img.logokit.com'
-
+# LogoKit/Logostream keys are read via services.api_key_manager (DB first, env fallback); web-only hotlinks.
 # Coinbase CDP API Key (loaded from JSON file)
 # Security (Finding #1): CDP key files moved to EXCLUDE/credentials/ to keep
 # private keys outside the project tree proper. EXCLUDE/ is gitignored.

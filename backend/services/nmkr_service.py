@@ -257,12 +257,12 @@ class NMKRService:
         2. NMKR API (if configured)
         3. Cardano Token Registry (GitHub)
         4. Blockfrost on-chain metadata (if configured)
-        5. LogoKit (ticker-based)
+        5. (LogoKit removed: hotlink-only terms)
 
         Args:
             policy_id: Cardano policy ID (hex)
             token_name_hex: Token name in hexadecimal format
-            ticker: Optional ticker symbol for LogoKit fallback
+            ticker: Optional ticker symbol (unused)
             user_id: User ID for API key lookup
             use_cache: Whether to check/update cache (default: True)
 
@@ -336,13 +336,6 @@ class NMKRService:
                             logo_url = onchain_logo
             except Exception as e:
                 logger.debug(f"Blockfrost metadata check failed: {e}")
-
-        # Final fallback to LogoKit (if ticker provided)
-        if not logo_url and ticker:
-            from services.logokit_service import logokit_service
-            logokit_url = logokit_service.get_crypto_logo_url(ticker, size=64)
-            logger.debug(f"Falling back to LogoKit for {ticker}")
-            logo_url = logokit_url
 
         # Save to cache before returning (if we found a URL and caching is enabled)
         if logo_url and use_cache:

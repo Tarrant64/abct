@@ -31,7 +31,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from routers import portfolio, wallets, exchanges, defi, nfts, pnl as pnl_router
 from routers.portfolio import _known_price, _known_change
 from services.pricing import pricing_service
-from services.logokit_service import logokit_service
 from services.token_metadata_cache import metadata_cache
 from services.cardano import cardano_service
 from services.exchange_names import get_aggregation_exchange_names, get_exchange_display_name
@@ -198,7 +197,7 @@ def _as_float(value, default: float = 0.0) -> float:
 async def _resolve_token_info(symbol: str) -> tuple[str, str]:
     """Look up proper display name and image URL for a token symbol.
 
-    Fallback chain: metadata_cache → CoinGecko /coins/{id} → LogoKit.
+    Fallback chain: metadata_cache → CoinGecko /coins/{id} → None.
     Always returns full external URLs safe for both web and mobile clients.
     """
     from services.pricing import ASSET_TO_COINGECKO
@@ -234,7 +233,7 @@ async def _resolve_token_info(symbol: str) -> tuple[str, str]:
                 logger.debug(f"CoinGecko image fallback failed for {symbol}: {e}")
 
     if not image_url:
-        image_url = logokit_service.get_crypto_logo_url(symbol, size=64)
+        image_url = None
 
     return name, image_url
 
@@ -913,7 +912,7 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
     for bs in blockchain_summaries:
         sym = bs['symbol']
         meta = chain_metas.get(sym)
-        bs['image_url'] = (meta.get('image_url') if meta else None) or logokit_service.get_crypto_logo_url(sym, size=64)
+        bs['image_url'] = (meta.get('image_url') if meta else None) or None
 
     # Get component values
     exchanges_value = exchange_summary.get('total_usd', 0)
@@ -1257,7 +1256,7 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
         h['value_usd'] = round(h['value_usd'], 2)
         h['native_amount'] = round(h['native_amount'], 8)
         h['percentage'] = round((h['value_usd'] / total_value_usd * 100) if total_value_usd > 0 else 0, 1)
-    # Ensure every entry has an image_url via metadata_cache → logokit fallback
+    # Ensure every entry has an image_url via metadata_cache only
     # (one concurrent lookup per missing symbol; symbols are unique here)
     missing_image_syms = [h['symbol'] for h in top_holdings if not h.get('image_url')]
     if missing_image_syms:
@@ -1266,7 +1265,7 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
         for h in top_holdings:
             if not h.get('image_url'):
                 meta = fallback_metas.get(h['symbol'])
-                h['image_url'] = (meta.get('image_url') if meta else None) or logokit_service.get_crypto_logo_url(h['symbol'], size=64)
+                h['image_url'] = (meta.get('image_url') if meta else None) or None
     top_holdings.sort(key=lambda x: x['value_usd'], reverse=True)
 
     # Fetch 7-day sparkline data + CoinGecko images for top holdings (for watchOS)
@@ -1602,7 +1601,10 @@ async def get_mobile_wallet_detail(
                 "price_native": round(asset.get('price_native', 0), 8) if asset.get('price_native') else None,
                 "price_usd": round(asset.get('price_usd', 0), 6) if asset.get('price_usd') else None,
                 "value_usd": round(asset.get('total_value_usd', 0), 2),
-                "logo_url": logokit_service.get_crypto_logo_url(asset.get('ticker', 'UNKNOWN'), size=32)
+                "logo_url": asset.get('logo_url') or None,
+                "policy_id": asset.get('policy_id'),
+                "asset_name_hex": asset.get('asset_name_hex'),
+                "coingecko_id": asset.get('coingecko_id'),
             })
 
     return {
@@ -1713,7 +1715,7 @@ async def get_mobile_exchange_detail(
             "usd_value": round(asset.get('usd_value', 0), 2),
             "usd_price": round(asset.get('price', 0), 6),
             "change_24h": 0,  # Not available from exchanges
-            "logo_url": logokit_service.get_crypto_logo_url(asset.get('currency', 'UNKNOWN'), size=32)
+            "logo_url": None
         })
 
     return {
@@ -1987,7 +1989,7 @@ async def get_mobile_defi_staking(refresh: bool = Query(False), user_id: int = D
                     "rewards_usd": round(rewards_usd, 2),
                     "apy": 4.5,  # Approximate Cardano APY
                     "active": True,
-                    "logo_url": logokit_service.get_crypto_logo_url("ADA", size=32)
+                    "logo_url": None
                 })
                 _tag_position_wallets(
                     positions[-1], wallets_by_stake.get(stake_address, []), delegated_usd)

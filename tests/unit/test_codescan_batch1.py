@@ -13,7 +13,6 @@ if BACKEND_DIR not in sys.path:
 from services import image_cache  # noqa: E402
 from services.image_cache import ImageCacheService, is_safe_symbol  # noqa: E402
 from services.logging_service import LogEntry, LogLevel  # noqa: E402
-from services.logokit_service import LogoKitService  # noqa: E402
 
 
 # --- image symbol validation -------------------------------------------------
@@ -40,13 +39,6 @@ async def test_cache_serves_legit_and_rejects_traversal(tmp_path, monkeypatch):
     assert await svc.get_image_path("..") is None
     assert await svc.cache_image("../evil", "http://example.invalid/x.png") is False
     assert not (tmp_path / "evil.png").exists()
-
-
-def test_logokit_quotes_symbol():
-    svc = LogoKitService()
-    url = svc.get_crypto_logo_url("a/b?x=1#")
-    assert "/crypto/A%2FB%3FX%3D1%23?" in url
-    assert "/crypto/BTC?" in svc.get_crypto_logo_url("btc")
 
 
 # --- /next and /legacy page lookup -------------------------------------------

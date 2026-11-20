@@ -10,7 +10,6 @@ import logging
 from typing import Dict, Optional
 
 from services.http_client import get_client
-from services.logokit_service import logokit_service
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +104,7 @@ async def get_helium_staking(wallet_address: str) -> Optional[Dict]:
             'token': 'HNT',
             'amount': hnt_data['lifetime'],
             'positions': 0,  # We don't know hotspot count from oracle
-            'logo_url': logokit_service.get_crypto_logo_url('HNT', size=32),
+            'logo_url': None,
         })
 
     # MOBILE rewards (legacy, may still have balances)
@@ -115,7 +114,7 @@ async def get_helium_staking(wallet_address: str) -> Optional[Dict]:
             'token': 'MOBILE',
             'amount': mobile_data['lifetime'],
             'positions': 0,
-            'logo_url': logokit_service.get_crypto_logo_url('MOBILE', size=32),
+            'logo_url': None,
         })
 
     if not staked:
