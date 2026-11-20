@@ -2015,6 +2015,32 @@ async def update_wallet_label(address: str, label: str, blockchain: str = None):
         await db.commit()
 
 
+async def update_wallet_label_for_user(wallet_id: int, user_id: int, label: str) -> int:
+    """Set a wallet's label only if the wallet belongs to `user_id`.
+
+    Returns the number of rows updated: 0 means the wallet does not exist OR is
+    not this user's (callers answer 404 for both, so ids cannot be probed).
+    """
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute(
+            "UPDATE wallets SET label = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+            (label, datetime.now(), wallet_id, user_id),
+        )
+        await db.commit()
+        return cursor.rowcount
+
+
+async def update_wallet_label_by_address_for_user(address: str, user_id: int, label: str) -> int:
+    """Like update_wallet_label(), but scoped to one user's wallets."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute(
+            "UPDATE wallets SET label = ?, updated_at = ? WHERE address = ? AND user_id = ?",
+            (label, datetime.now(), address, user_id),
+        )
+        await db.commit()
+        return cursor.rowcount
+
+
 async def delete_wallet(wallet_id: int):
     """Delete a wallet and all its associated data."""
     async with aiosqlite.connect(DATABASE_PATH) as db:

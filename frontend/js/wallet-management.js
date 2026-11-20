@@ -1000,15 +1000,25 @@
         const id = document.getElementById('editWalletId').value;
         const label = document.getElementById('editWalletLabel').value.trim();
 
+        // Server rejects empty / >64 char labels with 422: validate first
+        if (!label) {
+            showStatus('Label cannot be empty', 'error');
+            return;
+        }
+        if (label.length > 64) {
+            showStatus('Label must be 64 characters or fewer', 'error');
+            return;
+        }
+
         try {
             const response = await authFetch(`/wallets/${id}/label`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ label: label || null })
+                body: JSON.stringify({ label })
             });
 
             if (!response.ok) {
-                throw new Error('Failed to update label');
+                throw new Error(response.status === 422 ? 'Invalid label' : 'Failed to update label');
             }
 
             closeEditModal();

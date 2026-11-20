@@ -4,6 +4,7 @@ from typing import Optional
 from datetime import datetime
 import asyncio
 import logging
+import re
 import sys
 import os
 
@@ -135,7 +136,29 @@ class WalletCreate(BaseModel):
     label: Optional[str] = None
 
 class WalletUpdate(BaseModel):
-    label: str
+    label: Optional[str] = None
+
+
+WALLET_LABEL_MAX_LEN = 64
+_LABEL_CONTROL_RE = re.compile(r'[\x00-\x1f\x7f-\x9f\u2028\u2029]')
+
+
+def validate_wallet_label(label) -> str:
+    """Return the stripped label or raise 422.
+
+    Rejects null / non-string / empty-after-strip, anything over 64 characters
+    and any control character (newlines, NUL, C1 controls, line separators).
+    """
+    if not isinstance(label, str):
+        raise HTTPException(status_code=422, detail="label must be a non-empty string")
+    cleaned = label.strip()
+    if not cleaned:
+        raise HTTPException(status_code=422, detail="label must not be empty")
+    if len(cleaned) > WALLET_LABEL_MAX_LEN:
+        raise HTTPException(status_code=422, detail=f"label must be at most {WALLET_LABEL_MAX_LEN} characters")
+    if _LABEL_CONTROL_RE.search(cleaned):
+        raise HTTPException(status_code=422, detail="label must not contain control characters")
+    return cleaned
 
 class WalletResponse(BaseModel):
     id: int
@@ -2604,15 +2627,23 @@ async def update_stake_group_label(stake_address: str, data: dict, user_id: int 
 @router.patch("/{address}")
 @invalidates_portfolio("wallet updated")
 async def update_wallet(address: str, update: WalletUpdate, user_id: int = Depends(verify_session)):
-    """Update wallet label."""
-    from database import update_wallet_label
+    """Update wallet label (the caller's own wallet only; same label rules as PUT /{id}/label)."""
+    from database import update_wallet_label_by_address_for_user
 
-    wallet = await get_wallet_by_address(address)
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        return {"message": "Demo mode: Not updated", "demo_mode": True}
+
+    label = validate_wallet_label(update.label)
+
+    # user_id passed explicitly: never rely on the request-context fallback,
+    # and never update a wallet row another user owns.
+    wallet = await get_wallet_by_address(address, user_id=user_id)
     if not wallet:
         raise HTTPException(status_code=404, detail="Wallet not found")
 
-    await update_wallet_label(address, update.label)
-    return {"message": "Wallet updated", "address": address, "label": update.label}
+    await update_wallet_label_by_address_for_user(address, user_id, label)
+    return {"message": "Wallet updated", "address": address, "label": label}
 
 
 def remove_from_wallets_file(address: str) -> bool:
@@ -2702,18 +2733,23 @@ async def delete_wallet(address: str, user_id: int = Depends(verify_session)):
 @router.put("/{wallet_id}/label")
 @invalidates_portfolio("wallet label")
 async def update_wallet_label(wallet_id: int, data: dict, user_id: int = Depends(verify_session)):
-    """Update the label for a wallet."""
-    import aiosqlite
-    from database import DATABASE_PATH
+    """Rename a wallet.
 
-    label = data.get('label')
+    Auth: verify_session (as every state-changing wallet route). The wallet
+    must belong to the caller (404 otherwise, whether missing or someone
+    else's); demo users are blocked; the label must be a 1-64 character
+    string without control characters (422).
+    """
+    from database import update_wallet_label_for_user
 
-    async with aiosqlite.connect(DATABASE_PATH) as db:
-        await db.execute(
-            "UPDATE wallets SET label = ? WHERE id = ?",
-            (label, wallet_id)
-        )
-        await db.commit()
+    username = await get_username_by_user_id(user_id)
+    if username and await is_demo_user(username):
+        return {"message": "Demo mode: Not updated", "demo_mode": True}
+
+    label = validate_wallet_label(data.get('label') if isinstance(data, dict) else None)
+
+    if not await update_wallet_label_for_user(wallet_id, user_id, label):
+        raise HTTPException(status_code=404, detail="Wallet not found")
 
     return {"message": "Label updated", "wallet_id": wallet_id, "label": label}
 
