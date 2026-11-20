@@ -31,6 +31,7 @@ from nft_image_database import (
     get_nft_image,
     get_nft_image_data,
     get_nft_thumbnail_data,
+    save_nft_derived_image,
     get_nft_mobile_data,
     get_pending_images,
     update_image_status,
@@ -45,6 +46,9 @@ logger = logging.getLogger(__name__)
 try:
     from PIL import Image
     PILLOW_AVAILABLE = True
+    # Decompression-bomb guard: Pillow warns above this and raises above 2x it.
+    # Our own pixel check (MAX_SOURCE_PIXELS) rejects before any decoding.
+    Image.MAX_IMAGE_PIXELS = 64_000_000
 except ImportError:
     PILLOW_AVAILABLE = False
     logger.warning("Pillow not installed - thumbnail generation disabled")
@@ -73,6 +77,13 @@ ERR_URL_REJECTED = "Image URL rejected"
 ERR_FETCH_FAILED = "Image could not be fetched"
 ERR_TOO_LARGE = "Image too large"
 ERR_BAD_FORMAT = "Unsupported image format"
+
+
+# On-demand derivative generation (thumbnail / mobile) limits
+ON_DEMAND_THUMB_SIZE = 480            # longest side, px
+MAX_SOURCE_PIXELS = 64_000_000        # refuse to decode anything bigger
+DERIVE_TIMEOUT_SECONDS = 15.0
+_DERIVE_CONCURRENCY = 2
 
 
 class BlockedURLError(Exception):
@@ -821,6 +832,83 @@ class NFTImageService:
         """Get cached thumbnail data."""
         await self.initialize()
         return await get_nft_thumbnail_data(asset_id, blockchain)
+
+    # ------------------------------------------------------------------
+    # On-demand derivatives (thumbnail / mobile) for rows missing them
+    # ------------------------------------------------------------------
+
+    def _resize_checked(self, image_data: bytes, image_format: str, size: int, out_format: str) -> Optional[bytes]:
+        """Resize ``image_data`` so its longest side is <= ``size`` px (blocking; run in a thread).
+
+        Returns None for SVG, a missing Pillow, an oversized/undecodable source.
+        """
+        if not PILLOW_AVAILABLE or image_format == 'svg' or not image_data:
+            return None
+        if len(image_data) > self.max_download_bytes:
+            return None
+        try:
+            img = Image.open(BytesIO(image_data))
+            if img.width * img.height > MAX_SOURCE_PIXELS:
+                logger.warning("Refusing to resize oversized image: %sx%s", img.width, img.height)
+                return None
+            if img.format == 'JPEG':
+                img.draft('RGB', (size * 2, size * 2))  # cheap DCT-domain downscale
+            if getattr(img, 'is_animated', False):
+                img.seek(0)
+            has_alpha = img.mode in ('RGBA', 'LA') or 'transparency' in img.info
+            img = img.convert('RGBA' if has_alpha else 'RGB')
+            img.thumbnail((size, size), Image.Resampling.LANCZOS)
+            output = BytesIO()
+            if out_format == 'WEBP':
+                img.save(output, format='WEBP', quality=80, method=4)
+            else:
+                if img.mode == 'RGBA':  # JPEG has no alpha: flatten on white
+                    bg = Image.new('RGB', img.size, (255, 255, 255))
+                    bg.paste(img, mask=img.getchannel('A'))
+                    img = bg
+                img.save(output, format='JPEG', quality=82, optimize=True)
+            return output.getvalue()
+        except Exception as e:  # DecompressionBombError, truncated files, ...
+            logger.warning("On-demand resize failed: %s", e)
+            return None
+
+    async def _derive(self, asset_id: str, blockchain: str, kind: str):
+        """Generate + store the ``kind`` derivative from the cached original. Returns bytes or None."""
+        await self.initialize()
+        image_data, image_format = await get_nft_image_data(asset_id, blockchain)
+        if not image_data:
+            return None
+        if kind == 'thumbnail':
+            size, out_format = ON_DEMAND_THUMB_SIZE, 'JPEG'
+        else:
+            size, out_format = self.mobile_size, 'WEBP'
+        if not hasattr(self, '_derive_sem'):
+            self._derive_sem = asyncio.Semaphore(_DERIVE_CONCURRENCY)
+        async with self._derive_sem:
+            try:
+                data = await asyncio.wait_for(
+                    asyncio.to_thread(self._resize_checked, image_data, image_format, size, out_format),
+                    timeout=DERIVE_TIMEOUT_SECONDS,
+                )
+            except asyncio.TimeoutError:
+                logger.warning("Timed out generating %s for %s", kind, asset_id[:24])
+                return None
+        if data:
+            try:
+                await save_nft_derived_image(asset_id, blockchain, kind, data,
+                                             'webp' if kind == 'mobile' else None)
+            except Exception as e:
+                logger.warning("Could not store generated %s: %s", kind, e)
+        return data
+
+    async def get_or_create_thumbnail(self, asset_id: str, blockchain: str) -> Optional[bytes]:
+        """Cached thumbnail JPEG, generating (once) from the original when missing."""
+        return await self._derive(asset_id, blockchain, 'thumbnail')
+
+    async def get_or_create_mobile(self, asset_id: str, blockchain: str) -> Tuple[Optional[bytes], Optional[str]]:
+        """Cached mobile WebP, generating (once) from the original when missing."""
+        data = await self._derive(asset_id, blockchain, 'mobile')
+        return (data, 'webp') if data else (None, None)
 
     async def get_mobile(self, asset_id: str, blockchain: str) -> Tuple[Optional[bytes], Optional[str]]:
         """Get cached mobile-optimized image data."""

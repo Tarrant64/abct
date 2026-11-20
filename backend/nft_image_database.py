@@ -244,6 +244,24 @@ async def get_nft_image_data(asset_id: str, blockchain: str) -> tuple:
         return None, None
 
 
+async def save_nft_derived_image(asset_id: str, blockchain: str, kind: str,
+                                 data: bytes, fmt: str = None) -> bool:
+    """Store an on-demand generated thumbnail ('thumbnail') or mobile ('mobile') image."""
+    if kind == 'thumbnail':
+        sql = "UPDATE nft_images SET thumbnail_data = ?, updated_at = ? WHERE asset_id = ? AND blockchain = ?"
+        params = (data, datetime.now(), asset_id, blockchain)
+    elif kind == 'mobile':
+        sql = ("UPDATE nft_images SET mobile_data = ?, mobile_format = ?, updated_at = ? "
+               "WHERE asset_id = ? AND blockchain = ?")
+        params = (data, fmt, datetime.now(), asset_id, blockchain)
+    else:
+        raise ValueError(f"unknown derived image kind: {kind}")
+    async with aiosqlite.connect(NFT_IMAGE_DB_PATH) as db:
+        cursor = await db.execute(sql, params)
+        await db.commit()
+        return cursor.rowcount > 0
+
+
 async def get_nft_thumbnail_data(asset_id: str, blockchain: str) -> tuple:
     """Get just the thumbnail data and format for serving."""
     async with aiosqlite.connect(NFT_IMAGE_DB_PATH) as db:

@@ -29,6 +29,7 @@ from services.alchemy_nft_utils import evm_fanout_wallets
 from services.pricing import pricing_service
 from services.nft_price_client import nft_price_client
 from services import nft_pricing
+from services import nft_names
 from services.demo_nft_service import demo_nft_service
 from database import get_all_wallets, get_username_by_user_id
 from middleware.auth import verify_admin
@@ -1710,14 +1711,44 @@ async def get_cached_image(blockchain: str, asset_id: str):
     )
 
 
+_IMAGE_CONTENT_TYPES = {
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'gif': 'image/gif',
+    'webp': 'image/webp',
+    'svg': 'image/svg+xml'
+}
+
+# Vector images cannot be raster-thumbnailed, but a small SVG is already tiny,
+# so it may be served as-is. Anything bigger is refused (never a multi-MB file).
+_MAX_SVG_PASSTHROUGH_BYTES = 512 * 1024
+
+
+async def _small_svg_or_error(asset_id: str, blockchain: str) -> Response:
+    """Fallback for images that cannot be resized: tiny SVG as-is, else 404/415."""
+    image_data, image_format = await nft_image_service.get_image(asset_id, blockchain)
+    if not image_data:
+        raise HTTPException(status_code=404, detail="Image not cached")
+    if image_format == 'svg' and len(image_data) <= _MAX_SVG_PASSTHROUGH_BYTES:
+        return Response(
+            content=image_data,
+            media_type='image/svg+xml',
+            headers={'Cache-Control': 'max-age=604800'}
+        )
+    raise HTTPException(status_code=415, detail="Preview not available for this image")
+
+
 @router.get("/images/{blockchain}/{asset_id}/thumbnail")
 async def get_cached_thumbnail(blockchain: str, asset_id: str):
     """
-    Get a cached NFT thumbnail (150x150 JPEG).
-    Falls back to full image if thumbnail not available.
+    Get a cached NFT thumbnail (JPEG).
+    Generated on demand (and stored) when missing. Never falls back to the
+    full-size original: unresizable images get 415 (tiny SVGs excepted).
     """
-    # Try thumbnail first
     thumbnail_data, image_format = await nft_image_service.get_thumbnail(asset_id, blockchain)
+
+    if not thumbnail_data:
+        thumbnail_data = await nft_image_service.get_or_create_thumbnail(asset_id, blockchain)
 
     if thumbnail_data:
         return Response(
@@ -1726,35 +1757,19 @@ async def get_cached_thumbnail(blockchain: str, asset_id: str):
             headers={'Cache-Control': 'max-age=604800'}
         )
 
-    # Fall back to full image
-    image_data, image_format = await nft_image_service.get_image(asset_id, blockchain)
-
-    if not image_data:
-        raise HTTPException(status_code=404, detail="Image not cached")
-
-    content_types = {
-        'jpeg': 'image/jpeg',
-        'png': 'image/png',
-        'gif': 'image/gif',
-        'webp': 'image/webp',
-        'svg': 'image/svg+xml'
-    }
-    content_type = content_types.get(image_format, 'application/octet-stream')
-
-    return Response(
-        content=image_data,
-        media_type=content_type,
-        headers={'Cache-Control': 'max-age=604800'}
-    )
+    return await _small_svg_or_error(asset_id, blockchain)
 
 
 @router.get("/images/{blockchain}/{asset_id}/mobile")
 async def get_cached_mobile_image(blockchain: str, asset_id: str):
     """
     Get a cached mobile-optimized NFT image (400x400 WebP).
-    Falls back to full image if mobile version not available.
+    Generated on demand (and stored) when missing; never returns the full-size original.
     """
     mobile_data, mobile_format = await nft_image_service.get_mobile(asset_id, blockchain)
+
+    if not mobile_data:
+        mobile_data, mobile_format = await nft_image_service.get_or_create_mobile(asset_id, blockchain)
 
     if mobile_data:
         content_type = 'image/webp' if mobile_format == 'webp' else f'image/{mobile_format}'
@@ -1764,26 +1779,7 @@ async def get_cached_mobile_image(blockchain: str, asset_id: str):
             headers={'Cache-Control': 'max-age=604800'}
         )
 
-    # Fall back to full image
-    image_data, image_format = await nft_image_service.get_image(asset_id, blockchain)
-
-    if not image_data:
-        raise HTTPException(status_code=404, detail="Image not cached")
-
-    content_types = {
-        'jpeg': 'image/jpeg',
-        'png': 'image/png',
-        'gif': 'image/gif',
-        'webp': 'image/webp',
-        'svg': 'image/svg+xml'
-    }
-    content_type = content_types.get(image_format, 'application/octet-stream')
-
-    return Response(
-        content=image_data,
-        media_type=content_type,
-        headers={'Cache-Control': 'max-age=604800'}
-    )
+    return await _small_svg_or_error(asset_id, blockchain)
 
 
 @router.get("/images/{blockchain}/{asset_id}/info")
@@ -2268,7 +2264,8 @@ async def get_nfts_with_images(
     """
     # Check cache first (30 second TTL for wall display)
     from database import get_cache, set_cache
-    cache_key = f"nft_wall_{blockchain or 'all'}_{group_by_collection}_{include_thumbnails or 'none'}"
+    # v2: names/collections are null (not "Unknown") - the suffix retires v1 entries immediately
+    cache_key = f"nft_wall_v2_{blockchain or 'all'}_{group_by_collection}_{include_thumbnails or 'none'}"
     cached_response = await get_cache(cache_key, user_id=user_id)
     if cached_response:
         return cached_response
@@ -2396,6 +2393,8 @@ async def get_nfts_with_images(
     async def _wall_cardano():
         nfts = await nft_service.get_all_nfts(user_id=user_id, force_refresh=False)
         total = len(nfts)
+        # Background, once-per-NFT lookup of on-chain names; never blocks this request
+        nft_service.schedule_name_backfill(nfts, user_id)
         result = []
         for nft in nfts:
             asset_id = nft.get('unit') or nft.get('asset_id')
@@ -2404,8 +2403,8 @@ async def get_nfts_with_images(
                 policy_id = asset_id[:56] if len(asset_id) >= 56 else asset_id
                 result.append({
                     'asset_id': asset_id, 'blockchain': 'cardano',
-                    'name': nft.get('name', 'Unknown'),
-                    'collection': nft.get('collection', {}).get('name', 'Unknown Collection'),
+                    'name': nft_names.resolve_cardano_name(nft),
+                    'collection': nft_names.clean_collection(nft),
                     'policy_id': policy_id, 'collection_id': policy_id,
                     'image_url': f"/nfts/images/cardano/{asset_id}",
                     'thumbnail_url': f"/nfts/images/cardano/{asset_id}/thumbnail",
@@ -2431,8 +2430,8 @@ async def get_nfts_with_images(
                 floor_eth = nft_pricing.price_floor_native(nft.get('collection', {}), 'floor_price_eth')
                 result.append({
                     'asset_id': asset_id, 'blockchain': 'ethereum',
-                    'name': nft.get('name', 'Unknown'),
-                    'collection': nft.get('collection', {}).get('name', 'Unknown Collection'),
+                    'name': nft_names.clean_name(nft.get('name')),
+                    'collection': nft_names.clean_collection(nft),
                     'collection_id': nft.get('contract_address'),
                     'image_url': f"/nfts/images/ethereum/{asset_id}",
                     'thumbnail_url': f"/nfts/images/ethereum/{asset_id}/thumbnail",
@@ -2455,8 +2454,8 @@ async def get_nfts_with_images(
                 floor_sol = nft_pricing.price_floor_native(nft.get('collection', {}), 'floor_price_sol')
                 result.append({
                     'asset_id': asset_id, 'blockchain': 'solana',
-                    'name': nft.get('name', 'Unknown'),
-                    'collection': nft.get('collection', {}).get('name', 'Unknown Collection'),
+                    'name': nft_names.clean_name(nft.get('name')),
+                    'collection': nft_names.clean_collection(nft),
                     'image_url': f"/nfts/images/solana/{asset_id}",
                     'thumbnail_url': f"/nfts/images/solana/{asset_id}/thumbnail",
                     'mobile_url': f"/nfts/images/solana/{asset_id}/mobile" if cached_images[key].get('has_mobile') else None,
@@ -2478,8 +2477,8 @@ async def get_nfts_with_images(
                 floor_matic = nft_pricing.price_floor_native(nft.get('collection', {}), 'floor_price_matic')
                 result.append({
                     'asset_id': asset_id, 'blockchain': 'polygon',
-                    'name': nft.get('name', 'Unknown'),
-                    'collection': nft.get('collection', {}).get('name', 'Unknown Collection'),
+                    'name': nft_names.clean_name(nft.get('name')),
+                    'collection': nft_names.clean_collection(nft),
                     'image_url': f"/nfts/images/polygon/{asset_id}",
                     'thumbnail_url': f"/nfts/images/polygon/{asset_id}/thumbnail",
                     'mobile_url': f"/nfts/images/polygon/{asset_id}/mobile" if cached_images[key].get('has_mobile') else None,
@@ -2501,8 +2500,8 @@ async def get_nfts_with_images(
                 floor_eth = nft_pricing.price_floor_native(nft.get('collection', {}), 'floor_price_eth')
                 result.append({
                     'asset_id': asset_id, 'blockchain': 'base',
-                    'name': nft.get('name', 'Unknown'),
-                    'collection': nft.get('collection', {}).get('name', 'Unknown Collection'),
+                    'name': nft_names.clean_name(nft.get('name')),
+                    'collection': nft_names.clean_collection(nft),
                     'image_url': f"/nfts/images/base/{asset_id}",
                     'thumbnail_url': f"/nfts/images/base/{asset_id}/thumbnail",
                     'mobile_url': f"/nfts/images/base/{asset_id}/mobile" if cached_images[key].get('has_mobile') else None,
@@ -2578,7 +2577,7 @@ async def get_nfts_with_images(
                 collection_key = f"{nft['blockchain']}:{contract_address}"
             else:  # solana
                 # Use collection name for solana (no consistent collection ID format)
-                collection_key = f"{nft['blockchain']}:{nft['collection']}"
+                collection_key = f"{nft['blockchain']}:{nft['collection'] or ''}"
 
             collections[collection_key].append(nft)
 

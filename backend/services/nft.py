@@ -26,6 +26,7 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from services import nft_names
 from config import BLOCKFROST_BASE_URL, TAPTOOLS_API_KEY
 from database import (
     get_all_wallets, get_wallet_assets, get_cache, set_cache, get_stale_cache,
@@ -82,6 +83,8 @@ class NFTService:
         self._rate_limited = False  # Track if we've hit TapTools rate limit
         self._rate_limit_reset: Optional[datetime] = None  # When rate limit resets
         self._image_backfill_task: Optional[asyncio.Task] = None
+        # asset_id -> on-chain metadata name seen while resolving the image URL
+        self._resolved_names: Dict[str, str] = {}
 
     def is_taptools_configured(self) -> bool:
         """Check if TapTools API key is configured."""
@@ -312,6 +315,12 @@ class NFTService:
 
             if response.status_code == 200:
                 data = response.json()
+                # Remember the on-chain name from the same response (no extra
+                # call); the backfill merges it into the NFT cache.
+                meta_name = (nft_names.name_from_metadata(data.get('onchain_metadata'))
+                             or nft_names.name_from_metadata(data.get('metadata')))
+                if meta_name:
+                    self._resolved_names[asset_id] = meta_name
                 # Try onchain_metadata first (CIP-25 standard)
                 onchain = data.get('onchain_metadata')
                 if onchain:
@@ -854,6 +863,22 @@ class NFTService:
             self._schedule_image_backfill(user_id, missing)
         return nfts
 
+    def schedule_name_backfill(self, nfts: List[dict], user_id: Optional[int]) -> bool:
+        """Resolve on-chain names in the background for NFTs that have none yet.
+
+        Never blocks the caller. Each NFT is looked up at most once (it is
+        marked ``name_checked`` in the user's cache afterwards), so a wall
+        request cannot trigger repeated network calls.
+        """
+        if user_id is None:
+            return False
+        missing = [n['asset_id'] for n in nfts
+                   if isinstance(n, dict) and n.get('asset_id')
+                   and not n.get('name') and not n.get('name_checked')]
+        if not missing:
+            return False
+        return self._schedule_image_backfill(user_id, missing)
+
     def _schedule_image_backfill(self, user_id: int, asset_ids: List[str]) -> bool:
         """Start one background resolution task (no-op if one is already running)."""
         if self._image_backfill_task is not None and not self._image_backfill_task.done():
@@ -888,14 +913,16 @@ class NFTService:
             batch = asset_ids[i:i + IMAGE_BACKFILL_BATCH]
             results: Dict[str, Optional[str]] = {}
             await asyncio.gather(*(one(a, results) for a in batch))
-            await self._merge_image_results(user_id, results)
+            names = {a: self._resolved_names.pop(a) for a in batch if a in self._resolved_names}
+            await self._merge_image_results(user_id, results, names)
             all_results.update(results)
 
         found = sum(1 for v in all_results.values() if v)
         logger.info(f"Resolved {found}/{len(asset_ids)} Cardano NFT image URLs")
         return all_results
 
-    async def _merge_image_results(self, user_id: int, results: Dict[str, Optional[str]]) -> None:
+    async def _merge_image_results(self, user_id: int, results: Dict[str, Optional[str]],
+                                   names: Optional[Dict[str, str]] = None) -> None:
         """Merge resolved image URLs into the user's NFT cache, keeping its expiry.
 
         Re-reads the cache at save time and only touches image fields, so a full
@@ -911,6 +938,9 @@ class NFTService:
                     if results[aid]:
                         nft['image'] = results[aid]
                     nft['image_checked'] = True
+                    nft['name_checked'] = True
+                if names and aid in names:
+                    nft['name'] = names[aid]
             ttl = NFT_CACHE_TTL
             if expires_at:
                 try:

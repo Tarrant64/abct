@@ -1258,11 +1258,11 @@
                 <div class="nft-card" data-asset-id="${nft.asset_id}" data-blockchain="${nft.blockchain}">
                     <div class="image-container">
                         <span class="chain-badge ${nft.blockchain}">${nft.blockchain}</span>
-                        <img class="nft-image" src="${imgSrc}" alt="${escapeHtml(nft.name)}">
+                        <img class="nft-image" src="${imgSrc}" alt="${escapeHtml(displayName(nft))}">
                     </div>
                     <div class="nft-info">
-                        <div class="nft-name">${escapeHtml(nft.name)}</div>
-                        <div class="nft-collection">${escapeHtml(nft.collection)}</div>
+                        <div class="nft-name">${escapeHtml(displayName(nft))}</div>
+                        <div class="nft-collection">${escapeHtml(nft.collection || '')}</div>
                         <div class="nft-price">
                             <span class="native nft-value">${nft.floor_price ? nft.floor_price.toFixed(2) + ' ' + nft.native_symbol : '-'}</span>
                             <span class="usd nft-value">${formatUSD(nft.floor_price_usd)}</span>
@@ -1281,10 +1281,10 @@
                     <div class="image-container">
                         ${group.count > 1 ? `<span class="collection-count-badge">${group.count} NFTs</span>` : ''}
                         <span class="chain-badge ${rep.blockchain}">${rep.blockchain}</span>
-                        <img class="nft-image" src="${imgSrc}" alt="${escapeHtml(rep.name)}">
+                        <img class="nft-image" src="${imgSrc}" alt="${escapeHtml(displayName(rep))}">
                     </div>
                     <div class="nft-info">
-                        <div class="nft-name">${escapeHtml(group.collection_name)}</div>
+                        <div class="nft-name">${escapeHtml(group.collection_name || 'Unnamed collection')}</div>
                         <div class="nft-collection">${group.count} NFT${group.count > 1 ? 's' : ''}</div>
                         <div class="nft-price">
                             <span class="native nft-value">Collection</span>
@@ -1359,6 +1359,23 @@
         }
 
         // Escape HTML to prevent XSS
+        // NFTs may arrive with name/collection = null: fall back to the asset name
+        // decoded from the asset id (Cardano: policy 56 hex + name hex), else a label.
+        function displayName(nft) {
+            if (nft && nft.name) return nft.name;
+            try {
+                const id = (nft && nft.asset_id) || '';
+                if (nft && nft.blockchain === 'cardano' && /^[0-9a-fA-F]+$/.test(id) && id.length > 56 && id.length % 2 === 0) {
+                    let hex = id.slice(56);
+                    if (/^000[0-9a-f]{4}0/i.test(hex)) hex = hex.slice(8);
+                    const bytes = hex.match(/../g).map(h => parseInt(h, 16));
+                    const txt = new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(bytes)).trim();
+                    if (txt && !/[\u0000-\u001f\u007f-\u009f]/.test(txt)) return txt;
+                }
+            } catch (e) { /* not text */ }
+            return 'Untitled NFT';
+        }
+
         function escapeHtml(str) {
             if (!str) return '';
             return str.replace(/&/g, '&amp;')

@@ -199,6 +199,10 @@ See [SECURITY.md](SECURITY.md) for full details.
 
 ## What's New
 
+### Unreleased — NFT Names & Thumbnails (Nov 2026)
+- The NFT wall no longer shows "Unknown" for Cardano NFTs: names come from on-chain metadata (resolved in the background, once per NFT), else the decoded asset name; the API returns `null` (not "Unknown") when there is no name, and the wall shows "Untitled NFT"
+- Thumbnail and mobile image routes generate a small image on demand instead of sending the multi-MB original (415 if an image cannot be resized)
+
 ### v1.17.6 — Dashboard Freshness (Nov 2026)
 - Editing a stock, custom token or wallet now shows on the main dashboard immediately (server caches are invalidated on every write), with no full SYNC needed
 - Per-item refresh: refresh a single stock holding (Stocks table or main holdings table), custom token or wallet without re-syncing everything (`POST /stocks/{id}/refresh`, `POST /custom-tokens/{id}/refresh`, `POST /wallets/{address}/refresh`)
