@@ -199,6 +199,14 @@ See [SECURITY.md](SECURITY.md) for full details.
 
 ## What's New
 
+### Unreleased — Mobile/API Server Fixes (Nov 2026)
+- Unknown prices and 24h changes come back as `null` instead of a fake 0 (web and Flutter show a dash)
+- Staking positions say which wallet they belong to; every exchange (not just 7) is included in holdings and asset breakdowns, and an exchange with an expired cache is shown as stale instead of vanishing
+- Holdings use real token names; NFT detail returns `null` instead of "Unknown"
+- P&L summary has `computed_at` and a list of held assets with no cost basis; mobile P&L routes support ETag/304; a 409 on recompute names the running job
+- New `GET /api/mobile/analytics/fees` and `/analytics/staking-income` aggregates (fees at current price, flagged approximate; staking income only from stored data)
+- Wallet rename is validated (1-64 chars, no control characters), limited to your own wallets, and blocked in demo mode
+
 ### Unreleased — NFT Names & Thumbnails (Nov 2026)
 - The NFT wall no longer shows "Unknown" for Cardano NFTs: names come from on-chain metadata (resolved in the background, once per NFT), else the decoded asset name; the API returns `null` (not "Unknown") when there is no name, and the wall shows "Untitled NFT"
 - Thumbnail and mobile image routes generate a small image on demand instead of sending the multi-MB original (415 if an image cannot be resized)
