@@ -29,7 +29,7 @@ API_HEALTH_TESTS = {
     "coingecko":     ("header", "https://pro-api.coingecko.com/api/v3/ping", "x-cg-pro-api-key"),
     "charli3":       ("header", "https://api.charli3.io/api/v1/tokens?page=1&pageSize=1", "x-api-key"),
     "maestro":       ("header", "https://mainnet.gomaestro-api.org/v1/ecosystem", "api-key"),
-    "logostream":    ("header", "https://api.logostream.dev/v1/logo/crypto/BTC", "X-API-Key"),
+    "logostream":    ("query", "https://api.logostream.dev/cryptos/BTC?key={key}"),
     "alphavantage":  ("query", "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=AAPL&apikey={key}"),
 
     # Query-param: ("query", url_with_{key}_placeholder)

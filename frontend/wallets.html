@@ -2118,7 +2118,7 @@ base:0x789..." oninput="previewImport()"></textarea>
         function getChainLogo(chainId) {
             if (CHAIN_LOGO_OVERRIDES[chainId]) return CHAIN_LOGO_OVERRIDES[chainId];
             const sym = CHAIN_SYMBOLS[chainId] || chainId.toUpperCase();
-            return `https://img.logokit.com/crypto/${sym}?size=32`;
+            return getLogoKitUrl(sym, 32);
         }
 
         // Add Wallet Modal
@@ -3077,6 +3077,8 @@ base:0x789..." oninput="previewImport()"></textarea>
 
         // Waffle menu toggle
     </script>
+
+    <script src="/static/js/logos.js?v=1795202569"></script>
 
     <script src="/static/js/app.js?v=1795202569"></script>
 

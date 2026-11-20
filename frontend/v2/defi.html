@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="/next/static/css/v2.css">
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <script src="/static/js/session-auth.js?v=1795202569"></script>
+    <script src="/static/js/logos.js?v=1795202569"></script>
     <style>
         /* ============================================================
            DEFI PAGE — RICH STAKING & PROTOCOL CARDS
@@ -267,7 +268,7 @@
                 <div class="v2-table-wrapper v2-fade-in" id="defiTableView" style="display:none;"></div>
             </div>
 
-            <footer class="v2-footer">ABCT V2 | DeFi & Staking</footer>
+            <footer class="v2-footer">ABCT V2 | DeFi & Staking <span class="logo-credit">| Logos by <a href="https://logokit.com" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">LogoKit</a> &middot; <a href="https://logostream.dev" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">Logostream</a></span></footer>
         </main>
     </div>
 
@@ -417,9 +418,7 @@
         /* ============================================================
            HELPERS
            ============================================================ */
-        function getLogoKitUrl(symbol, size) {
-            return 'https://img.logokit.com/crypto/' + encodeURIComponent((symbol || '').toUpperCase()) + '?size=' + (size || 32);
-        }
+        // getLogoKitUrl(symbol, size) comes from /static/js/logos.js (majors-only, hotlinked, placeholder fallback)
 
         function getChainBadge(chain) {
             var c = (chain || 'cardano').toLowerCase();

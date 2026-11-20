@@ -115,7 +115,7 @@ class DemoWalletService:
                     "decimals": 0,
                     "price_usd": 0.045,
                     "value_usd": 15000 * 0.045,
-                    "logo": "https://logostream.dev/api/logo?symbol=MIN"
+                    "logo": ""
                 },
                 {
                     "name": "SNEK",
@@ -124,7 +124,7 @@ class DemoWalletService:
                     "decimals": 0,
                     "price_usd": 0.0012,
                     "value_usd": 25000000 * 0.0012,
-                    "logo": "https://logostream.dev/api/logo?symbol=SNEK"
+                    "logo": ""
                 },
                 {
                     "name": "WMT",
@@ -133,7 +133,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 0.15,
                     "value_usd": 8000 * 0.15,
-                    "logo": "https://logostream.dev/api/logo?symbol=WMT"
+                    "logo": ""
                 },
                 {
                     "name": "HOSKY",
@@ -142,7 +142,7 @@ class DemoWalletService:
                     "decimals": 0,
                     "price_usd": 0.00001,
                     "value_usd": 50000000 * 0.00001,
-                    "logo": "https://logostream.dev/api/logo?symbol=HOSKY"
+                    "logo": ""
                 },
                 {
                     "name": "BOOK",
@@ -151,7 +151,7 @@ class DemoWalletService:
                     "decimals": 0,
                     "price_usd": 0.25,
                     "value_usd": 2500 * 0.25,
-                    "logo": "https://logostream.dev/api/logo?symbol=BOOK"
+                    "logo": ""
                 },
                 {
                     "name": "COPI",
@@ -160,7 +160,7 @@ class DemoWalletService:
                     "decimals": 0,
                     "price_usd": 0.12,
                     "value_usd": 12000 * 0.12,
-                    "logo": "https://logostream.dev/api/logo?symbol=COPI"
+                    "logo": ""
                 },
                 {
                     "name": "INDY",
@@ -169,7 +169,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 0.85,
                     "value_usd": 500 * 0.85,
-                    "logo": "https://logostream.dev/api/logo?symbol=INDY"
+                    "logo": ""
                 },
                 {
                     "name": "SUNDAE",
@@ -178,7 +178,7 @@ class DemoWalletService:
                     "decimals": 0,
                     "price_usd": 0.025,
                     "value_usd": 35000 * 0.025,
-                    "logo": "https://logostream.dev/api/logo?symbol=SUNDAE"
+                    "logo": ""
                 },
                 {
                     "name": "AGIX",
@@ -187,7 +187,7 @@ class DemoWalletService:
                     "decimals": 8,
                     "price_usd": 0.45,
                     "value_usd": 3000 * 0.45,
-                    "logo": "https://logostream.dev/api/logo?symbol=AGIX"
+                    "logo": ""
                 },
                 {
                     "name": "NMKR",
@@ -196,7 +196,7 @@ class DemoWalletService:
                     "decimals": 0,
                     "price_usd": 0.32,
                     "value_usd": 5000 * 0.32,
-                    "logo": "https://logostream.dev/api/logo?symbol=NMKR"
+                    "logo": ""
                 },
                 {
                     "name": "CHARLI3",
@@ -205,7 +205,7 @@ class DemoWalletService:
                     "decimals": 0,
                     "price_usd": 0.18,
                     "value_usd": 8500 * 0.18,
-                    "logo": "https://logostream.dev/api/logo?symbol=C3"
+                    "logo": ""
                 },
                 {
                     "name": "LQ",
@@ -214,7 +214,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 0.08,
                     "value_usd": 15000 * 0.08,
-                    "logo": "https://logostream.dev/api/logo?symbol=LQ"
+                    "logo": ""
                 },
                 {
                     "name": "DJED",
@@ -223,7 +223,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 1.0,
                     "value_usd": 2000 * 1.0,
-                    "logo": "https://logostream.dev/api/logo?symbol=DJED"
+                    "logo": ""
                 },
                 {
                     "name": "IUSD",
@@ -232,7 +232,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 1.0,
                     "value_usd": 3500 * 1.0,
-                    "logo": "https://logostream.dev/api/logo?symbol=IUSD"
+                    "logo": ""
                 },
                 {
                     "name": "VYFI",
@@ -241,7 +241,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 2.5,
                     "value_usd": 750 * 2.5,
-                    "logo": "https://logostream.dev/api/logo?symbol=VYFI"
+                    "logo": ""
                 },
                 {
                     "name": "OPTIM",
@@ -250,7 +250,7 @@ class DemoWalletService:
                     "decimals": 0,
                     "price_usd": 0.05,
                     "value_usd": 20000 * 0.05,
-                    "logo": "https://logostream.dev/api/logo?symbol=OPTIM"
+                    "logo": ""
                 },
                 {
                     "name": "CLAP",
@@ -259,7 +259,7 @@ class DemoWalletService:
                     "decimals": 0,
                     "price_usd": 0.015,
                     "value_usd": 45000 * 0.015,
-                    "logo": "https://logostream.dev/api/logo?symbol=CLAP"
+                    "logo": ""
                 },
                 {
                     "name": "MILK",
@@ -268,7 +268,7 @@ class DemoWalletService:
                     "decimals": 0,
                     "price_usd": 0.022,
                     "value_usd": 18000 * 0.022,
-                    "logo": "https://logostream.dev/api/logo?symbol=MILK"
+                    "logo": ""
                 },
                 {
                     "name": "SOCIETY",
@@ -277,7 +277,7 @@ class DemoWalletService:
                     "decimals": 0,
                     "price_usd": 5.5,
                     "value_usd": 500 * 5.5,
-                    "logo": "https://logostream.dev/api/logo?symbol=SOCIETY"
+                    "logo": ""
                 },
                 {
                     "name": "CLAY",
@@ -286,7 +286,7 @@ class DemoWalletService:
                     "decimals": 0,
                     "price_usd": 3.2,
                     "value_usd": 1200 * 3.2,
-                    "logo": "https://logostream.dev/api/logo?symbol=CLAY"
+                    "logo": ""
                 },
                 {
                     "name": "MYTH",
@@ -295,7 +295,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 0.35,
                     "value_usd": 10000 * 0.35,
-                    "logo": "https://logostream.dev/api/logo?symbol=MYTH"
+                    "logo": ""
                 },
                 {
                     "name": "REVUTO",
@@ -304,7 +304,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 0.018,
                     "value_usd": 25000 * 0.018,
-                    "logo": "https://logostream.dev/api/logo?symbol=REVU"
+                    "logo": ""
                 },
                 {
                     "name": "HUNT",
@@ -313,7 +313,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 0.28,
                     "value_usd": 5000 * 0.28,
-                    "logo": "https://logostream.dev/api/logo?symbol=HUNT"
+                    "logo": ""
                 },
                 {
                     "name": "MELD",
@@ -322,7 +322,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 0.012,
                     "value_usd": 30000 * 0.012,
-                    "logo": "https://logostream.dev/api/logo?symbol=MELD"
+                    "logo": ""
                 },
                 {
                     "name": "AADA",
@@ -331,7 +331,7 @@ class DemoWalletService:
                     "decimals": 0,
                     "price_usd": 0.055,
                     "value_usd": 8000 * 0.055,
-                    "logo": "https://logostream.dev/api/logo?symbol=AADA"
+                    "logo": ""
                 }
             ],
             "ethereum": [
@@ -343,7 +343,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 1.0,
                     "value_usd": 5000,
-                    "logo": "https://logostream.dev/api/logo?symbol=USDC"
+                    "logo": ""
                 },
                 {
                     "name": "Tether USD",
@@ -352,7 +352,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 1.0,
                     "value_usd": 8000,
-                    "logo": "https://logostream.dev/api/logo?symbol=USDT"
+                    "logo": ""
                 },
                 {
                     "name": "Dai Stablecoin",
@@ -361,7 +361,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 1.0,
                     "value_usd": 3500,
-                    "logo": "https://logostream.dev/api/logo?symbol=DAI"
+                    "logo": ""
                 },
                 {
                     "name": "Chainlink",
@@ -370,7 +370,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 18.0,
                     "value_usd": 250 * 18.0,
-                    "logo": "https://logostream.dev/api/logo?symbol=LINK"
+                    "logo": ""
                 },
                 {
                     "name": "Uniswap",
@@ -379,7 +379,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 8.0,
                     "value_usd": 500 * 8.0,
-                    "logo": "https://logostream.dev/api/logo?symbol=UNI"
+                    "logo": ""
                 },
                 {
                     "name": "Aave",
@@ -388,7 +388,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 120.0,
                     "value_usd": 35 * 120.0,
-                    "logo": "https://logostream.dev/api/logo?symbol=AAVE"
+                    "logo": ""
                 },
                 {
                     "name": "Maker",
@@ -397,7 +397,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 2000.0,
                     "value_usd": 2.5 * 2000.0,
-                    "logo": "https://logostream.dev/api/logo?symbol=MKR"
+                    "logo": ""
                 },
                 {
                     "name": "Compound",
@@ -406,7 +406,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 85.0,
                     "value_usd": 50 * 85.0,
-                    "logo": "https://logostream.dev/api/logo?symbol=COMP"
+                    "logo": ""
                 },
                 {
                     "name": "SushiSwap",
@@ -415,7 +415,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 1.2,
                     "value_usd": 800 * 1.2,
-                    "logo": "https://logostream.dev/api/logo?symbol=SUSHI"
+                    "logo": ""
                 },
                 {
                     "name": "Curve DAO Token",
@@ -424,7 +424,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 0.8,
                     "value_usd": 3000 * 0.8,
-                    "logo": "https://logostream.dev/api/logo?symbol=CRV"
+                    "logo": ""
                 },
                 {
                     "name": "1inch",
@@ -433,7 +433,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 0.45,
                     "value_usd": 1500 * 0.45,
-                    "logo": "https://logostream.dev/api/logo?symbol=1INCH"
+                    "logo": ""
                 },
                 {
                     "name": "Polygon",
@@ -442,7 +442,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 0.90,
                     "value_usd": 5000 * 0.90,
-                    "logo": "https://logostream.dev/api/logo?symbol=MATIC"
+                    "logo": ""
                 },
                 {
                     "name": "The Graph",
@@ -451,7 +451,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 0.25,
                     "value_usd": 10000 * 0.25,
-                    "logo": "https://logostream.dev/api/logo?symbol=GRT"
+                    "logo": ""
                 },
                 {
                     "name": "Synthetix",
@@ -460,7 +460,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 3.5,
                     "value_usd": 400 * 3.5,
-                    "logo": "https://logostream.dev/api/logo?symbol=SNX"
+                    "logo": ""
                 },
                 {
                     "name": "Yearn Finance",
@@ -469,7 +469,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 8000.0,
                     "value_usd": 0.5 * 8000.0,
-                    "logo": "https://logostream.dev/api/logo?symbol=YFI"
+                    "logo": ""
                 },
                 {
                     "name": "Balancer",
@@ -478,7 +478,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 4.2,
                     "value_usd": 600 * 4.2,
-                    "logo": "https://logostream.dev/api/logo?symbol=BAL"
+                    "logo": ""
                 },
                 {
                     "name": "Wrapped Bitcoin",
@@ -487,7 +487,7 @@ class DemoWalletService:
                     "decimals": 8,
                     "price_usd": 98000.0,
                     "value_usd": 0.1 * 98000.0,
-                    "logo": "https://logostream.dev/api/logo?symbol=WBTC"
+                    "logo": ""
                 },
                 {
                     "name": "Lido Staked Ether",
@@ -496,7 +496,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 3500.0,
                     "value_usd": 1.5 * 3500.0,
-                    "logo": "https://logostream.dev/api/logo?symbol=STETH"
+                    "logo": ""
                 },
                 {
                     "name": "Rocket Pool ETH",
@@ -505,7 +505,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 3800.0,
                     "value_usd": 0.8 * 3800.0,
-                    "logo": "https://logostream.dev/api/logo?symbol=RETH"
+                    "logo": ""
                 }
             ],
             "solana": [
@@ -517,7 +517,7 @@ class DemoWalletService:
                     "decimals": 5,
                     "price_usd": 0.00001,
                     "value_usd": 50000000 * 0.00001,
-                    "logo": "https://logostream.dev/api/logo?symbol=BONK"
+                    "logo": ""
                 },
                 {
                     "name": "dogwifhat",
@@ -526,7 +526,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 2.5,
                     "value_usd": 500 * 2.5,
-                    "logo": "https://logostream.dev/api/logo?symbol=WIF"
+                    "logo": ""
                 },
                 {
                     "name": "Pyth Network",
@@ -535,7 +535,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 0.45,
                     "value_usd": 5000 * 0.45,
-                    "logo": "https://logostream.dev/api/logo?symbol=PYTH"
+                    "logo": ""
                 },
                 {
                     "name": "Jupiter",
@@ -544,7 +544,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 1.2,
                     "value_usd": 3000 * 1.2,
-                    "logo": "https://logostream.dev/api/logo?symbol=JUP"
+                    "logo": ""
                 },
                 {
                     "name": "Raydium",
@@ -553,7 +553,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 3.5,
                     "value_usd": 1500 * 3.5,
-                    "logo": "https://logostream.dev/api/logo?symbol=RAY"
+                    "logo": ""
                 },
                 {
                     "name": "Orca",
@@ -562,7 +562,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 4.2,
                     "value_usd": 800 * 4.2,
-                    "logo": "https://logostream.dev/api/logo?symbol=ORCA"
+                    "logo": ""
                 },
                 {
                     "name": "Serum",
@@ -571,7 +571,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 0.8,
                     "value_usd": 2000 * 0.8,
-                    "logo": "https://logostream.dev/api/logo?symbol=SRM"
+                    "logo": ""
                 },
                 {
                     "name": "Bonfida",
@@ -580,7 +580,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 0.35,
                     "value_usd": 5000 * 0.35,
-                    "logo": "https://logostream.dev/api/logo?symbol=FIDA"
+                    "logo": ""
                 },
                 {
                     "name": "Mango Markets",
@@ -589,7 +589,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 0.05,
                     "value_usd": 20000 * 0.05,
-                    "logo": "https://logostream.dev/api/logo?symbol=MNGO"
+                    "logo": ""
                 },
                 {
                     "name": "Marinade Staked SOL",
@@ -598,7 +598,7 @@ class DemoWalletService:
                     "decimals": 9,
                     "price_usd": 200.0,
                     "value_usd": 50 * 200.0,
-                    "logo": "https://logostream.dev/api/logo?symbol=MSOL"
+                    "logo": ""
                 },
                 {
                     "name": "USD Coin",
@@ -607,7 +607,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 1.0,
                     "value_usd": 10000,
-                    "logo": "https://logostream.dev/api/logo?symbol=USDC"
+                    "logo": ""
                 },
                 {
                     "name": "Render Token",
@@ -616,7 +616,7 @@ class DemoWalletService:
                     "decimals": 8,
                     "price_usd": 9.5,
                     "value_usd": 400 * 9.5,
-                    "logo": "https://logostream.dev/api/logo?symbol=RNDR"
+                    "logo": ""
                 },
                 {
                     "name": "Helium",
@@ -625,7 +625,7 @@ class DemoWalletService:
                     "decimals": 8,
                     "price_usd": 8.2,
                     "value_usd": 150 * 8.2,
-                    "logo": "https://logostream.dev/api/logo?symbol=HNT"
+                    "logo": ""
                 },
                 {
                     "name": "Star Atlas",
@@ -634,7 +634,7 @@ class DemoWalletService:
                     "decimals": 8,
                     "price_usd": 0.004,
                     "value_usd": 100000 * 0.004,
-                    "logo": "https://logostream.dev/api/logo?symbol=ATLAS"
+                    "logo": ""
                 },
                 {
                     "name": "Oxygen",
@@ -643,7 +643,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 0.015,
                     "value_usd": 8000 * 0.015,
-                    "logo": "https://logostream.dev/api/logo?symbol=OXY"
+                    "logo": ""
                 },
                 {
                     "name": "Jito Staked SOL",
@@ -652,7 +652,7 @@ class DemoWalletService:
                     "decimals": 9,
                     "price_usd": 205.0,
                     "value_usd": 30 * 205.0,
-                    "logo": "https://logostream.dev/api/logo?symbol=JITOSOL"
+                    "logo": ""
                 }
             ],
             "polygon": [
@@ -664,7 +664,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 1.0,
                     "value_usd": 8000,
-                    "logo": "https://logostream.dev/api/logo?symbol=USDC"
+                    "logo": ""
                 },
                 {
                     "name": "Tether USD",
@@ -673,7 +673,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 1.0,
                     "value_usd": 5000,
-                    "logo": "https://logostream.dev/api/logo?symbol=USDT"
+                    "logo": ""
                 },
                 {
                     "name": "QuickSwap",
@@ -682,7 +682,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 0.08,
                     "value_usd": 5000 * 0.08,
-                    "logo": "https://logostream.dev/api/logo?symbol=QUICK"
+                    "logo": ""
                 },
                 {
                     "name": "Aavegotchi",
@@ -691,7 +691,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 1.5,
                     "value_usd": 2000 * 1.5,
-                    "logo": "https://logostream.dev/api/logo?symbol=GHST"
+                    "logo": ""
                 },
                 {
                     "name": "Stader MaticX",
@@ -700,7 +700,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 1.1,
                     "value_usd": 3000 * 1.1,
-                    "logo": "https://logostream.dev/api/logo?symbol=MATICX"
+                    "logo": ""
                 },
                 {
                     "name": "Dragon Quick",
@@ -709,7 +709,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 0.15,
                     "value_usd": 800 * 0.15,
-                    "logo": "https://logostream.dev/api/logo?symbol=DQUICK"
+                    "logo": ""
                 },
                 {
                     "name": "Wrapped Ethereum",
@@ -718,7 +718,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 3500.0,
                     "value_usd": 1.2 * 3500.0,
-                    "logo": "https://logostream.dev/api/logo?symbol=WETH"
+                    "logo": ""
                 },
                 {
                     "name": "Wrapped Bitcoin",
@@ -727,7 +727,7 @@ class DemoWalletService:
                     "decimals": 8,
                     "price_usd": 98000.0,
                     "value_usd": 0.05 * 98000.0,
-                    "logo": "https://logostream.dev/api/logo?symbol=WBTC"
+                    "logo": ""
                 },
                 {
                     "name": "Balancer",
@@ -736,7 +736,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 4.2,
                     "value_usd": 400 * 4.2,
-                    "logo": "https://logostream.dev/api/logo?symbol=BAL"
+                    "logo": ""
                 },
                 {
                     "name": "Curve DAO Token",
@@ -745,7 +745,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 0.8,
                     "value_usd": 2000 * 0.8,
-                    "logo": "https://logostream.dev/api/logo?symbol=CRV"
+                    "logo": ""
                 },
                 {
                     "name": "SushiSwap",
@@ -754,7 +754,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 1.2,
                     "value_usd": 1000 * 1.2,
-                    "logo": "https://logostream.dev/api/logo?symbol=SUSHI"
+                    "logo": ""
                 }
             ],
             "base": [
@@ -766,7 +766,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 1.0,
                     "value_usd": 12000,
-                    "logo": "https://logostream.dev/api/logo?symbol=USDC"
+                    "logo": ""
                 },
                 {
                     "name": "Dai Stablecoin",
@@ -775,7 +775,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 1.0,
                     "value_usd": 5000,
-                    "logo": "https://logostream.dev/api/logo?symbol=DAI"
+                    "logo": ""
                 },
                 {
                     "name": "Coinbase Wrapped Staked ETH",
@@ -784,7 +784,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 3800.0,
                     "value_usd": 0.5 * 3800.0,
-                    "logo": "https://logostream.dev/api/logo?symbol=CBETH"
+                    "logo": ""
                 },
                 {
                     "name": "Wrapped Bitcoin",
@@ -793,7 +793,7 @@ class DemoWalletService:
                     "decimals": 8,
                     "price_usd": 98000.0,
                     "value_usd": 0.02 * 98000.0,
-                    "logo": "https://logostream.dev/api/logo?symbol=WBTC"
+                    "logo": ""
                 },
                 {
                     "name": "Uniswap",
@@ -802,7 +802,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 8.0,
                     "value_usd": 300 * 8.0,
-                    "logo": "https://logostream.dev/api/logo?symbol=UNI"
+                    "logo": ""
                 },
                 {
                     "name": "Aerodrome Finance",
@@ -811,7 +811,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 1.5,
                     "value_usd": 5000 * 1.5,
-                    "logo": "https://logostream.dev/api/logo?symbol=AERO"
+                    "logo": ""
                 },
                 {
                     "name": "BaseSwap",
@@ -820,7 +820,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 0.25,
                     "value_usd": 10000 * 0.25,
-                    "logo": "https://logostream.dev/api/logo?symbol=BSWAP"
+                    "logo": ""
                 },
                 {
                     "name": "Chainlink",
@@ -829,7 +829,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 18.0,
                     "value_usd": 200 * 18.0,
-                    "logo": "https://logostream.dev/api/logo?symbol=LINK"
+                    "logo": ""
                 },
                 {
                     "name": "Aave",
@@ -838,7 +838,7 @@ class DemoWalletService:
                     "decimals": 18,
                     "price_usd": 120.0,
                     "value_usd": 20 * 120.0,
-                    "logo": "https://logostream.dev/api/logo?symbol=AAVE"
+                    "logo": ""
                 }
             ],
             "algorand": [
@@ -850,7 +850,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 1.0,
                     "value_usd": 15000,
-                    "logo": "https://logostream.dev/api/logo?symbol=USDC",
+                    "logo": "",
                     "asset_id": "312769"
                 },
                 {
@@ -860,7 +860,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 0.005,
                     "value_usd": 500000 * 0.005,
-                    "logo": "https://logostream.dev/api/logo?symbol=PLANETS",
+                    "logo": "",
                     "asset_id": "27165954"
                 },
                 {
@@ -870,7 +870,7 @@ class DemoWalletService:
                     "decimals": 10,
                     "price_usd": 0.08,
                     "value_usd": 25000 * 0.08,
-                    "logo": "https://logostream.dev/api/logo?symbol=OPUL",
+                    "logo": "",
                     "asset_id": "287867876"
                 },
                 {
@@ -880,7 +880,7 @@ class DemoWalletService:
                     "decimals": 8,
                     "price_usd": 98000.0,
                     "value_usd": 0.005 * 98000.0,
-                    "logo": "https://logostream.dev/api/logo?symbol=GOBTC",
+                    "logo": "",
                     "asset_id": "386192725"
                 },
                 {
@@ -890,7 +890,7 @@ class DemoWalletService:
                     "decimals": 8,
                     "price_usd": 3500.0,
                     "value_usd": 0.15 * 3500.0,
-                    "logo": "https://logostream.dev/api/logo?symbol=GOETH",
+                    "logo": "",
                     "asset_id": "386195940"
                 },
                 {
@@ -900,7 +900,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 0.002,
                     "value_usd": 100000 * 0.002,
-                    "logo": "https://logostream.dev/api/logo?symbol=YLDY",
+                    "logo": "",
                     "asset_id": "226701642"
                 },
                 {
@@ -910,7 +910,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 0.0015,
                     "value_usd": 50000 * 0.0015,
-                    "logo": "https://logostream.dev/api/logo?symbol=SMILE",
+                    "logo": "",
                     "asset_id": "300208676"
                 },
                 {
@@ -920,7 +920,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 0.01,
                     "value_usd": 30000 * 0.01,
-                    "logo": "https://logostream.dev/api/logo?symbol=ALCH",
+                    "logo": "",
                     "asset_id": "310014962"
                 },
                 {
@@ -930,7 +930,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 0.12,
                     "value_usd": 5000 * 0.12,
-                    "logo": "https://logostream.dev/api/logo?symbol=TINY",
+                    "logo": "",
                     "asset_id": "329110405"
                 },
                 {
@@ -940,7 +940,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 0.008,
                     "value_usd": 20000 * 0.008,
-                    "logo": "https://logostream.dev/api/logo?symbol=COMET",
+                    "logo": "",
                     "asset_id": "348950369"
                 },
                 {
@@ -950,7 +950,7 @@ class DemoWalletService:
                     "decimals": 6,
                     "price_usd": 0.035,
                     "value_usd": 10000 * 0.035,
-                    "logo": "https://logostream.dev/api/logo?symbol=STKE",
+                    "logo": "",
                     "asset_id": "511484048"
                 }
             ]

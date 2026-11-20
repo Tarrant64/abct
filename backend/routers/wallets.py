@@ -70,7 +70,6 @@ from services.demo_defi_service import demo_defi_service
 from services.pricing import pricing_service
 from services.graph import graph_service
 from services.nmkr_service import nmkr_service
-from services.logokit_service import logokit_service
 from utils.address import parse_wallets_file, detect_blockchain, detect_blockchains, is_bitcoin_xpub, get_xpub_type
 from config import WALLETS_FILE, DATA_DIR
 from middleware.demo_mode import is_demo_user
@@ -462,15 +461,9 @@ async def get_wallet_assets_by_id(wallet_id: int, user_id: int = Depends(verify_
             except Exception:
                 pass
 
-        # Logo: Cardano tokens get a short server path (cache-only; resolved by services/cardano_token_meta);
-        # other chains use LogoKit only when a key is configured (an unkeyed URL is a guaranteed HTTP 401).
-        logo_url = None
-        if wallet['blockchain'] != 'cardano':
-            logo_sym = asset_data.get('ticker') or (asset.get('asset_name') or '')[:10]
-            if logo_sym and logokit_service.api_key:
-                logo_url = logokit_service.get_crypto_logo_url(logo_sym, size=64)
-
-        asset_data['logo_url'] = logo_url
+        # Logo: Cardano tokens get a short server path (cache-only; resolved by services/cardano_token_meta).
+        # The API never emits LogoKit/Logostream URLs: the web frontend builds those client-side for majors only.
+        asset_data['logo_url'] = None
         enriched_assets.append(asset_data)
 
     if wallet['blockchain'] == 'cardano':

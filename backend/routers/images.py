@@ -7,11 +7,10 @@ Prefix: /images
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse
 
 from auth_utils import verify_session
 from services.image_cache import image_cache_service, is_safe_symbol
-from services.logokit_service import logokit_service
 
 router = APIRouter(prefix="/images", tags=["images"])
 logger = logging.getLogger(__name__)
@@ -23,7 +22,7 @@ async def get_token_image(symbol: str, _user_id: int = Depends(verify_session)):
 
     If the image is already on disk, serve it directly.
     If not, attempt to fetch and cache it first.
-    If all sources fail, redirect to LogoKit.
+    If all sources fail, 404.
     """
     symbol = symbol.upper()
     if not is_safe_symbol(symbol):
@@ -47,16 +46,10 @@ async def get_token_image(symbol: str, _user_id: int = Depends(verify_session)):
             headers={"Cache-Control": "public, max-age=86400"},
         )
 
-    # All sources failed — redirect to LogoKit as last resort. Use the
-    # tokened service URL: the token-less form 401s ("Missing API token"),
-    # which native image loaders (mobile) surface as a broken logo while
-    # the web frontend masks it by building its own tokened URLs.
-    logokit_url = logokit_service.get_crypto_logo_url(symbol, size=128)
-    return RedirectResponse(
-        url=logokit_url,
-        status_code=302,
-        headers={"Cache-Control": "public, max-age=3600"},
-    )
+    # All sources failed. LogoKit/Logostream are deliberately NOT used here:
+    # their terms forbid server-side storage/proxying (hotlink-only), so they
+    # are web-frontend-only for major coins.
+    raise HTTPException(status_code=404, detail="Not found")
 
 
 @router.get("/status")

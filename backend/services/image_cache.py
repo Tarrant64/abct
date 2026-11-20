@@ -3,7 +3,7 @@ Token Image Cache Service
 
 Downloads and caches cryptocurrency token images locally.
 Eliminates runtime dependency on CoinGecko CDN for token logos.
-Falls back to LogoKit if original source unavailable.
+LogoKit is not used (hotlink-only terms).
 """
 
 import asyncio
@@ -101,7 +101,6 @@ class ImageCacheService:
         1. CoinGecko image URL from pricing cache
         2. CoinGecko /coins/{id} lookup (works before any pricing cycle)
         3. CoinPaprika coin logo
-        4. LogoKit URL
         """
         # Already cached?
         path = await self.get_image_path(symbol)
@@ -155,16 +154,8 @@ class ImageCacheService:
         except Exception as e:
             logger.debug(f"CoinPaprika image lookup failed for {symbol}: {e}")
 
-        # --- Source 4: LogoKit ---
-        # Must use the tokened service URL: token-less img.logokit.com
-        # requests answer 401 "Missing API token" for every client.
-        try:
-            from services.logokit_service import logokit_service
-            logokit_url = logokit_service.get_crypto_logo_url(symbol, size=128)
-            if await self.cache_image(symbol, logokit_url):
-                return await self.get_image_path(symbol)
-        except Exception as e:
-            logger.debug(f"LogoKit image fetch failed for {symbol}: {e}")
+        # LogoKit/Logostream intentionally absent: their terms forbid storing logos
+        # server-side (hotlink-only); the web frontend uses them for majors.
 
         return None
 

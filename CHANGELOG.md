@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Logo APIs: LogoKit and Logostream, web-only majors (ABCT-LOGO-APIS-20261120)
+
+**Fixed**
+- Web UI logos 401'd: several pages hotlinked `img.logokit.com` without a token, and the backend read only the env key (empty) instead of the DB-stored key. The web frontend now builds LogoKit URLs for majors with the DB key; everything else gets a local letter placeholder (no broken images).
+
+**Changed**
+- No API payload (mobile or web) carries a LogoKit or Logostream URL any more. `/api/mobile/*` logos are server paths or null. Removed server-side LogoKit/Logostream fetching (image cache, DeFi lookup, NMKR fallback) and the `/images/token/{symbol}` redirect to LogoKit (now 404): both providers' terms forbid server-side storage/proxying below Enterprise, and both look up by symbol only (no policy id), so they cannot serve Cardano native tokens.
+- `GET /api/config/public` now requires a session (every logo page is post-login) and returns `logokit_token`, `logostream_key`, `logo_majors`; empty values when no key is set.
+- `logokit_service` / `logostream` are key resolvers (DB first, env fallback) plus the `MAJOR_SYMBOLS` allowlist. Logostream health check uses the documented `api.logostream.dev/cryptos/{symbol}?key=` endpoint.
+
+**Added**
+- `frontend/js/logos.js`: majors-only LogoKit hotlinks, Logostream as an on-error browser fallback, placeholder otherwise.
+- Attribution ("Logos by LogoKit / Logostream") in web footers.
+
 ### Cardano token logos and metadata (ABCT-TOKEN-LOGOS-20261120)
 
 **Fixed**

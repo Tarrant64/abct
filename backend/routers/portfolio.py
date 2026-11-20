@@ -18,7 +18,6 @@ from services.cardano import cardano_service
 from services.pricing import pricing_service
 from services.defi import DEFI_PROTOCOLS
 from services.taptools import taptools_wallet_service
-from services.logokit_service import logokit_service
 from services.token_metadata_cache import metadata_cache
 from services.token_names import resolve_token_display_name
 from services.nmkr_service import nmkr_service
@@ -1477,13 +1476,9 @@ async def get_all_native_assets(user_id: int = Depends(verify_session), refresh:
             is_tracked = asset_id in tracked_ids
 
             # Logo: Cardano tokens get a short server path (see services/cardano_token_meta, applied after grouping);
-            # LogoKit only when a key is configured.
+            # No third-party logo-API URLs here (web builds major-coin ones client-side).
             blockchain = asset.get('blockchain', 'cardano')
             logo_url = None
-            if blockchain != 'cardano' or not policy_id:
-                logo_symbol = ticker if ticker else asset['asset_name'][:10] if asset['asset_name'] else 'UNKNOWN'
-                if logokit_service.api_key:
-                    logo_url = logokit_service.get_crypto_logo_url(logo_symbol, size=64)
 
             asset_totals[asset_id] = {
                 'asset_id': asset_id,
@@ -1811,7 +1806,7 @@ def _merge_holding(holdings: dict, key: str, amount: float, price: float,
             'value_usd': amount * price,
             'price_change_24h': _known_change(price_info),
             'wallet_count': 0,
-            'logo_url': logo_url or logokit_service.get_crypto_logo_url(price_sym, size=64),
+            'logo_url': logo_url or None,
             'source': source,
         }
 
@@ -1920,7 +1915,7 @@ async def get_all_holdings(
             'value_usd': amount * price,
             'price_change_24h': _known_change(price_info),
             'wallet_count': chain_data.get('wallet_count', 0),
-            'logo_url': (meta.get('image_url') if meta else None) or logokit_service.get_crypto_logo_url(price_sym, size=64),
+            'logo_url': (meta.get('image_url') if meta else None) or None,
             'source': 'chain',
         }
 
@@ -1941,7 +1936,7 @@ async def get_all_holdings(
             'value_usd': asset.get('value_usd') or 0,
             'price_change_24h': asset.get('price_change_24h'),
             'wallet_count': asset.get('wallet_count', 0),
-            'logo_url': (token_meta.get('image_url') if token_meta else None) or asset.get('logo_url') or (logokit_service.get_crypto_logo_url(ticker, size=64) if logokit_service.api_key else None),
+            'logo_url': (token_meta.get('image_url') if token_meta else None) or asset.get('logo_url') or None,
             'policy_id': asset.get('policy_id') or None,
             'asset_name_hex': asset.get('asset_name_hex'),
             'coingecko_id': asset.get('coingecko_id') or (token_meta.get('coingecko_id') if token_meta else None),
@@ -1970,7 +1965,7 @@ async def get_all_holdings(
                 'value_usd': asset.get('value_usd') or 0,
                 'price_change_24h': None,
                 'wallet_count': asset.get('wallet_count', 0),
-                'logo_url': (token_meta.get('image_url') if token_meta else None) or asset.get('logo_url') or (logokit_service.get_crypto_logo_url(ticker, size=64) if logokit_service.api_key else None),
+                'logo_url': (token_meta.get('image_url') if token_meta else None) or asset.get('logo_url') or None,
                 'policy_id': asset.get('policy_id') or None,
                 'asset_name_hex': asset.get('asset_name_hex'),
                 'coingecko_id': asset.get('coingecko_id') or (token_meta.get('coingecko_id') if token_meta else None),
@@ -2003,7 +1998,7 @@ async def get_all_holdings(
                         'value_usd': pre_valued_usd,
                         'price_change_24h': None,
                         'wallet_count': 0,
-                        'logo_url': pos.get('logo_url', '') or logokit_service.get_crypto_logo_url(token, size=64),
+                        'logo_url': pos.get('logo_url', '') or None,
                         'source': 'defi',
                     }
                     continue
@@ -2737,7 +2732,7 @@ async def get_portfolio_instant(user_id: int = Depends(verify_session)):
             # a ticker tile instead of a 404-ing coin image.
             'image_url': (None if {'manual_stock'} & agg['sources'] else
                           (meta.get('image_url') if meta else None) or
-                          logokit_service.get_crypto_logo_url(agg['symbol'], size=64)),
+                          None),
         })
 
     return {
@@ -4205,7 +4200,7 @@ async def get_portfolio_analytics(user_id: int = Depends(verify_session)):
                 'value_usd': value_usd,
                 'blockchain': blockchain,
                 'category': TOKEN_CATEGORIES.get(symbol, 'Other'),
-                'logo_url': logokit_service.get_crypto_logo_url(symbol, size=64),
+                'logo_url': None,
                 'price_change_24h': price_data.get('usd_24h_change', 0),
             })
             total_value += value_usd
@@ -4224,7 +4219,7 @@ async def get_portfolio_analytics(user_id: int = Depends(verify_session)):
                 'value_usd': value_usd,
                 'blockchain': blockchain,
                 'category': TOKEN_CATEGORIES.get(symbol, 'Other'),
-                'logo_url': logokit_service.get_crypto_logo_url(symbol, size=64),
+                'logo_url': None,
                 'price_change_24h': price_data.get('usd_24h_change', 0),
             })
             total_value += value_usd
@@ -4380,14 +4375,14 @@ async def get_blockchain_asset_breakdown(
         result = {
             'blockchain': blockchain,
             'symbol': native_symbol,
-            'logo_url': logokit_service.get_blockchain_logo_url(blockchain, size=128),
+            'logo_url': None,
             'total_value_usd': total_value,
             'native_coin': {
                 'symbol': native_symbol,
                 'quantity': native_qty,
                 'value_usd': native_value,
                 'percentage': native_pct,
-                'logo_url': logokit_service.get_crypto_logo_url(native_symbol, size=64)
+                'logo_url': None
             },
             'tokens': token_list,
             'nfts': {
@@ -4759,7 +4754,7 @@ async def _get_demo_portfolio_analytics() -> dict:
                 'value_usd': round(value, 2),
                 'percentage': round((value / total_usd * 100) if total_usd > 0 else 0, 1),
                 'category': category,
-                'logo_url': f'https://logostream.dev/api/logo?symbol={symbol}',
+                'logo_url': None,
             })
 
     # Add tokens
@@ -4848,14 +4843,14 @@ async def _get_demo_blockchain_breakdown(blockchain: str) -> dict:
     return {
         'blockchain': blockchain,
         'symbol': symbol,
-        'logo_url': f'https://logostream.dev/api/logo?symbol={symbol}',
+        'logo_url': None,
         'total_value_usd': round(total_value, 2),
         'native_coin': {
             'symbol': symbol,
             'quantity': round(native_qty, 8),
             'value_usd': round(native_value, 2),
             'percentage': round((native_value / total_value * 100) if total_value > 0 else 0, 1),
-            'logo_url': f'https://logostream.dev/api/logo?symbol={symbol}',
+            'logo_url': None,
         },
         'tokens': tokens,
         'nfts': {'count': 0, 'value_usd': 0, 'percentage': 0},

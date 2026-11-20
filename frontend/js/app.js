@@ -95,41 +95,8 @@ function setSafeText(element, text) {
     element.textContent = text;
 }
 
-// ============================================================================
-// LOGOKIT API INTEGRATION
-// ============================================================================
-
-// Cached LogoKit token — loaded from backend /api/config/public on init
-let _logokitToken = '';
-
-/**
- * Fetch the LogoKit publishable token from the backend.
- * Called once on page load; result is cached in _logokitToken.
- */
-async function initLogokitToken() {
-    try {
-        const resp = await fetch(`${API_BASE}/api/config/public`);
-        if (resp.ok) {
-            const data = await resp.json();
-            _logokitToken = data.logokit_token || '';
-        }
-    } catch (e) {
-        // Fail silently — logos will load without token (may hit rate limits)
-    }
-}
-
-/**
- * Get LogoKit URL for a token symbol (client-side helper).
- *
- * @param {string} symbol - Token symbol (BTC, ETH, ADA, etc.)
- * @param {number} size - Optional size (64, 128, 256)
- * @returns {string} LogoKit CDN URL
- */
-function getLogoKitUrl(symbol, size = 64) {
-    const tokenParam = _logokitToken ? `?token=${_logokitToken}` : '';
-    const sizeParam = size ? `${tokenParam ? '&' : '?'}size=${size}` : '';
-    return `https://img.logokit.com/crypto/${symbol.toUpperCase()}${tokenParam}${sizeParam}`;
-}
+// LogoKit / Logostream helpers (getLogoKitUrl, initLogokitToken) live in js/logos.js
+// (web-only, majors-only, hotlinked; see that file).
 
 /**
  * Create an <img> element for a token/crypto logo with fallback.

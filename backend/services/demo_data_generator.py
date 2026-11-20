@@ -33,7 +33,7 @@ def generate_stablecoins() -> Dict[str, List[Dict]]:
                 "decimals": 6,
                 "price_usd": 1.0,
                 "value_usd": 25000.0,
-                "logo": "https://logostream.dev/api/logo?symbol=USDC"
+                "logo": ""
             },
             {
                 "name": "Tether USD",
@@ -42,7 +42,7 @@ def generate_stablecoins() -> Dict[str, List[Dict]]:
                 "decimals": 6,
                 "price_usd": 1.0,
                 "value_usd": 15000.0,
-                "logo": "https://logostream.dev/api/logo?symbol=USDT"
+                "logo": ""
             },
             {
                 "name": "DJED Stablecoin",
@@ -51,7 +51,7 @@ def generate_stablecoins() -> Dict[str, List[Dict]]:
                 "decimals": 6,
                 "price_usd": 1.0,
                 "value_usd": 7500.0,
-                "logo": "https://logostream.dev/api/logo?symbol=DJED"
+                "logo": ""
             },
             {
                 "name": "Indigo USD",
@@ -60,7 +60,7 @@ def generate_stablecoins() -> Dict[str, List[Dict]]:
                 "decimals": 6,
                 "price_usd": 1.0,
                 "value_usd": 2500.0,
-                "logo": "https://logostream.dev/api/logo?symbol=IUSD"
+                "logo": ""
             }
         ],
         "ethereum": [
@@ -71,7 +71,7 @@ def generate_stablecoins() -> Dict[str, List[Dict]]:
                 "decimals": 6,
                 "price_usd": 1.0,
                 "value_usd": 30000.0,
-                "logo": "https://logostream.dev/api/logo?symbol=USDC"
+                "logo": ""
             },
             {
                 "name": "Tether USD",
@@ -80,7 +80,7 @@ def generate_stablecoins() -> Dict[str, List[Dict]]:
                 "decimals": 6,
                 "price_usd": 1.0,
                 "value_usd": 20000.0,
-                "logo": "https://logostream.dev/api/logo?symbol=USDT"
+                "logo": ""
             },
             {
                 "name": "Dai Stablecoin",
@@ -89,7 +89,7 @@ def generate_stablecoins() -> Dict[str, List[Dict]]:
                 "decimals": 18,
                 "price_usd": 1.0,
                 "value_usd": 10000.0,
-                "logo": "https://logostream.dev/api/logo?symbol=DAI"
+                "logo": ""
             }
         ],
         "solana": [
@@ -100,7 +100,7 @@ def generate_stablecoins() -> Dict[str, List[Dict]]:
                 "decimals": 6,
                 "price_usd": 1.0,
                 "value_usd": 25000.0,
-                "logo": "https://logostream.dev/api/logo?symbol=USDC"
+                "logo": ""
             },
             {
                 "name": "Tether USD",
@@ -109,7 +109,7 @@ def generate_stablecoins() -> Dict[str, List[Dict]]:
                 "decimals": 6,
                 "price_usd": 1.0,
                 "value_usd": 15000.0,
-                "logo": "https://logostream.dev/api/logo?symbol=USDT"
+                "logo": ""
             }
         ],
         "polygon": [
@@ -120,7 +120,7 @@ def generate_stablecoins() -> Dict[str, List[Dict]]:
                 "decimals": 6,
                 "price_usd": 1.0,
                 "value_usd": 18000.0,
-                "logo": "https://logostream.dev/api/logo?symbol=USDC"
+                "logo": ""
             },
             {
                 "name": "Tether USD",
@@ -129,7 +129,7 @@ def generate_stablecoins() -> Dict[str, List[Dict]]:
                 "decimals": 6,
                 "price_usd": 1.0,
                 "value_usd": 8000.0,
-                "logo": "https://logostream.dev/api/logo?symbol=USDT"
+                "logo": ""
             },
             {
                 "name": "Dai Stablecoin",
@@ -138,7 +138,7 @@ def generate_stablecoins() -> Dict[str, List[Dict]]:
                 "decimals": 18,
                 "price_usd": 1.0,
                 "value_usd": 4000.0,
-                "logo": "https://logostream.dev/api/logo?symbol=DAI"
+                "logo": ""
             }
         ],
         "base": [
@@ -149,7 +149,7 @@ def generate_stablecoins() -> Dict[str, List[Dict]]:
                 "decimals": 6,
                 "price_usd": 1.0,
                 "value_usd": 15000.0,
-                "logo": "https://logostream.dev/api/logo?symbol=USDC"
+                "logo": ""
             },
             {
                 "name": "Tether USD",
@@ -158,7 +158,7 @@ def generate_stablecoins() -> Dict[str, List[Dict]]:
                 "decimals": 6,
                 "price_usd": 1.0,
                 "value_usd": 5000.0,
-                "logo": "https://logostream.dev/api/logo?symbol=USDT"
+                "logo": ""
             }
         ]
     }
@@ -192,7 +192,7 @@ def generate_defi_positions() -> Dict[str, List[Dict]]:
                 "apy": 4.5,
                 "status": "active",
                 "stake_address": "stake1u9xqk7fwq8q9q9q9q9q9q9q9q9q9q9q9q9q9q9q9",
-                "logo": "https://logostream.dev/api/logo?symbol=ADA"
+                "logo": ""
             },
             {
                 "protocol": "Lido",
@@ -205,7 +205,7 @@ def generate_defi_positions() -> Dict[str, List[Dict]]:
                 "apy": 3.8,
                 "status": "active",
                 "validator": "Lido Validator Pool",
-                "logo": "https://logostream.dev/api/logo?symbol=LDO"
+                "logo": ""
             },
             {
                 "protocol": "Marinade Finance",
@@ -218,7 +218,7 @@ def generate_defi_positions() -> Dict[str, List[Dict]]:
                 "apy": 7.2,
                 "status": "active",
                 "validator": "Marinade Stake Pool",
-                "logo": "https://logostream.dev/api/logo?symbol=MNDE"
+                "logo": ""
             }
         ],
         "lending": [
@@ -232,7 +232,7 @@ def generate_defi_positions() -> Dict[str, List[Dict]]:
                 "apy": 5.2,
                 "rewards_earned": "625.50",
                 "rewards_earned_usd": 625.50 * 1.05,
-                "logo": "https://logostream.dev/api/logo?symbol=LQ"
+                "logo": ""
             },
             {
                 "protocol": "Aave V3",
@@ -244,7 +244,7 @@ def generate_defi_positions() -> Dict[str, List[Dict]]:
                 "apy": 4.8,
                 "rewards_earned": "485.50",
                 "rewards_earned_usd": 485.50,
-                "logo": "https://logostream.dev/api/logo?symbol=AAVE"
+                "logo": ""
             },
             {
                 "protocol": "Compound",
@@ -256,7 +256,7 @@ def generate_defi_positions() -> Dict[str, List[Dict]]:
                 "apy": 3.2,
                 "rewards_earned": "0.18",
                 "rewards_earned_usd": 0.18 * 3500,
-                "logo": "https://logostream.dev/api/logo?symbol=COMP"
+                "logo": ""
             },
             {
                 "protocol": "Aave V3",
@@ -268,7 +268,7 @@ def generate_defi_positions() -> Dict[str, List[Dict]]:
                 "apy": 6.5,
                 "rewards_earned": "385.75",
                 "rewards_earned_usd": 385.75,
-                "logo": "https://logostream.dev/api/logo?symbol=AAVE"
+                "logo": ""
             }
         ],
         "liquidity": [
@@ -286,7 +286,7 @@ def generate_defi_positions() -> Dict[str, List[Dict]]:
                 "fees_earned_24h": 18.50,
                 "fees_earned_total": 2150.75,
                 "impermanent_loss": -0.8,
-                "logo": "https://logostream.dev/api/logo?symbol=MIN"
+                "logo": ""
             },
             {
                 "protocol": "Uniswap V3",
@@ -302,7 +302,7 @@ def generate_defi_positions() -> Dict[str, List[Dict]]:
                 "fees_earned_24h": 25.00,
                 "fees_earned_total": 3250.00,
                 "impermanent_loss": -1.2,
-                "logo": "https://logostream.dev/api/logo?symbol=UNI"
+                "logo": ""
             },
             {
                 "protocol": "Aerodrome",
@@ -318,7 +318,7 @@ def generate_defi_positions() -> Dict[str, List[Dict]]:
                 "fees_earned_24h": 12.50,
                 "fees_earned_total": 950.00,
                 "impermanent_loss": -0.5,
-                "logo": "https://logostream.dev/api/logo?symbol=AERO"
+                "logo": ""
             }
         ],
         "farming": [
@@ -332,7 +332,7 @@ def generate_defi_positions() -> Dict[str, List[Dict]]:
                 "rewards_earned_usd": 18500 * 0.025,
                 "apy": 18.5,
                 "status": "active",
-                "logo": "https://logostream.dev/api/logo?symbol=SUNDAE"
+                "logo": ""
             },
             {
                 "protocol": "WingRiders",
@@ -344,7 +344,7 @@ def generate_defi_positions() -> Dict[str, List[Dict]]:
                 "rewards_earned_usd": 850 * 0.28,
                 "apy": 16.2,
                 "status": "active",
-                "logo": "https://logostream.dev/api/logo?symbol=WRT"
+                "logo": ""
             }
         ]
     }
@@ -430,13 +430,13 @@ def get_blockchain_logos() -> Dict[str, str]:
         Dict mapping blockchain name to logo URL
     """
     return {
-        "cardano": "https://logostream.dev/api/logo?symbol=ADA",
-        "bitcoin": "https://logostream.dev/api/logo?symbol=BTC",
-        "ethereum": "https://logostream.dev/api/logo?symbol=ETH",
-        "solana": "https://logostream.dev/api/logo?symbol=SOL",
-        "polygon": "https://logostream.dev/api/logo?symbol=MATIC",
-        "base": "https://logostream.dev/api/logo?symbol=ETH",  # Base uses ETH
-        "algorand": "https://logostream.dev/api/logo?symbol=ALGO"
+        "cardano": "",
+        "bitcoin": "",
+        "ethereum": "",
+        "solana": "",
+        "polygon": "",
+        "base": "",  # Base uses ETH
+        "algorand": ""
     }
 
 

@@ -2256,6 +2256,8 @@
         }
     </script>
 
+    <script src="/static/js/logos.js?v=1795202569"></script>
+
     <script src="/static/js/app.js?v=1795202569"></script>
 
     <!-- Transaction scripts -->
@@ -2357,7 +2359,7 @@
         }
 
         function privacyLogoUrl(symbol, size) {
-            return 'https://img.logokit.com/crypto/' + symbol + '?size=' + (size || 32);
+            return getLogoKitUrl(symbol, size || 32);
         }
 
         function fmtNumber(n, decimals) {
@@ -3260,12 +3262,7 @@
         }
 
         function injectLogokitTokensPrivacy() {
-            fetch('/api/config/public').then(r => r.json()).then(cfg => {
-                if (!cfg.logokit_token) return;
-                document.querySelectorAll('#privacyzkTab img[src*="img.logokit.com"]').forEach(img => {
-                    if (!img.src.includes('token=')) img.src = img.src.replace('?', '?token=' + cfg.logokit_token + '&');
-                });
-            }).catch(() => {});
+            // Logo URLs now come from getLogoKitUrl() (js/logos.js); nothing to inject.
         }
     </script>
 

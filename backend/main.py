@@ -33,7 +33,8 @@ Usage:
     uvicorn main:app --host 0.0.0.0 --port 8000
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from auth_utils import verify_session
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.middleware.gzip import GZipMiddleware
@@ -1434,10 +1435,24 @@ async def health_check():
     return result
 
 @app.get("/api/config/public")
-async def public_config():
-    """Public config values needed by frontend (no auth required)."""
-    from config import LOGOKIT_API_KEY
-    return {"logokit_token": LOGOKIT_API_KEY}
+async def public_config(_user_id: int = Depends(verify_session)):
+    """Web-frontend logo config (session required).
+
+    Every page that renders logos is behind login, so this is NOT public: the
+    LogoKit/Logostream keys are publishable-style hotlink keys but there is no
+    reason to hand them to anonymous callers. Keys come from the DB-backed API
+    settings (env fallback). Returns empty values when a key is unset. Majors
+    allowlist is the single source of truth for which symbols may be hotlinked.
+    """
+    from services.logokit_service import logokit_service, MAJOR_SYMBOLS
+    from services.logostream import logostream_service
+    lk = await logokit_service.get_public_token()
+    ls = await logostream_service.get_public_key()
+    return {
+        "logokit_token": lk,
+        "logostream_key": ls,
+        "logo_majors": sorted(MAJOR_SYMBOLS) if (lk or ls) else [],
+    }
 
 @app.get("/api/startup-status")
 async def get_startup_status():

@@ -1,120 +1,63 @@
 """
-LogoKit Service - Professional logo API integration
+LogoKit - web-frontend-only logo provider (major coins).
 
-Provides methods to generate logo URLs for cryptocurrencies, tokens,
-and blockchain assets using the LogoKit API.
+LogoKit's terms (docs: logokit.com/terms 2.2-2.4) require HOTLINKING logos via
+the provided img.logokit.com URLs; scraping/caching/proxying is Enterprise-only.
+It also looks logos up by SYMBOL only (no policy id), so it must never be used
+for obscure tokens (ticker collisions give wrong logos).
+
+Therefore this service does NOT build or fetch logo URLs for API responses.
+It only (a) resolves the publishable key (DB first, env fallback, same as every
+other service) and (b) owns the MAJOR_SYMBOLS allowlist. The web frontend
+receives both via the session-authenticated GET /api/config/public and builds
+img.logokit.com URLs in the browser. Nothing is stored or proxied server-side,
+and no /api/mobile/* payload contains a LogoKit URL.
 """
 
-from config import LOGOKIT_API_KEY, LOGOKIT_BASE_URL
-from typing import Optional, Dict
 import logging
-from urllib.parse import quote
+import os
+import sys
+from typing import List
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from services.api_key_manager import APIKeyManager
 
 logger = logging.getLogger(__name__)
 
+# Majors: chain-native coins ABCT tracks plus large-cap / mainstream stablecoin
+# assets. Deliberately excludes Cardano native tokens (symbol collisions).
+MAJOR_SYMBOLS = frozenset({
+    # chain natives (match frontend chain list)
+    'ADA', 'BTC', 'ETH', 'SOL', 'MATIC', 'POL', 'ALGO', 'BNB', 'ARB', 'AVAX', 'TRX',
+    'XRP', 'HBAR', 'EGLD', 'SUI', 'APT', 'FIL', 'LTC', 'DOGE', 'ZEC', 'XTZ', 'STX',
+    'VET', 'ATOM', 'NEAR', 'ICP', 'TON', 'DOT', 'KSM', 'XLM', 'KAS', 'OSMO', 'TIA',
+    'INJ', 'DYDX', 'SEI', 'AKT', 'KLAY', 'KAIA', 'ERG', 'IOTA', 'WAVES', 'MINA',
+    'ZIL', 'OP', 'ZK', 'LINEA', 'SCR', 'FTM', 'CRO', 'GNO', 'GLMR', 'XMR', 'SCRT',
+    # large caps / mainstream
+    'LINK', 'UNI', 'AAVE', 'MKR', 'LDO', 'RNDR', 'GRT', 'BCH', 'ETC', 'SHIB',
+    'WBTC', 'WETH', 'STETH',
+    # stablecoins
+    'USDC', 'USDT', 'DAI', 'USDE', 'FDUSD', 'PYUSD',
+})
 
-class LogoKitService:
-    """Service for generating LogoKit logo URLs."""
+
+def is_major(symbol) -> bool:
+    return isinstance(symbol, str) and symbol.strip().upper() in MAJOR_SYMBOLS
+
+
+class LogoKitService(APIKeyManager):
+    """Key resolver + majors allowlist for the web-only LogoKit hotlinks."""
 
     def __init__(self):
-        self.api_key = LOGOKIT_API_KEY
-        self.base_url = LOGOKIT_BASE_URL
+        super().__init__(api_name='logokit', env_var='LOGOKIT_API_KEY')
 
-    def get_crypto_logo_url(
-        self,
-        symbol: str,
-        size: Optional[int] = None,
-        fallback_404: bool = False
-    ) -> str:
-        """
-        Get LogoKit URL for cryptocurrency logo.
+    @property
+    def majors(self) -> List[str]:
+        return sorted(MAJOR_SYMBOLS)
 
-        Args:
-            symbol: Crypto symbol (e.g., 'BTC', 'ETH', 'ADA')
-            size: Optional size parameter (e.g., 64, 128, 256)
-            fallback_404: If True, return 404 instead of monogram fallback
-
-        Returns:
-            Full LogoKit CDN URL
-
-        Examples:
-            >>> service.get_crypto_logo_url('BTC')
-            'https://img.logokit.com/crypto/BTC?token=pk_...'
-
-            >>> service.get_crypto_logo_url('ETH', size=128)
-            'https://img.logokit.com/crypto/ETH?token=pk_...&size=128'
-        """
-        # Normalize symbol to uppercase
-        symbol = symbol.upper()
-
-        # Build URL
-        url = f"{self.base_url}/crypto/{quote(symbol, safe='')}?token={self.api_key}"
-
-        # Add optional parameters
-        if size:
-            url += f"&size={size}"
-
-        if fallback_404:
-            url += "&fallback=404"
-
-        return url
-
-    def get_token_logo_url(
-        self,
-        symbol: str,
-        size: Optional[int] = None,
-        fallback_404: bool = False
-    ) -> str:
-        """
-        Get LogoKit URL for token logo (alias for get_crypto_logo_url).
-
-        The /token/ and /crypto/ endpoints are interchangeable.
-        """
-        return self.get_crypto_logo_url(symbol, size, fallback_404)
-
-    def get_blockchain_logo_url(self, blockchain: str, size: Optional[int] = None) -> str:
-        """
-        Get logo URL for a blockchain's native coin.
-
-        Args:
-            blockchain: Blockchain name (cardano, bitcoin, ethereum, etc.)
-            size: Optional size parameter
-
-        Returns:
-            LogoKit CDN URL for the blockchain's native token
-        """
-        # Map blockchain names to their native coin symbols
-        blockchain_symbols = {
-            'cardano': 'ADA',
-            'bitcoin': 'BTC',
-            'ethereum': 'ETH',
-            'solana': 'SOL',
-            'polygon': 'MATIC',  # POL is rebranded MATIC
-            'base': 'ETH'  # Base uses ETH
-        }
-
-        symbol = blockchain_symbols.get(blockchain.lower())
-        if not symbol:
-            logger.warning(f"Unknown blockchain: {blockchain}")
-            return ""
-
-        return self.get_crypto_logo_url(symbol, size)
-
-    def get_logo_urls_batch(self, symbols: list[str], size: Optional[int] = None) -> Dict[str, str]:
-        """
-        Get logo URLs for multiple symbols at once.
-
-        Args:
-            symbols: List of crypto symbols
-            size: Optional size parameter
-
-        Returns:
-            Dict mapping symbol to logo URL
-        """
-        return {
-            symbol: self.get_crypto_logo_url(symbol, size)
-            for symbol in symbols
-        }
+    async def get_public_token(self) -> str:
+        """Publishable token (DB first, then env). Empty string when unset."""
+        return (await self.get_api_key()) or ''
 
 
 # Singleton instance
