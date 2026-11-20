@@ -221,3 +221,17 @@ def test_logo_endpoint_valid_ids_and_404(env):
     mp.setattr(ctm, "fetch_registry", lambda p, n: asyncio.sleep(0, {"logo_b64": base64.b64encode(_png()).decode()}))
     r = run(token_logos.get_token_logo(POLICY, "0a", Req(), user_id=1))
     assert r.media_type == "image/png" and "max-age" in r.headers["cache-control"] and r.body[:4] == b"\x89PNG"
+
+
+def test_429_retry_once_then_succeeds(env):
+    calls, mp = env
+    n = {"c": 0}
+
+    class R:
+        def __init__(self, code): self.status_code = code; self.headers = {"retry-after": "0"}
+
+    async def do():
+        n["c"] += 1
+        return R(429 if n["c"] == 1 else 200)
+    r = run(ctm._request_with_429(do, "t"))
+    assert r.status_code == 200 and n["c"] == 2

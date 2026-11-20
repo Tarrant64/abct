@@ -88,6 +88,7 @@ ALLOWED_HOSTS = {
 ALLOWED_SUFFIXES = (".ipfs.dweb.link", ".ipfs.w3s.link", ".ipfs.nftstorage.link", ".nmkr.io")
 
 _table_ready = False
+_src_sems: Dict[str, asyncio.Semaphore] = {}
 _inflight: Dict[str, "asyncio.Future"] = {}
 _warm_sem: Optional[asyncio.Semaphore] = None
 _warming: set = set()
@@ -239,6 +240,7 @@ def _reset_for_tests() -> None:
     global _table_ready
     _table_ready = False
     _inflight.clear()
+    _src_sems.clear()
     _warming.clear()
 
 
@@ -308,12 +310,33 @@ async def get_logo_blob(asset_id: str) -> Optional[Tuple[bytes, str]]:
     return None
 
 
+def _src_sem(name: str, n: int) -> asyncio.Semaphore:
+    sem = _src_sems.get(name)
+    if sem is None:
+        sem = _src_sems[name] = asyncio.Semaphore(n)
+    return sem
+
+
+async def _request_with_429(do, name: str, limit: int = 2):
+    """Run `do()` (returns an httpx response) under a per-source concurrency cap; one polite retry on HTTP 429."""
+    async with _src_sem(name, limit):
+        resp = await do()
+        if resp.status_code == 429:
+            try:
+                wait = min(float(resp.headers.get("retry-after", "2")), 6.0)
+            except ValueError:
+                wait = 2.0
+            await asyncio.sleep(wait)
+            resp = await do()
+        return resp
+
+
 # --- sources (each returns a partial dict or None; all network lives here, so tests patch these) ---
 
 async def fetch_registry(policy: str, name_hex: str) -> Optional[dict]:
     """Source 1: Cardano Foundation Token Registry (CIP-26). 204 = not registered."""
     client = get_client("cardano_token_registry", timeout=10)
-    resp = await client.get(f"{REGISTRY_URL}/{policy}{name_hex}")
+    resp = await _request_with_429(lambda: client.get(f"{REGISTRY_URL}/{policy}{name_hex}"), "registry")
     if resp.status_code == 204:
         return {}
     if resp.status_code != 200:
@@ -330,9 +353,10 @@ async def fetch_registry(policy: str, name_hex: str) -> Optional[dict]:
 async def fetch_blockfrost(policy: str, name_hex: str) -> Optional[dict]:
     """Source 2: Blockfrost /assets/{id}: registry block and CIP-25 / CIP-68 on-chain metadata."""
     from services.cardano import cardano_service
-    if not getattr(cardano_service, "blockfrost_api", None):
+    if not await cardano_service._get_blockfrost_key():
         return None  # not configured: skipped, not an error
-    m = await cardano_service.get_asset_metadata(policy + name_hex)
+    async with _src_sem("blockfrost", 3):
+        m = await cardano_service.get_asset_metadata(policy + name_hex)
     if m is None:
         return {}
     reg = m.get("registry_metadata") or {}
@@ -350,8 +374,8 @@ async def fetch_blockfrost(policy: str, name_hex: str) -> Optional[dict]:
 async def fetch_koios(policy: str, name_hex: str) -> Optional[dict]:
     """Source 3: Koios asset_info (registry block, CIP-25 mint metadata, CIP-68 datum). Public, rate limited."""
     client = get_client("koios_token_meta", timeout=15)
-    resp = await client.post(KOIOS_URL, json={"_asset_list": [[policy, name_hex]]},
-                             headers={"accept": "application/json"})
+    resp = await _request_with_429(lambda: client.post(KOIOS_URL, json={"_asset_list": [[policy, name_hex]]},
+                                                       headers={"accept": "application/json"}), "koios")
     if resp.status_code != 200:
         raise RuntimeError(f"koios status {resp.status_code}")
     rows = resp.json()
