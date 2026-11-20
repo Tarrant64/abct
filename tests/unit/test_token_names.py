@@ -39,9 +39,12 @@ async def test_all_holdings_token_name_ignores_wallet_label(holdings_env, monkey
         ], "assets": []}
     monkeypatch.setattr(portfolio_router, "get_all_native_assets", assets)
 
-    async def meta(self, symbol):
+    # Patch the INSTANCE: other tests' monkeypatch undo leaves a bound-method
+    # attribute on the shared metadata_cache instance, which would shadow a
+    # class-level patch.
+    async def meta(symbol):
         return {"name": "Tether USD", "image_url": None} if symbol == "USDT" else None
-    monkeypatch.setattr(type(portfolio_router.metadata_cache), "get_metadata", meta)
+    monkeypatch.setattr(portfolio_router.metadata_cache, "get_metadata", meta)
 
     result = await portfolio_router.get_all_holdings(user_id=1, refresh=True)
     names = {h["symbol"]: h["name"] for h in result["holdings"]}
