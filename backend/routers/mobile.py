@@ -182,20 +182,7 @@ _WALLET_NATIVE_CONFIG = {
 
 
 # Display names for tokens not in metadata_cache (CoinGecko top 250)
-_TOKEN_NAMES = {
-    'INDY': 'Indigo',
-    'LQ': 'Liqwid Finance',
-    'STRIKE': 'Strike',
-    'MIN': 'Minswap',
-    'SUNDAE': 'SundaeSwap',
-    'LENFI': 'Lenfi',
-    'SNEK': 'Snek',
-    'WMT': 'World Mobile',
-    'MILK': 'MuesliSwap',
-    'HUNT': 'Hunt',
-    'HOSKY': 'Hosky',
-    'NMKR': 'NMKR',
-}
+from services.token_names import TOKEN_NAMES as _TOKEN_NAMES  # shared display-name table
 
 
 def _as_float(value, default: float = 0.0) -> float:

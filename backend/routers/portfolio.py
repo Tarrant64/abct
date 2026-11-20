@@ -20,6 +20,7 @@ from services.defi import DEFI_PROTOCOLS
 from services.taptools import taptools_wallet_service
 from services.logokit_service import logokit_service
 from services.token_metadata_cache import metadata_cache
+from services.token_names import resolve_token_display_name
 from services.nmkr_service import nmkr_service
 from services.demo_wallet_service import demo_wallet_service
 from auth_utils import verify_session
@@ -1942,7 +1943,7 @@ async def get_all_holdings(
         token_meta = await metadata_cache.get_metadata(ticker)
         holdings[ticker] = {
             'symbol': ticker,
-            'name': asset.get('asset_name', ticker),
+            'name': resolve_token_display_name(ticker, token_meta),
             'amount': asset.get('total_quantity', 0),
             'price_usd': asset.get('price_usd') or None,
             'value_usd': asset.get('value_usd') or 0,
@@ -1968,7 +1969,7 @@ async def get_all_holdings(
             token_meta = await metadata_cache.get_metadata(ticker)
             holdings[ticker] = {
                 'symbol': ticker,
-                'name': asset.get('asset_name', ticker),
+                'name': resolve_token_display_name(ticker, token_meta),
                 'amount': asset.get('total_quantity', human_qty),
                 'price_usd': asset.get('price_usd') or None,
                 'value_usd': asset.get('value_usd') or 0,
@@ -2174,6 +2175,11 @@ async def get_all_holdings(
             meta = await metadata_cache.get_metadata(h['symbol'])
             if meta and meta.get('image_url'):
                 h['logo_url'] = meta['image_url']
+        # A staking-created row was named after its protocol ("Indigo" for
+        # INDY): give token rows the token's own name.
+        if h.get('source') == 'staking':
+            meta = await metadata_cache.get_metadata(h['symbol'])
+            h['name'] = resolve_token_display_name(h['symbol'], meta, fallback=h.get('name'))
         # Add market data from price cache
         price_info = all_prices.get(h['symbol'], {})
         h['market_cap'] = price_info.get('market_cap', 0) or 0
