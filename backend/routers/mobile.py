@@ -28,7 +28,7 @@ import aiosqlite
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import existing routers and services
-from routers import portfolio, wallets, exchanges, defi, nfts
+from routers import portfolio, wallets, exchanges, defi, nfts, pnl as pnl_router
 from routers.portfolio import _known_price, _known_change
 from services.pricing import pricing_service
 from services.logokit_service import logokit_service
@@ -3171,6 +3171,43 @@ async def get_asset_wallet_breakdown(
     }
     await set_cache(cache_key, result, 20 if missing_exchanges else MOBILE_CACHE_TTL, user_id=user_id)
     return result
+
+
+# ---------------------------------------------------------------------------
+# P&L (mobile). Thin wrappers over routers/pnl.py so these GETs go through this
+# router's ETag / If-None-Match -> 304 handling. The legacy /pnl/* routes are
+# unchanged. /pnl/summary is cached server-side for ~2 min, so its body (and
+# ETag) is stable between polls until prices/lots change.
+# ---------------------------------------------------------------------------
+
+@router.get("/pnl/summary")
+async def get_mobile_pnl_summary(user_id: int = Depends(verify_session)):
+    """Portfolio P&L summary + `computed_at` + `uncovered` (held assets with no cost basis)."""
+    return await pnl_router.get_pnl_summary(user_id=user_id)
+
+
+@router.get("/pnl/unrealized")
+async def get_mobile_pnl_unrealized(
+    token: Optional[str] = Query(None, description="Limit to one token symbol"),
+    user_id: int = Depends(verify_session),
+):
+    """Unrealized P&L per token."""
+    return await pnl_router.get_unrealized_pnl(user_id=user_id, token=token)
+
+
+@router.get("/pnl/realized/monthly")
+async def get_mobile_pnl_realized_monthly(
+    months: int = Query(12, ge=1, le=60),
+    user_id: int = Depends(verify_session),
+):
+    """Realized gains aggregated by month."""
+    return await pnl_router.get_monthly_realized(user_id=user_id, months=months)
+
+
+@router.get("/pnl/asset/{symbol}")
+async def get_mobile_pnl_asset(symbol: str, user_id: int = Depends(verify_session)):
+    """Per-asset P&L: unrealized + realized + open lots."""
+    return await pnl_router.get_asset_pnl(symbol, user_id=user_id)
 
 
 @router.get("/status")

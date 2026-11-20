@@ -3,6 +3,8 @@ P&L Router - Per-asset profit/loss tracking and cost basis management.
 """
 
 import asyncio
+import uuid
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -16,8 +18,110 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/pnl", tags=["pnl"])
 
+class _ProgressStore(dict):
+    """Per-user compute progress. A running job's job_id/started_at survive the
+    many whole-dict progress updates, so status and 409 responses can name the
+    job that is running."""
+
+    def __setitem__(self, user_id, value):
+        prev = self.get(user_id) or {}
+        if isinstance(value, dict):
+            for key in ("job_id", "started_at"):
+                if key in prev and key not in value:
+                    value = {**value, key: prev[key]}
+        super().__setitem__(user_id, value)
+
+
 # Per-user compute progress tracking
-_compute_progress: dict = {}
+_compute_progress: dict = _ProgressStore()
+
+# /pnl/summary is cached briefly so `computed_at` is the time the figures were
+# actually computed (stable across polls -> the mobile router's ETag/304 works)
+# and the held-assets scan is not repeated on every poll. Invalidated whenever
+# lots/disposals change or a compute finishes.
+PNL_SUMMARY_TTL_S = 120
+# Held positions worth less than this are not reported as "uncovered".
+UNCOVERED_MIN_USD = 1.0
+
+
+def _summary_key(user_id: int) -> str:
+    return f"pnl_summary_v2_{user_id}"
+
+
+async def _invalidate_summary(user_id: int) -> None:
+    try:
+        from database import clear_cache
+        await clear_cache(_summary_key(user_id), user_id=user_id)
+    except Exception as e:  # best-effort; the TTL bounds staleness anyway
+        logger.debug(f"P&L summary cache invalidation failed: {e}")
+
+
+def _conflict_response(user_id: int, current: dict) -> JSONResponse:
+    """409 body that names the running job instead of a bare message."""
+    return JSONResponse(
+        status_code=409,
+        content={
+            "detail": "Computation already in progress",
+            "job_id": current.get("job_id"),
+            "status": current.get("stage"),
+            "progress": current.get("progress"),
+            "details": current.get("details"),
+            "started_at": current.get("started_at"),
+        },
+    )
+
+
+def _new_job() -> dict:
+    return {
+        "stage": "starting",
+        "progress": 0,
+        "details": "Queued...",
+        "job_id": uuid.uuid4().hex[:12],
+        "started_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+
+
+async def _compute_uncovered(user_id: int, covered: set) -> list:
+    """Held assets (portfolio_positions) with NO open cost-basis lot.
+
+    [{symbol, value_usd}] sorted by value, dust (< UNCOVERED_MIN_USD) dropped.
+    One bounded DB read + the cached price map; no network.
+    """
+    from database import get_all_portfolio_positions
+    from services.pricing import pricing_service
+
+    positions = await get_all_portfolio_positions(user_id)
+    if not positions:
+        return []
+    try:
+        prices = await pricing_service.get_all_tracked_prices()
+    except Exception:
+        prices = {}
+
+    by_symbol: dict = {}
+    for pos in positions:
+        symbol = (pos.get("symbol") or "").upper()
+        if not symbol or symbol == "USD":
+            continue
+        try:
+            qty = float(pos.get("quantity") or 0)
+        except (TypeError, ValueError):
+            continue
+        info = prices.get(symbol) or {}
+        price = float(info.get("usd") or 0) if isinstance(info, dict) else 0.0
+        if price <= 0:
+            price = float(pos.get("last_price_usd") or 0)
+        by_symbol[symbol] = by_symbol.get(symbol, 0.0) + qty * price
+
+    return sorted(
+        (
+            {"symbol": sym, "value_usd": round(val, 2)}
+            for sym, val in by_symbol.items()
+            if sym not in covered and val >= UNCOVERED_MIN_USD
+        ),
+        key=lambda x: x["value_usd"],
+        reverse=True,
+    )
 
 
 class ManualLotRequest(BaseModel):
@@ -39,9 +143,27 @@ class DisposeRequest(BaseModel):
 
 @router.get("/summary")
 async def get_pnl_summary(user_id: int = Depends(verify_session)):
-    """Get portfolio-wide P&L summary including unrealized and realized gains"""
+    """Get portfolio-wide P&L summary including unrealized and realized gains.
+
+    Adds (2026-11-20): `computed_at` (ISO UTC, when these figures were
+    computed) and `uncovered` -- held assets with no cost basis
+    ([{symbol, value_usd}]), so clients can say how much of the portfolio the
+    P&L figures do NOT cover.
+    """
     try:
-        return await cost_basis_engine.get_portfolio_performance(user_id)
+        from database import get_cache, set_cache
+        cached = await get_cache(_summary_key(user_id), user_id=user_id)
+        if cached:
+            return cached
+        summary = await cost_basis_engine.get_portfolio_performance(user_id)
+        covered = {i["token_symbol"] for i in await cost_basis_engine.compute_unrealized_pnl(user_id)}
+        summary = {
+            **summary,
+            "computed_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "uncovered": await _compute_uncovered(user_id, covered),
+        }
+        await set_cache(_summary_key(user_id), summary, PNL_SUMMARY_TTL_S, user_id=user_id)
+        return summary
     except Exception as e:
         logger.error(f"Error getting P&L summary for user {user_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to compute P&L summary")
@@ -124,6 +246,7 @@ async def add_manual_lot(req: ManualLotRequest, user_id: int = Depends(verify_se
             req.quantity, req.cost_per_unit,
             req.acquisition_date, req.source
         )
+        await _invalidate_summary(user_id)
         return {"success": True, "lot_id": lot_id}
     except Exception as e:
         logger.error(f"Error adding manual lot: {e}")
@@ -145,6 +268,7 @@ async def dispose_lots(req: DisposeRequest, user_id: int = Depends(verify_sessio
             req.method or "fifo", req.disposal_type or "sell",
             req.disposal_date
         )
+        await _invalidate_summary(user_id)
         return result
     except Exception as e:
         logger.error(f"Error disposing lots: {e}")
@@ -157,7 +281,7 @@ async def get_compute_status(user_id: int = Depends(verify_session)):
     status = _compute_progress.get(user_id, {
         "stage": "idle", "progress": 0, "details": ""
     })
-    return status
+    return status  # includes job_id / started_at while a job exists
 
 
 @router.post("/compute")
@@ -173,22 +297,16 @@ async def compute_pnl(
     """
     current = _compute_progress.get(user_id, {})
     if current.get("stage") not in (None, "idle", "complete", "error"):
-        return JSONResponse(
-            status_code=409,
-            content={"detail": "Computation already in progress"}
-        )
+        return _conflict_response(user_id, current)
 
-    _compute_progress[user_id] = {
-        "stage": "starting",
-        "progress": 0,
-        "details": "Queued..."
-    }
+    job = _new_job()
+    _compute_progress[user_id] = job
 
     asyncio.create_task(
         _run_compute(user_id, exchange, include_wallets)
     )
 
-    return JSONResponse(status_code=202, content={"status": "started"})
+    return JSONResponse(status_code=202, content={"status": "started", "job_id": job["job_id"]})
 
 
 async def _run_compute(user_id: int, exchange: Optional[str], include_wallets: bool):
@@ -241,6 +359,7 @@ async def _run_compute(user_id: int, exchange: Optional[str], include_wallets: b
         }
 
         await cost_basis_engine.refresh_pnl_summary(user_id)
+        await _invalidate_summary(user_id)
 
         _compute_progress[user_id] = {
             "stage": "complete",
@@ -268,22 +387,16 @@ async def compute_wallet_pnl(
     """
     current = _compute_progress.get(user_id, {})
     if current.get("stage") not in (None, "idle", "complete", "error"):
-        return JSONResponse(
-            status_code=409,
-            content={"detail": "Computation already in progress"}
-        )
+        return _conflict_response(user_id, current)
 
-    _compute_progress[user_id] = {
-        "stage": "starting",
-        "progress": 0,
-        "details": "Queued..."
-    }
+    job = _new_job()
+    _compute_progress[user_id] = job
 
     asyncio.create_task(
         _run_wallet_compute(user_id, blockchain)
     )
 
-    return JSONResponse(status_code=202, content={"status": "started"})
+    return JSONResponse(status_code=202, content={"status": "started", "job_id": job["job_id"]})
 
 
 async def _run_wallet_compute(user_id: int, blockchain: Optional[str]):
@@ -304,6 +417,7 @@ async def _run_wallet_compute(user_id: int, blockchain: Optional[str]):
         }
 
         await cost_basis_engine.refresh_pnl_summary(user_id)
+        await _invalidate_summary(user_id)
 
         _compute_progress[user_id] = {
             "stage": "complete",
@@ -324,6 +438,7 @@ async def refresh_summary(user_id: int = Depends(verify_session)):
     """Refresh the P&L summary cache (materialized view)"""
     try:
         await cost_basis_engine.refresh_pnl_summary(user_id)
+        await _invalidate_summary(user_id)
         return {"success": True}
     except Exception as e:
         logger.error(f"Error refreshing P&L summary: {e}")
