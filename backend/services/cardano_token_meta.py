@@ -241,6 +241,7 @@ def _reset_for_tests() -> None:
     _table_ready = False
     _inflight.clear()
     _src_sems.clear()
+    _warm_sem = None
     _warming.clear()
 
 
