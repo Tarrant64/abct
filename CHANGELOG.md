@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Avatar: no more "?" in the top-right user icon (ABCT-WEB-AVATAR-20261120)
+
+**Fixed**
+- The /next (v2) top-right avatar was hardcoded to "?" and never populated; the classic avatar showed "?" whenever the cached username was missing. Both now show the signed-in user's initial (demo shows "D" with a "Demo" label), or a person icon if no name is known. The dropdown header shows the name too. Dropdown/logout behaviour unchanged.
+- `session-auth.js` now caches `username`/`is_demo` from `/auth/verify`, so the avatar no longer depends on the login page having stored them.
+
+**Changed**
+- `GET /auth/verify` also returns `is_demo` (bool) for valid sessions. No secrets or hashes are exposed. Test: `tests/unit/test_auth_verify_avatar.py`.
+
 ### Logo APIs: LogoKit and Logostream, web-only majors (ABCT-LOGO-APIS-20261120)
 
 **Fixed**

@@ -86,7 +86,7 @@ function v2InitShell(activePage) {
     const userMenu = document.querySelector('.v2-user-menu');
     if (userMenu && !document.getElementById('userDropdown')) {
         setSafeHTML(userMenu, `
-            <div class="v2-avatar" onclick="toggleUserMenu()">?</div>
+            <div class="v2-avatar" role="button" tabindex="0" onclick="toggleUserMenu()"></div>
             <div class="v2-user-dropdown" id="userDropdown">
                 <div class="v2-user-dropdown-header" id="userDropdownName">User</div>
                 <div class="v2-user-dropdown-divider"></div>
@@ -103,6 +103,9 @@ function v2InitShell(activePage) {
             </div>
         `);
     }
+
+    // Populate avatar/name now (session-auth refreshes it after verify)
+    if (typeof window.initUserAvatar === 'function') window.initUserAvatar();
 
     // Apply saved state
     loadSavedTheme();

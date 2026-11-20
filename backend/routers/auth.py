@@ -78,6 +78,7 @@ class TokenVerifyResponse(BaseModel):
     """Token verification response"""
     valid: bool
     username: Optional[str] = None
+    is_demo: Optional[bool] = None
 
 
 async def init_auth_tables():
@@ -335,7 +336,8 @@ async def verify_token(token: Optional[str] = None):
 
     return TokenVerifyResponse(
         valid=True,
-        username=session_data['username']
+        username=session_data['username'],
+        is_demo=bool(session_data.get('is_demo'))
     )
 
 

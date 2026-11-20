@@ -67,7 +67,16 @@ async function checkAuth(redirectPath) {
             return false;
         }
 
-        // Token is valid
+        // Token is valid. Cache identity from the server so the avatar never
+        // depends on the login page having stored it.
+        if (data.username) {
+            localStorage.setItem('abct_username', data.username);
+        }
+        if (data.is_demo === true || String(data.username || '').toLowerCase() === 'demo') {
+            localStorage.setItem('is_demo', 'true');
+        } else if (data.is_demo === false) {
+            localStorage.removeItem('is_demo');
+        }
         return true;
 
     } catch (error) {
@@ -144,22 +153,31 @@ function isDemoMode() {
  */
 function initUserAvatar() {
     const username = getCurrentUsername();
-    if (!username) return;
+    const demo = isDemoMode();
+    const label = demo ? 'Demo' : (username || '');
+    const initial = label.trim().charAt(0).toUpperCase();
 
-    // Set avatar letter
-    const avatar = document.getElementById('userAvatar');
-    if (avatar) {
-        avatar.textContent = username.charAt(0).toUpperCase();
-    }
+    // Classic (#userAvatar) and /next (.v2-avatar) avatars. Never show "?":
+    // use the initial, or a person icon when no name is known.
+    document.querySelectorAll('#userAvatar, .v2-avatar').forEach(function (avatar) {
+        if (initial) {
+            avatar.textContent = initial;
+        } else {
+            avatar.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" ' +
+                'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
+                'aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>';
+        }
+        avatar.setAttribute('title', label || 'Account');
+        avatar.setAttribute('aria-label', label ? 'Account menu for ' + label : 'Account menu');
+    });
 
-    // Set username in dropdown
-    const menuName = document.getElementById('userMenuName');
-    if (menuName) {
-        menuName.textContent = username;
-    }
+    // Name in the dropdown header (classic + /next)
+    document.querySelectorAll('#userMenuName, #userDropdownName').forEach(function (el) {
+        el.textContent = label || 'Account';
+    });
 
     // Hide change password in demo mode
-    if (isDemoMode()) {
+    if (demo) {
         const cpItem = document.getElementById('changePasswordMenuItem');
         if (cpItem) cpItem.style.display = 'none';
     }

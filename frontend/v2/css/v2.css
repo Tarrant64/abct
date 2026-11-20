@@ -858,7 +858,14 @@ a:hover { opacity: 0.85; }
     font-weight: 700;
     font-size: 13px;
     cursor: pointer;
+    flex-shrink: 0;
+    user-select: none;
+    overflow: hidden;
     transition: transform var(--v2-transition);
+}
+
+.v2-avatar svg {
+    display: block;
 }
 
 .v2-avatar:hover {
