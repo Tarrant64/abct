@@ -561,7 +561,7 @@
 
         async function loadStats() {
             try {
-                const response = await fetch('/logs/stats');
+                const response = await authFetch('/logs/stats');
                 const data = await response.json();
 
                 if (data.stats) {
@@ -580,7 +580,7 @@
 
         async function loadRecentLogs() {
             try {
-                const response = await fetch('/logs/recent?limit=100');
+                const response = await authFetch('/logs/recent?limit=100');
                 const data = await response.json();
 
                 logBuffer = data.logs || [];
@@ -593,7 +593,7 @@
         function startLiveStream() {
             if (eventSource) return;
 
-            eventSource = new EventSource('/logs/stream');
+            eventSource = new EventSource('/logs/stream' + (localStorage.getItem('abct_token') ? '?token=' + encodeURIComponent(localStorage.getItem('abct_token')) : ''));
 
             eventSource.onopen = () => {
                 updateConnectionStatus(true);
@@ -725,7 +725,7 @@
             }
 
             try {
-                const response = await fetch('/logs', {
+                const response = await authFetch('/logs', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ confirm: true })

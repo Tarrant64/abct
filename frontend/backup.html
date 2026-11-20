@@ -959,7 +959,7 @@
                     headers['Authorization'] = `Bearer ${token}`;
                 }
 
-                const response = await fetch('/backup/export', {
+                const response = await authFetch('/backup/export', {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify(options)
@@ -1018,7 +1018,7 @@
 
             try {
                 const token = localStorage.getItem('abct_token');
-                const response = await fetch('/backup/export-env', {
+                const response = await authFetch('/backup/export-env', {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`
@@ -1198,7 +1198,7 @@
                     headers['Authorization'] = `Bearer ${token}`;
                 }
 
-                const response = await fetch('/backup/preview', {
+                const response = await authFetch('/backup/preview', {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify(options)
@@ -1367,7 +1367,7 @@
                     headers['Authorization'] = `Bearer ${token}`;
                 }
 
-                const response = await fetch('/backup/import', {
+                const response = await authFetch('/backup/import', {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify(options)
@@ -1459,7 +1459,7 @@
 
             try {
                 const token = localStorage.getItem('abct_token');
-                const response = await fetch('/backup/import-env', {
+                const response = await authFetch('/backup/import-env', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

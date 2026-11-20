@@ -4527,7 +4527,7 @@ async function loadDefiGovernance(forceRefresh = false) {
 
         // Phase 3b: Fetch lending summary (parallel, non-blocking)
         try {
-            const lendingResp = await fetch('/defi/lending-summary', { credentials: 'include' });
+            const lendingResp = await authFetch('/defi/lending-summary', { credentials: 'include' });
             if (lendingResp.ok) {
                 _lendingData = await lendingResp.json();
             }
@@ -10322,7 +10322,7 @@ async function addTokenDirect(policyId, blockchain, quantity, label) {
 
     try {
         // First, try to look up token info
-        const lookupResponse = await fetch(
+        const lookupResponse = await authFetch(
             `${API_BASE}/custom-tokens/lookup?policy_id=${encodeURIComponent(policyId)}&blockchain=${blockchain}`
         );
         const lookupData = await lookupResponse.json();
