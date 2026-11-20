@@ -20,7 +20,7 @@ from pydantic import BaseModel
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.logging_service import get_logging_service, LogLevel
-from auth_utils import verify_session
+from auth_utils import verify_session, verify_session_sse
 
 router = APIRouter(prefix="/logs", tags=["logs"])
 
@@ -124,7 +124,7 @@ async def get_recent_logs(
 
 
 @router.get("/stream")
-async def stream_logs(request: Request, user_id: int = Depends(verify_session)):
+async def stream_logs(request: Request, user_id: int = Depends(verify_session_sse)):
     """
     Server-Sent Events endpoint for real-time log streaming.
 

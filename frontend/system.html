@@ -6,11 +6,11 @@
     <title>Settings - ABCT</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1795213206">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1795214142">
     <!-- DOMPurify for XSS protection -->
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1795213206"></script>
+    <script src="/static/js/session-auth.js?v=1795214142"></script>
     <script>
         // XSS Protection - Safe HTML rendering (needed before app.js)
         function setSafeHTML(element, html) {
@@ -2979,8 +2979,8 @@
     </div>
 
     <!-- App JS (provides changeTheme, loadSavedTheme, togglePrivacyMode, initializePrivacyMode, toggleWaffleMenu, authFetch) -->
-    <script src="/static/js/logos.js?v=1795213206"></script>
-    <script src="/static/js/app.js?v=1795213206"></script>
+    <script src="/static/js/logos.js?v=1795214142"></script>
+    <script src="/static/js/app.js?v=1795214142"></script>
 
     <!-- ==================== Tab Switching Logic ==================== -->
     <script>
@@ -3249,7 +3249,7 @@
 
         async function loadLogStats() {
             try {
-                const response = await fetch('/logs/stats');
+                const response = await authFetch('/logs/stats');
                 const data = await response.json();
 
                 if (data.stats) {
@@ -3267,7 +3267,7 @@
 
         async function loadRecentLogs() {
             try {
-                const response = await fetch('/logs/recent?limit=100');
+                const response = await authFetch('/logs/recent?limit=100');
                 const data = await response.json();
 
                 logBuffer = data.logs || [];
@@ -3280,7 +3280,7 @@
         function startLiveStream() {
             if (eventSource) return;
 
-            eventSource = new EventSource('/logs/stream');
+            eventSource = new EventSource('/logs/stream' + (localStorage.getItem('abct_token') ? '?token=' + encodeURIComponent(localStorage.getItem('abct_token')) : ''));
 
             eventSource.onopen = () => {
                 updateConnectionStatus(true);
@@ -3403,7 +3403,7 @@
             }
 
             try {
-                const response = await fetch('/logs', {
+                const response = await authFetch('/logs', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ confirm: true })
@@ -3949,7 +3949,7 @@
 
         async function saveMode(mode) {
             try {
-                const response = await fetch('/security/settings', {
+                const response = await authFetch('/security/settings', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ ssl_mode: mode })
@@ -3978,7 +3978,7 @@
             try {
                 showSecurityStatus('Generating certificate...', 'success');
 
-                const response = await fetch('/security/certificate/generate', {
+                const response = await authFetch('/security/certificate/generate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ hostname: 'localhost', valid_days: 365 })
@@ -4015,7 +4015,7 @@
 
                 showSecurityStatus('Uploading certificate...', 'success');
 
-                const response = await fetch('/security/certificate/upload', {
+                const response = await authFetch('/security/certificate/upload', {
                     method: 'POST',
                     body: formData
                 });
@@ -4040,7 +4040,7 @@
             }
 
             try {
-                const response = await fetch('/security/certificate', {
+                const response = await authFetch('/security/certificate', {
                     method: 'DELETE'
                 });
 
@@ -4072,7 +4072,7 @@
 
         async function loadCloudflareStatus() {
             try {
-                const response = await fetch('/cloudflare/status');
+                const response = await authFetch('/cloudflare/status');
                 if (!response.ok) return;
                 const data = await response.json();
                 renderCloudflareStatus(data);
@@ -4165,7 +4165,7 @@
             progressText.textContent = 'Starting installation...';
 
             try {
-                const response = await fetch('/cloudflare/setup', {
+                const response = await authFetch('/cloudflare/setup', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ token })
@@ -4201,7 +4201,7 @@
             progressText.textContent = 'Removing cloudflared...';
 
             try {
-                const response = await fetch('/cloudflare/remove', {
+                const response = await authFetch('/cloudflare/remove', {
                     method: 'DELETE'
                 });
 
@@ -4315,7 +4315,7 @@
                     headers['Authorization'] = `Bearer ${token}`;
                 }
 
-                const response = await fetch('/backup/export', {
+                const response = await authFetch('/backup/export', {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify(options)
@@ -4374,7 +4374,7 @@
 
             try {
                 const token = localStorage.getItem('abct_token');
-                const response = await fetch('/backup/export-env', {
+                const response = await authFetch('/backup/export-env', {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${token}`
@@ -4555,7 +4555,7 @@
                     headers['Authorization'] = `Bearer ${token}`;
                 }
 
-                const response = await fetch('/backup/preview', {
+                const response = await authFetch('/backup/preview', {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify(options)
@@ -4724,7 +4724,7 @@
                     headers['Authorization'] = `Bearer ${token}`;
                 }
 
-                const response = await fetch('/backup/import', {
+                const response = await authFetch('/backup/import', {
                     method: 'POST',
                     headers: headers,
                     body: JSON.stringify(options)
@@ -4815,7 +4815,7 @@
 
             try {
                 const token = localStorage.getItem('abct_token');
-                const response = await fetch('/backup/import-env', {
+                const response = await authFetch('/backup/import-env', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

@@ -6,9 +6,9 @@
     <title>ABCT - System Logs</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1795213206">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1795214142">
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1795213206"></script>
+    <script src="/static/js/session-auth.js?v=1795214142"></script>
     <style>
         .logs-page {
             max-width: 1400px;
@@ -561,7 +561,7 @@
 
         async function loadStats() {
             try {
-                const response = await fetch('/logs/stats');
+                const response = await authFetch('/logs/stats');
                 const data = await response.json();
 
                 if (data.stats) {
@@ -580,7 +580,7 @@
 
         async function loadRecentLogs() {
             try {
-                const response = await fetch('/logs/recent?limit=100');
+                const response = await authFetch('/logs/recent?limit=100');
                 const data = await response.json();
 
                 logBuffer = data.logs || [];
@@ -593,7 +593,7 @@
         function startLiveStream() {
             if (eventSource) return;
 
-            eventSource = new EventSource('/logs/stream');
+            eventSource = new EventSource('/logs/stream' + (localStorage.getItem('abct_token') ? '?token=' + encodeURIComponent(localStorage.getItem('abct_token')) : ''));
 
             eventSource.onopen = () => {
                 updateConnectionStatus(true);
@@ -725,7 +725,7 @@
             }
 
             try {
-                const response = await fetch('/logs', {
+                const response = await authFetch('/logs', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ confirm: true })
@@ -759,7 +759,7 @@
 
     </script>
 
-    <script src="/static/js/logos.js?v=1795213206"></script>
+    <script src="/static/js/logos.js?v=1795214142"></script>
 
     <script src="/static/js/app.js"></script>
 

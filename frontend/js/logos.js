@@ -75,7 +75,12 @@
     var ready = null;
     function init() {
         if (ready) return ready;
-        ready = fetch('/api/config/public', { credentials: 'include' })
+        var tok = null;
+        try { tok = localStorage.getItem('abct_token'); } catch (e) { /* no storage */ }
+        ready = fetch('/api/config/public', {
+            credentials: 'include',
+            headers: tok ? { 'Authorization': 'Bearer ' + tok } : {}
+        })
             .then(function (r) { return r.ok ? r.json() : {}; })
             .then(function (d) {
                 cfg.token = d.logokit_token || '';

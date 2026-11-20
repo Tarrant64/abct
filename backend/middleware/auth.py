@@ -1,11 +1,8 @@
 """
-Authentication Middleware - HTTP Basic Auth for ABCT
+Authentication Middleware - admin gate for ABCT
 
-Provides HTTP Basic Auth verification for admin endpoints:
-- Credentials from environment variables (ABCT_ADMIN_USER, ABCT_ADMIN_PASSWORD)
-- Constant-time comparison to prevent timing attacks
-- Optional localhost bypass (ABCT_REQUIRE_AUTH=false)
-- Secure credential handling
+verify_admin accepts the normal session Bearer token when the session is the
+admin account (see verify_admin). Optional bypass when ABCT_REQUIRE_AUTH=false.
 
 Usage:
     from middleware.auth import verify_admin
@@ -17,25 +14,12 @@ Usage:
 
 import os
 import hmac
-import secrets
-from fastapi import HTTPException, Depends
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+import aiosqlite
+from fastapi import HTTPException, Header
 from typing import Optional
 
-# Initialize HTTP Basic Auth (auto_error=False allows optional auth)
-security = HTTPBasic(auto_error=False)
-
-
-def get_admin_credentials() -> tuple[Optional[str], Optional[str]]:
-    """
-    Get admin credentials from environment variables.
-
-    Returns:
-        Tuple of (username, password) or (None, None) if not configured
-    """
-    username = os.getenv('ABCT_ADMIN_USER')
-    password = os.getenv('ABCT_ADMIN_PASSWORD')
-    return username, password
+from auth_utils import verify_session, ADMIN_USER_ID
+from config import DATABASE_PATH
 
 
 def is_auth_required() -> bool:
@@ -66,81 +50,43 @@ def constant_time_compare(a: str, b: str) -> bool:
     return hmac.compare_digest(a.encode('utf-8'), b.encode('utf-8'))
 
 
-async def verify_admin(credentials: Optional[HTTPBasicCredentials] = Depends(security)) -> str:
+async def verify_admin(authorization: Optional[str] = Header(None)) -> str:
     """
-    Verify HTTP Basic Auth credentials for admin access.
+    Admin gate for sensitive routes (security settings/certs, NFT image admin).
 
-    This dependency can be added to any endpoint that requires authentication:
-        @router.post("/endpoint", dependencies=[Depends(verify_admin)])
-        async def protected_endpoint():
-            ...
+    Accepts the normal session login (Authorization: Bearer <token>) when the
+    session belongs to the admin account. There is no separate Basic credential.
 
-    Args:
-        credentials: HTTP Basic Auth credentials from the request (optional if auth disabled)
-
-    Returns:
-        Username if authentication succeeds
+    The users table has no role/is_admin column. The admin is the primary,
+    non-demo account: user id ADMIN_USER_ID (1), the account seeded at first run
+    and the owner of all legacy data (auth_utils.verify_session also treats id 1
+    as admin when auth is off). Demo and any other account get 403.
 
     Raises:
-        HTTPException: 401 Unauthorized if credentials are invalid or missing
-        HTTPException: 503 Service Unavailable if auth is required but not configured
+        401: no/invalid/expired token (auth required)
+        403: valid session but not the admin account
     """
-    # Check if auth is disabled (for local development)
+    # Auth disabled (dev/LAN mode): unchanged behaviour, tokenless == admin.
     if not is_auth_required():
         return "localhost"
 
-    # If auth is required but no credentials provided, return 401
-    if credentials is None:
-        raise HTTPException(
-            status_code=401,
-            detail="Not authenticated",
-            headers={"WWW-Authenticate": "Basic"},
-        )
+    # Validates the Bearer token (401 on missing/invalid/expired)
+    user_id = await verify_session(authorization)
 
-    # Get configured credentials
-    admin_user, admin_password = get_admin_credentials()
+    if user_id == ADMIN_USER_ID:
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            async with db.execute(
+                "SELECT username, is_demo FROM users WHERE id = ?", (user_id,)
+            ) as cur:
+                row = await cur.fetchone()
+        if row and not row[1]:
+            return row[0]
 
-    # If credentials not configured but auth is required, return 503
-    if not admin_user or not admin_password:
-        raise HTTPException(
-            status_code=503,
-            detail="Authentication is required but not configured. Set ABCT_ADMIN_USER and ABCT_ADMIN_PASSWORD environment variables."
-        )
-
-    # Verify username and password using constant-time comparison
-    username_correct = constant_time_compare(credentials.username, admin_user)
-    password_correct = constant_time_compare(credentials.password, admin_password)
-
-    if not (username_correct and password_correct):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid credentials",
-            headers={"WWW-Authenticate": "Basic realm=\"ABCT Admin\""},
-        )
-
-    return credentials.username
+    raise HTTPException(status_code=403, detail="Admin access required")
 
 
-async def optional_verify_admin(credentials: Optional[HTTPBasicCredentials] = Depends(security)) -> Optional[str]:
-    """
-    Optional authentication dependency.
-
-    Similar to verify_admin, but allows requests without credentials if auth is disabled.
-    Use this for endpoints that should work without auth in development but require it in production.
-
-    Args:
-        credentials: HTTP Basic Auth credentials from the request (optional)
-
-    Returns:
-        Username if authenticated, None if auth is disabled
-
-    Raises:
-        HTTPException: 401 Unauthorized if credentials provided but invalid
-    """
+async def optional_verify_admin(authorization: Optional[str] = Header(None)) -> Optional[str]:
+    """Like verify_admin but returns None (instead of 401) when no token is sent and auth is disabled."""
     if not is_auth_required():
         return None
-
-    if credentials:
-        return await verify_admin(credentials)
-
-    return None
+    return await verify_admin(authorization)

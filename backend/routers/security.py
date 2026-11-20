@@ -27,15 +27,8 @@ from config import CERTS_DIR, DEFAULT_CERT_PATH, DEFAULT_KEY_PATH
 from services.ssl_service import get_ssl_service
 from auth_utils import verify_session
 
-# Try to import auth middleware if available
-try:
-    from middleware.auth import verify_admin
-    AUTH_AVAILABLE = True
-except ImportError:
-    # Fallback: no auth required if middleware not available
-    async def verify_admin():
-        pass
-    AUTH_AVAILABLE = False
+# Fail closed: a failed import must break startup, never silently allow.
+from middleware.auth import verify_admin
 
 router = APIRouter(prefix="/security", tags=["security"])
 

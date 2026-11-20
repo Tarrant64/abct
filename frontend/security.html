@@ -6,9 +6,9 @@
     <title>ABCT - Security Settings</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.ico">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-    <link rel="stylesheet" href="/static/css/styles.css?v=1795213206">
+    <link rel="stylesheet" href="/static/css/styles.css?v=1795214142">
     <!-- Session-based authentication -->
-    <script src="/static/js/session-auth.js?v=1795213206"></script>
+    <script src="/static/js/session-auth.js?v=1795214142"></script>
     <style>
         /* Security Settings Styles */
         .security-manager {
@@ -1014,7 +1014,7 @@
 
         async function saveMode(mode) {
             try {
-                const response = await fetch('/security/settings', {
+                const response = await authFetch('/security/settings', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ ssl_mode: mode })
@@ -1043,7 +1043,7 @@
             try {
                 showStatus('Generating certificate...', 'success');
 
-                const response = await fetch('/security/certificate/generate', {
+                const response = await authFetch('/security/certificate/generate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ hostname: 'localhost', valid_days: 365 })
@@ -1080,7 +1080,7 @@
 
                 showStatus('Uploading certificate...', 'success');
 
-                const response = await fetch('/security/certificate/upload', {
+                const response = await authFetch('/security/certificate/upload', {
                     method: 'POST',
                     body: formData
                 });
@@ -1105,7 +1105,7 @@
             }
 
             try {
-                const response = await fetch('/security/certificate', {
+                const response = await authFetch('/security/certificate', {
                     method: 'DELETE'
                 });
 
@@ -1139,7 +1139,7 @@
 
         async function loadCloudflareStatus() {
             try {
-                const response = await fetch('/cloudflare/status');
+                const response = await authFetch('/cloudflare/status');
                 if (!response.ok) return;
                 const data = await response.json();
                 renderCloudflareStatus(data);
@@ -1232,7 +1232,7 @@
             progressText.textContent = 'Starting installation...';
 
             try {
-                const response = await fetch('/cloudflare/setup', {
+                const response = await authFetch('/cloudflare/setup', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ token })
@@ -1268,7 +1268,7 @@
             progressText.textContent = 'Removing cloudflared...';
 
             try {
-                const response = await fetch('/cloudflare/remove', {
+                const response = await authFetch('/cloudflare/remove', {
                     method: 'DELETE'
                 });
 
@@ -1288,7 +1288,7 @@
 
     </script>
 
-    <script src="/static/js/logos.js?v=1795213206"></script>
+    <script src="/static/js/logos.js?v=1795214142"></script>
 
     <script src="/static/js/app.js"></script>
 
