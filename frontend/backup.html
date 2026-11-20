@@ -901,7 +901,7 @@
 
         async function loadBackupInfo() {
             try {
-                const response = await fetch('/backup/info');
+                const response = await authFetch('/backup/info');
                 const data = await response.json();
 
                 if (!response.ok) {

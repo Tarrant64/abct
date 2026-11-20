@@ -650,7 +650,7 @@ async def import_backup(options: ImportOptions, user_id: int = Depends(verify_se
         raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
 
 
-@router.get("/info")
+@router.get("/info", dependencies=[Depends(verify_session)])
 async def get_backup_info():
     """
     Get information about what can be backed up and current data status.

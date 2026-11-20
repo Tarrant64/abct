@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: unauthenticated route leaks (ABCT-LEAKFIX-20261120)
+
+**Fixed**
+- `GET /portfolio/chart/unified`: the route decorator sat on the `_stock_chart_overlay` helper, so the unified chart always failed and the helper was exposed without auth (returning stock value history). The decorator is back on `get_unified_chart` (`verify_session`); the helper is no longer a route.
+- Added `verify_session` to previously open GETs: `/settings/apis`, `/settings/apis/{id}`, `/settings/apis/{id}/test`, `/settings/api-utilization`, `/settings/api-utilization/{id}`, `/backup/info`, `/security/settings`, `/security/certificate/info`. Frontend callers (backup, security, system pages) now use `authFetch`. `ABCT_REQUIRE_AUTH` and `verify_session` semantics are unchanged.
+
 ### Mobile/API server fixes (ABCT-SERVER-FIXES-20261120)
 
 **Changed (additive unless noted)**

@@ -886,7 +886,7 @@
 
         async function loadSettings() {
             try {
-                const response = await fetch('/security/settings');
+                const response = await authFetch('/security/settings');
                 currentSettings = await response.json();
                 renderSettings(currentSettings);
             } catch (error) {

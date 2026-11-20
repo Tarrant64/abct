@@ -3821,7 +3821,7 @@
         async function loadSecuritySettings() {
             initSecurityTab();
             try {
-                const response = await fetch('/security/settings');
+                const response = await authFetch('/security/settings');
                 currentSettings = await response.json();
                 renderSecuritySettings(currentSettings);
             } catch (error) {
@@ -4256,7 +4256,7 @@
         async function loadBackupInfo() {
             initBackupTab();
             try {
-                const response = await fetch('/backup/info');
+                const response = await authFetch('/backup/info');
                 const data = await response.json();
 
                 if (!response.ok) {

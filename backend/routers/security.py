@@ -25,6 +25,7 @@ from database import (
 )
 from config import CERTS_DIR, DEFAULT_CERT_PATH, DEFAULT_KEY_PATH
 from services.ssl_service import get_ssl_service
+from auth_utils import verify_session
 
 # Try to import auth middleware if available
 try:
@@ -68,7 +69,7 @@ class CertGenerateRequest(BaseModel):
         return v.strip()
 
 
-@router.get("/settings")
+@router.get("/settings", dependencies=[Depends(verify_session)])
 async def get_settings():
     """
     Get current security/SSL settings.
@@ -346,7 +347,7 @@ async def upload_certificate(
         )
 
 
-@router.get("/certificate/info")
+@router.get("/certificate/info", dependencies=[Depends(verify_session)])
 async def get_certificate_info():
     """
     Get information about the current certificate.

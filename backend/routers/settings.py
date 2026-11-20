@@ -1108,7 +1108,7 @@ class APIEnabledUpdate(BaseModel):
     enabled: bool
 
 
-@router.get("/apis")
+@router.get("/apis", dependencies=[Depends(verify_session)])
 async def list_apis():
     """
     List all supported APIs with their current status.
@@ -1175,7 +1175,7 @@ async def list_apis():
     }
 
 
-@router.get("/apis/{api_id}")
+@router.get("/apis/{api_id}", dependencies=[Depends(verify_session)])
 async def get_api_status(api_id: str):
     """Get status of a specific API."""
     if api_id not in API_REGISTRY:
@@ -1356,7 +1356,7 @@ async def upload_api_file(api_id: str, file: UploadFile = File(...), user_id: in
     }
 
 
-@router.get("/apis/{api_id}/test")
+@router.get("/apis/{api_id}/test", dependencies=[Depends(verify_session)])
 async def test_api(api_id: str):
     """Test if an API key is valid by making a simple request."""
     if api_id not in API_REGISTRY:
@@ -1412,7 +1412,7 @@ class RateLimitUpdate(BaseModel):
     period_seconds: Optional[int] = 86400
 
 
-@router.get("/api-utilization")
+@router.get("/api-utilization", dependencies=[Depends(verify_session)])
 async def get_api_utilization():
     """
     Get API utilization data for all configured APIs.
@@ -1533,7 +1533,7 @@ async def get_api_utilization():
     }
 
 
-@router.get("/api-utilization/{api_id}")
+@router.get("/api-utilization/{api_id}", dependencies=[Depends(verify_session)])
 async def get_single_api_utilization(api_id: str):
     """Get utilization data for a specific API."""
     if api_id not in API_REGISTRY:

@@ -2803,7 +2803,6 @@ async def refresh_portfolio(user_id: int = Depends(verify_session)):
     return await get_portfolio_instant(user_id=user_id)
 
 
-@router.get("/chart/unified")
 async def _stock_chart_overlay(user_id: int, start_date):
     """Daily stock-value map for chart overlays (WQ-0386). Any failure in
     the reconstruction degrades to no overlay — the chart still renders the
@@ -2816,6 +2815,7 @@ async def _stock_chart_overlay(user_id: int, start_date):
         return {}
 
 
+@router.get("/chart/unified")
 async def get_unified_chart(
     user_id: int = Depends(verify_session),
     range: str = Query("1w", description="Time range: 24h, 1w, 1m, 3m, 6m, 1y, all"),
