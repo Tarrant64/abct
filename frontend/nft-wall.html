@@ -1601,7 +1601,7 @@
                     </div>
                     <div class="modal-info-section">
                         <div>
-                            <h2 class="modal-title">${escapeHtml(nft.name)}</h2>
+                            <h2 class="modal-title">${escapeHtml(nft.name || 'Unnamed NFT')}</h2>
                             <div class="modal-collection-name">${escapeHtml(nft.collection.name)}</div>
                             ${creatorHTML}
                             ${nft.description ? `<p class="modal-description">${escapeHtml(nft.description)}</p>` : ''}
