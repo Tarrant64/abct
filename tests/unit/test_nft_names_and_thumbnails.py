@@ -240,3 +240,10 @@ def test_wall_never_emits_unknown(image_db, monkeypatch):
     assert by_id[named]['collection'] is None and by_id[meta]['collection'] == 'Buds'
     blob = repr(res)
     assert 'Unknown' not in blob
+
+
+def test_docker_requirements_include_pillow():
+    """The Docker image installs backend/requirements.txt; without Pillow no thumbnail is ever generated."""
+    path = os.path.join(BACKEND_DIR, 'requirements.txt')
+    with open(path) as f:
+        assert any(line.strip().lower().startswith('pillow') for line in f)
