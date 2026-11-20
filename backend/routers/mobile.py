@@ -3210,6 +3210,55 @@ async def get_mobile_pnl_asset(symbol: str, user_id: int = Depends(verify_sessio
     return await pnl_router.get_asset_pnl(symbol, user_id=user_id)
 
 
+# ---------------------------------------------------------------------------
+# Analytics aggregates (2026-11-20). Bounded SQLite aggregates (services/
+# mobile_analytics.py), cached 10 min per (user, months), so the router's ETag
+# is stable between polls and a conditional GET returns 304.
+# ---------------------------------------------------------------------------
+ANALYTICS_CACHE_TTL_S = 600
+
+
+@router.get("/analytics/fees")
+async def get_mobile_fees(
+    months: int = Query(12, ge=1, le=60),
+    user_id: int = Depends(verify_session),
+):
+    """Fees paid, in USD, by month / chain / exchange (approximate: current price)."""
+    cache_key = f"mobile_fees_v1_{user_id}_{months}"
+    cached = await get_cache(cache_key, user_id=user_id)
+    if cached:
+        return cached
+    from services.mobile_analytics import fees_summary
+    try:
+        prices = await pricing_service.get_all_tracked_prices()
+    except Exception:
+        prices = {}
+    native_symbols = {chain: cfg['symbol'] for chain, cfg in _WALLET_NATIVE_CONFIG.items()}
+    result = await fees_summary(user_id, months, prices, native_symbols)
+    await set_cache(cache_key, result, ANALYTICS_CACHE_TTL_S, user_id=user_id)
+    return result
+
+
+@router.get("/analytics/staking-income")
+async def get_mobile_staking_income(
+    months: int = Query(12, ge=1, le=60),
+    user_id: int = Depends(verify_session),
+):
+    """Monthly staking income from stored reward history (never estimated)."""
+    cache_key = f"mobile_staking_income_v1_{user_id}_{months}"
+    cached = await get_cache(cache_key, user_id=user_id)
+    if cached:
+        return cached
+    from services.mobile_analytics import staking_income_summary
+    try:
+        prices = await pricing_service.get_all_tracked_prices()
+    except Exception:
+        prices = {}
+    result = await staking_income_summary(user_id, months, prices)
+    await set_cache(cache_key, result, ANALYTICS_CACHE_TTL_S, user_id=user_id)
+    return result
+
+
 @router.get("/status")
 async def get_mobile_api_status():
     """
