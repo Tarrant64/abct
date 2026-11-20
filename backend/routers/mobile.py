@@ -1730,6 +1730,33 @@ async def get_mobile_exchange_detail(
     }
 
 
+def _tag_position_wallets(position: dict, wallets_for_position: list, value_usd: Optional[float]) -> None:
+    """Attach wallet attribution to one staking position (2026-11-20).
+
+    Adds wallet_id / wallet_label / wallet_address (primary wallet) and a
+    `wallets` breakdown [{wallet_id, label, value_usd}]. Positions are
+    produced per wallet (never merged across wallets), so the breakdown has
+    one entry whose value_usd equals the row's USD value. A native
+    delegation shared by several wallets on one stake key lists them all;
+    the account-level amount cannot be split, so value_usd is null there.
+    """
+    if not wallets_for_position:
+        return
+    primary = wallets_for_position[0]
+    position["wallet_id"] = primary.get('id')
+    position["wallet_label"] = primary.get('label')
+    position["wallet_address"] = primary.get('address')
+    shared = len(wallets_for_position) > 1
+    position["wallets"] = [
+        {
+            "wallet_id": w.get('id'),
+            "label": w.get('label'),
+            "value_usd": None if shared else (None if value_usd is None else round(value_usd, 2)),
+        }
+        for w in wallets_for_position
+    ]
+
+
 async def _map_staking_protocol_positions(
     protocol_name: str,
     protocol_data: dict,
@@ -1899,9 +1926,11 @@ async def get_mobile_defi_staking(refresh: bool = Query(False), user_id: int = D
     )
     stake_addresses = []
     seen_stake_addresses = set()
-    for stake_address in resolved_stakes:
+    wallets_by_stake: dict = {}   # stake address -> wallets sharing that stake key
+    for wallet, stake_address in zip(cardano_wallets, resolved_stakes):
         if isinstance(stake_address, (Exception, BaseException)) or not stake_address:
             continue
+        wallets_by_stake.setdefault(stake_address, []).append(wallet)
         if stake_address not in seen_stake_addresses:
             seen_stake_addresses.add(stake_address)
             stake_addresses.append(stake_address)
@@ -1959,6 +1988,8 @@ async def get_mobile_defi_staking(refresh: bool = Query(False), user_id: int = D
                     "active": True,
                     "logo_url": logokit_service.get_crypto_logo_url("ADA", size=32)
                 })
+                _tag_position_wallets(
+                    positions[-1], wallets_by_stake.get(stake_address, []), delegated_usd)
         except Exception as e:
             logger.warning(f"Could not get staking info for {stake_address[:20]}: {e}")
 
@@ -1971,7 +2002,7 @@ async def get_mobile_defi_staking(refresh: bool = Query(False), user_id: int = D
             for wallet in cardano_wallets
         ], return_exceptions=True)
 
-        for cached in staking_caches:
+        for wallet, cached in zip(cardano_wallets, staking_caches):
             try:
                 if isinstance(cached, (Exception, BaseException)) or not cached or not isinstance(cached, dict):
                     continue
@@ -1988,6 +2019,8 @@ async def get_mobile_defi_staking(refresh: bool = Query(False), user_id: int = D
                             protocol_name, protocol_data, all_prices, ada_price
                         )
                     )
+                    for pp in proto_positions:
+                        _tag_position_wallets(pp, [wallet], pp.get("staked_usd"))
                     positions.extend(proto_positions)
                     total_staked_usd += staked_usd
                     total_rewards_usd += rewards_usd
@@ -2012,7 +2045,7 @@ async def get_mobile_defi_staking(refresh: bool = Query(False), user_id: int = D
             for wallet in bitcoin_wallets
         ], return_exceptions=True)
 
-        for cached in btc_karma_caches:
+        for wallet, cached in zip(bitcoin_wallets, btc_karma_caches):
             try:
                 if isinstance(cached, (Exception, BaseException)) or not cached or not isinstance(cached, dict):
                     continue
@@ -2029,6 +2062,8 @@ async def get_mobile_defi_staking(refresh: bool = Query(False), user_id: int = D
                             blockchain='bitcoin',
                         )
                     )
+                    for pp in proto_positions:
+                        _tag_position_wallets(pp, [wallet], pp.get("staked_usd"))
                     positions.extend(proto_positions)
                     total_staked_usd += staked_usd
                     total_rewards_usd += rewards_usd
