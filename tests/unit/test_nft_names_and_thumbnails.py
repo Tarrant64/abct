@@ -247,3 +247,61 @@ def test_docker_requirements_include_pillow():
     path = os.path.join(BACKEND_DIR, 'requirements.txt')
     with open(path) as f:
         assert any(line.strip().lower().startswith('pillow') for line in f)
+
+
+# --------------------------------------------- /wall/details uses the wall resolver
+def test_wall_details_never_emits_unknown(image_db, monkeypatch):
+    """Server-fixes item 5 (2026-11-20): /nfts/wall/details/* names and
+    collection come from the same resolver as the wall -- null, never
+    "Unknown" / "Unknown Collection"."""
+    import routers.nfts as r
+    import services.nftcdn as nftcdn_mod
+    import services.nmkr as nmkr_mod
+
+    anon = POLICY + "00ff01"                      # not text -> no name
+    sibling_named = POLICY + "4e46543031"         # decodes to NFT01
+    sibling_anon = POLICY + "00ff02"
+    nfts = [
+        {'asset_id': anon, 'collection': {}, 'price_ada': None},
+        {'asset_id': sibling_named, 'collection': {'name': ''}, 'price_ada': 1},
+        {'asset_id': sibling_anon, 'collection': {}, 'price_ada': 2},
+    ]
+
+    async def fake_get_all(user_id=None, force_refresh=False):
+        return nfts
+
+    async def none(*a, **k):
+        return None
+
+    async def price(sym=None):
+        return 1.0
+
+    async def no_wallets(*a, **k):
+        return []
+
+    class _R:
+        status_code = 404
+
+    async def bf(*a, **k):
+        return _R()
+
+    async def key():
+        return 'k'
+
+    monkeypatch.setattr(r.nft_service, 'get_all_nfts', fake_get_all)
+    monkeypatch.setattr(r.pricing_service, 'get_price', price)
+    monkeypatch.setattr(r, 'get_all_wallets', no_wallets)
+    monkeypatch.setattr(nftcdn_mod.nftcdn_service, 'get_nft_metadata', none)
+    monkeypatch.setattr(nmkr_mod.nmkr_service, 'get_nft_metadata', none)
+    import services.http_client as hc
+    monkeypatch.setattr(hc, 'blockfrost_fetch', bf)
+    monkeypatch.setattr(r._blockfrost_keys, 'get_api_key', key)
+
+    res = asyncio.run(r.get_nft_wall_details('cardano', anon, user_id=1))
+    assert res['name'] is None
+    assert res['collection']['name'] is None
+    assert res['wallet']['address'] is None
+    sib = {s['asset_id']: s['name'] for s in res['collection_siblings']}
+    assert sib[sibling_named] == 'NFT01'
+    assert sib[sibling_anon] is None
+    assert 'Unknown' not in repr(res)

@@ -2775,7 +2775,7 @@ async def get_nft_wall_details(
             raise HTTPException(status_code=400, detail=f"Unsupported blockchain: {blockchain}")
 
         # Get wallet owner
-        wallet_address = nft_data.get('wallet_address', 'Unknown')
+        wallet_address = nft_data.get('wallet_address')  # None (never 'Unknown') when not known
         wallet_name = None
 
         wallets = await get_all_wallets(user_id=user_id)
@@ -2803,7 +2803,7 @@ async def get_nft_wall_details(
                 if n_policy_id == collection_id and n_asset_id != asset_id:
                     collection_siblings.append({
                         'asset_id': n_asset_id,
-                        'name': n.get('name', 'Unknown'),
+                        'name': nft_names.resolve_cardano_name(n),
                         'image_url': f"/nfts/images/cardano/{n_asset_id}/thumbnail",
                         'floor_price_ada': n.get('price_ada'),
                         'floor_price_usd': (n.get('price_ada') or 0) * ada_price
@@ -2839,7 +2839,7 @@ async def get_nft_wall_details(
                         floor_price_native = n.get('collection', {}).get(f'floor_price_{price_key}', 0) or 0
                         collection_siblings.append({
                             'asset_id': sibling_asset_id,
-                            'name': n.get('name', 'Unknown'),
+                            'name': nft_names.clean_name(n.get('name')),
                             'image_url': f"/nfts/images/{blockchain}/{sibling_asset_id}/thumbnail",
                             f'floor_price_{price_key}': floor_price_native,
                             'floor_price_usd': floor_price_native * prices.get(price_key, 0)
@@ -2856,7 +2856,7 @@ async def get_nft_wall_details(
                         floor_price_sol = n.get('collection', {}).get('floor_price_sol', 0) or 0
                         collection_siblings.append({
                             'asset_id': sibling_asset_id,
-                            'name': n.get('name', 'Unknown'),
+                            'name': nft_names.clean_name(n.get('name')),
                             'image_url': f"/nfts/images/solana/{sibling_asset_id}/thumbnail",
                             'floor_price_sol': floor_price_sol,
                             'floor_price_usd': floor_price_sol * sol_price
@@ -2908,24 +2908,23 @@ async def get_nft_wall_details(
         edition_info = unified_metadata['edition_info'] if unified_metadata else None
         creator = unified_metadata['creator'] if unified_metadata else None
 
-        # IMPORTANT: Use extracted collection name and NFT name from metadata, not from nft_data
-        extracted_collection_name = unified_metadata['collection_name'] if unified_metadata else None
-        collection_name = extracted_collection_name or nft_data.get('collection', {}).get('name', 'Unknown Collection')
+        # Same resolver the wall uses (services/nft_names): null, never
+        # "Unknown" / "Unknown Collection", when no real name is known.
+        extracted_collection_name = nft_names.clean_display_text(
+            unified_metadata['collection_name'] if unified_metadata else None)
+        collection_name = extracted_collection_name or nft_names.clean_collection(nft_data)
 
-        extracted_nft_name = unified_metadata['nft_name'] if unified_metadata else None
+        extracted_nft_name = nft_names.clean_display_text(
+            unified_metadata['nft_name'] if unified_metadata else None)
 
-        # Fallback to nft_data, but decode hex if needed
-        fallback_name = nft_data.get('name', 'Unknown')
-        if fallback_name and fallback_name != 'Unknown':
-            # Check if name is hex-encoded (all hex chars and even length)
-            if len(fallback_name) % 2 == 0 and all(c in '0123456789abcdefABCDEF' for c in fallback_name):
-                try:
-                    decoded_name = bytes.fromhex(fallback_name).decode('utf-8', errors='ignore')
-                    if decoded_name and decoded_name.isprintable():
-                        fallback_name = decoded_name
-                        logger.info(f"Decoded hex NFT name: {fallback_name}")
-                except Exception:
-                    pass
+        # Fallback to nft_data (Cardano decodes the on-chain hex asset name)
+        if blockchain == 'cardano':
+            fallback_name = nft_names.resolve_cardano_name(nft_data)
+        else:
+            fallback_name = nft_names.clean_name(nft_data.get('name'))
+        if fallback_name and len(fallback_name) >= 8:
+            # name stored as raw hex (long enough that a real word can't be mistaken for hex)
+            fallback_name = nft_names.decode_asset_name(fallback_name) or fallback_name
 
         # For Book.io NFTs, prefer collection name as NFT name if no good NFT name found
         # (since asset names like "Macbeth0514" aren't user-friendly)
