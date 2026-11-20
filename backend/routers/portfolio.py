@@ -1941,7 +1941,10 @@ async def get_all_holdings(
             'value_usd': asset.get('value_usd') or 0,
             'price_change_24h': asset.get('price_change_24h'),
             'wallet_count': asset.get('wallet_count', 0),
-            'logo_url': asset.get('logo_url') or (token_meta.get('image_url') if token_meta else None) or logokit_service.get_crypto_logo_url(ticker, size=64),
+            'logo_url': (token_meta.get('image_url') if token_meta else None) or asset.get('logo_url') or (logokit_service.get_crypto_logo_url(ticker, size=64) if logokit_service.api_key else None),
+            'policy_id': asset.get('policy_id') or None,
+            'asset_name_hex': asset.get('asset_name_hex'),
+            'coingecko_id': asset.get('coingecko_id') or (token_meta.get('coingecko_id') if token_meta else None),
             'source': 'token',
         }
 
@@ -1967,7 +1970,10 @@ async def get_all_holdings(
                 'value_usd': asset.get('value_usd') or 0,
                 'price_change_24h': None,
                 'wallet_count': asset.get('wallet_count', 0),
-                'logo_url': asset.get('logo_url') or (token_meta.get('image_url') if token_meta else None) or logokit_service.get_crypto_logo_url(ticker, size=64),
+                'logo_url': (token_meta.get('image_url') if token_meta else None) or asset.get('logo_url') or (logokit_service.get_crypto_logo_url(ticker, size=64) if logokit_service.api_key else None),
+                'policy_id': asset.get('policy_id') or None,
+                'asset_name_hex': asset.get('asset_name_hex'),
+                'coingecko_id': asset.get('coingecko_id') or (token_meta.get('coingecko_id') if token_meta else None),
                 'source': 'token',
             }
 

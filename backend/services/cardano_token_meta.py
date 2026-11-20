@@ -237,7 +237,7 @@ async def _ensure_tables(db) -> None:
 
 
 def _reset_for_tests() -> None:
-    global _table_ready
+    global _table_ready, _warm_sem
     _table_ready = False
     _inflight.clear()
     _src_sems.clear()
