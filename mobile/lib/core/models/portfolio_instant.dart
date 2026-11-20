@@ -32,7 +32,7 @@ class InstantHolding {
     required this.imageUrl,
     required this.quantity,
     required this.valueUsd,
-    required this.priceUsd,
+    this.priceUsd,
     required this.priceChange24h,
     required this.allocationPct,
     required this.sources,
@@ -43,7 +43,8 @@ class InstantHolding {
   final String imageUrl;
   final double quantity;
   final double valueUsd;
-  final double priceUsd;
+  /// Null when the server has no price for the asset (render "—", not $0.00).
+  final double? priceUsd;
   final double priceChange24h;
   final double allocationPct;
   final List<String> sources;
@@ -60,7 +61,9 @@ class InstantHolding {
       imageUrl: JsonUtils.string(json, 'image_url'),
       quantity: JsonUtils.doubleValue(json, 'quantity'),
       valueUsd: JsonUtils.doubleValue(json, 'value_usd'),
-      priceUsd: JsonUtils.doubleValue(json, 'price_usd'),
+      priceUsd: json['price_usd'] != null
+          ? JsonUtils.doubleValue(json, 'price_usd')
+          : null,
       priceChange24h: JsonUtils.doubleValue(json, 'price_change_24h'),
       allocationPct: JsonUtils.doubleValue(json, 'allocation_pct'),
       sources: sources,

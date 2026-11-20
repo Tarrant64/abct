@@ -34,13 +34,15 @@ def _patterns(user_id: int) -> list:
         f"portfolio_instant_{uid}",
         f"portfolio_analytics_{uid}",
         f"all_holdings_{uid}",        # legacy key shape
-        f"all_holdings_v2_{uid}",     # current (covers the _all variant)
+        f"all_holdings_v2_{uid}",     # superseded by v3 (kept so old rows still clear)
+        f"all_holdings_v3_{uid}",     # current (covers the _all variant)
         f"unified_chart_v2_{uid}_",
         f"unified_chart_{uid}_",
         f"portfolio_24h_hourly_v2_{uid}",
         "asset_breakdown_",           # asset_breakdown_{chain}_{uid}
         "price_chart_v2_",            # price_chart_v2_{chain}_{tf}_{uid}
-        f"mobile_portfolio_summary_v2_{uid}_",
+        f"mobile_portfolio_summary_v2_{uid}_",  # superseded by v3
+        f"mobile_portfolio_summary_v3_{uid}_",
     ]
 
 

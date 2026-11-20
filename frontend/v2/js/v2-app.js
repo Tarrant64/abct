@@ -900,6 +900,9 @@ function renderAssetsTable() {
         const price = h.price_usd || 0;
         const amount = h.amount || 0;
         const change = h.price_change_24h || h.change_24h || 0;
+        // Server reports unknown price / 24h change as null (never 0): show "—"
+        const priceUnknown = h.price_usd == null;
+        const changeUnknown = h.price_change_24h == null && h.change_24h == null;
         const alloc = v2State.totalPortfolioValue > 0 ? (value / v2State.totalPortfolioValue * 100) : 0;
         const changeClass = change >= 0 ? 'v2-value-positive' : 'v2-value-negative';
         const symbol = h.symbol || '???';
@@ -925,14 +928,14 @@ function renderAssetsTable() {
                         </div>
                     </div>
                 </td>
-                <td class="right">${formatPrice(price)}</td>
+                <td class="right">${priceUnknown ? '&mdash;' : formatPrice(price)}</td>
                 <td class="right"><div class="v2-sparkline" id="spark_${idx}"><canvas></canvas></div></td>
                 <td class="right">
                     <div class="v2-amount v2-blur">${formatAmount(amount)}</div>
                     <div class="v2-amount-sub">${escapeHtml(symbol)}</div>
                 </td>
                 <td class="right"><span class="v2-amount v2-blur">${formatCurrency(value)}</span></td>
-                <td class="right"><span class="${changeClass}">${change >= 0 ? '+' : ''}${change.toFixed(2)}%</span></td>
+                <td class="right">${changeUnknown ? '&mdash;' : `<span class="${changeClass}">${change >= 0 ? '+' : ''}${change.toFixed(2)}%</span>`}</td>
                 <td class="right">${alloc.toFixed(1)}%</td>
             </tr>
         `;

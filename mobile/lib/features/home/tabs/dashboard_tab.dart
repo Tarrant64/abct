@@ -926,7 +926,9 @@ class _InstantHoldingRow extends StatelessWidget {
                   Text(
                     privacyMode
                         ? r'$••••'
-                        : ValueFormatters.usd(holding.priceUsd),
+                        : (holding.priceUsd == null
+                            ? '—'
+                            : ValueFormatters.usd(holding.priceUsd!)),
                     style: TextStyle(fontSize: 12, color: dimWhite),
                   ),
                   if (hasPriceChange) ...[
@@ -1035,7 +1037,7 @@ class _DashboardPayload {
                   symbol: h.symbol,
                   valueUsd: h.valueUsd,
                   nativeAmount: h.quantity,
-                  nativePriceUsd: h.priceUsd,
+                  nativePriceUsd: h.priceUsd ?? 0,
                   walletCount: 0,
                   percentage: h.allocationPct,
                   priceChange24h: h.priceChange24h,

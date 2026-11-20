@@ -29,6 +29,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import existing routers and services
 from routers import portfolio, wallets, exchanges, defi, nfts
+from routers.portfolio import _known_price, _known_change
 from services.pricing import pricing_service
 from services.logokit_service import logokit_service
 from services.token_metadata_cache import metadata_cache
@@ -51,6 +52,10 @@ from auth_utils import verify_session
 from middleware.demo_mode import is_demo_user
 from services.http_client import get_client
 from config import DATABASE_PATH
+
+def _round_or_none(value, ndigits: int = 2) -> Optional[float]:
+    return None if value is None else round(value, ndigits)
+
 
 def _etag_matches(if_none_match: str, etag: str) -> bool:
     """RFC 7232 weak comparison for If-None-Match: ignore W/ prefixes,
@@ -583,7 +588,7 @@ def _summary_cache_key(user_id: int, include_sparklines: bool) -> str:
     variant = "sparklines" if include_sparklines else "nosparklines"
     # v2 (WQ-0386): the payload now folds manual stocks into the total and
     # carries breakdown.stocks; a cached v1 row would omit both for its TTL.
-    return f"mobile_portfolio_summary_v2_{user_id}_{variant}"
+    return f"mobile_portfolio_summary_v3_{user_id}_{variant}"
 
 
 # In-flight background summary recomputes, keyed by cache key (SWR stampede guard)
@@ -896,8 +901,8 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
                 "native_coin_value_usd": round(native_coin_value, 2),
                 "native_tokens_value_usd": round(native_tokens_value, 2),
                 "native_amount": round(native_amount, 8),
-                "native_price_usd": round(price_usd, 2),
-                "price_change_24h": round(price_data.get('usd_24h_change', 0) or 0, 2),
+                "native_price_usd": _round_or_none(_known_price(price_data)),
+                "price_change_24h": _round_or_none(_known_change(price_data)),
                 "wallet_count": chain_data.get('wallet_count', 0),
                 "percentage": 0,  # Calculated later
                 "image_url": "",  # populated below from metadata_cache
@@ -1028,8 +1033,8 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
                 "symbol": ticker,
                 "value_usd": val,
                 "native_amount": float(asset.get('total_quantity', 0)),
-                "native_price_usd": round(price_usd, 2),
-                "price_change_24h": round((price_data.get('usd_24h_change', 0) or 0) if isinstance(price_data, dict) else 0, 2),
+                "native_price_usd": _round_or_none(_known_price(price_data) if price_usd > 0 else None),
+                "price_change_24h": _round_or_none(_known_change(price_data)),
                 "wallet_count": asset.get('wallet_count', 0),
                 "percentage": 0,
                 "image_url": token_image,
@@ -1060,8 +1065,8 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
             "symbol": placeholder_symbol,
             "value_usd": round(shortfall, 2),
             "native_amount": 0,
-            "native_price_usd": 0,
-            "price_change_24h": 0,
+            "native_price_usd": None,
+            "price_change_24h": None,
             "wallet_count": bs['wallet_count'],
             "percentage": 0,
             "image_url": bs['image_url'],
@@ -1091,7 +1096,8 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
                 "value_usd": value,
                 "native_amount": qty,
                 "native_price_usd": price,
-                "price_change_24h": round(float(s.get('change_pct') or 0), 2),
+                "price_change_24h": (round(float(s['change_pct']), 2)
+                                     if s.get('change_pct') is not None else None),
                 "wallet_count": 0,
                 "percentage": 0,
                 "image_url": "",
@@ -1165,8 +1171,8 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
                         "symbol": token,
                         "value_usd": val,
                         "native_amount": amount,
-                        "native_price_usd": round(price_usd, 2),
-                        "price_change_24h": round((price_data.get('usd_24h_change', 0) or 0) if isinstance(price_data, dict) else 0, 2),
+                        "native_price_usd": _round_or_none(_known_price(price_data)),
+                        "price_change_24h": _round_or_none(_known_change(price_data)),
                         "wallet_count": 0,
                         "percentage": 0,
                         "image_url": token_image,
@@ -1220,8 +1226,8 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
                         "symbol": currency,
                         "value_usd": val,
                         "native_amount": balance,
-                        "native_price_usd": round(price, 2),
-                        "price_change_24h": 0,
+                        "native_price_usd": round(price, 2) if price > 0 else None,
+                        "price_change_24h": None,
                         "wallet_count": 0,
                         "percentage": 0,
                         "image_url": exc_image,

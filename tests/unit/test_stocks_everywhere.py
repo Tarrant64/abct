@@ -125,7 +125,7 @@ def test_daily_chart_paths_overlay_stocks_and_bump_cache_keys():
     assert 'comps["stocks"] = round(sv, 2)' in src
     assert '"unified_chart_v2_' in src, "chart cache key must be versioned"
     assert '"portfolio_24h_hourly_v2_' in src
-    assert '"all_holdings_v2_' in src
+    assert '"all_holdings_v3_' in src
     # 24h hourly carries stocks as the static off-chain offset
     assert "stocks_usd = float(totals.get('manual_stocks_usd'" in src
     assert "+ stocks_usd" in src
@@ -150,7 +150,7 @@ def test_mobile_summary_includes_stocks():
     assert "stocks_value)" in src and "+\n                       stocks_value" in src, \
         "total must fold stocks in"
     assert '"stocks": {' in src, "breakdown.stocks bucket"
-    assert "mobile_portfolio_summary_v2_" in src
+    assert "mobile_portfolio_summary_v3_" in src
     assert "mobile_breakdown_history_v2_" in src
     assert "Could not merge manual stocks into top_holdings" in src
 

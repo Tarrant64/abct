@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import APIRouter, Query, Depends, HTTPException
 from pydantic import BaseModel
 import asyncio
@@ -1756,6 +1757,32 @@ async def _fetch_sparklines_and_images(symbols: list) -> tuple[dict, dict]:
     return {}, {}
 
 
+def _known_price(price_data) -> Optional[float]:
+    """Market price from a price-service row, or None when unknown.
+
+    Unknown prices are reported as null (never 0) so clients render "—"
+    instead of a fake $0.00. Call sites keep using the numeric price for USD
+    math; only the *reported* price field goes through this helper.
+    """
+    if not isinstance(price_data, dict):
+        return None
+    try:
+        p = float(price_data.get('usd'))
+    except (TypeError, ValueError):
+        return None
+    return p if p > 0 else None
+
+
+def _known_change(price_data) -> Optional[float]:
+    """24h % change from a price-service row, or None when unknown."""
+    if not isinstance(price_data, dict):
+        return None
+    try:
+        return float(price_data.get('usd_24h_change'))
+    except (TypeError, ValueError):
+        return None
+
+
 def _merge_holding(holdings: dict, key: str, amount: float, price: float,
                     all_prices: dict, name: str = '', logo_url: str = '',
                     source: str = 'unknown'):
@@ -1766,7 +1793,14 @@ def _merge_holding(holdings: dict, key: str, amount: float, price: float,
     if key in holdings:
         holdings[key]['amount'] += amount
         p = holdings[key]['price_usd']
-        holdings[key]['value_usd'] = holdings[key]['amount'] * p
+        if p is None:
+            # Row was created with an unknown price (null on the wire); adopt
+            # a market price now if one exists so the merged amount is valued.
+            p = _known_price(all_prices.get(price_sym, {})) or (price if price > 0 else None)
+            if p is not None:
+                holdings[key]['price_usd'] = p
+        if p is not None:
+            holdings[key]['value_usd'] = holdings[key]['amount'] * p
         if not holdings[key].get('logo_url') and logo_url:
             holdings[key]['logo_url'] = logo_url
     else:
@@ -1782,7 +1816,7 @@ def _merge_holding(holdings: dict, key: str, amount: float, price: float,
             'amount': amount,
             'price_usd': price,
             'value_usd': amount * price,
-            'price_change_24h': price_info.get('usd_24h_change', 0),
+            'price_change_24h': _known_change(price_info),
             'wallet_count': 0,
             'logo_url': logo_url or logokit_service.get_crypto_logo_url(price_sym, size=64),
             'source': source,
@@ -1807,7 +1841,9 @@ async def get_all_holdings(
 
     # Check cache first (5-min HOT TTL) — separate cache for include_all mode
     # v2 (WQ-0386): rows now include manual stocks.
-    cache_key = f"all_holdings_v2_{user_id}" + ("_all" if include_all else "")
+    # v3 (2026-11-20): unknown price_usd / price_change_24h are null, not 0;
+    # a v2 row served after deploy would still carry the fake zeros.
+    cache_key = f"all_holdings_v3_{user_id}" + ("_all" if include_all else "")
     if not refresh:
         cached = await get_cache(cache_key, user_id=user_id)
         if cached:
@@ -1886,9 +1922,9 @@ async def get_all_holdings(
             'symbol': price_sym,
             'name': name,
             'amount': amount,
-            'price_usd': price,
+            'price_usd': price if price > 0 else None,
             'value_usd': amount * price,
-            'price_change_24h': price_info.get('usd_24h_change', 0),
+            'price_change_24h': _known_change(price_info),
             'wallet_count': chain_data.get('wallet_count', 0),
             'logo_url': (meta.get('image_url') if meta else None) or logokit_service.get_crypto_logo_url(price_sym, size=64),
             'source': 'chain',
@@ -1907,9 +1943,9 @@ async def get_all_holdings(
             'symbol': ticker,
             'name': asset.get('asset_name', ticker),
             'amount': asset.get('total_quantity', 0),
-            'price_usd': asset.get('price_usd') or 0,
+            'price_usd': asset.get('price_usd') or None,
             'value_usd': asset.get('value_usd') or 0,
-            'price_change_24h': asset.get('price_change_24h', 0),
+            'price_change_24h': asset.get('price_change_24h'),
             'wallet_count': asset.get('wallet_count', 0),
             'logo_url': asset.get('logo_url') or (token_meta.get('image_url') if token_meta else None) or logokit_service.get_crypto_logo_url(ticker, size=64),
             'source': 'token',
@@ -1933,9 +1969,9 @@ async def get_all_holdings(
                 'symbol': ticker,
                 'name': asset.get('asset_name', ticker),
                 'amount': asset.get('total_quantity', human_qty),
-                'price_usd': asset.get('price_usd') or 0,
+                'price_usd': asset.get('price_usd') or None,
                 'value_usd': asset.get('value_usd') or 0,
-                'price_change_24h': 0,
+                'price_change_24h': None,
                 'wallet_count': asset.get('wallet_count', 0),
                 'logo_url': asset.get('logo_url') or (token_meta.get('image_url') if token_meta else None) or logokit_service.get_crypto_logo_url(ticker, size=64),
                 'source': 'token',
@@ -1963,9 +1999,9 @@ async def get_all_holdings(
                         'symbol': token,
                         'name': display_name,
                         'amount': quantity,
-                        'price_usd': round(pre_valued_usd / quantity, 6) if quantity > 0 else 0,
+                        'price_usd': round(pre_valued_usd / quantity, 6) if quantity > 0 else None,
                         'value_usd': pre_valued_usd,
-                        'price_change_24h': 0,
+                        'price_change_24h': None,
                         'wallet_count': 0,
                         'logo_url': pos.get('logo_url', '') or logokit_service.get_crypto_logo_url(token, size=64),
                         'source': 'defi',
@@ -2066,7 +2102,7 @@ async def get_all_holdings(
                 'amount': qty,
                 'price_usd': price,
                 'value_usd': qty * price,
-                'price_change_24h': float(s.get('change_pct') or 0),
+                'price_change_24h': (float(s['change_pct']) if s.get('change_pct') is not None else None),
                 'wallet_count': 0,
                 'logo_url': None,
                 'source': 'manual_stock',
@@ -2591,8 +2627,8 @@ async def get_portfolio_instant(user_id: int = Depends(verify_session)):
                 'symbol': price_sym,
                 'quantity': 0,
                 'value_usd': 0,
-                'price_usd': price,
-                'price_change_24h': price_info.get('usd_24h_change', 0) if isinstance(price_info, dict) else 0,
+                'price_usd': price if price > 0 else None,
+                'price_change_24h': _known_change(price_info),
                 'sources': set(),
             }
         symbol_agg[sym]['quantity'] += qty
@@ -2648,7 +2684,7 @@ async def get_portfolio_instant(user_id: int = Depends(verify_session)):
                 symbol_agg[sym] = {
                     'symbol': sym, 'quantity': qty, 'value_usd': value,
                     'price_usd': price,
-                    'price_change_24h': float(s.get('change_pct') or 0),
+                    'price_change_24h': (float(s['change_pct']) if s.get('change_pct') is not None else None),
                     'sources': {'manual_stock'},
                 }
     except Exception as e:

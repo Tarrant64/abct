@@ -50,10 +50,10 @@ INSERT INTO users (id) VALUES (2);
 
 USER_KEYS = [
     "portfolio_summary_{u}", "portfolio_totals_{u}", "portfolio_instant_{u}",
-    "portfolio_analytics_{u}", "all_holdings_v2_{u}", "all_holdings_v2_{u}_all",
+    "portfolio_analytics_{u}", "all_holdings_v3_{u}", "all_holdings_v3_{u}_all",
     "unified_chart_v2_{u}_1w", "unified_chart_v2_{u}_1w_by_chain",
     "portfolio_24h_hourly_v2_{u}", "asset_breakdown_cardano_{u}",
-    "price_chart_v2_cardano_1w_{u}", "mobile_portfolio_summary_v2_{u}_full",
+    "price_chart_v2_cardano_1w_{u}", "mobile_portfolio_summary_v3_{u}_full",
     "wallet_balance_7",
 ]
 

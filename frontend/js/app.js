@@ -11630,6 +11630,7 @@ function _holdingCellHtml(colId, h) {
             return `<td class="text-right"><span class="holding-amount">${blurValue(amountStr)}</span></td>`;
         }
         case 'price_change_24h': {
+            if (h.price_change_24h == null) return `<td class="text-right"><span class="holding-change neutral">&mdash;</span></td>`;
             const change = h.price_change_24h || 0;
             const changeClass = change > 0 ? 'positive' : change < 0 ? 'negative' : 'neutral';
             const changeSign = change > 0 ? '+' : '';
