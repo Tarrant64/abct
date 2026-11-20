@@ -163,9 +163,23 @@ function initUserAvatar() {
         if (initial) {
             avatar.textContent = initial;
         } else {
-            avatar.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" ' +
-                'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ' +
-                'aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>';
+            const NS = 'http://www.w3.org/2000/svg';
+            const svg = document.createElementNS(NS, 'svg');
+            svg.setAttribute('width', '18');
+            svg.setAttribute('height', '18');
+            svg.setAttribute('viewBox', '0 0 24 24');
+            svg.setAttribute('fill', 'none');
+            svg.setAttribute('stroke', 'currentColor');
+            svg.setAttribute('stroke-width', '2');
+            svg.setAttribute('stroke-linecap', 'round');
+            svg.setAttribute('stroke-linejoin', 'round');
+            svg.setAttribute('aria-hidden', 'true');
+            const head = document.createElementNS(NS, 'circle');
+            head.setAttribute('cx', '12'); head.setAttribute('cy', '8'); head.setAttribute('r', '4');
+            const body = document.createElementNS(NS, 'path');
+            body.setAttribute('d', 'M4 21c0-4 4-7 8-7s8 3 8 7');
+            svg.appendChild(head); svg.appendChild(body);
+            avatar.replaceChildren(svg);
         }
         avatar.setAttribute('title', label || 'Account');
         avatar.setAttribute('aria-label', label ? 'Account menu for ' + label : 'Account menu');
