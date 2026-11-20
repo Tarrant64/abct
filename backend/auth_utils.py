@@ -11,6 +11,11 @@ from fastapi import HTTPException, Header, Query
 import os
 
 
+# The admin account: first, non-demo user (seeded at first run; owns legacy data).
+# The users table has no role/is_admin column.
+ADMIN_USER_ID = 1
+
+
 def is_auth_required() -> bool:
     """Check if authentication is required"""
     require_auth = os.getenv('ABCT_REQUIRE_AUTH', 'true').lower()
