@@ -1897,11 +1897,12 @@ async def get_all_holdings(
     else:
         btc_karma_caches = []
 
-    # Fetch exchange data from cache
-    exchange_names = ['coinbase', 'binance', 'binance_us', 'okx', 'bitget', 'gate', 'kucoin']
-    exchange_caches = await asyncio.gather(*[
-        get_cache(f"{name}_portfolio", user_id=user_id) for name in exchange_names
-    ])
+    # Exchange data: EVERY aggregation exchange (legacy + registry), never
+    # silently dropped when its 5-min cache row is cold -- stale rows are
+    # served (flagged) and cold ones are fetched with a bounded timeout.
+    from services.exchange_holdings import load_exchange_portfolios, incomplete as _exchange_incomplete
+    exchange_loads = await load_exchange_portfolios(user_id)
+    exchange_caches = [l['data'] for l in exchange_loads]
 
     # Build unified holdings map keyed by symbol
     holdings = {}
@@ -2183,13 +2184,35 @@ async def get_all_holdings(
         price_sym = _PRICE_SYMBOL.get(key, h['symbol'])
         h['coingecko_id'] = ASSET_TO_COINGECKO.get(price_sym)
 
+    missing_exchanges = _exchange_incomplete(exchange_loads)
     result = {
         'holdings': sorted_holdings,
         'total_value_usd': round(total_value, 2),
         'nft_value_usd': round(nft_value_usd, 2),
         'count': len(sorted_holdings),
+        # Per-exchange load state (additive): which exchanges fed the rows
+        # above, which were served from an expired cache row, and which
+        # could not be read right now (their holdings are NOT in this list).
+        'exchanges': [
+            {
+                'exchange_id': l['exchange_id'],
+                'display_name': l['display_name'],
+                'status': l['status'],
+                'stale': l['stale'],
+                'total_usd': round(float((l['data'] or {}).get('total_usd', 0) or 0), 2),
+            }
+            for l in exchange_loads
+            if l['data'] is not None or l['status'] in ('warming', 'unavailable')
+        ],
+        'stale': any(l['stale'] for l in exchange_loads) or bool(missing_exchanges),
+        'incomplete_sources': [
+            {'exchange_id': l['exchange_id'], 'status': l['status']} for l in missing_exchanges
+        ],
     }
-    await set_cache(cache_key, result, ttl_seconds=CACHE_TTL_HOT, user_id=user_id)
+    # A result that is missing an exchange must not be pinned for the full
+    # HOT TTL -- retry soon so the warming exchange appears as soon as it lands.
+    await set_cache(cache_key, result,
+                    ttl_seconds=(30 if missing_exchanges else CACHE_TTL_HOT), user_id=user_id)
     return result
 
 

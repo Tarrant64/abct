@@ -53,6 +53,16 @@ from middleware.demo_mode import is_demo_user
 from services.http_client import get_client
 from config import DATABASE_PATH
 
+async def _exchange_cache_or_stale(name: str, user_id: int):
+    """`<name>_portfolio` cache row, falling back to the expired row."""
+    key = f"{name}_portfolio"
+    fresh = await get_cache(key, user_id=user_id)
+    if fresh:
+        return fresh
+    stale, _ = await get_stale_cache(key, user_id=user_id)
+    return stale
+
+
 def _round_or_none(value, ndigits: int = 2) -> Optional[float]:
     return None if value is None else round(value, ndigits)
 
@@ -1185,8 +1195,10 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
     # Merge exchange assets into top_holdings (so exchange-staked SOL etc. appear in totals)
     try:
         exchange_names = get_aggregation_exchange_names()
+        # Cache-only (the summary must never block on exchange APIs), but an
+        # expired row is better than dropping the exchange: fall back to stale.
         exchange_caches = await asyncio.gather(*[
-            get_cache(f"{name}_portfolio", user_id=user_id) for name in exchange_names
+            _exchange_cache_or_stale(name, user_id) for name in exchange_names
         ])
         # Same two-pass pattern as the staking merge: pre-resolve currencies
         # that will be newly added, then run the original loop without awaits
@@ -1874,6 +1886,7 @@ async def get_mobile_defi_staking(refresh: bool = Query(False), user_id: int = D
     positions = []
     total_staked_usd = 0.0
     total_rewards_usd = 0.0
+    native_delegation_usd = 0.0   # subset of total_staked_usd: ADA delegated on-chain
     has_unpriced = False
     refreshing = False
     data_as_of = None
@@ -1972,6 +1985,7 @@ async def get_mobile_defi_staking(refresh: bool = Query(False), user_id: int = D
                 rewards_usd = rewards_ada * ada_price
 
                 total_staked_usd += delegated_usd
+                native_delegation_usd += delegated_usd
                 total_rewards_usd += rewards_usd
 
                 positions.append({
@@ -2074,6 +2088,13 @@ async def get_mobile_defi_staking(refresh: bool = Query(False), user_id: int = D
     return {
         "total_staked_usd": round(total_staked_usd, 2),
         "total_rewards_usd": round(total_rewards_usd, 2),
+        # Split of total_staked_usd (additive, 2026-11-20). Natively delegated
+        # ADA never leaves the wallet, so it is ALREADY inside the wallet/L1
+        # balance: do not add native_delegation_usd on top of a portfolio total.
+        # protocol_staked_usd (Strike/Indigo/Surf/BTC Karma...) is locked
+        # outside the wallet and is the part counted in breakdown.staking.
+        "native_delegation_usd": round(native_delegation_usd, 2),
+        "protocol_staked_usd": round(total_staked_usd - native_delegation_usd, 2),
         "positions": positions,
         # True when some position's USD value could not be computed from a
         # real price — its amount is shown but it contributes 0 to totals
@@ -2209,6 +2230,9 @@ async def get_mobile_wallet_sources(
             "chain": source.get("chain"),
             "label": source.get("label"),
             "wallet_id": source.get("wallet_id"),
+            # exchange sources: stable id (== source_key) for joining with
+            # /portfolio/all-holdings.exchanges and wallet-breakdown sources
+            "exchange_id": (source["source_key"] if source["source_type"] == "exchange" else None),
             "is_active": bool(source.get("is_active", 1)),
             "latest_value_usd": round(float(latest.get("latest_value_usd", 0) or 0), 2),
             "latest_date": latest.get("latest_date"),
@@ -2949,7 +2973,9 @@ async def get_asset_wallet_breakdown(
     and DeFi positions, then returns each source with allocation percentages.
     """
     symbol = symbol.upper()
-    cache_key = f"mobile_wallet_breakdown_{user_id}_{symbol}"
+    # v2 (2026-11-20): exchange sources carry exchange_id/stale and the
+    # payload reports incomplete_sources; v1 rows lack them.
+    cache_key = f"mobile_wallet_breakdown_v2_{user_id}_{symbol}"
 
     cached = await get_cache(cache_key, user_id=user_id)
     if cached:
@@ -3028,11 +3054,13 @@ async def get_asset_wallet_breakdown(
             logger.debug(f"Native token breakdown failed for {symbol}: {e}")
 
     # 3. Exchange assets
-    exchange_names = get_aggregation_exchange_names()
-    exchange_caches = await asyncio.gather(*[
-        get_cache(f"{name}_portfolio", user_id=user_id) for name in exchange_names
-    ])
-    for name, exc_data in zip(exchange_names, exchange_caches):
+    # Never drop an exchange because its 5-min cache row expired: stale rows
+    # are served (flagged), cold ones fetched with a bounded timeout.
+    from services.exchange_holdings import load_exchange_portfolios, incomplete as _exchange_incomplete
+    exchange_loads = await load_exchange_portfolios(user_id)
+    for load in exchange_loads:
+        name = load['exchange_id']
+        exc_data = load['data']
         if not exc_data or not exc_data.get('assets'):
             continue
         for asset in exc_data['assets']:
@@ -3045,10 +3073,12 @@ async def get_asset_wallet_breakdown(
             info = EXCHANGE_INFO.get(name, {})
             sources.append({
                 'source_type': 'exchange',
+                'exchange_id': name,
                 'label': info.get('display_name') or get_exchange_display_name(name),
                 'amount': amount,
                 'value_usd': round(amount * current_price, 2),
-                'last_synced': datetime.utcnow().isoformat() + 'Z',
+                'stale': load['stale'],
+                'last_synced': (exc_data.get('cached_at') if load['stale'] else None) or (datetime.utcnow().isoformat() + 'Z'),
             })
 
     # 4. Staking positions — every kind, via the shared valuation so the
@@ -3138,14 +3168,21 @@ async def get_asset_wallet_breakdown(
         }
         logger.warning(f"Wallet breakdown empty for {symbol}: {debug_info}")
 
+    missing_exchanges = _exchange_incomplete(exchange_loads)
     result = {
         'symbol': symbol,
         'current_price_usd': round(current_price, 6),
         'total_amount': round(total_amount, 8),
         'total_value_usd': total_value,
         'sources': sources,
+        # True when any exchange row is stale or an exchange could not be
+        # read (its holdings are NOT in `sources`; see incomplete_sources)
+        'stale': any(l['stale'] for l in exchange_loads) or bool(missing_exchanges),
+        'incomplete_sources': [
+            {'exchange_id': l['exchange_id'], 'status': l['status']} for l in missing_exchanges
+        ],
     }
-    await set_cache(cache_key, result, MOBILE_CACHE_TTL, user_id=user_id)
+    await set_cache(cache_key, result, 20 if missing_exchanges else MOBILE_CACHE_TTL, user_id=user_id)
     return result
 
 

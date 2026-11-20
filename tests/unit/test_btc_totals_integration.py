@@ -313,6 +313,15 @@ def holdings_env(monkeypatch, tmp_path):
         return PRICES
 
     monkeypatch.setattr(pricing_service, "get_all_tracked_prices", fake_prices)
+
+    # No exchanges configured in this scenario (the real loader would read the
+    # sqlite cache table / hit exchange services).
+    import services.exchange_holdings as exchange_holdings
+
+    async def no_exchanges(user_id, names=None, allow_live=True, timeout=0):
+        return []
+
+    monkeypatch.setattr(exchange_holdings, "load_exchange_portfolios", no_exchanges)
     return None
 
 

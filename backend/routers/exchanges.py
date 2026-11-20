@@ -475,6 +475,38 @@ async def refresh_coinbase_portfolio(user_id: int = Depends(verify_session)):
     return await get_coinbase_portfolio(user_id=user_id, refresh=True)
 
 
+async def fetch_exchange_portfolio(exchange_name: str, user_id: int, refresh: bool = False):
+    """Read (or live-fetch and cache) any exchange's portfolio by registry/legacy name.
+
+    One dispatch for callers that hold only an exchange name (the mobile
+    holdings loader). Raises HTTPException(503) when the exchange has no
+    credentials configured; the underlying handlers already do. Returns the
+    standard {assets, total_usd, ...} payload and refreshes `<name>_portfolio`.
+    """
+    legacy = {
+        'coinbase': get_coinbase_portfolio,
+        'binance': get_binance_portfolio,
+        'binance_us': get_binance_us_portfolio,
+        'okx': get_okx_portfolio,
+        'bitget': get_bitget_portfolio,
+        'gate': get_gate_portfolio,
+        'kucoin': get_kucoin_portfolio,
+    }
+    handler = legacy.get(exchange_name)
+    if handler is not None:
+        return await handler(user_id=user_id, refresh=refresh)
+    entry = EXCHANGE_REGISTRY.get(exchange_name)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"Unknown exchange '{exchange_name}'")
+    svc = entry['service']
+    configured = svc.ensure_configured()
+    if asyncio.iscoroutine(configured):
+        configured = await configured
+    if not configured:
+        raise HTTPException(status_code=503, detail=f"{entry['display_name']} API not configured")
+    return await process_exchange_portfolio(svc, exchange_name, user_id, refresh)
+
+
 async def process_exchange_portfolio(exchange_service, exchange_name: str, user_id: int, refresh: bool = False):
     """
     Generic function to process exchange portfolio with pricing.

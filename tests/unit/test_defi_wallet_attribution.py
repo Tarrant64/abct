@@ -90,3 +90,7 @@ async def test_native_delegation_lists_all_wallets_sharing_stake_key(monkeypatch
     assert [w["wallet_id"] for w in pos["wallets"]] == [2, 3]
     assert all(w["value_usd"] is None for w in pos["wallets"])  # can't split an account
     assert pos["delegated_usd"] == pytest.approx(1000.0 * ADA_PRICE)
+    # additive split so clients never add delegated ADA on top of wallet value
+    assert out["native_delegation_usd"] == pytest.approx(1000.0 * ADA_PRICE, abs=0.01)
+    assert out["protocol_staked_usd"] == 0
+    assert out["total_staked_usd"] == pytest.approx(out["native_delegation_usd"])
