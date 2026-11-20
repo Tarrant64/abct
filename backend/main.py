@@ -51,7 +51,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import PROJECT_ROOT, DATA_DIR, CERTS_DIR, DEFAULT_CERT_PATH, DEFAULT_KEY_PATH, NFT_SCHEDULER_ENABLED, WALLET_BGSYNC_ENABLED, STAKE_REDISCOVERY_ENABLED, STOCK_SCHEDULER_ENABLED, DBSYNC_PG_ENABLED, ALLOWED_ORIGINS
 from database import init_db, init_encryption, migrate_encrypt_api_keys
 from nft_image_database import init_nft_image_db
-from routers import wallets, portfolio, defi, prices, exchanges, nfts, custom_tokens, settings, security, logs, nft_scheduler as nft_scheduler_router, backup, auth, dashboard, mobile, nmkr, cache, spam, transactions, demo, cloudflare, system, balance_history, analytics, intelligence, search, pnl, stocks
+from routers import wallets, portfolio, defi, prices, exchanges, nfts, custom_tokens, settings, security, logs, nft_scheduler as nft_scheduler_router, backup, auth, dashboard, mobile, token_logos, nmkr, cache, spam, transactions, demo, cloudflare, system, balance_history, analytics, intelligence, search, pnl, stocks
 from routers import engine as engine_router
 from routers.privacy import router as privacy_router
 from routers.images import router as images_router
@@ -1215,6 +1215,7 @@ async def http_exception_handler(request, exc):
 # Include routers
 app.include_router(auth.router)  # Auth router first (no dependencies)
 app.include_router(mobile.router)  # Mobile API
+app.include_router(token_logos.router)  # Cardano token logo/meta (mobile)
 app.include_router(wallets.router)
 app.include_router(portfolio.router)
 app.include_router(defi.router)

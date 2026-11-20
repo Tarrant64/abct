@@ -1476,28 +1476,14 @@ async def get_all_native_assets(user_id: int = Depends(verify_session), refresh:
             # Check if this token is being tracked
             is_tracked = asset_id in tracked_ids
 
-            # Generate logo URL with multiple fallback strategies
-            logo_url = None
+            # Logo: Cardano tokens get a short server path (see services/cardano_token_meta, applied after grouping);
+            # LogoKit only when a key is configured.
             blockchain = asset.get('blockchain', 'cardano')
-
-            # For Cardano native assets with policy_id, use comprehensive fallback chain
-            if blockchain == 'cardano' and policy_id and asset_id:
-                # Extract hex asset name from asset_id (format: policy_id + asset_name_hex)
-                asset_name_hex = asset_id[len(policy_id):] if len(asset_id) > len(policy_id) else None
-
-                if asset_name_hex:
-                    # Try NMKR → Cardano Token Registry → Blockfrost → LogoKit
-                    logo_url = await nmkr_service.get_token_logo_with_fallbacks(
-                        policy_id,
-                        asset_name_hex,
-                        ticker=ticker,
-                        user_id=user_id
-                    )
-
-            # Non-Cardano fallback to LogoKit
-            if not logo_url:
+            logo_url = None
+            if blockchain != 'cardano' or not policy_id:
                 logo_symbol = ticker if ticker else asset['asset_name'][:10] if asset['asset_name'] else 'UNKNOWN'
-                logo_url = logokit_service.get_crypto_logo_url(logo_symbol, size=64)
+                if logokit_service.api_key:
+                    logo_url = logokit_service.get_crypto_logo_url(logo_symbol, size=64)
 
             asset_totals[asset_id] = {
                 'asset_id': asset_id,
@@ -1563,6 +1549,12 @@ async def get_all_native_assets(user_id: int = Depends(verify_session), refresh:
 
     # Sort valuable assets by USD value
     valuable_assets.sort(key=lambda x: x.get('value_usd', 0), reverse=True)
+
+    # Logo path + policy/name hex + registry metadata (after pricing; the ticker is NOT back-filled here so a
+    # metadata ticker can never change which market price a token is matched to).
+    from services import cardano_token_meta
+    await cardano_token_meta.enrich_assets(
+        [d for d in asset_totals.values() if d.get('blockchain', 'cardano') == 'cardano'], fill_ticker=False)
 
     result = {
         'assets': list(asset_totals.values()),

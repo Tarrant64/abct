@@ -1602,7 +1602,10 @@ async def get_mobile_wallet_detail(
                 "price_native": round(asset.get('price_native', 0), 8) if asset.get('price_native') else None,
                 "price_usd": round(asset.get('price_usd', 0), 6) if asset.get('price_usd') else None,
                 "value_usd": round(asset.get('total_value_usd', 0), 2),
-                "logo_url": logokit_service.get_crypto_logo_url(asset.get('ticker', 'UNKNOWN'), size=32)
+                "logo_url": asset.get('logo_url') or (logokit_service.get_crypto_logo_url(asset.get('ticker', 'UNKNOWN'), size=32) if logokit_service.api_key else None),
+                "policy_id": asset.get('policy_id'),
+                "asset_name_hex": asset.get('asset_name_hex'),
+                "coingecko_id": asset.get('coingecko_id'),
             })
 
     return {

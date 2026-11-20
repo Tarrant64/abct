@@ -462,39 +462,20 @@ async def get_wallet_assets_by_id(wallet_id: int, user_id: int = Depends(verify_
             except Exception:
                 pass
 
-        # Add logo URL with multiple fallback strategies
+        # Logo: Cardano tokens get a short server path (cache-only; resolved by services/cardano_token_meta);
+        # other chains use LogoKit only when a key is configured (an unkeyed URL is a guaranteed HTTP 401).
         logo_url = None
-        if wallet['blockchain'] == 'cardano':
-            # For Cardano native tokens, use comprehensive fallback chain
-            policy_id = asset.get('policy_id')
-            asset_id = asset.get('asset_id', '')
-
-            # Extract hex asset name from asset_id (format: policy_id + asset_name_hex)
-            asset_name_hex = asset_id[len(policy_id):] if policy_id and len(asset_id) > len(policy_id) else None
-
-            if policy_id and asset_name_hex:
-                ticker = asset_data.get('ticker')
-                # Try NMKR → Cardano Token Registry → Blockfrost → LogoKit
-                logo_url = await nmkr_service.get_token_logo_with_fallbacks(
-                    policy_id,
-                    asset_name_hex,
-                    ticker=ticker,
-                    user_id=user_id
-                )
-
-        # Non-Cardano fallback to LogoKit
-        if not logo_url:
-            ticker = asset_data.get('ticker')
-            if ticker:
-                logo_url = logokit_service.get_crypto_logo_url(ticker, size=64)
-            else:
-                # Use asset name as fallback
-                asset_name = asset.get('asset_name', '')[:10]
-                if asset_name:
-                    logo_url = logokit_service.get_crypto_logo_url(asset_name, size=64)
+        if wallet['blockchain'] != 'cardano':
+            logo_sym = asset_data.get('ticker') or (asset.get('asset_name') or '')[:10]
+            if logo_sym and logokit_service.api_key:
+                logo_url = logokit_service.get_crypto_logo_url(logo_sym, size=64)
 
         asset_data['logo_url'] = logo_url
         enriched_assets.append(asset_data)
+
+    if wallet['blockchain'] == 'cardano':
+        from services import cardano_token_meta
+        await cardano_token_meta.enrich_assets(enriched_assets)
 
     # Get wallet balance for native coin
     wallet_balance = await get_wallet_balance(wallet_id)

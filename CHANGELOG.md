@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Cardano token logos and metadata (ABCT-TOKEN-LOGOS-20261120)
+
+**Fixed**
+- Wallet token lists showed placeholders: list payloads carried `data:` URLs (52 tokens), `ipfs.io` links (HTTP 403, 415 tokens), `ar://` / bare CIDs and LogoKit URLs with an empty token (HTTP 401). The mobile client accepts only small https images, so none rendered.
+
+**Added**
+- `services/cardano_token_meta.py`: multi-source chain (CF Token Registry, Blockfrost, Koios, CoinGecko cache) with positive/negative/error TTL caching and a safe image pipeline (allowlist, size cap, content-type check, Pillow normalisation to <= 128 px PNG).
+- `GET /api/mobile/token-logo/{policy}/{namehex}` and `GET /api/mobile/token-meta/{policy}/{namehex}` (`verify_session`).
+- Wallet assets, all-holdings and mobile wallet detail carry `logo_url` (relative server path), `policy_id`, `asset_name_hex`, `coingecko_id`, `meta_ticker`, `meta_name`, `meta_decimals`. Blank tickers/names are filled from metadata on wallet assets. See `docs/TOKEN_METADATA_SOURCES.md`.
+- LogoKit URLs are only emitted when a key is configured.
+
 ### Security: unauthenticated route leaks (ABCT-LEAKFIX-20261120)
 
 **Fixed**

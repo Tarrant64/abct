@@ -1,0 +1,30 @@
+# Cardano native-token metadata and logo sources
+
+Implemented in `backend/services/cardano_token_meta.py`, served by `backend/routers/token_logos.py`.
+
+## Chain (first hit wins per field)
+
+| # | Source | Gives | Notes |
+|---|---|---|---|
+| 1 | Cardano Foundation Token Registry (`tokens.cardano.org/metadata/{policy}{namehex}`, CIP-26) | name, ticker, decimals, base64 logo | free, no key; HTTP 204 = not registered |
+| 2 | Blockfrost `/assets/{id}` (registry block + CIP-25 / CIP-68 on-chain metadata) | name, ticker, decimals, logo or image (IPFS / Arweave / https) | needs `BLOCKFROST_API_KEY` (skipped when unset) |
+| 3 | Koios `asset_info` (token_registry_metadata, CIP-25 minting metadata, CIP-68 datum) | same | free public tier, rate limited |
+| 4 | `token_metadata_cache` (CoinGecko, by ticker) | `coingecko_id`, name, image | last resort for the image, also supplies `coingecko_id` |
+
+Skipped: TapTools (key is configured but it has no logo/metadata endpoint worth a call), DexScreener (no reliable Cardano image), NMKR proxy (key not configured). LogoKit is no longer used for Cardano tokens (no key is configured, every URL is HTTP 401).
+
+## Caching
+
+- Metadata rows: table `cardano_token_meta`. Found 7 days, nothing found ("empty") 6 hours, all sources errored 15 minutes.
+- Logos: table `cardano_token_logo`, normalised PNG (<= 128 px, a few KB), 30 days.
+- List endpoints read the cache only (never block on the network). Unknown tokens are queued for background resolution (4 at a time, de-duplicated).
+
+## Serving
+
+- `GET /api/mobile/token-logo/{policy_id}/{asset_name_hex}`: PNG, `ETag`, `Cache-Control: private, max-age=86400`, 404 when no logo, `verify_session`.
+- `GET /api/mobile/token-meta/{policy_id}/{asset_name_hex}`: name, ticker, decimals, coingecko_id, sources, `verify_session`.
+- Lists (`/wallets/id/{id}/assets`, `/portfolio/all-holdings` assets, `/api/mobile/wallets/{id}` tokens) carry `logo_url` as the relative path above (never a `data:` URL), plus `policy_id`, `asset_name_hex` (TapTools links), `coingecko_id`, `meta_ticker`, `meta_name`, `meta_decimals`.
+
+## Safety
+
+Images are fetched over https only from an allowlist of hosts (IPFS gateways, Arweave, a few CDNs), no userinfo or custom ports, redirects re-validated per hop, body capped at 2 MB while streaming, content type must be `image/*` (not SVG), and the bytes must decode in Pillow (pixel cap). Registry base64 is size-capped and decoded the same way.
