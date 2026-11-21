@@ -20,7 +20,7 @@ from database import (
 )
 from config import CACHE_TTL_COLD
 from services.cardano import cardano_service, is_stake_address, detect_ada_handle
-from services.taptools import taptools_wallet_service
+from services.koios_reconcile import taptools_wallet_service
 from services.bitcoin import bitcoin_service
 from services.ethereum import ethereum_service
 from services.solana import solana_service
