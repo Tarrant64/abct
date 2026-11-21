@@ -6636,17 +6636,19 @@ async function editWalletLabel(address, button) {
     // Save on enter or blur
     const saveLabel = async () => {
         const newLabel = input.value.trim();
-        if (newLabel && newLabel !== currentLabel) {
+        if (newLabel !== currentLabel) {
             try {
+                // An empty name clears the label (server stores NULL; the row falls back to its default title)
                 const response = await authFetch(`${API_BASE}/wallets/${encodeURIComponent(address)}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ label: newLabel })
+                    body: JSON.stringify({ label: newLabel || null })
                 });
 
                 if (response.ok) {
-                    labelSpan.textContent = newLabel;
-                    showStatus('Wallet name updated');
+                    const chain = Array.from(walletItem.classList).find(c => c !== 'wallet-item') || 'wallet';
+                    labelSpan.textContent = newLabel || (chain.charAt(0).toUpperCase() + chain.slice(1) + ' Wallet');
+                    showStatus(newLabel ? 'Wallet name updated' : 'Wallet name cleared');
                 } else {
                     showStatus('Failed to update wallet name', true);
                 }

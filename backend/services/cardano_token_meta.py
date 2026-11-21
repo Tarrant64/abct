@@ -269,6 +269,116 @@ async def get_cached_meta_bulk(asset_ids: List[str]) -> Dict[str, dict]:
     return out
 
 
+# --- authoritative decimals -> native_assets (2026-11-21) ------------------------
+#
+# `native_assets.decimals` is written at wallet-refresh time from the legacy
+# token_metadata cache and is 0 whenever that cache had nothing. A stored 0 means
+# "raw units shown as whole tokens" (e.g. 24,029,539,420 DRIP instead of 24,029).
+# The metadata chain above resolves decimals by EXACT policy+name from the
+# Cardano Token Registry, Blockfrost (registry/CIP-25/CIP-68) or Koios. None of
+# them is a ticker-matched guess ("market-cache" never supplies decimals), so a
+# non-zero value from one of these is safe to apply over a stored 0. We never
+# override a non-zero stored value and never touch non-Cardano rows.
+
+AUTHORITATIVE_DECIMAL_SOURCES = ("registry", "blockfrost", "koios")
+MAX_TOKEN_DECIMALS = 30
+
+
+def authoritative_decimals(meta_row: Optional[dict]) -> Optional[int]:
+    """Verified decimals (1..30) from a cardano_token_meta row, else None. Pure."""
+    if not meta_row:
+        return None
+    d = meta_row.get("decimals")
+    if isinstance(d, bool) or not isinstance(d, int) or not (1 <= d <= MAX_TOKEN_DECIMALS):
+        return None
+    try:
+        sources = meta_row.get("sources")
+        if isinstance(sources, str):
+            sources = json.loads(sources or "[]")
+    except ValueError:
+        return None
+    if not isinstance(sources, list) or not any(s in AUTHORITATIVE_DECIMAL_SOURCES for s in sources):
+        return None
+    return d
+
+
+def effective_decimals(stored, meta_row: Optional[dict]) -> int:
+    """Decimals to use: a non-zero stored value wins; a stored 0/None yields to authoritative metadata."""
+    try:
+        st = int(stored or 0)
+    except (TypeError, ValueError):
+        st = 0
+    if st > 0:
+        return st
+    return authoritative_decimals(meta_row) or 0
+
+
+async def fill_asset_decimals(assets: List[dict]) -> int:
+    """Fix `decimals` IN PLACE on Cardano asset dicts whose decimals is 0/None. Cache-only. Returns count changed."""
+    cands = []
+    for a in assets or []:
+        if int(a.get("decimals") or 0) > 0:
+            continue
+        p, n = split_asset_id(a.get("asset_id", ""), a.get("policy_id"))
+        if p:
+            cands.append((a, p + n))
+    if not cands:
+        return 0
+    rows = await get_cached_meta_bulk([aid for _, aid in cands])
+    changed = 0
+    for a, aid in cands:
+        d = authoritative_decimals(rows.get(aid))
+        if d:
+            a["decimals"] = d
+            changed += 1
+    return changed
+
+
+_SYNC_WHERE = """
+    (decimals IS NULL OR decimals = 0)
+    AND EXISTS (
+        SELECT 1 FROM cardano_token_meta m
+        WHERE m.asset_id = {t}.asset_id AND m.decimals BETWEEN 1 AND %d
+          AND (m.sources LIKE '%%"registry"%%' OR m.sources LIKE '%%"blockfrost"%%' OR m.sources LIKE '%%"koios"%%')
+          {extra}
+    )
+""" % MAX_TOKEN_DECIMALS
+
+
+async def sync_native_asset_decimals(db=None, asset_id: Optional[str] = None) -> int:
+    """Idempotent backfill: copy authoritative decimals onto native_assets / token_metadata rows still at 0.
+
+    Returns the number of native_assets rows changed (0 on a second run). `asset_id` limits it to one token.
+    """
+    own = db is None
+    if own:
+        db = await aiosqlite.connect(DATABASE_PATH)
+    try:
+        await _ensure_tables(db)
+        extra = "AND m.asset_id = ?" if asset_id else ""
+        args = (asset_id,) if asset_id else ()
+        total = 0
+        for table in ("native_assets", "token_metadata"):
+            # native_assets also holds ERC-20 / SPL rows: only Cardano wallets' rows are eligible
+            only_cardano = (" AND wallet_id IN (SELECT id FROM wallets WHERE blockchain = 'cardano')"
+                            if table == "native_assets" else "")
+            try:
+                cur = await db.execute(
+                    f"UPDATE {table} SET decimals = (SELECT m.decimals FROM cardano_token_meta m WHERE m.asset_id = {table}.asset_id) "
+                    f"WHERE {_SYNC_WHERE.format(t=table, extra=extra)}{only_cardano}", args)
+            except aiosqlite.OperationalError as e:  # table absent (fresh/test DB)
+                logger.debug("decimals sync skipped for %s: %s", table, e)
+                continue
+            if table == "native_assets":
+                total = cur.rowcount or 0
+        if own:
+            await db.commit()
+        return total
+    finally:
+        if own:
+            await db.close()
+
+
 async def _save_meta(asset_id: str, policy: str, name_hex: str, meta: dict, status: str, ttl: int) -> None:
     now = time.time()
     async with aiosqlite.connect(DATABASE_PATH) as db:
@@ -284,6 +394,10 @@ async def _save_meta(asset_id: str, policy: str, name_hex: str, meta: dict, stat
         """, (asset_id, policy, name_hex, meta.get("name"), meta.get("ticker"), meta.get("decimals"),
               meta.get("coingecko_id"), meta.get("logo_ref"), 1 if meta.get("has_logo") else 0,
               json.dumps(meta.get("sources") or []), status, now, now + ttl))
+        try:
+            await sync_native_asset_decimals(db, asset_id)
+        except Exception as e:  # never let a decimals sync break metadata resolution
+            logger.debug("decimals sync after resolve failed: %s", e)
         await db.commit()
 
 

@@ -42,8 +42,10 @@ CMC_API_KEY = os.getenv("CMC_API_KEY", "")
 GRAPH_API_KEY = os.getenv("GRAPH_API_KEY", "")
 ALPHAVANTAGE_API_KEY = os.getenv("ALPHAVANTAGE_API_KEY", "")
 CHARLI3_API_KEY = os.getenv("CHARLI3_API_KEY", "")
-# Deprecated — TapTools sunset. Retained for NFT service compatibility until NFT pricing is migrated.
-TAPTOOLS_API_KEY = os.getenv("TAPTOOLS_API_KEY", "")
+# RETIRED 2026-11-21: TapTools is dead. The name is kept only so legacy imports resolve; the value is
+# ALWAYS empty (the TAPTOOLS_API_KEY env var is deliberately ignored), so every TapTools-gated code path
+# (NFT floor tiers, NFT scheduler, engine enricher) is inert instead of calling a dead service.
+TAPTOOLS_API_KEY = ""
 ANKR_API_KEY = os.getenv("ANKR_API_KEY", "")
 
 # LogoKit/Logostream keys are read via services.api_key_manager (DB first, env fallback); web-only hotlinks.

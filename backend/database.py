@@ -1864,7 +1864,17 @@ async def release_scheduler_lock(lock_name: str, holder: str) -> None:
 
 
 async def save_native_assets(wallet_id: int, assets: list, user_id: int = None):
-    """Save native assets for a wallet."""
+    """Save native assets for a wallet.
+
+    Cardano rows arriving with decimals 0/None take the authoritative metadata decimals
+    (registry / Blockfrost / Koios, exact policy+name) when the metadata cache has them,
+    so a wallet refresh can't re-introduce a stored 0 (see services/cardano_token_meta).
+    """
+    try:
+        from services.cardano_token_meta import fill_asset_decimals
+        await fill_asset_decimals(assets)
+    except Exception as e:  # metadata is an enhancement; never block saving balances
+        logging.getLogger(__name__).debug(f"decimals fill skipped: {e}")
     async with aiosqlite.connect(DATABASE_PATH) as db:
         # Get user_id from wallet if not provided
         if user_id is None:
@@ -3085,6 +3095,31 @@ async def get_tracked_tokens() -> list:
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
+
+
+RETIRED_API_PROVIDERS = {"taptools": "TapTools service retired 2026-11-21"}
+
+
+async def retire_api_providers() -> int:
+    """Mark retired providers' stored api_settings rows disabled/retired. Idempotent, never deletes.
+
+    The row (and any key the user saved) is kept as-is; only `enabled` and the last-test fields change,
+    and only when they are not already in the retired state. Returns rows changed (0 on a re-run).
+    """
+    changed = 0
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        for name, reason in RETIRED_API_PROVIDERS.items():
+            try:
+                cur = await db.execute(
+                    "UPDATE api_settings SET enabled = 0, last_test_status = 'retired', last_test_message = ? "
+                    "WHERE api_name = ? AND (enabled != 0 OR last_test_status IS NOT 'retired')",
+                    (reason, name),
+                )
+                changed += cur.rowcount or 0
+            except aiosqlite.OperationalError as e:  # table/columns absent on a very old DB
+                logging.getLogger(__name__).debug(f"retire_api_providers skipped: {e}")
+        await db.commit()
+    return changed
 
 
 async def update_native_asset_decimals(asset_id: str, decimals: int):

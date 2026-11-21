@@ -1623,6 +1623,27 @@ async def get_mobile_wallet_detail(
     }
 
 
+def _resolve_exchange_id(name: str) -> Optional[str]:
+    """Map a path/label to an exchange id from get_aggregation_exchange_names(), else None.
+
+    Accepts the id itself ('woox'), and the label-derived alias the summary has always emitted
+    ('woo_x', 'crypto_com', 'independent_reserve') so both spellings reach the same exchange.
+    """
+    key = (name or "").strip().lower()
+    if not key:
+        return None
+    ids = get_aggregation_exchange_names()
+    if key in ids:
+        return key
+    def squash(v: str) -> str:
+        return "".join(ch for ch in v.lower() if ch.isalnum())
+    sq = squash(key)
+    for i in ids:
+        if squash(i) == sq or squash(get_exchange_display_name(i)) == sq:
+            return i
+    return None
+
+
 @router.get("/exchanges/summary")
 async def get_mobile_exchanges_summary(
     user_id: int = Depends(verify_session),
@@ -1648,6 +1669,9 @@ async def get_mobile_exchanges_summary(
 
         mobile_exchanges.append({
             "name": exchange_name,
+            # Additive (2026-11-21): the id that GET /exchanges/{exchange_id} accepts. `name` is derived
+            # from the display label ('woo x' -> 'woo_x') and is not always the registry key ('woox').
+            "exchange_id": _resolve_exchange_id(exchange.get('name', '')) or exchange_name,
             "display_name": info['display_name'],
             "configured": exchange.get('status') == 'connected',
             "value_usd": round(exchange.get('total_usd', 0), 2),
@@ -1676,23 +1700,15 @@ async def get_mobile_exchange_detail(
 
     Mobile-optimized wrapper for existing exchange endpoints.
     """
-    # Map exchange name to endpoint
-    exchange_map = {
-        'coinbase': exchanges.get_coinbase_portfolio,
-        'binance': exchanges.get_binance_portfolio,
-        'binance_us': exchanges.get_binance_us_portfolio,
-        'okx': exchanges.get_okx_portfolio,
-        'bitget': exchanges.get_bitget_portfolio,
-        'gate': exchanges.get_gate_portfolio,
-        'kucoin': exchanges.get_kucoin_portfolio,
-    }
-
-    get_func = exchange_map.get(exchange_name)
-    if not get_func:
+    # Every exchange that counts toward totals (7 legacy + the registry) resolves here (2026-11-21).
+    # Previously only the 7 legacy ones were mapped, so registry exchanges (kraken, bybit, ...) were 404.
+    resolved = _resolve_exchange_id(exchange_name)
+    if not resolved:
         raise HTTPException(status_code=404, detail=f"Exchange '{exchange_name}' not supported")
+    exchange_name = resolved
 
     try:
-        data = await get_func(user_id=user_id, refresh=refresh)
+        data = await exchanges.fetch_exchange_portfolio(exchange_name, user_id=user_id, refresh=refresh)
     except HTTPException as e:
         raise e
     except Exception as e:
@@ -1701,7 +1717,7 @@ async def get_mobile_exchange_detail(
 
     # Get display info
     info = EXCHANGE_INFO.get(exchange_name, {
-        "display_name": exchange_name.title(),
+        "display_name": get_exchange_display_name(exchange_name),
         "logo_url": ""
     })
 
@@ -3097,6 +3113,42 @@ async def get_asset_wallet_breakdown(
                     'label': _KIND_LABELS.get(entry['kind'], 'Staked in {p}').format(p=protocol_name),
                     'address': w['address'],
                     'blockchain': 'cardano',
+                    'amount': entry['amount'],
+                    'value_usd': round(entry['usd'], 2),
+                }
+                if not entry['priced']:
+                    source['priced'] = False
+                sources.append(source)
+
+    # 4b. BTC Karma stakes (Bitcoin wallets), same shared valuation and the same cache that
+    # get_staking_value()/the Staking tab read. Karma moves staked sats to a per-stake vault
+    # address (never the staker's own), so they are NOT inside the wallet's L1 amount counted in
+    # section 1: adding them here does not double-count. One entry per distinct address.
+    bitcoin_wallet_entries = portfolio_summary.get('bitcoin', {}).get('wallets', [])
+    seen_btc_addrs = set()
+    btc_wallets = []
+    for w in bitcoin_wallet_entries:
+        addr = w.get('address')
+        if addr and addr not in seen_btc_addrs:
+            seen_btc_addrs.add(addr)
+            btc_wallets.append(w)
+    karma_caches = await asyncio.gather(*[
+        get_cache(f"btc_karma_staking_{w['address']}", user_id=user_id) for w in btc_wallets
+    ], return_exceptions=True)
+    for w, cached_karma in zip(btc_wallets, karma_caches):
+        if isinstance(cached_karma, BaseException) or not cached_karma or not isinstance(cached_karma, dict):
+            continue
+        for protocol_name, protocol_data in (cached_karma.get('protocols') or {}).items():
+            if not isinstance(protocol_data, dict) or protocol_data.get('status') == 'unavailable':
+                continue
+            for entry in iter_staking_token_values(protocol_data, all_prices):
+                if entry['token'] != symbol:
+                    continue
+                source = {
+                    'source_type': 'staking',
+                    'label': _KIND_LABELS.get(entry['kind'], 'Staked in {p}').format(p=protocol_name),
+                    'address': w['address'],
+                    'blockchain': 'bitcoin',
                     'amount': entry['amount'],
                     'value_usd': round(entry['usd'], 2),
                 }

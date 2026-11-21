@@ -87,8 +87,8 @@ class NFTService:
         self._resolved_names: Dict[str, str] = {}
 
     def is_taptools_configured(self) -> bool:
-        """Check if TapTools API key is configured."""
-        return bool(TAPTOOLS_API_KEY)
+        """TapTools is retired (2026-11-21): never configured, never called."""
+        return False
 
     async def _get_blockfrost_headers(self) -> dict:
         """
@@ -147,10 +147,10 @@ class NFTService:
             "cached_nfts": len(self.nft_cache),
             "cached_collections": len(self.collection_cache),
             "last_refresh": self.last_full_refresh.isoformat() if self.last_full_refresh else None,
-            "floor_prices": "rate_limited" if self.is_rate_limited() else ("available" if self.is_taptools_configured() else "unavailable (TapTools API key required)"),
+            "floor_prices": "rate_limited" if self.is_rate_limited() else ("available" if self.is_taptools_configured() else "unavailable (TapTools retired; no live floor-price source)"),
             "rate_limit_status": rate_limit_info,
             "metadata_priority": " → ".join(metadata_sources),
-            "note": "TapTools API key required for floor prices. Get one at https://www.taptools.io/openapi/subscription" if not self.is_taptools_configured() else ("Rate limit reached - using cached floor prices" if self.is_rate_limited() else "Full NFT data available")
+            "note": "TapTools is retired; floor prices are served from stored values only" if not self.is_taptools_configured() else ("Rate limit reached - using cached floor prices" if self.is_rate_limited() else "Full NFT data available")
         }
 
     def is_nft(self, asset: dict) -> bool:

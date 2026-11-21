@@ -497,7 +497,7 @@ class PriceEnricher:
         Fallback chain:
         1. V1 nft_floor_prices table (already has data, free, instant)
         2. nft_price_client external service (if configured)
-        3. TapTools direct API call (rate-limited, last resort)
+        (TapTools direct call removed: service retired)
         """
         # Helper to convert ADA floor to USD
         async def _ada_to_usd(floor_ada: float) -> Optional[float]:
@@ -533,44 +533,8 @@ class PriceEnricher:
         except Exception as e:
             logger.debug(f"nft_price_client error for {policy_id[:16]}: {e}")
 
-        # 3. Direct TapTools API call (last resort)
-        try:
-            floor_ada = await self._fetch_taptools_floor_direct(policy_id)
-            if floor_ada and floor_ada > 0:
-                usd = await _ada_to_usd(floor_ada)
-                if usd:
-                    # Persist back to V1 table for future lookups
-                    await self._save_floor_to_v1(policy_id, floor_ada, "taptools_direct")
-                    return usd
-        except Exception as e:
-            logger.debug(f"TapTools direct floor price error for {policy_id[:16]}: {e}")
+        # (TapTools direct fallback removed 2026-11-21: service retired.)
 
-        return None
-
-    async def _fetch_taptools_floor_direct(self, policy_id: str) -> Optional[float]:
-        """Direct TapTools floor price call as last-resort fallback."""
-        try:
-            from services.api_key_manager import APIKeyManager
-            mgr = APIKeyManager(api_name='taptools', env_var='TAPTOOLS_API_KEY')
-            api_key = await mgr.get_api_key()
-            if not api_key:
-                return None
-
-            client = get_client("taptools_nft", timeout=15.0)
-            response = await client.get(
-                "https://openapi.taptools.io/api/v1/nft/collection/stats",
-                params={"policy": policy_id},
-                headers={"x-api-key": api_key},
-            )
-            if response.status_code == 200:
-                data = response.json()
-                price = data.get('price')
-                if price and float(price) > 0:
-                    return float(price)
-            elif response.status_code == 429:
-                logger.warning("TapTools rate limit hit during NFT floor price fetch")
-        except Exception as e:
-            logger.debug(f"TapTools direct API error for {policy_id[:16]}: {e}")
         return None
 
     async def _save_floor_to_v1(self, policy_id: str, floor_ada: float, source: str):
