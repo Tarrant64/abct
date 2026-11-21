@@ -37,6 +37,9 @@ async def test_price_enricher_has_no_direct_taptools_call():
     assert not hasattr(PriceEnricher, "_fetch_taptools_floor_direct")
 
 
+_LEGACY_HOST = ".".join(["openapi", "taptools", "io"])  # plain substring scan of source text, not URL validation
+
+
 def test_no_taptools_http_calls_remain_outside_gated_legacy():
     """Every remaining openapi.taptools.io URL is behind the (always False) configured gate."""
     root = os.path.join(BACKEND_DIR)
@@ -47,7 +50,7 @@ def test_no_taptools_http_calls_remain_outside_gated_legacy():
         for f in files:
             if f.endswith(".py"):
                 src = open(os.path.join(d, f), encoding="utf-8", errors="ignore").read()
-                if "openapi.taptools.io" in src or "TAPTOOLS_API_BASE}" in src:
+                if _LEGACY_HOST in src or "TAPTOOLS_API_BASE}" in src:
                     hits.append(f)
     assert sorted(hits) == ["nft.py", "nfts.py"]
 
