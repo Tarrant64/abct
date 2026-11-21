@@ -11,7 +11,7 @@ Implemented in `backend/services/cardano_token_meta.py`, served by `backend/rout
 | 3 | Koios `asset_info` (token_registry_metadata, CIP-25 minting metadata, CIP-68 datum) | same | free public tier, rate limited |
 | 4 | `token_metadata_cache` (CoinGecko, by ticker) | `coingecko_id`, name, image | last resort for the image, also supplies `coingecko_id` |
 
-Skipped: TapTools (key is configured but it has no logo/metadata endpoint worth a call), DexScreener (no reliable Cardano image), NMKR proxy (key not configured). LogoKit and Logostream are NOT part of this chain; see "LogoKit and Logostream" below.
+Skipped: TapTools (retired 2026-11-21, no longer called anywhere), DexScreener (no reliable Cardano image), NMKR proxy (key not configured). LogoKit and Logostream are NOT part of this chain; see "LogoKit and Logostream" below.
 
 ## Caching
 
@@ -43,3 +43,21 @@ How they are used instead:
 - Web footers carry the required attribution. README credit retained.
 
 Keys: add or change them in the web UI under Settings > API keys (stored in the DB, survives deploys because the deploy script keeps the data volume); no container env change is needed.
+
+## Decimals: metadata is applied to stored quantities (2026-11-21)
+
+`native_assets.decimals` is what every quantity / USD calculation divides by (`raw / 10**decimals`). It is filled at wallet-refresh time from the older `token_metadata` cache and was 0 whenever that cache had nothing, which showed raw units as whole tokens. The metadata chain resolves decimals by exact policy id + asset name, so those values are applied to stored rows under a strict rule:
+
+| Case | Result |
+|---|---|
+| stored is 0 / NULL and `cardano_token_meta.decimals` is 1..30 from `registry`, `blockfrost` or `koios` | stored value becomes the metadata value |
+| stored is non-zero | never overridden (even if metadata differs) |
+| decimals only known via the ticker-matched `market-cache` source (it never supplies decimals), no metadata row, or value outside 1..30 | unchanged |
+| native_assets row of a non-Cardano wallet | unchanged |
+
+Where it runs (all idempotent, `services/cardano_token_meta.py`):
+1. `sync_native_asset_decimals()` at startup (`main.py` lifespan); when rows change, wallet/portfolio response caches are cleared and each user's portfolio version bumped.
+2. After every metadata resolve (`_save_meta`), for that one asset, in the same transaction.
+3. `fill_asset_decimals()` inside `save_native_assets`, so a wallet refresh cannot write the 0 back.
+
+`token_metadata.decimals` rows still at 0 for the same assets are corrected too (used as a fallback in `all-holdings`). `meta_decimals` on list payloads is unchanged. A CIP-25 `decimals` field is minter-declared; it is accepted only because it is keyed by exact asset id and arrives through Blockfrost/Koios, never by ticker.

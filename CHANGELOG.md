@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Server polish round (ABCT-SERVER-POLISH-20261121)
+
+**Fixed**
+- Token decimals: `native_assets.decimals` was stored as 0 for 14 Cardano tokens (21 rows, one user) whose Token Registry / Blockfrost / Koios metadata has real decimals, so raw units were shown as whole tokens (e.g. 24,029,539,420 DRIP instead of 24,029.54). A stored 0/NULL now yields to verified metadata decimals (exact policy+name, source registry/Blockfrost/Koios, 1..30). A non-zero stored value is never overridden and a ticker-matched guess (market-cache) is never used. Applied (a) once at startup as an idempotent backfill, (b) whenever a token's metadata is resolved, and (c) in `save_native_assets` so a wallet refresh cannot re-introduce the 0. Affected response caches and the portfolio version are invalidated when rows change. See docs/TOKEN_METADATA_SOURCES.md. Tests: `tests/unit/test_token_decimals_backfill.py`.
+- `GET /api/mobile/exchanges/{name}` returned 404 for every registry exchange (kraken, bybit, ...). It now serves every id from `get_aggregation_exchange_names()` (and label aliases such as `woo_x`, `crypto_com`). Additive: `GET /api/mobile/exchanges/summary` rows carry `exchange_id`, the id the detail route accepts. Tests: `tests/unit/test_mobile_exchange_detail_and_btc_breakdown.py`.
+- `GET /api/mobile/asset/{symbol}/wallet-breakdown`: staking covered Cardano only. BTC Karma stakes on Bitcoin wallets are now listed (`source_type: "staking"`, `blockchain: "bitcoin"`) using the shared `iter_staking_token_values` valuation, once per address. They sit in a vault address, not the wallet balance, so there is no double count.
+- Wallet names can be cleared: `PUT /wallets/{id}/label` and `PATCH /wallets/{address}` accept `{"label": null}` or `""` (stored as NULL, response `label: null`). Auth, ownership (404 for foreign wallets), demo block and the 64-character / control-character rules are unchanged for non-empty names; an omitted `label` key is still 422. The web wallet list and Edit Label dialog now allow clearing.
+
+**Removed**
+- TapTools is retired: `TAPTOOLS_API_KEY` is ignored (the setting is always empty), `nft_service.is_taptools_configured()` is False, the engine's direct TapTools floor fallback is gone and the NFT status text no longer asks for a key. The stored `api_settings` row is kept but marked disabled/`retired` at startup (idempotent; no data deleted). Note: `services/taptools.py` (`taptools_wallet_service`) is a Koios-backed reconciliation service that only kept the old name; it is unchanged. Tests: `tests/unit/test_taptools_retired.py`.
+
+**Tests**
+- A demo session gets 403 and a tokenless request 401 on all 10 `verify_admin` routes (`tests/unit/test_demo_admin_routes_403.py`).
+
 ### Avatar: no more "?" in the top-right user icon (ABCT-WEB-AVATAR-20261120)
 
 **Fixed**

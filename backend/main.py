@@ -129,6 +129,32 @@ async def lifespan(app: FastAPI):
     logger.info("Database initialized")
     await log_service.info("main", "Main database initialized")
 
+    # Retired providers (TapTools): keep the stored row, mark it disabled/retired. Idempotent.
+    try:
+        from database import retire_api_providers
+        retired = await retire_api_providers()
+        if retired:
+            logger.info(f"Marked {retired} retired API provider row(s) disabled")
+    except Exception as e:
+        logger.warning(f"Retired-provider marking failed: {e}")
+
+    # Token decimals backfill (idempotent): copy verified registry/Blockfrost/Koios decimals onto
+    # native_assets rows stuck at 0, then drop the response caches that embed quantities/values.
+    try:
+        from services.cardano_token_meta import sync_native_asset_decimals
+        fixed = await sync_native_asset_decimals()
+        if fixed:
+            from database import clear_cache, get_all_users
+            from services.portfolio_freshness import invalidate_user_portfolio_caches
+            for pat in ("wallet_balance_", "native_assets_all", "defi_summary_", "pnl_summary"):
+                await clear_cache(pat)
+            for u in await get_all_users():
+                await invalidate_user_portfolio_caches(u["id"], reason="token decimals backfill")
+        logger.info(f"Token decimals backfill: {fixed} native asset row(s) corrected")
+        await log_service.info("main", f"Token decimals backfill: {fixed} row(s) corrected")
+    except Exception as e:
+        logger.warning(f"Token decimals backfill failed: {e}")
+
     # Initialize V2 engine tables
     logger.info("Initializing V2 engine tables...")
     try:

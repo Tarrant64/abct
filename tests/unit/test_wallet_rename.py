@@ -88,11 +88,28 @@ def test_rename_ok_strips_and_persists(env):
     assert _label(env, 1) == "Cold storage"
 
 
-@pytest.mark.parametrize("bad", [None, "", "   ", "x" * 65, "line\nbreak", "nul\x00", "tab\there",
+@pytest.mark.parametrize("bad", ["x" * 65, "line\nbreak", "nul\x00", "tab\there",
                                  "c1\x85ctl", "sep x", 123, ["a"]])
 def test_invalid_labels_are_422_and_do_not_write(env, bad):
     r = env.put("/wallets/1/label", json={"label": bad})
     assert r.status_code == 422
+    assert _label(env, 1) == "Old"
+
+
+@pytest.mark.parametrize("clear", [None, "", "   "])
+def test_null_or_empty_label_clears_it(env, clear):
+    """2026-11-21: clearing a name is allowed (stored as NULL), unlike other invalid values."""
+    r = env.put("/wallets/1/label", json={"label": clear})
+    assert r.status_code == 200 and r.json()["label"] is None
+    assert _label(env, 1) is None
+
+
+def test_clear_keeps_ownership_and_demo_rules(env):
+    assert env.put("/wallets/2/label", json={"label": None}).status_code == 404
+    assert _label(env, 2) == "Theirs"
+    assert env.put("/wallets/999/label", json={"label": ""}).status_code == 404
+    env.state["demo"] = True
+    assert env.put("/wallets/1/label", json={"label": None}).json().get("demo_mode") is True
     assert _label(env, 1) == "Old"
 
 
@@ -135,8 +152,13 @@ def test_patch_by_address_same_rules(env, monkeypatch):
 
     assert env.patch("/wallets/addr_mine", json={"label": "New"}).status_code == 200
     assert _label(env, 1) == "New"
-    assert env.patch("/wallets/addr_mine", json={"label": ""}).status_code == 422
-    assert env.patch("/wallets/addr_mine", json={"label": None}).status_code == 422
+    assert env.patch("/wallets/addr_mine", json={}).status_code == 422          # omitted key
+    assert env.patch("/wallets/addr_mine", json={"label": ""}).status_code == 200      # clears
+    assert _label(env, 1) is None
+    assert env.patch("/wallets/addr_mine", json={"label": "New"}).status_code == 200
+    assert env.patch("/wallets/addr_mine", json={"label": None}).status_code == 200    # clears
+    assert _label(env, 1) is None
+    assert env.patch("/wallets/addr_mine", json={"label": "New"}).status_code == 200
     assert env.patch("/wallets/addr_mine", json={"label": "a\nb"}).status_code == 422
     assert env.patch("/wallets/addr_mine", json={"label": "z" * 65}).status_code == 422
     # another user's address: 404 and untouched

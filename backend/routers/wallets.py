@@ -142,16 +142,22 @@ WALLET_LABEL_MAX_LEN = 64
 _LABEL_CONTROL_RE = re.compile(r'[\x00-\x1f\x7f-\x9f\u2028\u2029]')
 
 
-def validate_wallet_label(label) -> str:
+def validate_wallet_label(label, allow_clear: bool = False) -> Optional[str]:
     """Return the stripped label or raise 422.
 
-    Rejects null / non-string / empty-after-strip, anything over 64 characters
-    and any control character (newlines, NUL, C1 controls, line separators).
+    Rejects non-string, anything over 64 characters and any control character
+    (newlines, NUL, C1 controls, line separators). With allow_clear=True a
+    null / empty / whitespace-only label is a request to CLEAR the name and
+    returns None (stored as NULL); otherwise it is a 422.
     """
+    if label is None and allow_clear:
+        return None
     if not isinstance(label, str):
         raise HTTPException(status_code=422, detail="label must be a non-empty string")
     cleaned = label.strip()
     if not cleaned:
+        if allow_clear:
+            return None
         raise HTTPException(status_code=422, detail="label must not be empty")
     if len(cleaned) > WALLET_LABEL_MAX_LEN:
         raise HTTPException(status_code=422, detail=f"label must be at most {WALLET_LABEL_MAX_LEN} characters")
@@ -2608,7 +2614,13 @@ async def update_wallet(address: str, update: WalletUpdate, user_id: int = Depen
     if username and await is_demo_user(username):
         return {"message": "Demo mode: Not updated", "demo_mode": True}
 
-    label = validate_wallet_label(update.label)
+    # An explicit null / "" clears the name (stored as NULL); an omitted key is still a 422.
+    fields_set = getattr(update, "model_fields_set", None)
+    if fields_set is None:
+        fields_set = getattr(update, "__fields_set__", set())
+    if "label" not in fields_set:
+        raise HTTPException(status_code=422, detail="label is required (use null or \"\" to clear it)")
+    label = validate_wallet_label(update.label, allow_clear=True)
 
     # user_id passed explicitly: never rely on the request-context fallback,
     # and never update a wallet row another user owns.
@@ -2712,7 +2724,7 @@ async def update_wallet_label(wallet_id: int, data: dict, user_id: int = Depends
     Auth: verify_session (as every state-changing wallet route). The wallet
     must belong to the caller (404 otherwise, whether missing or someone
     else's); demo users are blocked; the label must be a 1-64 character
-    string without control characters (422).
+    string without control characters (422), or null / "" to clear it.
     """
     from database import update_wallet_label_for_user
 
@@ -2720,7 +2732,10 @@ async def update_wallet_label(wallet_id: int, data: dict, user_id: int = Depends
     if username and await is_demo_user(username):
         return {"message": "Demo mode: Not updated", "demo_mode": True}
 
-    label = validate_wallet_label(data.get('label') if isinstance(data, dict) else None)
+    # An explicit null / "" clears the name (stored as NULL); an omitted key is still a 422.
+    if not isinstance(data, dict) or 'label' not in data:
+        raise HTTPException(status_code=422, detail="label is required (use null or \"\" to clear it)")
+    label = validate_wallet_label(data.get('label'), allow_clear=True)
 
     if not await update_wallet_label_for_user(wallet_id, user_id, label):
         raise HTTPException(status_code=404, detail="Wallet not found")
