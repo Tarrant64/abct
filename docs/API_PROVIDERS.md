@@ -103,6 +103,14 @@ price source. Wallet reconciliation moved to Koios at the same time.
 
 **Note:** Koios is used automatically as a fallback when other APIs are unavailable. No configuration needed.
 
+**Account-level reconciliation (`backend/services/koios_reconcile.py`, formerly `services/taptools.py`):**
+the primary source for a Cardano stake account's spendable ADA (`utxo`), unclaimed rewards and native assets
+during wallet refresh. Endpoints (all POST, JSON body `{"_stake_addresses": [...]}`): `/account_info`,
+`/account_assets` (paged), `/account_addresses`; `/address_info` only as a stake-address fallback.
+The stake address is derived locally from the bech32 address first. Koios has no `/resolve_address`
+endpoint and its GET forms of the account endpoints return 404. If Koios fails, `routers/wallets.py`
+falls back to Blockfrost (`get_account_utxo_ada`, ADA only).
+
 ---
 
 ## Ethereum & EVM Chain APIs

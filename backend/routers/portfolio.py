@@ -17,7 +17,7 @@ from database import (
 from services.cardano import cardano_service
 from services.pricing import pricing_service
 from services.defi import DEFI_PROTOCOLS
-from services.taptools import taptools_wallet_service
+from services.koios_reconcile import taptools_wallet_service
 from services.token_metadata_cache import metadata_cache
 from services.token_names import resolve_token_display_name
 from services.nmkr_service import nmkr_service
@@ -134,7 +134,7 @@ async def calculate_wallet_native_assets_value(wallet_id: int, blockchain: str, 
     account's on-chain position list) as having ALREADY priced the asset,
     via pos['ada_value'], and skip ticker-based pricing on that assumption
     (`elif`, not a second `if`). That assumption was always false --
-    services/taptools.py hardcodes ada_value=0 for every position because
+    services/koios_reconcile.py (formerly taptools.py) hardcodes ada_value=0 for every position because
     Koios does not return pricing data at all, only quantity/existence
     (confirmed: no code path anywhere ever sets a position's ada_value to
     anything but 0). Fixing only the key name would still have yielded $0

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Koios reconciliation fix (ABCT-KOIOS-RESOLVE-20261121)
+
+**Fixed**
+- Every Cardano wallet refresh logged `Koios /resolve_address returned 404` and fell through to Blockfrost. Koios has no `/resolve_address` endpoint, and its `account_info` / `account_assets` / `account_addresses` endpoints are POST-only (the GET forms 404), so the whole Koios reconciliation path had never returned data. The service now POSTs `{"_stake_addresses": [...]}` to the real endpoints, derives the stake address locally from the bech32 address (Koios `/address_info` only as a fallback), pages `account_assets`, and parses Koios's real schema (lovelace strings, flat per-asset rows with `decimals`). Blockfrost remains the ADA-only fallback.
+
+**Changed**
+- `backend/services/taptools.py` renamed to `backend/services/koios_reconcile.py` (it was never TapTools); the old module name is a re-export shim. Tests: `tests/unit/test_koios_reconcile.py`. Docs: `docs/API_PROVIDERS.md`.
+
 ### Server polish round (ABCT-SERVER-POLISH-20261121)
 
 **Fixed**
