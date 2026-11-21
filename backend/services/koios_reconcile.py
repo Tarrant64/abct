@@ -120,7 +120,7 @@ class WalletReconciliationService:
         # Derive stake key from address
         stake_address = await self._address_to_stake(address)
         if not stake_address:
-            logger.debug(f"Could not derive stake key from {address}")
+            logger.debug("Could not derive stake key for a wallet address")
             return None
 
         cache_key = f"portfolio_{address}"
@@ -209,7 +209,7 @@ class WalletReconciliationService:
             return result
 
         except Exception as e:
-            logger.error(f"Error fetching Koios portfolio for {address}: {e}")
+            logger.error("Error fetching Koios portfolio: %s", type(e).__name__)
             return None
 
     async def get_stake_key_balance(self, address: str) -> Optional[Dict]:
