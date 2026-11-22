@@ -70,10 +70,12 @@ async def periodic_transaction_sync() -> None:
     if not autosync_enabled():
         logger.info("tx autosync disabled")
         return
+    logger.info("tx autosync started: first run in %ss, then every %ss", INITIAL_DELAY_SEC, interval_seconds())
     await asyncio.sleep(INITIAL_DELAY_SEC)
     while True:
         try:
-            await sync_all_users()
+            res = await sync_all_users()
+            logger.info("tx autosync cycle done: %d users, %d rows fetched", len(res), sum(res.values()))
         except asyncio.CancelledError:
             raise
         except Exception as e:  # noqa: BLE001
