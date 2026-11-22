@@ -1031,6 +1031,10 @@ async def lifespan(app: FastAPI):
 
     _background_tasks.append(asyncio.create_task(backfill_history_prices()))
 
+    # Keep transaction_history fresh (it was previously refreshed only by a manual web-UI action)
+    from services.transaction_autosync import periodic_transaction_sync
+    _background_tasks.append(asyncio.create_task(periodic_transaction_sync()))
+
     yield
 
     # --- Graceful shutdown ---
