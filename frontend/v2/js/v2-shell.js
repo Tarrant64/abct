@@ -26,6 +26,7 @@ const V2_NAV = [
 
 const V2_THEMES = [
     { value: 'dark-mode', label: 'Dark Mode' },
+    { value: 'aurora', label: 'Aurora (V3 preview)' },
     { value: 'light', label: 'Light' },
     { value: 'cypherpunk1', label: 'Cypherpunk' },
     { value: 'ocean-depths', label: 'Ocean Depths' },
@@ -43,6 +44,16 @@ const V2_THEMES = [
 function v2InitShell(activePage) {
     // Build sidebar HTML
     const currentPath = window.location.pathname;
+
+    // Design-WIP layer: pages under /next/* load the v2-next.css delta on top
+    // of v2.css (root "/" intentionally stays on the shipped design).
+    if (currentPath.startsWith('/next') && !document.getElementById('v2NextCss')) {
+        const link = document.createElement('link');
+        link.id = 'v2NextCss';
+        link.rel = 'stylesheet';
+        link.href = '/next/static/css/v2-next.css';
+        document.head.appendChild(link);
+    }
 
     let navHtml = '';
     V2_NAV.forEach(section => {

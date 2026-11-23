@@ -1331,8 +1331,9 @@ async def v2_pages(page: str):
 
 @app.get("/")
 async def root():
-    """Default dashboard is /next/ (WQ-0383); V1 moved to /legacy."""
-    return RedirectResponse(url="/next/", status_code=302)
+    """Serve the V2 dashboard directly at "/" — no redirect (user order 2026-11-23).
+    V1 remains available at /legacy/*; the classic V1 index is no longer the default."""
+    return FileResponse(str(v2_path / "index.html"))
 
 @app.get("/legacy")
 async def legacy_redirect():
