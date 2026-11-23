@@ -649,22 +649,40 @@ function renderChart(data) {
     const gridColor = style.getPropertyValue('--v2-chart-grid').trim() || 'rgba(255,255,255,0.04)';
     const textColor = style.getPropertyValue('--v2-chart-text').trim() || '#5a6475';
 
-    // Aurora design-WIP (matches the V2 mobile app): horizontal gradient line
-    // teal -> amber -> ember, warm vertical fill, glowing last point.
-    const isAurora = document.documentElement.getAttribute('data-theme') === 'aurora';
+    // fx design lanes (v2-next.css): per-theme gradient line like the mobile
+    // app — aurora teal->amber->ember, cypherpunk cyan->violet->pink, light
+    // indigo->violet->pink — with warm/violet fill and glowing last point.
+    const fxTheme = document.documentElement.getAttribute('data-theme');
+    const FX_LINE_GRADIENTS = {
+        aurora: ['#2dd4a7', '#f7b733', '#ff6b52'],
+        cypherpunk: ['#38bdf8', '#c084fc', '#f472b6'],
+        light: ['#818cf8', '#c084fc', '#f472b6'],
+    };
+    const FX_FILL_TOP = {
+        aurora: 'rgba(247, 147, 51, 0.22)',
+        cypherpunk: 'rgba(139, 92, 246, 0.22)',
+        light: 'rgba(124, 111, 240, 0.18)',
+    };
+    const FX_ENDPOINT = {
+        aurora: '#ffb347',
+        cypherpunk: '#c084fc',
+        light: '#7c6ff0',
+    };
+    const fxStops = FX_LINE_GRADIENTS[fxTheme];
     let strokeColor = lineColor;
     let areaColor = fillColor;
-    if (isAurora && ctx.canvas && ctx.canvas.width > 0) {
+    if (fxStops && ctx.canvas && ctx.canvas.width > 0) {
         const lg = ctx.createLinearGradient(0, 0, ctx.canvas.width, 0);
-        lg.addColorStop(0, '#2dd4a7');
-        lg.addColorStop(0.55, '#f7b733');
-        lg.addColorStop(1, '#ff6b52');
+        lg.addColorStop(0, fxStops[0]);
+        lg.addColorStop(0.55, fxStops[1]);
+        lg.addColorStop(1, fxStops[2]);
         strokeColor = lg;
         const vg = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height || 300);
-        vg.addColorStop(0, 'rgba(247, 147, 51, 0.22)');
-        vg.addColorStop(1, 'rgba(247, 147, 51, 0)');
+        vg.addColorStop(0, FX_FILL_TOP[fxTheme]);
+        vg.addColorStop(1, 'rgba(0, 0, 0, 0)');
         areaColor = vg;
     }
+    const isFxTheme = !!fxStops;
 
     // Destroy previous chart
     if (v2State.chartInstance) {
@@ -685,15 +703,15 @@ function renderChart(data) {
                 tension: isIntraday ? 0 : 0.35,
                 borderWidth: 2,
                 pointRadius: (scriptCtx) => {
-                    if (isAurora && !isIntraday && scriptCtx.dataIndex === values.length - 1) return 4;
+                    if (isFxTheme && !isIntraday && scriptCtx.dataIndex === values.length - 1) return 4;
                     return isIntraday ? (values.length > 200 ? 0 : 1.5) : 0;
                 },
                 pointBackgroundColor: (scriptCtx) => {
-                    if (isAurora && !isIntraday && scriptCtx.dataIndex === values.length - 1) return '#ffb347';
+                    if (isFxTheme && !isIntraday && scriptCtx.dataIndex === values.length - 1) return FX_ENDPOINT[fxTheme];
                     return strokeColor;
                 },
                 pointBorderColor: (scriptCtx) => {
-                    if (isAurora && !isIntraday && scriptCtx.dataIndex === values.length - 1) return '#fff7ea';
+                    if (isFxTheme && !isIntraday && scriptCtx.dataIndex === values.length - 1) return '#ffffff';
                     return 'transparent';
                 },
                 pointHoverRadius: 5,
@@ -940,9 +958,9 @@ function renderAssetsTable() {
         // Logo
         let logoHtml = '';
         if (h.logo_url) {
-            logoHtml = `<img src="${escapeAttr(h.logo_url)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="fallback" style="display:none">${escapeHtml(symbol.substring(0, 3))}</span>`;
+            logoHtml = `<img src="${escapeAttr(h.logo_url)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="fallback" style="display:none;background:${v2SymbolColor(symbol)}">${escapeHtml(symbol.substring(0, 3))}</span>`;
         } else {
-            logoHtml = `<span class="fallback">${escapeHtml(symbol.substring(0, 3))}</span>`;
+            logoHtml = `<span class="fallback" style="background:${v2SymbolColor(symbol)}">${escapeHtml(symbol.substring(0, 3))}</span>`;
         }
 
         html += `
@@ -1022,6 +1040,28 @@ function renderAssetsTable() {
     if (typeof applyColumnVisibility === 'function') {
         applyColumnVisibility();
     }
+}
+
+// Per-symbol chip colors for asset rows (mobile-app look): known brands use
+// their color, anything else gets a deterministic hue from the symbol hash.
+const V2_SYMBOL_COLORS = {
+    BTC: '#f7931a', ETH: '#627eea', ADA: '#2a6fbe', SOL: '#9945ff',
+    XRP: '#23292f', DOGE: '#c2a633', ADA2: '#2a6fbe', DOT: '#e6007a',
+    MATIC: '#8247e5', AVAX: '#e84142', LINK: '#2a5ada', LTC: '#345d9d',
+    UNI: '#ff007a', ATOM: '#2e3148', XLM: '#14b6e7', ICP: '#3b00b9',
+    FIL: '#0090ff', ETC: '#328332', HBAR: '#000000', VET: '#15bdff',
+    ALGO: '#000000', AAVE: '#b6509e', SUSHI: '#fa52a0', CRV: '#d16027',
+    COMP: '#00d395', MKR: '#1aab9b', SNX: '#5fc9c3', YFI: '#006ae3',
+    MSTR: '#e8412c', TSLA: '#cc0000', AAPL: '#555555', NVDA: '#76b900',
+    AMZN: '#ff9900', GOOGL: '#4285f4', MSFT: '#00a4ef', META: '#0668e1',
+};
+
+function v2SymbolColor(symbol) {
+    const sym = (symbol || '').toUpperCase();
+    if (V2_SYMBOL_COLORS[sym]) return V2_SYMBOL_COLORS[sym];
+    let hash = 0;
+    for (let i = 0; i < sym.length; i++) hash = (hash * 31 + sym.charCodeAt(i)) >>> 0;
+    return `hsl(${hash % 360} 65% 42%)`;
 }
 
 function renderSparkline(idx, change) {
@@ -1486,12 +1526,20 @@ function setActiveNav() {
 // THEME
 // ============================================================================
 
+// Themes available in the /next design lane (see v2-next.css). Anything else
+// found in localStorage is stale (retired theme) and maps to the lane default.
+const V2_THEME_WHITELIST = ['aurora', 'cypherpunk', 'light'];
+
 function loadSavedTheme() {
-    // /next/* is the design-WIP space: default to the aurora preview theme
-    // there unless the user explicitly picked one (localStorage wins always).
+    // Two lanes: root "/" renders the shipped design (dark-mode) until a
+    // milestone is promoted; /next/* runs the fx themes and defaults to aurora.
     const saved = localStorage.getItem('theme');
-    const defaultTheme = window.location.pathname.startsWith('/next') ? 'aurora' : 'dark-mode';
-    const theme = saved || defaultTheme;
+    let theme;
+    if (window.location.pathname.startsWith('/next')) {
+        theme = (saved && V2_THEME_WHITELIST.includes(saved)) ? saved : 'aurora';
+    } else {
+        theme = 'dark-mode';
+    }
     document.documentElement.setAttribute('data-theme', theme);
     const select = document.getElementById('v2ThemeSelect');
     if (select) select.value = theme;
@@ -1999,7 +2047,7 @@ function renderTopHoldings() {
         const logoHtml = h.logo_url
             ? `<img src="${escapeAttr(h.logo_url)}" alt="" style="width:32px;height:32px;border-radius:50%;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
             : '';
-        const fallback = `<div style="width:32px;height:32px;border-radius:50%;background:var(--v2-bg-input);display:${h.logo_url ? 'none' : 'flex'};align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--v2-text-muted);">${escapeHtml(symbol.substring(0, 3))}</div>`;
+        const fallback = `<div style="width:32px;height:32px;border-radius:50%;background:${v2SymbolColor(symbol)};display:${h.logo_url ? 'none' : 'flex'};align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#fff;">${escapeHtml(symbol.substring(0, 3))}</div>`;
 
         html += `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;${idx < sorted.length - 1 ? 'border-bottom:1px solid var(--v2-border);' : ''}cursor:pointer;" data-symbol="${escapeAttr(symbol)}" data-chain="${escapeAttr(chain)}" class="top-holding-row">
             <div style="flex-shrink:0;">${logoHtml}${fallback}</div>

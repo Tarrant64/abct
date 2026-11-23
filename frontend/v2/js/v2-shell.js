@@ -25,15 +25,9 @@ const V2_NAV = [
 ];
 
 const V2_THEMES = [
-    { value: 'dark-mode', label: 'Dark Mode' },
-    { value: 'aurora', label: 'Aurora (V3 preview)' },
+    { value: 'aurora', label: 'Aurora' },
+    { value: 'cypherpunk', label: 'Cypherpunk' },
     { value: 'light', label: 'Light' },
-    { value: 'cypherpunk1', label: 'Cypherpunk' },
-    { value: 'ocean-depths', label: 'Ocean Depths' },
-    { value: 'sunset-horizon', label: 'Sunset Horizon' },
-    { value: 'cypher', label: 'Cypher' },
-    { value: 'cypher2', label: 'Cypher 2' },
-    { value: 'cypher3', label: 'Cypher 3' },
 ];
 
 /**
@@ -51,7 +45,7 @@ function v2InitShell(activePage) {
         const link = document.createElement('link');
         link.id = 'v2NextCss';
         link.rel = 'stylesheet';
-        link.href = '/next/static/css/v2-next.css?v=20261123b';
+        link.href = '/next/static/css/v2-next.css?v=20261124a';
         document.head.appendChild(link);
     }
 
@@ -68,8 +62,16 @@ function v2InitShell(activePage) {
         navHtml += '</div>';
     });
 
-    // Theme options
-    let themeOptions = V2_THEMES.map(t => `<option value="${t.value}">${t.label}</option>`).join('');
+    // Theme options — the fx themes live in v2-next.css (/next lane only),
+    // so the picker is shown there; root keeps the shipped design.
+    const onNextPath = currentPath.startsWith('/next');
+    const themeRowHtml = onNextPath
+        ? `<div class="v2-user-dropdown-theme">
+                    <span>Theme</span>
+                    <select id="v2ThemeSelect" onchange="changeTheme(this.value)">${V2_THEMES.map(t => `<option value="${t.value}">${t.label}</option>`).join('')}</select>
+                </div>
+                <div class="v2-user-dropdown-divider"></div>`
+        : '';
 
     // Inject sidebar
     const sidebarEl = document.getElementById('v2Sidebar');
@@ -101,11 +103,7 @@ function v2InitShell(activePage) {
             <div class="v2-user-dropdown" id="userDropdown">
                 <div class="v2-user-dropdown-header" id="userDropdownName">User</div>
                 <div class="v2-user-dropdown-divider"></div>
-                <div class="v2-user-dropdown-theme">
-                    <span>Theme</span>
-                    <select id="v2ThemeSelect" onchange="changeTheme(this.value)">${themeOptions}</select>
-                </div>
-                <div class="v2-user-dropdown-divider"></div>
+                ${themeRowHtml}
                 <button class="v2-user-dropdown-item" onclick="window.location='/next/settings'">Settings</button>
                 <button class="v2-user-dropdown-item" onclick="window.location='/next/help'">Help & Guide</button>
                 <button class="v2-user-dropdown-item" onclick="openChangePasswordModal()">Change Password</button>
@@ -120,9 +118,41 @@ function v2InitShell(activePage) {
 
     // Apply saved state
     loadSavedTheme();
-    if (localStorage.getItem('v2_sidebar_collapsed') === 'true') {
+    // /next defaults to the icon rail (app-like); an explicit expand/collapse
+    // choice (the key exists) always wins.
+    const sidebarCollapsed = localStorage.getItem('v2_sidebar_collapsed');
+    if (sidebarCollapsed === 'true' || (sidebarCollapsed === null && currentPath.startsWith('/next'))) {
         document.getElementById('v2Sidebar').classList.add('collapsed');
         document.getElementById('v2Layout').classList.add('sidebar-collapsed');
+    }
+
+    // App-style segmented pill nav (Portfolio | Assets | NFTs | DeFi & Staking)
+    // in the topbar — /next only, primary sections like the mobile app.
+    if (currentPath.startsWith('/next')) {
+        const topbar = document.querySelector('.v2-topbar');
+        if (topbar && !topbar.querySelector('.v2-seg-nav')) {
+            const segItems = [
+                { id: 'dashboard', label: 'Portfolio', href: '/next/' },
+                { id: 'assets', label: 'Assets', href: '/next/assets' },
+                { id: 'nfts', label: 'NFTs', href: '/next/nfts' },
+                { id: 'defi', label: 'DeFi & Staking', href: '/next/defi' },
+            ];
+            const iconFor = (pid) => {
+                for (const s of V2_NAV) {
+                    const it = s.items.find(i => i.id === pid);
+                    if (it) return it.icon;
+                }
+                return '';
+            };
+            const segHtml = segItems.map(it =>
+                `<a href="${it.href}" class="${it.id === activePage ? 'active' : ''}">${iconFor(it.id)}<span>${it.label}</span></a>`
+            ).join('');
+            const seg = document.createElement('nav');
+            seg.className = 'v2-seg-nav';
+            seg.setAttribute('aria-label', 'Primary sections');
+            setSafeHTML(seg, segHtml);
+            topbar.insertBefore(seg, topbar.querySelector('.v2-topbar-right'));
+        }
     }
 
     // Add toast container if not present
