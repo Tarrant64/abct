@@ -227,6 +227,25 @@ class PricingService:
         self._cg_api_key: Optional[str] = None
         self._cg_key_loaded = False
 
+    def _needs_price(self, symbol: str) -> bool:
+        """True when `symbol` has no price fresher than cache_duration.
+
+        The fallback fetchers (CMC, Coinbase, CoinPaprika, DefiLlama) only run
+        for symbols that still "need" a price. They used to test `usd == 0`,
+        but self.cache keeps the last value forever, so once CoinGecko was
+        rate limited (429) nothing ever refreshed the price: it froze at the
+        last CoinGecko success (ABCT-V2 stale prices, 2026-11-23). A missing
+        or unparseable updated_at counts as stale.
+        """
+        entry = self.cache.get(symbol.upper() if isinstance(symbol, str) else symbol) or self.cache.get(symbol) or {}
+        if not entry.get('usd', 0) > 0:
+            return True
+        try:
+            at = datetime.fromisoformat(entry.get('updated_at'))
+        except (TypeError, ValueError):
+            return True
+        return datetime.now() - at >= self.cache_duration
+
     def _is_cg_pro_key(self, key: str) -> bool:
         """Detect CoinGecko Pro API key (starts with 'CG-' and is 32+ chars)."""
         return key.startswith("CG-") and len(key) >= 32
@@ -367,7 +386,7 @@ class PricingService:
 
         # DefiLlama final fallback (price only -- its current-price endpoint
         # carries no change field, hence the DexScreener enrichment below).
-        missing = [s for s in symbols if self.cache.get(s.upper(), {}).get('usd', 0) == 0]
+        missing = [s for s in symbols if self._needs_price(s.upper())]
         if missing:
             await self._fetch_from_defillama(missing)
 
@@ -409,23 +428,23 @@ class PricingService:
             await self._fetch_from_coingecko(symbols)
 
         # CMC fallback
-        missing_for_cmc = [s for s in symbols if self.cache.get(s, {}).get('usd', 0) == 0
+        missing_for_cmc = [s for s in symbols if self._needs_price(s)
                           and s.upper() in ASSET_TO_CMC]
         if missing_for_cmc and CMC_API_KEY:
             await self._fetch_from_cmc(missing_for_cmc)
 
         # Coinbase fallback
-        still_missing = [s for s in symbols if self.cache.get(s, {}).get('usd', 0) == 0]
+        still_missing = [s for s in symbols if self._needs_price(s)]
         if still_missing:
             await self._fetch_from_coinbase(still_missing)
 
         # CoinPaprika fallback (free, no key required)
-        missing_for_cp = [s for s in symbols if self.cache.get(s, {}).get('usd', 0) == 0]
+        missing_for_cp = [s for s in symbols if self._needs_price(s)]
         if missing_for_cp:
             await self._fetch_from_coinpaprika(missing_for_cp)
 
         # DefiLlama final fallback
-        still_missing_2 = [s for s in symbols if self.cache.get(s, {}).get('usd', 0) == 0
+        still_missing_2 = [s for s in symbols if self._needs_price(s)
                           and s.upper() in ASSET_TO_COINGECKO]
         if still_missing_2:
             await self._fetch_from_defillama(still_missing_2, include_major=True)
@@ -442,12 +461,12 @@ class PricingService:
             await self._fetch_from_coingecko(symbols)
 
         # CoinPaprika fallback (free, no key required)
-        missing_for_cp = [s for s in symbols if self.cache.get(s, {}).get('usd', 0) == 0]
+        missing_for_cp = [s for s in symbols if self._needs_price(s)]
         if missing_for_cp:
             await self._fetch_from_coinpaprika(missing_for_cp)
 
         # DefiLlama fallback
-        still_missing = [s for s in symbols if self.cache.get(s, {}).get('usd', 0) == 0
+        still_missing = [s for s in symbols if self._needs_price(s)
                         and s.upper() in ASSET_TO_COINGECKO]
         if still_missing:
             await self._fetch_from_defillama(still_missing, include_major=True)
@@ -521,7 +540,7 @@ class PricingService:
         cmc_symbols = []
         symbol_map = {}
         for symbol in symbols:
-            if self.cache.get(symbol.upper(), {}).get('usd', 0) > 0:
+            if not self._needs_price(symbol.upper()):
                 continue
             cmc_symbol = ASSET_TO_CMC.get(symbol.upper())
             if cmc_symbol:
@@ -588,7 +607,7 @@ class PricingService:
             for symbol in symbols:
                 if symbol.upper() not in coinbase_symbols:
                     continue
-                if self.cache.get(symbol.upper(), {}).get('usd', 0) > 0:
+                if not self._needs_price(symbol.upper()):
                     continue
 
                 cb_symbol = 'POL' if symbol.upper() == 'MATIC' else symbol.upper()
@@ -621,7 +640,7 @@ class PricingService:
         """Fetch prices from CoinPaprika API (free, no key required)."""
         try:
             from services.coinpaprika import coinpaprika_service
-            to_fetch = [s for s in symbols if self.cache.get(s.upper(), {}).get('usd', 0) == 0]
+            to_fetch = [s for s in symbols if self._needs_price(s.upper())]
             if not to_fetch:
                 return
 
@@ -655,7 +674,7 @@ class PricingService:
 
             for symbol in symbols:
                 upper_symbol = symbol.upper()
-                if self.cache.get(upper_symbol, {}).get('usd', 0) > 0:
+                if not self._needs_price(upper_symbol):
                     continue
 
                 if include_major and upper_symbol in ASSET_TO_COINGECKO:
