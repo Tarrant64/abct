@@ -51,7 +51,7 @@ function v2InitShell(activePage) {
         const link = document.createElement('link');
         link.id = 'v2NextCss';
         link.rel = 'stylesheet';
-        link.href = '/next/static/css/v2-next.css';
+        link.href = '/next/static/css/v2-next.css?v=20261123b';
         document.head.appendChild(link);
     }
 
