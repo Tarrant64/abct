@@ -1,19 +1,25 @@
 /* ============================================================================
-   ABCT V2 "NEXT" — design-WIP layer (loaded AFTER v2.css on /next/* only)
+   ABCT V2 "NEXT" — design-WIP layer v2 (loaded AFTER v2.css on /next/* only)
    ============================================================================
-   This file is the workspace for the new V2 web design language, matched to
-   the V2 mobile app ("Aurora" look): deep warm charcoal with an amber ember
-   glow at the top, glass cards, amber pill accents.
+   Full re-imagining matched to the V2 mobile app, not a recolor:
+
+   - Fluid floating layout: the sidebar is a detached glass rail; content
+     floats on an ember mesh backdrop instead of flat panels.
+   - Deep gloss: every card gets a layered sheen (top light band + warm tint),
+     inner highlights, ambient shadow, springy hover lift.
+   - Pop / vibrancy: champagne-to-amber gradient hero numerals, glowing amber
+     pill controls, warm glow accents, vibrant gradient chart line (JS side).
+   - App typography: big thin numerals, tight tracking, uppercase micro-labels.
 
    Rules of engagement:
    - Root "/" stays on the shipped design (v2.css only).
-   - /next/* loads v2.css + this delta layer and defaults to the aurora theme.
-   - Design iterations land here; when a milestone is ready, promote the
-     tokens into v2.css (or flip the default) so "/" picks them up.
+   - /next/* loads v2.css + this layer and defaults to the aurora theme.
+   - Everything here is scoped under [data-theme="aurora"] so the other
+     themes keep their look. Promote to v2.css when a milestone lands.
    ============================================================================ */
 
 /* ============================================================================
-   AURORA THEME TOKENS — matched to the V2 mobile app
+   1. THEME TOKENS — warm ember palette (drives charts, sparklines, badges)
    ============================================================================ */
 
 [data-theme="aurora"] {
@@ -22,22 +28,22 @@
     --v2-bg-sidebar: #120e09;
     --v2-bg-sidebar-hover: rgba(255, 176, 92, 0.07);
     --v2-bg-sidebar-active: rgba(247, 147, 51, 0.14);
-    --v2-bg-main: #0d0a07;
+    --v2-bg-main: transparent;
     --v2-bg-card: #171209;
     --v2-bg-card-hover: #1e1810;
     --v2-bg-input: #1e1810;
     --v2-bg-modal: #171209;
     --v2-bg-table-header: #1e1810;
-    --v2-bg-table-row-hover: rgba(255, 190, 120, 0.04);
+    --v2-bg-table-row-hover: rgba(255, 190, 120, 0.05);
     --v2-bg-table-row-alt: rgba(255, 190, 120, 0.02);
     --v2-bg-skeleton: linear-gradient(90deg, #1e1810 25%, #2a2117 50%, #1e1810 75%);
-    --v2-bg-topbar: rgba(16, 12, 8, 0.85);
+    --v2-bg-topbar: rgba(24, 17, 11, 0.72);
     --v2-bg-dropdown: #1e1810;
 
     /* Borders — warm, faint ember */
     --v2-border: #2b2114;
     --v2-border-light: rgba(255, 190, 120, 0.07);
-    --v2-border-sidebar: #241b10;
+    --v2-border-sidebar: rgba(255, 190, 120, 0.10);
     --v2-border-input: #38291a;
     --v2-border-focus: #f79333;
 
@@ -48,7 +54,7 @@
     --v2-text-heading: #faf5ec;
     --v2-text-link: #f7a94a;
     --v2-text-nav: #a89a86;
-    --v2-text-nav-active: #f3ede4;
+    --v2-text-nav-active: #ffd9a0;
 
     /* Accents — amber ember */
     --v2-accent: #f79333;
@@ -61,14 +67,14 @@
     --v2-blue: #5b8def;
     --v2-purple: #9b6dff;
 
-    /* Chart — amber-to-ember gradient feel (solid fallback + warm fill) */
+    /* Chart — mobile-style warm line */
     --v2-chart-line: #f7a94a;
     --v2-chart-fill: rgba(247, 147, 51, 0.10);
     --v2-chart-grid: rgba(255, 220, 180, 0.05);
     --v2-chart-text: #6e6252;
     --v2-chart-crosshair: rgba(255, 220, 180, 0.25);
 
-    /* Shadows — warmer */
+    /* Shadows — warmer, deeper */
     --v2-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
     --v2-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
     --v2-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.55);
@@ -76,81 +82,424 @@
     --v2-shadow-dropdown: 0 8px 32px rgba(0, 0, 0, 0.65);
 
     /* Scrollbar */
-    --v2-scrollbar-track: #120e09;
+    --v2-scrollbar-track: transparent;
     --v2-scrollbar-thumb: #38291a;
     --v2-scrollbar-thumb-hover: #4a3826;
 }
 
-/* Aurora glass tokens */
+/* Glass tokens (used by .glass-card base in v2.css where not overridden) */
 [data-theme="aurora"] {
-    --glass-bg: rgba(26, 18, 10, 0.55);
-    --glass-blur: blur(14px) saturate(135%);
-    --glass-border: rgba(255, 190, 120, 0.10);
-    --glass-highlight: linear-gradient(180deg, rgba(255, 210, 150, 0.09) 0%, rgba(255, 210, 150, 0.02) 30%, transparent 55%);
+    --glass-bg: rgba(30, 21, 13, 0.62);
+    --glass-blur: blur(18px) saturate(150%);
+    --glass-border: rgba(255, 190, 120, 0.11);
+    --glass-highlight: linear-gradient(165deg, rgba(255, 196, 130, 0.06) 0%, rgba(255, 196, 130, 0.015) 30%, transparent 48%);
     --glass-sheen: var(--glass-highlight);
-    --glass-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 200, 130, 0.06);
-    --glass-radius: 16px;
-}
-
-/* Ember glow rising from the top of the page (mobile-app backdrop feel) */
-[data-theme="aurora"] body,
-[data-theme="aurora"] .v2-layout {
-    background:
-        radial-gradient(1200px 480px at 50% -180px, rgba(190, 96, 28, 0.38) 0%, rgba(140, 66, 20, 0.22) 38%, rgba(24, 16, 9, 0) 72%),
-        radial-gradient(700px 320px at 85% -120px, rgba(247, 147, 51, 0.12) 0%, rgba(24, 16, 9, 0) 70%),
-        var(--v2-bg-body);
-    background-attachment: fixed;
+    --glass-shadow: 0 18px 40px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 214, 160, 0.13);
+    --glass-radius: 22px;
 }
 
 /* ============================================================================
-   AURORA POLISH — targeted overrides on top of the token system
+   2. CANVAS — ember mesh backdrop, fixed so it glows behind everything
    ============================================================================ */
 
-/* Amber chip for the active chart range (mobile pill look) */
-[data-theme="aurora"] .v2-range-btn.active {
-    background: linear-gradient(135deg, #f7b733 0%, #ee8a2e 100%);
-    color: #241609;
-    font-weight: 700;
-    border-radius: 100px;
-    box-shadow: 0 2px 10px rgba(247, 147, 51, 0.35);
+[data-theme="aurora"] body {
+    background:
+        radial-gradient(1100px 520px at 20% -180px, rgba(199, 92, 26, 0.40) 0%, rgba(199, 92, 26, 0) 62%),
+        radial-gradient(900px 460px at 86% -140px, rgba(247, 147, 51, 0.16) 0%, rgba(247, 147, 51, 0) 60%),
+        radial-gradient(1600px 900px at 50% 125%, rgba(96, 44, 14, 0.28) 0%, rgba(96, 44, 14, 0) 60%),
+        #0d0a07;
+    background-attachment: fixed;
 }
 
-/* All range buttons get the pill shape */
-[data-theme="aurora"] .v2-range-btn {
+[data-theme="aurora"] .v2-layout {
+    background: transparent;
+}
+
+[data-theme="aurora"] ::selection {
+    background: rgba(247, 147, 51, 0.35);
+    color: #fff7ea;
+}
+
+[data-theme="aurora"] ::-webkit-scrollbar-thumb {
+    background: rgba(247, 147, 51, 0.25);
     border-radius: 100px;
 }
 
-/* Sidebar active item: amber ember + warm glow */
+[data-theme="aurora"] ::-webkit-scrollbar-thumb:hover {
+    background: rgba(247, 147, 51, 0.45);
+}
+
+/* ============================================================================
+   3. FLOATING GLASS RAIL — the sidebar detaches from the screen edge
+   ============================================================================ */
+
+[data-theme="aurora"] .v2-sidebar {
+    top: 14px;
+    left: 14px;
+    height: calc(100vh - 28px);
+    border-radius: 26px;
+    border: 1px solid rgba(255, 190, 120, 0.10);
+    background: linear-gradient(180deg, rgba(34, 24, 15, 0.72) 0%, rgba(20, 14, 9, 0.82) 100%);
+    backdrop-filter: blur(20px) saturate(150%);
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
+    box-shadow:
+        0 24px 60px rgba(0, 0, 0, 0.55),
+        inset 0 1px 0 rgba(255, 214, 160, 0.10),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.40);
+    overflow: hidden;
+}
+
+[data-theme="aurora"] .v2-main {
+    margin-left: calc(var(--v2-sidebar-width) + 28px);
+    background: transparent;
+}
+
+[data-theme="aurora"] .v2-layout.sidebar-collapsed .v2-main {
+    margin-left: calc(var(--v2-sidebar-collapsed) + 28px);
+}
+
+/* Logo chip glows faintly */
+[data-theme="aurora"] .v2-sidebar-logo {
+    filter: drop-shadow(0 0 14px rgba(247, 147, 51, 0.25));
+}
+
+/* Nav items: rounded pills; active = amber ember pill with glow */
+[data-theme="aurora"] .v2-nav-item {
+    border-radius: 14px;
+    transition: background var(--v2-transition), color var(--v2-transition),
+        box-shadow var(--v2-transition), transform var(--v2-transition);
+}
+
+[data-theme="aurora"] .v2-nav-item:hover {
+    background: rgba(255, 190, 120, 0.07);
+    transform: translateX(2px);
+}
+
 [data-theme="aurora"] .v2-nav-item.active {
-    background: linear-gradient(135deg, rgba(247, 147, 51, 0.16) 0%, rgba(247, 147, 51, 0.07) 100%);
+    background: linear-gradient(135deg, rgba(247, 147, 51, 0.26) 0%, rgba(247, 147, 51, 0.10) 100%);
     color: var(--v2-text-nav-active);
-    box-shadow: inset 0 0 0 1px rgba(247, 147, 51, 0.18), 0 2px 10px rgba(247, 147, 51, 0.08);
+    box-shadow:
+        inset 0 0 0 1px rgba(247, 147, 51, 0.28),
+        0 4px 18px rgba(247, 147, 51, 0.14);
 }
 
-/* Hero value: larger, thin-weight numerals like the app */
-[data-theme="aurora"] .v2-hero-value {
-    font-weight: 600;
+/* ============================================================================
+   4. TOPBAR — warm glass sheet instead of a hard-edged strip
+   ============================================================================ */
+
+[data-theme="aurora"] .v2-topbar {
+    background: linear-gradient(180deg, rgba(30, 21, 13, 0.66) 0%, rgba(22, 15, 9, 0.55) 100%);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border-bottom: 1px solid rgba(255, 190, 120, 0.08);
+}
+
+[data-theme="aurora"] .v2-topbar-title {
+    letter-spacing: -0.01em;
+}
+
+/* Search input: pill with warm glass */
+[data-theme="aurora"] .v2-search input {
+    border-radius: 100px;
+    background: rgba(255, 190, 120, 0.06);
+    border: 1px solid rgba(255, 190, 120, 0.12);
+    transition: border-color var(--v2-transition), box-shadow var(--v2-transition), background var(--v2-transition);
+}
+
+[data-theme="aurora"] .v2-search input:focus {
+    outline: none;
+    border-color: rgba(247, 147, 51, 0.45);
+    box-shadow: 0 0 0 3px rgba(247, 147, 51, 0.15);
+    background: rgba(255, 190, 120, 0.09);
+}
+
+/* Avatar ring */
+[data-theme="aurora"] .v2-avatar {
+    box-shadow: 0 0 0 2px rgba(247, 147, 51, 0.45), 0 0 14px rgba(247, 147, 51, 0.25);
+}
+
+/* ============================================================================
+   5. GLOSS SYSTEM — the card treatment that carries the whole look
+   ============================================================================ */
+
+[data-theme="aurora"] .glass-card,
+[data-theme="aurora"] .v2-stat-card {
+    position: relative;
+    border-radius: 22px;
+    border: 1px solid rgba(255, 190, 120, 0.11);
+    background:
+        linear-gradient(165deg, rgba(255, 196, 130, 0.06) 0%, rgba(255, 196, 130, 0.015) 30%, rgba(0, 0, 0, 0) 48%),
+        linear-gradient(180deg, rgba(44, 32, 20, 0.66) 0%, rgba(27, 19, 12, 0.78) 100%);
+    backdrop-filter: blur(18px) saturate(155%);
+    -webkit-backdrop-filter: blur(18px) saturate(155%);
+    box-shadow:
+        0 18px 40px rgba(0, 0, 0, 0.42),
+        0 2px 8px rgba(0, 0, 0, 0.28),
+        inset 0 1px 0 rgba(255, 214, 160, 0.13),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.35);
+    transition:
+        transform 0.28s cubic-bezier(0.2, 0.7, 0.3, 1.15),
+        box-shadow 0.28s ease,
+        border-color 0.28s ease;
+}
+
+[data-theme="aurora"] .glass-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255, 190, 120, 0.22);
+    box-shadow:
+        0 26px 52px rgba(0, 0, 0, 0.5),
+        0 0 30px rgba(247, 147, 51, 0.10),
+        inset 0 1px 0 rgba(255, 214, 160, 0.18),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.35);
+}
+
+/* Stat cards: pop the numbers */
+[data-theme="aurora"] .v2-stat-card {
+    border-radius: 20px;
+    padding: 14px 16px;
+}
+
+[data-theme="aurora"] .v2-stat-value {
+    font-weight: 700;
     letter-spacing: -0.02em;
 }
 
-/* Positive change pill (Up $2,310 style) */
-[data-theme="aurora"] .v2-hero-change {
-    border-radius: 100px;
+[data-theme="aurora"] .v2-stat-label,
+[data-theme="aurora"] .v2-card-title {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 11px;
+    font-weight: 600;
 }
 
-/* Sync button in amber */
+/* ============================================================================
+   6. HERO — the mobile app's giant champagne numerals
+   ============================================================================ */
+
+[data-theme="aurora"] .v2-hero {
+    border-radius: 26px;
+    padding: 26px 28px;
+}
+
+[data-theme="aurora"] .v2-hero-value {
+    font-size: 54px;
+    font-weight: 250;
+    letter-spacing: -0.03em;
+    background: linear-gradient(180deg, #fff7ea 0%, #ffdca6 55%, #f7a94a 110%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 4px 22px rgba(247, 147, 51, 0.28));
+}
+
+/* Privacy mode: kill the glow so the base blur reads cleanly */
+[data-theme="aurora"] .v2-hero-value.v2-blur {
+    filter: none;
+}
+
+/* "+$2,310 (1.4%)" pill */
+[data-theme="aurora"] .v2-hero-change {
+    border-radius: 100px;
+    padding: 5px 12px;
+    background: rgba(0, 210, 106, 0.10);
+    border: 1px solid rgba(0, 210, 106, 0.22);
+    font-weight: 600;
+}
+
+/* ============================================================================
+   7. PILLS — segmented controls, buttons, sync
+   ============================================================================ */
+
+/* Chart range segmented control: glass tray with amber active pill */
+[data-theme="aurora"] .v2-chart-ranges {
+    background: rgba(255, 190, 120, 0.05);
+    border: 1px solid rgba(255, 190, 120, 0.10);
+    border-radius: 100px;
+    padding: 4px;
+    gap: 2px;
+}
+
+[data-theme="aurora"] .v2-range-btn {
+    border-radius: 100px;
+    padding: 6px 14px;
+    font-weight: 600;
+}
+
+[data-theme="aurora"] .v2-range-btn.active {
+    background: linear-gradient(135deg, #ffb84d 0%, #f78e2e 100%);
+    color: #2a1808;
+    font-weight: 700;
+    box-shadow:
+        0 4px 14px rgba(247, 147, 51, 0.40),
+        inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+/* Tabs (detail views) */
+[data-theme="aurora"] .v2-tab.active {
+    color: var(--v2-accent-text);
+    background: rgba(247, 147, 51, 0.12);
+    border-radius: 10px 10px 0 0;
+}
+
+/* Buttons: amber gradient pill for primary actions */
+[data-theme="aurora"] .v2-btn {
+    border-radius: 100px;
+    font-weight: 600;
+    transition: transform var(--v2-transition), box-shadow var(--v2-transition),
+        background var(--v2-transition), border-color var(--v2-transition);
+}
+
+[data-theme="aurora"] .v2-btn:not(.v2-btn-ghost) {
+    background: linear-gradient(135deg, #ffb84d 0%, #f78e2e 100%);
+    border: none;
+    color: #2a1808;
+    box-shadow:
+        0 4px 16px rgba(247, 147, 51, 0.30),
+        inset 0 1px 0 rgba(255, 255, 255, 0.30);
+}
+
+[data-theme="aurora"] .v2-btn:not(.v2-btn-ghost):hover {
+    transform: translateY(-1px);
+    box-shadow:
+        0 8px 24px rgba(247, 147, 51, 0.42),
+        inset 0 1px 0 rgba(255, 255, 255, 0.30);
+}
+
+[data-theme="aurora"] .v2-btn-ghost {
+    border: 1px solid rgba(255, 190, 120, 0.18);
+    background: rgba(255, 190, 120, 0.05);
+    color: var(--v2-text-primary);
+}
+
+[data-theme="aurora"] .v2-btn-ghost:hover {
+    border-color: rgba(247, 147, 51, 0.45);
+    background: rgba(247, 147, 51, 0.10);
+}
+
+/* Sync / refresh: warm glass with amber icon */
 [data-theme="aurora"] .v2-sync-btn {
+    border-radius: 100px;
     border-color: rgba(247, 147, 51, 0.35);
     color: var(--v2-accent-text);
+    background: rgba(247, 147, 51, 0.07);
 }
 
 [data-theme="aurora"] .v2-sync-btn:hover {
-    background: rgba(247, 147, 51, 0.12);
+    background: rgba(247, 147, 51, 0.16);
+    box-shadow: 0 0 18px rgba(247, 147, 51, 0.20);
 }
 
-/* Glass sheen picks up a warm tint */
-[data-theme="aurora"] .glass-sheen-1, [data-theme="aurora"] .glass-sheen-2,
-[data-theme="aurora"] .glass-sheen-3, [data-theme="aurora"] .glass-sheen-4,
-[data-theme="aurora"] .glass-sheen-5 {
-    --glass-sheen: linear-gradient(160deg, rgba(255, 190, 120, 0.08) 0%, rgba(255, 190, 120, 0.02) 35%, transparent 60%);
+/* ============================================================================
+   8. CHART — warm glow under the app-style gradient line (line itself in JS)
+   ============================================================================ */
+
+[data-theme="aurora"] .v2-chart-container {
+    border-radius: 24px;
+}
+
+[data-theme="aurora"] .v2-chart-canvas-wrapper canvas {
+    filter: drop-shadow(0 8px 22px rgba(247, 147, 51, 0.16));
+}
+
+/* ============================================================================
+   9. TABLES — glass rows with rounded wrappers
+   ============================================================================ */
+
+[data-theme="aurora"] .v2-table-wrapper {
+    border-radius: 20px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 190, 120, 0.10);
+    background: linear-gradient(180deg, rgba(40, 29, 18, 0.55) 0%, rgba(25, 18, 11, 0.72) 100%);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+}
+
+[data-theme="aurora"] .v2-table-wrapper thead th {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 11px;
+    color: var(--v2-text-muted);
+    border-bottom: 1px solid rgba(255, 190, 120, 0.10);
+}
+
+[data-theme="aurora"] .v2-table-wrapper tbody tr {
+    transition: background var(--v2-transition);
+}
+
+[data-theme="aurora"] .v2-table-wrapper tbody tr:hover {
+    background: rgba(255, 190, 120, 0.05);
+}
+
+/* ============================================================================
+   10. OVERLAYS — modals, dropdowns, search results, toasts in the same glass
+   ============================================================================ */
+
+[data-theme="aurora"] .v2-modal,
+[data-theme="aurora"] .v2-user-dropdown,
+[data-theme="aurora"] .v2-search-results {
+    border-radius: 22px;
+    border: 1px solid rgba(255, 190, 120, 0.14);
+    background: linear-gradient(180deg, rgba(40, 29, 18, 0.92) 0%, rgba(24, 17, 11, 0.95) 100%);
+    backdrop-filter: blur(24px) saturate(150%);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 214, 160, 0.10);
+}
+
+[data-theme="aurora"] .v2-toast {
+    border-radius: 16px;
+    backdrop-filter: blur(16px);
+    background: rgba(34, 24, 15, 0.9);
+}
+
+/* ============================================================================
+   11. MOTION — fluid entrance for page content
+   ============================================================================ */
+
+[data-theme="aurora"] .v2-fade-in {
+    animation: auroraRise 0.45s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+@keyframes auroraRise {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.995);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    [data-theme="aurora"] .v2-fade-in {
+        animation: none;
+    }
+    [data-theme="aurora"] .glass-card,
+    [data-theme="aurora"] .v2-nav-item,
+    [data-theme="aurora"] .v2-btn {
+        transition: none;
+    }
+}
+
+/* ============================================================================
+   12. SMALL SCREENS — keep the rail usable, drop the floating margins
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    [data-theme="aurora"] .v2-sidebar {
+        top: 0;
+        left: 0;
+        height: 100vh;
+        border-radius: 0;
+    }
+
+    [data-theme="aurora"] .v2-main,
+    [data-theme="aurora"] .v2-layout.sidebar-collapsed .v2-main {
+        margin-left: var(--v2-sidebar-width);
+    }
+
+    [data-theme="aurora"] .v2-hero-value {
+        font-size: 40px;
+    }
 }

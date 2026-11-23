@@ -649,6 +649,23 @@ function renderChart(data) {
     const gridColor = style.getPropertyValue('--v2-chart-grid').trim() || 'rgba(255,255,255,0.04)';
     const textColor = style.getPropertyValue('--v2-chart-text').trim() || '#5a6475';
 
+    // Aurora design-WIP (matches the V2 mobile app): horizontal gradient line
+    // teal -> amber -> ember, warm vertical fill, glowing last point.
+    const isAurora = document.documentElement.getAttribute('data-theme') === 'aurora';
+    let strokeColor = lineColor;
+    let areaColor = fillColor;
+    if (isAurora && ctx.canvas && ctx.canvas.width > 0) {
+        const lg = ctx.createLinearGradient(0, 0, ctx.canvas.width, 0);
+        lg.addColorStop(0, '#2dd4a7');
+        lg.addColorStop(0.55, '#f7b733');
+        lg.addColorStop(1, '#ff6b52');
+        strokeColor = lg;
+        const vg = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height || 300);
+        vg.addColorStop(0, 'rgba(247, 147, 51, 0.22)');
+        vg.addColorStop(1, 'rgba(247, 147, 51, 0)');
+        areaColor = vg;
+    }
+
     // Destroy previous chart
     if (v2State.chartInstance) {
         v2State.chartInstance.destroy();
@@ -660,14 +677,25 @@ function renderChart(data) {
             labels: formattedLabels,
             datasets: [{
                 data: values,
-                borderColor: lineColor,
-                backgroundColor: fillColor,
+                borderColor: strokeColor,
+                backgroundColor: areaColor,
                 fill: true,
                 // WQ-0385: straight segments in detail mode so the actual
                 // fluctuation shows; smooth curve for the daily view.
                 tension: isIntraday ? 0 : 0.35,
                 borderWidth: 2,
-                pointRadius: isIntraday ? (values.length > 200 ? 0 : 1.5) : 0,
+                pointRadius: (scriptCtx) => {
+                    if (isAurora && !isIntraday && scriptCtx.dataIndex === values.length - 1) return 4;
+                    return isIntraday ? (values.length > 200 ? 0 : 1.5) : 0;
+                },
+                pointBackgroundColor: (scriptCtx) => {
+                    if (isAurora && !isIntraday && scriptCtx.dataIndex === values.length - 1) return '#ffb347';
+                    return strokeColor;
+                },
+                pointBorderColor: (scriptCtx) => {
+                    if (isAurora && !isIntraday && scriptCtx.dataIndex === values.length - 1) return '#fff7ea';
+                    return 'transparent';
+                },
                 pointHoverRadius: 5,
                 pointHoverBackgroundColor: lineColor,
                 pointHoverBorderColor: '#fff',
