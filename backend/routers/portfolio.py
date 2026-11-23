@@ -79,6 +79,13 @@ STAKE_CACHE_TTL = CACHE_TTL_WARM  # 1 hour for stake address lookups
 NFT_INCLUSION_SETTING_KEY = 'include_nfts_in_total'
 
 
+def _price_snapshot_fields() -> dict:
+    try:
+        return dict(pricing_service.snapshot_info())
+    except Exception:
+        return {}
+
+
 async def get_nft_inclusion_preference(user_id: int) -> bool:
     """Whether this user's portfolio totals should include NFT value. Default False."""
     value = await get_user_setting(user_id, NFT_INCLUSION_SETTING_KEY, '0')
@@ -1384,6 +1391,10 @@ async def get_portfolio_summary(user_id: int = Depends(verify_session), refresh:
     except Exception as e:
         logger.debug(f"Portfolio positions write failed: {e}")
 
+    try:
+        summary.update(_price_snapshot_fields())
+    except Exception:
+        pass
     return summary
 
 # Cache TTL for native assets (7 days - tokens don't change often, only cleared on manual refresh)
@@ -2186,6 +2197,7 @@ async def get_all_holdings(
     missing_exchanges = _exchange_incomplete(exchange_loads)
     result = {
         'holdings': sorted_holdings,
+        **_price_snapshot_fields(),
         'total_value_usd': round(total_value, 2),
         'nft_value_usd': round(nft_value_usd, 2),
         'count': len(sorted_holdings),

@@ -62,6 +62,14 @@ async def _exchange_cache_or_stale(name: str, user_id: int):
     return stale
 
 
+def _price_snapshot_fields() -> dict:
+    """prices_as_of / price_refresh_backing_off (additive; never breaks the payload)."""
+    try:
+        return dict(pricing_service.snapshot_info())
+    except Exception:
+        return {}
+
+
 def _round_or_none(value, ndigits: int = 2) -> Optional[float]:
     return None if value is None else round(value, ndigits)
 
@@ -1343,6 +1351,9 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
         # a real price — its amount is counted, its USD contribution is 0
         "has_unpriced": has_unpriced_staking,
         "last_updated": datetime.utcnow().isoformat() + "Z",
+        # Additive (PRICING_CADENCE): when the shared price snapshot was taken,
+        # and whether the refresh is backing off after a CoinGecko 429.
+        **_price_snapshot_fields(),
         "from_cache": False
     }
 

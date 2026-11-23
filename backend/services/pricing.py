@@ -16,8 +16,10 @@ All three routing groups run in parallel via asyncio.gather().
 import asyncio
 import httpx
 import logging
+import random
+import time
 from typing import Dict, Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import sys
 import os
 
@@ -29,7 +31,19 @@ logger = logging.getLogger(__name__)
 
 COINGECKO_BASE_URL = "https://api.coingecko.com/api/v3"
 # Minimum seconds between CoinGecko spot refreshes of the same symbol.
-CG_MIN_REFRESH_S = 90
+CG_MIN_REFRESH_S = 90   # (legacy name; the snapshot call is now shared, see _fetch_from_coingecko)
+
+
+def _env_num(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+# Cadence knobs (docs: dashboard/docs/PRICING_CADENCE.md)
+PRICE_ON_DEMAND_MIN_AGE_S = _env_num("PRICE_ON_DEMAND_MIN_AGE", 300)       # seconds
+PRICE_ON_DEMAND_MAX_PER_HOUR = int(_env_num("PRICE_ON_DEMAND_MAX_PER_HOUR", 12))
 COINBASE_BASE_URL = "https://api.coinbase.com/v2"
 
 # Map our asset names to CoinGecko IDs
@@ -229,6 +243,14 @@ class PricingService:
         self._cg_api_key: Optional[str] = None
         self._cg_key_loaded = False
         self._cg_fetch_lock = asyncio.Lock()
+        # --- cadence (PRICING_CADENCE.md) ---
+        self._slot_lock = asyncio.Lock()
+        self._cg_snapshot_at: Optional[datetime] = None
+        self._cg_calls_total = 0
+        self.snapshot_at: Optional[datetime] = None      # last refresh that produced valid prices
+        self._last_attempt_at: Optional[float] = None    # monotonic, any refresh attempt
+        self._ondemand_times: List[float] = []
+        self._cadence_stats = {"ondemand_served": 0, "ondemand_declined": 0, "scheduled": 0}
 
     def _needs_price(self, symbol: str) -> bool:
         """True when `symbol` has no price fresher than cache_duration.
@@ -292,7 +314,7 @@ class PricingService:
             return {"x-cg-demo-api-key": self._cg_api_key}
         return {}
 
-    async def get_prices(self, symbols: list = None, force_refresh: bool = False) -> Dict[str, float]:
+    async def get_prices(self, symbols: list = None, force_refresh: bool = False, scheduled: bool = False) -> Dict[str, float]:
         """
         Get current USD prices for specified symbols.
 
@@ -303,31 +325,44 @@ class PricingService:
         if symbols is None:
             symbols = ['ADA', 'BTC', 'ETH']
 
-        # Check cache - but only return if all symbols have VALID (non-zero) prices
-        if not force_refresh and self._is_cache_valid():
-            all_cached_and_valid = all(
-                s in self.cache and self.cache.get(s, {}).get('usd', 0) > 0
-                for s in symbols
-                if ASSET_TO_COINGECKO.get(s.upper()) or s.upper() in CARDANO_TOKEN_POLICIES
-            )
-            if all_cached_and_valid:
-                return {s: self.cache.get(s, {}).get('usd', 0) for s in symbols}
-
-        # Classify symbols into routing groups
-        cardano_syms = [s for s in symbols if _classify_symbol(s) == 'cardano']
-        major_syms = [s for s in symbols if _classify_symbol(s) == 'major']
-        other_syms = [s for s in symbols if _classify_symbol(s) == 'other']
-
-        # Run all three routing groups in parallel
-        await asyncio.gather(
-            self._fetch_cardano_prices(cardano_syms),
-            self._fetch_major_prices(major_syms),
-            self._fetch_other_prices(other_syms),
-            return_exceptions=True
-        )
+        # Cadence gate: CoinGecko and every fallback source run only when a
+        # symbol is older than the 5-minute freshness rule AND a refresh slot
+        # is available (>= PRICE_ON_DEMAND_MIN_AGE since the last attempt, and
+        # under the hourly cap). Concurrent callers coalesce on the slot lock;
+        # everyone else is served the cached snapshot. Scheduled refreshes
+        # bypass the age/cap but still obey the gate's backoff and budget.
+        known = [s for s in symbols
+                 if ASSET_TO_COINGECKO.get(s.upper()) or s.upper() in CARDANO_TOKEN_POLICIES]
+        fetched = False
+        if not scheduled and not any(self._needs_price(s) for s in known):
+            pass
+        elif not scheduled and not self._slot_available():
+            self._cadence_stats["ondemand_declined"] += 1
+        else:
+            async with self._slot_lock:
+                if not scheduled and not any(self._needs_price(s) for s in known):
+                    pass    # coalesced: the previous holder refreshed these
+                elif not scheduled and not self._slot_available():
+                    self._cadence_stats["ondemand_declined"] += 1
+                else:
+                    self._take_slot(scheduled)
+                    fetched = True
+                    cardano_syms = [s for s in symbols if _classify_symbol(s) == 'cardano']
+                    major_syms = [s for s in symbols if _classify_symbol(s) == 'major']
+                    other_syms = [s for s in symbols if _classify_symbol(s) == 'other']
+                    await asyncio.gather(
+                        self._fetch_cardano_prices(cardano_syms),
+                        self._fetch_major_prices(major_syms),
+                        self._fetch_other_prices(other_syms),
+                        return_exceptions=True
+                    )
+        if not fetched and known and all(self.cache.get(s.upper(), {}).get('usd', 0) > 0 for s in known):
+            return {s: self.cache.get(s.upper(), self.cache.get(s, {})).get('usd', 0) for s in symbols}
 
         # Only update last_fetch if we got at least some valid prices
         has_valid_prices = any(self.cache.get(s.upper(), {}).get('usd', 0) > 0 for s in symbols)
+        if has_valid_prices and fetched:
+            self.snapshot_at = datetime.now(timezone.utc)
         if has_valid_prices:
             self.last_fetch = datetime.now()
             for s in symbols:
@@ -347,7 +382,7 @@ class PricingService:
             result[s] = price
 
         # Write current prices to engine price cache for today
-        if has_valid_prices:
+        if has_valid_prices and fetched:
             try:
                 from engine import db as engine_db
                 today = datetime.now().strftime('%Y-%m-%d')
@@ -368,6 +403,87 @@ class PricingService:
                 pass  # Don't break current pricing if engine cache write fails
 
         return result
+
+    # ============ Cadence ============
+
+    def _slot_available(self) -> bool:
+        now = time.monotonic()
+        if self._last_attempt_at is not None and now - self._last_attempt_at < PRICE_ON_DEMAND_MIN_AGE_S:
+            return False
+        self._ondemand_times = [t for t in self._ondemand_times if now - t < 3600]
+        return len(self._ondemand_times) < PRICE_ON_DEMAND_MAX_PER_HOUR
+
+    def _take_slot(self, scheduled: bool) -> None:
+        now = time.monotonic()
+        self._last_attempt_at = now
+        if scheduled:
+            self._cadence_stats["scheduled"] += 1
+        else:
+            self._ondemand_times.append(now)
+            self._cadence_stats["ondemand_served"] += 1
+
+    def cadence_stats_and_reset(self) -> dict:
+        out = dict(self._cadence_stats)
+        for k in self._cadence_stats:
+            self._cadence_stats[k] = 0
+        return out
+
+    async def refresh_interval_s(self) -> int:
+        """PRICE_REFRESH_MINUTES, else 30 min keyless / 10 min with a CoinGecko key."""
+        env = os.environ.get("PRICE_REFRESH_MINUTES")
+        if env:
+            try:
+                return max(60, int(float(env) * 60))
+            except ValueError:
+                pass
+        await self._get_cg_headers()
+        return 600 if self._cg_api_key else 1800
+
+    def snapshot_info(self) -> dict:
+        """Additive payload fields: when prices were last refreshed + backoff state."""
+        from services import coingecko_gate
+        at = self.snapshot_at
+        if at is None:
+            ts = [e.get('updated_at') for e in self.cache.values() if isinstance(e, dict) and e.get('updated_at')]
+            if ts:
+                try:
+                    at = datetime.fromisoformat(max(ts)).astimezone(timezone.utc)
+                except (TypeError, ValueError):
+                    at = None
+        return {
+            "prices_as_of": at.strftime('%Y-%m-%dT%H:%M:%SZ') if at else None,
+            "price_refresh_backing_off": coingecko_gate.in_backoff(),
+        }
+
+    async def _record_snapshot(self) -> None:
+        """Store one row per symbol per refresh (price_snapshots) so short-range
+        charts can be drawn from our own points instead of calling CoinGecko."""
+        try:
+            import aiosqlite
+            from config import DATABASE_PATH
+            ts = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+            rows = [(ts, sym, float(e['usd'])) for sym, e in self.cache.items()
+                    if isinstance(e, dict) and e.get('source') == 'CoinGecko' and e.get('usd', 0) > 0]
+            async with aiosqlite.connect(DATABASE_PATH) as db:
+                await db.execute("CREATE TABLE IF NOT EXISTS price_snapshots "
+                                 "(ts TEXT NOT NULL, symbol TEXT NOT NULL, usd REAL NOT NULL, "
+                                 "PRIMARY KEY (ts, symbol))")
+                await db.executemany("INSERT OR IGNORE INTO price_snapshots VALUES (?,?,?)", rows)
+                await db.execute("DELETE FROM price_snapshots WHERE ts < datetime('now','-35 days')")
+                await db.commit()
+        except Exception as e:
+            logger.debug(f"price snapshot not recorded: {e}")
+
+    async def price_refresh_loop(self) -> None:
+        """Background refresh of ALL tracked prices (1 batched CoinGecko call)."""
+        await asyncio.sleep(random.uniform(30, 120))     # stagger restarts
+        while True:
+            try:
+                symbols = list(set(ASSET_TO_COINGECKO.keys()) | set(CARDANO_TOKEN_POLICIES.keys()))
+                await self.get_prices(symbols, scheduled=True)
+            except Exception as e:
+                logger.warning(f"scheduled price refresh failed: {e}")
+            await asyncio.sleep(await self.refresh_interval_s())
 
     # ============ Smart Routing Groups ============
 
@@ -485,41 +601,23 @@ class PricingService:
     # ============ Individual Source Fetchers ============
 
     async def _fetch_from_coingecko(self, symbols: List[str]) -> None:
-        """Fetch prices from CoinGecko using /coins/markets for 1hr change and market cap."""
-        cg_ids = []
-        symbol_map = {}
-        for symbol in symbols:
-            cg_id = ASSET_TO_COINGECKO.get(symbol.upper())
-            if cg_id:
-                cg_ids.append(cg_id)
-                symbol_map[cg_id] = symbol.upper()
+        """Refresh the shared CoinGecko snapshot.
 
-        if not cg_ids:
+        ONE batched /coins/markets call covers every tracked id (see
+        PRICING_CADENCE.md), whatever subset the caller asked for. The major
+        and "other" routing groups both land here; the lock + age check make
+        them share a single call.
+        """
+        if not any(ASSET_TO_COINGECKO.get(s.upper()) for s in symbols):
             return
-
-        # One refresh per CG_MIN_REFRESH_S per symbol: callers asking again
-        # inside the window (force_refresh bursts, parallel groups) reuse the
-        # CoinGecko value just fetched instead of re-calling. The 5-minute
-        # freshness rule (_needs_price) is unchanged.
-        now = datetime.now()
-        def _recent(sym):
-            e = self.cache.get(sym) or {}
-            if e.get('source') != 'CoinGecko' or not e.get('usd', 0) > 0:
-                return False
-            try:
-                return (now - datetime.fromisoformat(e.get('updated_at'))).total_seconds() < CG_MIN_REFRESH_S
-            except (TypeError, ValueError):
-                return False
-        cg_ids = [i for i in cg_ids if not _recent(symbol_map[i])]
-        if not cg_ids:
-            return
+        symbol_map = {cg: sym for sym, cg in ASSET_TO_COINGECKO.items()}
         async with self._cg_fetch_lock:
-            # re-check: a concurrent caller may have refreshed while we waited
-            now = datetime.now()
-            cg_ids = [i for i in cg_ids if not _recent(symbol_map[i])]
-            if not cg_ids or self._cg_in_cooldown():
+            at = self._cg_snapshot_at
+            if at and (datetime.now() - at).total_seconds() < 30:
+                return   # a concurrent group just did it
+            if self._cg_in_cooldown():
                 return
-            await self._fetch_from_coingecko_locked(cg_ids, symbol_map)
+            await self._fetch_from_coingecko_locked(sorted(symbol_map), symbol_map)
 
     async def _fetch_from_coingecko_locked(self, all_cg_ids: List[str], symbol_map: Dict[str, str]) -> None:
         try:
@@ -559,6 +657,9 @@ class PricingService:
                             'data_completeness': 'full',
                             'updated_at': datetime.now().isoformat()
                         }
+                self._cg_snapshot_at = datetime.now()
+                self._cg_calls_total += 1
+                await self._record_snapshot()
                 logger.info(f"CoinGecko: fetched prices for {len(data)} tokens")
             elif response.status_code == 429:
                 # the shared gate already set the exponential backoff

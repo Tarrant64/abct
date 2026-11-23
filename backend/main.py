@@ -523,7 +523,10 @@ async def lifespan(app: FastAPI):
     # the app's 5-request open burst reads, so it never computes in-request.
     from routers.mobile import mobile_cache_warmer
     _background_tasks.append(asyncio.create_task(mobile_cache_warmer()))
-    from services.coingecko_gate import stats_logger_loop
+    from services.coingecko_gate import stats_logger_loop, EXTRA_STATS
+    from services.pricing import pricing_service as _ps
+    EXTRA_STATS.append(_ps.cadence_stats_and_reset)
+    _background_tasks.append(asyncio.create_task(_ps.price_refresh_loop()))
     _background_tasks.append(asyncio.create_task(stats_logger_loop()))
     _background_tasks.append(asyncio.create_task(collect_nft_prices_background()))
     _background_tasks.append(asyncio.create_task(_run_health_checks_background()))

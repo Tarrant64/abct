@@ -27,8 +27,20 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-PACE_PER_MIN = 20          # hard client-side ceiling (demo limit is 30/min)
-CACHE_TTL_S = 60.0         # identical GET reuse window
+import os
+from datetime import datetime, timezone
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+PACE_PER_MIN = _env_int("PRICE_CG_CALLS_PER_MIN", 8)      # hard ceiling (demo limit is 30/min)
+DAILY_BUDGET = _env_int("PRICE_CG_DAILY_BUDGET", 300)     # soft daily cap (~10k/month plan)
+CACHE_TTL_S = 120.0        # identical GET reuse window
 BACKOFF_STEPS_S = (120, 240, 480, 900)   # 2 -> 4 -> 8 -> 15 min cap
 STATS_LOG_INTERVAL_S = 900
 
@@ -40,8 +52,11 @@ _state = {
     "recent": [],            # monotonic timestamps of real network calls
 }
 _stats = {"calls": 0, "r429": 0, "blocked_backoff": 0,
-          "blocked_pace": 0, "cache_hits": 0, "dedup_hits": 0}
+          "blocked_pace": 0, "blocked_budget": 0, "cache_hits": 0, "dedup_hits": 0}
 _fallback_use = 0
+_daily = {"day": None, "n": 0}
+# Extra counter providers (callables returning a dict, reset on read), logged with the 15-min line.
+EXTRA_STATS = []
 _last_log = [0.0]
 _inflight: Dict[str, "asyncio.Future"] = {}
 _cache: Dict[str, Tuple[float, int, dict, bytes]] = {}
@@ -80,11 +95,18 @@ def _maybe_log_stats(force: bool = False) -> None:
         return
     _last_log[0] = now
     s = stats()
+    extra = {}
+    for fn in EXTRA_STATS:
+        try:
+            extra.update(fn())
+        except Exception:
+            pass
     logger.info(
-        "coingecko 15m stats: calls=%d 429=%d blocked_backoff=%d blocked_pace=%d "
-        "cache_hits=%d dedup_hits=%d fallback_use=%d backoff_remaining_s=%d",
-        s["calls"], s["r429"], s["blocked_backoff"], s["blocked_pace"],
-        s["cache_hits"], s["dedup_hits"], s["fallback_use"], s["backoff_remaining_s"])
+        "coingecko 15m stats: calls=%d 429=%d blocked_backoff=%d blocked_pace=%d blocked_budget=%d "
+        "cache_hits=%d dedup_hits=%d fallback_use=%d backoff_remaining_s=%d day_calls=%d %s",
+        s["calls"], s["r429"], s["blocked_backoff"], s["blocked_pace"], s["blocked_budget"],
+        s["cache_hits"], s["dedup_hits"], s["fallback_use"], s["backoff_remaining_s"], _daily["n"],
+        " ".join(f"{k}={v}" for k, v in extra.items()))
     for k in _stats:
         _stats[k] = 0
     globals()["_fallback_use"] = 0
@@ -114,6 +136,13 @@ def _register_429(retry_after: Optional[str]) -> None:
 
 def _register_ok() -> None:
     _state["step"] = 0
+
+
+def _budget_ok() -> bool:
+    day = datetime.now(timezone.utc).date()
+    if _daily["day"] != day:
+        _daily["day"], _daily["n"] = day, 0
+    return _daily["n"] < DAILY_BUDGET
 
 
 def _pace_ok() -> bool:
@@ -149,17 +178,26 @@ async def _api_key() -> Optional[str]:
 
 
 def _ttl_for(url: httpx.URL) -> float:
-    """Reuse window per request type. Spot prices stay at CACHE_TTL_S; data
-    that moves slowly (charts, sparklines, coin metadata, search) is reused
-    longer so mobile/summary/chart loads stop re-asking for the same thing."""
+    """Reuse window per request type (see PRICING_CADENCE.md). Spot prices are
+    governed by the pricing service's cadence; everything else is cached long
+    so chart/metadata views never add hidden calls."""
     path = url.path
     q = str(url.query)
+    if path.endswith(("/market_chart", "/ohlc")):
+        days = httpx.QueryParams(q).get("days", "")
+        return 1800.0 if days in ("1", "0.5") else 86400.0
+    if path.endswith("/history"):
+        return 86400.0
     if "/coins/markets" in path:
-        return 900.0 if "sparkline=true" in q else CACHE_TTL_S
-    if path.endswith(("/market_chart", "/ohlc", "/history", "/global", "/search")):
-        return 900.0
-    if "/coins/" in path:
+        if "sparkline=true" in q:
+            return 3600.0
+        if "ids=" not in q:
+            return 3600.0     # top-N lists (market overview, metadata)
+        return CACHE_TTL_S
+    if path.endswith(("/global", "/search", "/trending")):
         return 3600.0
+    if "/coins/" in path:
+        return 86400.0        # coin metadata / images
     return CACHE_TTL_S
 
 
@@ -216,13 +254,18 @@ class CoinGeckoGateTransport(httpx.AsyncBaseTransport):
             fut = asyncio.get_running_loop().create_future()
             _inflight[ck] = fut
         try:
-            if not _pace_ok():
+            if not _budget_ok():
+                _stats["blocked_budget"] += 1
+                resp = _synthetic_429(request, 600)
+                result = (429, dict(resp.headers), resp.content)
+            elif not _pace_ok():
                 _stats["blocked_pace"] += 1
                 resp = _synthetic_429(request, 30)
                 body = resp.content
                 result = (429, dict(resp.headers), body)
             else:
                 _stats["calls"] += 1
+                _daily["n"] += 1
                 real = await self._inner.handle_async_request(request)
                 body = await real.aread()
                 await real.aclose()
