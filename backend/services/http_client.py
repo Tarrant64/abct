@@ -58,9 +58,13 @@ def get_client(
         A long-lived httpx.AsyncClient instance.
     """
     if name not in _clients:
+        # Every client goes through the CoinGecko gate: it only acts on
+        # *.coingecko.com requests (backoff, pacing, dedup, key) and is a
+        # pass-through for every other host.
+        from services.coingecko_gate import CoinGeckoGateTransport
         _clients[name] = httpx.AsyncClient(
             timeout=timeout,
-            limits=_default_limits,
+            transport=CoinGeckoGateTransport(limits=_default_limits),
             headers=headers or {},
         )
         logger.debug(f"Created HTTP client '{name}' (timeout={timeout}s)")
@@ -106,6 +110,10 @@ async def fetch_with_retry(
             response = await client.request(method, url, **kwargs)
 
             if response.status_code not in retry_statuses or attempt == max_retries:
+                return response
+            # CoinGecko 429: never retry in-request. The gate holds a global
+            # exponential backoff; callers fall back to other sources.
+            if response.status_code == 429 and "coingecko.com" in str(url):
                 return response
 
             # Retryable status code - back off and try again

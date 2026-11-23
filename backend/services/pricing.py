@@ -28,6 +28,8 @@ from services.http_client import get_client, fetch_with_retry
 logger = logging.getLogger(__name__)
 
 COINGECKO_BASE_URL = "https://api.coingecko.com/api/v3"
+# Minimum seconds between CoinGecko spot refreshes of the same symbol.
+CG_MIN_REFRESH_S = 90
 COINBASE_BASE_URL = "https://api.coinbase.com/v2"
 
 # Map our asset names to CoinGecko IDs
@@ -226,6 +228,7 @@ class PricingService:
         # CoinGecko API key (loaded from DB on first use)
         self._cg_api_key: Optional[str] = None
         self._cg_key_loaded = False
+        self._cg_fetch_lock = asyncio.Lock()
 
     def _needs_price(self, symbol: str) -> bool:
         """True when `symbol` has no price fresher than cache_duration.
@@ -245,6 +248,14 @@ class PricingService:
         except (TypeError, ValueError):
             return True
         return datetime.now() - at >= self.cache_duration
+
+    def _cg_in_cooldown(self) -> bool:
+        """CoinGecko backoff: the shared gate's exponential backoff (2->15 min)
+        plus any legacy per-service cooldown."""
+        from services import coingecko_gate
+        if coingecko_gate.in_backoff():
+            return True
+        return bool(self._coingecko_cooldown_until and datetime.now() < self._coingecko_cooldown_until)
 
     def _is_cg_pro_key(self, key: str) -> bool:
         """Detect CoinGecko Pro API key (starts with 'CG-' and is 32+ chars)."""
@@ -422,7 +433,7 @@ class PricingService:
             return
 
         # CoinGecko (skip if in cooldown)
-        if self._coingecko_cooldown_until and datetime.now() < self._coingecko_cooldown_until:
+        if self._cg_in_cooldown():
             logger.info(f"Skipping CoinGecko (cooldown), going to CMC for majors")
         else:
             await self._fetch_from_coingecko(symbols)
@@ -455,7 +466,7 @@ class PricingService:
             return
 
         # CoinGecko (skip if in cooldown)
-        if self._coingecko_cooldown_until and datetime.now() < self._coingecko_cooldown_until:
+        if self._cg_in_cooldown():
             logger.info(f"Skipping CoinGecko (cooldown) for other tokens")
         else:
             await self._fetch_from_coingecko(symbols)
@@ -486,16 +497,43 @@ class PricingService:
         if not cg_ids:
             return
 
+        # One refresh per CG_MIN_REFRESH_S per symbol: callers asking again
+        # inside the window (force_refresh bursts, parallel groups) reuse the
+        # CoinGecko value just fetched instead of re-calling. The 5-minute
+        # freshness rule (_needs_price) is unchanged.
+        now = datetime.now()
+        def _recent(sym):
+            e = self.cache.get(sym) or {}
+            if e.get('source') != 'CoinGecko' or not e.get('usd', 0) > 0:
+                return False
+            try:
+                return (now - datetime.fromisoformat(e.get('updated_at'))).total_seconds() < CG_MIN_REFRESH_S
+            except (TypeError, ValueError):
+                return False
+        cg_ids = [i for i in cg_ids if not _recent(symbol_map[i])]
+        if not cg_ids:
+            return
+        async with self._cg_fetch_lock:
+            # re-check: a concurrent caller may have refreshed while we waited
+            now = datetime.now()
+            cg_ids = [i for i in cg_ids if not _recent(symbol_map[i])]
+            if not cg_ids or self._cg_in_cooldown():
+                return
+            await self._fetch_from_coingecko_locked(cg_ids, symbol_map)
+
+    async def _fetch_from_coingecko_locked(self, all_cg_ids: List[str], symbol_map: Dict[str, str]) -> None:
         try:
             client = get_client("coingecko", timeout=30.0)
             cg_headers = await self._get_cg_headers()
             cg_base = self._get_cg_base_url()
+            cg_ids = all_cg_ids
             response = await fetch_with_retry(
                 client, "GET",
                 f"{cg_base}/coins/markets",
                 params={
-                    'ids': ','.join(cg_ids),
+                    'ids': ','.join(sorted(cg_ids)),
                     'vs_currency': 'usd',
+                    'per_page': 250,
                     'price_change_percentage': '1h,24h'
                 },
                 headers=cg_headers
@@ -523,8 +561,8 @@ class PricingService:
                         }
                 logger.info(f"CoinGecko: fetched prices for {len(data)} tokens")
             elif response.status_code == 429:
-                self._coingecko_cooldown_until = datetime.now() + timedelta(seconds=60)
-                logger.warning(f"CoinGecko RATE LIMITED (429) - cooldown 60s, attempting fallbacks for {len(cg_ids)} symbols: {list(symbol_map.values())}")
+                # the shared gate already set the exponential backoff
+                logger.warning(f"CoinGecko RATE LIMITED (429) - gate backoff active, attempting fallbacks for {len(cg_ids)} symbols: {list(symbol_map.values())}")
             else:
                 logger.warning(f"CoinGecko API error: {response.status_code}")
 
@@ -533,6 +571,7 @@ class PricingService:
 
     async def _fetch_from_cmc(self, symbols: List[str]) -> None:
         """Fetch prices from CoinMarketCap API (requires API key)."""
+        from services.coingecko_gate import note_fallback_use; note_fallback_use(len(symbols))
         if not CMC_API_KEY:
             logger.debug("CMC API key not configured, skipping")
             return
@@ -599,6 +638,7 @@ class PricingService:
 
     async def _fetch_from_coinbase(self, symbols: List[str]) -> None:
         """Fetch prices from Coinbase public API (no auth required, fallback source)."""
+        from services.coingecko_gate import note_fallback_use; note_fallback_use(len(symbols))
         coinbase_symbols = {'ADA', 'BTC', 'ETH', 'SOL', 'MATIC', 'USDC', 'USDT', 'DAI',
                             'XRP', 'HBAR', 'SUI', 'APT', 'FIL', 'AVAX', 'LINK'}
 
@@ -638,6 +678,7 @@ class PricingService:
 
     async def _fetch_from_coinpaprika(self, symbols: List[str]) -> None:
         """Fetch prices from CoinPaprika API (free, no key required)."""
+        from services.coingecko_gate import note_fallback_use; note_fallback_use(len(symbols))
         try:
             from services.coinpaprika import coinpaprika_service
             to_fetch = [s for s in symbols if self._needs_price(s.upper())]
@@ -667,6 +708,7 @@ class PricingService:
 
     async def _fetch_from_defillama(self, symbols: List[str], include_major: bool = False) -> None:
         """Fetch prices from DefiLlama API (free, no key required)."""
+        from services.coingecko_gate import note_fallback_use; note_fallback_use(len(symbols))
         try:
             client = get_client("defilama", timeout=30.0)
             units = []

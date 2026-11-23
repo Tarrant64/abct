@@ -1311,7 +1311,10 @@ async def _compute_mobile_portfolio_summary(user_id: int, refresh: bool, include
             },
             "nfts": {
                 "value_usd": round(nfts_value, 2),
-                "percentage": round((nfts_value / total_value_usd * 100) if total_value_usd > 0 else 0, 1)
+                "percentage": round((nfts_value / total_value_usd * 100) if total_value_usd > 0 else 0, 1),
+                # ABCT-TOTAL-MISMATCH-20261123: lets clients label a total that
+                # deliberately leaves NFTs out (per-user preference, default off).
+                "included_in_total": bool(include_nfts_in_total),
             },
             "staking": {
                 "value_usd": round(staking_value, 2),
