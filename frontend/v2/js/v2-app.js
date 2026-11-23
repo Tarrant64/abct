@@ -1459,7 +1459,11 @@ function setActiveNav() {
 // ============================================================================
 
 function loadSavedTheme() {
-    const theme = localStorage.getItem('theme') || 'dark-mode';
+    // /next/* is the design-WIP space: default to the aurora preview theme
+    // there unless the user explicitly picked one (localStorage wins always).
+    const saved = localStorage.getItem('theme');
+    const defaultTheme = window.location.pathname.startsWith('/next') ? 'aurora' : 'dark-mode';
+    const theme = saved || defaultTheme;
     document.documentElement.setAttribute('data-theme', theme);
     const select = document.getElementById('v2ThemeSelect');
     if (select) select.value = theme;
