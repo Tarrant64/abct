@@ -1669,3 +1669,149 @@
 [data-theme="terminal"] .v2-stat-card::after {
     opacity: 0.08;
 }
+
+/* ============================================================================
+   20. AZURE — deep navy + teal (the mockup direction)
+   ============================================================================
+   Navy-indigo surfaces, teal accent for gains/active states, blue-teal donut
+   naturally from the chain colors, teal sparklines. Data-forward, calm.
+   ============================================================================ */
+
+[data-theme="azure"] {
+    --v2-bg-body: #181a27;
+    --v2-bg-sidebar: #141723;
+    --v2-bg-sidebar-hover: rgba(120, 180, 255, 0.07);
+    --v2-bg-sidebar-active: rgba(38, 177, 162, 0.14);
+    --v2-bg-main: transparent;
+    --v2-bg-card: #161b27;
+    --v2-bg-card-hover: #1b2130;
+    --v2-bg-input: #1b2130;
+    --v2-bg-modal: #161b27;
+    --v2-bg-table-header: #1b2130;
+    --v2-bg-table-row-hover: rgba(120, 180, 255, 0.05);
+    --v2-bg-table-row-alt: rgba(120, 180, 255, 0.025);
+    --v2-bg-skeleton: linear-gradient(90deg, #1b2130 25%, #232a3c 50%, #1b2130 75%);
+    --v2-bg-topbar: rgba(20, 23, 35, 0.78);
+    --v2-bg-dropdown: #1b2130;
+
+    --v2-border: #262c3d;
+    --v2-border-light: rgba(120, 180, 255, 0.08);
+    --v2-border-sidebar: rgba(120, 180, 255, 0.10);
+    --v2-border-input: #303a52;
+    --v2-border-focus: #2dd4bf;
+
+    --v2-text-primary: #eef1f8;
+    --v2-text-secondary: #97a1b8;
+    --v2-text-muted: #5f6a84;
+    --v2-text-heading: #f7f9fd;
+    --v2-text-link: #2dd4bf;
+    --v2-text-nav: #97a1b8;
+    --v2-text-nav-active: #eef1f8;
+
+    --v2-accent: #2dd4bf;
+    --v2-accent-hover: #4de3cf;
+    --v2-accent-muted: rgba(45, 212, 191, 0.14);
+    --v2-accent-text: #2dd4bf;
+    --v2-red: #ff5c7a;
+    --v2-red-muted: rgba(255, 92, 122, 0.14);
+    --v2-orange: #e89020;
+    --v2-blue: #5d7af9;
+    --v2-purple: #8b5cf6;
+
+    --v2-chart-line: #2dd4bf;
+    --v2-chart-fill: rgba(45, 212, 191, 0.10);
+    --v2-chart-grid: rgba(120, 180, 255, 0.05);
+    --v2-chart-text: #5f6a84;
+    --v2-chart-crosshair: rgba(120, 180, 255, 0.25);
+
+    --v2-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --v2-shadow-md: 0 4px 14px rgba(0, 0, 0, 0.42);
+    --v2-shadow-lg: 0 10px 28px rgba(0, 0, 0, 0.52);
+    --v2-shadow-card: 0 2px 8px rgba(0, 0, 0, 0.30), 0 0 0 1px var(--v2-border);
+    --v2-shadow-dropdown: 0 12px 40px rgba(0, 0, 0, 0.6);
+
+    --v2-scrollbar-track: transparent;
+    --v2-scrollbar-thumb: #303a52;
+    --v2-scrollbar-thumb-hover: #3e4a66;
+
+    --fx-backdrop:
+        radial-gradient(1100px 520px at 24% -200px, rgba(45, 90, 190, 0.20) 0%, rgba(45, 90, 190, 0) 60%),
+        radial-gradient(900px 460px at 85% -160px, rgba(38, 177, 162, 0.10) 0%, rgba(38, 177, 162, 0) 58%),
+        radial-gradient(1600px 900px at 50% 125%, rgba(28, 34, 60, 0.85) 0%, rgba(28, 34, 60, 0) 60%),
+        #181a27;
+    --fx-rail-bg: linear-gradient(180deg, rgba(20, 23, 35, 0.95) 0%, rgba(16, 19, 30, 0.98) 100%);
+    --fx-rail-border: rgba(120, 180, 255, 0.10);
+    --fx-rail-shadow: 0 20px 56px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(120, 180, 255, 0.08);
+    --fx-card-sheen: linear-gradient(165deg, rgba(120, 180, 255, 0.05) 0%, rgba(120, 180, 255, 0.015) 30%, rgba(0, 0, 0, 0) 50%);
+    --fx-card-bg: linear-gradient(180deg, rgba(24, 28, 43, 0.9) 0%, rgba(19, 23, 36, 0.94) 100%);
+    --fx-card-border: rgba(120, 180, 255, 0.12);
+    --fx-card-hover-border: rgba(45, 212, 191, 0.30);
+    --fx-card-shadow: 0 10px 30px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(120, 180, 255, 0.07);
+    --fx-card-hover-shadow: 0 18px 44px rgba(0, 0, 0, 0.45), 0 0 30px rgba(45, 212, 191, 0.08),
+        inset 0 1px 0 rgba(120, 180, 255, 0.10);
+    --fx-glow-strong: rgba(45, 212, 191, 0.40);
+    --fx-glow-soft: rgba(45, 212, 191, 0.14);
+    --fx-hero-grad: linear-gradient(180deg, #ffffff 0%, #c8fff4 55%, #2dd4bf 120%);
+    --fx-hero-glow: drop-shadow(0 6px 28px rgba(45, 212, 191, 0.25));
+    --fx-pill-grad: linear-gradient(135deg, #33e2cc 0%, #17b3a0 100%);
+    --fx-pill-text: #05231f;
+    --fx-pill-shadow: 0 5px 16px rgba(45, 212, 191, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.30);
+    --fx-topbar-bg: linear-gradient(180deg, rgba(20, 23, 35, 0.80) 0%, rgba(17, 20, 31, 0.68) 100%);
+    --fx-topbar-border: rgba(120, 180, 255, 0.09);
+    --fx-tray-bg: rgba(120, 180, 255, 0.06);
+    --fx-tray-border: rgba(120, 180, 255, 0.12);
+    --fx-overlay-bg: linear-gradient(180deg, rgba(22, 26, 40, 0.96) 0%, rgba(16, 19, 31, 0.98) 100%);
+    --fx-overlay-border: rgba(120, 180, 255, 0.15);
+    --fx-table-bg: linear-gradient(180deg, rgba(22, 26, 40, 0.88) 0%, rgba(17, 20, 32, 0.94) 100%);
+    --fx-table-border: rgba(120, 180, 255, 0.11);
+    --fx-chart-glow: drop-shadow(0 8px 24px rgba(45, 212, 191, 0.14));
+    --fx-search-bg: rgba(120, 180, 255, 0.06);
+    --fx-search-border: rgba(120, 180, 255, 0.14);
+    --fx-selection-bg: rgba(45, 212, 191, 0.30);
+    --fx-scrollbar: rgba(120, 180, 255, 0.22);
+    --fx-scrollbar-hover: rgba(120, 180, 255, 0.40);
+}
+
+/* ============================================================================
+   21. KPI CARD REFINEMENTS (all fx themes) — chevron label + circular badge
+   ============================================================================ */
+
+/* Small chevron before the KPI label, like the mockup */
+[data-fx] .v2-stat-label::before {
+    content: '›';
+    margin-right: 6px;
+    color: var(--v2-accent);
+    font-weight: 700;
+}
+
+/* Watermark icon inside a soft circular badge, slightly larger:
+   the badge is a ::before ring, the icon stays a plain ::after mask
+   (double-mask compositing is unreliable across browsers) */
+[data-fx] .v2-stat-card::before {
+    content: '';
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--v2-accent) 0%, transparent 72%);
+    opacity: 0.12;
+    pointer-events: none;
+}
+
+[data-fx] .v2-stat-card::after {
+    top: 10px;
+    right: 12px;
+    width: 46px;
+    height: 46px;
+    background: var(--v2-accent);
+    opacity: 0.16;
+    -webkit-mask: var(--stat-icon) center / contain no-repeat;
+    mask: var(--stat-icon) center / contain no-repeat;
+    pointer-events: none;
+}
+
+[data-theme="terminal"] .v2-stat-card::after {
+    opacity: 0.10;
+}
