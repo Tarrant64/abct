@@ -1380,7 +1380,8 @@
            16b. DEFI TABLE VIEW — bold headers, stark rows, value-intensity gradient
            --------------------------------------------------------------------------- */
 
-        /* Bold, prominent column headers */
+        /* Bold, prominent column headers: bright orange by default; the
+           sorted/active column turns red */
         [data-theme="aurora"] #defiTableView .v2-table th,
         [data-theme="cypherpunk"] #defiTableView .v2-table th,
         [data-theme="light"] #defiTableView .v2-table th {
@@ -1389,13 +1390,27 @@
             letter-spacing: 0.10em;
             padding: 12px 14px;
             border-bottom: 2px solid var(--fx-card-border);
+            color: var(--v2-accent-text);
+            text-shadow: 0 0 14px var(--fx-glow-soft);
+            transition: color var(--v2-transition), text-shadow var(--v2-transition);
+        }
+
+        [data-theme="aurora"] #defiTableView .v2-table th:hover,
+        [data-theme="cypherpunk"] #defiTableView .v2-table th:hover,
+        [data-theme="light"] #defiTableView .v2-table th:hover {
+            color: var(--v2-accent-hover);
         }
 
         [data-theme="aurora"] #defiTableView .v2-table th.sorted,
         [data-theme="cypherpunk"] #defiTableView .v2-table th.sorted,
         [data-theme="light"] #defiTableView .v2-table th.sorted {
-            color: var(--v2-accent-text);
-            text-shadow: 0 0 14px var(--fx-glow-soft);
+            color: #ff5252;
+            text-shadow: 0 0 16px rgba(255, 82, 82, 0.45);
+        }
+
+        [data-theme="light"] #defiTableView .v2-table th.sorted {
+            color: #d92d20;
+            text-shadow: none;
         }
 
         /* Starker row separation: solid zebra bands instead of near-invisible tint */
@@ -1455,7 +1470,7 @@
             display: inline-flex;
             align-items: center;
             padding: 3px 10px;
-            border-radius: 100px;
+            border-radius: 6px;
             font-size: 12px;
             font-weight: 700;
             letter-spacing: 0.02em;
