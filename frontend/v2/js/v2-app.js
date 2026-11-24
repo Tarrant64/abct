@@ -145,7 +145,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadDashboard() {
     try {
         // Chain-loading visual for the chart + donut + assets table
-        startChainLoader('chartChainLoader', { width: 900, height: 300 });
+        startChainLoader('chartChainLoader', { width: 900, height: 300, absolute: true });
         startChainLoader('assetsTableChainLoader', { width: 900, height: 180 });
         // Use cached fetch if available (v2-cache.js loaded), fall back to raw v2Fetch
         var useCached = typeof v2CachedFetch === 'function';
@@ -809,7 +809,7 @@ async function loadChart(range) {
     const skeleton = document.getElementById('chartSkeleton');
     if (skeleton) skeleton.style.display = 'none';
     stopChainLoader('chartChainLoader');
-    startChainLoader('chartChainLoader', { width: 900, height: 300 });
+    startChainLoader('chartChainLoader', { width: 900, height: 300, absolute: true });
 
     // If by-chain mode is active, load by-chain chart instead
     if (typeof _byChainMode !== 'undefined' && _byChainMode) {
@@ -2047,7 +2047,7 @@ function renderPortfolioDonut() {
                 container.appendChild(loader);
             }
             loader.style.display = 'block';
-            startChainLoader('donutChainLoader', { width: 240, height: 240 });
+            startChainLoader('donutChainLoader', { width: 240, height: 240, absolute: true });
         } else if (container) {
             setSafeHTML(container, '<div class="v2-empty" style="padding:32px"><div class="v2-empty-title">No allocation data</div></div>');
         }
@@ -3294,7 +3294,15 @@ function _chainLoaderTheme() {
 }
 
 function startChainLoader(canvasId, opts = {}) {
-    const canvas = document.getElementById(canvasId);
+    // If a previous container wipe removed the canvas, re-create it BEFORE the
+    // early return — otherwise the delayed start would silently do nothing.
+    let canvas = document.getElementById(canvasId);
+    if (!canvas && opts.host) {
+        canvas = document.createElement('canvas');
+        canvas.id = canvasId;
+        canvas.style.cssText = 'width:100%;display:block;';
+        opts.host.appendChild(canvas);
+    }
     if (!canvas) return;
     stopChainLoader(canvasId);
 
@@ -3337,8 +3345,16 @@ function _startChainLoaderNow(canvasId, opts = {}) {
     canvas.style.width = '100%';
     canvas.style.height = '100%';
     canvas.style.display = 'block';
-    canvas.style.position = 'absolute';
-    canvas.style.inset = '0';
+    if (opts.absolute) {
+        // Overlay mode (chart/donut): fill the sized parent
+        canvas.style.position = 'absolute';
+        canvas.style.inset = '0';
+    } else {
+        // In-flow mode (tables/panels): keep the element's own height so the
+        // wrapper (which has no fixed height) doesn't collapse
+        canvas.style.position = 'relative';
+        canvas.style.height = (opts.height || 200) + 'px';
+    }
 
     const ctx = canvas.getContext('2d');
     ctx.scale(dpr, dpr);
