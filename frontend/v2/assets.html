@@ -123,9 +123,7 @@
                     <!-- Chain filter tabs -->
                     <div class="chain-filter-bar" id="walletChainFilter"></div>
                     <div class="v2-table-wrapper" id="walletsTable">
-                        <div style="padding:40px;text-align:center;color:var(--v2-text-muted);">
-                            <div class="v2-skeleton v2-skeleton-chart" style="height:200px;"></div>
-                        </div>
+                        <canvas id="walletsChainLoader" style="width:100%;height:200px;display:block;"></canvas>
                     </div>
                 </div>
 
@@ -134,10 +132,8 @@
                         <span class="v2-table-title">Exchange Connections</span>
                     </div>
                     <div class="v2-table-wrapper" id="exchangesContent">
-                        <div style="padding:40px;text-align:center;color:var(--v2-text-muted);">
-                            <div class="v2-skeleton v2-skeleton-chart" style="height:200px;"></div>
-                        </div>
-                    </div>
+<canvas id="exchangesChainLoader" style="width:100%;height:200px;display:block;"></canvas>
+</div>
                 </div>
 
                 <div id="tabDefi" class="tab-content" style="display:none">
@@ -145,10 +141,8 @@
                         <span class="v2-table-title">DeFi & Staking Positions</span>
                     </div>
                     <div class="v2-table-wrapper" id="defiContent">
-                        <div style="padding:40px;text-align:center;color:var(--v2-text-muted);">
-                            <div class="v2-skeleton v2-skeleton-chart" style="height:200px;"></div>
-                        </div>
-                    </div>
+<canvas id="assetsDefiChainLoader" style="width:100%;height:200px;display:block;"></canvas>
+</div>
                 </div>
 
                 <div id="tabGovernance" class="tab-content" style="display:none">
@@ -157,10 +151,8 @@
                         <span id="govSummary" style="font-size:13px;color:var(--v2-text-muted);"></span>
                     </div>
                     <div id="governanceContent">
-                        <div style="padding:40px;text-align:center;color:var(--v2-text-muted);">
-                            <div class="v2-skeleton v2-skeleton-chart" style="height:200px;"></div>
-                        </div>
-                    </div>
+<canvas id="governanceChainLoader" style="width:100%;height:200px;display:block;"></canvas>
+</div>
                 </div>
 
                 <div id="tabCustom" class="tab-content" style="display:none">
@@ -169,10 +161,8 @@
                         <button class="v2-btn v2-btn-primary" id="addTokenBtn">+ Add Token</button>
                     </div>
                     <div class="v2-table-wrapper" id="customTokensContent">
-                        <div style="padding:40px;text-align:center;color:var(--v2-text-muted);">
-                            <div class="v2-skeleton v2-skeleton-chart" style="height:200px;"></div>
-                        </div>
-                    </div>
+<canvas id="customChainLoader" style="width:100%;height:200px;display:block;"></canvas>
+</div>
                 </div>
 
                 <div id="tabStocks" class="tab-content" style="display:none">
@@ -182,10 +172,8 @@
                         <button class="v2-btn v2-btn-primary" id="addStockBtn">+ Add Stock</button>
                     </div>
                     <div class="v2-table-wrapper" id="stocksContent">
-                        <div style="padding:40px;text-align:center;color:var(--v2-text-muted);">
-                            <div class="v2-skeleton v2-skeleton-chart" style="height:200px;"></div>
-                        </div>
-                    </div>
+<canvas id="stocksChainLoader" style="width:100%;height:200px;display:block;"></canvas>
+</div>
                 </div>
 
                 <div id="tabPnl" class="tab-content" style="display:none">
@@ -194,10 +182,8 @@
                         <button class="v2-btn v2-btn-secondary" id="computePnlBtn">Compute P&L</button>
                     </div>
                     <div id="pnlContent">
-                        <div style="padding:40px;text-align:center;color:var(--v2-text-muted);">
-                            <div class="v2-skeleton v2-skeleton-chart" style="height:200px;"></div>
-                        </div>
-                    </div>
+<canvas id="pnlChainLoader" style="width:100%;height:200px;display:block;"></canvas>
+</div>
                 </div>
             </div>
 
@@ -286,6 +272,21 @@
         });
 
         async function loadAssetsPage() {
+            // Chain-loading visuals on every tab panel while data fetches
+            var loaderMap = {
+                walletsTable: 'walletsChainLoader',
+                exchangesContent: 'exchangesChainLoader',
+                defiContent: 'assetsDefiChainLoader',
+                governanceContent: 'governanceChainLoader',
+                customTokensContent: 'customChainLoader',
+                stocksContent: 'stocksChainLoader',
+                pnlContent: 'pnlChainLoader',
+            };
+            Object.keys(loaderMap).forEach(function(hostId) {
+                var host = document.getElementById(hostId);
+                if (host) startChainLoader(loaderMap[hostId], { width: host.clientWidth || 800, height: 200, host: host });
+            });
+
             // Fire ALL requests in parallel — this is the key optimization.
             // Previously these were sequential (prices -> wallets -> exchanges -> defi -> custom),
             // causing ~4.5s load times. Now they all fire at once.
@@ -346,6 +347,28 @@
             if (tab === 'stocks' && !stocksLoaded) {
                 stocksLoaded = true;
                 loadStocksTab();
+            }
+
+            // Re-arm the chain loader if a panel was wiped (setSafeHTML removes
+            // the canvas) and its content hasn't rendered into this visit yet.
+            var loaderMap = {
+                wallets: ['walletsTable', 'walletsChainLoader'],
+                exchanges: ['exchangesContent', 'exchangesChainLoader'],
+                defi: ['defiContent', 'assetsDefiChainLoader'],
+                governance: ['governanceContent', 'governanceChainLoader'],
+                custom: ['customTokensContent', 'customChainLoader'],
+                stocks: ['stocksContent', 'stocksChainLoader'],
+                pnl: ['pnlContent', 'pnlChainLoader'],
+            };
+            var entry = loaderMap[tab];
+            if (entry) {
+                var host = document.getElementById(entry[0]);
+                var canvas = document.getElementById(entry[1]);
+                // panel empty (wiped or never rendered) and no loader running -> show it
+                var panelEmpty = host && !host.querySelector('.v2-table, .v2-empty, .defi-token-chips, table');
+                if (host && panelEmpty && !canvas) {
+                    startChainLoader(entry[1], { width: host.clientWidth || 800, height: 200, host: host });
+                }
             }
 
             // Update URL hash
@@ -423,8 +446,16 @@
             }
         }
 
-        function renderWalletsTab() {
+       
+            // Safety: any panel that never renders (e.g. P&L on demand) stops its loader
+            setTimeout(function() {
+                Object.keys(loaderMap).forEach(function(hostId) {
+                    stopChainLoader(loaderMap[hostId]);
+                });
+            }, 15000);
+ function renderWalletsTab() {
             const container = document.getElementById('walletsTable');
+            stopChainLoader('walletsChainLoader');
             let wallets = currentWalletChainFilter === 'all'
                 ? allWallets.slice()
                 : allWallets.filter(w => (w.blockchain || '').toLowerCase() === currentWalletChainFilter);
@@ -597,6 +628,7 @@
         // Exchanges Tab
         // ==========================================
         function renderExchangesTab(data) {
+            stopChainLoader('exchangesChainLoader');
             exchangeData = data;
             const container = document.getElementById('exchangesContent');
             const exchanges = data.exchanges || [];
@@ -659,6 +691,7 @@
         // DeFi Tab
         // ==========================================
         function renderDefiTab(data) {
+            stopChainLoader('assetsDefiChainLoader');
             const container = document.getElementById('defiContent');
             const positions = data.all_positions || data.positions || data.protocols || [];
             if (!positions.length) {
@@ -802,6 +835,7 @@
         }
 
         function renderGovernanceContent(delegations, allStaking, defiData) {
+            stopChainLoader('governanceChainLoader');
             const container = document.getElementById('governanceContent');
             const summaryEl = document.getElementById('govSummary');
 
@@ -976,6 +1010,7 @@
         // Custom Tokens Tab
         // ==========================================
         function renderCustomTokensTab(data) {
+            stopChainLoader('customChainLoader');
             const container = document.getElementById('customTokensContent');
             const tokens = data.tokens || data || [];
             if (!tokens.length) {

@@ -37,6 +37,7 @@ function renderStocksTab(data) {
     const container = document.getElementById('stocksContent');
     const summary = document.getElementById('stocksSummary');
     if (!container) return;
+    stopChainLoader('stocksChainLoader');
     const stocks = (data && data.stocks) || [];
     const tracked = (data && data.tracked_total_usd) || 0;
     if (summary) {
