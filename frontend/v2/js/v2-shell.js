@@ -45,7 +45,7 @@ function v2InitShell(activePage) {
         const link = document.createElement('link');
         link.id = 'v2NextCss';
         link.rel = 'stylesheet';
-        link.href = '/next/static/css/v2-next.css?v=20261124e';
+        link.href = '/next/static/css/v2-next.css?v=20261125a';
         document.head.appendChild(link);
     }
 
@@ -152,6 +152,35 @@ function v2InitShell(activePage) {
             seg.setAttribute('aria-label', 'Primary sections');
             setSafeHTML(seg, segHtml);
             topbar.insertBefore(seg, topbar.querySelector('.v2-topbar-right'));
+
+            // Sliding capsule: the highlight glides between items on hover
+            // and settles back on the active section.
+            const pill = document.createElement('span');
+            pill.className = 'v2-seg-nav-pill';
+            seg.appendChild(pill);
+            const links = [...seg.querySelectorAll('a')];
+            const activeLink = seg.querySelector('a.active') || links[0];
+            const movePill = (target) => {
+                if (!target) return;
+                pill.style.left = target.offsetLeft + 'px';
+                pill.style.width = target.offsetWidth + 'px';
+                pill.style.opacity = '1';
+            };
+            requestAnimationFrame(() => movePill(activeLink));
+            links.forEach(a => {
+                a.addEventListener('mouseenter', () => {
+                    movePill(a);
+                    a.style.color = 'var(--fx-pill-text)';
+                });
+                a.addEventListener('mouseleave', () => {
+                    a.style.color = '';
+                });
+            });
+            seg.addEventListener('mouseleave', () => {
+                links.forEach(a => { a.style.color = ''; });
+                movePill(activeLink);
+            });
+            window.addEventListener('resize', () => movePill(seg.querySelector('a.active') || links[0]));
         }
     }
 

@@ -1918,7 +1918,7 @@ function renderPortfolioDonut() {
     const centerLabel = document.getElementById('donutCenterLabel');
     const centerValue = document.getElementById('donutCenterValue');
     const centerSub = document.getElementById('donutCenterSub');
-    if (centerLabel) centerLabel.textContent = 'Total';
+    if (centerLabel) centerLabel.textContent = 'Portfolio Diversity';
     if (centerValue) centerValue.textContent = formatCurrency(displayTotal);
     if (centerSub) centerSub.textContent = '';
 
@@ -1935,12 +1935,12 @@ function renderPortfolioDonut() {
         type: 'doughnut',
         data: {
             labels,
-            datasets: [{ data, backgroundColor: colors, borderWidth: 0, borderRadius: 2, spacing: 2 }]
+            datasets: [{ data, backgroundColor: colors, borderWidth: 0, borderRadius: 10, spacing: 4, hoverOffset: 6 }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: true,
-            cutout: '68%',
+            cutout: '78%',
             plugins: {
                 legend: { display: false },
                 tooltip: {
