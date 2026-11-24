@@ -178,8 +178,10 @@ function v2InitShell(activePage) {
             setSafeHTML(seg, segHtml);
             topbar.insertBefore(seg, topbar.querySelector('.v2-topbar-right'));
 
-            // Sliding capsule: the highlight glides between items on hover
-            // and settles back on the active section.
+            // Sliding capsule: the gradient pill marks the ACTIVE section and
+            // glides when it changes. Hovering uses the CSS lighter-shade
+            // rule (.v2-seg-nav a:hover) — deliberately different from the
+            // active pill so hover never reads as selected.
             const pill = document.createElement('span');
             pill.className = 'v2-seg-nav-pill';
             seg.appendChild(pill);
@@ -192,19 +194,6 @@ function v2InitShell(activePage) {
                 pill.style.opacity = '1';
             };
             requestAnimationFrame(() => movePill(activeLink));
-            links.forEach(a => {
-                a.addEventListener('mouseenter', () => {
-                    movePill(a);
-                    a.style.color = 'var(--fx-pill-text)';
-                });
-                a.addEventListener('mouseleave', () => {
-                    a.style.color = '';
-                });
-            });
-            seg.addEventListener('mouseleave', () => {
-                links.forEach(a => { a.style.color = ''; });
-                movePill(activeLink);
-            });
             window.addEventListener('resize', () => movePill(seg.querySelector('a.active') || links[0]));
         }
     }
