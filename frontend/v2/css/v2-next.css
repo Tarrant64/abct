@@ -1329,27 +1329,30 @@
         /* Hover-expand: a collapsed rail unfurls to full width while hovered,
            overlaying (not shifting) the content. Tooltips are suppressed while
            expanded since the real labels are visible. */
-        [data-fx] .v2-layout.sidebar-collapsed .v2-sidebar:hover {
+        [data-fx] .v2-layout.sidebar-collapsed .v2-sidebar.hover-open {
             width: var(--v2-sidebar-width);
             box-shadow: var(--fx-rail-shadow), 0 0 60px rgba(0, 0, 0, 0.4);
         }
 
-        [data-fx] .v2-layout.sidebar-collapsed .v2-sidebar:hover .v2-nav-item {
+        [data-fx] .v2-layout.sidebar-collapsed .v2-sidebar.hover-open .v2-nav-item {
             justify-content: flex-start;
             padding: 9px 12px;
         }
 
-        [data-fx] .v2-layout.sidebar-collapsed .v2-sidebar:hover :is(.nav-text, .logo-text, .v2-nav-label) {
+        [data-fx] .v2-layout.sidebar-collapsed .v2-sidebar.hover-open :is(.nav-text, .logo-text, .v2-nav-label) {
             display: initial;
+            /* base sheet hides collapsed labels with opacity: 0 — undo it or the
+               labels stay invisible even when the rail is hover-expanded */
+            opacity: 1;
         }
 
-        [data-fx] .v2-layout.sidebar-collapsed .v2-sidebar:hover .v2-sidebar-logo {
+        [data-fx] .v2-layout.sidebar-collapsed .v2-sidebar.hover-open .v2-sidebar-logo {
             justify-content: flex-start;
             padding: 18px 16px;
         }
 
         /* No tooltips while hover-expanded */
-        [data-fx] .v2-layout.sidebar-collapsed .v2-sidebar:hover :is(.v2-nav-item, .v2-v1-link, .v2-sidebar-collapse-btn)::after {
+        [data-fx] .v2-layout.sidebar-collapsed .v2-sidebar.hover-open :is(.v2-nav-item, .v2-v1-link, .v2-sidebar-collapse-btn)::after {
             display: none;
         }
 
