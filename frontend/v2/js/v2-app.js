@@ -657,16 +657,22 @@ function renderChart(data) {
         aurora: ['#2dd4a7', '#f7b733', '#ff6b52'],
         cypherpunk: ['#38bdf8', '#c084fc', '#f472b6'],
         light: ['#818cf8', '#c084fc', '#f472b6'],
+        lux: ['#ccff00', '#67e8f9', '#c084fc'],
+        terminal: ['#00c087', '#f0b90b', '#f6465d'],
     };
     const FX_FILL_TOP = {
         aurora: 'rgba(247, 147, 51, 0.22)',
         cypherpunk: 'rgba(139, 92, 246, 0.22)',
         light: 'rgba(124, 111, 240, 0.18)',
+        lux: 'rgba(204, 255, 0, 0.16)',
+        terminal: 'rgba(0, 192, 135, 0.16)',
     };
     const FX_ENDPOINT = {
         aurora: '#ffb347',
         cypherpunk: '#c084fc',
         light: '#7c6ff0',
+        lux: '#ccff00',
+        terminal: '#00c087',
     };
     const fxStops = FX_LINE_GRADIENTS[fxTheme];
     let strokeColor = lineColor;
@@ -1528,7 +1534,7 @@ function setActiveNav() {
 
 // Themes available in the /next design lane (see v2-next.css). Anything else
 // found in localStorage is stale (retired theme) and maps to the lane default.
-const V2_THEME_WHITELIST = ['aurora', 'cypherpunk', 'light'];
+const V2_THEME_WHITELIST = ['aurora', 'cypherpunk', 'light', 'lux', 'terminal'];
 
 function loadSavedTheme() {
     // Two lanes: root "/" renders the shipped design (dark-mode) until a
