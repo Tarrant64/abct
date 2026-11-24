@@ -3314,8 +3314,18 @@ function startChainLoader(canvasId, opts = {}) {
 }
 
 function _startChainLoaderNow(canvasId, opts = {}) {
-    const canvas = document.getElementById(canvasId);
-    if (!canvas) return;
+    let canvas = document.getElementById(canvasId);
+    if (!canvas) {
+        // The host container may have been re-rendered (setSafeHTML wipes it):
+        // re-create the canvas inside the original host so the loader survives.
+        const hostId = canvasId.replace(/ChainLoader$/, '') + 'Host';
+        const host = document.getElementById(hostId) || opts.host;
+        if (!host) return;
+        canvas = document.createElement('canvas');
+        canvas.id = canvasId;
+        canvas.style.cssText = 'width:100%;display:block;';
+        host.appendChild(canvas);
+    }
     stopChainLoader(canvasId);
 
     const parent = canvas.parentElement;
