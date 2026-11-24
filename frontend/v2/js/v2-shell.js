@@ -52,7 +52,7 @@ function v2InitShell(activePage) {
             const link = document.createElement('link');
             link.id = 'v2NextCss';
             link.rel = 'stylesheet';
-            link.href = '/next/static/css/v2-next.css?v=20261125f';
+            link.href = '/next/static/css/v2-next.css?v=20261125g';
             document.head.appendChild(link);
         }
     } else {
@@ -101,6 +101,10 @@ function v2InitShell(activePage) {
                     <span class="collapse-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/></svg></span>
                     <span class="nav-text">Collapse</span>
                 </button>
+                <button class="v2-sidebar-collapse-btn" onclick="toggleSidebarSide()" data-label="Move sidebar" title="Move sidebar left/right" id="v2SideToggle">
+                    <span class="side-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="15" y1="4" x2="15" y2="20"/></svg></span>
+                    <span class="nav-text">Sidebar: <span id="v2SideLabel">Left</span></span>
+                </button>
             </div>
         `);
     }
@@ -136,13 +140,49 @@ function v2InitShell(activePage) {
         document.getElementById('v2Layout').classList.add('sidebar-collapsed');
     }
 
-    // Hover-expand for the collapsed rail: unfurl while the pointer is over
-    // it — but only on a fresh enter. Clicking Collapse must collapse even
-    // with the cursor on the rail, so a collapse click suppresses hover-open
-    // until the pointer leaves the rail.
+    // Sidebar side (left/right), persisted; applied before first paint of layout
+    const applySidebarSide = (side) => {
+        const layout = document.getElementById('v2Layout');
+        if (layout) layout.classList.toggle('sidebar-right', side === 'right');
+        document.documentElement.setAttribute('data-sidebar-side', side);
+        const lbl = document.getElementById('v2SideLabel');
+        if (lbl) lbl.textContent = side === 'right' ? 'Right' : 'Left';
+    };
+    let sidebarSide = 'left';
+    try { sidebarSide = localStorage.getItem('v2_sidebar_side') === 'right' ? 'right' : 'left'; } catch (err) {}
+    applySidebarSide(sidebarSide);
+    window.toggleSidebarSide = function() {
+        sidebarSide = sidebarSide === 'left' ? 'right' : 'left';
+        try { localStorage.setItem('v2_sidebar_side', sidebarSide); } catch (err) {}
+        applySidebarSide(sidebarSide);
+        // keep charts correctly sized after the layout flip
+        setTimeout(() => { if (typeof v2State !== 'undefined' && v2State.chartInstance) v2State.chartInstance.resize(); }, 350);
+    };
+
+    // Hover-expand for the collapsed rail: unfurl only when the pointer
+    // actively moves onto the rail after page load. On mount the cursor may
+    // already be resting over the rail (it was on a nav link on the previous
+    // page) — expanding then causes the distracting pop-out/retract on every
+    // navigation, so it is suppressed until real mouse movement or a nav click.
     const railEl = document.getElementById('v2Sidebar');
+    window.__railArmed = false;
+    document.addEventListener('mousemove', function arm(e) {
+        window.__railArmed = true;
+        document.removeEventListener('mousemove', arm);
+    });
+    // Any sidebar nav click: suppress hover-open on the next page too
+    document.addEventListener('click', (e) => {
+        if (e.target.closest && e.target.closest('#v2Sidebar a.v2-nav-item')) {
+            try { localStorage.setItem('v2_rail_suppress', String(Date.now())); } catch (err) {}
+        }
+    });
+    let suppressUntil = 0;
+    try {
+        const t = parseInt(localStorage.getItem('v2_rail_suppress') || '0', 10);
+        if (Date.now() - t < 4000) suppressUntil = t + 4000;  // suppress 4s after nav click
+    } catch (err) {}
     railEl.addEventListener('mouseenter', () => {
-        if (railEl.classList.contains('collapsed') && !window.__railSuppressHover) {
+        if (railEl.classList.contains('collapsed') && window.__railArmed && Date.now() > suppressUntil) {
             railEl.classList.add('hover-open');
         }
     });
@@ -151,60 +191,6 @@ function v2InitShell(activePage) {
         window.__railSuppressHover = false;
     });
 
-    // App-style segmented pill nav (Portfolio | Assets | NFTs | DeFi & Staking)
-    // in the topbar — /next only, primary sections like the mobile app.
-    if (currentPath.startsWith('/next')) {
-        const topbar = document.querySelector('.v2-topbar');
-        if (topbar && !topbar.querySelector('.v2-seg-nav')) {
-            const segItems = [
-                { id: 'dashboard', label: 'Portfolio', href: '/next/' },
-                { id: 'assets', label: 'Assets', href: '/next/assets' },
-                { id: 'nfts', label: 'NFTs', href: '/next/nfts' },
-                { id: 'defi', label: 'DeFi & Staking', href: '/next/defi' },
-            ];
-            const iconFor = (pid) => {
-                for (const s of V2_NAV) {
-                    const it = s.items.find(i => i.id === pid);
-                    if (it) return it.icon;
-                }
-                return '';
-            };
-            const segHtml = segItems.map(it =>
-                `<a href="${it.href}" class="${it.id === activePage ? 'active' : ''}">${iconFor(it.id)}<span>${it.label}</span></a>`
-            ).join('');
-            const seg = document.createElement('nav');
-            seg.className = 'v2-seg-nav';
-            seg.setAttribute('aria-label', 'Primary sections');
-            setSafeHTML(seg, segHtml);
-            topbar.insertBefore(seg, topbar.querySelector('.v2-topbar-right'));
-
-            // Sliding capsule: the gradient pill marks the ACTIVE section and
-            // glides when it changes. Hovering uses the CSS lighter-shade
-            // rule (.v2-seg-nav a:hover) — deliberately different from the
-            // active pill so hover never reads as selected.
-            const pill = document.createElement('span');
-            pill.className = 'v2-seg-nav-pill';
-            seg.appendChild(pill);
-            const links = [...seg.querySelectorAll('a')];
-            const activeLink = seg.querySelector('a.active') || links[0];
-            // Rect-based positioning (offsetLeft is unreliable before the delta
-            // stylesheet finishes applying), recomputed as layout settles.
-            const movePill = (target) => {
-                if (!target) return;
-                const segRect = seg.getBoundingClientRect();
-                const r = target.getBoundingClientRect();
-                pill.style.left = (r.left - segRect.left) + 'px';
-                pill.style.width = r.width + 'px';
-                pill.style.opacity = '1';
-            };
-            requestAnimationFrame(() => movePill(activeLink));
-            setTimeout(() => movePill(seg.querySelector('a.active') || links[0]), 300);
-            if (document.fonts && document.fonts.ready) {
-                document.fonts.ready.then(() => movePill(seg.querySelector('a.active') || links[0]));
-            }
-            window.addEventListener('resize', () => movePill(seg.querySelector('a.active') || links[0]));
-        }
-    }
 
     // Add toast container if not present
     if (!document.getElementById('toastContainer')) {
