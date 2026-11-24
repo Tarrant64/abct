@@ -30,6 +30,7 @@ const V2_THEMES = [
     { value: 'light', label: 'Light' },
     { value: 'lux', label: 'Lux' },
     { value: 'terminal', label: 'Terminal' },
+    { value: 'azure', label: 'Azure' },
 ];
 
 /**
@@ -51,7 +52,7 @@ function v2InitShell(activePage) {
             const link = document.createElement('link');
             link.id = 'v2NextCss';
             link.rel = 'stylesheet';
-            link.href = '/next/static/css/v2-next.css?v=20261125b';
+            link.href = '/next/static/css/v2-next.css?v=20261125c';
             document.head.appendChild(link);
         }
     } else {
