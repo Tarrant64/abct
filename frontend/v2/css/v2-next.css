@@ -990,6 +990,388 @@
     [data-theme="aurora"] .v2-hero-value,
     [data-theme="cypherpunk"] .v2-hero-value,
     [data-theme="light"] .v2-hero-value {
-        font-size: 40px;
+            font-size: 40px;
+        }
     }
-}
+
+    /* ============================================================================
+       16. DEFI & STAKING PAGE — sleek glass cards, protocol accent glow
+       ============================================================================
+       Overrides defi.html's inline flat-card styles: 4px left borders become a
+       gradient top hairline + corner glow in the protocol's brand color; rainbow
+       amount colors become clean heading numerals; badges become tinted pills;
+       list rows become soft rounded hover rows. Uses the same --fx-* system as
+       the rest of the design (theme-aware).
+       ============================================================================ */
+
+    /* Protocol brand accents (as --proto, brightened for dark glass) */
+    .defi-card[data-protocol="Indigo"] { --proto: #818cf8; }
+    .defi-card[data-protocol="Strike"] { --proto: #34d399; }
+    .defi-card[data-protocol="Liqwid"] { --proto: #22d3ee; }
+    .defi-card[data-protocol="Surf Lending"] { --proto: #60a5fa; }
+    .defi-card[data-protocol="Iagon"] { --proto: #fbbf24; }
+    .defi-card[data-protocol="Helium"] { --proto: #a78bfa; }
+    .defi-card[data-protocol="BTC Karma"] { --proto: #f7931a; }
+    .defi-card[data-protocol="Chainlink Staking"] { --proto: #60a5fa; }
+    .defi-card[data-protocol="Marginfi"] { --proto: #14f195; }
+    .defi-card[data-protocol="Kamino"] { --proto: #22d3ee; }
+    .defi-card[data-protocol="Drift"] { --proto: #e946ef; }
+    .defi-card[data-protocol="Jupiter Perps"] { --proto: #c7f284; }
+    .defi-card[data-protocol="Orca"] { --proto: #ffd700; }
+    .defi-card[data-protocol="Raydium"] { --proto: #818cf8; }
+    .defi-card[data-protocol="Solend"] { --proto: #e14fec; }
+    .defi-card.exchange-staked { --proto: #60a5fa; }
+    .defi-card.liquid-staking { --proto: #22d3ee; }
+    .defi-card.delegation { --proto: #4a8aff; }
+
+    /* Cards: glass + accent hairline + corner glow */
+    [data-theme="aurora"] .defi-card,
+    [data-theme="cypherpunk"] .defi-card,
+    [data-theme="light"] .defi-card {
+        border-left: none;
+        border: 1px solid var(--fx-card-border);
+        border-radius: 20px;
+        background: var(--fx-card-sheen), var(--fx-card-bg);
+        backdrop-filter: blur(18px) saturate(155%);
+        -webkit-backdrop-filter: blur(18px) saturate(155%);
+        box-shadow: var(--fx-card-shadow);
+        padding: 18px;
+        transition:
+            transform 0.28s cubic-bezier(0.2, 0.7, 0.3, 1.15),
+            box-shadow 0.28s ease,
+            border-color 0.28s ease;
+    }
+
+    [data-theme="aurora"] .defi-card:hover,
+    [data-theme="cypherpunk"] .defi-card:hover,
+    [data-theme="light"] .defi-card:hover {
+        transform: translateY(-3px);
+        border-color: var(--fx-card-hover-border);
+        box-shadow: var(--fx-card-hover-shadow);
+    }
+
+    /* Gradient accent hairline along the top edge */
+    [data-theme="aurora"] .defi-card::before,
+    [data-theme="cypherpunk"] .defi-card::before,
+    [data-theme="light"] .defi-card::before {
+        content: '';
+        position: absolute;
+        inset: 0 0 auto 0;
+        height: 2px;
+        background: linear-gradient(90deg, transparent 0%, var(--proto, var(--v2-accent)) 50%, transparent 100%);
+        opacity: 0.85;
+        pointer-events: none;
+    }
+
+    /* Soft protocol-tinted corner glow */
+    [data-theme="aurora"] .defi-card::after,
+    [data-theme="cypherpunk"] .defi-card::after,
+    [data-theme="light"] .defi-card::after {
+        content: '';
+        position: absolute;
+        top: -46px;
+        right: -46px;
+        width: 130px;
+        height: 130px;
+        background: radial-gradient(circle, var(--proto, var(--v2-accent)) 0%, transparent 70%);
+        opacity: 0.14;
+        pointer-events: none;
+    }
+
+    /* Card grid breathing room */
+    [data-theme="aurora"] .defi-card-grid,
+    [data-theme="cypherpunk"] .defi-card-grid,
+    [data-theme="light"] .defi-card-grid {
+        gap: 16px;
+    }
+
+    /* Typography: clean numerals, no rainbow, no mono */
+    [data-theme="aurora"] .defi-card .defi-card-amount,
+    [data-theme="cypherpunk"] .defi-card .defi-card-amount,
+    [data-theme="light"] .defi-card .defi-card-amount {
+        font-family: inherit;
+        font-variant-numeric: tabular-nums;
+        font-size: 26px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: var(--v2-text-heading);
+    }
+
+    [data-theme="aurora"] .defi-card .defi-card-value,
+    [data-theme="cypherpunk"] .defi-card .defi-card-value,
+    [data-theme="light"] .defi-card .defi-card-value {
+        font-family: inherit;
+        font-variant-numeric: tabular-nums;
+        font-size: 14px;
+        color: var(--v2-text-secondary);
+    }
+
+    [data-theme="aurora"] .defi-card-protocol,
+    [data-theme="cypherpunk"] .defi-card-protocol,
+    [data-theme="light"] .defi-card-protocol {
+        font-size: 10.5px;
+        letter-spacing: 0.09em;
+        font-weight: 700;
+    }
+
+    /* Logo chips: ring + glow like asset chips */
+    [data-theme="aurora"] .defi-card-logo,
+    [data-theme="cypherpunk"] .defi-card-logo,
+    [data-theme="light"] .defi-card-logo {
+        background: var(--fx-tray-bg);
+        box-shadow: 0 0 0 1px var(--fx-card-hover-border), 0 2px 10px var(--fx-glow-soft);
+    }
+
+    /* Badges: soft tinted pills instead of solid blocks */
+    [data-theme="aurora"] .defi-badge,
+    [data-theme="cypherpunk"] .defi-badge,
+    [data-theme="light"] .defi-badge {
+        border-radius: 100px;
+        padding: 3px 9px;
+        font-size: 9.5px;
+        letter-spacing: 0.06em;
+        font-weight: 700;
+        border: 1px solid transparent;
+    }
+
+    [data-theme="aurora"] .defi-badge-staked,
+    [data-theme="cypherpunk"] .defi-badge-staked,
+    [data-theme="light"] .defi-badge-staked {
+        background: var(--v2-accent-muted);
+        color: var(--v2-accent-text);
+        border-color: var(--fx-card-hover-border);
+    }
+
+    [data-theme="aurora"] .defi-badge-rewards,
+    [data-theme="aurora"] .defi-badge-depin,
+    [data-theme="cypherpunk"] .defi-badge-rewards,
+    [data-theme="cypherpunk"] .defi-badge-depin,
+    [data-theme="light"] .defi-badge-rewards,
+    [data-theme="light"] .defi-badge-depin {
+        background: rgba(247, 147, 51, 0.14);
+        color: #fbbf24;
+        border-color: rgba(247, 147, 51, 0.32);
+    }
+
+    [data-theme="light"] .defi-badge-rewards,
+    [data-theme="light"] .defi-badge-depin {
+        color: #b45309;
+    }
+
+    [data-theme="aurora"] .defi-badge-exchange,
+    [data-theme="cypherpunk"] .defi-badge-exchange,
+    [data-theme="light"] .defi-badge-exchange {
+        background: rgba(59, 130, 246, 0.15);
+        color: #60a5fa;
+        border-color: rgba(59, 130, 246, 0.32);
+    }
+
+    [data-theme="light"] .defi-badge-exchange {
+        color: #1d4ed8;
+    }
+
+    [data-theme="aurora"] .defi-badge-apy,
+    [data-theme="cypherpunk"] .defi-badge-apy,
+    [data-theme="light"] .defi-badge-apy {
+        background: rgba(16, 185, 129, 0.15);
+        color: #34d399;
+        border-color: rgba(16, 185, 129, 0.32);
+    }
+
+    [data-theme="light"] .defi-badge-apy {
+        color: #047857;
+    }
+
+    [data-theme="aurora"] .defi-badge-liquid,
+    [data-theme="cypherpunk"] .defi-badge-liquid,
+    [data-theme="light"] .defi-badge-liquid {
+        background: rgba(6, 182, 212, 0.14);
+        color: #22d3ee;
+        border-color: rgba(6, 182, 212, 0.32);
+    }
+
+    [data-theme="light"] .defi-badge-liquid {
+        color: #0e7490;
+    }
+
+    [data-theme="aurora"] .defi-badge-governance,
+    [data-theme="cypherpunk"] .defi-badge-governance,
+    [data-theme="light"] .defi-badge-governance {
+        background: rgba(139, 92, 246, 0.15);
+        color: #a78bfa;
+        border-color: rgba(139, 92, 246, 0.34);
+    }
+
+    [data-theme="light"] .defi-badge-governance {
+        color: #6d28d9;
+    }
+
+    [data-theme="aurora"] .defi-badge-chain,
+    [data-theme="cypherpunk"] .defi-badge-chain,
+    [data-theme="light"] .defi-badge-chain {
+        border-radius: 100px;
+    }
+
+    /* Pending rewards: soft tinted panel */
+    [data-theme="aurora"] .defi-card-pending,
+    [data-theme="cypherpunk"] .defi-card-pending,
+    [data-theme="light"] .defi-card-pending {
+        border-left: none;
+        border: 1px solid rgba(247, 147, 51, 0.22);
+        background: rgba(247, 147, 51, 0.07);
+        border-radius: 14px;
+        padding: 10px 12px;
+    }
+
+    [data-theme="aurora"] .defi-pending-label,
+    [data-theme="cypherpunk"] .defi-pending-label,
+    [data-theme="light"] .defi-pending-label {
+        letter-spacing: 0.09em;
+        font-size: 9.5px;
+    }
+
+    [data-theme="light"] .defi-pending-label {
+        color: #b45309;
+    }
+
+    /* Action links: ghost pills with gradient hover */
+    [data-theme="aurora"] .defi-action-link,
+    [data-theme="cypherpunk"] .defi-action-link,
+    [data-theme="light"] .defi-action-link {
+        border-radius: 100px;
+        border-color: var(--fx-card-border);
+        background: var(--fx-tray-bg);
+    }
+
+    [data-theme="aurora"] .defi-action-link:hover,
+    [data-theme="cypherpunk"] .defi-action-link:hover,
+    [data-theme="light"] .defi-action-link:hover {
+        background: var(--fx-pill-grad);
+        border-color: transparent;
+        color: var(--fx-pill-text);
+    }
+
+    /* Card footer separator subtler */
+    [data-theme="aurora"] .defi-card-actions,
+    [data-theme="cypherpunk"] .defi-card-actions,
+    [data-theme="light"] .defi-card-actions {
+        border-top: 1px solid var(--fx-table-border);
+    }
+
+    /* Strike V2 sub-panel */
+    [data-theme="aurora"] .strike-v2-section,
+    [data-theme="cypherpunk"] .strike-v2-section,
+    [data-theme="light"] .strike-v2-section {
+        background: var(--fx-tray-bg);
+        border-left: none;
+        border: 1px solid var(--fx-tray-border);
+        border-radius: 14px;
+    }
+
+    /* Section headers: micro-label style with glowing svg icon */
+    [data-theme="aurora"] .defi-section-icon,
+    [data-theme="cypherpunk"] .defi-section-icon,
+    [data-theme="light"] .defi-section-icon {
+        display: inline-flex;
+        align-items: center;
+        color: var(--v2-accent-text);
+        filter: drop-shadow(0 0 8px var(--fx-glow-soft));
+    }
+
+    [data-theme="aurora"] .defi-section-title,
+    [data-theme="cypherpunk"] .defi-section-title,
+    [data-theme="light"] .defi-section-title {
+        text-transform: uppercase;
+        letter-spacing: 0.09em;
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    [data-theme="aurora"] .defi-section-count,
+    [data-theme="cypherpunk"] .defi-section-count,
+    [data-theme="light"] .defi-section-count {
+        background: var(--fx-tray-bg);
+        border: 1px solid var(--fx-tray-border);
+        border-radius: 100px;
+    }
+
+    [data-theme="aurora"] .defi-section-refresh,
+    [data-theme="cypherpunk"] .defi-section-refresh,
+    [data-theme="light"] .defi-section-refresh {
+        border-radius: 100px;
+        border-color: var(--fx-tray-border);
+        background: var(--fx-tray-bg);
+    }
+
+    /* List rows (stablecoins, governance): soft rounded hover rows */
+    [data-theme="aurora"] .defi-gov-line,
+    [data-theme="aurora"] .defi-stable-line,
+    [data-theme="cypherpunk"] .defi-gov-line,
+    [data-theme="cypherpunk"] .defi-stable-line,
+    [data-theme="light"] .defi-gov-line,
+    [data-theme="light"] .defi-stable-line {
+        border-bottom: none;
+        border-radius: 12px;
+        padding: 10px 12px;
+        margin: 2px -4px;
+        transition: background var(--v2-transition);
+    }
+
+    [data-theme="aurora"] .defi-gov-line:hover,
+    [data-theme="cypherpunk"] .defi-gov-line:hover,
+    [data-theme="light"] .defi-gov-line:hover {
+        background: var(--fx-tray-bg);
+    }
+
+    [data-theme="aurora"] .defi-gov-line .line-amount,
+    [data-theme="aurora"] .defi-gov-line .line-value,
+    [data-theme="cypherpunk"] .defi-gov-line .line-amount,
+    [data-theme="cypherpunk"] .defi-gov-line .line-value,
+    [data-theme="light"] .defi-gov-line .line-amount,
+    [data-theme="light"] .defi-gov-line .line-value {
+        font-family: inherit;
+        font-variant-numeric: tabular-nums;
+    }
+
+    [data-theme="aurora"] .defi-gov-line .line-logo,
+    [data-theme="cypherpunk"] .defi-gov-line .line-logo,
+    [data-theme="light"] .defi-gov-line .line-logo {
+        box-shadow: 0 0 0 1px var(--fx-card-hover-border), 0 2px 8px var(--fx-glow-soft);
+    }
+
+    /* Token chips */
+    [data-theme="aurora"] .defi-token-chip,
+    [data-theme="cypherpunk"] .defi-token-chip,
+    [data-theme="light"] .defi-token-chip {
+        border-radius: 14px;
+        border-color: var(--fx-card-border);
+        background: var(--fx-tray-bg);
+    }
+
+    /* Top stat cards on the page get the glass treatment too */
+    [data-theme="aurora"] .defi-stat-card,
+    [data-theme="cypherpunk"] .defi-stat-card,
+    [data-theme="light"] .defi-stat-card {
+        border-radius: 20px;
+        border: 1px solid var(--fx-card-border);
+        background: var(--fx-card-sheen), var(--fx-card-bg);
+        backdrop-filter: blur(18px) saturate(155%);
+        -webkit-backdrop-filter: blur(18px) saturate(155%);
+        box-shadow: var(--fx-card-shadow);
+    }
+
+    [data-theme="aurora"] .defi-stat-label,
+    [data-theme="cypherpunk"] .defi-stat-label,
+    [data-theme="light"] .defi-stat-label {
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 10.5px;
+        font-weight: 600;
+    }
+
+    [data-theme="aurora"] .defi-stat-value,
+    [data-theme="cypherpunk"] .defi-stat-value,
+    [data-theme="light"] .defi-stat-value {
+        font-weight: 700;
+        letter-spacing: -0.02em;
+    }
