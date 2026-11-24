@@ -9,7 +9,7 @@ Endpoints:
     GET /analytics/relative-strength           - Normalized % change for major assets
     GET /analytics/gas-prices                  - Current gas prices (Etherscan oracle)
     GET /analytics/chain-breakdown/{blockchain} - TVL, stablecoins, DEX volume per chain (proxy)
-    GET /analytics/cardano-dex                 - Cardano DEX analytics (Charli3)
+    GET /analytics/cardano-dex                 - Cardano DEX analytics (retired)
     GET /analytics/tradfi/summary              - TradFi index data (requires Alpha Vantage)
     GET /analytics/tradfi/history/{symbol}     - TradFi daily close prices
     GET /analytics/tradfi/correlation          - BTC vs S&P 500 correlation
@@ -381,20 +381,10 @@ async def get_chain_breakdown(
 
 @router.get("/cardano-dex")
 async def get_cardano_dex_analytics(user_id: int = Depends(verify_session)):
-    """Get Cardano DEX breakdown (Minswap, SundaeSwap, etc.) from Charli3"""
-    try:
-        from services.charli3 import charli3_service
-        if not await charli3_service.is_configured():
-            return {"success": False, "configured": False, "message": "Charli3 API key not configured"}
+    """Cardano DEX breakdown — Charli3 retired 2026-11-24 (API defunkt, 503).
 
-        groups = await charli3_service.get_groups()
-        if not groups:
-            return {"success": False, "error": "Failed to fetch DEX groups"}
-
-        return {"success": True, "dexes": groups}
-    except Exception as e:
-        logger.exception("Error fetching Cardano DEX analytics")
-        return {"success": False, "error": f"Cardano DEX analytics request failed ({type(e).__name__})"}
+    Kept as a stable (empty) endpoint so mobile clients don't break."""
+    return {"success": False, "configured": False, "message": "Charli3 data source retired"}
 
 
 # ---- TradFi Endpoints (Phase 3) ----

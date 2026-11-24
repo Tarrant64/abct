@@ -545,58 +545,16 @@ async def get_quota(_user_id: int = Depends(verify_session)):
 
 @router.get("/stream/cardano")
 async def stream_cardano_prices(_user_id: int = Depends(verify_session_sse)):
-    """
-    SSE endpoint for live Cardano token prices via Charli3 streaming.
-    Falls back to polling if Charli3 streaming is unavailable.
-    """
+    """SSE live Cardano prices — Charli3 retired 2026-11-24 (API defunkt, 503).
+
+    Kept as a stable endpoint so any SSE clients fail gracefully."""
     from fastapi.responses import StreamingResponse
-    import asyncio
     import json
 
     async def event_generator():
-        try:
-            from services.charli3 import charli3_service
-            if not await charli3_service.is_configured():
-                yield f"data: {json.dumps({'error': 'Charli3 not configured'})}\n\n"
-                return
+        yield f"data: {json.dumps({'error': 'Charli3 data source retired'})}\n\n"
 
-            # Get pool IDs for tracked Cardano tokens
-            from services.charli3 import CHARLI3_TOKEN_MAP
-            pool_ids = list(CHARLI3_TOKEN_MAP.values())
-
-            if not pool_ids:
-                yield f"data: {json.dumps({'error': 'No Cardano tokens configured'})}\n\n"
-                return
-
-            try:
-                async for event in charli3_service.stream_tokens(pool_ids):
-                    yield f"data: {json.dumps(event)}\n\n"
-            except Exception as e:
-                logger.warning(f"Charli3 stream failed, falling back to polling: {e}")
-                # Fallback: poll every 30 seconds
-                while True:
-                    try:
-                        prices = await charli3_service.get_token_prices_batch(pool_ids)
-                        if prices:
-                            yield f"data: {json.dumps({'prices': prices, 'source': 'poll'})}\n\n"
-                    except Exception as pe:
-                        logger.error(f"Charli3 poll error: {pe}")
-                    await asyncio.sleep(30)
-
-        except Exception as e:
-            logger.error(f"SSE stream error: {e}")
-            yield f"data: {json.dumps({'error': 'stream error'})}\n\n"
-
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"
-        }
-    )
-
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 @router.get("/{symbol}")
 async def get_price(symbol: str, _user_id: int = Depends(verify_session)):

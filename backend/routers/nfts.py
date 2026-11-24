@@ -1368,42 +1368,6 @@ async def _get_nft_price_staleness() -> dict:
     }
 
 
-async def _fetch_taptools_floors(policy_ids: list, nft_svc) -> Dict[str, float]:
-    """Fetch floor prices directly from TapTools for policy IDs."""
-    from config import TAPTOOLS_API_KEY
-
-    TAPTOOLS_API_BASE = "https://openapi.taptools.io/api/v1"
-    floors = {}
-    headers = {"x-api-key": TAPTOOLS_API_KEY}
-    client = get_client("taptools_nft", timeout=15.0)
-
-    for i, pid in enumerate(policy_ids):
-        if nft_svc.is_rate_limited():
-            break
-        try:
-            response = await client.get(
-                f"{TAPTOOLS_API_BASE}/nft/collection/stats",
-                params={"policy": pid},
-                headers=headers,
-            )
-            if response.status_code == 429:
-                nft_svc.set_rate_limited()
-                break
-            if response.status_code == 200:
-                data = response.json()
-                price = data.get('price')
-                if price and float(price) > 0:
-                    floors[pid] = float(price)
-        except Exception as e:
-            logger.debug(f"TapTools floor price error for {pid[:16]}: {e}")
-
-        # Rate limit: 1 request/sec
-        if i < len(policy_ids) - 1:
-            await asyncio.sleep(1)
-
-    return floors
-
-
 @router.post("/prices/sync")
 async def sync_prices_from_service(user_id: int = Depends(verify_session)):
     """
@@ -1424,13 +1388,12 @@ async def sync_prices_from_service(user_id: int = Depends(verify_session)):
         return {
             'success': True,
             'message': 'No NFT collections to sync',
-            'synced': 0, 'from_cache': 0, 'from_service': 0, 'from_taptools': 0,
+            'synced': 0, 'from_cache': 0, 'from_service': 0,
             'failed': 0, 'total_collections': 0
         }
 
     from_cache = 0
     from_service = 0
-    from_taptools = 0
     synced_ids = set()
 
     # Tier 1: Check V1 nft_floor_prices database
@@ -1465,30 +1428,17 @@ async def sync_prices_from_service(user_id: int = Depends(verify_session)):
         except Exception as e:
             logger.debug(f"External price service error: {e}")
 
-    # Tier 3: Try TapTools (if configured, rate-limited)
+    # Tier 3: (removed) TapTools floors — TapTools retired 2026-11-24
     remaining_ids = [pid for pid in policy_ids if pid not in synced_ids]
     rate_limited = False
-    if remaining_ids and nft_service.is_taptools_configured() and not nft_service.is_rate_limited():
-        logger.info(f"Trying TapTools for {len(remaining_ids)} remaining collections")
-        taptools_prices = await _fetch_taptools_floors(remaining_ids, nft_service)
-        for pid, price in taptools_prices.items():
-            if price is not None and float(price) > 0:
-                await nft_service.update_floor_price_cache(pid, float(price))
-                synced_ids.add(pid)
-                from_taptools += 1
-        if nft_service.is_rate_limited():
-            rate_limited = True
-    elif remaining_ids and nft_service.is_rate_limited():
-        rate_limited = True
 
-    total_synced = from_cache + from_service + from_taptools
+    total_synced = from_cache + from_service
     failed = len(policy_ids) - len(synced_ids)
 
     # Build descriptive message
     parts = []
     if from_cache: parts.append(f"{from_cache} cached")
     if from_service: parts.append(f"{from_service} from service")
-    if from_taptools: parts.append(f"{from_taptools} from TapTools")
     source_detail = f" ({', '.join(parts)})" if parts else ""
     message = f"Synced {total_synced} of {len(policy_ids)} collections{source_detail}"
     if rate_limited and failed > 0:
@@ -1506,14 +1456,14 @@ async def sync_prices_from_service(user_id: int = Depends(verify_session)):
             logger.debug(f"Failed to clear persistent NFT cache: {e}")
 
     # Check if no sources available at all
-    has_sources = from_cache > 0 or nft_service.is_taptools_configured() or await nft_price_client.is_configured()
+    has_sources = from_cache > 0 or await nft_price_client.is_configured()
 
     return {
         'success': total_synced > 0 or failed == 0,
         'synced': total_synced,
         'from_cache': from_cache,
         'from_service': from_service,
-        'from_taptools': from_taptools,
+
         'failed': failed,
         'total_collections': len(policy_ids),
         'rate_limited': rate_limited,
@@ -1556,7 +1506,6 @@ async def get_price_coverage(user_id: int = Depends(verify_session)):
             priced_nfts += sum(1 for n in all_nfts if n.get('policy_id') == pid)
 
     # Check which sources are available
-    taptools_configured = nft_service.is_taptools_configured()
     try:
         nft_svc_configured = await nft_price_client.is_configured()
     except Exception:
@@ -1572,7 +1521,6 @@ async def get_price_coverage(user_id: int = Depends(verify_session)):
         'total_collections': total_collections,
         'priced_collections': priced_collections,
         'sources': {
-            'taptools_configured': taptools_configured,
             'taptools_rate_limited': nft_service.is_rate_limited(),
             'nft_price_service_configured': nft_svc_configured,
         },

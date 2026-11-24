@@ -199,7 +199,7 @@ class DemoWalletService:
                     "logo": ""
                 },
                 {
-                    "name": "CHARLI3",
+                    "name": "LIQWID",
                     "ticker": "C3",
                     "quantity": "8500",
                     "decimals": 0,

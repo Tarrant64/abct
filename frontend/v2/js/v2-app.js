@@ -144,8 +144,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function loadDashboard() {
     try {
-        // Chain-loading visual for the chart + donut while everything fetches
+        // Chain-loading visual for the chart + donut + assets table
         startChainLoader('chartChainLoader', { width: 900, height: 300 });
+        startChainLoader('assetsTableChainLoader', { width: 900, height: 180 });
         // Use cached fetch if available (v2-cache.js loaded), fall back to raw v2Fetch
         var useCached = typeof v2CachedFetch === 'function';
 
@@ -886,6 +887,7 @@ function renderStocksStat(data) {
 function renderAssetsTable() {
     const tbody = document.getElementById('assetsTableBody');
     if (!tbody) return;
+    stopChainLoader('assetsTableChainLoader');
 
     let holdings = [...v2State.holdings];
 
@@ -940,6 +942,7 @@ function renderAssetsTable() {
         return v2State.sortDir === 'asc' ? va - vb : vb - va;
     });
 
+    stopTableChainLoader(tbody);
     if (holdings.length === 0) {
         setSafeHTML(tbody, `
             <tr>
@@ -1078,6 +1081,33 @@ function v2SymbolColor(symbol) {
     let hash = 0;
     for (let i = 0; i < sym.length; i++) hash = (hash * 31 + sym.charCodeAt(i)) >>> 0;
     return `hsl(${hash % 360} 65% 42%)`;
+}
+
+
+// Table loading visual: chain propagation inside a table span (WQ-0391)
+function startTableChainLoader(tbody, colSpan, height) {
+    if (!tbody) return;
+    stopTableChainLoader(tbody);
+    const wrap = document.createElement('tr');
+    wrap.className = 'chain-loader-tr';
+    wrap.innerHTML = '<td colspan="' + colSpan + '" style="border:none;padding:0;"></td>';
+    tbody.insertBefore(wrap, tbody.firstChild);
+    const host = wrap.querySelector('td');
+    const canvas = document.createElement('canvas');
+    canvas.id = 'tableChainLoader_' + (tbody.id || 'x');
+    canvas.style.cssText = 'width:100%;height:' + (height || 160) + 'px;display:block;';
+    host.appendChild(canvas);
+    startChainLoader(canvas.id, { width: host.clientWidth || 600, height: height || 160 });
+    tbody.__chainLoaderTr = wrap;
+}
+
+function stopTableChainLoader(tbody) {
+    if (tbody && tbody.__chainLoaderTr) {
+        const c = tbody.__chainLoaderTr.querySelector('canvas');
+        if (c) stopChainLoader(c.id);
+        tbody.__chainLoaderTr.remove();
+        tbody.__chainLoaderTr = null;
+    }
 }
 
 function renderSparkline(idx, change) {

@@ -437,7 +437,7 @@ class PriceEnricher:
         Fetch current NFT floor price (best-effort).
 
         For EVM: uses Alchemy getFloorPrice via ethereum_nft service
-        For Cardano: uses TapTools via nft_price_client service
+        For Cardano: uses the nft_price_client service
 
         Returns USD value, or None if unavailable.
         """

@@ -49,7 +49,7 @@ API_REGISTRY = {
     "nftcdn": {
         "name": "NFT CDN",
         "category": "cardano",
-        "description": "Cardano NFT metadata and images (prioritized over TapTools)",
+        "description": "Cardano NFT metadata and images",
         "required": False,
         "docs_url": "https://nftcdn.io/doc",
         "env_var": "NFTCDN_API_KEY",
@@ -64,7 +64,7 @@ API_REGISTRY = {
     "nmkr": {
         "name": "NMKR Studio",
         "category": "cardano",
-        "description": "Cardano NFT metadata via NMKR Studio API (prioritized over TapTools)",
+        "description": "Cardano NFT metadata via NMKR Studio API",
         "required": False,
         "docs_url": "https://studio-api.nmkr.io/swagger/index.html",
         "env_var": "NMKR_API_KEY",
@@ -86,21 +86,6 @@ API_REGISTRY = {
         "pricing": "free",
         "pricing_note": "Free tier available, limits not documented",
         "default_limit": None,  # Not documented
-        "default_period": 86400,
-        "period_label": "day",
-        "rate_limit_note": "Limits not documented",
-        "rate_limit_type": "none"
-    },
-    "charli3": {
-        "name": "Charli3",
-        "category": "cardano",
-        "description": "Cardano token pricing, OHLCV history, and DEX analytics",
-        "required": False,
-        "docs_url": "https://charli3.io/",
-        "env_var": "CHARLI3_API_KEY",
-        "pricing": "freemium",
-        "pricing_note": "Freemium: generous free tier for token pricing",
-        "default_limit": None,
         "default_period": 86400,
         "period_label": "day",
         "rate_limit_note": "Limits not documented",
@@ -1644,7 +1629,6 @@ async def reload_all_api_keys(user_id: int = Depends(verify_session)):
         'services.ethereum',
         'services.etherscan',
         'services.coinbase',
-        'services.charli3',
     ]
 
     reloaded_count = 0
@@ -1718,7 +1702,7 @@ async def force_run_task(
     must be triggered separately (e.g., via the respective API endpoint).
 
     Args:
-        service: Service name (taptools, portfolio, etc.)
+        service: Service name (blockfrost, portfolio, etc.)
         task: Task name (nft_floor_prices, snapshot, etc.)
     """
     from services.rate_limit_tracker import rate_limit_tracker
@@ -1756,7 +1740,7 @@ async def clear_service_rate_limit(
     has passed or if you want to attempt API calls again.
 
     Args:
-        service: Service name (taptools, alchemy, etc.)
+        service: Service name (blockfrost, alchemy, etc.)
     """
     from services.rate_limit_tracker import rate_limit_tracker
 

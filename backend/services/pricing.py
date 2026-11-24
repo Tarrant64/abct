@@ -2,12 +2,12 @@
 Pricing Service - Smart chain-aware routing with fallback sources.
 
 Routing strategy:
-- Cardano tokens: Charli3 -> DefiLlama
+- Cardano tokens: DefiLlama (Charli3 retired 2026-11-24)
 - Major coins (BTC, ETH, ADA, SOL, etc.): CoinGecko -> CMC -> Coinbase -> CoinPaprika -> DefiLlama
 - Other tokens (DeFi mapped in CoinGecko): CoinGecko -> CoinPaprika -> DefiLlama
 
 Historical prices:
-- Cardano tokens: Charli3 OHLCV -> DefiLlama chart -> CoinGecko
+- Cardano tokens: DefiLlama chart -> CoinGecko (Charli3 retired 2026-11-24)
 - Other tokens: Engine cache -> DefiLlama chart -> CoinGecko
 
 All three routing groups run in parallel via asyncio.gather().
@@ -164,7 +164,7 @@ ASSET_TO_CMC = {
     'DYDX': 'DYDX',
 }
 
-# Map token symbols to their policy IDs and asset names for pricing/Charli3
+# Map token symbols to their policy IDs and asset names for pricing
 # Format: {symbol: (policy_id, hex_asset_name)}
 CARDANO_TOKEN_POLICIES = {
     'INDY': ('533bb94a8850ee3ccbe483106489399112b74c905342cb1792a797a0', '494e4459'),
@@ -267,7 +267,7 @@ class PricingService:
         Get current USD prices for specified symbols.
 
         Smart routing: classifies symbols by chain and routes to best-fit API.
-        Cardano tokens -> Charli3, Major coins -> CoinGecko/CMC, Others -> CoinGecko.
+        Cardano tokens -> DefiLlama/DexScreener, Major coins -> CoinGecko/CMC, Others -> CoinGecko.
         All three groups run in parallel.
         """
         if symbols is None:
@@ -342,30 +342,11 @@ class PricingService:
     # ============ Smart Routing Groups ============
 
     async def _fetch_cardano_prices(self, symbols: List[str]) -> None:
-        """Route: Charli3 -> DefiLlama for Cardano tokens."""
+        """Route: DefiLlama for Cardano tokens (Charli3 retired 2026-11-24)."""
         if not symbols:
             return
 
-        # Try Charli3 first
-        try:
-            from services.charli3 import charli3_service
-            charli3_results = await charli3_service.get_token_prices_batch(symbols)
-            for sym, data in charli3_results.items():
-                if data and data.get('price', 0) > 0:
-                    self.cache[sym] = {
-                        'usd': data['price'],
-                        'usd_1h_change': data.get('change_1h', 0),
-                        'usd_24h_change': data.get('change_24h', 0),
-                        'market_cap': 0,
-                        'volume_24h': data.get('volume_24h', 0),
-                        'source': 'Charli3',
-                        'data_completeness': 'partial',
-                        'updated_at': datetime.now().isoformat()
-                    }
-        except Exception as e:
-            logger.warning(f"Charli3 pricing failed: {e}")
-
-        # DefiLlama final fallback (price only -- its current-price endpoint
+        # DefiLlama fallback (price only -- its current-price endpoint
         # carries no change field, hence the DexScreener enrichment below).
         missing = [s for s in symbols if self.cache.get(s.upper(), {}).get('usd', 0) == 0]
         if missing:
@@ -743,10 +724,7 @@ class PricingService:
         if not symbols_to_fetch:
             return historical_data
 
-        # Step 2: Charli3 OHLCV for Cardano tokens
-        cardano_to_fetch = [s for s in symbols_to_fetch if s.upper() in CARDANO_TOKEN_POLICIES]
-        if cardano_to_fetch:
-            await self._fetch_historical_charli3(cardano_to_fetch, days, historical_data)
+        # Step 2: (removed) Charli3 OHLCV — retired 2026-11-24, API defunkt
 
         # Step 3: DefiLlama chart for remaining symbols
         remaining = [s for s in symbols_to_fetch if s not in historical_data]
@@ -759,48 +737,6 @@ class PricingService:
             await self._fetch_historical_coingecko(still_remaining, days, historical_data)
 
         return historical_data
-
-    async def _fetch_historical_charli3(self, symbols: List[str], days: int, historical_data: dict) -> None:
-        """Fetch OHLCV history from Charli3 for Cardano tokens."""
-        try:
-            from services.charli3 import charli3_service
-            if not await charli3_service.is_configured():
-                return
-
-            now_ts = int(datetime.now().timestamp())
-            from_ts = now_ts - (days * 86400)
-            resolution = "1d" if days > 7 else "60min"
-
-            for symbol in symbols:
-                candles = await charli3_service.get_ohlcv_history(
-                    symbol, resolution=resolution, from_ts=from_ts, to_ts=now_ts
-                )
-                if candles:
-                    historical_data[symbol] = []
-                    for candle in candles:
-                        ts = candle['time']
-                        dt = datetime.fromtimestamp(ts)
-                        if days <= 90:
-                            time_value = ts
-                            date_str = dt.strftime('%Y-%m-%d %H:%M')
-                        else:
-                            time_value = dt.strftime('%Y-%m-%d')
-                            date_str = dt.strftime('%Y-%m-%d')
-
-                        historical_data[symbol].append({
-                            'date': date_str,
-                            'price': candle['close'],
-                            'time': time_value,
-                            'open': candle.get('open'),
-                            'high': candle.get('high'),
-                            'low': candle.get('low'),
-                            'close': candle.get('close'),
-                            'volume': candle.get('volume'),
-                        })
-                    logger.info(f"Charli3: fetched {len(candles)} OHLCV candles for {symbol}")
-
-        except Exception as e:
-            logger.warning(f"Charli3 historical fetch failed: {e}")
 
     async def _fetch_historical_defillama(self, symbols: List[str], days: int, historical_data: dict) -> None:
         """Fetch historical prices from DefiLlama chart endpoint."""

@@ -41,7 +41,7 @@ BLOCKSCOUT_API_KEY = os.getenv("BLOCKSCOUT_API_KEY", "")
 CMC_API_KEY = os.getenv("CMC_API_KEY", "")
 GRAPH_API_KEY = os.getenv("GRAPH_API_KEY", "")
 ALPHAVANTAGE_API_KEY = os.getenv("ALPHAVANTAGE_API_KEY", "")
-CHARLI3_API_KEY = os.getenv("CHARLI3_API_KEY", "")
+# Charli3 retired 2026-11-24 (API defunkt) — key no longer read.
 # RETIRED 2026-11-21: TapTools is dead. The name is kept only so legacy imports resolve; the value is
 # ALWAYS empty (the TAPTOOLS_API_KEY env var is deliberately ignored), so every TapTools-gated code path
 # (NFT floor tiers, NFT scheduler, engine enricher) is inert instead of calling a dead service.
@@ -243,8 +243,6 @@ SNOWSCAN_BASE_URL = ETHERSCAN_V2_URL
 # CoinMarketCap API
 CMC_BASE_URL = "https://pro-api.coinmarketcap.com/v1"
 
-# Charli3 API (Cardano token pricing + OHLCV)
-CHARLI3_BASE_URL = "https://api.charli3.io/api/v1"
 
 # CoinPaprika API (free, no key required — 25k calls/month)
 COINPAPRIKA_BASE_URL = "https://api.coinpaprika.com/v1"

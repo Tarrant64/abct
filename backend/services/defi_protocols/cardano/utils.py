@@ -271,7 +271,7 @@ async def get_lp_token_info(unit: str) -> Optional[Dict]:
 async def get_token_price_ada(unit: str) -> float:
     """Get token price in ADA via USD pricing service.
 
-    Fetches token price in USD from the pricing service (Charli3 -> DefiLlama),
+    Fetches token price in USD from the pricing service (DefiLlama),
     then divides by the current ADA/USD price to get the price in ADA.
 
     Args:
@@ -364,7 +364,7 @@ async def resolve_lp_value(
     1. Get LP token total supply from Blockfrost
     2. Find the pool UTXOs that hold the reserves for this LP token
     3. Calculate user's share of the pool reserves
-    4. Price each reserve token via the pricing service (Charli3 -> DefiLlama for ADA-paired tokens)
+    4. Price each reserve token via the pricing service (DefiLlama for ADA-paired tokens)
     5. Sum to get total USD value
 
     This is the primary valuation method used by all 5 DEX adapters.

@@ -2834,34 +2834,7 @@ async def get_mobile_price_chart(
         chart_source = "CoinGecko"
         logger.info(f"Fetched {len(formatted_data)} OHLCV points from CoinGecko for {symbol}")
 
-    # 2. Try Charli3 for Cardano native tokens
-    if not formatted_data:
-        from services.pricing import CARDANO_TOKEN_POLICIES
-        if symbol.upper() in CARDANO_TOKEN_POLICIES:
-            logger.info(f"CoinGecko failed, trying Charli3 for Cardano token {symbol}")
-            try:
-                from services.charli3 import charli3_service
-                if await charli3_service.is_configured():
-                    now_ts = int(datetime.utcnow().timestamp())
-                    from_ts = now_ts - (days * 86400)
-                    resolution = "1d" if days > 7 else "60min"
-                    candles = await charli3_service.get_ohlcv_history(
-                        symbol, resolution=resolution, from_ts=from_ts, to_ts=now_ts
-                    )
-                    if candles:
-                        for candle in candles:
-                            formatted_data.append({
-                                "timestamp": int(candle['time']),
-                                "open": round(float(candle.get('open', 0)), 6),
-                                "high": round(float(candle.get('high', 0)), 6),
-                                "low": round(float(candle.get('low', 0)), 6),
-                                "close": round(float(candle.get('close', 0)), 6),
-                                "volume": float(candle.get('volume', 0))
-                            })
-                        chart_source = "Charli3"
-                        logger.info(f"Fetched {len(formatted_data)} OHLCV points from Charli3 for {symbol}")
-            except Exception as e:
-                logger.warning(f"Charli3 OHLCV fetch failed for {symbol}: {e}")
+    # 2. (removed) Charli3 fallback retired 2026-11-24 — API defunkt (503)
 
     # 3. Try DefiLlama (free, unlimited, no auth needed)
     if not formatted_data:
@@ -2937,11 +2910,11 @@ async def get_mobile_price_chart(
             logger.info(f"Fetched {len(formatted_data)} points from Coinbase for {symbol}")
 
     if not formatted_data:
-        logger.warning(f"All chart sources exhausted for {symbol} (CoinGecko, Charli3, DefiLlama, Binance, Coinbase)")
+        logger.warning(f"All chart sources exhausted for {symbol} (CoinGecko, DefiLlama, Binance, Coinbase)")
         raise HTTPException(
             status_code=404,
             detail=f"No price chart data available for {symbol}. "
-                   f"Tried: CoinGecko, Charli3, DefiLlama, Binance, Coinbase. "
+                   f"Tried: CoinGecko, DefiLlama, Binance, Coinbase. "
                    f"Token may not have market data on any supported source."
         )
 
