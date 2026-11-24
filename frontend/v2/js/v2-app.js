@@ -1507,6 +1507,15 @@ function toggleSidebar() {
     v2State.sidebarCollapsed = sidebar.classList.contains('collapsed');
     localStorage.setItem('v2_sidebar_collapsed', v2State.sidebarCollapsed);
 
+    // Collapse must collapse even with the cursor still on the rail: drop any
+    // hover-open state and suppress hover-expand until the pointer leaves.
+    if (v2State.sidebarCollapsed) {
+        sidebar.classList.remove('hover-open');
+        window.__railSuppressHover = true;
+    } else {
+        window.__railSuppressHover = false;
+    }
+
     // Redraw chart after sidebar animation
     setTimeout(() => {
         if (v2State.chartInstance) {

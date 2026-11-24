@@ -51,7 +51,7 @@ function v2InitShell(activePage) {
             const link = document.createElement('link');
             link.id = 'v2NextCss';
             link.rel = 'stylesheet';
-            link.href = '/next/static/css/v2-next.css?v=20261125a';
+            link.href = '/next/static/css/v2-next.css?v=20261125b';
             document.head.appendChild(link);
         }
     } else {
@@ -131,9 +131,24 @@ function v2InitShell(activePage) {
     // choice (the key exists) always wins.
     const sidebarCollapsed = localStorage.getItem('v2_sidebar_collapsed');
     if (sidebarCollapsed === 'true' || (sidebarCollapsed === null && currentPath.startsWith('/next'))) {
-        document.getElementById('v2Sidebar').classList.add('collapsed');
+        sidebarEl.classList.add('collapsed');
         document.getElementById('v2Layout').classList.add('sidebar-collapsed');
     }
+
+    // Hover-expand for the collapsed rail: unfurl while the pointer is over
+    // it — but only on a fresh enter. Clicking Collapse must collapse even
+    // with the cursor on the rail, so a collapse click suppresses hover-open
+    // until the pointer leaves the rail.
+    const railEl = document.getElementById('v2Sidebar');
+    railEl.addEventListener('mouseenter', () => {
+        if (railEl.classList.contains('collapsed') && !window.__railSuppressHover) {
+            railEl.classList.add('hover-open');
+        }
+    });
+    railEl.addEventListener('mouseleave', () => {
+        railEl.classList.remove('hover-open');
+        window.__railSuppressHover = false;
+    });
 
     // App-style segmented pill nav (Portfolio | Assets | NFTs | DeFi & Staking)
     // in the topbar — /next only, primary sections like the mobile app.
