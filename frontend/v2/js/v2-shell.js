@@ -28,6 +28,8 @@ const V2_THEMES = [
     { value: 'aurora', label: 'Aurora' },
     { value: 'cypherpunk', label: 'Cypherpunk' },
     { value: 'light', label: 'Light' },
+    { value: 'lux', label: 'Lux' },
+    { value: 'terminal', label: 'Terminal' },
 ];
 
 /**
@@ -40,13 +42,20 @@ function v2InitShell(activePage) {
     const currentPath = window.location.pathname;
 
     // Design-WIP layer: pages under /next/* load the v2-next.css delta on top
-    // of v2.css (root "/" intentionally stays on the shipped design).
-    if (currentPath.startsWith('/next') && !document.getElementById('v2NextCss')) {
-        const link = document.createElement('link');
-        link.id = 'v2NextCss';
-        link.rel = 'stylesheet';
-        link.href = '/next/static/css/v2-next.css?v=20261125a';
-        document.head.appendChild(link);
+    // of v2.css (root "/" intentionally stays on the shipped design). The
+    // [data-fx] attribute gates ALL shared structural rules of that layer.
+    const isNext = currentPath.startsWith('/next');
+    if (isNext) {
+        document.documentElement.dataset.fx = '1';
+        if (!document.getElementById('v2NextCss')) {
+            const link = document.createElement('link');
+            link.id = 'v2NextCss';
+            link.rel = 'stylesheet';
+            link.href = '/next/static/css/v2-next.css?v=20261125a';
+            document.head.appendChild(link);
+        }
+    } else {
+        delete document.documentElement.dataset.fx;
     }
 
     let navHtml = '';
