@@ -1886,3 +1886,17 @@
     display: inline-flex;
     flex: 0 0 auto;
 }
+
+/* ============================================================================
+   23. BRAND LOGO — multi-theme ABCT mark
+   ============================================================================ */
+[data-fx] .v2-sidebar-logo .logo-icon {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 10px var(--fx-glow-soft));
+}
+[data-fx] .v2-sidebar.collapsed .v2-sidebar-logo .logo-icon {
+    width: 34px;
+    height: 34px;
+}

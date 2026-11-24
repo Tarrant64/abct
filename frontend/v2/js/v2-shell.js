@@ -52,7 +52,7 @@ function v2InitShell(activePage) {
             const link = document.createElement('link');
             link.id = 'v2NextCss';
             link.rel = 'stylesheet';
-            link.href = '/next/static/css/v2-next.css?v=20261125g';
+            link.href = '/next/static/css/v2-next.css?v=20261125h';
             document.head.appendChild(link);
         }
     } else {
@@ -88,7 +88,7 @@ function v2InitShell(activePage) {
     if (sidebarEl) {
         setSafeHTML(sidebarEl, `
             <div class="v2-sidebar-logo" onclick="window.location='/next/'">
-                <img class="logo-icon" src="/static/abct-logo2.png" alt="ABCT" width="36" height="36">
+                <img class="logo-icon" id="v2LogoIcon" src="/static/logos/abct-logo-dark.png" alt="ABCT" width="36" height="36">
                 <span class="logo-text">ABCT</span>
             </div>
             <div class="v2-nav">${navHtml}</div>
