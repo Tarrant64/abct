@@ -3015,7 +3015,7 @@ async def _build_24h_hourly_payload(user_id: int, include_nfts: bool, cache_key:
 
         # Build time -> {symbol: price} index from historical data
         # Each symbol has entries like {'date': 'YYYY-MM-DD HH:MM', 'price': float, 'time': unix_ts}
-        # Normalize timestamps to hour boundaries so that Charli3 (e.g. "14:00")
+        # Normalize timestamps to hour boundaries so hourly sources (e.g. "14:00")
         # and DefiLlama (e.g. "14:05") merge into the same bucket instead of
         # interleaving into separate data points that cause sawtooth oscillation.
         all_times = {}  # date_str -> {symbol: price}
@@ -3052,7 +3052,7 @@ async def _build_24h_hourly_payload(user_id: int, include_nfts: bool, cache_key:
 
         # Build chart data points with carry-forward pricing.
         # Different tokens may have prices at different timestamps (e.g. ADA hourly
-        # from Charli3 vs BTC hourly from DefiLlama). Carry forward the last known
+        # from an hourly source vs BTC hourly from DefiLlama). Carry forward the last known
         # price per symbol to prevent sawtooth patterns from missing data points.
         last_known_price = {}  # symbol -> last seen price
         data = []
@@ -4890,7 +4890,7 @@ async def get_asset_chart(
     if not cg_id:
         cg_id = await resolve_coingecko_id(symbol, blockchain)
 
-    # Use get_historical_prices even without a CG ID — it has Charli3 for Cardano
+    # Use get_historical_prices even without a CG ID — DefiLlama covers Cardano
     # native tokens and other fallback sources that don't require a CoinGecko ID.
     historical = await pricing_service.get_historical_prices([symbol], days=days)
     points = historical.get(symbol, [])

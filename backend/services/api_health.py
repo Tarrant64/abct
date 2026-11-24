@@ -27,7 +27,6 @@ API_HEALTH_TESTS = {
     "coinmarketcap": ("header", "https://pro-api.coinmarketcap.com/v1/key/info", "X-CMC_PRO_API_KEY"),
     "nmkr":          ("header", "https://studio-api.nmkr.io/v2/GetCounts", "Authorization"),
     "coingecko":     ("header", "https://pro-api.coingecko.com/api/v3/ping", "x-cg-pro-api-key"),
-    "charli3":       ("header", "https://api.charli3.io/api/v1/tokens?page=1&pageSize=1", "x-api-key"),
     "maestro":       ("header", "https://mainnet.gomaestro-api.org/v1/ecosystem", "api-key"),
     "logostream":    ("query", "https://api.logostream.dev/cryptos/BTC?key={key}"),
     "alphavantage":  ("query", "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=AAPL&apikey={key}"),

@@ -109,7 +109,7 @@ async def get_current_portfolio_state(user_id: int):
     # Fetch current component values using the same functions as the snapshot service
     print(f"\n   Calculating native assets (tracked tokens) value...")
     try:
-        # Calculate native assets value per wallet (uses TapTools pricing)
+        # Calculate native assets value per wallet (uses nft pricing)
         for wallet in wallets:
             value = await calculate_wallet_native_assets_value(wallet['id'], wallet['blockchain'], user_id)
             if value > 0:

@@ -375,6 +375,20 @@
         document.addEventListener('DOMContentLoaded', function() {
             v2InitShell('defi');
 
+            // Chain-loading visual while data loads (only if no cache to show)
+            var cachedInit = getCachedDefi();
+            if (!cachedInit) {
+                var host = document.getElementById('defiSections');
+                if (host) {
+                    var lc = document.createElement('canvas');
+                    lc.id = 'defiChainLoader';
+                    lc.style.cssText = 'width:100%;height:220px;display:block;';
+                    host.innerHTML = '';
+                    host.appendChild(lc);
+                    startChainLoader('defiChainLoader', { width: host.clientWidth || 800, height: 220 });
+                }
+            }
+
             // Phase A: Render from localStorage cache instantly (no spinners, no waiting)
             var cached = getCachedDefi();
             var cacheAge = getCachedDefiAge();
@@ -693,22 +707,38 @@
                 }
 
                 // Render everything
-                renderFullDefi(allStaking, defiData, holdingsData, instantData, adaDelegation, exchangeStablecoins, nativeStablecoins, exchangeStakedAssets, lendingData);
+                // Guard against clobbering a good cache with an empty fetch
+                // (backend warming up / transient failure): if nothing came
+                // back but we're showing cached data, keep the cache and retry
+                // later instead of rendering $0.00 over it.
+                var fetchedAnything = (allStaking && Object.keys(allStaking).length > 0) ||
+                    (defiData && defiData.positions_by_category && Object.keys(defiData.positions_by_category).length > 0) ||
+                    (holdingsData && holdingsData.holdings && holdingsData.holdings.length > 0);
+                var cachedBefore = getCachedDefi();
+                var hadCachedData = cachedBefore && cachedBefore.allStaking && Object.keys(cachedBefore.allStaking).length > 0;
 
-                // Save to localStorage cache for instant display on next visit
-                setCachedDefi({
-                    allStaking: allStaking,
-                    defiData: defiData,
-                    holdingsData: holdingsData,
-                    instantData: instantData,
-                    adaDelegation: adaDelegation,
-                    exchangeStablecoins: exchangeStablecoins,
-                    nativeStablecoins: nativeStablecoins,
-                    exchangeStakedAssets: exchangeStakedAssets,
-                    lendingData: lendingData,
-                    prices: defiPrices,
-                    walletAddresses: _walletAddresses
-                });
+                if (!fetchedAnything && hadCachedData) {
+                    console.warn('[DeFi] Empty fetch with existing cache — keeping cached render, will retry');
+                    showToast('DeFi data temporarily unavailable — showing last known values', 'warning');
+                    updateDefiTimestamp();
+                } else {
+                    renderFullDefi(allStaking, defiData, holdingsData, instantData, adaDelegation, exchangeStablecoins, nativeStablecoins, exchangeStakedAssets, lendingData);
+
+                    // Save to localStorage cache for instant display on next visit
+                    setCachedDefi({
+                        allStaking: allStaking,
+                        defiData: defiData,
+                        holdingsData: holdingsData,
+                        instantData: instantData,
+                        adaDelegation: adaDelegation,
+                        exchangeStablecoins: exchangeStablecoins,
+                        nativeStablecoins: nativeStablecoins,
+                        exchangeStakedAssets: exchangeStakedAssets,
+                        lendingData: lendingData,
+                        prices: defiPrices,
+                        walletAddresses: _walletAddresses
+                    });
+                }
                 updateDefiTimestamp();
 
                 // Auto-retry timed-out DePIN cards via dedicated endpoints (like V1)
@@ -736,6 +766,7 @@
            RENDER — Full V1-level content
            ============================================================ */
         function renderFullDefi(allStaking, defiData, holdingsData, instantData, adaDelegation, exchangeStablecoins, nativeStablecoins, exchangeStakedAssets, lendingData) {
+            stopChainLoader('defiChainLoader');
             allDefiRows = [];
             var html = '';
             var totalStakedValue = 0;

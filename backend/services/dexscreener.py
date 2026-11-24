@@ -1,7 +1,7 @@
 """
 DexScreener pricing for Cardano native tokens (WQ-0397).
 
-Why: the cardano pricing route was Charli3 -> DefiLlama. Charli3 needs an
+Why: the cardano pricing route is DefiLlama. DefiLlama needs an
 API key that this install does not have (is_configured False since the
 encryption keychain issue; TapTools, the old change source, is dead), and
 DefiLlama's current-price endpoint is price_only -- it never carries a 24h
@@ -31,7 +31,7 @@ _CARDANO_CHAIN = "cardano"
 
 def dexscreener_units(policies: Dict[str, Tuple[str, str]]) -> Dict[str, str]:
     """symbol -> concatenated policy_id + hex_name address that DexScreener
-    indexes Cardano tokens under (same units Charli3's map uses)."""
+    indexes Cardano tokens under."""
     return {sym: f"{policy}{hexname}"
             for sym, (policy, hexname) in policies.items()}
 
