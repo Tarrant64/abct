@@ -45,7 +45,7 @@ function v2InitShell(activePage) {
         const link = document.createElement('link');
         link.id = 'v2NextCss';
         link.rel = 'stylesheet';
-        link.href = '/next/static/css/v2-next.css?v=20261124a';
+        link.href = '/next/static/css/v2-next.css?v=20261124b';
         document.head.appendChild(link);
     }
 
@@ -54,7 +54,7 @@ function v2InitShell(activePage) {
         navHtml += `<div class="v2-nav-section"><div class="v2-nav-label">${section.section}</div>`;
         section.items.forEach(item => {
             const isActive = item.id === activePage;
-            navHtml += `<a href="${item.href}" class="v2-nav-item${isActive ? ' active' : ''}" data-page="${item.id}">
+            navHtml += `<a href="${item.href}" class="v2-nav-item${isActive ? ' active' : ''}" data-page="${item.id}" data-label="${item.label}" title="${item.label}">
                 <span class="v2-nav-icon">${item.icon}</span>
                 <span class="nav-text">${item.label}</span>
             </a>`;
@@ -83,11 +83,11 @@ function v2InitShell(activePage) {
             </div>
             <div class="v2-nav">${navHtml}</div>
             <div class="v2-sidebar-footer">
-                <a href="/" class="v2-v1-link">
+                <a href="/" class="v2-v1-link" data-label="Classic View" title="Classic View">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
                     <span class="nav-text">Classic View</span>
                 </a>
-                <button class="v2-sidebar-collapse-btn" onclick="toggleSidebar()">
+                <button class="v2-sidebar-collapse-btn" onclick="toggleSidebar()" data-label="Expand" title="Expand">
                     <span class="collapse-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/></svg></span>
                     <span class="nav-text">Collapse</span>
                 </button>
