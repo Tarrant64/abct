@@ -1674,12 +1674,32 @@ function loadSavedTheme() {
         theme = 'dark-mode';
     }
     document.documentElement.setAttribute('data-theme', theme);
+    applyBrandLogo(theme);
     const select = document.getElementById('v2ThemeSelect');
     if (select) select.value = theme;
 }
 
+// Brand logo per theme (matches the multi-theme brand identity sheet)
+const V2_THEME_LOGOS = {
+    'dark-mode': '/static/logos/abct-logo-dark.png',
+    aurora: '/static/logos/abct-logo-amber.png',
+    cypherpunk: '/static/logos/abct-logo-violet.png',
+    light: '/static/logos/abct-logo-light.png',
+    lux: '/static/logos/abct-logo-violet.png',
+    terminal: '/static/logos/abct-logo-teal.png',
+    azure: '/static/logos/abct-logo-teal.png',
+};
+
+function applyBrandLogo(theme) {
+    const img = document.getElementById('v2LogoIcon');
+    if (img && V2_THEME_LOGOS[theme]) {
+        img.src = V2_THEME_LOGOS[theme] + '?v=20261125b';
+    }
+}
+
 function changeTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
+    applyBrandLogo(theme);
     localStorage.setItem('theme', theme);
 
     // Redraw chart with new colors
