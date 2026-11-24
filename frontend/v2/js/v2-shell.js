@@ -52,7 +52,7 @@ function v2InitShell(activePage) {
             const link = document.createElement('link');
             link.id = 'v2NextCss';
             link.rel = 'stylesheet';
-            link.href = '/next/static/css/v2-next.css?v=20261125e';
+            link.href = '/next/static/css/v2-next.css?v=20261125f';
             document.head.appendChild(link);
         }
     } else {
@@ -187,13 +187,21 @@ function v2InitShell(activePage) {
             seg.appendChild(pill);
             const links = [...seg.querySelectorAll('a')];
             const activeLink = seg.querySelector('a.active') || links[0];
+            // Rect-based positioning (offsetLeft is unreliable before the delta
+            // stylesheet finishes applying), recomputed as layout settles.
             const movePill = (target) => {
                 if (!target) return;
-                pill.style.left = target.offsetLeft + 'px';
-                pill.style.width = target.offsetWidth + 'px';
+                const segRect = seg.getBoundingClientRect();
+                const r = target.getBoundingClientRect();
+                pill.style.left = (r.left - segRect.left) + 'px';
+                pill.style.width = r.width + 'px';
                 pill.style.opacity = '1';
             };
             requestAnimationFrame(() => movePill(activeLink));
+            setTimeout(() => movePill(seg.querySelector('a.active') || links[0]), 300);
+            if (document.fonts && document.fonts.ready) {
+                document.fonts.ready.then(() => movePill(seg.querySelector('a.active') || links[0]));
+            }
             window.addEventListener('resize', () => movePill(seg.querySelector('a.active') || links[0]));
         }
     }

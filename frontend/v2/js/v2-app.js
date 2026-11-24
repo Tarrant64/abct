@@ -2521,16 +2521,36 @@ function navigateTo(page) {
 // TOAST NOTIFICATIONS
 // ============================================================================
 
-function showToast(message, type = 'success') {
+function showToast(message, type = 'success', opts = {}) {
     const container = document.getElementById('toastContainer');
     if (!container) return;
 
     const toast = document.createElement('div');
     toast.className = `v2-toast ${type}`;
-    toast.textContent = message;
-    container.appendChild(toast);
+    if (opts.loader) {
+        // Work-in-progress toast: mini blockchain-propagation graphic + text
+        toast.style.display = 'flex';
+        toast.style.alignItems = 'center';
+        toast.style.gap = '10px';
+        const mini = document.createElement('canvas');
+        mini.className = 'v2-toast-chain';
+        mini.width = 72; mini.height = 20;
+        mini.style.cssText = 'width:72px;height:20px;flex:0 0 auto;';
+        const label = document.createElement('span');
+        label.textContent = message;
+        toast.appendChild(mini);
+        toast.appendChild(label);
+        container.appendChild(toast);
+        startChainLoader(mini.id = 'toastChain_' + Date.now(), { width: 72, height: 20 });
+    } else {
+        toast.textContent = message;
+        container.appendChild(toast);
+    }
 
     setTimeout(() => {
+        if (opts.loader && toast.querySelector('canvas')) {
+            stopChainLoader(toast.querySelector('canvas').id);
+        }
         toast.style.opacity = '0';
         toast.style.transform = 'translateX(20px)';
         setTimeout(() => toast.remove(), 300);
@@ -3248,6 +3268,26 @@ function startChainLoader(canvasId, opts = {}) {
     if (!canvas) return;
     stopChainLoader(canvasId);
 
+    // Delay the visual: if data lands quickly the loader never appears at all
+    // (prevents the animation flashing over an already-rendered chart).
+    const delay = opts.delay != null ? opts.delay : 280;
+    if (delay > 0) {
+        const pending = { pending: null, raf: 0 };
+        pending.pending = setTimeout(() => {
+            _chainLoaders.delete(canvasId);
+            _startChainLoaderNow(canvasId, opts);
+        }, delay);
+        _chainLoaders.set(canvasId, pending);
+        return;
+    }
+    _startChainLoaderNow(canvasId, opts);
+}
+
+function _startChainLoaderNow(canvasId, opts = {}) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    stopChainLoader(canvasId);
+
     const parent = canvas.parentElement;
     const w = Math.max(120, (opts.width || parent?.clientWidth || 400));
     const h = Math.max(80, (opts.height || parent?.clientHeight || 240));
@@ -3358,6 +3398,7 @@ function startChainLoader(canvasId, opts = {}) {
 function stopChainLoader(canvasId) {
     const state = _chainLoaders.get(canvasId);
     if (state) {
+        if (state.pending) clearTimeout(state.pending);
         cancelAnimationFrame(state.raf);
         _chainLoaders.delete(canvasId);
     }
