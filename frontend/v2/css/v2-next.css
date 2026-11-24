@@ -1372,6 +1372,133 @@
     [data-theme="aurora"] .defi-stat-value,
     [data-theme="cypherpunk"] .defi-stat-value,
     [data-theme="light"] .defi-stat-value {
-        font-weight: 700;
-        letter-spacing: -0.02em;
-    }
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        /* ---------------------------------------------------------------------------
+           16b. DEFI TABLE VIEW — bold headers, stark rows, value-intensity gradient
+           --------------------------------------------------------------------------- */
+
+        /* Bold, prominent column headers */
+        [data-theme="aurora"] #defiTableView .v2-table th,
+        [data-theme="cypherpunk"] #defiTableView .v2-table th,
+        [data-theme="light"] #defiTableView .v2-table th {
+            font-weight: 800;
+            font-size: 11.5px;
+            letter-spacing: 0.10em;
+            padding: 12px 14px;
+            border-bottom: 2px solid var(--fx-card-border);
+        }
+
+        [data-theme="aurora"] #defiTableView .v2-table th.sorted,
+        [data-theme="cypherpunk"] #defiTableView .v2-table th.sorted,
+        [data-theme="light"] #defiTableView .v2-table th.sorted {
+            color: var(--v2-accent-text);
+            text-shadow: 0 0 14px var(--fx-glow-soft);
+        }
+
+        /* Starker row separation: solid zebra bands instead of near-invisible tint */
+        [data-theme="aurora"] #defiTableView .v2-table tbody tr:nth-child(even),
+        [data-theme="cypherpunk"] #defiTableView .v2-table tbody tr:nth-child(even),
+        [data-theme="light"] #defiTableView .v2-table tbody tr:nth-child(even) {
+            background: var(--fx-tray-bg);
+        }
+
+        [data-theme="aurora"] #defiTableView .v2-table td,
+        [data-theme="cypherpunk"] #defiTableView .v2-table td,
+        [data-theme="light"] #defiTableView .v2-table td {
+            border-bottom: 1px solid var(--fx-table-border);
+            padding: 10px 14px;
+        }
+
+        /* Value-intensity gradient bar on the row's left edge (set via --vi) */
+        [data-theme="aurora"] #defiTableView .v2-table tbody tr,
+        [data-theme="cypherpunk"] #defiTableView .v2-table tbody tr,
+        [data-theme="light"] #defiTableView .v2-table tbody tr {
+            position: relative;
+        }
+
+        [data-theme="aurora"] #defiTableView .v2-table tbody td:first-child,
+        [data-theme="cypherpunk"] #defiTableView .v2-table tbody td:first-child,
+        [data-theme="light"] #defiTableView .v2-table tbody td:first-child {
+            position: relative;
+        }
+
+        [data-theme="aurora"] #defiTableView .v2-table tbody td:first-child::before,
+        [data-theme="cypherpunk"] #defiTableView .v2-table tbody td:first-child::before,
+        [data-theme="light"] #defiTableView .v2-table tbody td:first-child::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 3px;
+            height: calc(100% - 10px);
+            border-radius: 100px;
+            background: var(--fx-pill-grad);
+            opacity: var(--vi, 0);
+            transition: opacity var(--v2-transition);
+            pointer-events: none;
+        }
+
+        [data-theme="aurora"] #defiTableView .v2-table tbody tr:hover td:first-child::before,
+        [data-theme="cypherpunk"] #defiTableView .v2-table tbody tr:hover td:first-child::before,
+        [data-theme="light"] #defiTableView .v2-table tbody tr:hover td:first-child::before {
+            opacity: 1;
+        }
+
+        /* Token cell: protocol-colored chip */
+        [data-theme="aurora"] #defiTableView .v2-token-chip,
+        [data-theme="cypherpunk"] #defiTableView .v2-token-chip,
+        [data-theme="light"] #defiTableView .v2-token-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 10px;
+            border-radius: 100px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            background: color-mix(in srgb, var(--row-proto, var(--v2-accent)) 16%, transparent);
+            color: color-mix(in srgb, var(--row-proto, var(--v2-accent)) 80%, var(--v2-text-primary));
+            border: 1px solid color-mix(in srgb, var(--row-proto, var(--v2-accent)) 35%, transparent);
+        }
+
+        [data-theme="light"] #defiTableView .v2-token-chip {
+            color: color-mix(in srgb, var(--row-proto, #4f46e5) 60%, #111827);
+        }
+
+        /* Type as quiet label */
+        [data-theme="aurora"] #defiTableView .v2-type-label,
+        [data-theme="cypherpunk"] #defiTableView .v2-type-label,
+        [data-theme="light"] #defiTableView .v2-type-label {
+            font-size: 11.5px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            font-weight: 600;
+            color: var(--v2-text-muted);
+        }
+
+        /* Value column: big tabular numerals; scaled emphasis via --vi */
+        [data-theme="aurora"] #defiTableView .v2-value-cell,
+        [data-theme="cypherpunk"] #defiTableView .v2-value-cell,
+        [data-theme="light"] #defiTableView .v2-value-cell {
+            font-variant-numeric: tabular-nums;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            color: var(--v2-text-heading);
+        }
+
+        [data-theme="aurora"] #defiTableView .v2-value-cell.top,
+        [data-theme="cypherpunk"] #defiTableView .v2-value-cell.top,
+        [data-theme="light"] #defiTableView .v2-value-cell.top {
+            text-shadow: 0 0 18px var(--fx-glow-soft);
+        }
+
+        /* Quantity column: quieter, tabular */
+        [data-theme="aurora"] #defiTableView .v2-qty-cell,
+        [data-theme="cypherpunk"] #defiTableView .v2-qty-cell,
+        [data-theme="light"] #defiTableView .v2-qty-cell {
+            font-variant-numeric: tabular-nums;
+            color: var(--v2-text-secondary);
+        }

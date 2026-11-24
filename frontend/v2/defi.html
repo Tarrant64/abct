@@ -2092,13 +2092,31 @@
                 sortTh('value', 'Value (USD)', true) +
                 '</tr></thead><tbody>';
 
+            // Value-intensity scale: highest value -> strongest accent.
+            var maxVal = 0;
+            rows.forEach(function(r) { if (r.value > maxVal) maxVal = r.value; });
+
+            // Protocol brand colors (mirrors the .defi-card accents in CSS)
+            var protoColors = {
+                'Indigo': '#818cf8', 'Strike': '#34d399', 'Liqwid': '#22d3ee',
+                'Surf Lending': '#60a5fa', 'Iagon': '#fbbf24', 'Helium': '#a78bfa',
+                'BTC Karma': '#f7931a', 'Chainlink Staking': '#60a5fa',
+                'Marginfi': '#14f195', 'Kamino': '#22d3ee', 'Drift': '#e946ef',
+                'Jupiter Perps': '#c7f284', 'Orca': '#ffd700', 'Raydium': '#818cf8',
+                'Solend': '#e14fec', 'ADA Delegation': '#4a8aff'
+            };
+
             rows.forEach(function(r) {
-                thtml += '<tr>' +
+                var vi = maxVal > 0 ? Math.max(0.12, Math.min(1, r.value / maxVal)) : 0;
+                var proto = protoColors[r.protocol] || '';
+                var style = ' style="--vi:' + vi.toFixed(3) + (proto ? ';--row-proto:' + proto : '') + '"';
+                var valueHtml = r.value > 0 ? formatCurrency(r.value) : '<span style="color:var(--v2-text-muted);font-weight:400;">--</span>';
+                thtml += '<tr' + style + ' data-protocol="' + escapeAttr(r.protocol) + '">' +
                     '<td><strong>' + escapeHtml(r.protocol) + '</strong></td>' +
-                    '<td>' + escapeHtml(r.token) + '</td>' +
-                    '<td>' + escapeHtml(r.type) + '</td>' +
-                    '<td class="right v2-blur">' + formatAmount(r.amount) + '</td>' +
-                    '<td class="right v2-blur">' + (r.value > 0 ? formatCurrency(r.value) : '<span style="color:var(--v2-text-muted);">--</span>') + '</td>' +
+                    '<td><span class="v2-token-chip">' + escapeHtml(r.token) + '</span></td>' +
+                    '<td><span class="v2-type-label">' + escapeHtml(r.type) + '</span></td>' +
+                    '<td class="right v2-qty-cell v2-blur">' + formatAmount(r.amount) + '</td>' +
+                    '<td class="right v2-value-cell v2-blur' + (vi >= 0.75 ? ' top' : '') + '">' + valueHtml + '</td>' +
                     '</tr>';
             });
             thtml += '</tbody></table>';
