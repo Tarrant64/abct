@@ -428,6 +428,91 @@
 }
 
 /* ============================================================================
+   5b. COLLAPSED RAIL — clean icon-only mode
+   ============================================================================
+   The base stylesheet hides labels with opacity:0, which keeps their layout
+   width and clips the icons in the 64px rail. Remove them from layout
+   entirely and offer hover tooltips instead.
+   ============================================================================ */
+
+[data-theme="aurora"] .v2-sidebar.collapsed :is(.nav-text, .logo-text),
+[data-theme="cypherpunk"] .v2-sidebar.collapsed :is(.nav-text, .logo-text),
+[data-theme="light"] .v2-sidebar.collapsed :is(.nav-text, .logo-text) {
+    display: none;
+}
+
+/* Tooltips: floating label pill to the right of the icon on hover.
+   The rail must not clip them, so it loses overflow:hidden in fx themes. */
+[data-theme="aurora"] .v2-sidebar,
+[data-theme="cypherpunk"] .v2-sidebar,
+[data-theme="light"] .v2-sidebar {
+    overflow: visible;
+}
+
+/* ...and the nav scroller must not clip them either (safe: collapsed content
+   is short enough to never scroll) */
+[data-theme="aurora"] .v2-sidebar.collapsed .v2-nav,
+[data-theme="cypherpunk"] .v2-sidebar.collapsed .v2-nav,
+[data-theme="light"] .v2-sidebar.collapsed .v2-nav {
+    overflow: visible;
+}
+
+[data-theme="aurora"] .v2-sidebar.collapsed :is(.v2-nav-item, .v2-v1-link, .v2-sidebar-collapse-btn),
+[data-theme="cypherpunk"] .v2-sidebar.collapsed :is(.v2-nav-item, .v2-v1-link, .v2-sidebar-collapse-btn),
+[data-theme="light"] .v2-sidebar.collapsed :is(.v2-nav-item, .v2-v1-link, .v2-sidebar-collapse-btn) {
+    position: relative;
+    justify-content: center;
+    padding: 10px;
+}
+
+[data-theme="aurora"] .v2-sidebar.collapsed :is(.v2-nav-item, .v2-v1-link, .v2-sidebar-collapse-btn)::after,
+[data-theme="cypherpunk"] .v2-sidebar.collapsed :is(.v2-nav-item, .v2-v1-link, .v2-sidebar-collapse-btn)::after,
+[data-theme="light"] .v2-sidebar.collapsed :is(.v2-nav-item, .v2-v1-link, .v2-sidebar-collapse-btn)::after {
+    content: attr(data-label);
+    position: absolute;
+    left: calc(100% + 12px);
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 6px 12px;
+    border-radius: 10px;
+    background: var(--fx-overlay-bg);
+    border: 1px solid var(--fx-overlay-border);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: var(--v2-text-primary);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+    z-index: 600;
+}
+
+[data-theme="aurora"] .v2-sidebar.collapsed :is(.v2-nav-item, .v2-v1-link, .v2-sidebar-collapse-btn):hover::after,
+[data-theme="cypherpunk"] .v2-sidebar.collapsed :is(.v2-nav-item, .v2-v1-link, .v2-sidebar-collapse-btn):hover::after,
+[data-theme="light"] .v2-sidebar.collapsed :is(.v2-nav-item, .v2-v1-link, .v2-sidebar-collapse-btn):hover::after {
+    opacity: 1;
+}
+
+/* Collapsed logo: icon only, centered */
+[data-theme="aurora"] .v2-sidebar.collapsed .v2-sidebar-logo,
+[data-theme="cypherpunk"] .v2-sidebar.collapsed .v2-sidebar-logo,
+[data-theme="light"] .v2-sidebar.collapsed .v2-sidebar-logo {
+    justify-content: center;
+    padding: 18px 8px;
+}
+
+/* Section labels already collapse to zero-height in the base sheet; make
+   sure they take no vertical space in the fx rail either. */
+[data-theme="aurora"] .v2-sidebar.collapsed .v2-nav-label,
+[data-theme="cypherpunk"] .v2-sidebar.collapsed .v2-nav-label,
+[data-theme="light"] .v2-sidebar.collapsed .v2-nav-label {
+    display: none;
+}
+
+/* ============================================================================
    6. TOPBAR — glass sheet + app-style segmented pill nav
    ============================================================================ */
 
