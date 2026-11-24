@@ -610,3 +610,172 @@ async def get_price(symbol: str, _user_id: int = Depends(verify_session)):
         "currency": "USD",
         "source": "CoinGecko"
     }
+
+
+# ============================================================================
+# SPARKLINES — 7d price history for asset rows (WQ-0390)
+# ============================================================================
+# One CoinGecko /market_chart call per symbol, cached in-process for 1h.
+# Concurrency-capped and rate-limited; failures are negative-cached for
+# 10 minutes so a dead symbol doesn't hammer the API on every table render.
+
+from services.pricing import ASSET_TO_COINGECKO
+from middleware.demo_mode import is_demo_user
+from database import get_username_by_user_id
+import asyncio
+import random
+from datetime import datetime, timedelta
+
+_sparkline_cache: dict = {}          # symbol -> {"ts": float, "points": [...], "ok": bool} (REAL data, shared)
+_spark_demo_cache: dict = {}         # symbol -> points (demo walks; kept separate so demo data
+                                     # never leaks into real users' responses)
+_SPARK_TTL_OK = 3600                 # 1h for successful fetches
+_SPARK_TTL_FAIL = 600                # 10 min negative cache
+_spark_semaphore = asyncio.Semaphore(3)
+
+
+def _demo_sparkline(symbol: str, days: int = 7) -> list:
+    """Deterministic pseudo-random walk for demo users (stable per symbol+day)."""
+    rng = random.Random(f"spark:{symbol}:{int(time.time() // 86400)}")
+    base = 100.0
+    drift = rng.uniform(-0.004, 0.004)
+    points = []
+    price = base
+    steps = days * 6
+    for i in range(steps):
+        price *= (1 + drift + rng.uniform(-0.012, 0.012))
+        points.append(round(price, 6))
+    return points
+
+
+async def _fetch_sparkline(symbol: str, days: int = 7) -> list:
+    """Fetch a 7d price series for one symbol via CoinGecko market_chart."""
+    cg_id = ASSET_TO_COINGECKO.get(symbol.upper())
+    if not cg_id:
+        return []
+    try:
+        client = get_client("coingecko_sparklines", timeout=30.0)
+        resp = await client.get(
+            f"https://api.coingecko.com/api/v3/coins/{cg_id}/market_chart",
+            params={"vs_currency": "usd", "days": days},
+        )
+        if resp.status_code != 200:
+            logger.warning(f"Sparkline fetch {symbol}: HTTP {resp.status_code}")
+            return []
+        prices = resp.json().get("prices", [])
+        series = [p for _, p in prices if p and p > 0]
+        if not series:
+            return []
+        # Downsample to ~48 points for compact rendering
+        step = max(1, len(series) // 48)
+        return series[::step]
+    except Exception as e:
+        logger.warning(f"Sparkline fetch {symbol} failed: {e}")
+        return []
+
+
+async def _fetch_sparklines_defillama(symbols: list, days: int = 7) -> dict:
+    """Batch-fetch daily close prices via DefiLlama (free, no key, no CG quota).
+
+    One call per day for ALL symbols: /prices/historical/{ts}/{coin1},{coin2},...
+    Returns {symbol: [prices...]} using the same ASSET_TO_COINGECKO ids.
+    """
+    keys = {}
+    for sym in symbols:
+        cg_id = ASSET_TO_COINGECKO.get(sym.upper())
+        if cg_id:
+            keys[f"coingecko:{cg_id}"] = sym.upper()
+    if not keys:
+        return {}
+
+    now = datetime.utcnow()
+    out = {sym: [] for sym in keys.values()}
+    try:
+        client = get_client("defillama_sparklines", timeout=30.0)
+        for d in range(days - 1, -1, -1):
+            ts = int((now - timedelta(days=d)).replace(hour=12, minute=0,
+                                                       second=0, microsecond=0).timestamp())
+            resp = await client.get(
+                f"https://coins.llama.fi/prices/historical/{ts}/" + ",".join(keys.keys())
+            )
+            if resp.status_code != 200:
+                logger.warning(f"DefiLlama sparkline batch HTTP {resp.status_code}")
+                continue
+            coins = resp.json().get("coins", {})
+            for key, info in coins.items():
+                sym = keys.get(key)
+                price = info.get("price")
+                if sym and price and price > 0:
+                    out[sym].append(price)
+    except Exception as e:
+        logger.warning(f"DefiLlama sparkline batch failed: {e}")
+        return {}
+
+    return {sym: pts for sym, pts in out.items() if len(pts) >= 3}
+
+
+@router.post("/sparklines")
+async def get_sparklines(
+    body: dict,
+    user_id: int = Depends(verify_session),
+):
+    """
+    Get 7d price series for a list of symbols (asset-row sparklines).
+
+    Body: {"symbols": ["ADA", "BTC", ...]}
+    Returns: {"sparklines": {"ADA": [prices...], ...}}
+    """
+    symbols = [s for s in (body.get("symbols") or []) if isinstance(s, str)][:60]
+    if not symbols:
+        return {"sparklines": {}}
+
+    now = time.time()
+    result: dict = {}
+    to_fetch: list = []
+
+    for sym in symbols:
+        sym = sym.upper()
+        cached = _sparkline_cache.get(sym)
+        if cached and (now - cached["ts"]) < (_SPARK_TTL_OK if cached["ok"] else _SPARK_TTL_FAIL):
+            if cached["ok"]:
+                result[sym] = cached["points"]
+            continue
+        to_fetch.append(sym)
+
+    # Demo users: deterministic fake walks, no API calls (separate cache!)
+    try:
+        username = await get_username_by_user_id(user_id)
+        if username and await is_demo_user(username):
+            for sym in to_fetch:
+                pts = _demo_sparkline(sym)
+                _spark_demo_cache[sym] = pts
+                if pts:
+                    result[sym] = pts
+            return {"sparklines": result}
+    except Exception:
+        pass  # fall through to real fetch if demo check fails
+
+    async def fetch_one(sym: str):
+        async with _spark_semaphore:
+            await asyncio.sleep(0.25)  # ~4 req/s ceiling
+            pts = await _fetch_sparkline(sym)
+        _sparkline_cache[sym] = {"ts": time.time(), "points": pts, "ok": bool(pts)}
+        return sym, pts
+
+    # Primary: DefiLlama batch (no quota); fallback for stragglers: CoinGecko
+    dl = await _fetch_sparklines_defillama(to_fetch)
+    for sym, pts in dl.items():
+        _sparkline_cache[sym] = {"ts": time.time(), "points": pts, "ok": True}
+        result[sym] = pts
+    still_missing = [s for s in to_fetch if s not in result]
+    if still_missing:
+        done = await asyncio.gather(*(fetch_one(s) for s in still_missing), return_exceptions=True)
+        for item in done:
+            if isinstance(item, Exception):
+                logger.warning(f"Sparkline task error: {item}")
+                continue
+            sym, pts = item
+            if pts:
+                result[sym] = pts
+
+    return {"sparklines": result}

@@ -1043,6 +1043,8 @@ function renderAssetsTable() {
         holdings.forEach((h, idx) => {
             renderSparkline(idx, h.price_change_24h || h.change_24h || 0);
         });
+        // Real 7d data replaces the placeholders when it arrives
+        loadRealSparklines(holdings);
     });
 
     // Apply column visibility settings
@@ -1113,6 +1115,83 @@ function renderSparkline(idx, change) {
         else ctx.lineTo(i * step, val);
     });
     ctx.stroke();
+}
+
+// Real 7d sparkline from /prices/sparklines data (WQ-0390)
+function renderSparklineFromData(idx, series) {
+    const container = document.getElementById(`spark_${idx}`);
+    if (!container) return;
+    const canvas = container.querySelector('canvas');
+    if (!canvas || !series || series.length < 3) return;
+
+    const ctx = canvas.getContext('2d');
+    canvas.width = 80;
+    canvas.height = 32;
+
+    const W = 80, H = 32, PAD = 2;
+    const min = Math.min(...series), max = Math.max(...series);
+    const range = (max - min) || 1;
+    const step = (W - PAD * 2) / (series.length - 1);
+    const yFor = (v) => PAD + (1 - (v - min) / range) * (H - PAD * 2);
+
+    const style = getComputedStyle(document.documentElement);
+    const up = series[series.length - 1] >= series[0];
+    const color = up
+        ? (style.getPropertyValue('--v2-accent').trim() || '#00d26a')
+        : (style.getPropertyValue('--v2-red').trim() || '#ff5252');
+
+    ctx.clearRect(0, 0, W, H);
+    // Fill under the line
+    ctx.beginPath();
+    series.forEach((v, i) => {
+        const x = PAD + i * step, y = yFor(v);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.lineTo(W - PAD, H - PAD); ctx.lineTo(PAD, H - PAD); ctx.closePath();
+    ctx.fillStyle = up ? 'rgba(0, 210, 106, 0.10)' : 'rgba(255, 82, 82, 0.10)';
+    ctx.fill();
+    // Line
+    ctx.beginPath();
+    series.forEach((v, i) => {
+        const x = PAD + i * step, y = yFor(v);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+}
+
+// Batch-fetch real sparklines for the holdings table and redraw (fire & forget)
+let _sparklinesInFlight = false;
+// Heatmap theme state (set by _getHeatmapColor)
+let _lastHeatmapNeutral = null;
+let _lastHeatmapAccent = null;
+async function loadRealSparklines(holdings) {
+    if (_sparklinesInFlight) return;
+    const symbols = [...new Set(
+        holdings.map(h => (h.symbol || '').toUpperCase()).filter(Boolean)
+    )].slice(0, 60);
+    if (!symbols.length) return;
+    _sparklinesInFlight = true;
+    try {
+        const resp = await v2Fetch(`${API_BASE}/prices/sparklines`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ symbols })
+        });
+        if (!resp.ok) throw new Error('sparklines HTTP ' + resp.status);
+        const data = await resp.json();
+        v2State.sparklines = data.sparklines || {};
+        v2State.holdings.forEach((h, idx) => {
+            const pts = v2State.sparklines[(h.symbol || '').toUpperCase()];
+            if (pts && pts.length > 2) renderSparklineFromData(idx, pts);
+        });
+    } catch (e) {
+        console.warn('Real sparklines unavailable, keeping placeholder lines:', e);
+    } finally {
+        _sparklinesInFlight = false;
+    }
 }
 
 
@@ -1550,11 +1629,12 @@ const V2_THEME_WHITELIST = ['aurora', 'cypherpunk', 'light', 'lux', 'terminal', 
 
 function loadSavedTheme() {
     // Two lanes: root "/" renders the shipped design (dark-mode) until a
-    // milestone is promoted; /next/* runs the fx themes and defaults to aurora.
+    // milestone is promoted; /next/* runs the fx themes and defaults to azure
+    // (Chris's chosen direction). An explicit saved theme (whitelisted) wins.
     const saved = localStorage.getItem('theme');
     let theme;
     if (window.location.pathname.startsWith('/next')) {
-        theme = (saved && V2_THEME_WHITELIST.includes(saved)) ? saved : 'aurora';
+        theme = (saved && V2_THEME_WHITELIST.includes(saved)) ? saved : 'azure';
     } else {
         theme = 'dark-mode';
     }
@@ -2138,6 +2218,17 @@ function renderPortfolioHeatmap() {
     const tiles = _layoutTreemapTiles(allTokens, containerWidth, totalHeight);
 
     let tilesHtml = '';
+    // Prime the theme reads (first _getHeatmapColor call sets the globals)
+    _getHeatmapColor(0);
+    // Readable text on light themes: pick dark text when the neutral bg is light
+    const [nr0, ng0, nb0] = (function() {
+        const hex = (_lastHeatmapNeutral || '#1a1f2b').replace('#', '');
+        return [parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16)];
+    })();
+    const neutralLuma = 0.2126 * nr0 + 0.7152 * ng0 + 0.0722 * nb0;
+    const textMain = neutralLuma > 140 ? '#111827' : '#fff';
+    const textSoft = neutralLuma > 140 ? 'rgba(17,24,39,0.75)' : 'rgba(255,255,255,0.9)';
+    const textFaint = neutralLuma > 140 ? 'rgba(17,24,39,0.55)' : 'rgba(255,255,255,0.7)';
     for (const tile of tiles) {
         const bgColor = _getHeatmapColor(tile.token.change24h);
         const changeStr = (tile.token.change24h >= 0 ? '+' : '') + tile.token.change24h.toFixed(2) + '%';
@@ -2168,9 +2259,9 @@ function renderPortfolioHeatmap() {
             'overflow:hidden;cursor:default;transition:filter 0.15s;' +
             'border:1px solid rgba(0,0,0,0.15);" ' +
             'title="' + escapeAttr(tile.token.symbol + ': ' + valueStr + ' (' + changeStr + ')') + '">' +
-            '<span style="font-size:' + symbolSize + ';font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.5);">' + escapeHtml(tile.token.symbol) + '</span>' +
-            (changeSize !== '0' ? '<span style="font-size:' + changeSize + ';font-weight:600;color:rgba(255,255,255,0.9);">' + changeStr + '</span>' : '') +
-            (valueSize !== '0' ? '<span style="font-size:' + valueSize + ';color:rgba(255,255,255,0.7);" class="v2-blur">' + valueStr + '</span>' : '') +
+            '<span style="font-size:' + symbolSize + ';font-weight:700;color:' + textMain + ';text-shadow:0 1px 2px rgba(0,0,0,0.25);">' + escapeHtml(tile.token.symbol) + '</span>' +
+            (changeSize !== '0' ? '<span style="font-size:' + changeSize + ';font-weight:600;color:' + textSoft + ';">' + changeStr + '</span>' : '') +
+            (valueSize !== '0' ? '<span style="font-size:' + valueSize + ';color:' + textFaint + ';" class="v2-blur">' + valueStr + '</span>' : '') +
             '</div>';
     }
 
@@ -2178,17 +2269,22 @@ function renderPortfolioHeatmap() {
 }
 
 function _getHeatmapColor(change) {
-    // Theme-aware gradient
+    // Theme-aware gradient: accent (gain) / red (loss) over the theme's card
+    // background — the old hardcoded #1a1f2b neutral read as off-palette blue
+    // on every fx theme.
     const style = getComputedStyle(document.documentElement);
     const successHex = style.getPropertyValue('--v2-accent').trim() || '#00d26a';
     const errorHex = style.getPropertyValue('--v2-red').trim() || '#ff5252';
-    const bgHex = '#1a1f2b';
+    const bgHex = style.getPropertyValue('--v2-bg-card').trim() || '#1a1f2b';
 
     function hexToRgb(hex) {
         hex = hex.replace('#', '');
         if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
         return [parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16)];
     }
+    // Expose the tile bg so the renderer can pick readable text colors
+    _lastHeatmapNeutral = bgHex;
+    _lastHeatmapAccent = successHex;
     function lerp(a, b, t) { return Math.round(a + (b - a) * t); }
 
     const [sr, sg, sb] = hexToRgb(successHex);
