@@ -1820,3 +1820,69 @@
 [data-theme="terminal"] .v2-stat-card::after {
     opacity: 0.10;
 }
+
+/* ============================================================================
+   22. SIDEBAR POSITION (left/right) + top nav retirement
+   ============================================================================
+   The top segmented nav is retired; all navigation lives in the sidebar.
+   The sidebar can sit left (default) or right (user preference, toggled in
+   the sidebar footer). [data-fx][data-sidebar-side="right"] drives layout.
+   ============================================================================ */
+
+/* Right-side rail: mirror the floating position + margins */
+[data-fx] .v2-layout.sidebar-right .v2-sidebar {
+    left: auto;
+    right: 14px;
+}
+
+[data-fx] .v2-layout.sidebar-right .v2-main {
+    margin-left: 28px;
+    margin-right: calc(var(--v2-sidebar-width) + 28px);
+}
+
+[data-fx] .v2-layout.sidebar-right.sidebar-collapsed .v2-main {
+    margin-right: calc(var(--v2-sidebar-collapsed) + 28px);
+    margin-left: 28px;
+}
+
+/* Right-side hover-expand keeps working (width comes from .hover-open) */
+[data-fx] .v2-layout.sidebar-right.sidebar-collapsed .v2-sidebar.hover-open {
+    left: auto;
+    right: 14px;
+}
+
+/* Collapse arrow mirrors on the right side */
+[data-fx] .v2-layout.sidebar-right .collapse-arrow {
+    transform: rotate(180deg);
+}
+
+[data-fx] .v2-layout.sidebar-right.sidebar-collapsed .collapse-arrow {
+    transform: rotate(0deg);
+}
+
+/* Nav item hover: no translateX on the right side (would push off-screen feel) */
+[data-fx] .v2-layout.sidebar-right .v2-nav-item:hover {
+    transform: none;
+}
+
+/* Small screens: right-side rail reverts to full-height overlay like left */
+@media (max-width: 768px) {
+    [data-fx] .v2-layout.sidebar-right .v2-sidebar {
+        left: auto;
+        right: 0;
+    }
+    [data-fx] .v2-layout.sidebar-right .v2-main,
+    [data-fx] .v2-layout.sidebar-right.sidebar-collapsed .v2-main {
+        margin-left: 0;
+        margin-right: var(--v2-sidebar-width);
+    }
+}
+
+/* Retired top seg-nav: hide any stragglers (element removed from shell) */
+.v2-seg-nav { display: none !important; }
+
+/* Sidebar footer toggle styling: match the collapse button */
+[data-fx] .v2-sidebar .side-icon {
+    display: inline-flex;
+    flex: 0 0 auto;
+}
