@@ -2142,7 +2142,7 @@
         async function refreshDefi(forceStaking) {
             // Clear cache so we fetch fresh data
             if (typeof V2_CACHE !== 'undefined') V2_CACHE.clearAll();
-            showToast('Refreshing DeFi data...', 'success');
+            showToast('Refreshing DeFi data...', 'success', { loader: true });
             try {
                 if (forceStaking) {
                     // Refresh staking data for all wallets
