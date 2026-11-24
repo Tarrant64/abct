@@ -144,6 +144,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function loadDashboard() {
     try {
+        // Chain-loading visual for the chart + donut while everything fetches
+        startChainLoader('chartChainLoader', { width: 900, height: 300 });
         // Use cached fetch if available (v2-cache.js loaded), fall back to raw v2Fetch
         var useCached = typeof v2CachedFetch === 'function';
 
@@ -570,6 +572,7 @@ function renderChart(data) {
     // Hide skeleton
     const skeleton = document.getElementById('chartSkeleton');
     if (skeleton) skeleton.style.display = 'none';
+    stopChainLoader('chartChainLoader');
 
     const canvas = document.getElementById('portfolioChart');
     if (!canvas) return;
@@ -801,9 +804,11 @@ async function loadChart(range) {
         });
     }
 
-    // Show skeleton
+    // Show skeleton + chain-loading visual
     const skeleton = document.getElementById('chartSkeleton');
-    if (skeleton) skeleton.style.display = 'block';
+    if (skeleton) skeleton.style.display = 'none';
+    stopChainLoader('chartChainLoader');
+    startChainLoader('chartChainLoader', { width: 900, height: 300 });
 
     // If by-chain mode is active, load by-chain chart instead
     if (typeof _byChainMode !== 'undefined' && _byChainMode) {
@@ -2001,10 +2006,24 @@ function renderPortfolioDonut() {
 
     const entries = Object.entries(chainTotals).sort((a, b) => b[1] - a[1]);
     if (entries.length === 0) {
+        // No holdings yet — likely still loading; show the chain loader
         const container = document.getElementById('donutContainer');
-        if (container) setSafeHTML(container, '<div class="v2-empty" style="padding:32px"><div class="v2-empty-title">No allocation data</div></div>');
+        if (container && !v2State.holdings.length) {
+            let loader = document.getElementById('donutChainLoader');
+            if (!loader) {
+                loader = document.createElement('canvas');
+                loader.id = 'donutChainLoader';
+                loader.style.cssText = 'position:absolute;inset:0;';
+                container.appendChild(loader);
+            }
+            loader.style.display = 'block';
+            startChainLoader('donutChainLoader', { width: 240, height: 240 });
+        } else if (container) {
+            setSafeHTML(container, '<div class="v2-empty" style="padding:32px"><div class="v2-empty-title">No allocation data</div></div>');
+        }
         return;
     }
+    stopChainLoader('donutChainLoader');
 
     const labels = entries.map(([chain]) => chain.charAt(0).toUpperCase() + chain.slice(1));
     const data = entries.map(([_, v]) => v);
@@ -2990,6 +3009,7 @@ function renderByChainChart(result) {
 
     const skeleton = document.getElementById('chartSkeleton');
     if (skeleton) skeleton.style.display = 'none';
+    stopChainLoader('chartChainLoader');
 
     const data = result.data;
     const chainSet = new Set();
@@ -3203,3 +3223,146 @@ function showDemoAlert() {
         }
     });
 })();
+
+// ============================================================================
+// LOADING VISUAL — "blockchain propagation" network (WQ-0391)
+// ============================================================================
+// Animated canvas shown wherever a skeleton would be: nodes on a grid pulse,
+// packets travel between them along links. Themed via CSS variables, respects
+// prefers-reduced-motion, self-stops when hidden. Deliberately different from
+// the mobile app's loader (web: network propagation; mobile: pulsing blocks).
+
+const _chainLoaders = new Map();   // canvasId -> {raf, ctx, nodes, links, t0}
+
+function _chainLoaderTheme() {
+    const style = getComputedStyle(document.documentElement);
+    return {
+        accent: style.getPropertyValue('--v2-accent').trim() || '#00d26a',
+        red: style.getPropertyValue('--v2-red').trim() || '#ff5252',
+        node: style.getPropertyValue('--v2-text-muted').trim() || '#5a6475',
+    };
+}
+
+function startChainLoader(canvasId, opts = {}) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    stopChainLoader(canvasId);
+
+    const parent = canvas.parentElement;
+    const w = Math.max(120, (opts.width || parent?.clientWidth || 400));
+    const h = Math.max(80, (opts.height || parent?.clientHeight || 240));
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.display = 'block';
+    canvas.style.position = 'absolute';
+    canvas.style.inset = '0';
+
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    // Node lattice: deterministic pseudo-random layout seeded per canvas
+    let seed = 7;
+    const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    const cols = Math.max(4, Math.round(w / 90));
+    const rows = Math.max(2, Math.round(h / 90));
+    const nodes = [];
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            nodes.push({
+                x: (c + 0.5) / cols * w + (rnd() - 0.5) * (w / cols) * 0.5,
+                y: (r + 0.5) / rows * h + (rnd() - 0.5) * (h / rows) * 0.5,
+                phase: rnd() * Math.PI * 2,
+                speed: 0.6 + rnd() * 0.8,
+            });
+        }
+    }
+    // Links: connect each node to its 1-2 nearest neighbors
+    const links = [];
+    nodes.forEach((n, i) => {
+        const near = nodes.map((m, j) => ({ j, d: Math.hypot(m.x - n.x, m.y - n.y) }))
+            .filter(o => o.j !== i).sort((a, b) => a.d - b.d).slice(0, 2);
+        near.forEach(o => {
+            if (!links.some(l => (l.a === o.j && l.b === i))) links.push({ a: i, b: o.j });
+        });
+    });
+    // Packets traveling along links
+    const packets = Array.from({ length: Math.min(10, links.length) }, (_, i) => ({
+        link: i % links.length,
+        t: Math.random(),
+        speed: 0.25 + Math.random() * 0.5,
+        dir: Math.random() > 0.5 ? 1 : -1,
+    }));
+
+    const state = { raf: 0, t0: performance.now() };
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function frame(now) {
+        const t = (now - state.t0) / 1000;
+        const theme = _chainLoaderTheme();
+        ctx.clearRect(0, 0, w, h);
+
+        // Links: faint lattice
+        ctx.lineWidth = 1;
+        links.forEach(l => {
+            const a = nodes[l.a], b = nodes[l.b];
+            ctx.strokeStyle = theme.node;
+            ctx.globalAlpha = 0.10;
+            ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        });
+
+        // Nodes: pulsing
+        nodes.forEach(n => {
+            const pulse = reduced ? 0.5 : (0.5 + 0.5 * Math.sin(t * n.speed * 2 + n.phase));
+            ctx.globalAlpha = 0.25 + pulse * 0.45;
+            ctx.fillStyle = theme.node;
+            ctx.beginPath(); ctx.arc(n.x, n.y, 2.5 + pulse * 2, 0, Math.PI * 2); ctx.fill();
+        });
+
+        // Packets: glowing dots with trails along links
+        if (!reduced) {
+            packets.forEach(p => {
+                p.t += p.speed * 0.016;
+                if (p.t > 1) { p.t = 0; p.link = (p.link + 1) % links.length; p.dir = Math.random() > 0.5 ? 1 : -1; }
+                const l = links[p.link];
+                const a = nodes[l.a], b = nodes[l.b];
+                const tt = p.dir === 1 ? p.t : 1 - p.t;
+                const x = a.x + (b.x - a.x) * tt;
+                const y = a.y + (b.y - a.y) * tt;
+                ctx.globalAlpha = 0.85;
+                ctx.fillStyle = theme.accent;
+                ctx.shadowColor = theme.accent;
+                ctx.shadowBlur = 8;
+                ctx.beginPath(); ctx.arc(x, y, 2.2, 0, Math.PI * 2); ctx.fill();
+                ctx.shadowBlur = 0;
+                // trail
+                const back = Math.max(0, tt - 0.12 * p.dir);
+                const bx = a.x + (b.x - a.x) * back;
+                const by = a.y + (b.y - a.y) * back;
+                ctx.globalAlpha = 0.30;
+                ctx.strokeStyle = theme.accent;
+                ctx.lineWidth = 1.4;
+                ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(x, y); ctx.stroke();
+            });
+        }
+        ctx.globalAlpha = 1;
+
+        state.raf = requestAnimationFrame(frame);
+    }
+    state.raf = requestAnimationFrame(frame);
+    _chainLoaders.set(canvasId, state);
+}
+
+function stopChainLoader(canvasId) {
+    const state = _chainLoaders.get(canvasId);
+    if (state) {
+        cancelAnimationFrame(state.raf);
+        _chainLoaders.delete(canvasId);
+    }
+    const canvas = document.getElementById(canvasId);
+    if (canvas) {
+        canvas.style.display = 'none';
+    }
+}
