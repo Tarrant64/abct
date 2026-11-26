@@ -1780,6 +1780,11 @@ def _merge_holding(holdings: dict, key: str, amount: float, price: float,
     price_sym = _PRICE_SYMBOL.get(key, key)
     if key in holdings:
         holdings[key]['amount'] += amount
+        # v4 (2026-11-24): track every source type that contributes to this row
+        # (clients filter/group assets by where they live). `source` stays the
+        # first writer's type for older clients.
+        if source not in holdings[key].setdefault('sources', [holdings[key].get('source')]):
+            holdings[key]['sources'].append(source)
         p = holdings[key]['price_usd']
         if p is None:
             # Row was created with an unknown price (null on the wire); adopt
@@ -1808,6 +1813,7 @@ def _merge_holding(holdings: dict, key: str, amount: float, price: float,
             'wallet_count': 0,
             'logo_url': logo_url or None,
             'source': source,
+            'sources': [source],
         }
 
 
@@ -1831,7 +1837,8 @@ async def get_all_holdings(
     # v2 (WQ-0386): rows now include manual stocks.
     # v3 (2026-11-20): unknown price_usd / price_change_24h are null, not 0;
     # a v2 row served after deploy would still carry the fake zeros.
-    cache_key = f"all_holdings_v3_{user_id}" + ("_all" if include_all else "")
+    # v4 (2026-11-24): rows carry `sources` (every contributing source type).
+    cache_key = f"all_holdings_v4_{user_id}" + ("_all" if include_all else "")
     if not refresh:
         cached = await get_cache(cache_key, user_id=user_id)
         if cached:
@@ -1917,6 +1924,7 @@ async def get_all_holdings(
             'wallet_count': chain_data.get('wallet_count', 0),
             'logo_url': (meta.get('image_url') if meta else None) or None,
             'source': 'chain',
+            'sources': ['chain'],
         }
 
     # --- 2. Native tokens (valuable only — already have prices) ---
@@ -1941,6 +1949,7 @@ async def get_all_holdings(
             'asset_name_hex': asset.get('asset_name_hex'),
             'coingecko_id': asset.get('coingecko_id') or (token_meta.get('coingecko_id') if token_meta else None),
             'source': 'token',
+            'sources': ['token'],
         }
 
     # --- 2b. Non-valuable native tokens (zero-value/dust, only when include_all) ---
@@ -1970,6 +1979,7 @@ async def get_all_holdings(
                 'asset_name_hex': asset.get('asset_name_hex'),
                 'coingecko_id': asset.get('coingecko_id') or (token_meta.get('coingecko_id') if token_meta else None),
                 'source': 'token',
+                'sources': ['token'],
             }
 
     # --- 3. DeFi positions (governance tokens + LP/liquidity positions) ---
@@ -2000,6 +2010,7 @@ async def get_all_holdings(
                         'wallet_count': 0,
                         'logo_url': pos.get('logo_url', '') or None,
                         'source': 'defi',
+                        'sources': ['defi'],
                     }
                     continue
 
@@ -2101,6 +2112,7 @@ async def get_all_holdings(
                 'wallet_count': 0,
                 'logo_url': None,
                 'source': 'manual_stock',
+                'sources': ['manual_stock'],
                 'stock_id': s.get('id'),
                 'description': s.get('description'),
             }
@@ -2291,6 +2303,7 @@ async def debug_holding(
                     continue
                 sources.append({
                     'source': 'staking',
+                    'sources': ['staking'],
                     'protocol': protocol_name,
                     'kind': entry['kind'],
                     'wallet': addr[:20] + '...',
@@ -2312,6 +2325,7 @@ async def debug_holding(
                 continue
             sources.append({
                 'source': 'exchange',
+                'sources': ['exchange'],
                 'exchange': name,
                 'amount': float(asset.get('balance', 0)),
                 'price': float(asset.get('price', 0)),
