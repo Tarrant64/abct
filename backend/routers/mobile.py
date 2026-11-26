@@ -2800,6 +2800,10 @@ async def get_mobile_price_chart(
 
     symbol = symbol.upper()
 
+    # Source tracking for logging
+    chart_source = None
+    formatted_data = []
+
     # 0. Manual stock/ETF (WQ-0382 engine): these tickers are not crypto and
     # every crypto source below fails for them. The stock engine keeps daily
     # OHLC bars in stock_price_history (Nasdaq historical, refreshed by the
@@ -2844,10 +2848,6 @@ async def get_mobile_price_chart(
         "all": 365
     }
     days = range_to_days.get(range, 7)
-
-    # Source tracking for logging
-    chart_source = None
-    formatted_data = []
 
     # 1. Try CoinGecko first (has OHLC data)
     ohlcv_data = await fetch_ohlcv_coingecko(symbol, days)
