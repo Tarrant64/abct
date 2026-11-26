@@ -15,7 +15,7 @@ All endpoints require authentication via verify_session.
 from fastapi import APIRouter, HTTPException, Query, Depends, Request, Response
 from fastapi.routing import APIRoute
 from typing import Optional, List, Dict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import hashlib
 import httpx
 import logging
@@ -2799,6 +2799,38 @@ async def get_mobile_price_chart(
         return cached
 
     symbol = symbol.upper()
+
+    # 0. Manual stock/ETF (WQ-0382 engine): these tickers are not crypto and
+    # every crypto source below fails for them. The stock engine keeps daily
+    # OHLC bars in stock_price_history (Nasdaq historical, refreshed by the
+    # scheduler's backfill), so serve those when the symbol is tracked.
+    # (2026-11-26: BITW et al. showed no chart in the clients.)
+    try:
+        from database import get_manual_stock_by_symbol, get_stock_price_history
+        stock_row = await get_manual_stock_by_symbol(symbol)
+        if stock_row:
+            days_map = {"1h": 5, "24h": 5, "1d": 5, "7d": 10, "30d": 40, "90d": 95, "1y": 365, "all": 365}
+            bars = await get_stock_price_history(symbol, days_map.get(range, 10))
+            if len(bars) < 5:
+                from services.stock_data import stock_data_service
+                await stock_data_service.backfill_history(
+                    symbol, stock_row.get("asset_class") or "stock",
+                    days=days_map.get(range, 10) + 40)
+                bars = await get_stock_price_history(symbol, days_map.get(range, 10))
+            if bars:
+                formatted_data = [{
+                    "timestamp": int(datetime.strptime(b["trade_date"], "%Y-%m-%d")
+                                     .replace(tzinfo=timezone.utc).timestamp()),
+                    "open": round(float(b.get("open") or b["close"]), 6),
+                    "high": round(float(b.get("high") or b["close"]), 6),
+                    "low": round(float(b.get("low") or b["close"]), 6),
+                    "close": round(float(b["close"]), 6),
+                    "volume": int(b.get("volume") or 0),
+                } for b in bars]
+                chart_source = "Nasdaq (stock engine)"
+                logger.info(f"Fetched {len(formatted_data)} daily bars from stock history for {symbol}")
+    except Exception as e:
+        logger.warning(f"Stock history chart path failed for {symbol}: {e}")
 
     # Map range to days
     range_to_days = {
